@@ -101,6 +101,8 @@
     "recentlyViewed": "최근 본 항목",
     "addFavorite": "즐겨찾기에 추가",
     "removeFavorite": "즐겨찾기에서 제거",
+    "place": "배치",
+    "placeSpecies": "{{name}} 배치",
     "dragToCanvas": "캔버스로 드래그",
     "setAsStamp": "스탬프로 설정",
     "error": "오류",

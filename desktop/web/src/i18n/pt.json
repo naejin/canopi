@@ -101,6 +101,8 @@
     "recentlyViewed": "Vistos recentemente",
     "addFavorite": "Adicionar aos favoritos",
     "removeFavorite": "Remover dos favoritos",
+    "place": "Colocar",
+    "placeSpecies": "Colocar {{name}}",
     "dragToCanvas": "Arrastar para a tela",
     "setAsStamp": "Definir como carimbo",
     "error": "Erro",

@@ -2,9 +2,25 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
-import { readPlantStampDragData } from '../canvas/plant-stamp-source'
+import {
+  clearPlantStampSource,
+  readPlantStampDragData,
+  readPlantStampSource,
+} from '../canvas/plant-stamp-source'
 import type { PlantSearchResultState } from '../app/plant-browser/search-session'
 import type { SpeciesFilter, SpeciesListItem } from '../types/species'
+
+const mockCanvasSession = vi.hoisted(() => {
+  const toolSurface = {
+    setTool: vi.fn(),
+  }
+  return {
+    toolSurface,
+    currentToolCommandSurface: {
+      value: toolSurface as typeof toolSurface | null,
+    },
+  }
+})
 
 const mockWorkbench = vi.hoisted(() => ({
   intent: { value: { text: '', filters: emptyFilters(), extraFilters: [], sort: 'Name', locale: 'en' } },
@@ -76,6 +92,10 @@ vi.mock('../app/plant-browser', () => ({
   speciesCatalogWorkbench: mockWorkbench,
 }))
 
+vi.mock('../canvas/session', () => ({
+  currentCanvasToolCommandSurface: mockCanvasSession.currentToolCommandSurface,
+}))
+
 import { WebSpeciesCatalogPanel } from '../web/WebSpeciesCatalogPanel'
 
 describe('Web Edition Species Catalog panel', () => {
@@ -89,6 +109,9 @@ describe('Web Edition Species Catalog panel', () => {
     originalMatchMedia = window.matchMedia
     locale.value = 'en'
     resetWorkbench()
+    clearPlantStampSource()
+    mockCanvasSession.currentToolCommandSurface.value = mockCanvasSession.toolSurface
+    mockCanvasSession.toolSurface.setTool.mockClear()
   })
 
   afterEach(() => {
@@ -270,6 +293,26 @@ describe('Web Edition Species Catalog panel', () => {
     })
   })
 
+  it('starts Plant Stamp from a catalog Place action without opening detail', async () => {
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    await act(async () => {
+      requiredElement<HTMLButtonElement>('[data-testid="web-species-place"]').click()
+    })
+
+    expect(readPlantStampSource()).toEqual({
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      stratum: null,
+      width_max_m: null,
+    })
+    expect(mockCanvasSession.toolSurface.setTool).toHaveBeenCalledWith('plant-stamp')
+    expect(mockWorkbench.selectSpecies).not.toHaveBeenCalled()
+    expect(mockWorkbench.toggleFavorite).not.toHaveBeenCalled()
+  })
+
   it('surfaces catalog load failures with a retry action', async () => {
     mockWorkbench.results.value = {
       items: [],
@@ -314,6 +357,46 @@ describe('Web Edition Species Catalog panel', () => {
       dispatchDragStart(rows[1]!, recentTransfer)
     })
     expect(readPlantStampDragData(recentTransfer)?.canonical_name).toBe('Melissa officinalis')
+  })
+
+  it('starts Plant Stamp from favorite and recently viewed Place actions', async () => {
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="favorites" />, container)
+    })
+
+    const placeButtons = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[data-testid="web-species-place"]'),
+    )
+    expect(placeButtons).toHaveLength(2)
+
+    await act(async () => {
+      placeButtons[0]!.click()
+    })
+    expect(readPlantStampSource()?.canonical_name).toBe('Prunus persica')
+    expect(mockCanvasSession.toolSurface.setTool).toHaveBeenLastCalledWith('plant-stamp')
+
+    await act(async () => {
+      placeButtons[1]!.click()
+    })
+    expect(readPlantStampSource()?.canonical_name).toBe('Melissa officinalis')
+    expect(mockCanvasSession.toolSurface.setTool).toHaveBeenLastCalledWith('plant-stamp')
+    expect(mockWorkbench.selectSpecies).not.toHaveBeenCalled()
+  })
+
+  it('keeps Place safe when the canvas command surface is unavailable', async () => {
+    mockCanvasSession.currentToolCommandSurface.value = null
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    await act(async () => {
+      requiredElement<HTMLButtonElement>('[data-testid="web-species-place"]').click()
+    })
+
+    expect(readPlantStampSource()?.canonical_name).toBe('Malus domestica')
+    expect(mockCanvasSession.toolSurface.setTool).not.toHaveBeenCalled()
+    expect(mockWorkbench.selectSpecies).not.toHaveBeenCalled()
   })
 
   it('renders reduced Species detail with a lazy hero image and only v1 fields', async () => {

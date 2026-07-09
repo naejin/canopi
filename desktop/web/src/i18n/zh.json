@@ -101,6 +101,8 @@
     "recentlyViewed": "最近浏览",
     "addFavorite": "添加收藏",
     "removeFavorite": "取消收藏",
+    "place": "放置",
+    "placeSpecies": "放置 {{name}}",
     "dragToCanvas": "拖拽到画布",
     "setAsStamp": "设为印章",
     "error": "错误",

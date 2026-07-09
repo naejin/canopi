@@ -101,6 +101,8 @@
     "recentlyViewed": "Недавно просмотренные",
     "addFavorite": "Добавить в избранное",
     "removeFavorite": "Удалить из избранного",
+    "place": "Разместить",
+    "placeSpecies": "Разместить {{name}}",
     "dragToCanvas": "Перетащить на холст",
     "setAsStamp": "Использовать как штамп",
     "error": "Ошибка",

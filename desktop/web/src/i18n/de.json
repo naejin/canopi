@@ -101,6 +101,8 @@
     "recentlyViewed": "Kürzlich angesehen",
     "addFavorite": "Zu Favoriten hinzufügen",
     "removeFavorite": "Aus Favoriten entfernen",
+    "place": "Platzieren",
+    "placeSpecies": "{{name}} platzieren",
     "dragToCanvas": "Auf die Fläche ziehen",
     "setAsStamp": "Als Stempel setzen",
     "error": "Fehler",

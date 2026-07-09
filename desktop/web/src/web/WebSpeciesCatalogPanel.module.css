@@ -200,7 +200,7 @@
 .row {
   min-height: 58px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--control-size-md);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   border: 0;
@@ -244,6 +244,13 @@
   white-space: nowrap;
 }
 
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.placeButton,
 .favoriteButton,
 .loadMoreButton {
   border: 1px solid var(--color-border);
@@ -252,6 +259,14 @@
   color: var(--color-text);
   font: inherit;
   cursor: pointer;
+}
+
+.placeButton {
+  min-width: 56px;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
 }
 
 .favoriteButton {

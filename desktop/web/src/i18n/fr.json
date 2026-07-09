@@ -101,6 +101,8 @@
     "recentlyViewed": "Vus récemment",
     "addFavorite": "Ajouter aux favoris",
     "removeFavorite": "Retirer des favoris",
+    "place": "Placer",
+    "placeSpecies": "Placer {{name}}",
     "dragToCanvas": "Glisser sur la zone de dessin",
     "setAsStamp": "Utiliser comme tampon",
     "error": "Erreur",

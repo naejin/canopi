@@ -101,6 +101,8 @@
     "recentlyViewed": "Recent bekeken",
     "addFavorite": "Toevoegen aan favorieten",
     "removeFavorite": "Verwijderen uit favorieten",
+    "place": "Plaatsen",
+    "placeSpecies": "{{name}} plaatsen",
     "dragToCanvas": "Naar canvas slepen",
     "setAsStamp": "Als stempel instellen",
     "error": "Fout",

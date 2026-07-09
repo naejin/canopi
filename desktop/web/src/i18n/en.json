@@ -101,6 +101,8 @@
     "recentlyViewed": "Recently viewed",
     "addFavorite": "Add to favorites",
     "removeFavorite": "Remove from favorites",
+    "place": "Place",
+    "placeSpecies": "Place {{name}}",
     "dragToCanvas": "Drag to canvas",
     "setAsStamp": "Set as stamp",
     "error": "Error",

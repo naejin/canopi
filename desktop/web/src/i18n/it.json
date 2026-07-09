@@ -101,6 +101,8 @@
     "recentlyViewed": "Visti di recente",
     "addFavorite": "Aggiungi ai preferiti",
     "removeFavorite": "Rimuovi dai preferiti",
+    "place": "Posiziona",
+    "placeSpecies": "Posiziona {{name}}",
     "dragToCanvas": "Trascina sulla tela",
     "setAsStamp": "Usa come timbro",
     "error": "Errore",

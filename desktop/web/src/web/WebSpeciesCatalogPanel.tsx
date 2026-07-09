@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import { locale } from '../app/settings/state'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
-import { writePlantStampDragData } from '../canvas/plant-stamp-source'
+import { currentCanvasToolCommandSurface } from '../canvas/session'
+import {
+  beginPlantStampFromSpecies,
+  writePlantStampDragData,
+} from '../canvas/plant-stamp-source'
 import type {
   SpeciesCatalogDetailView,
   SpeciesCatalogFilterStripView,
@@ -421,6 +425,7 @@ function SpeciesList({
 }
 
 function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
+  const commandSurface = currentCanvasToolCommandSurface.value
   const handleDragStart = (event: DragEvent) => {
     writePlantStampDragData(event.dataTransfer, item)
     const preview = document.createElement('div')
@@ -446,6 +451,10 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
       preview.remove()
     }
   }
+  const handlePlace = (event: MouseEvent) => {
+    event.stopPropagation()
+    beginPlantStampFromSpecies(item, commandSurface)
+  }
 
   return (
     <div
@@ -467,24 +476,35 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
         <span className={styles.botanicalName}>{item.canonical_name}</span>
         <span className={styles.metadata}>{metadataLabel(item)}</span>
       </span>
-      <button
-        type="button"
-        className={`${styles.favoriteButton} ${item.is_favorite ? styles.favoriteButtonActive : ''}`}
-        aria-label={item.is_favorite ? t('plantDb.removeFavorite') : t('plantDb.addFavorite')}
-        aria-pressed={item.is_favorite}
-        onClick={(event) => {
-          event.stopPropagation()
-          void speciesCatalogWorkbench.toggleFavorite(item.canonical_name)
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') return
-          event.preventDefault()
-          event.stopPropagation()
-          void speciesCatalogWorkbench.toggleFavorite(item.canonical_name)
-        }}
-      >
-        {item.is_favorite ? '★' : '☆'}
-      </button>
+      <span className={styles.rowActions}>
+        <button
+          type="button"
+          className={styles.placeButton}
+          aria-label={t('plantDb.placeSpecies', { name: item.common_name ?? item.canonical_name })}
+          data-testid="web-species-place"
+          onClick={handlePlace}
+        >
+          {t('plantDb.place')}
+        </button>
+        <button
+          type="button"
+          className={`${styles.favoriteButton} ${item.is_favorite ? styles.favoriteButtonActive : ''}`}
+          aria-label={item.is_favorite ? t('plantDb.removeFavorite') : t('plantDb.addFavorite')}
+          aria-pressed={item.is_favorite}
+          onClick={(event) => {
+            event.stopPropagation()
+            void speciesCatalogWorkbench.toggleFavorite(item.canonical_name)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return
+            event.preventDefault()
+            event.stopPropagation()
+            void speciesCatalogWorkbench.toggleFavorite(item.canonical_name)
+          }}
+        >
+          {item.is_favorite ? '★' : '☆'}
+        </button>
+      </span>
     </div>
   )
 }
