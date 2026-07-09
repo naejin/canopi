@@ -272,6 +272,49 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('Lemon balm')
   })
 
+  it('renders Species row names on one line with separate metadata', async () => {
+    mockWorkbench.results.value = {
+      ...mockWorkbench.results.value,
+      items: [
+        {
+          ...makeSpeciesListItem('Malus domestica', 'Apple'),
+          climate_zones: ['Temperate', 'Mediterranean'],
+          life_cycles: ['Perennial'],
+        },
+      ],
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const nameLine = requiredElement<HTMLElement>('[data-testid="web-species-name-line"]')
+    expect(nameLine.textContent).toContain('Apple')
+    expect(nameLine.textContent).toContain('Malus domestica')
+
+    const metadata = requiredElement<HTMLElement>('[data-testid="web-species-row-metadata"]')
+    expect(metadata.textContent).toBe('Temperate · Mediterranean · Perennial')
+  })
+
+  it('does not duplicate Canonical Name when a Species row has no Common Name', async () => {
+    mockWorkbench.results.value = {
+      ...mockWorkbench.results.value,
+      items: [
+        {
+          ...makeSpeciesListItem('Malus domestica', 'Apple'),
+          common_name: null,
+        },
+      ],
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const nameLine = requiredElement<HTMLElement>('[data-testid="web-species-name-line"]')
+    expect(nameLine.textContent).toBe('Malus domestica')
+  })
+
   it('writes desktop Plant Stamp drag payloads from catalog rows', async () => {
     await act(async () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)

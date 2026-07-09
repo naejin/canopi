@@ -222,11 +222,21 @@
 .nameBlock {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: var(--space-1);
+}
+
+.nameLine {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .commonName {
   min-width: 0;
+  flex: 0 1 auto;
   overflow: hidden;
   font-size: var(--text-sm);
   font-weight: 600;
@@ -234,17 +244,39 @@
   white-space: nowrap;
 }
 
-.botanicalName,
-.metadata {
+.nameLine .commonName:not(:only-child) {
+  max-width: 58%;
+}
+
+.nameSeparator {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.botanicalName {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+  font-style: italic;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.metadata {
+  min-width: 0;
+  overflow: visible;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.25;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
 .rowActions {
+  align-self: center;
   display: flex;
   align-items: center;
   gap: var(--space-1);

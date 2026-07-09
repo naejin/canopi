@@ -142,6 +142,24 @@ describe('WebCanvasToolbar', () => {
     expect(container.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
   })
 
+  it('exposes Plant Spacing as a Web canvas tool', async () => {
+    await act(async () => {
+      render(<WebCanvasToolbar />, container)
+    })
+
+    const plantSpacing = button('Plant Spacing')
+    expect(plantSpacing.dataset.tool).toBe('plant-spacing')
+    expect(plantSpacing.disabled).toBe(false)
+
+    await act(async () => {
+      plantSpacing.click()
+      await Promise.resolve()
+    })
+
+    expect(activeTool.value).toBe('plant-spacing')
+    expect(plantSpacing.getAttribute('aria-checked')).toBe('true')
+  })
+
   function button(label: string): HTMLButtonElement {
     const element = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
     if (!element) throw new Error(`Missing ${label} button`)

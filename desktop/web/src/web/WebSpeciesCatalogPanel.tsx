@@ -426,6 +426,10 @@ function SpeciesList({
 
 function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
   const commandSurface = currentCanvasToolCommandSurface.value
+  const commonName = item.common_name?.trim() ?? ''
+  const displayName = commonName.length > 0 ? commonName : item.canonical_name
+  const showCanonicalName = displayName !== item.canonical_name
+  const metadata = metadataLabel(item)
   const handleDragStart = (event: DragEvent) => {
     writePlantStampDragData(event.dataTransfer, item)
     const preview = document.createElement('div')
@@ -472,9 +476,18 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
       data-testid="web-species-row"
     >
       <span className={styles.nameBlock}>
-        <span className={styles.commonName}>{item.common_name ?? item.canonical_name}</span>
-        <span className={styles.botanicalName}>{item.canonical_name}</span>
-        <span className={styles.metadata}>{metadataLabel(item)}</span>
+        <span className={styles.nameLine} data-testid="web-species-name-line">
+          <span className={styles.commonName}>{displayName}</span>
+          {showCanonicalName && (
+            <>
+              <span className={styles.nameSeparator} aria-hidden="true">·</span>
+              <span className={styles.botanicalName}>{item.canonical_name}</span>
+            </>
+          )}
+        </span>
+        {metadata.length > 0 && (
+          <span className={styles.metadata} data-testid="web-species-row-metadata">{metadata}</span>
+        )}
       </span>
       <span className={styles.rowActions}>
         <button

@@ -35,6 +35,7 @@ import {
   RulerIcon,
   SelectIcon,
   SnapIcon,
+  SpacingIcon,
   TextIcon,
   UndoIcon,
 } from '../components/canvas/toolbar-icons'
@@ -59,6 +60,7 @@ const WEB_TOOLS: readonly WebToolbarTool[] = [
   { tool: 'text', label: 'canvas.tools.text', description: 'canvas.tools.textDesc', Icon: TextIcon },
   { tool: 'measurement-guide', label: 'canvas.tools.measurementGuide', description: 'canvas.tools.measurementGuideDesc', Icon: MeasurementGuideIcon },
   { tool: 'object-stamp', label: 'canvas.tools.objectStamp', description: 'canvas.tools.objectStampDesc', Icon: ObjectStampIcon },
+  { tool: 'plant-spacing', label: 'canvas.tools.plantSpacing', description: 'canvas.tools.plantSpacingDesc', Icon: SpacingIcon },
 ]
 
 export function WebCanvasToolbar() {
