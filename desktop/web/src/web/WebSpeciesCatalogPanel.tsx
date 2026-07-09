@@ -16,7 +16,7 @@ import type { StripChoiceField, StripControlField } from '../app/plant-browser'
 import { toggleArrayValue } from '../components/plant-db/filter-utils'
 import styles from './WebSpeciesCatalogPanel.module.css'
 
-const MOBILE_FILTER_COLLAPSE_QUERY = '(max-width: 720px)'
+const MOBILE_FILTER_COLLAPSE_QUERY = '(max-width: 860px)'
 
 interface WebSpeciesCatalogPanelProps {
   readonly mode: 'catalog' | 'favorites'

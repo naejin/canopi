@@ -236,6 +236,7 @@ describe('Web Edition Species Catalog panel', () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
 
+    expect(window.matchMedia).toHaveBeenCalledWith('(max-width: 860px)')
     const summary = requiredElement<HTMLButtonElement>('[data-testid="web-species-filter-summary"]')
     expect(summary.getAttribute('aria-expanded')).toBe('false')
     expect(summary.textContent).toContain('Filters')
