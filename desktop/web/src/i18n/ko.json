@@ -65,6 +65,8 @@
     "noFavorites": "아직 즐겨찾기가 없습니다.",
     "noRecentlyViewed": "아직 최근 본 식물이 없습니다.",
     "filters": "필터",
+    "filterSummaryInactive": "활성 필터 없음",
+    "filterSummaryActive": "{{count}}개 활성",
     "clearFilters": "필터 초기화",
     "activeFilters": "활성 필터",
     "sort": "정렬",

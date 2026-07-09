@@ -65,6 +65,8 @@
     "noFavorites": "Nog geen favorieten.",
     "noRecentlyViewed": "Nog geen recent bekeken planten.",
     "filters": "Filters",
+    "filterSummaryInactive": "Geen actieve filters",
+    "filterSummaryActive": "{{count}} actief",
     "clearFilters": "Filters wissen",
     "activeFilters": "Actieve filters",
     "sort": "Sorteren",

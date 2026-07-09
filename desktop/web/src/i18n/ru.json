@@ -65,6 +65,8 @@
     "noFavorites": "Избранного пока нет.",
     "noRecentlyViewed": "Недавно просмотренных растений пока нет.",
     "filters": "Фильтры",
+    "filterSummaryInactive": "Нет активных фильтров",
+    "filterSummaryActive": "{{count}} активн.",
     "clearFilters": "Сбросить фильтры",
     "activeFilters": "Активные фильтры",
     "sort": "Сортировка",

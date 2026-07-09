@@ -65,6 +65,8 @@
     "noFavorites": "Aucun favori pour l'instant.",
     "noRecentlyViewed": "Aucune plante vue récemment pour l'instant.",
     "filters": "Filtres",
+    "filterSummaryInactive": "Aucun filtre actif",
+    "filterSummaryActive": "{{count}} actif(s)",
     "clearFilters": "Effacer les filtres",
     "activeFilters": "Filtres actifs",
     "sort": "Trier",

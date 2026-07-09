@@ -59,9 +59,59 @@
   background: var(--color-bg);
 }
 
+.filterRegionCollapsed {
+  gap: 0;
+}
+
 .filterRows {
   display: grid;
   gap: var(--space-2);
+}
+
+.filterSummaryButton {
+  width: 100%;
+  min-height: var(--control-size-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-2);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.filterSummaryButton:hover,
+.filterSummaryButton:focus-visible {
+  border-color: var(--color-border-strong);
+  outline: none;
+}
+
+.filterSummaryTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filterSummaryStatus {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filterSummaryChevron {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .filterRow {

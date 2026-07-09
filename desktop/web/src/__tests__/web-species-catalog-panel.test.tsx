@@ -80,11 +80,13 @@ import { WebSpeciesCatalogPanel } from '../web/WebSpeciesCatalogPanel'
 
 describe('Web Edition Species Catalog panel', () => {
   let container: HTMLDivElement
+  let originalMatchMedia: typeof window.matchMedia | undefined
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
+    originalMatchMedia = window.matchMedia
     locale.value = 'en'
     resetWorkbench()
   })
@@ -92,6 +94,15 @@ describe('Web Edition Species Catalog panel', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    if (originalMatchMedia) {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      })
+    } else {
+      Reflect.deleteProperty(window, 'matchMedia')
+    }
   })
 
   it('renders catalog search and supported filters through the Species Catalog Workbench', async () => {
@@ -176,6 +187,54 @@ describe('Web Edition Species Catalog panel', () => {
       requiredElement<HTMLButtonElement>('[data-testid="web-species-clear-filters"]').click()
     })
     expect(mockWorkbench.clearFilters).toHaveBeenCalledOnce()
+  })
+
+  it('collapses supported filters behind a mobile summary without hiding the Species list', async () => {
+    setSmallScreenMatch(true)
+    const filters = {
+      ...emptyFilters(),
+      climate_zones: ['Temperate'],
+    }
+    mockWorkbench.intent.value = {
+      text: '',
+      filters,
+      extraFilters: [],
+      sort: 'Name',
+      locale: 'en',
+    }
+    mockWorkbench.filterStrip.value = {
+      ...mockWorkbench.filterStrip.value,
+      filters,
+      hasActive: true,
+      activeCount: 1,
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const summary = requiredElement<HTMLButtonElement>('[data-testid="web-species-filter-summary"]')
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    expect(summary.textContent).toContain('Filters')
+    expect(summary.textContent).toContain('1 active')
+    expect(requiredElement<HTMLElement>('[data-testid="web-species-row"]').textContent).toContain('Apple')
+    expect(container.querySelector('[data-testid="web-species-filter-climate_zones-Temperate"]')).toBeNull()
+
+    await act(async () => {
+      summary.click()
+    })
+
+    expect(summary.getAttribute('aria-expanded')).toBe('true')
+    const climate = requiredElement<HTMLButtonElement>(
+      '[data-testid="web-species-filter-climate_zones-Temperate"]',
+    )
+    expect(climate.getAttribute('aria-pressed')).toBe('true')
+
+    await act(async () => {
+      requiredElement<HTMLButtonElement>('[data-testid="web-species-active-filter-climate_zones-Temperate"]')
+        .click()
+    })
+    expect(mockWorkbench.patchFilters).toHaveBeenCalledWith({ climate_zones: null })
   })
 
   it('renders browser-local favorites and recently viewed Species', async () => {
@@ -455,6 +514,23 @@ function supportedFilterControls() {
       source: 'adapter',
     },
   ] as const
+}
+
+function setSmallScreenMatch(matches: boolean): void {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
 }
 
 function emptyFilters(): SpeciesFilter {

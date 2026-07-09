@@ -12,6 +12,8 @@ import type { StripChoiceField, StripControlField } from '../app/plant-browser'
 import { toggleArrayValue } from '../components/plant-db/filter-utils'
 import styles from './WebSpeciesCatalogPanel.module.css'
 
+const MOBILE_FILTER_COLLAPSE_QUERY = '(max-width: 720px)'
+
 interface WebSpeciesCatalogPanelProps {
   readonly mode: 'catalog' | 'favorites'
 }
@@ -105,42 +107,99 @@ function WebFilterRegion({
 }: {
   readonly filterStrip: SpeciesCatalogFilterStripView
 }) {
+  const isCompactFilterLayout = useSmallSpeciesFilterLayout()
+  const [expanded, setExpanded] = useState(false)
   const controls = filterStrip.controls.filter((control): control is StripChoiceField => (
     control.kind === 'choice' && (filterStrip.options?.[control.optionsKey] ?? []).length > 0
   ))
 
   if (controls.length === 0) return null
 
+  const collapsed = isCompactFilterLayout && !expanded
+  const summary = filterStrip.hasActive
+    ? t('plantDb.filterSummaryActive', { count: filterStrip.activeCount })
+    : t('plantDb.filterSummaryInactive')
+
   return (
-    <div className={styles.filterRegion}>
-      <div className={styles.filterRows}>
-        {controls.map((control) => (
-          <WebFilterControl
-            key={control.filterKey}
-            control={control}
-            filters={filterStrip.filters}
-            options={filterStrip.options}
-          />
-        ))}
-      </div>
-      {filterStrip.hasActive && (
-        <div className={styles.activeFilters}>
-          <WebActiveFilterChips
-            controls={controls}
-            filters={filterStrip.filters}
-          />
-          <button
-            type="button"
-            className={styles.clearFiltersButton}
-            data-testid="web-species-clear-filters"
-            onClick={() => { speciesCatalogWorkbench.clearFilters() }}
-          >
-            {t('filters.clearAll')}
-          </button>
-        </div>
+    <div
+      className={`${styles.filterRegion} ${collapsed ? styles.filterRegionCollapsed : ''}`}
+      data-collapsed={collapsed ? 'true' : 'false'}
+    >
+      {isCompactFilterLayout && (
+        <button
+          type="button"
+          className={styles.filterSummaryButton}
+          aria-expanded={!collapsed}
+          data-testid="web-species-filter-summary"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          <span className={styles.filterSummaryTitle}>{t('plantDb.filters')}</span>
+          <span className={styles.filterSummaryStatus}>{summary}</span>
+          <span className={styles.filterSummaryChevron} aria-hidden="true">
+            {collapsed ? '+' : '-'}
+          </span>
+        </button>
+      )}
+      {!collapsed && (
+        <>
+          <div className={styles.filterRows}>
+            {controls.map((control) => (
+              <WebFilterControl
+                key={control.filterKey}
+                control={control}
+                filters={filterStrip.filters}
+                options={filterStrip.options}
+              />
+            ))}
+          </div>
+          {filterStrip.hasActive && (
+            <div className={styles.activeFilters}>
+              <WebActiveFilterChips
+                controls={controls}
+                filters={filterStrip.filters}
+              />
+              <button
+                type="button"
+                className={styles.clearFiltersButton}
+                data-testid="web-species-clear-filters"
+                onClick={() => { speciesCatalogWorkbench.clearFilters() }}
+              >
+                {t('filters.clearAll')}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
+}
+
+function useSmallSpeciesFilterLayout(): boolean {
+  const [isSmall, setIsSmall] = useState(() => matchesSmallSpeciesFilterLayout())
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+
+    const media = window.matchMedia(MOBILE_FILTER_COLLAPSE_QUERY)
+    const update = () => setIsSmall(media.matches)
+    update()
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update)
+      return () => media.removeEventListener('change', update)
+    }
+    media.addListener?.(update)
+    return () => {
+      media.removeListener?.(update)
+    }
+  }, [])
+
+  return isSmall
+}
+
+function matchesSmallSpeciesFilterLayout(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia(MOBILE_FILTER_COLLAPSE_QUERY).matches
 }
 
 function WebFilterControl({

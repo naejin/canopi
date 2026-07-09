@@ -65,6 +65,8 @@
     "noFavorites": "お気に入りはまだありません。",
     "noRecentlyViewed": "最近閲覧した植物はまだありません。",
     "filters": "フィルター",
+    "filterSummaryInactive": "有効なフィルターなし",
+    "filterSummaryActive": "{{count}} 件有効",
     "clearFilters": "フィルターをクリア",
     "activeFilters": "適用中のフィルター",
     "sort": "並べ替え",

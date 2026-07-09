@@ -65,6 +65,8 @@
     "noFavorites": "尚无收藏。",
     "noRecentlyViewed": "尚无最近浏览的植物。",
     "filters": "筛选",
+    "filterSummaryInactive": "无启用筛选",
+    "filterSummaryActive": "{{count}} 个启用",
     "clearFilters": "清除筛选",
     "activeFilters": "活动筛选",
     "sort": "排序",
