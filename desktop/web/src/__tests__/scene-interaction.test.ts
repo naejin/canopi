@@ -6552,6 +6552,8 @@ describe('SceneInteractionController', () => {
       symbol: 'tree',
       position: { x: 50, y: 70 },
     })
+    expect(store.session.selectedEntityIds).toEqual(new Set([store.persisted.plants[0]!.id]))
+    expect(selectedObjectIds.value).toEqual(new Set([store.persisted.plants[0]!.id]))
     controller.dispose()
   })
 
@@ -6576,6 +6578,8 @@ describe('SceneInteractionController', () => {
     events.pointerDown({ x: 50, y: 70 }, { button: 0 })
 
     expect(store.persisted.plants).toHaveLength(0)
+    expect(store.session.selectedEntityIds).toEqual(new Set())
+    expect(selectedObjectIds.value).toEqual(new Set())
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })

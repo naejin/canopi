@@ -23,9 +23,11 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
     if (!isSceneLayerOpenForCreation(context.getSceneStore().persisted, 'plants')) return
 
     context.sceneEdits.run('interaction-stamp-plant', (tx) => {
+      let placedPlantId = ''
       tx.mutate((draft) => {
-        appendPlantStampSourceToDraft(draft, source, context.applySnapping(world))
+        placedPlantId = appendPlantStampSourceToDraft(draft, source, context.applySnapping(world))
       })
+      if (placedPlantId) tx.setSelection([placedPlantId])
     })
   }
 
