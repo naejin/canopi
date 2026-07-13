@@ -51,12 +51,14 @@ export interface SceneInteractionEventHarness {
   pointerMoveClient(client: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   pointerUp(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   pointerUpClient(client: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
+  pointerCancel(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   pointerLeave(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   wheel(screen: ScenePoint, options?: WheelEventInit): WheelEvent
   keyDown(options: string | SceneInteractionKeyboardOptions): KeyboardEvent
   keyUp(options: string | SceneInteractionKeyboardOptions): KeyboardEvent
   holdSpace(): KeyboardEvent
   releaseSpace(): KeyboardEvent
+  windowBlur(): Event
   dispose(): void
 }
 
@@ -138,6 +140,10 @@ export function createSceneInteractionEventHarness(
     return dispatchPointer(window, 'pointerup', client, eventOptions)
   }
 
+  function pointerCancel(screen: ScenePoint, eventOptions: SceneInteractionPointerOptions = {}): PointerEvent {
+    return dispatchPointer(window, 'pointercancel', clientPoint(screen), eventOptions)
+  }
+
   function pointerLeave(screen: ScenePoint, eventOptions: SceneInteractionPointerOptions = {}): PointerEvent {
     return dispatchPointer(container, 'pointerleave', clientPoint(screen), eventOptions)
   }
@@ -165,6 +171,12 @@ export function createSceneInteractionEventHarness(
     return keyUp({ key: ' ', code: 'Space' })
   }
 
+  function windowBlur(): Event {
+    const event = new Event('blur')
+    window.dispatchEvent(event)
+    return event
+  }
+
   return {
     listenerLog: listenerSpies?.log ?? null,
     setBounds,
@@ -178,12 +190,14 @@ export function createSceneInteractionEventHarness(
     pointerMoveClient,
     pointerUp,
     pointerUpClient,
+    pointerCancel,
     pointerLeave,
     wheel,
     keyDown,
     keyUp,
     holdSpace,
     releaseSpace,
+    windowBlur,
     dispose: () => {
       listenerSpies?.restore()
       Object.defineProperty(container, 'getBoundingClientRect', {
@@ -239,7 +253,7 @@ function createPointerEvent(
 }
 
 function defaultPointerButtons(type: string, button: number): number {
-  if (type === 'pointerup') return 0
+  if (type === 'pointerup' || type === 'pointercancel') return 0
   if (button === 0) return 1
   if (button === 1) return 4
   if (button === 2) return 2

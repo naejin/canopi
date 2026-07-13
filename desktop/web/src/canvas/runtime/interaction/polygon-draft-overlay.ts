@@ -11,6 +11,7 @@ export interface PolygonDraftOverlayController {
 
 export function createPolygonDraftOverlay(container: HTMLElement): PolygonDraftOverlayController {
   const root = document.createElementNS(SVG_NS, 'svg')
+  root.dataset.polygonDraftOverlay = 'true'
   Object.assign(root.style, {
     position: 'absolute',
     inset: '0',

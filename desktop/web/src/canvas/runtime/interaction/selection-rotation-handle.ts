@@ -3,7 +3,8 @@ import type { CameraController, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStore } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
-import type { SceneInteractionPointerDrag, SceneInteractionPointerEvent } from './frame'
+import { runCanvasRuntimeCleanups } from '../cleanup'
+import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter'
 
 interface SelectionRotationHandleOptions {
   readonly container: HTMLElement
@@ -16,9 +17,10 @@ interface SelectionRotationHandleOptions {
 }
 
 export interface SelectionRotationHandleController {
+  readonly dragActive: boolean
   refresh(): void
   hide(): void
-  pointerDown(context: SelectionRotationHandlePointerDownContext): SceneInteractionPointerDrag | null
+  pointerDown(context: SelectionRotationHandlePointerDownContext): SceneToolPointerDrag | null
   cancelActiveDrag(): boolean
   contains(target: EventTarget | null): boolean
   dispose(): void
@@ -132,7 +134,6 @@ export function createSelectionRotationHandle(
     event.preventDefault()
     event.stopPropagation()
   })
-  options.container.appendChild(root)
   let activeDrag: ActiveRotationDrag | null = null
 
   function refresh(): void {
@@ -155,7 +156,7 @@ export function createSelectionRotationHandle(
     root.style.display = 'none'
   }
 
-  function pointerDown({ event, rawWorld }: SelectionRotationHandlePointerDownContext): SceneInteractionPointerDrag | null {
+  function pointerDown({ event, rawWorld }: SelectionRotationHandlePointerDownContext): SceneToolPointerDrag | null {
     if (event.button !== 0) return null
     const selection = options.getSelection()
     const transformState = captureRotationTransformState(options.getSceneStore().persisted, selection)
@@ -184,41 +185,57 @@ export function createSelectionRotationHandle(
     }
   }
 
-  function updateRotation(context: SceneInteractionPointerEvent): void {
+  function updateRotation(context: SceneToolPointerEvent): void {
     applyActiveRotation(context)
   }
 
-  function commitRotation(context: SceneInteractionPointerEvent): void {
-    if (!activeDrag) return
+  function commitRotation(context: SceneToolPointerEvent): void {
+    const drag = activeDrag
+    if (!drag) return
     const deltaDeg = applyActiveRotation(context)
-    const tx = activeDrag.tx
-    activeDrag = null
-    root.style.cursor = 'grab'
-    delete root.dataset.rotationHandleActive
-    hideReadout()
-
-    if (Math.abs(deltaDeg) > NO_OP_ROTATION_DELTA_DEG && tx.changed) {
-      tx.commit({ invalidate: 'scene' })
-    } else {
-      tx.abort()
-      options.render('scene')
+    let transactionFinished = false
+    try {
+      if (Math.abs(deltaDeg) > NO_OP_ROTATION_DELTA_DEG && drag.tx.changed) {
+        drag.tx.commit({ invalidate: 'scene' })
+        transactionFinished = true
+      } else {
+        drag.tx.abort()
+        transactionFinished = true
+        options.render('scene')
+      }
+    } finally {
+      if (transactionFinished) {
+        activeDrag = null
+        root.style.cursor = 'grab'
+        delete root.dataset.rotationHandleActive
+        hideReadout()
+        options.refreshSelectionDependent()
+      }
     }
-    options.refreshSelectionDependent()
   }
 
   function cancelActiveDrag(): boolean {
-    if (!activeDrag) return false
-    activeDrag.tx.abort()
-    activeDrag = null
-    root.style.cursor = 'grab'
-    delete root.dataset.rotationHandleActive
-    hideReadout()
-    options.render('scene')
-    options.refreshSelectionDependent()
+    const drag = activeDrag
+    if (!drag) return false
+    let transactionFinished = false
+    try {
+      drag.tx.abort()
+      transactionFinished = true
+    } finally {
+      if (transactionFinished) activeDrag = null
+      root.style.cursor = 'grab'
+      delete root.dataset.rotationHandleActive
+      hideReadout()
+      try {
+        options.render('scene')
+      } finally {
+        options.refreshSelectionDependent()
+      }
+    }
     return true
   }
 
-  function applyActiveRotation(context: SceneInteractionPointerEvent): number {
+  function applyActiveRotation(context: SceneToolPointerEvent): number {
     if (!activeDrag) return 0
     const deltaDeg = resolveDeltaDeg(activeDrag, context)
     if (Math.abs(deltaDeg - activeDrag.lastDeltaDeg) < 0.0001) return deltaDeg
@@ -244,9 +261,18 @@ export function createSelectionRotationHandle(
     readout.style.display = 'none'
   }
 
-  refresh()
+  try {
+    options.container.appendChild(root)
+    refresh()
+  } catch (error) {
+    root.remove()
+    throw error
+  }
 
   return {
+    get dragActive() {
+      return activeDrag !== null
+    },
     refresh,
     hide,
     pointerDown,
@@ -255,8 +281,10 @@ export function createSelectionRotationHandle(
       return target instanceof Node && root.contains(target)
     },
     dispose() {
-      cancelActiveDrag()
-      root.remove()
+      runCanvasRuntimeCleanups([
+        () => cancelActiveDrag(),
+        () => root.remove(),
+      ], 'Selection Rotation Handle disposal failed')
     },
   }
 }
@@ -350,7 +378,7 @@ function centerOfBounds(bounds: SceneBounds): ScenePoint {
   }
 }
 
-function resolveDeltaDeg(active: ActiveRotationDrag, context: SceneInteractionPointerEvent): number {
+function resolveDeltaDeg(active: ActiveRotationDrag, context: SceneToolPointerEvent): number {
   const currentAngleDeg = angleDeg(active.pivot, context.rawWorld)
   const rawDeltaDeg = signedAngleDeltaDeg(active.startPointerAngleDeg, currentAngleDeg)
   if (!context.event.shiftKey) return rawDeltaDeg

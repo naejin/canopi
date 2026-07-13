@@ -36,12 +36,16 @@ import { SceneCanvasRuntime } from './scene-runtime.ts'
 import type { PlantNameLabel } from './selection-labels'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
 import type {
+  SceneEditCoordinator,
+  SceneEditTransaction,
+} from './scene-runtime/transactions'
+import type {
   CanvasRuntimeAppAdapter,
   CanvasRuntimeDocumentCompositionInput,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
-import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-frame'
+import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
 
 function makeFile(): CanopiFile {
   return {
@@ -186,10 +190,15 @@ function createRendererStub() {
   }
 }
 
-async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
+function createRuntimeContainer(): HTMLDivElement {
   const container = document.createElement('div')
   Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
   Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+  return container
+}
+
+async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
+  const container = createRuntimeContainer()
 
   const renderer = createRendererStub()
   ;(runtime as any)._construction.replaceRendererHost({
@@ -378,6 +387,178 @@ describe('scene canvas runtime', () => {
     plantSpacingIntervalM.value = 0.5
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
+  })
+
+  it('rolls back effects acquired before a later subscription fails', () => {
+    const disposeTheme = vi.fn()
+    const disposeLocale = vi.fn(() => {
+      throw new Error('locale disposal failed')
+    })
+    const disposeChromeOverlay = vi.fn()
+    const cleanState = createCleanStateAdapterProbe()
+    const panelTargets = createPanelTargetAdapterProbe()
+
+    expect(() => new SceneCanvasRuntime({
+      appAdapter: {
+        ...cleanState.adapter,
+        settings: createTestSettingsAdapter({
+          subscribeTheme: () => disposeTheme,
+          subscribeLocale: () => disposeLocale,
+          subscribeChromeOverlay: () => disposeChromeOverlay,
+        }),
+      },
+      targetPresentation: {
+        ...panelTargets.adapter,
+        subscribePanelOriginTargetChanges: () => {
+          throw new Error('panel subscription failed')
+        },
+      },
+    })).toThrow('Scene Canvas runtime effect installation failed')
+
+    expect(disposeTheme).toHaveBeenCalledTimes(1)
+    expect(disposeLocale).toHaveBeenCalledTimes(1)
+    expect(disposeChromeOverlay).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs every installed effect disposer when one disposer fails', () => {
+    const disposeTheme = vi.fn(() => {
+      throw new Error('theme disposal failed')
+    })
+    const disposeLocale = vi.fn()
+    const disposeChromeOverlay = vi.fn()
+    const disposePanelTarget = vi.fn()
+    const cleanState = createCleanStateAdapterProbe()
+    const panelTargets = createPanelTargetAdapterProbe()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...cleanState.adapter,
+        settings: createTestSettingsAdapter({
+          subscribeTheme: () => disposeTheme,
+          subscribeLocale: () => disposeLocale,
+          subscribeChromeOverlay: () => disposeChromeOverlay,
+        }),
+      },
+      targetPresentation: {
+        ...panelTargets.adapter,
+        subscribePanelOriginTargetChanges: () => disposePanelTarget,
+      },
+    })
+
+    expect(() => runtime.destroy()).toThrow('theme disposal failed')
+
+    expect(disposeTheme).toHaveBeenCalledTimes(1)
+    expect(disposeLocale).toHaveBeenCalledTimes(1)
+    expect(disposeChromeOverlay).toHaveBeenCalledTimes(1)
+    expect(disposePanelTarget).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes a tool change only after the live Session transition succeeds', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+
+    const sceneEdits = (runtime as unknown as { _sceneEdits: SceneEditCoordinator })._sceneEdits
+    const beginSceneEdit = sceneEdits.begin.bind(sceneEdits)
+    let abortCalls = 0
+    const beginSpy = vi.spyOn(sceneEdits, 'begin').mockImplementation((type: string) => {
+      const transaction = beginSceneEdit(type)
+      if (type !== 'interaction-drag') return transaction
+      return {
+        mutate: (edit) => transaction.mutate(edit),
+        setSelection: (ids: Iterable<string>) => transaction.setSelection(ids),
+        commit: (options) => transaction.commit(options),
+        get changed() {
+          return transaction.changed
+        },
+        abort: () => {
+          abortCalls += 1
+          if (abortCalls === 1) throw new Error('drag abort failed')
+          transaction.abort()
+        },
+      } satisfies SceneEditTransaction
+    })
+
+    events.pointerDown({ x: 10, y: 10 }, { pointerId: 51 })
+    events.pointerMove({ x: 30, y: 30 }, { pointerId: 51 })
+
+    expect(() => runtime.commandSurface.tools.setTool('rectangle'))
+      .toThrow('drag abort failed')
+    expect(activeTool.value).toBe('select')
+    expect(container.style.cursor).toBe('default')
+
+    runtime.commandSurface.tools.setTool('rectangle')
+
+    expect(abortCalls).toBe(2)
+    expect(activeTool.value).toBe('rectangle')
+    expect(container.style.cursor).toBe('crosshair')
+
+    beginSpy.mockRestore()
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('restores the live Session tool when post-transition refresh fails', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('hand')
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 52 })
+    events.pointerMove({ x: 110, y: 110 }, { pointerId: 52 })
+    expect(container.style.cursor).toBe('grabbing')
+    const selection = vi.spyOn(runtime.querySurface, 'getDesignObjectSelection')
+      .mockImplementation(() => {
+        throw new Error('selection refresh failed')
+      })
+
+    expect(() => runtime.commandSurface.tools.setTool('select'))
+      .toThrow('selection refresh failed')
+    expect(activeTool.value).toBe('hand')
+    expect(container.style.cursor).toBe('grab')
+
+    selection.mockRestore()
+    const beforeFreshPan = runtime.querySurface.getViewport()
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
+    events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
+    events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
+
+    expect(runtime.querySurface.getViewport()).toMatchObject({
+      x: beforeFreshPan.x + 30,
+      y: beforeFreshPan.y + 20,
+    })
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('restores the previous tool adapter when post-transition refresh fails', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('plant-spacing')
+    const selection = vi.spyOn(runtime.querySurface, 'getDesignObjectSelection')
+      .mockImplementation(() => {
+        throw new Error('selection refresh failed')
+      })
+
+    expect(() => runtime.commandSurface.tools.setTool('select'))
+      .toThrow('selection refresh failed')
+    expect(activeTool.value).toBe('plant-spacing')
+    const plantSpacingHud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
+    expect(plantSpacingHud?.style.display).toBe('block')
+    expect(plantSpacingHud?.textContent).toContain('Select a placed plant')
+
+    selection.mockRestore()
+    clickAt(events, { x: 10, y: 10 })
+
+    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    events.dispose()
+    runtime.destroy()
   })
 
   it('groups, duplicates, and deletes grouped scene entities', () => {
@@ -669,6 +850,57 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.replaceDocument(fileWithOnlyPlants('plant-2'))
     expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
+  })
+
+  it('rolls back renderer ownership when interaction Session construction fails', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const container = createRuntimeContainer()
+    const renderer = createRendererStub()
+    const disposeRenderer = vi.fn(async () => {})
+    ;(runtime as any)._construction.replaceRendererHost({
+      initialize: async () => renderer,
+      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
+      dispose: disposeRenderer,
+    })
+    const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(() => {
+      throw new Error('interaction construction failed')
+    })
+
+    try {
+      await expect(runtime.init(container)).rejects.toThrow('interaction construction failed')
+    } finally {
+      appendChild.mockRestore()
+    }
+
+    expect(disposeRenderer).toHaveBeenCalledTimes(1)
+    expect((runtime as any)._rendering.container).toBeNull()
+    runtime.destroy()
+  })
+
+  it('rolls back Session listeners and renderer ownership when the initial render fails', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const container = createRuntimeContainer()
+    const events = createSceneInteractionEventHarness(container, { trackListeners: true })
+    const renderer = createRendererStub()
+    renderer.renderScene.mockImplementation(() => {
+      throw new Error('initial render failed')
+    })
+    const disposeRenderer = vi.fn(async () => {})
+    ;(runtime as any)._construction.replaceRendererHost({
+      initialize: async () => renderer,
+      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
+      dispose: disposeRenderer,
+    })
+
+    await expect(runtime.init(container)).rejects.toThrow('initial render failed')
+
+    expect(disposeRenderer).toHaveBeenCalledTimes(1)
+    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
+    expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
+    expect(container.querySelector('[data-hover-tooltip]')).toBeNull()
+    expect((runtime as any)._rendering.container).toBeNull()
+    events.dispose()
+    runtime.destroy()
   })
 
   it('describes editable top-level Design Object selection with visual bounds', () => {

@@ -11,6 +11,10 @@ import {
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { SpeciesCacheEntry } from '../species-cache'
 import {
+  runCanvasRuntimeCleanups,
+  throwCanvasRuntimeCleanupErrors,
+} from '../cleanup'
+import {
   applySceneDragDeltaToDraft,
   captureSceneDragState,
   createSceneDragState,
@@ -76,6 +80,7 @@ export interface SharedGesturePointerUpResult {
 
 export interface SceneInteractionSharedGestures {
   readonly active: boolean
+  readonly editActive: boolean
   readonly panning: boolean
   beginPan(context: SharedGesturePointerDownContext): boolean
   beginSelectionGesture(context: SharedGesturePointerDownContext): boolean
@@ -104,6 +109,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
   private activeClickTarget: TopLevelTarget | null = null
   private activeClickScreen: ScenePoint | null = null
   private activeClickAdditive = false
+  private dragPresentationActive = false
   private lastClick: {
     readonly target: TopLevelTarget
     readonly screen: ScenePoint
@@ -117,6 +123,10 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
 
   get active(): boolean {
     return this.mode !== 'idle'
+  }
+
+  get editActive(): boolean {
+    return this.dragEdit !== null
   }
 
   get panning(): boolean {
@@ -239,6 +249,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     this.activeClickTarget = hit
     this.activeClickScreen = screen
     this.activeClickAdditive = additive
+    this.dragPresentationActive = true
     this.context.beginDesignObjectDragPresentation()
     this.distanceOverlay.hide()
     return true
@@ -299,9 +310,12 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       }
       if (moved) this.lastClick = null
       this.dragEdit = null
-      this.distanceOverlay.hide()
       this.activeDraggedPlantId = null
-      this.context.endDesignObjectDragPresentation()
+      try {
+        this.distanceOverlay.hide()
+      } finally {
+        this.endDragPresentation()
+      }
     }
 
     if (this.mode === 'band' && this.startWorld && this.startScreen && distance(this.startScreen, screen) > 2) {
@@ -329,28 +343,56 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
   }
 
   cancel(): void {
+    const errors: unknown[] = []
+    const attempt = (cleanup: () => void): void => {
+      try {
+        cleanup()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
     const wasDragging = this.mode === 'dragging'
-    this.mode = 'idle'
-    this.startScreen = null
-    this.startWorld = null
-    this.dragEdit?.abort()
-    this.dragEdit = null
-    this.dragSnapRef = null
-    this.lastDragDelta = { x: 0, y: 0 }
-    this.activeDraggedPlantId = null
-    this.activeClickTarget = null
-    this.activeClickScreen = null
-    this.activeClickAdditive = false
-    resetSceneDragState(this.dragState)
-    this.bandAdditive = false
-    hideInteractionPreview(this.context.preview)
-    this.distanceOverlay.hide()
-    if (wasDragging) this.context.endDesignObjectDragPresentation()
+    const edit = this.dragEdit
+    let transactionFinished = edit === null
+    if (edit) {
+      attempt(() => {
+        edit.abort()
+        if (this.dragEdit === edit) this.dragEdit = null
+        transactionFinished = true
+      })
+    }
+
+    if (transactionFinished) {
+      this.mode = 'idle'
+      this.startScreen = null
+      this.startWorld = null
+      this.dragSnapRef = null
+      this.lastDragDelta = { x: 0, y: 0 }
+      this.activeDraggedPlantId = null
+      this.activeClickTarget = null
+      this.activeClickScreen = null
+      this.activeClickAdditive = false
+      resetSceneDragState(this.dragState)
+      this.bandAdditive = false
+    }
+    attempt(() => hideInteractionPreview(this.context.preview))
+    attempt(() => this.distanceOverlay.hide())
+    if (wasDragging && transactionFinished) attempt(() => this.context.render('scene'))
+    attempt(() => this.endDragPresentation())
+    throwCanvasRuntimeCleanupErrors(errors, 'Shared Scene Interaction cancellation failed')
   }
 
   dispose(): void {
-    this.cancel()
-    this.distanceOverlay.dispose()
+    runCanvasRuntimeCleanups([
+      () => this.cancel(),
+      () => this.distanceOverlay.dispose(),
+    ], 'Shared Scene Interaction disposal failed')
+  }
+
+  private endDragPresentation(): void {
+    if (!this.dragPresentationActive) return
+    this.context.endDesignObjectDragPresentation()
+    this.dragPresentationActive = false
   }
 
   private computeDragDelta(rawWorld: ScenePoint): ScenePoint {

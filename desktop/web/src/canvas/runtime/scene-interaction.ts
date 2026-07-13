@@ -35,14 +35,14 @@ import {
   previewSavedObjectStampAt,
 } from './interaction/saved-object-stamp-tool'
 import {
-  createSceneToolModules,
-  type SceneToolModules,
+  createSceneToolRegistry,
+  type SceneToolRegistry,
 } from './interaction/tool-modules'
-import {
-  createSceneInteractionFrame,
-  type SceneInteractionFrame,
-  type SceneInteractionTransientCleanupOptions,
-} from './interaction/frame'
+import type {
+  SceneToolAdapter,
+  SceneToolPointerDrag,
+  SceneToolTransientOptions,
+} from './interaction/tool-adapter'
 import {
   createSceneInteractionSharedGestures,
   type SceneInteractionSharedGestures,
@@ -85,10 +85,25 @@ import {
   setSceneDesignObjectLocks,
 } from './scene/locks'
 import type { ScenePersistedState } from './scene'
+import {
+  runCanvasRuntimeCleanups,
+  throwCanvasRuntimeCleanupErrors,
+} from './cleanup'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
 
-export interface SceneInteractionDeps {
+interface SceneInteractionPointerGesture {
+  readonly pointerId: number
+  readonly startScreen: ScenePoint
+  readonly startWorld: ScenePoint
+  readonly containerRect: DOMRect
+}
+
+interface SceneInteractionCancellationOptions extends SceneToolTransientOptions {
+  readonly releaseSpace?: boolean
+}
+
+export interface SceneInteractionSessionDeps {
   container: HTMLElement
   getSceneStore: () => SceneStore
   camera: CameraController
@@ -130,11 +145,26 @@ export interface SceneInteractionDeps {
   notifyTransientHistoryChange?: () => void
 }
 
-export class SceneInteractionController {
+export interface SceneInteractionSession {
+  setTool(name: string): void
+  refreshMeasurements(): void
+  canUndoTransientHistory(): boolean
+  canRedoTransientHistory(): boolean
+  undoTransientHistory(): boolean
+  redoTransientHistory(): boolean
+  dispose(): void
+}
+
+export function createSceneInteractionSession(
+  deps: SceneInteractionSessionDeps,
+): SceneInteractionSession {
+  return new DefaultSceneInteractionSession(deps)
+}
+
+class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _preview: HTMLDivElement
   private readonly _tooltip: HoverTooltipController
-  private readonly _tools: SceneToolModules
-  private readonly _frame: SceneInteractionFrame
+  private readonly _toolRegistry: SceneToolRegistry
   private readonly _sharedGestures: SceneInteractionSharedGestures
   private readonly _annotationEditor: AnnotationInlineEditorController
   private readonly _selectionToolbar: SelectionActionToolbarController
@@ -144,221 +174,290 @@ export class SceneInteractionController {
   private readonly _measurementGuideControlPoints: MeasurementGuideControlPointController
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
+  private _pointerGesture: SceneInteractionPointerGesture | null = null
+  private _toolPointerDrag: SceneToolPointerDrag | null = null
+  private _spaceHeld = false
+  private _attached = false
+  private _disposed = false
+  private _transientCancellationPending = false
   private _designObjectDragPresentationSuppressed = false
   private _pendingInteractionHostFocusFrame: number | null = null
 
-  constructor(private readonly _deps: SceneInteractionDeps) {
-    this._preview = createInteractionPreview(this._deps.container)
-    this._tooltip = createHoverTooltip(this._deps.container)
-    this._tools = createSceneToolModules({
-      container: this._deps.container,
-      preview: this._preview,
-      camera: this._deps.camera,
-      sceneEdits: this._deps.sceneEdits,
-      getSceneStore: this._deps.getSceneStore,
-      getSelection: this._deps.getSelection,
-      clearSelection: this._deps.clearSelection,
-      render: this._deps.render,
-      getSpeciesCache: this._deps.getSpeciesCache,
-      getPlantPresentationContext: this._deps.getPlantPresentationContext,
-      getLocalizedCommonNames: this._deps.getLocalizedCommonNames,
-      readPlantSpacingIntervalMeters: this._deps.readPlantSpacingIntervalMeters,
-      commitPlantSpacingIntervalMeters: this._deps.commitPlantSpacingIntervalMeters,
-      switchTool: (name) => this._switchTool(name),
-      applySnapping: (point) => this._applySnapping(point),
-      getContainerRect: () => this._frame.currentContainerRect(),
-      notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
-    })
-    this._annotationEditor = createAnnotationInlineEditor({
-      container: this._deps.container,
-      camera: this._deps.camera,
-      getSceneStore: this._deps.getSceneStore,
-      sceneEdits: this._deps.sceneEdits,
-      canEditAnnotation: (annotationId) => this._canEditAnnotation(annotationId),
-      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-    })
-    this._sharedGestures = createSceneInteractionSharedGestures({
-      container: this._deps.container,
-      preview: this._preview,
-      camera: this._deps.camera,
-      getSceneStore: this._deps.getSceneStore,
-      getSelection: this._deps.getSelection,
-      getDesignObjectSelection: this._deps.getDesignObjectSelection,
-      setSelection: this._deps.setSelection,
-      clearSelection: this._deps.clearSelection,
-      sceneEdits: this._deps.sceneEdits,
-      setViewport: this._deps.setViewport,
-      render: this._deps.render,
-      getSpeciesCache: this._deps.getSpeciesCache,
-      getPlantPresentationContext: this._deps.getPlantPresentationContext,
-      applySnapping: (point) => this._applySnapping(point),
-      refreshViewportDependent: () => this._refreshViewportDependentMeasurements(),
-      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-      beginDesignObjectDragPresentation: () => this._beginDesignObjectDragPresentation(),
-      endDesignObjectDragPresentation: () => this._endDesignObjectDragPresentation(),
-      beginAnnotationTextEdit: (annotationId) => this._beginAnnotationTextEdit(annotationId),
-    })
-    this._selectionToolbar = createSelectionActionToolbar({
-      container: this._deps.container,
-      camera: this._deps.camera,
-      getSelection: this._deps.getDesignObjectSelection,
-      commands: this._deps.selectionCommands,
-      saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
-    })
-    this._contextMenu = createCanvasContextMenu({
-      container: this._deps.container,
-      commands: this._deps.selectionCommands,
-      getSelection: this._deps.getDesignObjectSelection,
-      saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
-    })
-    this._rotationHandle = createSelectionRotationHandle({
-      container: this._deps.container,
-      camera: this._deps.camera,
-      getSceneStore: this._deps.getSceneStore,
-      getSelection: this._deps.getDesignObjectSelection,
-      sceneEdits: this._deps.sceneEdits,
-      render: this._deps.render,
-      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-    })
-    this._zoneControlPoints = createZoneControlPoints({
-      container: this._deps.container,
-      camera: this._deps.camera,
-      getSceneStore: this._deps.getSceneStore,
-      getSelection: this._deps.getDesignObjectSelection,
-      sceneEdits: this._deps.sceneEdits,
-      applySnapping: (point) => this._applySnapping(point),
-      render: this._deps.render,
-      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-      beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
-      endDragPresentation: () => this._endDesignObjectDragPresentation(),
-    })
-    this._measurementGuideControlPoints = createMeasurementGuideControlPoints({
-      container: this._deps.container,
-      camera: this._deps.camera,
-      getSceneStore: this._deps.getSceneStore,
-      getSelection: this._deps.getDesignObjectSelection,
-      sceneEdits: this._deps.sceneEdits,
-      applySnapping: (point) => this._applySnapping(point),
-      render: this._deps.render,
-      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-      beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
-      endDragPresentation: () => this._endDesignObjectDragPresentation(),
-    })
-    this._lockedAffordance = createLockedObjectAffordance({
-      container: this._deps.container,
-      onUnlock: (id) => this._unlockLockedObject(id),
-    })
-    this._frame = createSceneInteractionFrame({
-      container: this._deps.container,
-      handlers: {
-        pointerDown: this._onPointerDown,
-        pointerLeave: this._onPointerLeave,
-        pointerMove: this._onPointerMove,
-        pointerUp: this._onPointerUp,
-        keyDown: this._onKeyDown,
-        keyUp: this._onKeyUp,
-        contextMenu: this._onContextMenu,
-        wheel: this._onWheel,
-        dragOver: this._onDragOver,
-        dragLeave: this._onDragLeave,
-        drop: this._onDrop,
-      },
-    })
-    this.setTool(getCanvasTool())
-    this._frame.attach()
+  constructor(private readonly _deps: SceneInteractionSessionDeps) {
+    const rollback: Array<() => void> = []
+    const own = <T>(resource: T, dispose: (resource: T) => void): T => {
+      rollback.push(() => dispose(resource))
+      return resource
+    }
+
+    try {
+      this._preview = own(
+        createInteractionPreview(this._deps.container),
+        (preview) => preview.remove(),
+      )
+      this._tooltip = own(
+        createHoverTooltip(this._deps.container),
+        (tooltip) => tooltip.dispose(),
+      )
+      this._toolRegistry = own(createSceneToolRegistry({
+        container: this._deps.container,
+        preview: this._preview,
+        camera: this._deps.camera,
+        sceneEdits: this._deps.sceneEdits,
+        getSceneStore: this._deps.getSceneStore,
+        getSelection: this._deps.getSelection,
+        clearSelection: this._deps.clearSelection,
+        render: this._deps.render,
+        getSpeciesCache: this._deps.getSpeciesCache,
+        getPlantPresentationContext: this._deps.getPlantPresentationContext,
+        getLocalizedCommonNames: this._deps.getLocalizedCommonNames,
+        readPlantSpacingIntervalMeters: this._deps.readPlantSpacingIntervalMeters,
+        commitPlantSpacingIntervalMeters: this._deps.commitPlantSpacingIntervalMeters,
+        switchTool: (name) => this._switchTool(name),
+        applySnapping: (point) => this._applySnapping(point),
+        getContainerRect: () => this._currentContainerRect(),
+        notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
+      }), disposeSceneToolRegistry)
+      this._annotationEditor = own(createAnnotationInlineEditor({
+        container: this._deps.container,
+        camera: this._deps.camera,
+        getSceneStore: this._deps.getSceneStore,
+        sceneEdits: this._deps.sceneEdits,
+        canEditAnnotation: (annotationId) => this._canEditAnnotation(annotationId),
+        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+      }), (editor) => editor.dispose())
+      this._sharedGestures = own(createSceneInteractionSharedGestures({
+        container: this._deps.container,
+        preview: this._preview,
+        camera: this._deps.camera,
+        getSceneStore: this._deps.getSceneStore,
+        getSelection: this._deps.getSelection,
+        getDesignObjectSelection: this._deps.getDesignObjectSelection,
+        setSelection: this._deps.setSelection,
+        clearSelection: this._deps.clearSelection,
+        sceneEdits: this._deps.sceneEdits,
+        setViewport: this._deps.setViewport,
+        render: this._deps.render,
+        getSpeciesCache: this._deps.getSpeciesCache,
+        getPlantPresentationContext: this._deps.getPlantPresentationContext,
+        applySnapping: (point) => this._applySnapping(point),
+        refreshViewportDependent: () => this._refreshViewportDependentMeasurements(),
+        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+        beginDesignObjectDragPresentation: () => this._beginDesignObjectDragPresentation(),
+        endDesignObjectDragPresentation: () => this._endDesignObjectDragPresentation(),
+        beginAnnotationTextEdit: (annotationId) => this._beginAnnotationTextEdit(annotationId),
+      }), (gestures) => gestures.dispose())
+      this._selectionToolbar = own(createSelectionActionToolbar({
+        container: this._deps.container,
+        camera: this._deps.camera,
+        getSelection: this._deps.getDesignObjectSelection,
+        commands: this._deps.selectionCommands,
+        saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
+      }), (toolbar) => toolbar.dispose())
+      this._contextMenu = own(createCanvasContextMenu({
+        container: this._deps.container,
+        commands: this._deps.selectionCommands,
+        getSelection: this._deps.getDesignObjectSelection,
+        saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
+      }), (menu) => menu.dispose())
+      this._rotationHandle = own(createSelectionRotationHandle({
+        container: this._deps.container,
+        camera: this._deps.camera,
+        getSceneStore: this._deps.getSceneStore,
+        getSelection: this._deps.getDesignObjectSelection,
+        sceneEdits: this._deps.sceneEdits,
+        render: this._deps.render,
+        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+      }), (handle) => handle.dispose())
+      this._zoneControlPoints = own(createZoneControlPoints({
+        container: this._deps.container,
+        camera: this._deps.camera,
+        getSceneStore: this._deps.getSceneStore,
+        getSelection: this._deps.getDesignObjectSelection,
+        sceneEdits: this._deps.sceneEdits,
+        applySnapping: (point) => this._applySnapping(point),
+        render: this._deps.render,
+        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+        beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
+        endDragPresentation: () => this._endDesignObjectDragPresentation(),
+      }), (controlPoints) => controlPoints.dispose())
+      this._measurementGuideControlPoints = own(createMeasurementGuideControlPoints({
+        container: this._deps.container,
+        camera: this._deps.camera,
+        getSceneStore: this._deps.getSceneStore,
+        getSelection: this._deps.getDesignObjectSelection,
+        sceneEdits: this._deps.sceneEdits,
+        applySnapping: (point) => this._applySnapping(point),
+        render: this._deps.render,
+        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+        beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
+        endDragPresentation: () => this._endDesignObjectDragPresentation(),
+      }), (controlPoints) => controlPoints.dispose())
+      this._lockedAffordance = own(createLockedObjectAffordance({
+        container: this._deps.container,
+        onUnlock: (id) => this._unlockLockedObject(id),
+      }), (affordance) => affordance.dispose())
+      this.setTool(getCanvasTool())
+      this._attach()
+      rollback.length = 0
+    } catch (error) {
+      for (const cleanup of rollback.reverse()) {
+        try {
+          cleanup()
+        } catch {
+          // Preserve the construction failure after best-effort resource cleanup.
+        }
+      }
+      throw error
+    }
   }
 
   setTool(name: string): void {
-    if (this._tool !== name) this._annotationEditor.cancel()
-    this._tool = name
-    this._frame.transitionTool({
-      toolName: name,
-      transition: (toolName) => this._tools.transitionTo(toolName, () => this._cancelTransientInteraction()),
-      updateCursor: (toolName) => {
-        this._deps.container.style.cursor = cursorForTool(toolName)
-      },
-    })
-    this._refreshSelectionDependentMeasurements()
+    if (this._disposed) return
+    const previousTool = this._tool
+    const changingTool = this._tool !== name
+    if (changingTool) this._annotationEditor.cancel()
+
+    const previousAdapter = this._activeToolAdapter()
+    this._cancelTransientInteraction()
+    const previousCursor = this._deps.container.style.cursor
+    let previousDeactivationAttempted = false
+    let nextAdapter: SceneToolAdapter | null = null
+    let nextActivationAttempted = false
+    try {
+      if (changingTool) {
+        previousDeactivationAttempted = true
+        previousAdapter?.onDeactivate?.()
+      }
+
+      this._tool = name
+      nextAdapter = this._toolRegistry.select(name)
+      if (changingTool) {
+        nextActivationAttempted = true
+        nextAdapter?.onActivate?.()
+      }
+      this._deps.container.style.cursor = cursorForTool(name)
+      this._refreshSelectionDependentMeasurements()
+    } catch (error) {
+      const errors: unknown[] = [error]
+      const attempt = (rollback: () => void): void => {
+        try {
+          rollback()
+        } catch (rollbackError) {
+          errors.push(rollbackError)
+        }
+      }
+
+      if (nextActivationAttempted) attempt(() => nextAdapter?.onDeactivate?.())
+      this._tool = previousTool
+      this._toolRegistry.select(previousTool)
+      this._deps.container.style.cursor = previousCursor
+      if (previousDeactivationAttempted) attempt(() => previousAdapter?.onActivate?.())
+      attempt(() => this._refreshSelectionDependentMeasurements())
+      throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction tool transition failed')
+    }
   }
 
   dispose(): void {
-    this._cancelPendingInteractionHostFocus()
-    this._frame.dispose(() => {
-      this._deps.setHoveredEntityId(null)
-      this._selectionToolbar.dispose()
-      this._contextMenu.dispose()
-      this._rotationHandle.dispose()
-      this._zoneControlPoints.dispose()
-      this._measurementGuideControlPoints.dispose()
-      this._lockedAffordance.dispose()
-      this._annotationEditor.dispose()
-      this._sharedGestures.dispose()
-      this._tools.dispose()
-      this._preview.remove()
-      this._tooltip.dispose()
-    })
+    if (this._disposed) return
+    this._disposed = true
+    const errors: unknown[] = []
+    const attempt = (cleanup: () => void): void => {
+      try {
+        cleanup()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+
+    attempt(() => this._detach())
+    attempt(() => this._cancelPendingInteractionHostFocus())
+    attempt(() => this._cancelTransientInteraction())
+    attempt(() => this._activeToolAdapter()?.onDeactivate?.())
+    attempt(() => this._selectionToolbar.dispose())
+    attempt(() => this._contextMenu.dispose())
+    attempt(() => this._rotationHandle.dispose())
+    attempt(() => this._zoneControlPoints.dispose())
+    attempt(() => this._measurementGuideControlPoints.dispose())
+    attempt(() => this._lockedAffordance.dispose())
+    attempt(() => this._annotationEditor.dispose())
+    attempt(() => this._sharedGestures.dispose())
+    attempt(() => this._forEachUniqueToolHook('dispose', (dispose) => attempt(dispose)))
+    attempt(() => this._preview.remove())
+    attempt(() => this._tooltip.dispose())
+    attempt(() => this._deps.setHoveredEntityId(null))
+
+    throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction Session disposal failed')
   }
 
   refreshMeasurements(): void {
+    if (this._disposed) return
     this._refreshViewportDependentMeasurements()
   }
 
   canUndoTransientHistory(): boolean {
-    return this._tools.canUndoTransientHistory()
+    if (this._disposed) return false
+    return this._activeToolAdapter()?.canUndoTransientHistory?.() ?? false
   }
 
   canRedoTransientHistory(): boolean {
-    return this._tools.canRedoTransientHistory()
+    if (this._disposed) return false
+    return this._activeToolAdapter()?.canRedoTransientHistory?.() ?? false
   }
 
   undoTransientHistory(): boolean {
-    return this._tools.undoTransientHistory()
+    if (this._disposed) return false
+    return this._activeToolAdapter()?.undoTransientHistory?.() ?? false
   }
 
   redoTransientHistory(): boolean {
-    return this._tools.redoTransientHistory()
+    if (this._disposed) return false
+    return this._activeToolAdapter()?.redoTransientHistory?.() ?? false
   }
 
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
+    if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
+    if (this._retryPendingTransientCancellation(event)) return
+    if (this._contextMenu.contains(event.target)) return
     this._contextMenu.hide()
     if (this._annotationEditor.contains(event.target)) return
     if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     if (this._selectionToolbar.contains(event.target)) return
-    if (this._contextMenu.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
-    if (this._tools.shouldIgnorePointerEvent(event.target)) return
+    if (this._activeToolAdapter()?.shouldIgnorePointerEvent?.(event.target) ?? false) return
 
     this._claimInteractionPointerDown(event)
 
     const containerRect = this._deps.container.getBoundingClientRect()
     const screen = this._screenPoint(event, containerRect)
     const world = this._deps.camera.screenToWorld(screen)
-    this._frame.startPointerGesture({
+    this._pointerGesture = {
       pointerId: event.pointerId,
       startScreen: screen,
       startWorld: world,
       containerRect,
-    })
+    }
+    this._toolPointerDrag = null
 
     if (event.button === 0 && this._rotationHandle.contains(event.target)) {
       const rotationDrag = this._rotationHandle.pointerDown({ event, rawWorld: world })
-      if (rotationDrag) this._frame.beginToolPointerDrag(rotationDrag)
-      else this._frame.clearPointerGesture()
+      if (rotationDrag) this._toolPointerDrag = rotationDrag
+      else this._clearPointerGesture()
       return
     }
 
     if (event.button === 0 && this._zoneControlPoints.contains(event.target)) {
       const zoneControlPointDrag = this._zoneControlPoints.pointerDown({ event, rawWorld: world })
-      if (zoneControlPointDrag) this._frame.beginToolPointerDrag(zoneControlPointDrag)
-      else this._frame.clearPointerGesture()
+      if (zoneControlPointDrag) this._toolPointerDrag = zoneControlPointDrag
+      else this._clearPointerGesture()
       return
     }
 
     if (event.button === 0 && this._measurementGuideControlPoints.contains(event.target)) {
       const guideControlPointDrag = this._measurementGuideControlPoints.pointerDown({ event, rawWorld: world })
-      if (guideControlPointDrag) this._frame.beginToolPointerDrag(guideControlPointDrag)
-      else this._frame.clearPointerGesture()
+      if (guideControlPointDrag) this._toolPointerDrag = guideControlPointDrag
+      else this._clearPointerGesture()
       return
     }
 
@@ -367,16 +466,18 @@ export class SceneInteractionController {
       screen,
       world,
       tool: this._tool,
-      spaceHeld: this._frame.isSpaceHeld(),
+      spaceHeld: this._spaceHeld,
     })) return
 
-    if (this._tools.pointerDown({
+    if (this._activeToolAdapter()?.pointerDown?.({
       event,
       screen,
       rawWorld: world,
-      beginDrag: (drag) => this._frame.beginToolPointerDrag(drag),
-      clearPointerGesture: () => this._frame.clearPointerGesture(),
-    })) {
+      beginDrag: (drag) => {
+        this._toolPointerDrag = drag
+      },
+      clearPointerGesture: () => this._clearPointerGesture(),
+    }) ?? false) {
       return
     }
 
@@ -385,7 +486,7 @@ export class SceneInteractionController {
       screen,
       world,
       tool: this._tool,
-      spaceHeld: this._frame.isSpaceHeld(),
+      spaceHeld: this._spaceHeld,
     })
   }
 
@@ -394,7 +495,7 @@ export class SceneInteractionController {
   }
 
   private _updateHover(event: PointerEvent): void {
-    if (this._tools.shouldSuppressHover()) {
+    if (this._activeToolAdapter()?.shouldSuppressHover?.() ?? false) {
       this._clearPassiveHoverPresentation()
       return
     }
@@ -432,69 +533,95 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
-    if (!this._frame.hasPointerGesture()) {
-      if (this._selectionToolbar.contains(event.target)) return
-      if (this._contextMenu.contains(event.target)) return
-      if (this._zoneControlPoints.contains(event.target)) return
-      if (this._measurementGuideControlPoints.contains(event.target)) return
-      if (this._lockedAffordance.contains(event.target)) return
-      if (this._tools.shouldIgnorePointerEvent(event.target)) return
+    if (!this._pointerGesture) {
+      if (this._isOwnedOverlayPointerTarget(event.target)) return
 
       const screen = this._screenPoint(event)
       const rawWorld = this._deps.camera.screenToWorld(screen)
-      if (this._tools.pointerMoveWithoutCapture({ event, screen, rawWorld })) return
+      if (this._activeToolAdapter()?.pointerMoveWithoutCapture?.({ event, screen, rawWorld }) ?? false) return
       this._updateHover(event)
       return
     }
-    const pointerGesture = this._frame.pointerGestureFor(event)
-    if (!pointerGesture) return
+    const pointerGesture = this._pointerGesture
+    if (pointerGesture.pointerId !== event.pointerId) return
 
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
     if (this._sharedGestures.active && this._sharedGestures.pointerMove({ screen, rawWorld })) return
 
-    const toolDrag = this._frame.activeToolPointerDrag()
+    const toolDrag = this._toolPointerDrag
     if (toolDrag) {
       toolDrag.update({ event, screen, rawWorld })
       return
     }
 
-    if (this._tools.pointerMoveWithCapture({
+    if (this._activeToolAdapter()?.pointerMoveWithCapture?.({
       event,
       screen,
       rawWorld,
       startScreen: pointerGesture.startScreen,
       startWorld: pointerGesture.startWorld,
-      beginDrag: (drag) => this._frame.beginToolPointerDrag(drag),
-      clearPointerGesture: () => this._frame.clearPointerGesture(),
-    })) {
+      beginDrag: (drag) => {
+        this._toolPointerDrag = drag
+      },
+      clearPointerGesture: () => this._clearPointerGesture(),
+    }) ?? false) {
       return
     }
   }
 
   private readonly _onPointerUp = (event: PointerEvent): void => {
-    const hasPointerGesture = this._frame.hasPointerGesture()
-    if (!hasPointerGesture && this._tools.shouldIgnorePointerUpWithoutCapture()) return
-    if (hasPointerGesture && !this._frame.pointerGestureFor(event)) return
+    if (this._retryPendingTransientCancellation(event)) return
+    const hasPointerGesture = this._pointerGesture !== null
+    if (!hasPointerGesture && this._isOwnedOverlayPointerTarget(event.target)) return
+    if (!hasPointerGesture && (this._activeToolAdapter()?.shouldIgnorePointerUpWithoutCapture?.() ?? false)) return
+    if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
-    const toolDrag = this._frame.activeToolPointerDrag()
-    if (toolDrag) {
-      toolDrag.commit({ event, screen, rawWorld })
+    let preserveActiveDraft = false
+    try {
+      this._toolPointerDrag?.commit({ event, screen, rawWorld })
+      const sharedResult = this._sharedGestures.pointerUp({
+        screen,
+        rawWorld,
+        preserveActiveDraft: this._activeToolAdapter()?.shouldPreserveTransientOnPan?.() ?? false,
+      })
+      preserveActiveDraft = sharedResult.preserveActiveDraft
+    } finally {
+      try {
+        this._cancelTransientInteraction({ preserveActiveDraft })
+      } finally {
+        this._refreshViewportDependentMeasurements()
+      }
     }
-    const sharedResult = this._sharedGestures.pointerUp({
-      screen,
-      rawWorld,
-      preserveActiveDraft: this._tools.shouldPreserveTransientOnPan(),
-    })
+  }
 
-    this._cancelTransientInteraction({ preserveActiveDraft: sharedResult.preserveActiveDraft })
-    this._refreshViewportDependentMeasurements()
+  private readonly _onPointerCancel = (event: PointerEvent): void => {
+    if (this._retryPendingTransientCancellation(event)) return
+    if (!this._pointerGesture || this._pointerGesture.pointerId !== event.pointerId) return
+    this._cancelInterruptedInteraction()
+  }
+
+  private readonly _onWindowBlur = (): void => {
+    this._cancelPendingInteractionHostFocus()
+    this._cancelInterruptedInteraction()
+  }
+
+  private _cancelInterruptedInteraction(): void {
+    try {
+      this._cancelTransientInteraction({
+        preserveActiveDraft: this._activeToolAdapter()?.shouldPreserveTransientOnPan?.() ?? false,
+        releaseSpace: true,
+      })
+    } finally {
+      this._refreshViewportDependentMeasurements()
+    }
   }
 
   private readonly _onWheel = (event: WheelEvent): void => {
+    if (this._retryPendingTransientCancellation(event)) return
     event.preventDefault()
     const screen = this._screenPoint(event)
     const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1
@@ -504,8 +631,13 @@ export class SceneInteractionController {
   }
 
   private readonly _onContextMenu = (event: MouseEvent): void => {
+    if (this._retryPendingTransientCancellation(event)) return
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
+    if (this._hasActiveSceneEdit()) {
+      event.stopImmediatePropagation()
+      return
+    }
     if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     const screen = this._screenPoint(event)
     const world = this._deps.camera.screenToWorld(screen)
@@ -514,6 +646,7 @@ export class SceneInteractionController {
   }
 
   private readonly _onDragOver = (event: DragEvent): void => {
+    if (this._retryPendingTransientCancellation(event)) return
     event.preventDefault()
     if (hasSavedObjectStampDragData(event.dataTransfer)) {
       const source = readSavedObjectStampDragPreviewSource(event.dataTransfer)
@@ -547,6 +680,7 @@ export class SceneInteractionController {
     event.preventDefault()
     hideInteractionPreview(this._preview)
     clearSavedObjectStampGhosts(this._preview)
+    if (this._retryPendingTransientCancellation(event)) return
     const savedObjectStampSource = readSavedObjectStampDropSource(event)
     if (savedObjectStampSource) {
       clearSavedObjectStampDragSource()
@@ -594,7 +728,10 @@ export class SceneInteractionController {
     return this._deps.camera.screenToWorld(this._screenPoint(event))
   }
 
-  private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>, rect = this._frame.currentContainerRect()): ScenePoint {
+  private _screenPoint(
+    event: Pick<MouseEvent, 'clientX' | 'clientY'>,
+    rect = this._currentContainerRect(),
+  ): ScenePoint {
     return {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
@@ -633,69 +770,69 @@ export class SceneInteractionController {
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape' && this._zoneControlPoints.cancelActiveDrag()) {
+    if (this._retryPendingTransientCancellation(event)) return
+    if (
+      !this._pointerGesture
+      && isKeyboardInteractiveEventTarget(event.target)
+    ) return
+    if (this._activeToolAdapter()?.keyDown?.(event) ?? false) return
+    if (event.key === 'Escape' && this._pointerGesture) {
       event.preventDefault()
-      this._frame.clearPointerGesture()
+      this._cancelInterruptedInteraction()
       return
     }
-
-    if (event.key === 'Escape' && this._measurementGuideControlPoints.cancelActiveDrag()) {
-      event.preventDefault()
-      this._frame.clearPointerGesture()
-      return
-    }
-
-    if (event.key === 'Escape' && this._rotationHandle.cancelActiveDrag()) {
-      event.preventDefault()
-      this._frame.clearPointerGesture()
-      return
-    }
-
-    if (this._tools.keyDown(event)) return
 
     if (this._beginSelectedAnnotationTextEditFromKeyboard(event)) return
 
     if (
       event.code !== 'Space'
-      || this._frame.isSpaceHeld()
+      || this._spaceHeld
       || isEditableTarget(event.target)
-      || this._tools.shouldSuppressSharedKeyboard(event)
+      || (this._activeToolAdapter()?.shouldSuppressSharedKeyboard?.(event) ?? false)
     ) return
     event.preventDefault()
-    this._frame.holdSpace()
-    if (!this._frame.activeToolPointerDrag() && this._tool !== 'hand') {
+    this._spaceHeld = true
+    if (!this._toolPointerDrag && this._tool !== 'hand') {
       this._deps.container.style.cursor = 'grab'
     }
   }
 
   private readonly _onKeyUp = (event: KeyboardEvent): void => {
     if (event.code !== 'Space') return
-    this._frame.releaseSpace()
+    this._spaceHeld = false
     if (!this._sharedGestures.panning) {
       this._deps.container.style.cursor = cursorForTool(this._tool)
     }
   }
 
-  private _cancelTransientInteraction(options: SceneInteractionTransientCleanupOptions = {}): void {
-    this._frame.cleanupTransient(options, {
-      clearPointerGesture: () => this._frame.clearPointerGesture(),
-      cancelSharedGestures: () => {
-        this._sharedGestures.cancel()
-        this._rotationHandle.cancelActiveDrag()
-        this._zoneControlPoints.cancelActiveDrag()
-        this._measurementGuideControlPoints.cancelActiveDrag()
-      },
-      cancelToolTransient: (cleanupOptions) => this._tools.cancelTransient(cleanupOptions),
-      clearHover: () => this._clearPassiveHoverPresentation(),
-      resetCursor: () => {
-        this._deps.container.style.cursor = cursorForTool(this._tool)
-      },
-    })
+  private _cancelTransientInteraction(options: SceneInteractionCancellationOptions = {}): void {
+    this._clearPointerGesture()
+    if (options.releaseSpace) this._spaceHeld = false
+    const activeAdapter = this._activeToolAdapter()
+    try {
+      runCanvasRuntimeCleanups([
+        () => this._sharedGestures.cancel(),
+        () => this._rotationHandle.cancelActiveDrag(),
+        () => this._zoneControlPoints.cancelActiveDrag(),
+        () => this._measurementGuideControlPoints.cancelActiveDrag(),
+        () => activeAdapter?.cancelTransient?.(options),
+        () => this._deps.setHoveredEntityId(null),
+        () => this._tooltip.hide(),
+        () => this._lockedAffordance.hide(),
+        () => {
+          this._deps.container.style.cursor = cursorForTool(this._tool)
+        },
+      ], 'Scene Interaction cancellation failed')
+      this._transientCancellationPending = false
+    } catch (error) {
+      this._transientCancellationPending = this._hasActiveSceneEdit()
+      throw error
+    }
   }
 
   private _refreshViewportDependentMeasurements(): void {
     this._annotationEditor.refresh()
-    if (this._tools.refreshViewportDependent()) {
+    if (this._activeToolAdapter()?.refreshViewportDependent?.() === true) {
       this._zoneControlPoints.refresh(this._canShowSelectAffordances())
       this._measurementGuideControlPoints.refresh(this._canShowSelectAffordances())
       if (this._canShowSelectAffordances()) {
@@ -713,7 +850,7 @@ export class SceneInteractionController {
 
   private _refreshSelectionDependentMeasurements(): void {
     this._annotationEditor.refresh()
-    this._tools.refreshSelectionDependent()
+    this._forEachUniqueToolHook('refreshSelectionDependent', (refresh) => refresh())
     const canShowSelectAffordances = this._canShowSelectAffordances()
     this._zoneControlPoints.refresh(canShowSelectAffordances)
     this._measurementGuideControlPoints.refresh(canShowSelectAffordances)
@@ -727,7 +864,10 @@ export class SceneInteractionController {
   }
 
   private _canShowSelectAffordances(): boolean {
-    return this._tool === 'select' && !this._annotationEditor.hasActiveEditor()
+    return this._tool === 'select'
+      && !this._transientCancellationPending
+      && !this._hasActiveSceneEdit()
+      && !this._annotationEditor.hasActiveEditor()
   }
 
   private _beginDesignObjectDragPresentation(): void {
@@ -802,7 +942,7 @@ export class SceneInteractionController {
     if (event.key !== 'Enter' && event.key !== 'F2') return false
     if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
     if (isEditableTarget(event.target)) return false
-    if (this._tools.shouldSuppressSharedKeyboard(event)) return false
+    if (this._activeToolAdapter()?.shouldSuppressSharedKeyboard?.(event) ?? false) return false
 
     const selection = this._deps.getDesignObjectSelection()
     if (
@@ -870,6 +1010,119 @@ export class SceneInteractionController {
     if (committed) this._lockedAffordance.hide()
   }
 
+  private _activeToolAdapter(): SceneToolAdapter | null {
+    return this._toolRegistry.activeAdapter
+  }
+
+  private _isOwnedOverlayPointerTarget(target: EventTarget | null): boolean {
+    return this._annotationEditor.contains(target)
+      || this._selectionToolbar.contains(target)
+      || this._contextMenu.contains(target)
+      || this._rotationHandle.contains(target)
+      || this._zoneControlPoints.contains(target)
+      || this._measurementGuideControlPoints.contains(target)
+      || this._lockedAffordance.contains(target)
+      || (this._activeToolAdapter()?.shouldIgnorePointerEvent?.(target) ?? false)
+  }
+
+  private _hasActiveSceneEdit(): boolean {
+    return this._sharedGestures.editActive
+      || this._rotationHandle.dragActive
+      || this._zoneControlPoints.dragActive
+      || this._measurementGuideControlPoints.dragActive
+  }
+
+  private _forEachUniqueToolHook(
+    hook: 'refreshSelectionDependent' | 'dispose',
+    visit: (callback: () => void) => void,
+  ): void {
+    const callbacks = new Set<() => void>()
+    this._toolRegistry.forEachAdapter((adapter) => {
+      const callback = adapter[hook]
+      if (callback) callbacks.add(callback)
+    })
+    for (const callback of callbacks) visit(callback)
+  }
+
+  private _currentContainerRect(): DOMRect {
+    return this._pointerGesture?.containerRect ?? this._deps.container.getBoundingClientRect()
+  }
+
+  private _clearPointerGesture(): void {
+    this._pointerGesture = null
+    this._toolPointerDrag = null
+  }
+
+  private _retryPendingTransientCancellation(event: Event): boolean {
+    if (!this._transientCancellationPending) return false
+    if (event.cancelable) event.preventDefault()
+    event.stopImmediatePropagation()
+    try {
+      this._cancelTransientInteraction({ releaseSpace: true })
+    } finally {
+      this._refreshViewportDependentMeasurements()
+    }
+    return true
+  }
+
+  private _attach(): void {
+    if (this._attached || this._disposed) return
+    const container = this._deps.container
+    try {
+      container.addEventListener('pointerdown', this._onPointerDown, { capture: true })
+      container.addEventListener('pointerleave', this._onPointerLeave)
+      window.addEventListener('pointermove', this._onPointerMove, { capture: true })
+      window.addEventListener('pointerup', this._onPointerUp, { capture: true })
+      window.addEventListener('pointercancel', this._onPointerCancel, { capture: true })
+      window.addEventListener('keydown', this._onKeyDown, { capture: true })
+      window.addEventListener('keyup', this._onKeyUp)
+      window.addEventListener('blur', this._onWindowBlur)
+      container.addEventListener('contextmenu', this._onContextMenu)
+      container.addEventListener('wheel', this._onWheel, { passive: false })
+      container.addEventListener('dragover', this._onDragOver)
+      container.addEventListener('dragleave', this._onDragLeave)
+      container.addEventListener('drop', this._onDrop)
+      this._attached = true
+    } catch (error) {
+      this._attached = true
+      try {
+        this._detach()
+      } catch {
+        // Preserve the listener-installation failure after attempting every removal.
+      }
+      throw error
+    }
+  }
+
+  private _detach(): void {
+    if (!this._attached) return
+    this._attached = false
+    const container = this._deps.container
+    runCanvasRuntimeCleanups([
+      () => container.removeEventListener('pointerdown', this._onPointerDown, { capture: true }),
+      () => container.removeEventListener('pointerleave', this._onPointerLeave),
+      () => window.removeEventListener('pointermove', this._onPointerMove, { capture: true }),
+      () => window.removeEventListener('pointerup', this._onPointerUp, { capture: true }),
+      () => window.removeEventListener('pointercancel', this._onPointerCancel, { capture: true }),
+      () => window.removeEventListener('keydown', this._onKeyDown, { capture: true }),
+      () => window.removeEventListener('keyup', this._onKeyUp),
+      () => window.removeEventListener('blur', this._onWindowBlur),
+      () => container.removeEventListener('contextmenu', this._onContextMenu),
+      () => container.removeEventListener('wheel', this._onWheel),
+      () => container.removeEventListener('dragover', this._onDragOver),
+      () => container.removeEventListener('dragleave', this._onDragLeave),
+      () => container.removeEventListener('drop', this._onDrop),
+    ], 'Scene Interaction listener removal failed')
+  }
+
+}
+
+function disposeSceneToolRegistry(registry: SceneToolRegistry): void {
+  const disposers = new Set<() => void>()
+  registry.forEachAdapter((adapter) => {
+    if (adapter.dispose) disposers.add(adapter.dispose)
+  })
+  runCanvasRuntimeCleanups([...disposers], 'Scene tool registry disposal failed')
 }
 
 function disabledContextMenuSelection(): CanvasDesignObjectSelectionModel {
@@ -915,6 +1168,15 @@ function isCanvasKeyboardShortcutTarget(target: EventTarget | null, container: H
   if (!element) return false
   if (isKeyboardInteractiveElement(element)) return false
   return true
+}
+
+function isKeyboardInteractiveEventTarget(target: EventTarget | null): boolean {
+  const element = target instanceof HTMLElement
+    ? target
+    : target instanceof Node
+      ? target.parentElement
+      : null
+  return element ? isKeyboardInteractiveElement(element) : false
 }
 
 function isKeyboardInteractiveElement(element: HTMLElement): boolean {

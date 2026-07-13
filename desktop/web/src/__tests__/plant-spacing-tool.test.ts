@@ -10,7 +10,7 @@ import type { SceneToolAdapter } from '../canvas/runtime/interaction/tool-adapte
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
-} from './support/scene-interaction-frame'
+} from './support/scene-interaction-events'
 
 function createPlantPresentationContext(viewportScale: number) {
   return {

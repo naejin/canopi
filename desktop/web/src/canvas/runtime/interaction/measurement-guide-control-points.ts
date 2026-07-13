@@ -3,7 +3,8 @@ import { createMeasurementGuideDraftMeasurements } from '../measurement-guides'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { SceneMeasurementGuideEntity, ScenePoint, SceneStore } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
-import type { SceneInteractionPointerDrag, SceneInteractionPointerEvent } from './frame'
+import { runCanvasRuntimeCleanups } from '../cleanup'
+import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter'
 import { createZoneMeasurementOverlay, type ZoneMeasurementOverlayController } from './zone-measurement-overlay'
 
 interface MeasurementGuideControlPointOptions {
@@ -20,9 +21,10 @@ interface MeasurementGuideControlPointOptions {
 }
 
 export interface MeasurementGuideControlPointController {
+  readonly dragActive: boolean
   refresh(enabled: boolean): void
   hide(): void
-  pointerDown(context: MeasurementGuideControlPointPointerDownContext): SceneInteractionPointerDrag | null
+  pointerDown(context: MeasurementGuideControlPointPointerDownContext): SceneToolPointerDrag | null
   cancelActiveDrag(): boolean
   contains(target: EventTarget | null): boolean
   dispose(): void
@@ -68,9 +70,14 @@ export function createMeasurementGuideControlPoints(
     'display: none',
     'pointer-events: none',
   ].join(';')
-  options.container.appendChild(root)
-
-  const measurements: ZoneMeasurementOverlayController = createZoneMeasurementOverlay(options.container)
+  let measurements: ZoneMeasurementOverlayController
+  try {
+    options.container.appendChild(root)
+    measurements = createZoneMeasurementOverlay(options.container)
+  } catch (error) {
+    root.remove()
+    throw error
+  }
   let activeDrag: ActiveMeasurementGuideControlPointDrag | null = null
   let controlPoints = new Map<string, MeasurementGuideControlPoint>()
 
@@ -98,7 +105,7 @@ export function createMeasurementGuideControlPoints(
     root.style.display = 'none'
   }
 
-  function pointerDown({ event, rawWorld }: MeasurementGuideControlPointPointerDownContext): SceneInteractionPointerDrag | null {
+  function pointerDown({ event, rawWorld }: MeasurementGuideControlPointPointerDownContext): SceneToolPointerDrag | null {
     if (event.button !== 0) return null
     const element = closestControlPointElement(event.target)
     const controlPoint = element ? controlPoints.get(element.dataset.measurementGuideControlPoint ?? '') : null
@@ -127,7 +134,7 @@ export function createMeasurementGuideControlPoints(
     }
   }
 
-  function updateDrag(context: SceneInteractionPointerEvent): void {
+  function updateDrag(context: SceneToolPointerEvent): void {
     const drag = activeDrag
     if (!drag) return
     if (
@@ -138,37 +145,63 @@ export function createMeasurementGuideControlPoints(
     applyActiveDrag(context.rawWorld)
   }
 
-  function commitDrag(context: SceneInteractionPointerEvent): void {
+  function commitDrag(context: SceneToolPointerEvent): void {
     const drag = activeDrag
     if (!drag) return
     const movedPastDragThreshold = drag.movedPastDragThreshold
       || screenDistance(drag.startScreen, context.screen) > CONTROL_POINT_DRAG_THRESHOLD_PX
     if (movedPastDragThreshold) applyActiveDrag(context.rawWorld)
-    activeDrag = null
-    delete root.dataset.measurementGuideControlPointActive
-    measurements.hide()
-
-    if (drag.changed && drag.tx.changed) {
-      drag.tx.commit({ invalidate: 'scene' })
-    } else {
-      drag.tx.abort()
-      options.render('scene')
+    let transactionFinished = false
+    try {
+      measurements.hide()
+      if (drag.changed && drag.tx.changed) {
+        drag.tx.commit({ invalidate: 'scene' })
+        transactionFinished = true
+      } else {
+        drag.tx.abort()
+        transactionFinished = true
+        options.render('scene')
+      }
+    } finally {
+      if (transactionFinished) {
+        activeDrag = null
+        delete root.dataset.measurementGuideControlPointActive
+        finishDragPresentation()
+      }
     }
-    options.endDragPresentation()
-    options.refreshSelectionDependent()
   }
 
   function cancelActiveDrag(): boolean {
     const drag = activeDrag
     if (!drag) return false
-    drag.tx.abort()
-    activeDrag = null
-    delete root.dataset.measurementGuideControlPointActive
-    measurements.hide()
-    options.render('scene')
-    options.endDragPresentation()
-    options.refreshSelectionDependent()
+    let transactionFinished = false
+    try {
+      drag.tx.abort()
+      transactionFinished = true
+    } finally {
+      if (transactionFinished) {
+        activeDrag = null
+        delete root.dataset.measurementGuideControlPointActive
+      }
+      try {
+        measurements.hide()
+      } finally {
+        try {
+          options.render('scene')
+        } finally {
+          finishDragPresentation()
+        }
+      }
+    }
     return true
+  }
+
+  function finishDragPresentation(): void {
+    try {
+      options.endDragPresentation()
+    } finally {
+      options.refreshSelectionDependent()
+    }
   }
 
   function applyActiveDrag(rawWorld: ScenePoint): void {
@@ -205,6 +238,9 @@ export function createMeasurementGuideControlPoints(
   }
 
   return {
+    get dragActive() {
+      return activeDrag !== null
+    },
     refresh,
     hide,
     pointerDown,
@@ -213,9 +249,11 @@ export function createMeasurementGuideControlPoints(
       return target instanceof Node && root.contains(target)
     },
     dispose() {
-      cancelActiveDrag()
-      measurements.dispose()
-      root.remove()
+      runCanvasRuntimeCleanups([
+        () => cancelActiveDrag(),
+        () => measurements.dispose(),
+        () => root.remove(),
+      ], 'Measurement Guide Control Point disposal failed')
     },
   }
 

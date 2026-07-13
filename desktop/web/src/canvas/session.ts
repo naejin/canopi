@@ -100,7 +100,6 @@ export function setCurrentCanvasSession(session: CanvasRuntimeSurfaces | null): 
 export function setCurrentCanvasTool(name: string): void {
   const session = currentCanvasToolCommandSurface.value
   if (session) {
-    setCanvasTool(name)
     session.setTool(name)
     return
   }

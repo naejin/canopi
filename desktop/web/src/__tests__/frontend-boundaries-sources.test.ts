@@ -992,7 +992,7 @@ describe('frontend boundary sources', () => {
 
   it('keeps Planning Canvas interaction lifetime behind its planning-specific frame', () => {
     const planningFrameSource = readSource('../app/planning-canvas/interaction-frame.ts')
-    const sceneFrameSource = readSource('../canvas/runtime/interaction/frame.ts')
+    const sceneSessionSource = readSource('../canvas/runtime/scene-interaction.ts')
     const planningSurfaceSources = [
       '../app/timeline/canvas/host-model.ts',
       '../app/timeline/canvas/controller.ts',
@@ -1007,7 +1007,7 @@ describe('frontend boundary sources', () => {
     expect(planningFrameSource).toContain('syncVisibleItems')
     expect(planningFrameSource).toContain('handleWheel?:')
     expect(planningFrameSource).not.toContain('SceneInteraction')
-    expect(sceneFrameSource).not.toContain('planning-canvas')
+    expect(sceneSessionSource).not.toContain('planning-canvas')
     expectNoImportsMatching('../app/planning-canvas/interaction-frame.ts', [
       /canvas\/runtime\/interaction/,
     ])

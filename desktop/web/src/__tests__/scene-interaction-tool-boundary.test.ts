@@ -1,5 +1,13 @@
-import { existsSync, readFileSync } from 'node:fs'
+import * as fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
+
+const { existsSync, readFileSync } = fs
+const fsWithDirectoryRead = fs as unknown as {
+  readdirSync(
+    path: URL,
+    options: { withFileTypes: true },
+  ): Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>
+}
 
 function readSource(path: string): string {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -9,6 +17,10 @@ function sourceExists(path: string): boolean {
   return existsSync(new URL(path, import.meta.url))
 }
 
+function sourceUrl(path: string): URL {
+  return new URL(path, import.meta.url)
+}
+
 function importSpecifiers(source: string): string[] {
   return Array.from(
     source.matchAll(/(?:\bfrom\s+|^\s*import\s+)['"]([^'"]+)['"]/gm),
@@ -16,8 +28,26 @@ function importSpecifiers(source: string): string[] {
   )
 }
 
+function runtimeModuleSources(
+  path = '../canvas/runtime/',
+): Array<{ readonly name: string; readonly source: string }> {
+  const directory = sourceUrl(path)
+  return fsWithDirectoryRead.readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const childPath = `${path.replace(/\/$/, '')}/${entry.name}`
+      if (entry.isDirectory()) return runtimeModuleSources(`${childPath}/`)
+      if (
+        !entry.isFile()
+        || !entry.name.endsWith('.ts')
+        || entry.name.endsWith('.test.ts')
+        || childPath === '../canvas/runtime/scene-interaction.ts'
+      ) return []
+      return [{ name: childPath, source: readSource(childPath) }]
+    })
+}
+
 describe('Scene Interaction tool module boundaries', () => {
-  it('keeps broad Scene Interaction tests on the frame event harness', () => {
+  it('keeps broad Scene Interaction tests on the user-equivalent event harness', () => {
     const guardedSources = [
       readSource('scene-interaction.test.ts'),
       readSource('../canvas/runtime/scene-runtime.test.ts'),
@@ -25,42 +55,55 @@ describe('Scene Interaction tool module boundaries', () => {
 
     for (const source of guardedSources) {
       expect(source).toContain('createSceneInteractionEventHarness')
-      expect(source).not.toMatch(/\._on(?:Pointer|Key|Wheel)/)
+      expect(source).not.toMatch(/\._on[A-Z]/)
     }
   })
 
-  it('routes Scene Interaction lifecycle through the Scene Interaction Frame seam', () => {
+  it('keeps Scene Interaction listener and lifecycle ownership in the Session', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const frameSource = readSource('../canvas/runtime/interaction/frame.ts')
 
-    expect(interactionSource).toContain('createSceneInteractionFrame')
-    expect(interactionSource).toContain('this._frame.cleanupTransient')
-    expect(interactionSource).not.toContain("addEventListener('pointerdown'")
-    expect(interactionSource).not.toContain("removeEventListener('pointerdown'")
-    expect(frameSource).toContain("addEventListener('pointerdown'")
-    expect(frameSource).toContain("removeEventListener('pointerdown'")
-    expect(frameSource).toContain('cleanupTransient')
+    expect(interactionSource).toContain('createSceneInteractionSession')
+    expect(interactionSource).toContain("addEventListener('pointerdown'")
+    expect(interactionSource).toContain("removeEventListener('pointerdown'")
+    expect(interactionSource).toContain("addEventListener('pointercancel'")
+    expect(interactionSource).toContain("removeEventListener('pointercancel'")
+    expect(interactionSource).toContain("addEventListener('blur'")
+    expect(interactionSource).toContain("removeEventListener('blur'")
+    expect(interactionSource).toContain('_cancelTransientInteraction')
+    expect(interactionSource).toContain('_cancelPendingInteractionHostFocus')
+    expect(interactionSource).toContain('_selectionToolbar.dispose()')
+    expect(sourceExists('../canvas/runtime/interaction/frame.ts')).toBe(false)
   })
 
-  it('keeps generic pointer capture lifecycle behind the Scene Interaction Frame seam', () => {
+  it('keeps the public Scene Interaction seam limited to Session construction and lifecycle', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const frameSource = readSource('../canvas/runtime/interaction/frame.ts')
+    const exportedNames = Array.from(
+      interactionSource.matchAll(
+        /^export\s+(?:(?:abstract|async|declare)\s+)*(?:interface|type|class|function|const|let|var|enum|namespace)\s+(\w+)/gm,
+      ),
+      (match) => match[1],
+    )
 
-    expect(frameSource).toContain('startPointerGesture')
-    expect(frameSource).toContain('pointerGestureFor')
-    expect(frameSource).toContain('beginToolPointerDrag')
-    expect(frameSource).toContain('clearPointerGesture')
-    expect(frameSource).toContain('isSpaceHeld')
-    expect(interactionSource).not.toContain('_pointerId')
-    expect(interactionSource).not.toContain('_startScreen')
-    expect(interactionSource).not.toContain('_startWorld')
-    expect(interactionSource).not.toContain('_cachedContainerRect')
-    expect(interactionSource).not.toContain('_toolDrag')
-    expect(interactionSource).not.toContain('_spaceHeld')
-    expect(interactionSource).not.toContain('InteractionMode')
+    expect(Array.from(interactionSource.matchAll(/^export\b/gm))).toHaveLength(3)
+    expect(exportedNames).toEqual([
+      'SceneInteractionSessionDeps',
+      'SceneInteractionSession',
+      'createSceneInteractionSession',
+    ])
+    expect(interactionSource).not.toMatch(/^export\s+(?:default|\*|(?:type\s+)?\{)/m)
+    expect(interactionSource).not.toContain('SceneInteractionFrameHandlers')
   })
 
-  it('keeps shared selection gestures behind the Scene Interaction Frame seam', () => {
+  it('prevents canvas runtime modules from acquiring a second host-listener or pointer-session owner', () => {
+    for (const { name, source } of runtimeModuleSources()) {
+      expect(source, name).not.toMatch(/window\.(?:add|remove)EventListener/)
+      expect(source, name).not.toMatch(/(?:\bcontainer|\.container)\.(?:add|remove)EventListener/)
+      expect(source, name).not.toContain('SceneInteractionFrame')
+      expect(source, name).not.toMatch(/from ['"][^'"]*interaction\/frame['"]/)
+    }
+  })
+
+  it('keeps shared selection gesture algorithms behind the Session seam', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
     const sharedGesturesSource = readSource('../canvas/runtime/interaction/shared-gestures.ts')
 
@@ -76,13 +119,27 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(sharedGesturesSource).toContain('interaction-drag')
   })
 
+  it('keeps the tool registry focused on adapter construction and identity', () => {
+    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const registrySource = readSource('../canvas/runtime/interaction/tool-modules.ts')
+
+    expect(registrySource).toContain('createSceneToolRegistry')
+    expect(registrySource).toContain('activeAdapter')
+    expect(registrySource).toContain('select(toolName: string)')
+    expect(registrySource).not.toContain('SceneToolModules')
+    expect(registrySource).not.toContain('transitionTo(')
+    expect(registrySource).not.toContain('pointerMoveWithCapture(context')
+    expect(interactionSource).toContain('this._activeToolAdapter()?.pointerDown?.(')
+    expect(interactionSource).toContain('this._activeToolAdapter()?.pointerMoveWithCapture?.(')
+  })
+
   it('keeps Annotation Text creation editor state behind the text tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
     const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const textToolSource = readSource('../canvas/runtime/interaction/text-annotation-tool.ts')
     const inlineEditorSource = readSource('../canvas/runtime/interaction/annotation-inline-editor.ts')
 
-    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).toContain('createSceneToolRegistry')
     expect(interactionSource).not.toContain('createTextAnnotationTool')
     expect(interactionSource).not.toContain('createTextAnnotationToolAdapter')
     expect(interactionSource).toContain('createAnnotationInlineEditor')
@@ -103,7 +160,7 @@ describe('Scene Interaction tool module boundaries', () => {
     const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const zoneToolSource = readSource('../canvas/runtime/interaction/zone-drawing-tool.ts')
 
-    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).toContain('createSceneToolRegistry')
     expect(interactionSource).not.toContain('createZoneDrawingTool')
     expect(interactionSource).not.toContain('createZoneDrawingToolAdapters')
     expect(toolModulesSource).toContain('createZoneDrawingTool')
@@ -127,7 +184,7 @@ describe('Scene Interaction tool module boundaries', () => {
     const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const objectStampSource = readSource('../canvas/runtime/interaction/object-stamp-tool.ts')
 
-    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).toContain('createSceneToolRegistry')
     expect(interactionSource).not.toContain('createObjectStampTool')
     expect(interactionSource).not.toContain('createObjectStampToolAdapter')
     expect(toolModulesSource).toContain('createObjectStampTool')
@@ -171,7 +228,7 @@ describe('Scene Interaction tool module boundaries', () => {
     const plantStampSource = readSource('../canvas/runtime/interaction/plant-stamp-tool.ts')
     const sourceSeam = readSource('../canvas/plant-stamp-source.ts')
 
-    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).toContain('createSceneToolRegistry')
     expect(interactionSource).not.toContain('createPlantStampTool')
     expect(interactionSource).not.toContain('createPlantStampToolAdapter')
     expect(toolModulesSource).toContain('createPlantStampTool')
@@ -191,7 +248,7 @@ describe('Scene Interaction tool module boundaries', () => {
     const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const plantSpacingSource = readSource('../canvas/runtime/interaction/plant-spacing-tool.ts')
 
-    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).toContain('createSceneToolRegistry')
     expect(interactionSource).not.toContain('createPlantSpacingTool')
     expect(interactionSource).not.toContain('createPlantSpacingToolAdapter')
     expect(toolModulesSource).toContain('createPlantSpacingTool')
@@ -226,7 +283,7 @@ describe('Scene Interaction tool module boundaries', () => {
     )
   })
 
-  it('keeps active tool drag state generic in the scene interaction router', () => {
+  it('keeps active tool drag state generic in the Scene Interaction Session', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
 
     expect(interactionSource).toContain('ToolPointerDrag')

@@ -1,7 +1,10 @@
 import { setCanvasSelection } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { createUuid } from '../../utils/ids'
-import { SceneInteractionController } from './scene-interaction'
+import {
+  createSceneInteractionSession,
+  type SceneInteractionSession,
+} from './scene-interaction'
 import {
   resetTransientRuntimeState,
   syncCanvasSignalsFromScene,
@@ -22,6 +25,7 @@ import type {
   CanvasQuerySurface,
 } from './runtime'
 import { targets, speciesTarget } from '../../target'
+import { throwCanvasRuntimeCleanupErrors } from './cleanup'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -29,7 +33,7 @@ export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 
 export class SceneCanvasRuntime {
   private readonly _construction: SceneRuntimeConstruction
-  private _interaction: SceneInteractionController | null = null
+  private _interaction: SceneInteractionSession | null = null
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
     this._construction = createSceneRuntimeConstruction(options, {
@@ -50,9 +54,13 @@ export class SceneCanvasRuntime {
       addGuide: (axis, worldPosition) => this._addGuide(axis, worldPosition),
       setHoveredEntityId: (id, options) => this._setHoveredEntityId(id, options),
       disposeInteraction: () => {
-        this._interaction?.dispose()
+        const interaction = this._interaction
         this._interaction = null
-        this._notifyTransientHistoryChanged()
+        try {
+          interaction?.dispose()
+        } finally {
+          this._notifyTransientHistoryChanged()
+        }
       },
       notifyTransientHistoryChanged: () => this._notifyTransientHistoryChanged(),
       canUndoTransientHistory: () => this._interaction?.canUndoTransientHistory() ?? false,
@@ -135,44 +143,56 @@ export class SceneCanvasRuntime {
   }
 
   async init(container: HTMLElement): Promise<void> {
-    refreshCanvasColorCache(container)
-    await this._rendering.initialize(container)
-    const viewport = this._camera.initialize({
-      width: Math.max(1, container.clientWidth),
-      height: Math.max(1, container.clientHeight),
-    })
-    this._setViewport(viewport, { forceRevision: true })
-    this._interaction = new SceneInteractionController({
-      container,
-      getSceneStore: () => this._sceneStore,
-      camera: this._camera,
-      setViewport: (viewport) => this._setViewport(viewport),
-      getSpeciesCache: () => this._presentation.getSpeciesCache(),
-      getPlantPresentationContext: (viewportScale) => this._presentation.createPlantPresentationContext(viewportScale),
-      getSelection: () => this._sceneStore.session.selectedEntityIds,
-      setSelection: (ids) => this._setSelection(ids),
-      clearSelection: () => this._setSelection([]),
-      sceneEdits: this._sceneEdits,
-      getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
-      selectionCommands: this._commandSurface.sceneEdits,
-      contextualCommands: {
-        saveSelectionAsObjectStamp: () => {
-          void this._appAdapter.savedObjectStamps?.saveCurrentSelection()
+    try {
+      refreshCanvasColorCache(container)
+      await this._rendering.initialize(container)
+      const viewport = this._camera.initialize({
+        width: Math.max(1, container.clientWidth),
+        height: Math.max(1, container.clientHeight),
+      })
+      this._setViewport(viewport, { forceRevision: true })
+      this._interaction = createSceneInteractionSession({
+        container,
+        getSceneStore: () => this._sceneStore,
+        camera: this._camera,
+        setViewport: (viewport) => this._setViewport(viewport),
+        getSpeciesCache: () => this._presentation.getSpeciesCache(),
+        getPlantPresentationContext: (viewportScale) =>
+          this._presentation.createPlantPresentationContext(viewportScale),
+        getSelection: () => this._sceneStore.session.selectedEntityIds,
+        setSelection: (ids) => this._setSelection(ids),
+        clearSelection: () => this._setSelection([]),
+        sceneEdits: this._sceneEdits,
+        getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
+        selectionCommands: this._commandSurface.sceneEdits,
+        contextualCommands: {
+          saveSelectionAsObjectStamp: () => {
+            void this._appAdapter.savedObjectStamps?.saveCurrentSelection()
+          },
         },
-      },
-      setTool: (name) => this._commandSurface.tools.setTool(name),
-      render: (kind) => this._invalidate(kind),
-      readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
-      readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
-      readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
-      commitPlantSpacingIntervalMeters: (meters) => this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
-      getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
-      notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
-      setHoveredEntityId: (id) => {
-        this._setHoveredEntityId(id)
-      },
-    })
-    await this._rendering.renderScene()
+        setTool: (name) => this._commandSurface.tools.setTool(name),
+        render: (kind) => this._invalidate(kind),
+        readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
+        readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
+        readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
+        commitPlantSpacingIntervalMeters: (meters) =>
+          this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
+        getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
+        notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
+        setHoveredEntityId: (id) => {
+          this._setHoveredEntityId(id)
+        },
+      })
+      await this._rendering.renderScene()
+    } catch (error) {
+      const errors: unknown[] = [error]
+      try {
+        this._documentSurface.destroy()
+      } catch (cleanupError) {
+        errors.push(cleanupError)
+      }
+      throwCanvasRuntimeCleanupErrors(errors, 'Scene Canvas runtime initialization failed')
+    }
   }
 
   get commandSurface(): CanvasCommandSurface {
@@ -234,7 +254,7 @@ export class SceneCanvasRuntime {
 
   private _resetTransientRuntimeState(): void {
     resetTransientRuntimeState((name) => {
-      this._interaction?.setTool(name)
+      this._commandSurface.tools.setTool(name)
     })
   }
 

@@ -6,6 +6,7 @@ import type { ScenePersistedState, SceneViewportState } from './scene'
 import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
+import { runCanvasRuntimeCleanups } from './cleanup'
 
 interface SceneCanvasDocumentSurfaceOptions {
   readonly documents: Pick<
@@ -111,10 +112,12 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   destroy(): void {
-    this.options.clearHoveredEntity()
-    this.options.disposeInteraction()
-    this.options.chrome.destroy()
-    this.options.disposeEffects()
-    this.options.rendering.dispose()
+    runCanvasRuntimeCleanups([
+      () => this.options.clearHoveredEntity(),
+      () => this.options.disposeInteraction(),
+      () => this.options.chrome.destroy(),
+      () => this.options.disposeEffects(),
+      () => this.options.rendering.dispose(),
+    ], 'Scene Canvas document surface disposal failed')
   }
 }

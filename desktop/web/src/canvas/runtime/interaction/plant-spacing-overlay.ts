@@ -227,11 +227,20 @@ export function createPlantSpacingOverlay(
   root.appendChild(intervalRow)
   root.appendChild(count)
   root.appendChild(hint)
-  container.appendChild(ghosts)
-  container.appendChild(guide)
-  container.appendChild(lengthLabel)
-  container.appendChild(highlight)
-  container.appendChild(root)
+  try {
+    container.appendChild(ghosts)
+    container.appendChild(guide)
+    container.appendChild(lengthLabel)
+    container.appendChild(highlight)
+    container.appendChild(root)
+  } catch (error) {
+    root.remove()
+    guide.remove()
+    lengthLabel.remove()
+    ghosts.remove()
+    highlight.remove()
+    throw error
+  }
 
   function refreshStaticLabels(): void {
     intervalLabel.textContent = t('canvas.plantSpacing.interval')

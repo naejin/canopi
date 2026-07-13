@@ -40,6 +40,7 @@ import {
   SceneRuntimeEditCoordinator,
   type SceneEditCoordinator,
 } from './transactions'
+import { runCanvasRuntimeCleanups } from '../cleanup'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -193,7 +194,10 @@ export function createSceneRuntimeConstruction(
     clearHoveredEntity: () => callbacks.setHoveredEntityId(null, { invalidate: false }),
     disposeInteraction: callbacks.disposeInteraction,
     disposeEffects: () => {
-      for (const dispose of disposeEffects.splice(0)) dispose()
+      runCanvasRuntimeCleanups(
+        disposeEffects.splice(0),
+        'Scene Canvas runtime effect disposal failed',
+      )
     },
   })
   const sceneEdits = new SceneRuntimeEditCoordinator({

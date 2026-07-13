@@ -11,6 +11,7 @@ export interface ZoneMeasurementOverlayController {
 
 export function createZoneMeasurementOverlay(container: HTMLElement): ZoneMeasurementOverlayController {
   const root = document.createElement('div')
+  root.dataset.zoneMeasurementOverlay = 'true'
   Object.assign(root.style, {
     position: 'absolute',
     inset: '0',

@@ -234,10 +234,6 @@ _Avoid_: Category, folder, custom layer
 A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, plant species symbols, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
 _Avoid_: Canvas mutation, layer signal write, scene patch
 
-**Scene Interaction Frame**:
-The canvas runtime interaction seam for pointer and keyboard gesture lifetime: capture, panning, zoom input, band selection, shared design object dragging, drop placement, hover presentation, snapping, and transient cleanup. The scene interaction frame dispatches tool-specific behavior to Scene Edit tool modules, but it owns cross-tool ordering and cleanup. It does not own persisted scene data, renderer output, Design Session state, or app chrome.
-_Avoid_: Interaction controller, tool router, event handler blob
-
 **Object Group**:
 A named or unnamed flat collection of design objects whose members move or transform together. An object group may contain placed plants, zones, or annotations across Layers; the group itself is not a separate visible design shape and object groups do not nest inside object groups.
 _Avoid_: Layer, selection
@@ -454,12 +450,6 @@ A **Target** is the stored or derived subject a planning entry refers to. **Targ
 
 **Scene Edit vs Design Edit**:
 A **Scene Edit** changes canvas-owned Design state and should be handled by the canvas runtime. A **Design Edit** changes non-canvas Design state such as Budget Items, Timeline Actions, Consortiums, Location, description, or extra fields.
-
-**Scene Edit vs Scene Interaction Frame**:
-A **Scene Edit** is the canvas-owned design change. The **Scene Interaction Frame** is the runtime gesture seam that may produce Scene Edits while also owning non-persisted interaction behavior such as panning, hover presentation, and cleanup.
-
-**Scene Interaction Frame vs Scene Edit Tool Module**:
-The **Scene Interaction Frame** owns cross-tool gesture lifetime, shared selection, and cleanup. A Scene Edit tool module owns tool-specific state, such as Plant Stamp, Object Stamp, Plant Spacing, Annotation, or Zone drawing behavior.
 
 **Location vs Location Workbench**:
 A **Location** is the saved site in a Design. The **Location Workbench** is the interaction surface that edits and presents that saved site.

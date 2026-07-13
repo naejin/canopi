@@ -107,14 +107,19 @@ export function createLockedObjectAffordance(
   })
 
   root.replaceChildren(status, unlockButton)
-  options.container.appendChild(root)
 
   function refreshLabels(): void {
     statusText.textContent = t('canvas.selectionActions.locked')
     unlockButton.setAttribute('aria-label', t('canvas.selectionActions.unlock'))
   }
 
-  refreshLabels()
+  try {
+    options.container.appendChild(root)
+    refreshLabels()
+  } catch (error) {
+    root.remove()
+    throw error
+  }
 
   return {
     show(view) {

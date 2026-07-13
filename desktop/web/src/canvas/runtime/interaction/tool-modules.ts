@@ -30,10 +30,6 @@ import {
 } from './saved-object-stamp-tool'
 import type {
   SceneToolAdapter,
-  SceneToolCapturedPointerContext,
-  SceneToolPointerDownContext,
-  SceneToolPointerEvent,
-  SceneToolTransientOptions,
 } from './tool-adapter'
 import {
   createTextAnnotationTool,
@@ -44,7 +40,7 @@ import {
   createZoneDrawingToolAdapters,
 } from './zone-drawing-tool'
 
-export interface SceneToolModulesContext {
+export interface SceneToolRegistryContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
   readonly camera: CameraController
@@ -64,200 +60,131 @@ export interface SceneToolModulesContext {
   readonly notifyTransientHistoryChange: () => void
 }
 
-export interface SceneToolModules {
-  transitionTo(toolName: string, resetSharedInteraction: () => void): void
-  shouldIgnorePointerEvent(target: EventTarget | null): boolean
-  shouldIgnorePointerUpWithoutCapture(): boolean
-  shouldPreserveTransientOnPan(): boolean
-  shouldSuppressHover(): boolean
-  shouldSuppressSharedKeyboard(event: KeyboardEvent): boolean
-  pointerDown(context: SceneToolPointerDownContext): boolean
-  pointerMoveWithoutCapture(context: SceneToolPointerEvent): boolean
-  pointerMoveWithCapture(context: SceneToolCapturedPointerContext): boolean
-  keyDown(event: KeyboardEvent): boolean
-  canUndoTransientHistory(): boolean
-  canRedoTransientHistory(): boolean
-  undoTransientHistory(): boolean
-  redoTransientHistory(): boolean
-  cancelTransient(options?: SceneToolTransientOptions): void
-  refreshViewportDependent(): boolean
-  refreshSelectionDependent(): void
-  dispose(): void
+export interface SceneToolRegistry {
+  readonly activeAdapter: SceneToolAdapter | null
+  select(toolName: string): SceneToolAdapter | null
+  forEachAdapter(visit: (adapter: SceneToolAdapter) => void): void
 }
 
-export function createSceneToolModules(context: SceneToolModulesContext): SceneToolModules {
-  const textTool = createTextAnnotationTool({
-    container: context.container,
-    camera: context.camera,
-    getSceneStore: context.getSceneStore,
-    sceneEdits: context.sceneEdits,
-  })
-  const zoneDrawingTool = createZoneDrawingTool({
-    container: context.container,
-    preview: context.preview,
-    camera: context.camera,
-    getSceneStore: context.getSceneStore,
-    getSelection: context.getSelection,
-    clearSelection: context.clearSelection,
-    sceneEdits: context.sceneEdits,
-    render: context.render,
-    applySnapping: context.applySnapping,
-    notifyTransientHistoryChange: context.notifyTransientHistoryChange,
-  })
-  const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
-  const plantStampTool = createPlantStampTool({
-    getSceneStore: context.getSceneStore,
-    sceneEdits: context.sceneEdits,
-    applySnapping: context.applySnapping,
-  })
-  const objectStampTool = createObjectStampTool({
-    preview: context.preview,
-    camera: context.camera,
-    getSceneStore: context.getSceneStore,
-    getSpeciesCache: context.getSpeciesCache,
-    getPlantPresentationContext: context.getPlantPresentationContext,
-    sceneEdits: context.sceneEdits,
-    applySnapping: context.applySnapping,
-  })
-  const savedObjectStampTool = createSavedObjectStampTool({
-    preview: context.preview,
-    camera: context.camera,
-    getSceneStore: context.getSceneStore,
-    getPlantPresentationContext: context.getPlantPresentationContext,
-    sceneEdits: context.sceneEdits,
-    applySnapping: context.applySnapping,
-    switchTool: context.switchTool,
-  })
-  const plantSpacingTool = createPlantSpacingTool({
-    container: context.container,
-    camera: context.camera,
-    getSceneStore: context.getSceneStore,
-    getSpeciesCache: context.getSpeciesCache,
-    getPlantPresentationContext: context.getPlantPresentationContext,
-    getLocalizedCommonNames: context.getLocalizedCommonNames,
-    readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters,
-    commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters,
-    sceneEdits: context.sceneEdits,
-    switchTool: context.switchTool,
-    applySnapping: context.applySnapping,
-    getContainerRect: context.getContainerRect,
-  })
-  const measurementGuideTool = createMeasurementGuideTool({
-    container: context.container,
-    preview: context.preview,
-    camera: context.camera,
-    getSceneStore: context.getSceneStore,
-    sceneEdits: context.sceneEdits,
-    applySnapping: context.applySnapping,
-  })
+export function createSceneToolRegistry(context: SceneToolRegistryContext): SceneToolRegistry {
+  const rollback: Array<() => void> = []
+  const own = <T>(resource: T, dispose: (resource: T) => void): T => {
+    rollback.push(() => dispose(resource))
+    return resource
+  }
 
-  return new SceneToolModuleRegistry(new Map([
-    ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
-    ['text', createTextAnnotationToolAdapter(textTool)],
-    ['line', zoneDrawingAdapters.line],
-    ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],
-    ['rectangle', zoneDrawingAdapters.rectangle],
-    ['ellipse', zoneDrawingAdapters.ellipse],
-    ['polygon', zoneDrawingAdapters.polygon],
-    ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
+  try {
+    const textTool = own(createTextAnnotationTool({
+      container: context.container,
+      camera: context.camera,
+      getSceneStore: context.getSceneStore,
+      sceneEdits: context.sceneEdits,
+    }), (tool) => tool.dispose())
+    const zoneDrawingTool = own(createZoneDrawingTool({
+      container: context.container,
+      preview: context.preview,
+      camera: context.camera,
+      getSceneStore: context.getSceneStore,
+      getSelection: context.getSelection,
+      clearSelection: context.clearSelection,
+      sceneEdits: context.sceneEdits,
+      render: context.render,
+      applySnapping: context.applySnapping,
+      notifyTransientHistoryChange: context.notifyTransientHistoryChange,
+    }), (tool) => tool.dispose())
+    const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
+    const plantStampTool = own(createPlantStampTool({
+      getSceneStore: context.getSceneStore,
+      sceneEdits: context.sceneEdits,
+      applySnapping: context.applySnapping,
+    }), (tool) => tool.clear())
+    const objectStampTool = own(createObjectStampTool({
+      preview: context.preview,
+      camera: context.camera,
+      getSceneStore: context.getSceneStore,
+      getSpeciesCache: context.getSpeciesCache,
+      getPlantPresentationContext: context.getPlantPresentationContext,
+      sceneEdits: context.sceneEdits,
+      applySnapping: context.applySnapping,
+    }), (tool) => tool.dispose())
+    const savedObjectStampTool = own(createSavedObjectStampTool({
+      preview: context.preview,
+      camera: context.camera,
+      getSceneStore: context.getSceneStore,
+      getPlantPresentationContext: context.getPlantPresentationContext,
+      sceneEdits: context.sceneEdits,
+      applySnapping: context.applySnapping,
       switchTool: context.switchTool,
-    })],
-    ['saved-object-stamp', createSavedObjectStampToolAdapter(savedObjectStampTool, {
+    }), (tool) => tool.dispose())
+    const plantSpacingTool = own(createPlantSpacingTool({
+      container: context.container,
+      camera: context.camera,
+      getSceneStore: context.getSceneStore,
+      getSpeciesCache: context.getSpeciesCache,
+      getPlantPresentationContext: context.getPlantPresentationContext,
+      getLocalizedCommonNames: context.getLocalizedCommonNames,
+      readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters,
+      commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters,
+      sceneEdits: context.sceneEdits,
       switchTool: context.switchTool,
-    })],
-    ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],
-  ]))
+      applySnapping: context.applySnapping,
+      getContainerRect: context.getContainerRect,
+    }), (tool) => tool.dispose())
+    const measurementGuideTool = own(createMeasurementGuideTool({
+      container: context.container,
+      preview: context.preview,
+      camera: context.camera,
+      getSceneStore: context.getSceneStore,
+      sceneEdits: context.sceneEdits,
+      applySnapping: context.applySnapping,
+    }), (tool) => tool.dispose())
+
+    const registry = new DefaultSceneToolRegistry(new Map([
+      ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
+      ['text', createTextAnnotationToolAdapter(textTool)],
+      ['line', zoneDrawingAdapters.line],
+      ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],
+      ['rectangle', zoneDrawingAdapters.rectangle],
+      ['ellipse', zoneDrawingAdapters.ellipse],
+      ['polygon', zoneDrawingAdapters.polygon],
+      ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
+        switchTool: context.switchTool,
+      })],
+      ['saved-object-stamp', createSavedObjectStampToolAdapter(savedObjectStampTool, {
+        switchTool: context.switchTool,
+      })],
+      ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],
+    ]))
+    rollback.length = 0
+    return registry
+  } catch (error) {
+    for (const cleanup of rollback.reverse()) {
+      try {
+        cleanup()
+      } catch {
+        // Preserve the construction failure after best-effort tool cleanup.
+      }
+    }
+    throw error
+  }
 }
 
-class SceneToolModuleRegistry implements SceneToolModules {
-  private activeToolName = 'select'
+class DefaultSceneToolRegistry implements SceneToolRegistry {
+  private _activeToolName = 'select'
 
   constructor(private readonly adapters: ReadonlyMap<string, SceneToolAdapter>) {}
 
-  transitionTo(toolName: string, resetSharedInteraction: () => void): void {
-    const previousToolName = this.activeToolName
-    this.activeToolName = toolName
-    if (previousToolName !== toolName) {
-      this.adapterFor(previousToolName)?.onDeactivate?.()
-    }
-    resetSharedInteraction()
-    this.activeAdapter()?.onActivate?.()
+  get activeAdapter(): SceneToolAdapter | null {
+    return this.adapterFor(this._activeToolName)
   }
 
-  shouldIgnorePointerEvent(target: EventTarget | null): boolean {
-    return this.activeAdapter()?.shouldIgnorePointerEvent?.(target) ?? false
+  select(toolName: string): SceneToolAdapter | null {
+    this._activeToolName = toolName
+    return this.activeAdapter
   }
 
-  shouldIgnorePointerUpWithoutCapture(): boolean {
-    return this.activeAdapter()?.shouldIgnorePointerUpWithoutCapture?.() ?? false
-  }
-
-  shouldPreserveTransientOnPan(): boolean {
-    return this.activeAdapter()?.shouldPreserveTransientOnPan?.() ?? false
-  }
-
-  shouldSuppressHover(): boolean {
-    return this.activeAdapter()?.shouldSuppressHover?.() ?? false
-  }
-
-  shouldSuppressSharedKeyboard(event: KeyboardEvent): boolean {
-    return this.activeAdapter()?.shouldSuppressSharedKeyboard?.(event) ?? false
-  }
-
-  pointerDown(context: SceneToolPointerDownContext): boolean {
-    return this.activeAdapter()?.pointerDown?.(context) ?? false
-  }
-
-  pointerMoveWithoutCapture(context: SceneToolPointerEvent): boolean {
-    return this.activeAdapter()?.pointerMoveWithoutCapture?.(context) ?? false
-  }
-
-  pointerMoveWithCapture(context: SceneToolCapturedPointerContext): boolean {
-    return this.activeAdapter()?.pointerMoveWithCapture?.(context) ?? false
-  }
-
-  keyDown(event: KeyboardEvent): boolean {
-    return this.activeAdapter()?.keyDown?.(event) ?? false
-  }
-
-  canUndoTransientHistory(): boolean {
-    return this.activeAdapter()?.canUndoTransientHistory?.() ?? false
-  }
-
-  canRedoTransientHistory(): boolean {
-    return this.activeAdapter()?.canRedoTransientHistory?.() ?? false
-  }
-
-  undoTransientHistory(): boolean {
-    return this.activeAdapter()?.undoTransientHistory?.() ?? false
-  }
-
-  redoTransientHistory(): boolean {
-    return this.activeAdapter()?.redoTransientHistory?.() ?? false
-  }
-
-  cancelTransient(options?: SceneToolTransientOptions): void {
-    this.activeAdapter()?.cancelTransient?.(options)
-  }
-
-  refreshViewportDependent(): boolean {
-    return this.activeAdapter()?.refreshViewportDependent?.() === true
-  }
-
-  refreshSelectionDependent(): void {
-    for (const adapter of new Set(this.adapters.values())) {
-      adapter.refreshSelectionDependent?.()
-    }
-  }
-
-  dispose(): void {
-    for (const adapter of new Set(this.adapters.values())) {
-      adapter.dispose?.()
-    }
-  }
-
-  private activeAdapter(): SceneToolAdapter | null {
-    return this.adapterFor(this.activeToolName)
+  forEachAdapter(visit: (adapter: SceneToolAdapter) => void): void {
+    for (const adapter of new Set(this.adapters.values())) visit(adapter)
   }
 
   private adapterFor(toolName: string): SceneToolAdapter | null {

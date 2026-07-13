@@ -271,7 +271,6 @@ export function createSelectionActionToolbar(
   }))
   let renderedActionIds = ''
   let renderedSelectionKey = ''
-  options.container.appendChild(root)
 
   function refresh(): void {
     root.setAttribute('aria-label', t('canvas.selectionActions.ariaLabel'))
@@ -330,7 +329,13 @@ export function createSelectionActionToolbar(
     }
   }
 
-  refresh()
+  try {
+    options.container.appendChild(root)
+    refresh()
+  } catch (error) {
+    root.remove()
+    throw error
+  }
 
   return {
     refresh,

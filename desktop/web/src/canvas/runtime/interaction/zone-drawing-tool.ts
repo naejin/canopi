@@ -14,7 +14,10 @@ import {
 } from '../zone-measurements'
 import { showInteractionPreview } from './overlay-ui'
 import { createPolygonDraftOverlay } from './polygon-draft-overlay'
-import { createZoneMeasurementOverlay } from './zone-measurement-overlay'
+import {
+  createZoneMeasurementOverlay,
+  type ZoneMeasurementOverlayController,
+} from './zone-measurement-overlay'
 import {
   appendEllipseZoneToDraft,
   appendLineZoneToDraft,
@@ -67,7 +70,13 @@ export interface ZoneDrawingTool {
 
 export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDrawingTool {
   const polygonDraftOverlay = createPolygonDraftOverlay(context.container)
-  const zoneMeasurements = createZoneMeasurementOverlay(context.container)
+  let zoneMeasurements: ZoneMeasurementOverlayController
+  try {
+    zoneMeasurements = createZoneMeasurementOverlay(context.container)
+  } catch (error) {
+    polygonDraftOverlay.dispose()
+    throw error
+  }
   let activeDrag: ActiveDragZoneDraft | null = null
   let polygonDraftVertices: ScenePoint[] = []
   let polygonActiveWorld: ScenePoint | null = null

@@ -4,14 +4,13 @@ import { plantSymbolMenuOpen } from '../../plant-symbol-menu-state'
 import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
 import { guides, northBearingAvailable, northBearingDeg } from '../../scene-metadata-state'
-import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
+import { clearCanvasSelection, setCanvasSelection } from '../../session-state'
 import type { SceneStore } from '../scene'
 import type { CanvasRuntimeLayerProjectionAdapter } from '../app-adapter'
 
 export function resetTransientRuntimeState(
   setTool: (name: string) => void,
 ): void {
-  setCanvasTool('select')
   setTool('select')
   clearCanvasSelection()
   plantColorMenuOpen.value = false

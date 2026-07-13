@@ -47,7 +47,9 @@ describe('canvas session seam', () => {
     setCurrentCanvasTool('rectangle')
     expect(currentCanvasTool.value).toBe('rectangle')
 
-    const setTool = vi.fn()
+    const setTool = vi.fn((name: string) => {
+      currentCanvasTool.value = name
+    })
     const surfaces = createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({
         tools: {
@@ -62,5 +64,20 @@ describe('canvas session seam', () => {
     expect(getCurrentCanvasToolCommandSurface()).toBe(currentCanvasSession.value?.commands.tools)
     expect(setTool).toHaveBeenCalledWith('hand')
     expect(currentCanvasTool.value).toBe('hand')
+  })
+
+  it('does not pre-publish a mounted tool change that the command surface rejects', () => {
+    setCurrentCanvasTool('rectangle')
+    const setTool = vi.fn(() => {
+      throw new Error('tool transition failed')
+    })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ tools: { setTool } }),
+    }))
+
+    expect(() => setCurrentCanvasTool('hand')).toThrow('tool transition failed')
+
+    expect(setTool).toHaveBeenCalledWith('hand')
+    expect(currentCanvasTool.value).toBe('rectangle')
   })
 })

@@ -2,8 +2,9 @@ import type { CameraController } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint, SceneStore, SceneZoneEntity } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
+import { runCanvasRuntimeCleanups } from '../cleanup'
 import { getRectangularZoneCorners } from '../zone-geometry'
-import type { SceneInteractionPointerDrag, SceneInteractionPointerEvent } from './frame'
+import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter'
 
 interface ZoneControlPointOptions {
   readonly container: HTMLElement
@@ -19,9 +20,10 @@ interface ZoneControlPointOptions {
 }
 
 export interface ZoneControlPointController {
+  readonly dragActive: boolean
   refresh(enabled: boolean): void
   hide(): void
-  pointerDown(context: ZoneControlPointPointerDownContext): SceneInteractionPointerDrag | null
+  pointerDown(context: ZoneControlPointPointerDownContext): SceneToolPointerDrag | null
   cancelActiveDrag(): boolean
   contains(target: EventTarget | null): boolean
   dispose(): void
@@ -113,7 +115,7 @@ export function createZoneControlPoints(
     root.style.display = 'none'
   }
 
-  function pointerDown({ event, rawWorld }: ZoneControlPointPointerDownContext): SceneInteractionPointerDrag | null {
+  function pointerDown({ event, rawWorld }: ZoneControlPointPointerDownContext): SceneToolPointerDrag | null {
     if (event.button !== 0) return null
     const element = closestControlPointElement(event.target)
     const controlPoint = element ? controlPoints.get(element.dataset.zoneControlPoint ?? '') : null
@@ -142,7 +144,7 @@ export function createZoneControlPoints(
     }
   }
 
-  function updateDrag(context: SceneInteractionPointerEvent): void {
+  function updateDrag(context: SceneToolPointerEvent): void {
     const drag = activeDrag
     if (!drag) return
     if (
@@ -153,35 +155,58 @@ export function createZoneControlPoints(
     applyActiveDrag(context.rawWorld)
   }
 
-  function commitDrag(context: SceneInteractionPointerEvent): void {
+  function commitDrag(context: SceneToolPointerEvent): void {
     const drag = activeDrag
     if (!drag) return
     const movedPastDragThreshold = drag.movedPastDragThreshold
       || screenDistance(drag.startScreen, context.screen) > CONTROL_POINT_DRAG_THRESHOLD_PX
     if (movedPastDragThreshold) applyActiveDrag(context.rawWorld)
-    activeDrag = null
-    delete root.dataset.zoneControlPointActive
-
-    if (drag.changed && drag.tx.changed) {
-      drag.tx.commit({ invalidate: 'scene' })
-    } else {
-      drag.tx.abort()
-      options.render('scene')
+    let transactionFinished = false
+    try {
+      if (drag.changed && drag.tx.changed) {
+        drag.tx.commit({ invalidate: 'scene' })
+        transactionFinished = true
+      } else {
+        drag.tx.abort()
+        transactionFinished = true
+        options.render('scene')
+      }
+    } finally {
+      if (transactionFinished) {
+        activeDrag = null
+        delete root.dataset.zoneControlPointActive
+        finishDragPresentation()
+      }
     }
-    options.endDragPresentation()
-    options.refreshSelectionDependent()
   }
 
   function cancelActiveDrag(): boolean {
     const drag = activeDrag
     if (!drag) return false
-    drag.tx.abort()
-    activeDrag = null
-    delete root.dataset.zoneControlPointActive
-    options.render('scene')
-    options.endDragPresentation()
-    options.refreshSelectionDependent()
+    let transactionFinished = false
+    try {
+      drag.tx.abort()
+      transactionFinished = true
+    } finally {
+      if (transactionFinished) {
+        activeDrag = null
+        delete root.dataset.zoneControlPointActive
+      }
+      try {
+        options.render('scene')
+      } finally {
+        finishDragPresentation()
+      }
+    }
     return true
+  }
+
+  function finishDragPresentation(): void {
+    try {
+      options.endDragPresentation()
+    } finally {
+      options.refreshSelectionDependent()
+    }
   }
 
   function applyActiveDrag(rawWorld: ScenePoint): void {
@@ -213,6 +238,9 @@ export function createZoneControlPoints(
   }
 
   return {
+    get dragActive() {
+      return activeDrag !== null
+    },
     refresh,
     hide,
     pointerDown,
@@ -221,8 +249,10 @@ export function createZoneControlPoints(
       return target instanceof Node && root.contains(target)
     },
     dispose() {
-      cancelActiveDrag()
-      root.remove()
+      runCanvasRuntimeCleanups([
+        () => cancelActiveDrag(),
+        () => root.remove(),
+      ], 'Zone Control Point disposal failed')
     },
   }
 

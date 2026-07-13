@@ -160,8 +160,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private setTool(name: string): void {
-    setCanvasTool(name)
     this.options.setInteractionTool(name)
+    setCanvasTool(name)
   }
 
   private zoomIn(): void {

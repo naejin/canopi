@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals'
+import { setCanvasTool } from '../../canvas/session-state'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -81,8 +82,16 @@ export function createTestCanvasCommandSurface(
     },
   }
 
+  const setTool = overrides.tools?.setTool ?? surface.tools.setTool
   return {
-    tools: { ...surface.tools, ...overrides.tools },
+    tools: {
+      ...surface.tools,
+      ...overrides.tools,
+      setTool: (name) => {
+        setTool(name)
+        setCanvasTool(name)
+      },
+    },
     viewport: { ...surface.viewport, ...overrides.viewport },
     history: { ...surface.history, ...overrides.history },
     sceneEdits: { ...surface.sceneEdits, ...overrides.sceneEdits },
