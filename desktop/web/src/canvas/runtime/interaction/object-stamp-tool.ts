@@ -1,9 +1,7 @@
-import { createUuid } from '../../../utils/ids'
 import { getAnnotationWorldBounds } from '../annotation-layout'
 import type {
   SceneAnnotationEntity,
   SceneObjectGroupEntity,
-  SceneObjectGroupMember,
   ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
@@ -14,7 +12,6 @@ import {
   cloneSceneObjectGroupMembers,
   isSceneDesignObjectLocked,
   resolveSceneObjectGroupMembers,
-  sceneObjectGroupMemberKey,
   sceneObjectGroupMemberLayerName,
 } from '../scene'
 import type { CameraController } from '../camera'
@@ -24,6 +21,10 @@ import {
 } from '../plant-presentation'
 import { getZoneWorldBounds } from '../zone-geometry'
 import type { SpeciesCacheEntry } from '../species-cache'
+import {
+  createSceneArrangementPlacement,
+  type SceneArrangementTemplate,
+} from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { hitTestTopLevel } from './hit-testing'
 import {
@@ -89,6 +90,7 @@ export interface ObjectStampTool {
 }
 
 export function createObjectStampTool(context: ObjectStampToolContext): ObjectStampTool {
+  const arrangementPlacement = createSceneArrangementPlacement({ sceneEdits: context.sceneEdits })
   let objectStampSource: ObjectStampSource | null = null
 
   function pointerDown(world: ScenePoint): void {
@@ -175,110 +177,12 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
   function placeObjectStamp(anchorWorld: ScenePoint): void {
     const source = objectStampSource
     if (!source || !canUseObjectStampSource(source)) return
-    const delta = objectStampDelta(source, anchorWorld)
-
-    if (source.kind === 'plant') {
-      let nextId = ''
-      const committed = context.sceneEdits.run('interaction-object-stamp', (tx) => {
-        tx.mutate((draft) => {
-          const clone = clonePlantForObjectStamp(source.plant)
-          clone.id = createUuid()
-          clone.position = translatePoint(source.plant.position, delta)
-          draft.plants = [...draft.plants, clone]
-          nextId = clone.id
-        })
-        if (nextId) tx.setSelection([nextId])
-      })
-      if (committed) previewAtAnchor(anchorWorld)
-      return
-    }
-
-    if (source.kind === 'zone') {
-      let nextId = ''
-      const committed = context.sceneEdits.run('interaction-object-stamp', (tx) => {
-        tx.mutate((draft) => {
-          const clone = cloneZoneForObjectStamp(source.zone)
-          clone.name = uniqueZoneName(source.zone.name, new Set(draft.zones.map((zone) => zone.name)))
-          clone.points = translateZonePoints(source.zone, delta)
-          draft.zones = [...draft.zones, clone]
-          nextId = clone.name
-        })
-        if (nextId) tx.setSelection([nextId])
-      })
-      if (committed) previewAtAnchor(anchorWorld)
-      return
-    }
-
-    if (source.kind === 'annotation') {
-      let nextId = ''
-      const committed = context.sceneEdits.run('interaction-object-stamp', (tx) => {
-        tx.mutate((draft) => {
-          const clone = cloneAnnotationForObjectStamp(source.annotation)
-          clone.id = createUuid()
-          clone.position = translatePoint(source.annotation.position, delta)
-          draft.annotations = [...draft.annotations, clone]
-          nextId = clone.id
-        })
-        if (nextId) tx.setSelection([nextId])
-      })
-      if (committed) previewAtAnchor(anchorWorld)
-      return
-    }
-
-    if (source.kind === 'group') {
-      let nextId = ''
-      const committed = context.sceneEdits.run('interaction-object-stamp', (tx) => {
-        tx.mutate((draft) => {
-          const sourceToCloneId = new Map<string, string>()
-          const existingZoneNames = new Set(draft.zones.map((zone) => zone.name))
-
-          const clonedPlants = source.plants.map((plant) => {
-            const clone = clonePlantForObjectStamp(plant)
-            clone.id = createUuid()
-            clone.position = translatePoint(plant.position, delta)
-            sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }), clone.id)
-            return clone
-          })
-
-          const clonedZones = source.zones.map((zone) => {
-            const clone = cloneZoneForObjectStamp(zone)
-            clone.name = uniqueZoneName(zone.name, existingZoneNames)
-            existingZoneNames.add(clone.name)
-            clone.points = translateZonePoints(zone, delta)
-            sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }), clone.name)
-            return clone
-          })
-
-          const clonedAnnotations = source.annotations.map((annotation) => {
-            const clone = cloneAnnotationForObjectStamp(annotation)
-            clone.id = createUuid()
-            clone.position = translatePoint(annotation.position, delta)
-            sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }), clone.id)
-            return clone
-          })
-
-          const members = source.group.members
-            .map((member): SceneObjectGroupMember | null => {
-              const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey(member))
-              return cloneId ? { kind: member.kind, id: cloneId } : null
-            })
-            .filter((member): member is SceneObjectGroupMember => member !== null)
-          if (members.length < 2) return
-
-          const cloneGroup = cloneGroupForObjectStamp(source.group)
-          cloneGroup.id = createUuid()
-          cloneGroup.members = members
-
-          draft.plants = [...draft.plants, ...clonedPlants]
-          draft.zones = [...draft.zones, ...clonedZones]
-          draft.annotations = [...draft.annotations, ...clonedAnnotations]
-          draft.groups = [...draft.groups, cloneGroup]
-          nextId = cloneGroup.id
-        })
-        if (nextId) tx.setSelection([nextId])
-      })
-      if (committed) previewAtAnchor(anchorWorld)
-    }
+    const receipt = arrangementPlacement.place({
+      template: objectStampArrangementTemplate(source),
+      translateBy: objectStampDelta(source, anchorWorld),
+      historyType: 'interaction-object-stamp',
+    })
+    if (receipt.committed) previewAtAnchor(anchorWorld)
   }
 
   function canUseObjectStampSource(source: ObjectStampSource): boolean {
@@ -521,6 +425,58 @@ function objectStampDelta(source: ObjectStampSource, anchorWorld: ScenePoint): S
   }
 }
 
+function objectStampArrangementTemplate(source: ObjectStampSource): SceneArrangementTemplate {
+  if (source.kind === 'plant') {
+    return emptySceneArrangementTemplate({
+      plants: [{ sourceId: source.sourceId, entity: clonePlantForObjectStamp(source.plant) }],
+    })
+  }
+  if (source.kind === 'zone') {
+    return emptySceneArrangementTemplate({
+      zones: [{ sourceId: source.sourceId, entity: cloneZoneForObjectStamp(source.zone) }],
+    })
+  }
+  if (source.kind === 'annotation') {
+    return emptySceneArrangementTemplate({
+      annotations: [{
+        sourceId: source.sourceId,
+        entity: cloneAnnotationForObjectStamp(source.annotation),
+      }],
+    })
+  }
+  return {
+    plants: source.plants.map((plant) => ({
+      sourceId: plant.id,
+      entity: clonePlantForObjectStamp(plant),
+    })),
+    zones: source.zones.map((zone) => ({
+      sourceId: zone.name,
+      entity: cloneZoneForObjectStamp(zone),
+    })),
+    annotations: source.annotations.map((annotation) => ({
+      sourceId: annotation.id,
+      entity: cloneAnnotationForObjectStamp(annotation),
+    })),
+    measurementGuides: [],
+    groups: [{
+      sourceId: source.sourceId,
+      entity: cloneGroupForObjectStamp(source.group),
+    }],
+  }
+}
+
+function emptySceneArrangementTemplate(
+  entries: Partial<SceneArrangementTemplate>,
+): SceneArrangementTemplate {
+  return {
+    plants: entries.plants ?? [],
+    zones: entries.zones ?? [],
+    annotations: entries.annotations ?? [],
+    measurementGuides: entries.measurementGuides ?? [],
+    groups: entries.groups ?? [],
+  }
+}
+
 function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
   return {
     x: point.x + delta.x,
@@ -536,17 +492,6 @@ function translateZonePoints(zone: SceneZoneEntity, delta: ScenePoint): ScenePoi
     ]
   }
   return zone.points.map((point) => translatePoint(point, delta))
-}
-
-function uniqueZoneName(baseName: string, existingNames: Set<string>): string {
-  if (!existingNames.has(baseName)) return baseName
-  let index = 2
-  let candidate = `${baseName} copy`
-  while (existingNames.has(candidate)) {
-    candidate = `${baseName} copy ${index}`
-    index += 1
-  }
-  return candidate
 }
 
 function objectStampGroupBounds(

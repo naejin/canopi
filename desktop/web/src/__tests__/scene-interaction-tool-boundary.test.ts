@@ -9,6 +9,13 @@ function sourceExists(path: string): boolean {
   return existsSync(new URL(path, import.meta.url))
 }
 
+function importSpecifiers(source: string): string[] {
+  return Array.from(
+    source.matchAll(/(?:\bfrom\s+|^\s*import\s+)['"]([^'"]+)['"]/gm),
+    (match) => match[1] ?? '',
+  )
+}
+
 describe('Scene Interaction tool module boundaries', () => {
   it('keeps broad Scene Interaction tests on the frame event harness', () => {
     const guardedSources = [
@@ -132,6 +139,30 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(objectStampSource).toContain('ObjectStampSource')
     expect(objectStampSource).toContain('cloneGroupMembersForObjectStamp')
     expect(objectStampSource).toContain('createObjectStampToolAdapter')
+  })
+
+  it('routes repeated Scene arrangement placement through the shared kernel', () => {
+    const placementSource = readSource('../canvas/runtime/scene-runtime/arrangement-placement.ts')
+    const clipboardSource = readSource('../canvas/runtime/scene-runtime/clipboard.ts')
+    const mutationsSource = readSource('../canvas/runtime/scene-runtime/mutations.ts')
+    const objectStampSource = readSource('../canvas/runtime/interaction/object-stamp-tool.ts')
+    const savedStampSource = readSource('../canvas/runtime/interaction/saved-object-stamp-tool.ts')
+
+    expect(placementSource).toContain('createSceneArrangementPlacement')
+    expect(new Set(importSpecifiers(placementSource))).toEqual(new Set([
+      '../../../utils/ids',
+      '../scene',
+      './transactions',
+    ]))
+    expect(clipboardSource).toContain('createClipboardArrangementTemplate')
+    for (const source of [mutationsSource, objectStampSource, savedStampSource]) {
+      expect(source).toContain('createSceneArrangementPlacement')
+    }
+    for (const source of [clipboardSource, objectStampSource, savedStampSource]) {
+      expect(source).not.toContain('uniqueZoneName')
+      expect(source).not.toContain('sourceToCloneId')
+      expect(source).not.toContain('selectedTopLevelIds')
+    }
   })
 
   it('keeps Plant Stamp placement state behind the plant stamp tool module', () => {

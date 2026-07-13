@@ -252,7 +252,7 @@ describe('Canvas runtime surfaces', () => {
     try {
       documents.loadDocument({
         ...BASE_FILE,
-        plants: [createPlant('plant-1', 10, 20)],
+        plants: [{ ...createPlant('plant-1', 10, 20), pinned_name: true }],
         extra: {
           guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
         },
@@ -264,11 +264,13 @@ describe('Canvas runtime surfaces', () => {
       const duplicated = queries.getPlacedPlants()
       expect(duplicated).toHaveLength(2)
       expect(duplicated[1]?.position).toEqual({ x: 11, y: 20 })
+      expect(duplicated[1]?.pinned_name).toBe(true)
 
       commands.sceneEdits.duplicateSelected()
       const duplicatedAgain = queries.getPlacedPlants()
       expect(duplicatedAgain).toHaveLength(3)
       expect(duplicatedAgain[2]?.position).toEqual({ x: 12, y: 20 })
+      expect(duplicatedAgain[2]?.pinned_name).toBe(true)
 
       commands.history.undo()
       expect(queries.getPlacedPlants()).toHaveLength(2)
@@ -352,6 +354,56 @@ describe('Canvas runtime surfaces', () => {
       host.destroy()
     }
   })
+
+  it.each(['paste', 'pasteAt', 'duplicateSelected'] as const)(
+    'selects cloned Groups and ungrouped Design Objects after %s',
+    (placementCommand) => {
+      const host = createRuntimeHost()
+      const { commands, documents, queries } = host.surfaces
+
+      try {
+        documents.loadDocument({
+          ...BASE_FILE,
+          plants: [
+            createPlant('plant-1', 10, 20),
+            createPlant('plant-2', 12, 20),
+            createPlant('plant-3', 20, 20),
+          ],
+          groups: [{
+            id: 'group-1',
+            locked: false,
+            name: 'Pair',
+            members: [
+              { kind: 'plant', id: 'plant-1' },
+              { kind: 'plant', id: 'plant-2' },
+            ],
+          }],
+        })
+
+        commands.sceneEdits.selectAll()
+        expect(queries.getSelection()).toEqual(new Set(['plant-3', 'group-1']))
+        if (placementCommand === 'duplicateSelected') {
+          commands.sceneEdits.duplicateSelected()
+        } else {
+          commands.sceneEdits.copy()
+          if (placementCommand === 'pasteAt') commands.sceneEdits.pasteAt({ x: 100, y: 50 })
+          else commands.sceneEdits.paste()
+        }
+
+        const scene = queries.getSceneSnapshot()
+        const clonedGroup = scene.groups.find((group) => group.id !== 'group-1')!
+        const clonedMemberIds = new Set(clonedGroup.members.map((member) => member.id))
+        const clonedUngroupedPlant = scene.plants.find((plant) => (
+          !['plant-1', 'plant-2', 'plant-3'].includes(plant.id)
+          && !clonedMemberIds.has(plant.id)
+        ))!
+
+        expect(queries.getSelection()).toEqual(new Set([clonedGroup.id, clonedUngroupedPlant.id]))
+      } finally {
+        host.destroy()
+      }
+    },
+  )
 
   it('groups and ungroups selected scene entities without Konva nodes', () => {
     const host = createRuntimeHost()

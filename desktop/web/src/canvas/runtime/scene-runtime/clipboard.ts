@@ -2,18 +2,15 @@ import type {
   SceneAnnotationEntity,
   SceneMeasurementGuideEntity,
   SceneObjectGroupEntity,
-  SceneObjectGroupMember,
   ScenePersistedState,
   ScenePlantEntity,
-  ScenePoint,
   SceneZoneEntity,
 } from '../scene'
 import type { SceneSelectionTarget } from './selection'
-import { createUuid } from '../../../utils/ids'
+import type { SceneArrangementTemplate } from './arrangement-placement'
 import {
   cloneSceneObjectGroupMembers,
   resolveSceneObjectGroupMembers,
-  sceneObjectGroupMemberKey,
 } from '../scene'
 
 export interface SceneClipboardPayload {
@@ -76,78 +73,35 @@ export function createClipboardPayload(
   }
 }
 
-export function pasteClipboardPayload(
+export function createClipboardArrangementTemplate(
   payload: SceneClipboardPayload,
-  draft: ScenePersistedState,
-  offset: ScenePoint,
   options: { preservePinnedNames?: boolean } = {},
-): Set<string> {
-  const nextSelection = new Set<string>()
-  const existingZoneNames = new Set(draft.zones.map((zone) => zone.name))
-  const sourceToCloneId = new Map<string, string>()
-
-  for (const plant of payload.plants) {
-    const clone = clonePlantWithOffset(plant, offset, options)
-    draft.plants.push(clone)
-    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }), clone.id)
+): SceneArrangementTemplate {
+  return {
+    plants: payload.plants.map((plant) => ({
+      sourceId: plant.id,
+      entity: {
+        ...clonePlantEntity(plant),
+        pinnedName: options.preservePinnedNames === true ? plant.pinnedName === true : false,
+      },
+    })),
+    zones: payload.zones.map((zone) => ({
+      sourceId: zone.name,
+      entity: cloneZoneEntity(zone),
+    })),
+    annotations: payload.annotations.map((annotation) => ({
+      sourceId: annotation.id,
+      entity: cloneAnnotationEntity(annotation),
+    })),
+    measurementGuides: payload.measurementGuides.map((guide) => ({
+      sourceId: guide.id,
+      entity: cloneMeasurementGuideEntity(guide),
+    })),
+    groups: payload.groups.map((group) => ({
+      sourceId: group.id,
+      entity: cloneGroupEntity(group),
+    })),
   }
-
-  for (const zone of payload.zones) {
-    const clone = cloneZoneWithOffset(zone, existingZoneNames, offset)
-    existingZoneNames.add(clone.name)
-    draft.zones.push(clone)
-    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }), clone.name)
-  }
-
-  for (const annotation of payload.annotations) {
-    const clone = cloneAnnotationWithOffset(annotation, offset)
-    draft.annotations.push(clone)
-    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }), clone.id)
-  }
-
-  for (const guide of payload.measurementGuides) {
-    const clone = cloneMeasurementGuideWithOffset(guide, offset)
-    draft.measurementGuides = [...(draft.measurementGuides ?? []), clone]
-    sourceToCloneId.set(measurementGuideKey(guide.id), clone.id)
-  }
-
-  for (const group of payload.groups) {
-    const members = group.members
-      .map((member): SceneObjectGroupMember | null => {
-        const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey(member))
-        return cloneId ? { kind: member.kind, id: cloneId } : null
-      })
-      .filter((member): member is SceneObjectGroupMember => member !== null)
-    if (members.length < 2) continue
-    const cloneGroup: SceneObjectGroupEntity = {
-      ...group,
-      id: createUuid(),
-      members,
-    }
-    draft.groups.push(cloneGroup)
-    nextSelection.add(cloneGroup.id)
-  }
-
-  if (nextSelection.size > 0) return nextSelection
-
-  for (const plant of payload.plants) {
-    const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }))
-    if (cloneId) nextSelection.add(cloneId)
-  }
-  for (const zone of payload.zones) {
-    const cloneName = sourceToCloneId.get(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }))
-    if (cloneName) nextSelection.add(cloneName)
-  }
-  for (const annotation of payload.annotations) {
-    const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }))
-    if (cloneId) nextSelection.add(cloneId)
-  }
-  for (const guide of payload.measurementGuides) {
-    const cloneId = sourceToCloneId.get(measurementGuideKey(guide.id))
-    if (cloneId) nextSelection.add(cloneId)
-  }
-
-  return nextSelection
 }
 
 function clonePlantEntity(plant: ScenePlantEntity): ScenePlantEntity {
@@ -188,92 +142,4 @@ function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity
 
 function cloneSelectionTarget(target: SceneSelectionTarget): SceneSelectionTarget {
   return { ...target }
-}
-
-function clonePlantWithOffset(
-  plant: ScenePlantEntity,
-  offset: ScenePoint,
-  options: { preservePinnedNames?: boolean },
-): ScenePlantEntity {
-  return {
-    ...clonePlantEntity(plant),
-    id: createUuid(),
-    pinnedName: options.preservePinnedNames === true ? plant.pinnedName === true : false,
-    position: {
-      x: plant.position.x + offset.x,
-      y: plant.position.y + offset.y,
-    },
-  }
-}
-
-function cloneZoneWithOffset(
-  zone: SceneZoneEntity,
-  existingNames: Set<string>,
-  offset: ScenePoint,
-): SceneZoneEntity {
-  const nextName = uniqueZoneName(zone.name, existingNames)
-  return {
-    ...cloneZoneEntity(zone),
-    name: nextName,
-    points: cloneZonePointsWithOffset(zone, offset),
-  }
-}
-
-function cloneZonePointsWithOffset(zone: SceneZoneEntity, offset: ScenePoint): ScenePoint[] {
-  if (zone.zoneType === 'ellipse') {
-    return zone.points.map((point, index) =>
-      index === 0
-        ? { x: point.x + offset.x, y: point.y + offset.y }
-        : { ...point },
-    )
-  }
-  return zone.points.map((point) => ({
-    x: point.x + offset.x,
-    y: point.y + offset.y,
-  }))
-}
-
-function cloneAnnotationWithOffset(annotation: SceneAnnotationEntity, offset: ScenePoint): SceneAnnotationEntity {
-  return {
-    ...cloneAnnotationEntity(annotation),
-    id: createUuid(),
-    position: {
-      x: annotation.position.x + offset.x,
-      y: annotation.position.y + offset.y,
-    },
-  }
-}
-
-function cloneMeasurementGuideWithOffset(
-  guide: SceneMeasurementGuideEntity,
-  offset: ScenePoint,
-): SceneMeasurementGuideEntity {
-  return {
-    ...cloneMeasurementGuideEntity(guide),
-    id: `measurement-guide-${createUuid()}`,
-    locked: false,
-    start: {
-      x: guide.start.x + offset.x,
-      y: guide.start.y + offset.y,
-    },
-    end: {
-      x: guide.end.x + offset.x,
-      y: guide.end.y + offset.y,
-    },
-  }
-}
-
-function measurementGuideKey(id: string): string {
-  return `measurement-guide:${id}`
-}
-
-function uniqueZoneName(baseName: string, existingNames: Set<string>): string {
-  if (!existingNames.has(baseName)) return baseName
-  let index = 2
-  let candidate = `${baseName} copy`
-  while (existingNames.has(candidate)) {
-    candidate = `${baseName} copy ${index}`
-    index += 1
-  }
-  return candidate
 }

@@ -26,10 +26,14 @@ import {
   type SceneConcreteDesignObjectTarget,
 } from '../scene'
 import {
+  createClipboardArrangementTemplate,
   createClipboardPayload,
-  pasteClipboardPayload,
   type SceneClipboardPayload,
 } from './clipboard'
+import {
+  createSceneArrangementPlacement,
+  type SceneArrangementPlacement,
+} from './arrangement-placement'
 import {
   getCombinedTargetBounds,
   getDesignObjectSelectionModel,
@@ -87,6 +91,7 @@ export class SceneRuntimeMutationController {
   private readonly _sceneStore: SceneStore
   private readonly _selection: SceneRuntimeMutationControllerOptions['selection']
   private readonly _sceneEdits: SceneEditCoordinator
+  private readonly _arrangementPlacement: SceneArrangementPlacement
   private readonly _presentation: SceneRuntimeMutationControllerOptions['presentation']
   private readonly _invalidateScene: () => void
   private _clipboard: SceneClipboardPayload | null = null
@@ -96,6 +101,7 @@ export class SceneRuntimeMutationController {
     this._sceneStore = options.sceneStore
     this._selection = options.selection
     this._sceneEdits = options.sceneEdits
+    this._arrangementPlacement = createSceneArrangementPlacement({ sceneEdits: options.sceneEdits })
     this._presentation = options.presentation
     this._invalidateScene = options.invalidateScene
   }
@@ -111,15 +117,13 @@ export class SceneRuntimeMutationController {
   paste(): void {
     if (!this._clipboard) return
 
-    let nextSelection = new Set<string>()
     const offset = normalPasteOffset(this._normalPasteCount + 1)
-    this._sceneEdits.run('paste', (tx) => {
-      tx.mutate((draft) => {
-        nextSelection = pasteClipboardPayload(this._clipboard!, draft, offset)
-      })
-      if (nextSelection.size > 0) tx.setSelection(nextSelection)
+    const receipt = this._arrangementPlacement.place({
+      template: createClipboardArrangementTemplate(this._clipboard),
+      translateBy: offset,
+      historyType: 'paste',
     })
-    if (nextSelection.size > 0) this._normalPasteCount += 1
+    if (receipt.committed) this._normalPasteCount += 1
   }
 
   pasteAt(point: ScenePoint): void {
@@ -127,16 +131,14 @@ export class SceneRuntimeMutationController {
     const sourceCenter = this._getClipboardSourceCenter(this._clipboard)
     if (!sourceCenter) return
 
-    let nextSelection = new Set<string>()
     const offset = {
       x: point.x - sourceCenter.x,
       y: point.y - sourceCenter.y,
     }
-    this._sceneEdits.run('paste', (tx) => {
-      tx.mutate((draft) => {
-        nextSelection = pasteClipboardPayload(this._clipboard!, draft, offset)
-      })
-      if (nextSelection.size > 0) tx.setSelection(nextSelection)
+    this._arrangementPlacement.place({
+      template: createClipboardArrangementTemplate(this._clipboard),
+      translateBy: offset,
+      historyType: 'paste',
     })
   }
 
@@ -151,12 +153,10 @@ export class SceneRuntimeMutationController {
     const payload = createClipboardPayload(persisted, selected)
     if (!payload) return
 
-    let nextSelection = new Set<string>()
-    this._sceneEdits.run('duplicate-selected', (tx) => {
-      tx.mutate((draft) => {
-        nextSelection = pasteClipboardPayload(payload, draft, NORMAL_PASTE_OFFSET_M, { preservePinnedNames: true })
-      })
-      if (nextSelection.size > 0) tx.setSelection(nextSelection)
+    this._arrangementPlacement.place({
+      template: createClipboardArrangementTemplate(payload, { preservePinnedNames: true }),
+      translateBy: NORMAL_PASTE_OFFSET_M,
+      historyType: 'duplicate-selected',
     })
   }
 
