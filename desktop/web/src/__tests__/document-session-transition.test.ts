@@ -547,6 +547,7 @@ describe("document session transition", () => {
   });
 
   it("starts an empty session by installing workflows and hiding canvas chrome", () => {
+    resetMachine({ file: null, path: null, name: "Untitled" });
     const session = makeSession();
 
     machine.beginEmptyDocumentSession(session);

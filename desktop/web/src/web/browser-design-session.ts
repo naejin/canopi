@@ -1,14 +1,19 @@
 import { effect } from "@preact/signals";
-import {
-  DEFAULT_BUDGET_CURRENCY,
-  normalizeLoadedDocument,
-  normalizeNewDocument,
-} from "../app/contracts/document";
+import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
+import { createDesignSessionReplacement } from "../app/document-session/replacement";
 import {
   designSessionStore,
   type DesignSessionStore,
 } from "../app/document-session/store";
-import { buildPersistedDesignSessionContent } from "../app/document-session/persistence";
+import { DESIGN_SESSION_WORKFLOWS } from "../app/document-session/workflows";
+import {
+  createDesignSessionWorkflowRunner,
+  type DesignSessionWorkflowRunner,
+} from "../app/document-session/workflow-runner";
+import {
+  buildPersistedDesignSessionContent,
+  snapshotCanvasIntoDesignSession,
+} from "../app/document-session/persistence";
 import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
 import {
@@ -47,6 +52,7 @@ interface BrowserDesignSessionControllerOptions {
   readonly appDataStore?: BrowserAppDataStore;
   readonly now?: () => Date;
   readonly createDraftId?: () => string;
+  readonly workflowRunner?: DesignSessionWorkflowRunner;
 }
 
 export interface BrowserDesignSessionController {
@@ -80,15 +86,16 @@ export function createBrowserDesignSessionController({
   appDataStore = browserAppDataStore,
   now = () => new Date(),
   createDraftId = createBrowserDraftId,
+  workflowRunner = createDesignSessionWorkflowRunner(DESIGN_SESSION_WORKFLOWS),
 }: BrowserDesignSessionControllerOptions = {}): BrowserDesignSessionController {
   let activeDraftId: string | null = null;
   let canvasSession: CanvasDocumentSurface | null = null;
+  const replacement = createDesignSessionReplacement({ store, workflowRunner });
 
   async function newDesign(): Promise<void> {
     const file = createEmptyWebCanopiFile(now());
     activeDraftId = null;
-    store.replaceCurrentDesignState(file, null, file.name);
-    store.resetDirtyBaselines();
+    replacement.replace({ file, kind: "new", path: null, name: file.name }, canvasSession);
     saveCurrentDraft();
   }
 
@@ -99,19 +106,22 @@ export function createBrowserDesignSessionController({
       throw new Error(`Expected a .canopi file, received ${opened.fileName}.`);
     }
 
-    const file = normalizeLoadedDocument(parseCanopiJson(opened.text));
+    const file = parseCanopiJson(opened.text);
     activeDraftId = null;
-    store.replaceCurrentDesignState(file, null, file.name || nameFromFileName(opened.fileName));
-    store.resetDirtyBaselines();
+    replacement.replace({
+      file,
+      kind: "loaded",
+      path: null,
+      name: file.name || nameFromFileName(opened.fileName),
+    }, canvasSession);
     saveCurrentDraft();
     return true;
   }
 
   async function openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened"> {
-    const file = normalizeLoadedDocument(parseCanopiJson(template.text));
+    const file = parseCanopiJson(template.text);
     activeDraftId = null;
-    store.replaceCurrentDesignState(file, null, template.name);
-    store.resetDirtyBaselines();
+    replacement.replace({ file, kind: "loaded", path: null, name: template.name }, canvasSession);
     saveCurrentDraft();
     return "opened";
   }
@@ -184,19 +194,38 @@ export function createBrowserDesignSessionController({
     const draft = appDataStore.loadDraft(id);
     if (!draft) return false;
 
-    const file = normalizeLoadedDocument(draft);
+    const file = draft;
     activeDraftId = id;
-    store.replaceCurrentDesignState(file, null, file.name || "Untitled");
-    store.resetDirtyBaselines();
+    replacement.replace({
+      file,
+      kind: "loaded",
+      path: null,
+      name: file.name || "Untitled",
+    }, canvasSession);
     saveCurrentDraft();
     return true;
   }
 
   function attachCanvasSession(session: CanvasDocumentSurface): () => void {
+    replacement.attach(session);
     canvasSession = session;
     return () => {
-      if (canvasSession === session) {
+      if (canvasSession !== session) return;
+
+      try {
+        if (session.hasLoadedDocument() && store.hasCurrentDesign()) {
+          snapshotCanvasIntoDesignSession({
+            session,
+            name: store.readDesignName(),
+            store,
+          });
+          store.markCanvasDetachedDirty(store.isCanvasDirty());
+        }
+      } catch (error) {
+        console.error("Failed to snapshot browser canvas before detach:", error);
+      } finally {
         canvasSession = null;
+        workflowRunner.dispose();
       }
     };
   }
@@ -254,7 +283,7 @@ export const browserDesignSessionController = createBrowserDesignSessionControll
 
 function createEmptyWebCanopiFile(now: Date): CanopiFile {
   const timestamp = now.toISOString();
-  return normalizeNewDocument({
+  return {
     version: WEB_CANOPI_FILE_VERSION,
     name: "Untitled",
     description: null,
@@ -275,7 +304,7 @@ function createEmptyWebCanopiFile(now: Date): CanopiFile {
     created_at: timestamp,
     updated_at: timestamp,
     extra: {},
-  });
+  };
 }
 
 function parseCanopiJson(text: string): CanopiFile {

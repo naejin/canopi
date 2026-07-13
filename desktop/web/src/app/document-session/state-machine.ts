@@ -1,7 +1,6 @@
 import { message } from "@tauri-apps/plugin-dialog";
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import { getCurrentCanvasDocumentSurface } from "../../canvas/session";
-import { normalizeLoadedDocument, normalizeNewDocument } from "../contracts/document";
 import * as designIpc from "../../ipc/design";
 import { t } from "../../i18n";
 import type { CanopiFile } from "../../types/design";
@@ -14,6 +13,10 @@ import {
   disposeDesignSessionPersistence,
   snapshotCanvasIntoDesignSession,
 } from "./persistence";
+import {
+  createDesignSessionReplacement,
+  type DesignSessionReplacement,
+} from "./replacement";
 import { DESIGN_SESSION_WORKFLOWS } from "./workflows";
 import {
   createDesignSessionWorkflowRunner,
@@ -134,8 +137,14 @@ const DEFAULT_DEPS: DesignSessionStateMachineDeps = {
 
 export class DesignSessionStateMachine {
   private state: DesignSessionState = INITIAL_STATE;
+  private readonly replacement: DesignSessionReplacement;
 
-  constructor(private readonly deps: DesignSessionStateMachineDeps = DEFAULT_DEPS) {}
+  constructor(private readonly deps: DesignSessionStateMachineDeps = DEFAULT_DEPS) {
+    this.replacement = createDesignSessionReplacement({
+      store: deps.store,
+      workflowRunner: deps.workflowRunner,
+    });
+  }
 
   getState(): DesignSessionState {
     return this.state;
@@ -176,8 +185,7 @@ export class DesignSessionStateMachine {
       documentLoaded: session.hasLoadedDocument(),
       operation: null,
     };
-    this.deps.workflowRunner.install();
-    session.hideCanvasChrome();
+    this.replacement.attach(session);
   }
 
   async saveCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<void> {
@@ -261,14 +269,19 @@ export class DesignSessionStateMachine {
         return cancelledResult(session);
       }
 
-      const file = normalizeDocumentForSource(request.source, loaded.file);
-      this.applyDocumentTransition({
-        source: request.source,
-        session,
-        file,
-        path: loaded.path,
-        name: loaded.name,
-      });
+      if (request.source === "mount-existing") {
+        if (!session) {
+          throw new Error("mount-existing document transitions require an attached canvas session");
+        }
+        this.replacement.attach(session);
+      } else {
+        this.replacement.replace({
+          file: loaded.file,
+          kind: request.source === "new" ? "new" : "loaded",
+          path: loaded.path,
+          name: loaded.name,
+        }, session);
+      }
 
       this.state = this.steadyStateFor(session);
       return {
@@ -446,47 +459,6 @@ export class DesignSessionStateMachine {
     };
   }
 
-  private applyDocumentTransition({
-    source,
-    session,
-    file,
-    path,
-    name,
-  }: ApplyDocumentTransitionOptions): void {
-    if (!session) {
-      this.applyDetachedDocumentTransition({ source, file, path, name });
-      return;
-    }
-
-    if (source === "mount-existing") {
-      session.loadDocument(file);
-    } else {
-      session.replaceDocument(file);
-      this.deps.store.replaceCurrentDesignState(file, path, name);
-      this.deps.store.resetDirtyBaselines();
-    }
-
-    session.clearHistory();
-    session.showCanvasChrome();
-    session.zoomToFit();
-    this.deps.workflowRunner.install();
-  }
-
-  private applyDetachedDocumentTransition({
-    source,
-    file,
-    path,
-    name,
-  }: Omit<ApplyDocumentTransitionOptions, "session">): void {
-    if (source === "mount-existing") {
-      throw new Error("mount-existing document transitions require an attached canvas session");
-    }
-
-    this.deps.store.replaceCurrentDesignState(file, path, name);
-    this.deps.store.resetDirtyBaselines();
-    this.deps.workflowRunner.install();
-  }
-
   private async confirmReplacement(session: CanvasDocumentSurface | null): Promise<ReplacementDecision> {
     if (!this.deps.store.hasCurrentDesign()) return "proceed";
     if (!this.deps.store.isDesignDirty()) return "proceed";
@@ -567,14 +539,6 @@ export function createDesignSessionStateMachine(
   });
 }
 
-interface ApplyDocumentTransitionOptions {
-  source: DocumentTransitionSource;
-  session: CanvasDocumentSurface | null;
-  file: CanopiFile;
-  path: string | null;
-  name: string;
-}
-
 interface QueuedDocumentLoadRequest {
   session: CanvasDocumentSurface;
   options: QueuedDocumentLoadOptions;
@@ -584,15 +548,6 @@ interface QueuedDocumentLoadRequest {
   isStillPending: () => boolean;
   clearPending: () => void;
   restorePending: () => void;
-}
-
-function normalizeDocumentForSource(
-  source: DocumentTransitionSource,
-  file: CanopiFile,
-): CanopiFile {
-  if (source === "new") return normalizeNewDocument(file);
-  if (source === "mount-existing") return file;
-  return normalizeLoadedDocument(file);
 }
 
 function cancelledResult(session: CanvasDocumentSurface | null): DocumentTransitionResult {

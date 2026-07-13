@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
+import type { DesignSessionWorkflowRunner } from '../app/document-session/workflow-runner'
 import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import {
@@ -326,6 +327,141 @@ describe('browser Design Session lifecycle', () => {
       },
     ])
     expect(canvas.markSaved).toHaveBeenCalledOnce()
+  })
+
+  it('applies every browser replacement through the attached canvas lifecycle', async () => {
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({
+      id: 'draft-replacement',
+      file: makeCanopiFile({ name: 'Draft Replacement' }),
+      now: NOW.toISOString(),
+    })
+    const adapter = testFileAdapter({
+      openCanopiFile: vi.fn(async () => ({
+        fileName: 'opened-replacement.canopi',
+        text: JSON.stringify(makeCanopiFile({ name: 'Opened Replacement' })),
+      })),
+    })
+    const store = createMemoryDesignSessionStore()
+    const workflowRunner: DesignSessionWorkflowRunner = {
+      install: vi.fn(),
+      dispose: vi.fn(),
+    }
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: adapter,
+      workflowRunner,
+      now: () => NOW,
+      createDraftId: () => `draft-${store.readDesignName().toLowerCase().replace(/ /g, '-')}`,
+    })
+    const canvas = testCanvasDocumentSurface()
+    const detach = controller.attachCanvasSession(canvas)
+    vi.mocked(canvas.replaceDocument).mockClear()
+
+    await controller.newDesign()
+    await controller.openCanopi()
+    await controller.openCanopiTemplate({
+      name: 'Template Display',
+      text: JSON.stringify(makeCanopiFile({ name: 'Template Replacement' })),
+    })
+    expect(controller.openDraft('draft-replacement')).toBe(true)
+
+    expect(vi.mocked(canvas.replaceDocument).mock.calls.map(([file]) => file.name)).toEqual([
+      'Untitled',
+      'Opened Replacement',
+      'Template Replacement',
+      'Draft Replacement',
+    ])
+    expect(canvas.clearHistory).toHaveBeenCalledTimes(4)
+    expect(canvas.showCanvasChrome).toHaveBeenCalledTimes(4)
+    expect(canvas.zoomToFit).toHaveBeenCalledTimes(4)
+    expect(workflowRunner.install).toHaveBeenCalledTimes(5)
+
+    detach()
+    expect(workflowRunner.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('snapshots canvas-owned state and dirty status before detaching', () => {
+    const initial = makeCanopiFile({ name: 'Remount Garden' })
+    const store = createMemoryDesignSessionStore({
+      file: initial,
+      path: null,
+      name: initial.name,
+    })
+    const workflowRunner: DesignSessionWorkflowRunner = {
+      install: vi.fn(),
+      dispose: vi.fn(),
+    }
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      fileAdapter: testFileAdapter(),
+      workflowRunner,
+      now: () => NOW,
+    })
+    const canvasOwnedPlant = {
+      id: 'canvas-owned-plant',
+      locked: false,
+      canonical_name: 'Malus domestica',
+      common_name: null,
+      color: null,
+      position: { x: 10, y: 20 },
+      rotation: null,
+      scale: 1,
+      notes: null,
+      planted_date: null,
+      quantity: null,
+    }
+    const firstCanvas = testCanvasDocumentSurface({
+      serializeDocument: vi.fn((_metadata, document) => ({
+        ...document,
+        plants: [canvasOwnedPlant],
+      })),
+    })
+    const detach = controller.attachCanvasSession(firstCanvas)
+    store.setCanvasClean(false)
+
+    detach()
+
+    expect(firstCanvas.serializeDocument).toHaveBeenCalledOnce()
+    expect(store.readCurrentDesign()?.plants).toEqual([canvasOwnedPlant])
+    expect(store.isDesignDirty()).toBe(true)
+    expect(workflowRunner.dispose).toHaveBeenCalledOnce()
+
+    const remountedCanvas = testCanvasDocumentSurface()
+    controller.attachCanvasSession(remountedCanvas)
+    expect(remountedCanvas.loadDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ plants: [canvasOwnedPlant] }),
+    )
+  })
+
+  it('does not retain a canvas when attachment fails', async () => {
+    const initial = makeCanopiFile({ name: 'Existing Garden' })
+    const store = createMemoryDesignSessionStore({
+      file: initial,
+      path: null,
+      name: initial.name,
+    })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      fileAdapter: testFileAdapter(),
+      workflowRunner: { install: vi.fn(), dispose: vi.fn() },
+      now: () => NOW,
+    })
+    const failedCanvas = testCanvasDocumentSurface({
+      loadDocument: vi.fn(() => {
+        throw new Error('canvas hydration failed')
+      }),
+    })
+
+    expect(() => controller.attachCanvasSession(failedCanvas)).toThrow('canvas hydration failed')
+    await controller.newDesign()
+
+    expect(failedCanvas.replaceDocument).not.toHaveBeenCalled()
+    expect(failedCanvas.serializeDocument).not.toHaveBeenCalled()
+    expect(store.readCurrentDesign()?.name).toBe('Untitled')
   })
 })
 

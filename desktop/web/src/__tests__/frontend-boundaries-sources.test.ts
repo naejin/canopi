@@ -801,6 +801,8 @@ describe('frontend boundary sources', () => {
     const actionsSource = readSource('../app/document-session/actions.ts')
     const transitionSource = readSource('../app/document-session/transition.ts')
     const stateMachineSource = readSource('../app/document-session/state-machine.ts')
+    const browserSessionSource = readSource('../web/browser-design-session.ts')
+    const webWorkspaceSource = readSource('../web/WebCanvasWorkspace.tsx')
 
     expectImportsToContain('../app/document-session/use-canvas-document-session.ts', ['./lifecycle'])
     expect(hookSource).not.toContain('SceneCanvasRuntime')
@@ -823,9 +825,25 @@ describe('frontend boundary sources', () => {
     expect(stateMachineSource).toContain('autosaveDesign')
     expectImportsToContain('../app/document-session/state-machine.ts', [
       './persistence',
+      './replacement',
       './workflow-runner',
       './workflows',
     ])
+    expect(stateMachineSource).not.toContain('applyDocumentTransition')
+    expectNoImportsMatching('../app/document-session/replacement.ts', [
+      /@tauri-apps/,
+      /(^|\/)ipc(\/|$)/,
+      /(^|\/)web(\/|$)/,
+    ])
+    expectImportsToContain('../web/browser-design-session.ts', [
+      '../app/document-session/replacement',
+    ])
+    expect(browserSessionSource).not.toContain('normalizeLoadedDocument')
+    expect(browserSessionSource).not.toContain('normalizeNewDocument')
+    expect(webWorkspaceSource).not.toContain('syncCanvasDocument')
+    expect(webWorkspaceSource).not.toContain('useSignalEffect')
+    expect(webWorkspaceSource).not.toContain('.replaceDocument(')
+    expect(webWorkspaceSource).not.toContain('.loadDocument(')
     expectNoImportsMatching('../app/document-session/persistence.ts', [
       /consortium\/workflow$/,
       /document-session\/workflow-runner$/,

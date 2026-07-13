@@ -1,5 +1,4 @@
-import { untracked, useSignalEffect } from '@preact/signals'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import {
   designSessionStore,
   type DesignSessionStore,
@@ -7,7 +6,6 @@ import {
 import { locale } from '../app/settings/state'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
 import type { CanvasDocumentSurface, CanvasRuntimeHost } from '../canvas/runtime/runtime'
-import type { CanopiFile } from '../types/design'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
@@ -38,7 +36,6 @@ export function WebCanvasWorkspace({
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<MountedRuntime | null>(null)
-  const [runtimeReady, setRuntimeReady] = useState(false)
 
   useEffect(() => {
     const container = containerRef.current
@@ -46,11 +43,29 @@ export function WebCanvasWorkspace({
     if (!container || !canvasArea) return
 
     let cancelled = false
+    let released = false
     const host = createRuntimeHost()
     runtimeRef.current = {
       host,
       detachCanvasSession: () => {},
       resizeObserver: null,
+    }
+
+    const releaseRuntime = () => {
+      if (released) return
+      released = true
+      const mounted = runtimeRef.current?.host === host ? runtimeRef.current : null
+      if (mounted) runtimeRef.current = null
+      try {
+        mounted?.resizeObserver?.disconnect()
+        mounted?.detachCanvasSession()
+      } finally {
+        try {
+          host.destroy()
+        } finally {
+          setCanvasRuntimeSurfaces(null)
+        }
+      }
     }
 
     void host.init(container).then(() => {
@@ -63,34 +78,17 @@ export function WebCanvasWorkspace({
       documents.initializeViewport()
       documents.attachRulersTo(rulerOverlayRef.current ?? canvasArea)
       mounted.detachCanvasSession = controller.attachCanvasSession(documents)
-      syncCanvasDocument(documents, store.readCurrentDesign())
       installResizeObserver(mounted, canvasArea, documents)
-      setRuntimeReady(true)
     }).catch((error: unknown) => {
+      releaseRuntime()
       console.error('Failed to initialize browser canvas runtime:', error)
     })
 
     return () => {
       cancelled = true
-      const mounted = runtimeRef.current
-      runtimeRef.current = null
-      mounted?.resizeObserver?.disconnect()
-      mounted?.detachCanvasSession()
-      host.destroy()
-      setCanvasRuntimeSurfaces(null)
-      setRuntimeReady(false)
+      releaseRuntime()
     }
   }, [controller, createRuntimeHost, store])
-
-  useSignalEffect(() => {
-    const file = store.currentDesign.value
-    if (!runtimeReady) return
-    untracked(() => {
-      const documents = runtimeRef.current?.host.surfaces.documents
-      if (!documents) return
-      syncCanvasDocument(documents, file)
-    })
-  })
 
   return (
     <div className={panelStyles.canvasPanel} data-testid="web-canvas-workspace">
@@ -121,21 +119,6 @@ export function WebCanvasWorkspace({
       </div>
     </div>
   )
-}
-
-function syncCanvasDocument(documents: CanvasDocumentSurface, file: CanopiFile | null): void {
-  if (!file) {
-    documents.hideCanvasChrome()
-    return
-  }
-
-  if (documents.hasLoadedDocument()) {
-    documents.replaceDocument(file)
-  } else {
-    documents.loadDocument(file)
-  }
-  documents.showCanvasChrome()
-  documents.zoomToFit()
 }
 
 function installResizeObserver(

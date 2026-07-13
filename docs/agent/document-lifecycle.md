@@ -6,7 +6,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
 - `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, resize observation, autosave timing, settings flush, runtime teardown, and canvas-session publication.
-- `desktop/web/src/app/document-session/state-machine.ts` owns explicit Design Session states and transition ordering: attached/ detached readiness, dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, autosave execution, teardown snapshots, persistence disposal, and workflow runner install/dispose.
+- `desktop/web/src/app/document-session/state-machine.ts` owns explicit desktop Design Session states and intent orchestration: attached/detached readiness, dirty checks, queued loads, autosave execution, teardown snapshots, persistence disposal, and workflow runner disposal.
+- `desktop/web/src/app/document-session/replacement.ts` is the platform-neutral authority-handoff seam shared by desktop and Web. Its `attach()` and `replace()` operations own new/loaded normalization, initial load versus explicit replacement, attached/detached store updates, dirty-baseline resets, canvas history/chrome/zoom ordering, and workflow installation. It must import neither Tauri nor browser infrastructure.
 - `desktop/web/src/app/document-session/transition.ts` exposes intent-shaped Design Session operations for document actions and lifecycle callers while keeping low-level transition request construction inside the Design Session module.
 - `desktop/web/src/app/document-session/store.ts` is the public Design Session state seam for active Design identity, dirty baselines, pending loads, saved markers, autosave failure, and read-only reactive projections.
 - `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, and teardown snapshots.
@@ -34,9 +35,12 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Production callers use intent-shaped Design Session operations such as `openDesignSessionFromDialog()`, `openDesignSessionFromPath()`, `openTemplateDesignSession()`, `createNewDesignSession()`, `startAttachedDesignSession()`, `consumeQueuedDocumentLoad()`, `saveCurrentDesign()`, `saveAsCurrentDesign()`, `autosaveDesignSession()`, and `teardownAttachedDesignSession()`.
 - Low-level `transitionDocument()` request construction is internal to the Design Session module and state-machine tests. Production callers must not assemble transition sources, dirty guard modes, load callbacks, queue deferral behavior, or attached/detached branch policy.
 - Design Session operations decide whether an attached `CanvasDocumentSurface` is available or whether to apply a detached document-state transition.
+- Canvas hydration is explicit: only Design Session `attach()` and `replace()` operations may load or replace the runtime document. Never infer canvas replacement from `currentDesign` identity or another reactive non-canvas snapshot update; SceneStore remains authoritative while attached.
 - Attached transitions hydrate the canvas session, show chrome, call `zoomToFit()`, clear history, and install Design Session workflows.
 - Detached transitions update canonical document state, reset dirty baselines, and install Design Session workflows without canvas-only calls.
 - Lifecycle callers should use `startAttachedDesignSession()`, `autosaveDesignSession()`, and `teardownAttachedDesignSession()` instead of reassembling Design Session state-machine steps locally.
+- Web file, template, draft, and New Design acquisition stays in `web/browser-design-session.ts`; after resolving an input it delegates replacement and canvas attachment to the shared replacement seam. Browser Draft persistence and desktop native persistence remain separate compile-time adapters.
+- Before a Web canvas host is detached or destroyed, `browser-design-session.ts` snapshots SceneStore-owned state back into the Design Session store and preserves detached canvas dirty state. A later attachment hydrates from that handoff snapshot; never destroy an attached Web runtime while leaving only the older non-canvas snapshot behind.
 
 ## Document Authority
 

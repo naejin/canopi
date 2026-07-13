@@ -114,7 +114,7 @@ describe('Web Edition canvas workspace', () => {
     expect(store.readCurrentDesign()?.name).toBe('Untitled')
   })
 
-  it('does not reload the stale Design file from canvas-owned sync signals', async () => {
+  it('does not replace live canvas-owned state after a non-canvas Design edit', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     const store = createMemoryDesignSessionStore()
@@ -123,7 +123,7 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost({ writeLayerVisibilityOnceOnReplace: true })
+    const runtime = fakeRuntimeHost()
 
     await controller.newDesign()
     await act(async () => {
@@ -139,16 +139,55 @@ describe('Web Edition canvas workspace', () => {
     vi.mocked(runtime.documents.replaceDocument).mockClear()
 
     await act(async () => {
-      const current = store.readCurrentDesign()
-      if (!current) throw new Error('Expected current Design')
-      store.replaceCurrentDesignSnapshot({
-        ...current,
-        description: 'Updated outside the canvas',
-      })
+      controller.renameDesign('Renamed outside the canvas')
       await Promise.resolve()
     })
 
-    expect(runtime.documents.replaceDocument).toHaveBeenCalledTimes(1)
+    expect(store.readDesignName()).toBe('Renamed outside the canvas')
+    expect(store.isDesignDirty()).toBe(true)
+    expect(runtime.documents.replaceDocument).not.toHaveBeenCalled()
+  })
+
+  it('releases a runtime whose Design attachment fails', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeHost()
+    vi.mocked(runtime.documents.loadDocument).mockImplementation(() => {
+      throw new Error('canvas hydration failed')
+    })
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await controller.newDesign()
+
+    try {
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => runtime.host}
+          />,
+          container,
+        )
+        await Promise.resolve()
+      })
+
+      await vi.waitFor(() => {
+        expect(logError).toHaveBeenCalledWith(
+          'Failed to initialize browser canvas runtime:',
+          expect.objectContaining({ message: 'canvas hydration failed' }),
+        )
+      })
+      expect(runtime.host.destroy).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBeNull()
+    } finally {
+      logError.mockRestore()
+    }
   })
 })
 
@@ -171,12 +210,11 @@ function memoryStorage(): MemoryStorage {
   }
 }
 
-function fakeRuntimeHost(options: { readonly writeLayerVisibilityOnceOnReplace?: boolean } = {}): {
+function fakeRuntimeHost(): {
   host: CanvasRuntimeHost
   documents: CanvasDocumentSurface
 } {
   let loaded = false
-  let layerVisibilityWritesRemaining = options.writeLayerVisibilityOnceOnReplace ? 1 : 0
   const documents: CanvasDocumentSurface = {
     initializeViewport: vi.fn(),
     attachRulersTo: vi.fn(),
@@ -187,10 +225,6 @@ function fakeRuntimeHost(options: { readonly writeLayerVisibilityOnceOnReplace?:
       loaded = true
     }),
     replaceDocument: vi.fn(() => {
-      if (layerVisibilityWritesRemaining > 0) {
-        layerVisibilityWritesRemaining -= 1
-        layerVisibility.value = { ...layerVisibility.value }
-      }
       loaded = true
     }),
     hasLoadedDocument: vi.fn(() => loaded),
