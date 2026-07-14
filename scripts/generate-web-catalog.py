@@ -701,29 +701,11 @@ def assert_asset_sizes(output_dir: Path, *, max_asset_bytes: int) -> None:
         )
 
 
-def open_shard_files(directory: Path, prefix: str, shard_count: int) -> list[Any]:
-    width = max(4, len(str(shard_count - 1)))
-    return [
-        (directory / f"{prefix}-{index:0{width}d}.jsonl").open("w", encoding="utf-8")
-        for index in range(shard_count)
-    ]
-
-
-def close_files(files: list[Any]) -> None:
-    for handle in files:
-        handle.close()
-
-
 def write_json(path: Path, value: Any) -> None:
     path.write_text(
         json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-
-
-def write_jsonl(handle: Any, value: dict[str, Any]) -> None:
-    handle.write(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
-    handle.write("\n")
 
 
 def write_simple_parquet(path: Path, columns: list[str], rows: list[dict[str, Any]]) -> None:
