@@ -4,8 +4,14 @@ import {
   type DesignSessionStore,
 } from '../app/document-session/store'
 import { locale } from '../app/settings/state'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { getCurrentCanvasSession, setCanvasRuntimeSurfaces } from '../canvas/session'
+import { runCanvasRuntimeCleanups } from '../canvas/runtime/cleanup'
 import type { CanvasDocumentSurface, CanvasRuntimeHost } from '../canvas/runtime/runtime'
+import {
+  CanvasRuntimeLifecycleBusyError,
+  claimCanvasRuntimeLifecycle,
+  ensureCanvasRuntimeLifecycleAvailable,
+} from '../canvas/runtime/lifecycle-owner'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
@@ -42,29 +48,60 @@ export function WebCanvasWorkspace({
     const canvasArea = canvasAreaRef.current
     if (!container || !canvasArea) return
 
+    ensureCanvasRuntimeLifecycleAvailable()
     let cancelled = false
     let released = false
-    const host = createRuntimeHost()
+    let releasing = false
+    let attachmentInProgress = false
+    let releaseRuntime = () => {}
+    const runtimeLease = claimCanvasRuntimeLifecycle(() => releaseRuntime())
+    let host: CanvasRuntimeHost
+    try {
+      host = createRuntimeHost()
+    } catch (error) {
+      runtimeLease.release()
+      throw error
+    }
     runtimeRef.current = {
       host,
       detachCanvasSession: () => {},
       resizeObserver: null,
     }
 
-    const releaseRuntime = () => {
-      if (released) return
-      released = true
+    releaseRuntime = () => {
+      if (released || releasing) return
+      if (attachmentInProgress) {
+        throw new CanvasRuntimeLifecycleBusyError(
+          'Browser Canvas attachment is still in progress',
+        )
+      }
+      releasing = true
       const mounted = runtimeRef.current?.host === host ? runtimeRef.current : null
-      if (mounted) runtimeRef.current = null
       try {
-        mounted?.resizeObserver?.disconnect()
         mounted?.detachCanvasSession()
-      } finally {
+        released = true
         try {
-          host.destroy()
-        } finally {
-          setCanvasRuntimeSurfaces(null)
+          runCanvasRuntimeCleanups([
+            () => {
+              const observer = mounted?.resizeObserver
+              if (mounted) mounted.resizeObserver = null
+              observer?.disconnect()
+            },
+            () => host.destroy(),
+            () => {
+              if (mounted) runtimeRef.current = null
+            },
+            () => {
+              if (getCurrentCanvasSession() === host.surfaces) {
+                setCanvasRuntimeSurfaces(null)
+              }
+            },
+          ], 'Browser Canvas runtime cleanup failed')
+        } catch (error) {
+          console.error('Failed to release browser canvas runtime:', error)
         }
+      } finally {
+        releasing = false
       }
     }
 
@@ -73,20 +110,45 @@ export function WebCanvasWorkspace({
 
       const mounted = runtimeRef.current
       if (!mounted) return
+      const runtimeIsActive = () => !cancelled
+        && !released
+        && runtimeRef.current?.host === host
       const documents = host.surfaces.documents
-      setCanvasRuntimeSurfaces(host.surfaces)
       documents.initializeViewport()
+      if (!runtimeIsActive()) return
       documents.attachRulersTo(rulerOverlayRef.current ?? canvasArea)
-      mounted.detachCanvasSession = controller.attachCanvasSession(documents)
-      installResizeObserver(mounted, canvasArea, documents)
+      if (!runtimeIsActive()) return
+
+      let detachCanvasSession: () => void
+      attachmentInProgress = true
+      try {
+        detachCanvasSession = controller.attachCanvasSession(documents)
+      } finally {
+        attachmentInProgress = false
+      }
+      mounted.detachCanvasSession = detachCanvasSession
+      if (!runtimeIsActive()) {
+        runtimeLease.release()
+        return
+      }
+
+      installResizeObserver(mounted, canvasArea, documents, runtimeIsActive)
+      if (!runtimeIsActive()) return
+      setCanvasRuntimeSurfaces(host.surfaces)
     }).catch((error: unknown) => {
-      releaseRuntime()
-      console.error('Failed to initialize browser canvas runtime:', error)
+      try {
+        runtimeLease.release()
+      } catch (releaseError) {
+        console.error('Failed to release browser canvas runtime:', releaseError)
+      }
+      if (!cancelled) {
+        console.error('Failed to initialize browser canvas runtime:', error)
+      }
     })
 
     return () => {
       cancelled = true
-      releaseRuntime()
+      runtimeLease.release()
     }
   }, [controller, createRuntimeHost, store])
 
@@ -125,13 +187,18 @@ function installResizeObserver(
   mounted: MountedRuntime,
   canvasArea: HTMLElement,
   documents: CanvasDocumentSurface,
+  runtimeIsActive: () => boolean,
 ): void {
   const resize = () => {
     documents.resize(canvasArea.clientWidth, canvasArea.clientHeight)
   }
   resize()
-  if (typeof ResizeObserver === 'undefined') return
+  if (!runtimeIsActive() || typeof ResizeObserver === 'undefined') return
   const observer = new ResizeObserver(resize)
-  observer.observe(canvasArea)
+  if (!runtimeIsActive()) {
+    observer.disconnect()
+    return
+  }
   mounted.resizeObserver = observer
+  observer.observe(canvasArea)
 }

@@ -149,16 +149,17 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(runtimeSource).not.toContain('this._sceneSession.updateSession(')
   })
 
-  it('separates Scene history commands from saved-checkpoint authority', () => {
+  it('separates Scene history commands from persistence authority', () => {
     const commandSource = readSource('../canvas/runtime/command-surface.ts')
     const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
 
     expect(commandSource).toContain('readonly history: SceneHistoryCommands')
     expect(commandSource).not.toContain('readonly history: SettledSceneHistory')
     expect(documentSource).toContain(
-      'authority: SceneDocumentAuthority & SceneSavedCheckpoint',
+      'authority: SceneDocumentAuthority & ScenePersistenceAuthority',
     )
-    expect(documentSource).not.toContain('SceneDocumentAuthority & SettledSceneHistory')
+    expect(documentSource).not.toContain('SceneSavedCheckpoint')
+    expect(documentSource).not.toContain('SettledSceneHistory')
   })
 
   it('recognizes SceneHistory imports independently of relative depth', () => {

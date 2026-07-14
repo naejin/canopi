@@ -1,4 +1,7 @@
-import { RendererHost } from '../renderers'
+import {
+  RendererHost,
+  RendererHostInitializationCancelledError,
+} from '../renderers'
 import type { SceneRendererContext, SceneRendererInstance, SceneRendererSnapshot } from '../renderers/scene-types'
 import type { SceneViewportState } from '../scene'
 
@@ -26,8 +29,8 @@ export class SceneRuntimeRenderScheduler {
   }
 
   async initialize(container: HTMLElement): Promise<void> {
-    this._container = container
     await this._options.getRendererHost().initialize({ container })
+    this._container = container
   }
 
   invalidate(kind: SceneRuntimeRenderKind): void {
@@ -36,10 +39,10 @@ export class SceneRuntimeRenderScheduler {
       return
     }
     if (kind === 'viewport') {
-      void this.renderViewport()
+      this._runDetached(this.renderViewport(), 'Scene Canvas viewport update failed:')
       return
     }
-    void this.renderScene()
+    this._runDetached(this.renderScene(), 'Scene Canvas render failed:')
   }
 
   async renderScene(): Promise<void> {
@@ -53,6 +56,7 @@ export class SceneRuntimeRenderScheduler {
     if (renderEpoch !== this._renderEpoch || container !== this._container) return
 
     await this._options.getRendererHost().run((renderer) => {
+      if (renderEpoch !== this._renderEpoch || container !== this._container) return
       renderer.resize(
         Math.max(1, container.clientWidth),
         Math.max(1, container.clientHeight),
@@ -61,6 +65,7 @@ export class SceneRuntimeRenderScheduler {
     }, {
       operationName: 'render scene',
     })
+    if (renderEpoch !== this._renderEpoch || container !== this._container) return
     this._options.renderChrome()
   }
 
@@ -76,10 +81,10 @@ export class SceneRuntimeRenderScheduler {
 
   resize(width: number, height: number): void {
     if (!this._container) return
-    void this._options.getRendererHost().run((renderer) => {
+    this._runDetached(this._options.getRendererHost().run((renderer) => {
       renderer.resize(width, height)
       renderer.setViewport(this._options.getViewport())
-    })
+    }), 'Scene Canvas resize failed:')
     this._options.renderChrome()
   }
 
@@ -87,5 +92,12 @@ export class SceneRuntimeRenderScheduler {
     this._container = null
     this._renderEpoch += 1
     void this._options.getRendererHost().dispose()
+  }
+
+  private _runDetached(operation: Promise<void>, failureMessage: string): void {
+    void operation.catch((error) => {
+      if (error instanceof RendererHostInitializationCancelledError) return
+      console.error(failureMessage, error)
+    })
   }
 }

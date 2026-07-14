@@ -141,6 +141,35 @@ export interface CanvasDocumentReplacementReceipt {
   readonly callerFinalizerInvoked: boolean
 }
 
+export class CanvasDocumentReplacementNotAdmittedError extends Error {
+  constructor(readonly reason: unknown) {
+    super(
+      reason instanceof Error
+        ? reason.message
+        : 'Canvas rejected document replacement before hydration',
+    )
+    this.name = 'CanvasDocumentReplacementNotAdmittedError'
+  }
+}
+
+export type CanvasPersistenceAcknowledgement = 'applied' | 'stale'
+
+export interface CanvasPersistenceCapture {
+  readonly content: CanopiFile
+  isCurrent(): boolean
+  acknowledgeSaved(): CanvasPersistenceAcknowledgement
+}
+
+export class CanvasAuthorityBusyError extends Error {
+  constructor(
+    readonly activeType: string,
+    message = `Canvas authority ${activeType} is busy`,
+  ) {
+    super(message)
+    this.name = 'CanvasAuthorityBusyError'
+  }
+}
+
 const canvasDocumentReplacementTokenBrand = Symbol('canvas-document-replacement-token')
 
 export interface CanvasDocumentReplacementToken {
@@ -166,8 +195,10 @@ export interface CanvasDocumentSurface {
     finalizeReplacement: () => void,
   ): CanvasDocumentReplacementReceipt
   hasLoadedDocument(): boolean
-  serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile
-  markSaved(): void
+  captureForPersistence(
+    metadata: CanvasRuntimeDocumentMetadata,
+    doc: CanopiFile,
+  ): CanvasPersistenceCapture
   resize(width: number, height: number): void
   destroy(): void
 }

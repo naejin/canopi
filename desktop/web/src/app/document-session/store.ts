@@ -1,7 +1,10 @@
 import { batch, computed, signal, type ReadonlySignal, type Signal } from '@preact/signals'
-import type { CanvasDocumentSurface } from '../../canvas/runtime/runtime'
 import type { CanopiFile } from '../../types/design'
 import * as designState from '../../state/design'
+import {
+  registerDesignSessionPersistenceCapability,
+  type DesignSessionPersistenceCapture,
+} from './persistence-capability'
 
 export interface PendingTemplateImport {
   readonly path: string
@@ -41,6 +44,7 @@ export interface DesignSessionStore {
 
   replaceCurrentDesignState(file: CanopiFile, path: string | null, name: string): void
   replaceCurrentDesignSnapshot(file: CanopiFile): void
+  renameCurrentDesign(name: string): boolean
   mutateCurrentDesign(
     updater: (design: CanopiFile) => CanopiFile,
     options?: DocumentMutationOptions,
@@ -53,7 +57,6 @@ export interface DesignSessionStore {
   ): void
 
   resetDirtyBaselines(): void
-  markSaved(session?: CanvasDocumentSurface | null): void
   markCanvasDetachedDirty(dirty: boolean): void
   setCanvasClean(clean: boolean): void
   setAutosaveFailed(failed: boolean): void
@@ -62,6 +65,12 @@ export interface DesignSessionStore {
   setPendingDesignPath(path: string | null): void
   readPendingTemplateImport(): PendingTemplateImport | null
   setPendingTemplateImport(template: PendingTemplateImport | null): void
+}
+
+declare const persistenceCapableDesignSessionStoreBrand: unique symbol
+
+export interface PersistenceCapableDesignSessionStore extends DesignSessionStore {
+  readonly [persistenceCapableDesignSessionStoreBrand]: true
 }
 
 interface DesignSessionStoreSignals {
@@ -79,8 +88,13 @@ interface DesignSessionStoreSignals {
   readonly designDirty: ReadonlySignal<boolean>
 }
 
-function createDesignSessionStore(signals: DesignSessionStoreSignals): DesignSessionStore {
-  return {
+function createDesignSessionStore(
+  signals: DesignSessionStoreSignals,
+): PersistenceCapableDesignSessionStore {
+  let sessionGeneration = 0
+  let detachedCanvasRevision = 0
+
+  const store = {
     currentDesign: signals.currentDesign,
     designPath: signals.designPath,
     designName: signals.designName,
@@ -127,6 +141,8 @@ function createDesignSessionStore(signals: DesignSessionStoreSignals): DesignSes
     },
 
     replaceCurrentDesignState(file, path, name) {
+      sessionGeneration += 1
+      detachedCanvasRevision = 0
       batch(() => {
         signals.currentDesign.value = file
         signals.designPath.value = path
@@ -135,7 +151,19 @@ function createDesignSessionStore(signals: DesignSessionStoreSignals): DesignSes
     },
 
     replaceCurrentDesignSnapshot(file) {
+      detachedCanvasRevision += 1
       signals.currentDesign.value = file
+    },
+
+    renameCurrentDesign(name) {
+      const design = signals.currentDesign.value
+      if (!design || name === signals.designName.value) return false
+      batch(() => {
+        signals.currentDesign.value = { ...design, name }
+        signals.designName.value = name
+        signals.nonCanvasRevision.value += 1
+      })
+      return true
     },
 
     mutateCurrentDesign(updater, options = {}) {
@@ -184,15 +212,6 @@ function createDesignSessionStore(signals: DesignSessionStoreSignals): DesignSes
       })
     },
 
-    markSaved(session) {
-      session?.markSaved()
-      batch(() => {
-        signals.detachedCanvasDirty.value = false
-        signals.nonCanvasSavedRevision.value = signals.nonCanvasRevision.value
-        signals.autosaveFailed.value = false
-      })
-    },
-
     markCanvasDetachedDirty(dirty) {
       signals.detachedCanvasDirty.value = dirty
     },
@@ -220,12 +239,64 @@ function createDesignSessionStore(signals: DesignSessionStoreSignals): DesignSes
     setPendingTemplateImport(template) {
       signals.pendingTemplateImport.value = template
     },
-  }
+  } as PersistenceCapableDesignSessionStore
+
+  registerDesignSessionPersistenceCapability(store, () => {
+    const file = signals.currentDesign.value
+    if (!file) throw new Error('Cannot capture persistence state without a loaded Design')
+    const generation = sessionGeneration
+    const canvasRevision = detachedCanvasRevision
+    const nonCanvasRevision = signals.nonCanvasRevision.value
+    const capture: DesignSessionPersistenceCapture = {
+      file: cloneDocument(file),
+      path: signals.designPath.value,
+      name: signals.designName.value,
+      isCurrent: () => generation === sessionGeneration
+        && canvasRevision === detachedCanvasRevision,
+      isExactCurrent: () => generation === sessionGeneration
+        && canvasRevision === detachedCanvasRevision
+        && nonCanvasRevision === signals.nonCanvasRevision.value,
+      acknowledgeSaved(options = {}) {
+        if (
+          generation !== sessionGeneration
+          || canvasRevision !== detachedCanvasRevision
+        ) return 'stale'
+        batch(() => {
+          if (options.canvasAcknowledged || options.canvasDetached) {
+            signals.detachedCanvasDirty.value = false
+          }
+          if (options.canvasDetached) signals.canvasClean.value = true
+          signals.nonCanvasSavedRevision.value = nonCanvasRevision
+          signals.autosaveFailed.value = false
+        })
+        return 'applied'
+      },
+      updatePath(path) {
+        if (
+          generation !== sessionGeneration
+          || canvasRevision !== detachedCanvasRevision
+        ) return false
+        signals.designPath.value = path
+        return true
+      },
+      setAutosaveFailed(failed) {
+        if (
+          generation !== sessionGeneration
+          || canvasRevision !== detachedCanvasRevision
+        ) return false
+        signals.autosaveFailed.value = failed
+        return true
+      },
+    }
+    return Object.freeze(capture)
+  })
+
+  return store
 }
 
 export function createMemoryDesignSessionStore(
   initial: Partial<DesignSessionIdentity> = {},
-): DesignSessionStore {
+): PersistenceCapableDesignSessionStore {
   const currentDesign = signal<CanopiFile | null>(initial.file ?? null)
   const designPath = signal<string | null>(initial.path ?? null)
   const designName = signal<string>(initial.name ?? initial.file?.name ?? 'Untitled')
@@ -257,7 +328,7 @@ export function createMemoryDesignSessionStore(
   })
 }
 
-export const designSessionStore: DesignSessionStore = createDesignSessionStore({
+export const designSessionStore: PersistenceCapableDesignSessionStore = createDesignSessionStore({
   currentDesign: designState.currentDesign,
   designPath: designState.designPath,
   designName: designState.designName,
@@ -291,8 +362,6 @@ export const replaceCurrentDesignState = (
 export const replaceCurrentDesignSnapshot = (file: CanopiFile) =>
   designSessionStore.replaceCurrentDesignSnapshot(file)
 export const resetDirtyBaselines = () => designSessionStore.resetDirtyBaselines()
-export const markDesignSaved = (session?: CanvasDocumentSurface | null) =>
-  designSessionStore.markSaved(session)
 export const markCanvasDetachedDirty = (dirty: boolean) =>
   designSessionStore.markCanvasDetachedDirty(dirty)
 export const setCanvasClean = (clean: boolean) => designSessionStore.setCanvasClean(clean)
@@ -302,3 +371,7 @@ export const setPendingDesignPath = (path: string | null) =>
   designSessionStore.setPendingDesignPath(path)
 export const setPendingTemplateImport = (template: PendingTemplateImport | null) =>
   designSessionStore.setPendingTemplateImport(template)
+
+function cloneDocument(file: CanopiFile): CanopiFile {
+  return JSON.parse(JSON.stringify(file)) as CanopiFile
+}

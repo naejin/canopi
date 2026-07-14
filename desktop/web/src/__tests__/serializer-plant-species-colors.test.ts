@@ -34,7 +34,7 @@ describe('serializer species color defaults', () => {
       documents.loadDocument(makeDoc())
       commands.plantPresentation.setPlantColorForSpecies('Malus domestica', '#C44230')
 
-      const file = documents.serializeDocument({ name: 'Test' }, makeDoc())
+      const file = documents.captureForPersistence({ name: 'Test' }, makeDoc()).content
 
       expect(file.plant_species_colors).toEqual({ 'Malus domestica': '#C44230' })
     } finally {

@@ -179,7 +179,6 @@ export function createSceneRuntimeConstruction(
     renderChrome: callbacks.renderChrome,
   })
   const documents = new SceneRuntimeDocumentBridge({
-    sceneStore,
     authority: sceneEdits,
     prepareForDocumentReplacement: callbacks.prepareForDocumentReplacement,
     clearHoveredTargets: () => callbacks.syncHoveredCanvasTargets(null),
@@ -203,6 +202,7 @@ export function createSceneRuntimeConstruction(
     clearHoveredEntity: () => callbacks.setHoveredEntityId(null, { invalidate: false }),
     disposeRuntime: () => {
       runtimeActive = false
+      sceneEdits.disposePersistence()
     },
     disposeInteraction: callbacks.disposeInteraction,
     disposeEffects: () => {

@@ -1,13 +1,6 @@
-import { getCurrentCanvasDocumentSurface } from '../../canvas/session'
-import { buildPersistedDesignSessionContent } from '../document-session/persistence'
-import { designSessionStore } from '../document-session/store'
+import { captureCurrentDesignObservation } from '../document-session/transition'
 
 export function buildCurrentDesignProblemReportAttachment(): string | null {
-  if (!designSessionStore.hasCurrentDesign()) return null
-
-  const file = buildPersistedDesignSessionContent({
-    session: getCurrentCanvasDocumentSurface(),
-    name: designSessionStore.readDesignName(),
-  })
-  return `${JSON.stringify(file, null, 2)}\n`
+  const file = captureCurrentDesignObservation()
+  return file ? `${JSON.stringify(file, null, 2)}\n` : null
 }

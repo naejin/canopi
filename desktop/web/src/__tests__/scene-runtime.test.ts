@@ -306,7 +306,8 @@ describe('Canvas runtime surfaces', () => {
       expect(queries.getPlacedPlants().map((plant) => plant.pinned_name ?? false)).toEqual([false, false])
       expect(
         documents
-          .serializeDocument({ name: 'Pinned names' }, { ...BASE_FILE, name: 'Pinned names' })
+          .captureForPersistence({ name: 'Pinned names' }, { ...BASE_FILE, name: 'Pinned names' })
+          .content
           .plants
           .map((plant) => plant.pinned_name ?? false),
       ).toEqual([false, false])
@@ -450,7 +451,7 @@ describe('Canvas runtime surfaces', () => {
       commands.sceneEdits.selectAll()
       commands.plantPresentation.setSelectedPlantColor('#228833')
 
-      const serialized = documents.serializeDocument(
+      const serialized = documents.captureForPersistence(
         {
           name: 'Updated',
           location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
@@ -491,7 +492,7 @@ describe('Canvas runtime surfaces', () => {
             preserved_from_document: true,
           },
         },
-      )
+      ).content
 
       expect(serialized.name).toBe('Updated')
       expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
@@ -531,7 +532,7 @@ describe('Canvas runtime surfaces', () => {
       commands.plantPresentation.setSelectedPlantColor('#228833')
       commands.history.undo()
 
-      const afterUndo = documents.serializeDocument(
+      const afterUndo = documents.captureForPersistence(
         {
           name: 'Updated',
           description: documentCopy.description,
@@ -539,7 +540,7 @@ describe('Canvas runtime surfaces', () => {
           northBearingDeg: documentCopy.north_bearing_deg,
         },
         documentCopy,
-      )
+      ).content
 
       expect(afterUndo.description).toBe(documentCopy.description)
       expect(afterUndo.location).toEqual(documentCopy.location)
@@ -549,7 +550,7 @@ describe('Canvas runtime surfaces', () => {
 
       commands.history.redo()
 
-      const afterRedo = documents.serializeDocument(
+      const afterRedo = documents.captureForPersistence(
         {
           name: 'Updated',
           description: documentCopy.description,
@@ -557,7 +558,7 @@ describe('Canvas runtime surfaces', () => {
           northBearingDeg: documentCopy.north_bearing_deg,
         },
         documentCopy,
-      )
+      ).content
 
       expect(afterRedo.description).toBe(documentCopy.description)
       expect(afterRedo.location).toEqual(documentCopy.location)
@@ -584,7 +585,7 @@ describe('Canvas runtime surfaces', () => {
 
       commands.plantPresentation.setPlantColorForSpecies('Quercus robur', '#228833')
 
-      const serialized = documents.serializeDocument(
+      const serialized = documents.captureForPersistence(
         {
           name: 'Updated',
           location: null,
@@ -596,7 +597,7 @@ describe('Canvas runtime surfaces', () => {
             'Quercus robur': '#112233',
           },
         },
-      )
+      ).content
 
       expect(serialized.plant_species_colors).toEqual({
         'Quercus robur': '#228833',
@@ -613,10 +614,10 @@ describe('Canvas runtime surfaces', () => {
     try {
       documents.loadDocument(BASE_FILE)
 
-      const serialized = documents.serializeDocument(
+      const serialized = documents.captureForPersistence(
         { name: 'Updated' },
         BASE_FILE,
-      )
+      ).content
 
       expect(serialized.budget_currency).toBe('EUR')
     } finally {

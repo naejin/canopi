@@ -1,11 +1,14 @@
 import type { CanopiFile } from '../../types/design'
 import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
-import type {
-  CanvasDocumentReplacementReceipt,
-  CanvasDocumentReplacementToken,
-  CanvasDocumentSurface,
-  CanvasRuntimeDocumentMetadata,
+import {
+  CanvasAuthorityBusyError,
+  CanvasDocumentReplacementNotAdmittedError,
+  type CanvasDocumentReplacementReceipt,
+  type CanvasDocumentReplacementToken,
+  type CanvasDocumentSurface,
+  type CanvasPersistenceCapture,
+  type CanvasRuntimeDocumentMetadata,
 } from './runtime'
 import type { ScenePersistedState, SceneViewportState } from './scene'
 import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
@@ -16,11 +19,11 @@ import { runCanvasRuntimeCleanups } from './cleanup'
 interface SceneCanvasDocumentSurfaceOptions {
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
-    'loadDocument' | 'replaceDocument' | 'serializeDocument' | 'markSaved'
+    'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
   readonly camera: Pick<CameraController, 'initialize' | 'resize' | 'zoomToFit' | 'viewport'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
-  readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'renderScene' | 'resize' | 'dispose'>
+  readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
   readonly getSceneSnapshot: () => ScenePersistedState
   readonly createPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly setViewport: (
@@ -43,7 +46,7 @@ export function createSceneCanvasDocumentSurface(
 }
 
 class SceneCanvasDocumentRole implements CanvasDocumentSurface {
-  private _documentLoaded = false
+  private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
 
   constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
 
@@ -55,7 +58,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
       height: Math.max(1, container.clientHeight),
     })
     this.options.setViewport(viewport, { forceRevision: true })
-    void this.options.rendering.renderScene()
+    this.options.rendering.invalidate('scene')
   }
 
   attachRulersTo(element: HTMLElement): void {
@@ -84,8 +87,9 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   loadDocument(file: CanopiFile): void {
+    this._documentState = 'settling'
     this.options.documents.loadDocument(file)
-    this._documentLoaded = true
+    this._documentState = 'loaded'
   }
 
   replaceDocument(
@@ -93,24 +97,32 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     token: CanvasDocumentReplacementToken,
     finalizeReplacement: () => void,
   ): CanvasDocumentReplacementReceipt {
-    const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
-    this._documentLoaded = true
-    return receipt
+    const previousDocumentState = this._documentState
+    this._documentState = 'settling'
+    try {
+      const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
+      this._documentState = 'loaded'
+      return receipt
+    } catch (error) {
+      if (error instanceof CanvasDocumentReplacementNotAdmittedError) {
+        this._documentState = previousDocumentState
+      }
+      throw error
+    }
   }
 
   hasLoadedDocument(): boolean {
-    return this._documentLoaded
+    return this._documentState !== 'absent'
   }
 
-  serializeDocument(
+  captureForPersistence(
     metadata: CanvasRuntimeDocumentMetadata,
     doc: CanopiFile,
-  ): CanopiFile {
-    return this.options.documents.serializeDocument(metadata, doc)
-  }
-
-  markSaved(): void {
-    this.options.documents.markSaved()
+  ): CanvasPersistenceCapture {
+    if (this._documentState === 'settling') {
+      throw new CanvasAuthorityBusyError('document-settlement')
+    }
+    return this.options.documents.captureForPersistence(metadata, doc)
   }
 
   resize(width: number, height: number): void {

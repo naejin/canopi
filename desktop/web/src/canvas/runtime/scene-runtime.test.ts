@@ -33,7 +33,10 @@ import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtim
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../target'
-import { createCanvasDocumentReplacementToken } from './runtime'
+import {
+  CanvasDocumentReplacementNotAdmittedError,
+  createCanvasDocumentReplacementToken,
+} from './runtime'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
 import type { PlantNameLabel } from './selection-labels'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
@@ -1217,12 +1220,18 @@ describe('scene canvas runtime', () => {
     })
     const replacementToken = createCanvasDocumentReplacementToken()
 
-    expect(() => runtime.documentSurface.replaceDocument(
-      fileWithOnlyPlants('plant-2'),
-      replacementToken,
-      () => {},
-    ))
-      .toThrowError(SceneEditBusyError)
+    let rejection: unknown
+    try {
+      runtime.documentSurface.replaceDocument(
+        fileWithOnlyPlants('plant-2'),
+        replacementToken,
+        () => {},
+      )
+    } catch (error) {
+      rejection = error
+    }
+    expect(rejection).toBeInstanceOf(CanvasDocumentReplacementNotAdmittedError)
+    expect(rejection).toMatchObject({ reason: expect.any(SceneEditBusyError) })
     expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
       id: 'plant-1',
       position: { x: 99, y: 99 },
@@ -1778,7 +1787,7 @@ describe('scene canvas runtime', () => {
     const file = fileWithOnlyPlants('plant-1')
 
     runtime.documentSurface.loadDocument(file)
-    runtime.documentSurface.markSaved()
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
     cleanState.setCanvasClean.mockClear()
 
     runtime.commandSurface.sceneEdits.selectAll()
@@ -1791,8 +1800,21 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.history.redo()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
-    runtime.documentSurface.markSaved()
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
+  })
+
+  it('stales existing persistence receipts and rejects new capture after destroy', () => {
+    const runtime = new SceneCanvasRuntime()
+    const file = fileWithOnlyPlants('plant-1')
+    runtime.documentSurface.loadDocument(file)
+    const capture = runtime.documentSurface.captureForPersistence({ name: file.name }, file)
+
+    runtime.destroy()
+
+    expect(capture.acknowledgeSaved()).toBe('stale')
+    expect(() => runtime.documentSurface.captureForPersistence({ name: file.name }, file))
+      .toThrow('runtime-disposed')
   })
 
   it('delegates Design file composition through the injected app adapter', () => {
@@ -1819,7 +1841,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.plantPresentation.setSelectedPlantColor('#228833')
 
-    const serialized = runtime.documentSurface.serializeDocument({ name: 'Adapter save' }, file)
+    const serialized = runtime.documentSurface.captureForPersistence({ name: 'Adapter save' }, file).content
 
     expect(composeDocumentForSave).toHaveBeenCalledTimes(1)
     const input = composeDocumentForSave.mock.calls[0]?.[0]
@@ -1879,7 +1901,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.plantPresentation.setSelectedPlantColor('#228833')
 
-    const serialized = runtime.documentSurface.serializeDocument({ name: 'Detached save' }, file)
+    const serialized = runtime.documentSurface.captureForPersistence({ name: 'Detached save' }, file).content
 
     expect(serialized.name).toBe('Detached save')
     expect(serialized.description).toBe('Loaded description')
@@ -2193,7 +2215,7 @@ describe('scene canvas runtime', () => {
     })
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
-    const serialized = runtime.documentSurface.serializeDocument({ name: file.name }, file)
+    const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
     expect(serialized.measurement_guides).toEqual([
       {
         id: createdGuide.id,
@@ -2573,28 +2595,28 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = fileWithOnlyPlants('plant-1')
     runtime.documentSurface.loadDocument(file)
-    runtime.documentSurface.markSaved()
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
     cleanState.setCanvasClean.mockClear()
 
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.lockSelected()
 
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(true)
     expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     runtime.commandSurface.history.undo()
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(false)
 
     runtime.commandSurface.history.redo()
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(true)
 
     runtime.commandSurface.sceneEdits.unlockSelected()
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(true)
   })
 
@@ -2608,14 +2630,14 @@ describe('scene canvas runtime', () => {
     })
     const file = makeFile()
     runtime.documentSurface.loadDocument(file)
-    runtime.documentSurface.markSaved()
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
     cleanState.setCanvasClean.mockClear()
 
     expect(runtime.commandSurface.layers.setSceneLayerVisibility('plants', false)).toBe(true)
     expect(runtime.commandSurface.layers.setSceneLayerOpacity('zones', 0.4)).toBe(true)
     expect(runtime.commandSurface.layers.setSceneLayerLocked('zones', true)).toBe(true)
 
-    const serialized = runtime.documentSurface.serializeDocument({ name: file.name }, file)
+    const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
 
     expect(serialized.layers.find((layer) => layer.name === 'plants')?.visible).toBe(false)
     expect(serialized.layers.find((layer) => layer.name === 'zones')?.opacity).toBe(0.4)
@@ -2627,12 +2649,12 @@ describe('scene canvas runtime', () => {
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     runtime.commandSurface.history.undo()
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.layers.find((layer) => layer.name === 'zones')?.locked)
       .toBe(false)
     expect(layerLockState.value.zones).toBe(false)
 
     runtime.commandSurface.history.redo()
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.layers.find((layer) => layer.name === 'zones')?.locked)
       .toBe(true)
     expect(layerLockState.value.zones).toBe(true)
 
@@ -2644,12 +2666,12 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
     runtime.documentSurface.loadDocument(file)
-    runtime.documentSurface.markSaved()
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
     cleanState.setCanvasClean.mockClear()
 
     ;(runtime as any)._addGuide('v', 42)
 
-    const serialized = runtime.documentSurface.serializeDocument({ name: file.name }, file)
+    const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
     expect(serialized.extra).toEqual({
       guides: [{ id: expect.any(String), axis: 'v', position: 42 }],
     })
@@ -2657,7 +2679,7 @@ describe('scene canvas runtime', () => {
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
     runtime.commandSurface.history.undo()
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).extra).toEqual({})
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.extra).toEqual({})
     expect(guides.value).toEqual([])
   })
 
@@ -2671,14 +2693,14 @@ describe('scene canvas runtime', () => {
     file.plants[0]!.color = '#C44230'
     file.plants[1]!.color = '#C44230'
     runtime.documentSurface.loadDocument(file)
-    runtime.documentSurface.markSaved()
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
     cleanState.setCanvasClean.mockClear()
 
     const changed = runtime.commandSurface.plantPresentation.setPlantColorForSpecies('Malus domestica', '#C44230')
 
     expect(changed).toBe(0)
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
-    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plant_species_colors).toEqual({
+    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.plant_species_colors).toEqual({
       'Malus domestica': '#C44230',
     })
   })

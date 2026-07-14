@@ -17,6 +17,11 @@ export const canvasDirty = designState.canvasDirty
 export const designDirty = designState.designDirty
 
 export const resetDirtyBaselines = designState.resetDirtyBaselines
-export const markSaved = designState.markSaved
+export function markSaved(): void {
+  designState.detachedCanvasDirty.value = false
+  designState.canvasClean.value = true
+  designState.nonCanvasSavedRevision.value = designState.nonCanvasRevision.value
+  designState.autosaveFailed.value = false
+}
 export const markCanvasDetachedDirty = designState.markCanvasDetachedDirty
 export const replaceCurrentDesignState = designState.replaceCurrentDesignState

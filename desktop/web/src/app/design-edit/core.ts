@@ -26,15 +26,7 @@ export function setDesignName(name: string): void {
   if (nextName.length === 0) return
   if (nextName === designSessionStore.readDesignName()) return
 
-  const design = designSessionStore.readCurrentDesign()
-  if (!design) return
-
-  designSessionStore.replaceCurrentDesignState(
-    { ...design, name: nextName },
-    designSessionStore.readDesignPath(),
-    nextName,
-  )
-  designSessionStore.markDocumentDirty()
+  designSessionStore.renameCurrentDesign(nextName)
 }
 
 export function editDesignArray<K extends keyof CanopiFile>(

@@ -117,8 +117,11 @@ export function createTestCanvasDocumentSurface(
       return { callerFinalizerInvoked: true }
     },
     hasLoadedDocument: () => false,
-    serializeDocument: (metadata, doc) => ({ ...doc, name: metadata.name }),
-    markSaved: () => {},
+    captureForPersistence: (metadata, doc) => ({
+      content: { ...doc, name: metadata.name },
+      isCurrent: () => true,
+      acknowledgeSaved: () => 'applied',
+    }),
     resize: () => {},
     destroy: () => {},
   }

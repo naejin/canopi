@@ -225,8 +225,8 @@ describe('command registry canvas tool switching', () => {
     nonCanvasSavedRevision.value = 0
     const newSpy = vi.spyOn(documentActions, 'newDesignAction').mockResolvedValue(undefined)
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
-    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(undefined)
-    const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(undefined)
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(null)
+    const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(null)
 
     getCommand('file.new').action()
     getCommand('file.open').action()
@@ -248,7 +248,7 @@ describe('command registry canvas tool switching', () => {
 
   it('looks up disabled state and dispatch through the public App Command Graph seam', () => {
     const saveCommand = getAppCommand('file.save')
-    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(undefined)
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(null)
 
     if (!saveCommand) throw new Error('Missing file.save command')
     expect(saveCommand.disabled()).toBe(true)

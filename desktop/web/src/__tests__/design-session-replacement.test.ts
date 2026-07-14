@@ -3,7 +3,10 @@ import { effect } from "@preact/signals";
 import { createDesignSessionReplacement } from "../app/document-session/replacement";
 import { createMemoryDesignSessionStore } from "../app/document-session/store";
 import type { DesignSessionWorkflowRunner } from "../app/document-session/workflow-runner";
-import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
+import {
+  CanvasDocumentReplacementNotAdmittedError,
+  type CanvasDocumentSurface,
+} from "../canvas/runtime/runtime";
 import { SceneHistory } from "../canvas/runtime/scene-history";
 import { SceneStore } from "../canvas/runtime/scene";
 import { SceneRuntimeEditCoordinator } from "../canvas/runtime/scene-runtime/transactions";
@@ -213,6 +216,45 @@ describe("Design Session replacement", () => {
       .not.toBe(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[0]);
     expect(vi.mocked(canvas.replaceDocument).mock.calls[0]?.[1])
       .toBe(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1]);
+  });
+
+  it("drops a replacement the Canvas did not admit to hydration", () => {
+    const events: string[] = [];
+    const previous = makeFile("Previous");
+    const store = createMemoryDesignSessionStore({
+      file: previous,
+      path: "/previous.canopi",
+      name: "Previous",
+    });
+    const canvas = makeCanvas(events);
+    const preparationError = new Error("replacement preparation failed");
+    vi.mocked(canvas.replaceDocument).mockImplementationOnce(() => {
+      throw new CanvasDocumentReplacementNotAdmittedError(preparationError);
+    });
+    const replacement = createDesignSessionReplacement({
+      store,
+      workflowRunner: makeWorkflowRunner(events),
+    });
+    const rejected = {
+      file: makeFile("Rejected"),
+      kind: "loaded" as const,
+      path: "/rejected.canopi",
+      name: "Rejected",
+    };
+
+    expect(() => replacement.replace(rejected, canvas)).toThrow(preparationError);
+    expect(replacement.pendingCanvasReplacementIdentity(canvas)).toBeNull();
+
+    replacement.replace({
+      file: makeFile("Later"),
+      kind: "loaded",
+      path: "/later.canopi",
+      name: "Later",
+    }, canvas);
+
+    expect(vi.mocked(canvas.replaceDocument).mock.calls[0]?.[1])
+      .not.toBe(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1]);
+    expect(store.readDesignName()).toBe("Later");
   });
 
   it("does not report a byte-equivalent replacement from another path as the retained request", () => {
@@ -670,8 +712,11 @@ function makeCanvas(events: string[]): CanvasDocumentSurface {
       return { callerFinalizerInvoked: true };
     }),
     hasLoadedDocument: vi.fn(() => loaded),
-    serializeDocument: vi.fn((_metadata, document) => document),
-    markSaved: vi.fn(),
+    captureForPersistence: vi.fn((_metadata, document) => ({
+      content: document,
+      isCurrent: () => true,
+      acknowledgeSaved: () => "applied" as const,
+    })),
     resize: vi.fn(),
     destroy: vi.fn(),
   };

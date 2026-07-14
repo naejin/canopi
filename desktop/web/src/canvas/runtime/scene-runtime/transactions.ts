@@ -2,9 +2,18 @@ import { computed, signal, type ReadonlySignal } from '@preact/signals'
 
 import type { CanopiFile } from '../../../types/design'
 import { throwCanvasRuntimeCleanupErrors } from '../cleanup'
-import type { CanvasDocumentReplacementToken } from '../runtime'
+import {
+  CanvasAuthorityBusyError,
+  CanvasDocumentReplacementNotAdmittedError,
+  type CanvasDocumentReplacementToken,
+} from '../runtime'
 import type { SceneHistory } from '../scene-history'
-import type { ScenePersistedState, ScenePlantEntity, SceneStore } from '../scene'
+import {
+  cloneScenePersistedState,
+  type ScenePersistedState,
+  type ScenePlantEntity,
+  type SceneStore,
+} from '../scene'
 import {
   applySceneCommandPersistedPatch,
   createScenePatchCommand,
@@ -62,11 +71,18 @@ export interface SceneHistoryCommands {
   redo(): boolean
 }
 
-export interface SceneSavedCheckpoint {
-  markSaved(): void
+export type ScenePersistenceAcknowledgement = 'applied' | 'stale'
+
+export interface ScenePersistenceCapture {
+  readonly scene: ScenePersistedState
+  isCurrent(): boolean
+  acknowledgeSaved(): ScenePersistenceAcknowledgement
 }
 
-export type SettledSceneHistory = SceneHistoryCommands & SceneSavedCheckpoint
+export interface ScenePersistenceAuthority {
+  capturePersistence(): ScenePersistenceCapture
+  disposePersistence(): void
+}
 
 declare const scenePresentationTicketBrand: unique symbol
 
@@ -102,13 +118,14 @@ export interface SceneDocumentReplacementStages {
 export type SceneRuntimeAuthority = SceneEditCoordinator
   & SceneCommandAdmission
   & SettledSceneReader
-  & SettledSceneHistory
+  & SceneHistoryCommands
+  & ScenePersistenceAuthority
   & ScenePresentationMaintenance
   & SceneDocumentAuthority
 
-export class SceneEditBusyError extends Error {
-  constructor(readonly activeType: string) {
-    super(`Scene edit ${activeType} already owns the Scene`)
+export class SceneEditBusyError extends CanvasAuthorityBusyError {
+  constructor(activeType: string) {
+    super(activeType, `Scene edit ${activeType} already owns the Scene`)
     this.name = 'SceneEditBusyError'
   }
 }
@@ -176,6 +193,9 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   } | null = null
   private _pendingImmediate: PendingImmediateEdit | null = null
   private _documentGeneration = 0
+  private _persistenceEpoch = 0
+  private _persistenceDisposed = false
+  private _persistenceProjectionRevision = 0
   private _contentRevision = 0
   private _backfillRevisionPending = false
   private _backfillInvalidationPending = false
@@ -369,8 +389,64 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     return replay.resume()
   }
 
-  markSaved(): void {
-    this.runWhenSettled(() => this._history.markSaved(), undefined, { resumePending: true })
+  capturePersistence(): ScenePersistenceCapture {
+    if (this._persistenceDisposed) {
+      throw new SceneEditBusyError('runtime-disposed')
+    }
+    if (this._replacementHandoff || this._active instanceof SceneHydrationSettlement) {
+      throw new SceneEditBusyError(this._active?.type ?? 'document-replacement')
+    }
+    if (this._active && !(this._active instanceof SceneRuntimeEditTransaction)) {
+      throw new SceneEditBusyError(this._active.type)
+    }
+    if (this._isPresentationMaintenanceBusy()) {
+      throw new SceneEditBusyError('presentation-backfill')
+    }
+
+    const scene = this._active instanceof SceneRuntimeEditTransaction
+      && !this._history.hasRecorded(this._active)
+      ? this._active.captureCommittedPersistedState()
+      : this._sceneStore.persisted
+    const checkpoint = this._history.captureCheckpoint()
+    const documentGeneration = this._documentGeneration
+    const persistenceEpoch = this._persistenceEpoch
+    const persistenceProjectionRevision = this._persistenceProjectionRevision
+    let acknowledgement: ScenePersistenceAcknowledgement | null = null
+    const captureIsCurrent = () => !this._persistenceDisposed
+      && documentGeneration === this._documentGeneration
+      && persistenceEpoch === this._persistenceEpoch
+      && persistenceProjectionRevision === this._persistenceProjectionRevision
+      && this._history.isCheckpointCurrent(checkpoint)
+
+    return Object.freeze({
+      scene: cloneScenePersistedState(scene),
+      isCurrent: captureIsCurrent,
+      acknowledgeSaved: (): ScenePersistenceAcknowledgement => {
+        if (acknowledgement) return acknowledgement
+        if (
+          this._persistenceDisposed
+          || documentGeneration !== this._documentGeneration
+          || persistenceEpoch !== this._persistenceEpoch
+        ) {
+          acknowledgement = 'stale'
+          return acknowledgement
+        }
+        const historyAcknowledgement = this._history.acknowledgeSaved(checkpoint)
+        acknowledgement = historyAcknowledgement === 'stale'
+          || this._persistenceDisposed
+          || documentGeneration !== this._documentGeneration
+          || persistenceEpoch !== this._persistenceEpoch
+          ? 'stale'
+          : 'applied'
+        return acknowledgement
+      },
+    })
+  }
+
+  disposePersistence(): void {
+    if (this._persistenceDisposed) return
+    this._persistenceDisposed = true
+    this._persistenceEpoch += 1
   }
 
   issueTicket(): ScenePresentationTicket {
@@ -524,17 +600,17 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
 
     try {
       stages.prepare()
+      if (this._active !== replacement) {
+        throw new SceneEditBusyError(predecessor?.type ?? replacement.type)
+      }
+      replacement.beginHydration()
+      return stages.finalizeReplacement !== undefined
     } catch (error) {
+      if (replacement.canRetry) throw error
       this._cancelReplacementBeforeHydration(replacement)
-      throw error
+      if (error instanceof CanvasDocumentReplacementNotAdmittedError) throw error
+      throw new CanvasDocumentReplacementNotAdmittedError(error)
     }
-
-    if (this._active !== replacement) {
-      this._cancelReplacementBeforeHydration(replacement)
-      throw new SceneEditBusyError(predecessor?.type ?? replacement.type)
-    }
-    replacement.beginHydration()
-    return stages.finalizeReplacement !== undefined
   }
 
   private _captureSnapshot(): SceneCommandSnapshot {
@@ -698,6 +774,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       })
     })
     if (changedPlantIds.size === 0) return false
+    this._persistenceProjectionRevision += 1
     const currentPlantsById = new Map(
       this._sceneStore.persisted.plants.map((plant) => [plant.id, plant]),
     )
@@ -1126,6 +1203,10 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
 
   get isCommitting(): boolean {
     return this._phase === 'committing'
+  }
+
+  captureCommittedPersistedState(): ScenePersistedState {
+    return cloneScenePersistedState(this._before.persisted)
   }
 
   mutate(edit: (draft: ScenePersistedState) => void): void {

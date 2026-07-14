@@ -345,6 +345,11 @@ describe('DesignNotebookPanel', () => {
     const addDesignReference = vi.fn().mockResolvedValue(undefined)
     const saveAsCurrent = vi.fn().mockImplementation(async () => {
       activePath.value = '/designs/current.canopi'
+      return {
+        status: 'applied' as const,
+        path: '/designs/current.canopi',
+        content: testDesign(),
+      }
     })
     const loadNotebook = vi.fn()
       .mockResolvedValueOnce({ sections: [], entries: [] })

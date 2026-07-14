@@ -52,7 +52,8 @@ export function registerCloseGuard(): void {
 
       if (decision === "save") {
         try {
-          await saveCurrentDesign();
+          const settlement = await saveCurrentDesign();
+          if (settlement?.status !== 'applied' || designDirty.value) return;
         } catch {
           return;
         }

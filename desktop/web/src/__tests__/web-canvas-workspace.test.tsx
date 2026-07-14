@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,7 @@ import {
   layerVisibility,
 } from '../app/canvas-settings/signals'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
-import { currentCanvasSession } from '../canvas/session'
+import { currentCanvasReady, currentCanvasSession } from '../canvas/session'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -66,6 +66,79 @@ describe('Web Edition canvas workspace', () => {
     expect(container.textContent).not.toContain('Color by')
     expect(container.textContent).not.toContain('Design Notebook')
     expect(container.textContent).not.toContain('Problem Report')
+  })
+
+  it('does not continue initialization after publication synchronously releases the runtime', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const first = fakeRuntimeHost()
+    const second = fakeRuntimeHost()
+    const observe = vi.fn()
+    const disconnect = vi.fn()
+    const OriginalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe = observe
+      unobserve() {}
+      disconnect = disconnect
+    } as unknown as typeof ResizeObserver
+    let releasedFirst = false
+    const disposePublicationEffect = effect(() => {
+      if (
+        !releasedFirst
+        && currentCanvasSession.value === first.host.surfaces
+      ) {
+        releasedFirst = true
+        render(null, container)
+      }
+      void currentCanvasReady.value
+    })
+    await controller.newDesign()
+
+    try {
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => first.host}
+          />,
+          container,
+        )
+        await Promise.resolve()
+      })
+
+      const destroyOrder = vi.mocked(first.host.destroy).mock.invocationCallOrder[0] ?? 0
+      expect(first.host.destroy).toHaveBeenCalledOnce()
+      expect(vi.mocked(first.documents.resize).mock.invocationCallOrder[0])
+        .toBeLessThan(destroyOrder)
+      expect(observe.mock.invocationCallOrder[0]).toBeLessThan(destroyOrder)
+      expect(disconnect).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBeNull()
+      expect(currentCanvasReady.value).toBe(false)
+
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => second.host}
+          />,
+          container,
+        )
+        await Promise.resolve()
+      })
+      expect(second.host.init).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBe(second.host.surfaces)
+    } finally {
+      disposePublicationEffect()
+      globalThis.ResizeObserver = OriginalResizeObserver
+    }
   })
 
   it('shows a desktop-style browser-safe welcome screen without recent files when no Design is active', async () => {
@@ -189,6 +262,192 @@ describe('Web Edition canvas workspace', () => {
       logError.mockRestore()
     }
   })
+
+  it('does not replace or clear an existing Canvas publication when attachment is rejected', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const existing = fakeRuntimeHost()
+    const rejected = fakeRuntimeHost()
+    await controller.newDesign()
+    const detachExisting = controller.attachCanvasSession(existing.documents)
+    currentCanvasSession.value = existing.host.surfaces
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => rejected.host}
+          />,
+          container,
+        )
+        await Promise.resolve()
+      })
+
+      await vi.waitFor(() => expect(rejected.host.destroy).toHaveBeenCalledOnce())
+      expect(currentCanvasSession.value).toBe(existing.host.surfaces)
+      expect(rejected.documents.loadDocument).not.toHaveBeenCalled()
+    } finally {
+      render(null, container)
+      detachExisting()
+      currentCanvasSession.value = null
+      logError.mockRestore()
+    }
+  })
+
+  it('retries a failed Canvas handoff before mounting a replacement runtime', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const first = fakeRuntimeHost()
+    const second = fakeRuntimeHost()
+    const disconnect = vi.fn()
+    const OriginalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect = disconnect
+    } as unknown as typeof ResizeObserver
+    await controller.newDesign()
+
+    try {
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => first.host}
+          />,
+          container,
+        )
+      })
+      let handoffFailures = 4
+      vi.mocked(first.documents.captureForPersistence)
+        .mockImplementation((metadata, doc) => {
+          if (handoffFailures > 0) {
+            handoffFailures -= 1
+          throw new Error('handoff capture failed')
+          }
+          return {
+            content: { ...doc, name: metadata.name },
+            isCurrent: () => true,
+            acknowledgeSaved: () => 'applied' as const,
+          }
+        })
+
+      expect(() => render(null, container)).toThrow('exact persistence settlement failed')
+      expect(disconnect).not.toHaveBeenCalled()
+      expect(first.host.destroy).not.toHaveBeenCalled()
+      expect(currentCanvasSession.value).toBe(first.host.surfaces)
+
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => second.host}
+          />,
+          container,
+        )
+        await Promise.resolve()
+      })
+
+      expect(disconnect).toHaveBeenCalledOnce()
+      expect(first.host.destroy).toHaveBeenCalledOnce()
+      expect(second.host.init).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBe(second.host.surfaces)
+    } finally {
+      globalThis.ResizeObserver = OriginalResizeObserver
+    }
+  })
+
+  it('releases the lifecycle after reporting exhaustive post-handoff cleanup failures', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const first = fakeRuntimeHost()
+    const second = fakeRuntimeHost()
+    const disconnectError = new Error('observer disconnect failed')
+    const destroyError = new Error('runtime destroy failed')
+    const disconnect = vi.fn()
+    disconnect.mockImplementationOnce(() => {
+      throw disconnectError
+    })
+    vi.mocked(first.host.destroy).mockImplementationOnce(() => {
+      throw destroyError
+    })
+    const OriginalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect = disconnect
+    } as unknown as typeof ResizeObserver
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await controller.newDesign()
+
+    try {
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => first.host}
+          />,
+          container,
+        )
+      })
+
+      expect(() => render(null, container)).not.toThrow()
+
+      expect(first.documents.captureForPersistence).toHaveBeenCalledOnce()
+      expect(disconnect).toHaveBeenCalledOnce()
+      expect(first.host.destroy).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBeNull()
+      expect(logError).toHaveBeenCalledWith(
+        'Failed to release browser canvas runtime:',
+        expect.objectContaining({
+          name: 'CanvasRuntimeCleanupError',
+          errors: [disconnectError, destroyError],
+        }),
+      )
+
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeHost={() => second.host}
+          />,
+          container,
+        )
+        await Promise.resolve()
+      })
+
+      expect(second.host.init).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBe(second.host.surfaces)
+    } finally {
+      globalThis.ResizeObserver = OriginalResizeObserver
+      logError.mockRestore()
+    }
+  })
 })
 
 interface MemoryStorage extends BrowserStorageAdapter {
@@ -230,8 +489,11 @@ function fakeRuntimeHost(): {
       return { callerFinalizerInvoked: true }
     }),
     hasLoadedDocument: vi.fn(() => loaded),
-    serializeDocument: vi.fn((metadata, doc) => ({ ...doc, name: metadata.name })),
-    markSaved: vi.fn(),
+    captureForPersistence: vi.fn((metadata, doc) => ({
+      content: { ...doc, name: metadata.name },
+      isCurrent: () => true,
+      acknowledgeSaved: () => 'applied' as const,
+    })),
     resize: vi.fn(),
     destroy: vi.fn(),
   }

@@ -1,4 +1,4 @@
-import { computed, signal } from '@preact/signals'
+import { batch, computed, signal } from '@preact/signals'
 import {
   canvasHasSelectionState,
   canvasReadyState,
@@ -83,8 +83,10 @@ export function getCurrentCanvasDocumentSurface(): CanvasDocumentSurface | null 
 }
 
 export function setCanvasRuntimeSurfaces(surfaces: CanvasRuntimeSurfaces | null): void {
-  currentCanvasSession.value = surfaces
-  setCanvasReadyState(surfaces !== null)
+  batch(() => {
+    currentCanvasSession.value = surfaces
+    setCanvasReadyState(surfaces !== null)
+  })
 }
 
 export function setCurrentCanvasSession(session: CanvasRuntimeSurfaces | null): void {

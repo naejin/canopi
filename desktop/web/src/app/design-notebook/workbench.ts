@@ -175,15 +175,12 @@ export function createDesignNotebookWorkbench(
     if (currentDesign.value === null) return false
 
     const pathBeforeSave = activePath.value
-    if (pathBeforeSave) {
-      await saveCurrent()
-    } else {
-      await saveAsCurrent()
-    }
-
-    const savedPath = activePath.value
-    const savedDesign = currentDesign.value
-    if (!savedPath || savedDesign === null) return false
+    const settlement = pathBeforeSave
+      ? await saveCurrent()
+      : await saveAsCurrent()
+    if (settlement?.status !== 'applied' || !settlement.path) return false
+    const savedPath = settlement.path
+    const savedDesign = settlement.content
 
     await addDesignReferenceAdapter(savedPath, savedDesign)
     await load()

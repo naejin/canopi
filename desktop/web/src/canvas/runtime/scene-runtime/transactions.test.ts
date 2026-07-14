@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { canvasClean } from '../../../__tests__/support/design-session-state'
 import type { CanopiFile } from '../../../types/design'
 import { selectedObjectIds } from '../../session-state'
-import { createCanvasDocumentReplacementToken } from '../runtime'
+import {
+  CanvasDocumentReplacementNotAdmittedError,
+  createCanvasDocumentReplacementToken,
+} from '../runtime'
 import { SceneHistory } from '../scene-history'
 import { SceneStore } from '../scene'
 import {
@@ -455,7 +458,7 @@ describe('Scene Edit single-writer admission', () => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
     })).toBe(true)
-    coordinator.markSaved()
+    expect(coordinator.capturePersistence().acknowledgeSaved()).toBe('applied')
     expect(history.isClean).toBe(true)
 
     expect(coordinator.undo()).toBe(true)
@@ -1843,6 +1846,36 @@ describe('Settled Scene presentation maintenance', () => {
     })).toBe(true)
     expect(competingPrepare).toHaveBeenCalledOnce()
     expect(competingFinalizer).toHaveBeenCalledOnce()
+  })
+
+  it('reports a preparation rejection as not admitted and releases the old Scene', () => {
+    const { coordinator, store } = createAdmissionHarness()
+    const next = makeFile()
+    next.name = 'Rejected before hydration'
+    next.plants[0]!.position = { x: 77, y: 88 }
+    const preparationError = new Error('replacement preparation failed')
+    let rejection: unknown
+
+    try {
+      coordinator.replaceDocument(next, {
+        token: createCanvasDocumentReplacementToken(),
+        prepare: () => {
+          throw preparationError
+        },
+      })
+    } catch (error) {
+      rejection = error
+    }
+
+    expect(rejection).toBeInstanceOf(CanvasDocumentReplacementNotAdmittedError)
+    expect(rejection).toMatchObject({ reason: preparationError })
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(coordinator.run('edit-after-rejection', (tx) => {
+      tx.mutate((draft) => {
+        draft.plants[0]!.position = { x: 44, y: 55 }
+      })
+    })).toBe(true)
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
   })
 
   it('settles and quarantines a retained immediate edit before replacing on retry', () => {

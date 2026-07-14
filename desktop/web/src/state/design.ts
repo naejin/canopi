@@ -20,12 +20,10 @@ export const pendingTemplateImport = signal<{ path: string; name: string } | nul
 // ---------------------------------------------------------------------------
 // Two-baseline dirty model
 //
-// Canvas dirty: tracked by the active canvas runtime history via saved checkpoint position.
-//   canvasClean is the authority — true when _past.length
-//   matches _savedPosition and the checkpoint hasn't been truncated.
-//   Safe against the 500-cap: if truncation shifts past the saved position,
-//   canvasClean stays false permanently until the next save.
-//   Supports undo-to-clean: undoing back to the saved position = clean.
+// Canvas dirty: tracked by the active canvas runtime history via opaque state identity.
+//   canvasClean is true only when the current history state is the exact acknowledged
+//   state. Branches and truncation never reuse identities, while undoing to the
+//   acknowledged state becomes clean again.
 //
 // Non-canvas dirty: revision counter for tab edits (timeline/budget/consortium).
 //
@@ -71,15 +69,6 @@ export function resetDirtyBaselines(): void {
     nonCanvasSavedRevision.value = 0
     autosaveFailed.value = false
   })
-}
-
-/** Mark save baseline as current state (used after successful save). */
-export function markSaved(session?: { markSaved(): void } | null): void {
-  // Tell history to remember the current position as saved
-  session?.markSaved()
-  detachedCanvasDirty.value = false
-  nonCanvasSavedRevision.value = nonCanvasRevision.value
-  autosaveFailed.value = false
 }
 
 export function markCanvasDetachedDirty(dirty: boolean): void {

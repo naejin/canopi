@@ -824,6 +824,7 @@ describe('frontend boundary sources', () => {
     expect(lifecycleSource).not.toContain('SceneCanvasRuntime')
     expect(lifecycleSource).not.toContain('createCanvasRuntimeSurfaces')
     expect(lifecycleSource).toContain('startAttachedDesignSession')
+    expect(lifecycleSource).toContain('abortFailedAttachedDesignSessionStart')
     expect(lifecycleSource).toContain('autosaveDesignSession')
     expect(lifecycleSource).toContain('teardownAttachedDesignSession')
     expect(lifecycleSource).not.toContain('transitionDocument')
@@ -832,7 +833,13 @@ describe('frontend boundary sources', () => {
     expect(actionsSource).not.toContain('transitionDocument')
     expect(transitionSource).toContain('createDesignSessionStateMachine')
     expect(stateMachineSource).toContain('transitionDocument')
-    expect(stateMachineSource).toContain('buildPersistedDesignSessionContent')
+    expect(stateMachineSource).toContain('createDesignSessionPersistence')
+    expect(stateMachineSource).toContain('.beginSave(')
+    expect(stateMachineSource).toContain('.beginSaveAs(')
+    expect(stateMachineSource).toContain('.beginRecovery(')
+    expect(stateMachineSource).not.toContain('buildPersistedDesignSessionContent')
+    expect(stateMachineSource).not.toContain('.markSaved(')
+    expect(stateMachineSource).not.toContain('replaceCurrentDesignState(')
     expect(stateMachineSource).toContain('autosaveDesign')
     expectImportsToContain('../app/document-session/state-machine.ts', [
       './persistence',
@@ -847,8 +854,15 @@ describe('frontend boundary sources', () => {
       /(^|\/)web(\/|$)/,
     ])
     expectImportsToContain('../web/browser-design-session.ts', [
+      '../app/document-session/persistence',
       '../app/document-session/replacement',
     ])
+    expect(browserSessionSource).toContain('createDesignSessionPersistence')
+    expect(browserSessionSource).toContain('.beginBrowserDownload(')
+    expect(browserSessionSource).toContain('.beginBrowserDraft(')
+    expect(browserSessionSource).not.toContain('buildPersistedDesignSessionContent')
+    expect(browserSessionSource).not.toContain('.markSaved(')
+    expect(browserSessionSource).not.toContain('replaceCurrentDesignState(')
     expect(browserSessionSource).not.toContain('normalizeLoadedDocument')
     expect(browserSessionSource).not.toContain('normalizeNewDocument')
     expect(webWorkspaceSource).not.toContain('syncCanvasDocument')
@@ -859,7 +873,11 @@ describe('frontend boundary sources', () => {
       /consortium\/workflow$/,
       /document-session\/workflow-runner$/,
       /document-session\/workflows$/,
+      /canvas\/runtime\/scene-runtime\/transactions$/,
     ])
+    expect(readSource('../app/document-session/persistence.ts')).not.toContain(
+      'SceneEditBusyError',
+    )
   })
 
   it('routes canvas clean-state reporting through the Canvas Runtime App Adapter', () => {
@@ -986,6 +1004,15 @@ describe('frontend boundary sources', () => {
     expect(dialogSource).not.toContain('ProblemReportRequest')
   })
 
+  it('routes Problem Report Design observation through the owning session transition seam', () => {
+    const attachmentSource = readSource('../app/problem-report/attachments.ts')
+
+    expect(attachmentSource).toContain("from '../document-session/transition'")
+    expect(attachmentSource).not.toContain("from '../document-session/persistence'")
+    expect(attachmentSource).not.toContain("from '../document-session/store'")
+    expect(attachmentSource).not.toContain("from '../../canvas/session'")
+  })
+
   it('keeps production Design Session state behind the store seam', () => {
     const sourcePaths = [
       '../app',
@@ -997,6 +1024,55 @@ describe('frontend boundary sources', () => {
     for (const sourcePath of sourcePaths) {
       if (sourcePath === '../app/document-session/store.ts') continue
       expectNoImportsMatching(sourcePath, [/state\/design$/])
+    }
+  })
+
+  it('confines raw Design persistence captures to the persistence module', () => {
+    const storeSource = readSource('../app/document-session/store.ts')
+    const publicStoreContract = storeSource.slice(
+      storeSource.indexOf('export interface DesignSessionStore {'),
+      storeSource.indexOf('\n}\n\ndeclare const persistenceCapableDesignSessionStoreBrand'),
+    )
+    expect(publicStoreContract).not.toContain('capturePersistence')
+
+    const sourcePaths = sourceFilesUnder('..')
+      .filter(isTypescriptSource)
+      .filter((sourcePath) => !sourcePath.startsWith('../__tests__/'))
+    for (const sourcePath of sourcePaths) {
+      if (
+        sourcePath === '../app/document-session/persistence-capability.ts'
+        || sourcePath === '../app/document-session/persistence.ts'
+      ) continue
+      expect(readSource(sourcePath)).not.toContain('captureDesignSessionPersistenceState')
+    }
+
+    for (const sourcePath of sourcePaths) {
+      const source = readSource(sourcePath)
+      if (
+        sourcePath !== '../app/document-session/persistence-capability.ts'
+        && sourcePath !== '../app/document-session/persistence.ts'
+        && sourcePath !== '../app/document-session/store.ts'
+      ) {
+        expect(source, sourcePath).not.toContain('persistence-capability')
+      }
+      if (
+        sourcePath !== '../app/document-session/persistence-capability.ts'
+        && sourcePath !== '../app/document-session/store.ts'
+      ) {
+        expect(source, sourcePath).not.toContain('registerDesignSessionPersistenceCapability')
+      }
+    }
+
+    const appLevelSourcePaths = [
+      '../app',
+      '../components',
+      '../ipc',
+      '../state',
+      '../web',
+    ].flatMap(sourceFilesUnder).filter(isTypescriptSource)
+    for (const sourcePath of appLevelSourcePaths) {
+      if (sourcePath === '../app/document-session/persistence.ts') continue
+      expect(readSource(sourcePath), sourcePath).not.toMatch(/\.captureForPersistence\s*\(/)
     }
   })
 

@@ -12,6 +12,23 @@ export interface DesignSessionWorkflowRunner {
   dispose(): void
 }
 
+export class DesignSessionWorkflowCleanupError extends Error {
+  constructor(readonly errors: readonly unknown[]) {
+    super('Multiple Design Session workflow cleanups failed')
+    this.name = 'DesignSessionWorkflowCleanupError'
+  }
+}
+
+export class DesignSessionWorkflowInstallError extends Error {
+  constructor(
+    readonly installError: unknown,
+    readonly cleanupErrors: readonly unknown[],
+  ) {
+    super('Design Session workflow installation and cleanup failed')
+    this.name = 'DesignSessionWorkflowInstallError'
+  }
+}
+
 export function createDesignSessionWorkflowRunner(
   workflows: readonly DesignSessionWorkflow[],
   context: DesignSessionWorkflowContext = {},
@@ -21,9 +38,9 @@ export function createDesignSessionWorkflowRunner(
   function dispose(): void {
     const current = disposers
     disposers = []
-    for (let i = current.length - 1; i >= 0; i -= 1) {
-      current[i]!()
-    }
+    const cleanup = runWorkflowCleanups(current)
+    disposers = cleanup.failed
+    throwWorkflowCleanupErrors(cleanup.errors)
   }
 
   return {
@@ -36,8 +53,10 @@ export function createDesignSessionWorkflowRunner(
           if (disposer) nextDisposers.push(disposer)
         }
       } catch (error) {
-        for (let i = nextDisposers.length - 1; i >= 0; i -= 1) {
-          nextDisposers[i]!()
+        const cleanup = runWorkflowCleanups(nextDisposers)
+        disposers = cleanup.failed
+        if (cleanup.errors.length > 0) {
+          throw new DesignSessionWorkflowInstallError(error, cleanup.errors)
         }
         throw error
       }
@@ -45,4 +64,29 @@ export function createDesignSessionWorkflowRunner(
     },
     dispose,
   }
+}
+
+function runWorkflowCleanups(
+  current: readonly DesignSessionWorkflowDisposer[],
+): {
+  readonly failed: DesignSessionWorkflowDisposer[]
+  readonly errors: unknown[]
+} {
+  const failed: DesignSessionWorkflowDisposer[] = []
+  const errors: unknown[] = []
+  for (let i = current.length - 1; i >= 0; i -= 1) {
+    const disposer = current[i]!
+    try {
+      disposer()
+    } catch (error) {
+      failed.unshift(disposer)
+      errors.push(error)
+    }
+  }
+  return { failed, errors }
+}
+
+function throwWorkflowCleanupErrors(errors: readonly unknown[]): void {
+  if (errors.length === 1) throw errors[0]
+  if (errors.length > 1) throw new DesignSessionWorkflowCleanupError(errors)
 }

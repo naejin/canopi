@@ -1,6 +1,7 @@
 import type { CanopiFile } from '../../../types/design'
-import type { SceneDocumentReader } from '../scene'
+import { serializeScenePersistedState } from '../scene'
 import type {
+  CanvasPersistenceCapture,
   CanvasDocumentReplacementReceipt,
   CanvasDocumentReplacementToken,
   CanvasRuntimeDocumentMetadata,
@@ -8,11 +9,10 @@ import type {
 import type {
   CanvasRuntimeDocumentCompositionInput,
 } from '../app-adapter'
-import type { SceneDocumentAuthority, SceneSavedCheckpoint } from './transactions'
+import type { SceneDocumentAuthority, ScenePersistenceAuthority } from './transactions'
 
 interface SceneRuntimeDocumentBridgeOptions {
-  sceneStore: SceneDocumentReader
-  authority: SceneDocumentAuthority & SceneSavedCheckpoint
+  authority: SceneDocumentAuthority & ScenePersistenceAuthority
   prepareForDocumentReplacement(): void
   clearHoveredTargets(): void
   clearPanelOriginTargets(): void
@@ -21,7 +21,6 @@ interface SceneRuntimeDocumentBridgeOptions {
 }
 
 export class SceneRuntimeDocumentBridge {
-  private readonly _sceneStore: SceneDocumentReader
   private readonly _authority: SceneRuntimeDocumentBridgeOptions['authority']
   private readonly _prepareForDocumentReplacement: SceneRuntimeDocumentBridgeOptions['prepareForDocumentReplacement']
   private readonly _clearHoveredTargets: SceneRuntimeDocumentBridgeOptions['clearHoveredTargets']
@@ -30,7 +29,6 @@ export class SceneRuntimeDocumentBridge {
   private readonly _syncCanvasSignalsFromDocument: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromDocument']
 
   constructor(options: SceneRuntimeDocumentBridgeOptions) {
-    this._sceneStore = options.sceneStore
     this._authority = options.authority
     this._prepareForDocumentReplacement = options.prepareForDocumentReplacement
     this._clearHoveredTargets = options.clearHoveredTargets
@@ -67,12 +65,17 @@ export class SceneRuntimeDocumentBridge {
     return { callerFinalizerInvoked }
   }
 
-  serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
-    const canvasOutput = this._sceneStore.toCanopiFile({ now: new Date() })
-    return this._composeDocumentForSave({ metadata, document: doc, canvas: canvasOutput })
-  }
-
-  markSaved(): void {
-    this._authority.markSaved()
+  captureForPersistence(
+    metadata: CanvasRuntimeDocumentMetadata,
+    doc: CanopiFile,
+  ): CanvasPersistenceCapture {
+    const capture = this._authority.capturePersistence()
+    const canvas = serializeScenePersistedState(capture.scene, { now: new Date() })
+    const content = this._composeDocumentForSave({ metadata, document: doc, canvas })
+    return Object.freeze({
+      content,
+      isCurrent: () => capture.isCurrent(),
+      acknowledgeSaved: () => capture.acknowledgeSaved(),
+    })
   }
 }

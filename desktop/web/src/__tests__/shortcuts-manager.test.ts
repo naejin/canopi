@@ -156,8 +156,8 @@ describe('shortcut manager canvas tool switching', () => {
     }
     nonCanvasRevision.value = 1
     nonCanvasSavedRevision.value = 0
-    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(undefined)
-    const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(undefined)
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(null)
+    const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(null)
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
     const newSpy = vi.spyOn(documentActions, 'newDesignAction').mockResolvedValue(undefined)
 

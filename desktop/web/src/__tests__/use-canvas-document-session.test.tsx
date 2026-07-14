@@ -1,30 +1,30 @@
 import { render } from "preact";
+import { effect } from "@preact/signals";
 import { useRef } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  autosaveDesign: vi.fn(async () => undefined),
+  autosaveDesignSession: vi.fn(async () => true),
   beginEmptyDocumentSession: vi.fn((session: any) => {
     session.hideCanvasChrome();
   }),
   cancelQueuedLoad: vi.fn(),
   consumeQueuedDocumentLoad: vi.fn((_session?: unknown) => () => {}),
-  disposeDesignSessionPersistence: vi.fn(),
   flushSettingsProjection: vi.fn(),
   runtimeInitImpl: vi.fn(async (_container?: HTMLElement) => undefined),
+  resizeDisconnect: vi.fn(),
   runtimeInstances: [] as Array<{
     host: Record<string, unknown>;
     documents: Record<string, unknown>;
   }>,
-  snapshotCanvasIntoDesignSession: vi.fn(),
+  teardownAttachedDesignSession: vi.fn(),
   startAttachedDesignSession: vi.fn(),
   transitionDocument: vi.fn((request: any) => {
     request.session.loadDocument({ name: "Mounted" });
     request.session.showCanvasChrome();
     return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
   }),
-  buildPersistedDesignSessionContent: vi.fn(() => ({ name: "Autosaved" })),
 }));
 
 vi.mock("../app/canvas-runtime/host", () => ({
@@ -45,8 +45,11 @@ vi.mock("../app/canvas-runtime/host", () => ({
         return { callerFinalizerInvoked: true };
       }),
       hasLoadedDocument: vi.fn(() => loaded),
-      serializeDocument: vi.fn((_metadata, doc) => doc),
-      markSaved: vi.fn(),
+      captureForPersistence: vi.fn((_metadata, doc) => ({
+        content: doc,
+        isCurrent: vi.fn(() => true),
+        acknowledgeSaved: vi.fn(() => "applied"),
+      })),
       resize: vi.fn(),
       destroy: vi.fn(),
     };
@@ -66,28 +69,16 @@ vi.mock("../app/canvas-runtime/host", () => ({
   }),
 }));
 
-vi.mock("../ipc/design", () => ({
-  autosaveDesign: mocks.autosaveDesign,
-}));
-
 vi.mock("../app/document-session/transition", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../app/document-session/transition")>();
   return {
     ...actual,
     beginEmptyDocumentSession: mocks.beginEmptyDocumentSession,
+    autosaveDesignSession: mocks.autosaveDesignSession,
     consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
     startAttachedDesignSession: mocks.startAttachedDesignSession,
+    teardownAttachedDesignSession: mocks.teardownAttachedDesignSession,
     transitionDocument: mocks.transitionDocument,
-  };
-});
-
-vi.mock("../app/document-session/persistence", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../app/document-session/persistence")>();
-  return {
-    ...actual,
-    buildPersistedDesignSessionContent: mocks.buildPersistedDesignSessionContent,
-    disposeDesignSessionPersistence: mocks.disposeDesignSessionPersistence,
-    snapshotCanvasIntoDesignSession: mocks.snapshotCanvasIntoDesignSession,
   };
 });
 
@@ -96,7 +87,13 @@ vi.mock("../app/settings/projection", () => ({
 }));
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
-import { currentCanvasDocumentSurface, currentCanvasSession, setCurrentCanvasSession } from "../canvas/session";
+import {
+  currentCanvasDocumentSurface,
+  currentCanvasReady,
+  currentCanvasSession,
+  setCurrentCanvasSession,
+} from "../canvas/session";
+import { createTestCanvasRuntimeSurfaces } from "./support/canvas-runtime-surfaces";
 import { createCanvasDocumentReplacementToken } from "../canvas/runtime/runtime";
 import { autoSaveIntervalMs } from "../app/settings/state";
 import {
@@ -126,12 +123,18 @@ function Harness() {
 }
 
 async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 20; index += 1) {
+    await Promise.resolve();
+  }
+}
+
+async function mountHarness(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    render(<Harness />, container);
+  });
+  await act(async () => {
+    await flushMicrotasks();
+  });
 }
 
 function makeDesign(name = "Demo") {
@@ -162,18 +165,18 @@ describe("useCanvasDocumentSession", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    mocks.autosaveDesign.mockClear();
+    mocks.autosaveDesignSession.mockClear();
     mocks.beginEmptyDocumentSession.mockClear();
     mocks.cancelQueuedLoad.mockReset();
     mocks.cancelQueuedLoad.mockImplementation(() => {});
     mocks.consumeQueuedDocumentLoad.mockClear();
     mocks.consumeQueuedDocumentLoad.mockImplementation(() => mocks.cancelQueuedLoad);
-    mocks.disposeDesignSessionPersistence.mockClear();
     mocks.flushSettingsProjection.mockClear();
     mocks.runtimeInitImpl.mockReset();
     mocks.runtimeInitImpl.mockResolvedValue(undefined);
+    mocks.resizeDisconnect.mockClear();
     mocks.runtimeInstances.length = 0;
-    mocks.snapshotCanvasIntoDesignSession.mockClear();
+    mocks.teardownAttachedDesignSession.mockClear();
     mocks.startAttachedDesignSession.mockReset();
     mocks.startAttachedDesignSession.mockImplementation((session: any) => {
       if (currentDesign.value) {
@@ -190,10 +193,11 @@ describe("useCanvasDocumentSession", () => {
       request.session.showCanvasChrome();
       return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
     });
-    mocks.buildPersistedDesignSessionContent.mockClear();
     (globalThis as Record<string, unknown>).ResizeObserver = class {
       observe() {}
-      disconnect() {}
+      disconnect() {
+        mocks.resizeDisconnect();
+      }
     };
     container = document.createElement("div");
     document.body.innerHTML = "";
@@ -215,10 +219,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("mounts an empty session by installing workflows and hiding canvas chrome", async () => {
-    await act(async () => {
-      render(<Harness />, container);
-      await flushMicrotasks();
-    });
+    await mountHarness(container);
 
     const documents = mocks.runtimeInstances[0]?.documents as {
       hideCanvasChrome: ReturnType<typeof vi.fn>;
@@ -232,13 +233,52 @@ describe("useCanvasDocumentSession", () => {
     expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
   });
 
+  it("does not continue initialization after publication synchronously releases the runtime", async () => {
+    let releasedFirst = false;
+    const disposePublicationEffect = effect(() => {
+      const firstSurfaces = mocks.runtimeInstances[0]?.host.surfaces;
+      if (
+        !releasedFirst
+        && firstSurfaces
+        && currentCanvasSession.value === firstSurfaces
+      ) {
+        releasedFirst = true;
+        render(null, container);
+      }
+      void currentCanvasReady.value;
+    });
+
+    try {
+      await mountHarness(container);
+
+      const first = mocks.runtimeInstances[0] as unknown as {
+        host: { destroy: ReturnType<typeof vi.fn> };
+        documents: { initializeViewport: ReturnType<typeof vi.fn> };
+      };
+      const destroyOrder = first.host.destroy.mock.invocationCallOrder[0] ?? 0;
+
+      expect(first.host.destroy).toHaveBeenCalledOnce();
+      expect(first.documents.initializeViewport.mock.invocationCallOrder[0])
+        .toBeLessThan(destroyOrder);
+      expect(mocks.startAttachedDesignSession.mock.invocationCallOrder[0])
+        .toBeLessThan(destroyOrder);
+      expect(mocks.consumeQueuedDocumentLoad.mock.invocationCallOrder[0])
+        .toBeLessThan(destroyOrder);
+      expect(currentCanvasSession.value).toBeNull();
+      expect(currentCanvasReady.value).toBe(false);
+
+      await mountHarness(container);
+      expect(mocks.runtimeInstances).toHaveLength(2);
+      expect(currentCanvasSession.value).toBe(mocks.runtimeInstances[1]?.host.surfaces);
+    } finally {
+      disposePublicationEffect();
+    }
+  });
+
   it("loads the current design on mount and snapshots before teardown", async () => {
     currentDesign.value = makeDesign();
 
-    await act(async () => {
-      render(<Harness />, container);
-      await flushMicrotasks();
-    });
+    await mountHarness(container);
 
     const instance = mocks.runtimeInstances[0] as unknown as {
       host: { destroy: ReturnType<typeof vi.fn> };
@@ -259,40 +299,149 @@ describe("useCanvasDocumentSession", () => {
       render(null, container);
     });
 
-    expect(mocks.snapshotCanvasIntoDesignSession).toHaveBeenCalledTimes(1);
-    expect(mocks.disposeDesignSessionPersistence).toHaveBeenCalledTimes(1);
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
     expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
     expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
-    const snapshotOrder = mocks.snapshotCanvasIntoDesignSession.mock.invocationCallOrder[0];
+    const snapshotOrder = mocks.teardownAttachedDesignSession.mock.invocationCallOrder[0];
     const destroyOrder = instance.host.destroy.mock.invocationCallOrder[0];
     expect(snapshotOrder).toBeLessThan(destroyOrder ?? Number.POSITIVE_INFINITY);
   });
 
-  it("does not snapshot when runtime init rejects", async () => {
+  it("retains a failed handoff owner and retries it before the next mount", async () => {
     currentDesign.value = makeDesign();
-    mocks.runtimeInitImpl.mockRejectedValueOnce(new Error("init failed"));
-
-    await act(async () => {
-      render(<Harness />, container);
-      await flushMicrotasks();
+    mocks.teardownAttachedDesignSession.mockImplementationOnce(() => {
+      throw new Error("handoff capture failed");
     });
 
-    await act(async () => {
-      render(null, container);
-      await flushMicrotasks();
-    });
+    await mountHarness(container);
 
     const instance = mocks.runtimeInstances[0] as unknown as {
       host: { destroy: ReturnType<typeof vi.fn> };
     };
 
-    expect(mocks.transitionDocument).not.toHaveBeenCalled();
-    expect(mocks.snapshotCanvasIntoDesignSession).not.toHaveBeenCalled();
-    expect(mocks.disposeDesignSessionPersistence).toHaveBeenCalledTimes(1);
+    expect(() => render(null, container)).toThrow("handoff capture failed");
+    expect(instance.host.destroy).not.toHaveBeenCalled();
+    expect(currentCanvasSession.value).not.toBeNull();
+    expect(mocks.resizeDisconnect).not.toHaveBeenCalled();
+    expect(mocks.cancelQueuedLoad).not.toHaveBeenCalled();
+    expect(mocks.flushSettingsProjection).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+      await flushMicrotasks();
+    });
+    expect(mocks.autosaveDesignSession).toHaveBeenCalledOnce();
+
+    await mountHarness(container);
+
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(2);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
+    expect(mocks.resizeDisconnect).toHaveBeenCalledTimes(1);
+    expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
+    expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
+    expect(mocks.runtimeInstances).toHaveLength(2);
+    expect(currentCanvasSession.value).toBe(mocks.runtimeInstances[1]?.host.surfaces);
+  });
+
+  it("does not clear a successor publication while retrying a stale teardown", async () => {
+    currentDesign.value = makeDesign();
+    const successorSurfaces = createTestCanvasRuntimeSurfaces();
+    mocks.teardownAttachedDesignSession.mockImplementationOnce(() => {
+      setCurrentCanvasSession(successorSurfaces);
+      throw new Error("old Canvas lease is stale");
+    });
+
+    await mountHarness(container);
+    expect(() => render(null, container)).toThrow("old Canvas lease is stale");
+    expect(currentCanvasSession.value).toBe(successorSurfaces);
+
+    mocks.runtimeInitImpl.mockImplementationOnce(() => new Promise(() => {}));
+    await mountHarness(container);
+
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(2);
+    expect(mocks.runtimeInstances[0]?.host.destroy).toHaveBeenCalledOnce();
+    expect(currentCanvasSession.value).toBe(successorSurfaces);
+  });
+
+  it("releases the lifecycle after reporting exhaustive post-handoff cleanup failures", async () => {
+    currentDesign.value = makeDesign();
+    const disconnectError = new Error("observer disconnect failed");
+    const settingsError = new Error("settings flush failed");
+    mocks.resizeDisconnect.mockImplementationOnce(() => {
+      throw disconnectError;
+    });
+    mocks.flushSettingsProjection.mockImplementationOnce(() => {
+      throw settingsError;
+    });
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      await mountHarness(container);
+
+      const first = mocks.runtimeInstances[0] as unknown as {
+        host: { destroy: ReturnType<typeof vi.fn> };
+      };
+
+      expect(() => render(null, container)).not.toThrow();
+
+      expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+      expect(mocks.resizeDisconnect).toHaveBeenCalledTimes(1);
+      expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
+      expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
+      expect(first.host.destroy).toHaveBeenCalledTimes(1);
+      expect(currentCanvasSession.value).toBe(null);
+      expect(logError).toHaveBeenCalledWith(
+        "Failed to dispose Design Session lifecycle:",
+        expect.objectContaining({
+          name: "CanvasRuntimeCleanupError",
+          errors: [disconnectError, settingsError],
+        }),
+      );
+
+      await mountHarness(container);
+
+      expect(mocks.runtimeInstances).toHaveLength(2);
+      expect(currentCanvasSession.value).toBe(mocks.runtimeInstances[1]?.host.surfaces);
+    } finally {
+      logError.mockRestore();
+    }
+  });
+
+  it("releases a failed runtime immediately and allows a later mount to retry", async () => {
+    currentDesign.value = makeDesign();
+    mocks.runtimeInitImpl.mockRejectedValueOnce(new Error("init failed"));
+
+    await act(async () => {
+      render(<Harness />, container);
+    });
+    await act(async () => {
+      await flushMicrotasks();
+    });
+
+    const failedInstance = mocks.runtimeInstances[0] as unknown as {
+      host: { destroy: ReturnType<typeof vi.fn> };
+    };
+
+    expect(mocks.transitionDocument).not.toHaveBeenCalled();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+    expect(failedInstance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+      await flushMicrotasks();
+    });
+    expect(mocks.autosaveDesignSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      render(null, container);
+    });
+    await mountHarness(container);
+
+    expect(mocks.runtimeInstances).toHaveLength(2);
+    expect(currentCanvasSession.value).toBe(mocks.runtimeInstances[1]?.host.surfaces);
   });
 
   it("does not snapshot before the runtime has loaded a document", async () => {
@@ -304,10 +453,7 @@ describe("useCanvasDocumentSession", () => {
       }),
     );
 
-    await act(async () => {
-      render(<Harness />, container);
-      await flushMicrotasks();
-    });
+    await mountHarness(container);
 
     await act(async () => {
       render(null, container);
@@ -324,8 +470,7 @@ describe("useCanvasDocumentSession", () => {
     };
 
     expect(mocks.transitionDocument).not.toHaveBeenCalled();
-    expect(mocks.snapshotCanvasIntoDesignSession).not.toHaveBeenCalled();
-    expect(mocks.disposeDesignSessionPersistence).toHaveBeenCalledTimes(1);
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
   });
@@ -338,10 +483,7 @@ describe("useCanvasDocumentSession", () => {
       return mocks.cancelQueuedLoad;
     });
 
-    await act(async () => {
-      render(<Harness />, container);
-      await flushMicrotasks();
-    });
+    await mountHarness(container);
 
     await act(async () => {
       render(null, container);
@@ -351,7 +493,7 @@ describe("useCanvasDocumentSession", () => {
       host: { destroy: ReturnType<typeof vi.fn> };
     };
 
-    expect(mocks.snapshotCanvasIntoDesignSession).toHaveBeenCalledTimes(1);
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
   });
 
@@ -359,18 +501,14 @@ describe("useCanvasDocumentSession", () => {
     currentDesign.value = makeDesign();
     detachedCanvasDirty.value = true;
 
-    await act(async () => {
-      render(<Harness />, container);
-      await flushMicrotasks();
-    });
+    await mountHarness(container);
 
     await act(async () => {
       vi.advanceTimersByTime(100);
       await flushMicrotasks();
     });
 
-    expect(mocks.buildPersistedDesignSessionContent).toHaveBeenCalledTimes(1);
-    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(1);
+    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       autoSaveIntervalMs.value = 250;
@@ -382,14 +520,15 @@ describe("useCanvasDocumentSession", () => {
       await flushMicrotasks();
     });
 
-    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(1);
+    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       vi.advanceTimersByTime(150);
       await flushMicrotasks();
     });
 
-    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(2);
+    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(2);
     expect(autosaveFailed.value).toBe(false);
   });
+
 });

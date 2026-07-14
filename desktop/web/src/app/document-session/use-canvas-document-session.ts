@@ -1,4 +1,8 @@
 import { useEffect, useRef } from "preact/hooks";
+import {
+  claimCanvasRuntimeLifecycle,
+  ensureCanvasRuntimeLifecycleAvailable,
+} from "../../canvas/runtime/lifecycle-owner";
 import { autoSaveIntervalMs } from "../settings/state";
 import { createDesignSessionLifecycle, type DesignSessionLifecycle } from "./lifecycle";
 
@@ -28,18 +32,29 @@ export function useCanvasDocumentSession({
     const canvasArea = canvasAreaRef.current;
     if (!container || !canvasArea) return;
 
-    const lifecycle = createDesignSessionLifecycle({
-      canvasArea,
-      container,
-      rulerOverlay: rulerOverlayRef.current,
-    });
-    lifecycleRef.current = lifecycle;
-    lifecycle.start();
-
-    return () => {
-      lifecycleRef.current = null;
-      lifecycle.dispose();
+    ensureCanvasRuntimeLifecycleAvailable();
+    let lifecycle: DesignSessionLifecycle | null = null;
+    const runtimeLease = claimCanvasRuntimeLifecycle(() => lifecycle?.dispose());
+    const releaseLifecycle = () => {
+      runtimeLease.release();
+      if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
     };
+    try {
+      lifecycle = createDesignSessionLifecycle({
+        canvasArea,
+        container,
+        rulerOverlay: rulerOverlayRef.current,
+      }, {
+        onInitializationFailure: releaseLifecycle,
+      });
+      lifecycleRef.current = lifecycle;
+      lifecycle.start();
+    } catch (error) {
+      releaseLifecycle();
+      throw error;
+    }
+
+    return releaseLifecycle;
   }, []);
 
   const intervalMs = autoSaveIntervalMs.value;

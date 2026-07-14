@@ -1,3 +1,4 @@
+import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   currentCanvasReady,
@@ -33,6 +34,22 @@ describe('canvas session seam', () => {
 
     expect(currentCanvasSession.value).toBe(null)
     expect(currentCanvasReady.value).toBe(false)
+  })
+
+  it('publishes session identity and readiness atomically across reentrant release', () => {
+    const surfaces = createTestCanvasRuntimeSurfaces()
+    const disposeEffect = effect(() => {
+      if (currentCanvasSession.value === surfaces) {
+        setCurrentCanvasSession(null)
+      }
+      void currentCanvasReady.value
+    })
+
+    setCurrentCanvasSession(surfaces)
+
+    expect(currentCanvasSession.value).toBeNull()
+    expect(currentCanvasReady.value).toBe(false)
+    disposeEffect()
   })
 
   it('rejects mounted runtime publication until it is adapted into explicit surfaces', () => {

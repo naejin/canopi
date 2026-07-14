@@ -35,6 +35,10 @@ function noop(): SceneCommand {
 // AND clear the shared history so canvasClean starts as true.
 let history: SceneHistory
 
+function acknowledgeCurrentScene(): void {
+  history.acknowledgeSaved(history.captureCheckpoint())
+}
+
 beforeEach(() => {
   const appAdapter = createAppCanvasRuntimeAppAdapter()
   history = new SceneHistory({
@@ -104,13 +108,13 @@ describe('canvas edits', () => {
   it('save clears dirty', () => {
     history.record(noop())
     expect(designDirty.value).toBe(true)
-    history.markSaved()
+    acknowledgeCurrentScene()
     markSaved()
     expect(designDirty.value).toBe(false)
   })
 
   it('undo back to saved state clears dirty', () => {
-    history.markSaved()
+    acknowledgeCurrentScene()
     markSaved()
     history.record(noop())
     expect(designDirty.value).toBe(true)
@@ -120,7 +124,7 @@ describe('canvas edits', () => {
   })
 
   it('redo after undo makes dirty again', () => {
-    history.markSaved()
+    acknowledgeCurrentScene()
     markSaved()
     history.record(noop())
     history.undo(applyHistoryCommand)
@@ -130,7 +134,7 @@ describe('canvas edits', () => {
   })
 
   it('dirty survives beyond 500 operations (the cap bug)', () => {
-    history.markSaved()
+    acknowledgeCurrentScene()
     markSaved()
 
     // Execute 501 commands — stack caps at 500, saved position shifts
@@ -141,7 +145,7 @@ describe('canvas edits', () => {
     expect(designDirty.value).toBe(true)
 
     // Save and one more edit — still works
-    history.markSaved()
+    acknowledgeCurrentScene()
     markSaved()
     expect(designDirty.value).toBe(false)
     history.record(noop())
@@ -153,7 +157,7 @@ describe('canvas edits', () => {
     for (let i = 0; i < 500; i++) {
       history.record(noop())
     }
-    history.markSaved()
+    acknowledgeCurrentScene()
     markSaved()
     expect(designDirty.value).toBe(false)
 
@@ -207,7 +211,7 @@ describe('mixed edit sources', () => {
     history.record(noop())
     nonCanvasRevision.value++
     expect(designDirty.value).toBe(true)
-    history.markSaved()
+    acknowledgeCurrentScene()
     markSaved()
     expect(designDirty.value).toBe(false)
   })

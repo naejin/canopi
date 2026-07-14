@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createDesignNotebookWorkbench } from '../app/design-notebook/workbench'
+import type { DesignSaveSettlement } from '../app/document-session/persistence'
 import type { CanopiFile, DesignSummary } from '../types/design'
 
 describe('design notebook workbench', () => {
@@ -38,6 +39,17 @@ describe('design notebook workbench', () => {
       created_at: '',
       updated_at: '',
       extra: {},
+    }
+  }
+
+  function appliedSave(
+    content: CanopiFile,
+    path: string,
+  ): DesignSaveSettlement {
+    return {
+      status: 'applied',
+      path,
+      content,
     }
   }
 
@@ -244,11 +256,16 @@ describe('design notebook workbench', () => {
 
   it('saves an unsaved current Design before adding it to a Notebook Section', async () => {
     const activePath = signal<string | null>(null)
-    const currentDesign = signal<CanopiFile | null>(testDesign())
-    const savedDesign = { ...testDesign(), name: 'Saved Current Design' }
+    const currentDesignBeforeSave = testDesign()
+    const currentDesign = signal<CanopiFile | null>(currentDesignBeforeSave)
+    const savedDesign = {
+      ...testDesign(),
+      name: 'Saved Current Design',
+      plants: [{ id: 'persisted-canvas-plant' } as CanopiFile['plants'][number]],
+    }
     const saveAsCurrent = vi.fn().mockImplementation(async () => {
       activePath.value = '/designs/current.canopi'
-      currentDesign.value = savedDesign
+      return appliedSave(savedDesign, '/designs/current.canopi')
     })
     const addDesignReference = vi.fn().mockResolvedValue(undefined)
     const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
@@ -303,13 +320,15 @@ describe('design notebook workbench', () => {
     expect(added).toBe(true)
     expect(saveAsCurrent).toHaveBeenCalledTimes(1)
     expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', savedDesign)
+    expect(currentDesign.value).toBe(currentDesignBeforeSave)
     expect(moveEntryToSection).toHaveBeenCalledWith('/designs/current.canopi', 'section-client')
     expect(workbench.view.value.entries[0]?.path).toBe('/designs/current.canopi')
   })
 
   it('does not move Add Current into a deleted Notebook Section', async () => {
     const activePath = signal<string | null>('/designs/current.canopi')
-    const currentDesign = signal<CanopiFile | null>(testDesign())
+    const savedDesign = testDesign()
+    const currentDesign = signal<CanopiFile | null>(savedDesign)
     const addDesignReference = vi.fn().mockResolvedValue(undefined)
     const deleteSection = vi.fn().mockResolvedValue(undefined)
     const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
@@ -344,7 +363,9 @@ describe('design notebook workbench', () => {
       currentDesign,
       loadNotebook,
       openDesign: vi.fn(),
-      saveCurrent: vi.fn(),
+      saveCurrent: vi.fn().mockResolvedValue(
+        appliedSave(savedDesign, '/designs/current.canopi'),
+      ),
       saveAsCurrent: vi.fn(),
       addDesignReference,
       deleteSection,
@@ -356,7 +377,7 @@ describe('design notebook workbench', () => {
     const added = await workbench.addCurrentDesignToNotebook('section-client')
 
     expect(added).toBe(true)
-    expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', testDesign())
+    expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', savedDesign)
     expect(moveEntryToSection).not.toHaveBeenCalled()
     expect(workbench.view.value.entries[0]?.section_id).toBeNull()
   })
@@ -370,7 +391,7 @@ describe('design notebook workbench', () => {
       currentDesign,
       loadNotebook,
       openDesign: vi.fn(),
-      saveAsCurrent: vi.fn().mockResolvedValue(undefined),
+      saveAsCurrent: vi.fn().mockResolvedValue(null),
       saveCurrent: vi.fn(),
       moveEntryToSection: vi.fn(),
     })

@@ -127,8 +127,11 @@ function createDocumentSurface() {
       return { callerFinalizerInvoked: true }
     },
     hasLoadedDocument: () => false,
-    serializeDocument: (metadata, doc) => ({ ...doc, name: metadata.name }),
-    markSaved: () => {},
+    captureForPersistence: (metadata, doc) => ({
+      content: { ...doc, name: metadata.name },
+      isCurrent: () => true,
+      acknowledgeSaved: () => 'applied',
+    }),
     resize: () => {},
     destroy: () => {},
   } satisfies CanvasDocumentSurface
@@ -174,19 +177,26 @@ describe('canvas runtime surfaces', () => {
     expect(documentSurfaceSource).toContain('finalizeReplacement: () => void,')
     expect(documentSurfaceSource).toContain('): CanvasDocumentReplacementReceipt {')
     expect(documentSurfaceSource).not.toContain('finalizeReplacement?:')
-    expect(documentSurfaceSource).toContain('serializeDocument(')
+    expect(documentSurfaceSource).toContain('captureForPersistence(')
+    expect(documentSurfaceSource).not.toContain('serializeDocument(')
+    expect(documentSurfaceSource).not.toContain('markSaved():')
+    expect(runtimeContractSource).toContain('captureForPersistence(')
+    expect(runtimeContractSource).not.toContain('serializeDocument(')
+    expect(runtimeContractSource).not.toContain('markSaved():')
     expect(documentSurfaceSource).not.toContain('clearHistory')
     expect(runtimeContractSource).not.toContain('clearHistory(): void')
     expect(documentSurfaceSource).toContain('resize(width')
     expect(runtimeSource).toContain('get documentSurface')
     expect(runtimeSource).not.toContain('loadDocument(file')
     expect(runtimeSource).not.toContain('replaceDocument(file')
+    expect(runtimeSource).not.toContain('captureForPersistence(metadata')
     expect(runtimeSource).not.toContain('serializeDocument(metadata')
     expect(runtimeSource).not.toContain('markSaved():')
     expect(runtimeSource).not.toContain('clearHistory():')
     expect(runtimeSource).not.toContain('resize(width')
     expect(runtimeSource).not.toContain('this._documents.loadDocument(file)')
     expect(runtimeSource).not.toContain('this._documents.replaceDocument(file)')
+    expect(runtimeSource).not.toContain('this._documents.captureForPersistence(metadata, doc)')
     expect(runtimeSource).not.toContain('this._documents.serializeDocument(metadata, doc)')
   })
 
@@ -341,8 +351,8 @@ describe('canvas runtime surfaces', () => {
     commandSurface.setTool
     // @ts-expect-error command surfaces cannot read scene snapshots.
     commandSurface.getSceneSnapshot
-    // @ts-expect-error command surfaces cannot serialize documents.
-    commandSurface.serializeDocument
+    // @ts-expect-error command surfaces cannot capture documents for persistence.
+    commandSurface.captureForPersistence
   })
 
   it('keeps document consumers away from panel queries and toolbar commands', () => {
@@ -355,7 +365,9 @@ describe('canvas runtime surfaces', () => {
       documentSurface.replaceDocument(file, replacementToken)
     }
     documentSurface.replaceDocument(file, replacementToken, () => {})
-    expect(documentSurface.serializeDocument({ name: 'Doc' }, file).name).toBe('Doc')
+    const persistence = documentSurface.captureForPersistence({ name: 'Doc' }, file)
+    expect(persistence.content.name).toBe('Doc')
+    expect(persistence.acknowledgeSaved()).toBe('applied')
     // @ts-expect-error document surfaces cannot read placed plant lists.
     documentSurface.getPlacedPlants
     // @ts-expect-error document surfaces cannot issue tool commands.

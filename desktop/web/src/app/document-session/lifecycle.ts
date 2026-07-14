@@ -1,13 +1,18 @@
-import { setCanvasRuntimeSurfaces } from "../../canvas/session";
+import {
+  getCurrentCanvasSession,
+  setCanvasRuntimeSurfaces,
+} from "../../canvas/session";
 import type {
   CanvasDocumentSurface,
   CanvasRuntimeHost,
   CanvasRuntimeSurfaces,
 } from "../../canvas/runtime/runtime";
+import { runCanvasRuntimeCleanups } from "../../canvas/runtime/cleanup";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
 import { createAppCanvasRuntimeHost } from "../canvas-runtime/host";
 import {
+  abortFailedAttachedDesignSessionStart,
   autosaveDesignSession,
   consumeQueuedDocumentLoad,
   startAttachedDesignSession,
@@ -33,6 +38,7 @@ interface DesignSessionLifecycleDeps {
   ) => DesignSessionResizeObserver | null;
   readonly readInitialAutosaveInterval: () => number;
   readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void;
+  readonly onInitializationFailure: () => void;
 }
 
 const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
@@ -43,7 +49,8 @@ const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
     return new ResizeObserver(callback);
   },
   readInitialAutosaveInterval: () => autoSaveIntervalMs.value,
-  logError: console.error,
+  logError: (message, ...optionalParams) => console.error(message, ...optionalParams),
+  onInitializationFailure: () => {},
 };
 
 export interface DesignSessionLifecycle {
@@ -84,33 +91,57 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
   start(): void {
     this.updateAutosaveInterval(this.deps.readInitialAutosaveInterval());
 
-    void this.runtimeHost.init(this.host.container).then(() => {
+    void this.runtimeHost.init(this.host.container).then(async () => {
       if (this.cancelled) return;
 
       this.runtimeInitialized = true;
-      this.deps.publishSurfaces(this.surfaces);
       this.documents.initializeViewport();
+      if (this.cancelled) return;
       if (this.host.rulerOverlay) {
         this.documents.attachRulersTo(this.host.rulerOverlay);
+        if (this.cancelled) return;
       }
 
-      void startAttachedDesignSession(this.documents)
-        .then((result) => {
-          if (result?.status === "failed") {
-            this.deps.logError("Failed to mount current canvas document:", result.error);
-          }
-        })
-        .catch((error: unknown) => {
-          this.deps.logError("Failed to start canvas document session:", error);
-        });
+      const result = await startAttachedDesignSession(this.documents);
+      if (this.cancelled) return;
+      if (result?.status === "failed") {
+        abortFailedAttachedDesignSessionStart(this.documents, this.deps.logError);
+        throw result.error;
+      }
 
-      this.resizeObserver = this.deps.createResizeObserver(() => {
+      const resizeObserver = this.deps.createResizeObserver(() => {
         this.documents.resize(this.host.canvasArea.clientWidth, this.host.canvasArea.clientHeight);
       });
-      this.resizeObserver?.observe(this.host.canvasArea);
-      this.cancelQueuedLoad = consumeQueuedDocumentLoad(this.documents);
+      if (this.cancelled) {
+        this.disconnectLateResizeObserver(resizeObserver);
+        return;
+      }
+      this.resizeObserver = resizeObserver;
+      resizeObserver?.observe(this.host.canvasArea);
+      if (this.cancelled) return;
+
+      const cancelQueuedLoad = consumeQueuedDocumentLoad(this.documents);
+      if (this.cancelled) {
+        try {
+          cancelQueuedLoad();
+        } catch (error) {
+          this.deps.logError("Failed to cancel a late document load:", error);
+        }
+        return;
+      }
+      this.cancelQueuedLoad = cancelQueuedLoad;
+      this.deps.publishSurfaces(this.surfaces);
     }).catch((error: unknown) => {
+      if (this.cancelled) return;
       this.deps.logError("Failed to initialize scene canvas runtime:", error);
+      try {
+        this.deps.onInitializationFailure();
+      } catch (cleanupError) {
+        this.deps.logError(
+          "Failed to clean up after Canvas runtime initialization failure:",
+          cleanupError,
+        );
+      }
     });
   }
 
@@ -123,14 +154,23 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
 
   dispose(): void {
     this.cancelled = true;
-    this.clearAutosaveTimer();
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = null;
-    this.cancelQueuedLoad();
-    flushSettingsProjection();
     this.teardownDocumentSession();
-    this.runtimeHost.destroy();
-    this.deps.publishSurfaces(null);
+    try {
+      runCanvasRuntimeCleanups([
+        () => this.clearAutosaveTimer(),
+        () => this.disconnectResizeObserver(),
+        () => this.cancelPendingDocumentLoad(),
+        () => flushSettingsProjection(),
+        () => this.runtimeHost.destroy(),
+        () => {
+          if (getCurrentCanvasSession() === this.surfaces) {
+            this.deps.publishSurfaces(null);
+          }
+        },
+      ], "Design Session lifecycle cleanup failed");
+    } catch (error) {
+      this.deps.logError("Failed to dispose Design Session lifecycle:", error);
+    }
   }
 
   private clearAutosaveTimer(): void {
@@ -139,11 +179,33 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     this.autosaveTimer = null;
   }
 
+  private disconnectResizeObserver(): void {
+    const observer = this.resizeObserver;
+    this.resizeObserver = null;
+    observer?.disconnect();
+  }
+
+  private cancelPendingDocumentLoad(): void {
+    const cancel = this.cancelQueuedLoad;
+    this.cancelQueuedLoad = () => {};
+    cancel();
+  }
+
+  private disconnectLateResizeObserver(observer: DesignSessionResizeObserver | null): void {
+    try {
+      observer?.disconnect();
+    } catch (error) {
+      this.deps.logError("Failed to disconnect a late Canvas resize observer:", error);
+    }
+  }
+
   private autosave(): void {
     void autosaveDesignSession({
       session: this.documents,
       runtimeInitialized: this.runtimeInitialized,
       logError: this.deps.logError,
+    }).catch((error: unknown) => {
+      this.deps.logError("Autosave failed:", error);
     });
   }
 

@@ -1,9 +1,13 @@
 import { effect } from "@preact/signals";
 import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
-import { createDesignSessionReplacement } from "../app/document-session/replacement";
+import {
+  createDesignSessionReplacement,
+  type DesignSessionPendingCanvasReplacementIdentity,
+  type ResolvedDesignReplacement,
+} from "../app/document-session/replacement";
 import {
   designSessionStore,
-  type DesignSessionStore,
+  type PersistenceCapableDesignSessionStore,
 } from "../app/document-session/store";
 import { DESIGN_SESSION_WORKFLOWS } from "../app/document-session/workflows";
 import {
@@ -11,10 +15,15 @@ import {
   type DesignSessionWorkflowRunner,
 } from "../app/document-session/workflow-runner";
 import {
-  buildPersistedDesignSessionContent,
-  snapshotCanvasIntoDesignSession,
+  createDesignSessionPersistence,
+  DesignPersistenceLeaseError,
+  settleWrittenDesignOperation,
+  type DesignReplacementGuardCapture,
 } from "../app/document-session/persistence";
-import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
+import {
+  CanvasAuthorityBusyError,
+  type CanvasDocumentSurface,
+} from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
 import {
   browserAppDataStore,
@@ -47,7 +56,7 @@ export interface BrowserDesignFileAdapter {
 }
 
 interface BrowserDesignSessionControllerOptions {
-  readonly store?: DesignSessionStore;
+  readonly store?: PersistenceCapableDesignSessionStore;
   readonly fileAdapter?: BrowserDesignFileAdapter;
   readonly appDataStore?: BrowserAppDataStore;
   readonly now?: () => Date;
@@ -75,6 +84,12 @@ export interface BrowserDesignSessionAutosaveOptions {
   readonly onDraftSaved?: () => void;
 }
 
+interface PendingBrowserCanvasReplacement {
+  readonly canvas: CanvasDocumentSurface;
+  readonly identity: DesignSessionPendingCanvasReplacementIdentity;
+  isDesignBaselineCurrent(): boolean;
+}
+
 export const browserDesignFileAdapter: BrowserDesignFileAdapter = {
   openCanopiFile,
   downloadCanopiFile,
@@ -90,38 +105,169 @@ export function createBrowserDesignSessionController({
 }: BrowserDesignSessionControllerOptions = {}): BrowserDesignSessionController {
   let activeDraftId: string | null = null;
   let canvasSession: CanvasDocumentSurface | null = null;
-  const replacement = createDesignSessionReplacement({ store, workflowRunner });
+  let draftWriteEpoch = 0;
+  let replacementIntent = 0;
+  let workflowInstallAttempt = 0;
+  const replacement = createDesignSessionReplacement({
+    store,
+    workflowRunner: {
+      install() {
+        workflowInstallAttempt += 1;
+        workflowRunner.install();
+      },
+      dispose: () => workflowRunner.dispose(),
+    },
+  });
+  const persistence = createDesignSessionPersistence({ store });
+  let pendingCanvasReplacement: PendingBrowserCanvasReplacement | null = null;
+
+  function applyDesignReplacement(
+    input: ResolvedDesignReplacement,
+    baseline: DesignReplacementGuardCapture = persistence.beginReplacementGuard(),
+  ): void {
+    const canvas = canvasSession;
+    if (canvas) quarantineCompetingPendingReplacement(input, canvas);
+    try {
+      replacement.replace(input, canvas);
+      pendingCanvasReplacement = null;
+    } catch (error) {
+      const identity = canvas
+        ? replacement.pendingCanvasReplacementIdentity(canvas)
+        : null;
+      pendingCanvasReplacement = canvas && identity
+        ? {
+            canvas,
+            identity,
+            isDesignBaselineCurrent: () => baseline.isDesignBaselineCurrent(),
+          }
+        : null;
+      throw error;
+    }
+  }
+
+  function quarantineCompetingPendingReplacement(
+    input: ResolvedDesignReplacement,
+    canvas: CanvasDocumentSurface,
+  ): void {
+    const identity = replacement.pendingCanvasReplacementIdentity(canvas);
+    if (
+      !identity
+      || replacement.matchesPendingCanvasReplacement(input, canvas, identity)
+    ) return;
+
+    resumeExactPendingCanvasReplacement(canvas, identity);
+    throw new CanvasAuthorityBusyError("document-settlement");
+  }
+
+  function resumeExactPendingCanvasReplacement(
+    canvas: CanvasDocumentSurface,
+    identity: DesignSessionPendingCanvasReplacementIdentity,
+  ): void {
+    const pending = pendingCanvasReplacement;
+    if (
+      !pending
+      || pending.canvas !== canvas
+      || pending.identity !== identity
+    ) {
+      throw new Error(
+        "Browser Canvas replacement is missing its exact Design baseline",
+      );
+    }
+
+    const designAlreadyFinalized =
+      replacement.isPendingCanvasReplacementDesignFinalized(canvas, identity);
+    const resumed = replacement.resumePendingCanvasReplacement(
+      canvas,
+      identity,
+      {
+        preserveCurrentDesign:
+          !designAlreadyFinalized && !pending.isDesignBaselineCurrent(),
+      },
+    );
+    if (!resumed) {
+      throw new Error("Browser Canvas replacement changed before quarantine");
+    }
+    pendingCanvasReplacement = null;
+  }
 
   async function newDesign(): Promise<void> {
+    replacementIntent += 1;
     const file = createEmptyWebCanopiFile(now());
-    activeDraftId = null;
-    replacement.replace({ file, kind: "new", path: null, name: file.name }, canvasSession);
+    const draftId = createDraftId();
+    applyDesignReplacement({
+      file,
+      kind: "new",
+      path: null,
+      name: file.name,
+      finalizationIdentity: `browser-draft:${draftId}`,
+      onDesignFinalized: () => {
+        activeDraftId = draftId;
+      },
+    });
     saveCurrentDraft();
   }
 
   async function openCanopi(): Promise<boolean> {
+    const intent = ++replacementIntent;
+    const canvas = canvasSession;
+    const pendingIdentity = canvas
+      ? replacement.pendingCanvasReplacementIdentity(canvas)
+      : null;
+    if (canvas && pendingIdentity) {
+      resumeExactPendingCanvasReplacement(canvas, pendingIdentity);
+      return false;
+    }
+    const guardCapture = persistence.beginReplacementGuard();
+    let replacementGuard = guardCapture.guard;
+    if (!replacementGuard) {
+      await Promise.resolve();
+      if (intent !== replacementIntent) return false;
+      replacementGuard = guardCapture.resume();
+    }
+    if (
+      !replacementGuard
+      || intent !== replacementIntent
+      || !replacementGuard.isCurrent()
+    ) return false;
+
     const opened = await fileAdapter.openCanopiFile();
+    if (intent !== replacementIntent || !replacementGuard.isCurrent()) return false;
     if (!opened) return false;
     if (!opened.fileName.toLowerCase().endsWith(".canopi")) {
       throw new Error(`Expected a .canopi file, received ${opened.fileName}.`);
     }
 
     const file = parseCanopiJson(opened.text);
-    activeDraftId = null;
-    replacement.replace({
+    const draftId = createDraftId();
+    if (intent !== replacementIntent || !replacementGuard.isCurrent()) return false;
+    applyDesignReplacement({
       file,
       kind: "loaded",
       path: null,
       name: file.name || nameFromFileName(opened.fileName),
-    }, canvasSession);
+      finalizationIdentity: `browser-draft:${draftId}`,
+      onDesignFinalized: () => {
+        activeDraftId = draftId;
+      },
+    }, guardCapture);
     saveCurrentDraft();
     return true;
   }
 
   async function openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened"> {
+    replacementIntent += 1;
     const file = parseCanopiJson(template.text);
-    activeDraftId = null;
-    replacement.replace({ file, kind: "loaded", path: null, name: template.name }, canvasSession);
+    const draftId = createDraftId();
+    applyDesignReplacement({
+      file,
+      kind: "loaded",
+      path: null,
+      name: template.name,
+      finalizationIdentity: `browser-draft:${draftId}`,
+      onDesignFinalized: () => {
+        activeDraftId = draftId;
+      },
+    });
     saveCurrentDraft();
     return "opened";
   }
@@ -131,18 +277,19 @@ export function createBrowserDesignSessionController({
     if (!current) throw new Error("No browser Design is loaded.");
 
     const name = current.name || store.readDesignName() || "Untitled";
-    const content = buildPersistedDesignSessionContent({
-      session: activeCanvasSession(),
-      name,
-      store,
-    });
-    const fileName = `${safeFileStem(content.name || "Untitled")}.canopi`;
-    await fileAdapter.downloadCanopiFile({
-      fileName,
-      text: `${JSON.stringify(content, null, 2)}\n`,
-    });
-    store.replaceCurrentDesignState(content, null, content.name);
-    store.markSaved(null);
+    const operation = persistence.beginBrowserDownload();
+    const content = operation.content;
+    const fileName = `${safeFileStem(content.name || name || "Untitled")}.canopi`;
+    try {
+      await fileAdapter.downloadCanopiFile({
+        fileName,
+        text: `${JSON.stringify(content, null, 2)}\n`,
+      });
+    } catch (error) {
+      operation.fail(error);
+      throw error;
+    }
+    settleWrittenDesignOperation(operation);
     saveCurrentDraft();
   }
 
@@ -154,99 +301,183 @@ export function createBrowserDesignSessionController({
     const design = store.readCurrentDesign();
     if (!design) return;
 
-    store.replaceCurrentDesignState(
-      { ...design, name: nextName },
-      store.readDesignPath(),
-      nextName,
-    );
-    store.markDocumentDirty();
+    store.renameCurrentDesign(nextName);
   }
 
   function saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null {
     if (!store.hasCurrentDesign()) return null;
 
-    const name = store.readCurrentDesign()?.name || store.readDesignName() || "Untitled";
+    draftWriteEpoch += 1;
     const draftId = activeDraftId ?? createDraftId();
-    const content = buildPersistedDesignSessionContent({
-      session: activeCanvasSession(),
-      name,
-      store,
-    });
+    const operation = persistence.beginBrowserDraft();
     const result = appDataStore.saveDraft({
       id: draftId,
-      file: content,
+      file: operation.content,
       now: now().toISOString(),
     });
-    store.setAutosaveFailed(!result.ok);
     if (result.ok) {
       const previousDraftId = activeDraftId;
       activeDraftId = result.value.id;
-      store.markSaved(activeCanvasSession());
+      settleWrittenDesignOperation(operation);
       if (previousDraftId && previousDraftId !== result.value.id) {
         const deleted = appDataStore.deleteDraft(previousDraftId);
         if (!deleted.ok) store.setAutosaveFailed(true);
       }
+    } else {
+      operation.fail(result.error);
     }
     return result;
   }
 
   function openDraft(id: string): boolean {
+    replacementIntent += 1;
     const draft = appDataStore.loadDraft(id);
     if (!draft) return false;
 
     const file = draft;
-    activeDraftId = id;
-    replacement.replace({
+    applyDesignReplacement({
       file,
       kind: "loaded",
       path: null,
       name: file.name || "Untitled",
-    }, canvasSession);
+      finalizationIdentity: `browser-draft:${id}`,
+      onDesignFinalized: () => {
+        activeDraftId = id;
+      },
+    });
     saveCurrentDraft();
     return true;
   }
 
   function attachCanvasSession(session: CanvasDocumentSurface): () => void {
-    replacement.attach(session);
+    if (canvasSession === session) {
+      throw new DesignPersistenceLeaseError("Browser Canvas session is already attached");
+    }
+    persistence.attachCanvas(session);
+    const installAttemptBeforeAttachment = workflowInstallAttempt;
+    try {
+      replacement.attach(session);
+    } catch (error) {
+      try {
+        if (workflowInstallAttempt !== installAttemptBeforeAttachment) {
+          try {
+            workflowRunner.dispose();
+          } catch (cleanupError) {
+            console.error(
+              "Failed to clean up browser Design Session workflows after Canvas attachment failure:",
+              cleanupError,
+            );
+          }
+        }
+      } finally {
+        persistence.detachCanvas(session);
+      }
+      throw error;
+    }
     canvasSession = session;
     return () => {
       if (canvasSession !== session) return;
 
       try {
+        settlePendingReplacementForHandoff(session);
         if (session.hasLoadedDocument() && store.hasCurrentDesign()) {
-          snapshotCanvasIntoDesignSession({
-            session,
-            name: store.readDesignName(),
-            store,
-          });
+          persistence.settleCanvasHandoff(session);
           store.markCanvasDetachedDirty(store.isCanvasDirty());
         }
       } catch (error) {
         console.error("Failed to snapshot browser canvas before detach:", error);
-      } finally {
-        canvasSession = null;
-        workflowRunner.dispose();
+        throw error;
       }
+      workflowRunner.dispose();
+      persistence.detachCanvas(session);
+      canvasSession = null;
     };
   }
 
-  function activeCanvasSession(): CanvasDocumentSurface | null {
-    if (!canvasSession?.hasLoadedDocument()) return null;
-    return canvasSession;
+  function settlePendingReplacementForHandoff(
+    session: CanvasDocumentSurface,
+  ): void {
+    const identity = replacement.pendingCanvasReplacementIdentity(session);
+    if (!identity) {
+      if (pendingCanvasReplacement?.canvas === session) {
+        pendingCanvasReplacement = null;
+      }
+      return;
+    }
+
+    const pending = pendingCanvasReplacement;
+    if (
+      !pending
+      || pending.canvas !== session
+      || pending.identity !== identity
+    ) {
+      throw new Error(
+        "Browser Canvas replacement is missing its exact Design baseline",
+      );
+    }
+
+    const designAlreadyFinalized =
+      replacement.isPendingCanvasReplacementDesignFinalized(session, identity);
+    const preserveCurrentDesign =
+      !designAlreadyFinalized && !pending.isDesignBaselineCurrent();
+    const settled = replacement.settlePendingCanvasReplacementForHandoff(
+      session,
+      identity,
+      { preserveCurrentDesign },
+    );
+    if (!settled) {
+      throw new Error("Browser Canvas replacement changed before handoff");
+    }
+    pendingCanvasReplacement = null;
   }
 
   function installAutosave({ onDraftSaved }: BrowserDesignSessionAutosaveOptions = {}): () => void {
     let lastDesign = store.readCurrentDesign();
-    return effect(() => {
+    let disposed = false;
+    let scheduled = false;
+    const scheduleAutosave = () => {
+      if (scheduled || disposed) return;
+      scheduled = true;
+      const scheduledWriteEpoch = draftWriteEpoch;
+      queueMicrotask(() => {
+        scheduled = false;
+        if (disposed) return;
+        if (scheduledWriteEpoch !== draftWriteEpoch) {
+          const current = store.readCurrentDesign();
+          if (current && store.isDesignDirty()) {
+            scheduleAutosave();
+          }
+          return;
+        }
+        let result: BrowserAppDataWriteResult<BrowserDraftSummary> | null;
+        try {
+          result = saveCurrentDraft();
+        } catch (error) {
+          store.setAutosaveFailed(true);
+          logBrowserDesignSessionError(error);
+          return;
+        }
+        if (!result?.ok) return;
+        try {
+          onDraftSaved?.();
+        } catch (error) {
+          logBrowserDesignSessionError(error);
+        }
+      });
+    };
+    const disposeEffect = effect(() => {
       const current = store.currentDesign.value;
       const dirty = store.designDirty.value;
       if (current === lastDesign && !dirty) return;
       lastDesign = current;
       if (!current) return;
 
-      const result = saveCurrentDraft();
-      if (result?.ok) onDraftSaved?.();
+      scheduleAutosave();
     });
+    return () => {
+      disposed = true;
+      disposeEffect();
+    };
   }
 
   return {

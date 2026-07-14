@@ -9,6 +9,7 @@ import {
   type SaveCurrentDesignOptions,
   type TeardownDesignSessionOptions,
 } from "./state-machine";
+import type { DesignSaveSettlement } from "./persistence";
 import {
   setPendingDesignPath,
   setPendingTemplateImport,
@@ -39,6 +40,10 @@ export function getDesignSessionState(): DesignSessionState {
   return designSessionStateMachine.getState();
 }
 
+export function captureCurrentDesignObservation() {
+  return designSessionStateMachine.captureCurrentDesignObservation();
+}
+
 export function resetDesignSessionStateForTests(): void {
   designSessionStateMachine.resetState();
 }
@@ -47,6 +52,17 @@ export function startAttachedDesignSession(
   session: CanvasDocumentSurface,
 ): Promise<DocumentTransitionResult | null> {
   return designSessionStateMachine.startAttachedDesignSession(session);
+}
+
+export function abortFailedAttachedDesignSessionStart(
+  session: CanvasDocumentSurface,
+  logError: (message?: unknown, ...optionalParams: unknown[]) => void = console.error,
+): void {
+  designSessionStateMachine.teardownAttachedDesignSession({
+    session,
+    runtimeInitialized: false,
+    logError,
+  });
 }
 
 export function beginEmptyDocumentSession(session: CanvasDocumentSurface): void {
@@ -60,11 +76,15 @@ export function consumeQueuedDocumentLoad(
   return designSessionStateMachine.consumeQueuedDocumentLoad(session, options);
 }
 
-export function saveCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<void> {
+export function saveCurrentDesign(
+  options: SaveCurrentDesignOptions = {},
+): Promise<DesignSaveSettlement | null> {
   return designSessionStateMachine.saveCurrentDesign(options);
 }
 
-export function saveAsCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<void> {
+export function saveAsCurrentDesign(
+  options: SaveCurrentDesignOptions = {},
+): Promise<DesignSaveSettlement | null> {
   return designSessionStateMachine.saveAsCurrentDesign(options);
 }
 

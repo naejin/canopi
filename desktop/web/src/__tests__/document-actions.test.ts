@@ -73,6 +73,7 @@ import {
   openDesignFromPath,
   saveCurrentDesign,
 } from '../app/document-session/actions'
+import { resetDesignSessionStateForTests } from '../app/document-session/transition'
 import type { CanopiFile } from '../types/design'
 
 function makeFile(name: string): CanopiFile {
@@ -102,10 +103,6 @@ function makeEngine() {
   return {
     loadDocument: vi.fn(),
     replaceDocument: vi.fn(),
-    history: {
-      clear: vi.fn(),
-      markSaved: vi.fn(),
-    },
     showCanvasChrome: vi.fn(),
   }
 }
@@ -113,6 +110,7 @@ function makeEngine() {
 function makeSession() {
   let loaded = false
   const engine = makeEngine()
+  const acknowledgeSaved = vi.fn(() => 'applied' as const)
   engine.loadDocument.mockImplementation(() => {
     loaded = true
   })
@@ -133,8 +131,12 @@ function makeSession() {
     hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
     hasLoadedDocument: vi.fn(() => loaded),
-    markSaved: engine.history.markSaved,
-    serializeDocument: vi.fn((metadata: { name: string }) => makeFile(metadata.name)),
+    captureForPersistence: vi.fn((metadata: { name: string }, doc: CanopiFile) => ({
+      content: { ...doc, name: metadata.name },
+      isCurrent: () => true,
+      acknowledgeSaved,
+    })),
+    acknowledgeSaved,
     initializeViewport: vi.fn(),
     attachRulersTo: vi.fn(),
     resize: vi.fn(),
@@ -159,6 +161,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 beforeEach(() => {
+  resetDesignSessionStateForTests()
   mocks.canvasSession = makeSession()
   mocks.saveDesign.mockReset()
   mocks.saveDesign.mockResolvedValue('/designs/current.canopi')
@@ -179,7 +182,6 @@ beforeEach(() => {
 
   activeTool.value = 'rectangle'
   selectedObjectIds.value = new Set(['selected-1'])
-  mocks.canvasSession.serializeDocument.mockClear()
 })
 
 describe('document replacement actions', () => {
@@ -216,6 +218,7 @@ describe('document replacement actions', () => {
   })
 
   it('saves first when the user chooses save', async () => {
+    mocks.canvasSession.loadDocument(makeFile('Current'))
     nonCanvasRevision.value = 1
     mocks.message.mockResolvedValue('Save')
     mocks.loadDesign.mockResolvedValue(makeFile('Next'))
@@ -226,7 +229,7 @@ describe('document replacement actions', () => {
       '/designs/current.canopi',
       expect.objectContaining({ name: 'Current' }),
     )
-    expect(mocks.canvasSession.engine.history.markSaved).toHaveBeenCalled()
+    expect(mocks.canvasSession.acknowledgeSaved).toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Next')
     expect(mocks.canvasSession.zoomToFit).toHaveBeenCalled()
   })

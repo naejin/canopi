@@ -117,7 +117,10 @@ describe("registerCloseGuard", () => {
     design.nonCanvasRevision.value = 1;
 
     mocks.message.mockResolvedValue("Save");
-    mocks.saveCurrentDesign.mockResolvedValue(undefined);
+    mocks.saveCurrentDesign.mockImplementation(async () => {
+      design.nonCanvasSavedRevision.value = design.nonCanvasRevision.value;
+      return { status: "applied" };
+    });
 
     const { registerCloseGuard } = await import("../app/shell/close-guard");
     registerCloseGuard();
@@ -187,6 +190,42 @@ describe("registerCloseGuard", () => {
     await handler(event);
 
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mocks.destroy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the window open when save settlement is stale", async () => {
+    const design = await import("./support/design-session-state");
+    design.nonCanvasRevision.value = 1;
+    mocks.message.mockResolvedValue("Save");
+    mocks.saveCurrentDesign.mockResolvedValue({ status: "stale" });
+
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    registerCloseGuard();
+    await flushMicrotasks();
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (
+      event: { preventDefault: () => void },
+    ) => Promise<void>;
+
+    await handler({ preventDefault: vi.fn() });
+
+    expect(mocks.destroy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the window open when edits made during save remain dirty", async () => {
+    const design = await import("./support/design-session-state");
+    design.nonCanvasRevision.value = 1;
+    mocks.message.mockResolvedValue("Save");
+    mocks.saveCurrentDesign.mockResolvedValue({ status: "applied" });
+
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    registerCloseGuard();
+    await flushMicrotasks();
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (
+      event: { preventDefault: () => void },
+    ) => Promise<void>;
+
+    await handler({ preventDefault: vi.fn() });
+
     expect(mocks.destroy).not.toHaveBeenCalled();
   });
 });
