@@ -42,7 +42,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Species Catalog contract tests
-        run: python3 -m unittest scripts.test_species_catalog_contract scripts.test_prepare_db scripts.test_generate_web_catalog
+        run: python3 -m unittest scripts.test_species_catalog_contract scripts.test_prepare_db scripts.test_web_catalog_artifact_contract scripts.test_generate_web_catalog
 
       - uses: actions/setup-node@v4
         with:

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEmptySpeciesFilter } from '../app/plant-browser'
 import { createDuckDbReducedSpeciesCatalogReader } from '../web/duckdb-wasm-catalog'
 import type { SpeciesSearchRequest } from '../types/species'
+import { validWebCatalogManifest } from './fixtures/web-catalog-manifest'
 
 describe('DuckDB-WASM reduced Species Catalog reader', () => {
   it('browses Species from Parquet assets and keeps DuckDB alive for reuse', async () => {
@@ -34,15 +35,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
-      fetchJson: async () => ({
-        asset_format: 'parquet',
-        duckdb: { reader: 'read_parquet' },
-        assets: {
-          species: [{ path: 'species/species-0000.parquet' }],
-          names: {},
-          images: [],
-        },
-      }),
+      fetchJson: async () => validWebCatalogManifest(),
       createDatabase: async () => database,
     })
 
@@ -88,17 +81,57 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
       fetchJson: async () => ({
+        ...validWebCatalogManifest(),
         asset_format: 'ndjson',
-        assets: {
-          species: [{ path: 'species/species-0000.jsonl' }],
-          names: {},
-          images: [],
-        },
       }),
       createDatabase,
     })
 
     await expect(reader.searchSpecies(searchRequest(), new Set())).rejects.toThrow(/Parquet/i)
+    expect(createDatabase).not.toHaveBeenCalled()
+  })
+
+  it('rejects a catalog from another artifact owner before starting DuckDB', async () => {
+    const createDatabase = vi.fn(async () => ({
+      connect: vi.fn(async () => ({
+        query: vi.fn(async () => table([])),
+        close: vi.fn(async () => {}),
+      })),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }))
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => ({
+        ...validWebCatalogManifest(),
+        generated_by: 'another-catalog-producer',
+      }),
+      createDatabase,
+    })
+
+    await expect(reader.getSupportedFilterFields()).rejects.toThrow(/owner/i)
+    expect(createDatabase).not.toHaveBeenCalled()
+  })
+
+  it('rejects a stale artifact contract before starting DuckDB', async () => {
+    const createDatabase = vi.fn(async () => ({
+      connect: vi.fn(async () => ({
+        query: vi.fn(async () => table([])),
+        close: vi.fn(async () => {}),
+      })),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }))
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => ({
+        ...validWebCatalogManifest(),
+        artifact_contract_fingerprint: '0'.repeat(64),
+      }),
+      createDatabase,
+    })
+
+    await expect(reader.getSupportedFilterFields()).rejects.toThrow(/compiled contract/i)
     expect(createDatabase).not.toHaveBeenCalled()
   })
 
@@ -131,18 +164,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
-      fetchJson: async () => ({
-        asset_format: 'parquet',
-        duckdb: { reader: 'read_parquet' },
-        assets: {
-          species: [{ path: 'species/species-0000.parquet' }],
-          names: {
-            en: { path: 'names/names-en.parquet' },
-            fr: { path: 'names/names-fr.parquet' },
-          },
-          images: [],
-        },
-      }),
+      fetchJson: async () => validWebCatalogManifest(),
       createDatabase: async () => database,
     })
 
@@ -202,18 +224,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
-      fetchJson: async () => ({
-        asset_format: 'parquet',
-        duckdb: { reader: 'read_parquet' },
-        assets: {
-          species: [{ path: 'species/species-0000.parquet' }],
-          names: {
-            en: { path: 'names/names-en.parquet' },
-            fr: { path: 'names/names-fr.parquet' },
-          },
-          images: [],
-        },
-      }),
+      fetchJson: async () => validWebCatalogManifest(),
       createDatabase: async () => database,
     })
 
@@ -269,22 +280,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
-      fetchJson: async () => ({
-        asset_format: 'parquet',
-        duckdb: { reader: 'read_parquet' },
-        supported_filters: [
-          {
-            key: 'habit',
-            options_key: 'habits',
-            predicate: { kind: 'text_any', columns: ['habit', 'growth_form'] },
-          },
-        ],
-        assets: {
-          species: [{ path: 'species/species-0000.parquet' }],
-          names: { fr: { path: 'names/names-fr.parquet' } },
-          images: [],
-        },
-      }),
+      fetchJson: async () => validWebCatalogManifest(),
       createDatabase: async () => ({
         connect: vi.fn(async () => connection),
         registerFileURL: vi.fn(async () => {}),
@@ -344,32 +340,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
-      fetchJson: async () => ({
-        asset_format: 'parquet',
-        duckdb: { reader: 'read_parquet' },
-        supported_filters: [
-          {
-            key: 'climate_zones',
-            options_key: 'climate_zones',
-            predicate: { kind: 'json_array_any', columns: ['climate_zones'] },
-          },
-          {
-            key: 'habit',
-            options_key: 'habits',
-            predicate: { kind: 'text_any', columns: ['habit', 'growth_form'] },
-          },
-          {
-            key: 'life_cycle',
-            options_key: 'life_cycles',
-            predicate: { kind: 'json_array_any', columns: ['life_cycles'] },
-          },
-        ],
-        assets: {
-          species: [{ path: 'species/species-0000.parquet' }],
-          names: {},
-          images: [],
-        },
-      }),
+      fetchJson: async () => validWebCatalogManifest(),
       createDatabase: async () => ({
         connect: vi.fn(async () => connection),
         registerFileURL: vi.fn(async () => {}),
@@ -448,15 +419,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
-      fetchJson: async () => ({
-        asset_format: 'parquet',
-        duckdb: { reader: 'read_parquet' },
-        assets: {
-          species: [{ path: 'species/species-0000.parquet' }],
-          names: { fr: { path: 'names/names-fr.parquet' } },
-          images: [{ path: 'images/images-0000.parquet' }],
-        },
-      }),
+      fetchJson: async () => validWebCatalogManifest(),
       createDatabase: async () => database,
     })
 
@@ -514,15 +477,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
       catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
-      fetchJson: async () => ({
-        asset_format: 'parquet',
-        duckdb: { reader: 'read_parquet' },
-        assets: {
-          species: [{ path: 'species/species-0000.parquet' }],
-          names: {},
-          images: [],
-        },
-      }),
+      fetchJson: async () => validWebCatalogManifest(),
       createDatabase: async () => ({
         connect: vi.fn(async () => connection),
         registerFileURL: vi.fn(async () => {}),

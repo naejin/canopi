@@ -13,8 +13,9 @@
     "generate:web-catalog": "cd ../.. && python3 scripts/generate-web-catalog.py",
     "preview": "vite preview",
     "test": "vitest run",
-    "gen:types": "cargo run -p bindings-gen",
-    "check:types": "npm run gen:types && git diff --exit-code -- src/generated/contracts.ts src/generated/known-canopi-keys.ts src/generated/plant-filter-fields.ts ../src/db/plant_filter_fields.rs",
+    "gen:types": "cargo run -p bindings-gen && cd ../.. && python3 scripts/web_catalog_artifact_contract.py emit --write",
+    "check:web-catalog-artifact": "cd ../.. && python3 scripts/web_catalog_artifact_contract.py check",
+    "check:types": "npm run check:web-catalog-artifact && npm run gen:types && git diff --exit-code -- src/generated/contracts.ts src/generated/known-canopi-keys.ts src/generated/plant-filter-fields.ts src/generated/web-catalog-artifact.mjs src/generated/web-catalog-artifact.d.mts ../src/db/plant_filter_fields.rs",
     "prepare": "cd ../.. && husky desktop/web/.husky"
   },
   "dependencies": {

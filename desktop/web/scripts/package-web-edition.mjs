@@ -12,6 +12,7 @@ import {
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { admitWebCatalogManifest } from "../src/generated/web-catalog-artifact.mjs";
 
 const DEFAULT_WEB_BASE_PATH = "/app/";
 const WEB_BASE_PATH_ENV = "CANOPI_WEB_BASE_PATH";
@@ -222,75 +223,19 @@ function validateCatalogArtifact(distRoot, maxAssetBytes) {
       `Web Edition build is missing generated Species Catalog manifest at ${CATALOG_MANIFEST_PATH}. Run npm run generate:web-catalog before npm run package:web.`,
     );
   }
-  const catalogManifest = JSON.parse(readFileSync(catalogManifestPath, "utf8"));
-  if (catalogManifest.asset_format !== "parquet") {
-    throw new Error("Web Edition Species Catalog manifest must use Parquet assets for production packaging.");
-  }
-  if (!Array.isArray(catalogManifest.supported_filters) || catalogManifest.supported_filters.length === 0) {
-    throw new Error("Web Edition Species Catalog manifest is missing supported-filter metadata.");
-  }
+  const catalogManifest = admitWebCatalogManifest(
+    JSON.parse(readFileSync(catalogManifestPath, "utf8")),
+  );
   const catalogRoot = dirname(catalogManifestPath);
-  const catalogMaxAssetBytes = stricterCatalogMaxAssetBytes(catalogManifest, maxAssetBytes);
-  const assets = catalogAssetEntries(catalogManifest);
-  if (assets.length === 0) {
-    throw new Error("Web Edition Species Catalog manifest does not list required catalog assets.");
-  }
-  for (const asset of assets) {
+  const catalogMaxAssetBytes = Math.min(maxAssetBytes, catalogManifest.maxAssetBytes);
+  for (const asset of catalogManifest.files) {
     validateCatalogAssetEntry(catalogRoot, asset, catalogMaxAssetBytes);
   }
   return {
     manifestPath: CATALOG_MANIFEST_PATH,
-    assetFormat: typeof catalogManifest.asset_format === "string" ? catalogManifest.asset_format : null,
-    supportedFilters: catalogManifest.supported_filters.flatMap((filter) => (
-      filter && typeof filter.key === "string" ? [filter.key] : []
-    )),
-    files: assets.map((asset) => `canopi-catalog/${asset.path}`),
-  };
-}
-
-function stricterCatalogMaxAssetBytes(catalogManifest, maxAssetBytes) {
-  const catalogLimit = catalogManifest.cloudflare_pages?.max_asset_bytes;
-  return Number.isFinite(catalogLimit) && catalogLimit > 0
-    ? Math.min(maxAssetBytes, catalogLimit)
-    : maxAssetBytes;
-}
-
-function catalogAssetEntries(catalogManifest) {
-  const assets = catalogManifest.assets;
-  if (!assets || typeof assets !== "object") {
-    throw new Error("Web Edition Species Catalog manifest does not list required catalog assets.");
-  }
-  const species = parseCatalogAssetList("species", assets.species);
-  const names = assets.names && typeof assets.names === "object"
-    ? Object.values(assets.names).map((entry) => parseCatalogAssetEntry("names", entry))
-    : [];
-  const images = parseCatalogAssetList("images", assets.images);
-  if (species.length === 0 || names.length === 0 || images.length === 0) {
-    throw new Error("Web Edition Species Catalog manifest does not list required catalog assets.");
-  }
-  return [...species, ...names, ...images];
-}
-
-function parseCatalogAssetList(kind, value) {
-  return Array.isArray(value)
-    ? value.map((entry) => parseCatalogAssetEntry(kind, entry))
-    : [];
-}
-
-function parseCatalogAssetEntry(kind, value) {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    typeof value.path !== "string" ||
-    !Number.isFinite(value.bytes) ||
-    typeof value.sha256 !== "string"
-  ) {
-    throw new Error(`Invalid Web Edition Species Catalog ${kind} asset manifest entry.`);
-  }
-  return {
-    path: value.path,
-    bytes: value.bytes,
-    sha256: value.sha256,
+    assetFormat: catalogManifest.assetFormat,
+    supportedFilters: catalogManifest.supportedFilters.map((filter) => filter.key),
+    files: catalogManifest.files.map((asset) => `canopi-catalog/${asset.path}`),
   };
 }
 
@@ -378,7 +323,10 @@ function filesUnder(dir) {
     const child = resolve(dir, entry.name);
     if (entry.isDirectory()) return filesUnder(child);
     if (entry.isFile()) return [child];
-    return [];
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Web Edition build contains a symbolic link and cannot be packaged: ${child}`);
+    }
+    throw new Error(`Web Edition build contains an unsupported filesystem entry: ${child}`);
   });
 }
 

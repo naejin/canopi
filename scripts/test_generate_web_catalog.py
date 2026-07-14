@@ -22,6 +22,19 @@ def load_generator_module():
 
 
 generator = load_generator_module()
+EXPECTED_LOCALES = [
+    "en",
+    "fr",
+    "es",
+    "pt",
+    "it",
+    "zh",
+    "de",
+    "ja",
+    "ko",
+    "nl",
+    "ru",
+]
 
 
 class GenerateWebCatalogTests(unittest.TestCase):
@@ -41,8 +54,12 @@ class GenerateWebCatalogTests(unittest.TestCase):
             )
 
             self.assertEqual(manifest["asset_format"], "parquet")
+            self.assertRegex(
+                manifest["artifact_contract_fingerprint"],
+                r"^[0-9a-f]{64}$",
+            )
             self.assertEqual(manifest["duckdb"]["reader"], "read_parquet")
-            self.assertEqual(manifest["locales"], generator.UI_LOCALES)
+            self.assertEqual(manifest["locales"], EXPECTED_LOCALES)
             self.assertEqual(
                 manifest["supported_filters"],
                 [
@@ -79,14 +96,14 @@ class GenerateWebCatalogTests(unittest.TestCase):
             self.assertEqual(
                 manifest["schema"]["species_fields"],
                 [
-                    "id",
-                    "slug",
-                    "canonical_name",
-                    "common_name",
-                    "climate_zones",
-                    "habit",
-                    "growth_form",
-                    "life_cycles",
+                    {"name": "id", "logical_type": "required_text"},
+                    {"name": "slug", "logical_type": "required_text"},
+                    {"name": "canonical_name", "logical_type": "required_text"},
+                    {"name": "common_name", "logical_type": "nullable_text"},
+                    {"name": "climate_zones", "logical_type": "json_text_array"},
+                    {"name": "habit", "logical_type": "nullable_text"},
+                    {"name": "growth_form", "logical_type": "nullable_text"},
+                    {"name": "life_cycles", "logical_type": "json_text_array"},
                 ],
             )
             self.assertEqual(
@@ -99,7 +116,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
                 self.assertEqual(species_asset.read_bytes()[-4:], b"PAR1")
             self.assertEqual(
                 sorted(manifest["assets"]["names"].keys()),
-                sorted(generator.UI_LOCALES),
+                sorted(EXPECTED_LOCALES),
             )
             self.assertEqual(
                 manifest["assets"]["names"]["fr"]["path"],
@@ -109,7 +126,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
             species_rows = read_manifest_rows(
                 output_dir,
                 manifest["assets"]["species"],
-                fields=manifest["schema"]["species_fields"],
+                fields=schema_field_names(manifest, "species_fields"),
             )
             apple = next(row for row in species_rows if row["slug"] == "malus-domestica")
             self.assertEqual(apple["canonical_name"], "Malus domestica")
@@ -133,7 +150,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
             french_names = read_manifest_rows(
                 output_dir,
                 [manifest["assets"]["names"]["fr"]],
-                fields=manifest["schema"]["name_fields"],
+                fields=schema_field_names(manifest, "names_fields"),
             )
             self.assertEqual(french_names, [{
                 "species_id": "species-apple",
@@ -146,7 +163,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
             japanese_names = read_manifest_rows(
                 output_dir,
                 [manifest["assets"]["names"]["ja"]],
-                fields=manifest["schema"]["name_fields"],
+                fields=schema_field_names(manifest, "names_fields"),
             )
             self.assertEqual(japanese_names, [])
 
@@ -157,7 +174,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
             image_rows = read_manifest_rows(
                 output_dir,
                 manifest["assets"]["images"],
-                fields=manifest["schema"]["image_fields"],
+                fields=schema_field_names(manifest, "images_fields"),
             )
             self.assertEqual(
                 next(row for row in image_rows if row["species_id"] == "species-apple"),
@@ -175,6 +192,169 @@ class GenerateWebCatalogTests(unittest.TestCase):
                 None,
             )
 
+    def test_generation_uses_compiled_asset_layout_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            plan = generator.ARTIFACT_PLAN
+            plan = replace_artifact_table(
+                plan,
+                generator.artifact_contract.ArtifactTable.SPECIES,
+                directory="plant-rows",
+                filename_prefix="plant-chunk-",
+            )
+            plan = replace_artifact_table(
+                plan,
+                generator.artifact_contract.ArtifactTable.NAMES,
+                directory="localized-names",
+                filename_prefix="locale-",
+            )
+            plan = replace_artifact_table(
+                plan,
+                generator.artifact_contract.ArtifactTable.IMAGES,
+                directory="hero-images",
+                filename_prefix="hero-chunk-",
+            )
+
+            with mock.patch.object(generator, "ARTIFACT_PLAN", plan):
+                manifest = generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertEqual(
+                manifest["assets"]["species"][0]["path"],
+                "plant-rows/plant-chunk-0000.parquet",
+            )
+            self.assertEqual(
+                manifest["assets"]["names"]["fr"]["path"],
+                "localized-names/locale-fr.parquet",
+            )
+            self.assertEqual(
+                manifest["assets"]["images"][0]["path"],
+                "hero-images/hero-chunk-0000.parquet",
+            )
+
+    def test_generation_rejects_row_schema_the_projector_cannot_produce(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            plan = generator.ARTIFACT_PLAN
+            species = next(
+                table
+                for table in plan.tables
+                if table.table is generator.artifact_contract.ArtifactTable.SPECIES
+            )
+            plan = replace_artifact_table(
+                plan,
+                generator.artifact_contract.ArtifactTable.SPECIES,
+                fields=species.fields + (
+                    generator.artifact_contract.ArtifactField(
+                        name="future_field",
+                        logical_type="nullable_text",
+                    ),
+                ),
+            )
+
+            with (
+                mock.patch.object(generator, "ARTIFACT_PLAN", plan),
+                self.assertRaisesRegex(
+                    generator.ArtifactProjectionError,
+                    r"tables\.species\.fields.*future_field.*cannot derive",
+                ),
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertFalse(output_dir.exists())
+
+    def test_generation_rejects_logical_type_drift_before_reading_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            plan = generator.ARTIFACT_PLAN
+            images = next(
+                table
+                for table in plan.tables
+                if table.table is generator.artifact_contract.ArtifactTable.IMAGES
+            )
+            plan = replace_artifact_table(
+                plan,
+                generator.artifact_contract.ArtifactTable.IMAGES,
+                fields=tuple(
+                    replace(field, logical_type="required_text")
+                    if field.name == "source"
+                    else field
+                    for field in images.fields
+                ),
+            )
+
+            with (
+                mock.patch.object(generator, "ARTIFACT_PLAN", plan),
+                mock.patch.object(
+                    generator.storage_contract,
+                    "verify_database",
+                ) as verify_database,
+                self.assertRaisesRegex(
+                    generator.ArtifactProjectionError,
+                    r"tables\.images\.fields\.source.*nullable_text.*required_text",
+                ),
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            verify_database.assert_not_called()
+            self.assertFalse(output_dir.exists())
+
+    def test_generation_rejects_shard_counts_outside_the_compiled_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            plan = replace_artifact_table(
+                generator.ARTIFACT_PLAN,
+                generator.artifact_contract.ArtifactTable.SPECIES,
+                filename_index_width=1,
+            )
+
+            with (
+                mock.patch.object(generator, "ARTIFACT_PLAN", plan),
+                mock.patch.object(
+                    generator.storage_contract,
+                    "verify_database",
+                ) as verify_database,
+                self.assertRaisesRegex(
+                    generator.artifact_contract.ArtifactLayoutError,
+                    r"species.*11 shards.*one-digit index",
+                ),
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=11,
+                    image_shard_count=1,
+                )
+
+            verify_database.assert_not_called()
+            self.assertFalse(output_dir.exists())
+
     def test_asset_size_check_fails_for_oversized_assets(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
@@ -184,7 +364,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
             with self.assertRaises(generator.AssetSizeError):
                 generator.assert_asset_sizes(output_dir, max_asset_bytes=5)
 
-    def test_late_asset_size_failure_preserves_existing_catalog(self):
+    def test_manifest_asset_limit_failure_preserves_existing_catalog(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             export_path = root / "canopi-export-test.db"
@@ -198,7 +378,9 @@ class GenerateWebCatalogTests(unittest.TestCase):
             catalog_before = snapshot_directory(output_dir)
             siblings_before = snapshot_directory(root)
 
-            with self.assertRaises(generator.AssetSizeError):
+            with self.assertRaises(
+                generator.artifact_contract.ManifestBuildError
+            ):
                 generator.generate_web_catalog(
                     export_path=export_path,
                     output_dir=output_dir,
@@ -722,6 +904,22 @@ def read_manifest_rows(output_dir: Path, assets, fields=None):
         else:
             rows.extend(read_jsonl(path))
     return rows
+
+
+def schema_field_names(manifest, key):
+    return [field["name"] for field in manifest["schema"][key]]
+
+
+def replace_artifact_table(plan, table, **changes):
+    return replace(
+        plan,
+        tables=tuple(
+            replace(candidate, **changes)
+            if candidate.table is table
+            else candidate
+            for candidate in plan.tables
+        ),
+    )
 
 
 def read_jsonl(path: Path):

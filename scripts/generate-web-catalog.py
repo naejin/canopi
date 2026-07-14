@@ -28,13 +28,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import species_catalog_contract as storage_contract
+from scripts import web_catalog_artifact_contract as artifact_contract
 
 DEFAULT_EXPORTS_DIR = Path.home() / "projects/canopi-data/data/exports"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "desktop/web/public/canopi-catalog"
 
-UI_LOCALES = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"]
-CLOUDFLARE_PAGES_MAX_ASSET_BYTES = 25 * 1024 * 1024
-WEB_CATALOG_OWNER = "canopi-web-catalog-v1"
+ARTIFACT_PLAN = artifact_contract.compile_web_catalog_artifact()
+CLOUDFLARE_PAGES_MAX_ASSET_BYTES = ARTIFACT_PLAN.maximum_asset_bytes
 
 
 @dataclass(frozen=True)
@@ -42,44 +42,6 @@ class OutputDestinationAdmission:
     identity: tuple[int, int, int] | None
     publication_mode: int | None
 
-SPECIES_FIELDS = [
-    "id",
-    "slug",
-    "canonical_name",
-    "common_name",
-    "climate_zones",
-    "habit",
-    "growth_form",
-    "life_cycles",
-]
-NAME_FIELDS = ["species_id", "language", "common_name", "normalized_name", "is_primary", "display_order"]
-IMAGE_FIELDS = ["species_id", "url", "source", "source_page_url", "credit", "license"]
-WEB_SUPPORTED_FILTERS = [
-    {
-        "key": "climate_zones",
-        "options_key": "climate_zones",
-        "predicate": {
-            "kind": "json_array_any",
-            "columns": ["climate_zones"],
-        },
-    },
-    {
-        "key": "habit",
-        "options_key": "habits",
-        "predicate": {
-            "kind": "text_any",
-            "columns": ["habit", "growth_form"],
-        },
-    },
-    {
-        "key": "life_cycle",
-        "options_key": "life_cycles",
-        "predicate": {
-            "kind": "json_array_any",
-            "columns": ["life_cycles"],
-        },
-    },
-]
 WEB_STORAGE_USES = (
     storage_contract.WebStorageUse(
         "species",
@@ -118,21 +80,84 @@ WEB_STORAGE_USES = (
         ("species_id", "climate_zone"),
     ),
 )
-EXCLUDED_DETAIL_FIELDS = [
-    "edibility",
-    "hardiness",
-    "height",
-    "stratum",
-    "soil",
-    "ecology",
-    "propagation",
-    "risk",
-    "taxonomy",
-]
+
+PROJECTED_ROW_CAPABILITIES = {
+    artifact_contract.ArtifactTable.SPECIES: {
+        "id": "required_text",
+        "slug": "required_text",
+        "canonical_name": "required_text",
+        "common_name": "nullable_text",
+        "climate_zones": "json_text_array",
+        "habit": "nullable_text",
+        "growth_form": "nullable_text",
+        "life_cycles": "json_text_array",
+    },
+    artifact_contract.ArtifactTable.NAMES: {
+        "species_id": "required_text",
+        "language": "required_text",
+        "common_name": "required_text",
+        "normalized_name": "required_text",
+        "is_primary": "boolean_text",
+        "display_order": "integer_text",
+    },
+    artifact_contract.ArtifactTable.IMAGES: {
+        "species_id": "required_text",
+        "url": "required_text",
+        "source": "nullable_text",
+        "source_page_url": "nullable_text",
+        "credit": "nullable_text",
+        "license": "nullable_text",
+    },
+}
 
 
 class AssetSizeError(RuntimeError):
     pass
+
+
+class ArtifactProjectionError(RuntimeError):
+    def __init__(self, violations: list[str]):
+        self.violations = tuple(violations)
+        details = "\n".join(f"- {violation}" for violation in violations)
+        super().__init__(
+            f"Web Catalog row projectors have {len(violations)} "
+            f"contract violation(s):\n{details}"
+        )
+
+
+def validate_artifact_projection(
+    plan: artifact_contract.WebCatalogArtifactPlan,
+) -> None:
+    violations: list[str] = []
+    for table_plan in plan.tables:
+        contracted = set(table_plan.field_names)
+        capabilities = PROJECTED_ROW_CAPABILITIES[table_plan.table]
+        producible = set(capabilities)
+        missing = sorted(contracted - producible)
+        if missing:
+            violations.append(
+                f"tables.{table_plan.table.value}.fields: {missing!r} "
+                "cannot derive from the generator row projector"
+            )
+        extra = sorted(producible - contracted)
+        if extra:
+            violations.append(
+                f"tables.{table_plan.table.value}.fields: generator derives "
+                f"uncontracted fields {extra!r}"
+            )
+        for field in table_plan.fields:
+            supported_logical_type = capabilities.get(field.name)
+            if (
+                supported_logical_type is not None
+                and supported_logical_type != field.logical_type
+            ):
+                violations.append(
+                    f"tables.{table_plan.table.value}.fields.{field.name}: "
+                    f"generator supports {supported_logical_type!r}, but the "
+                    f"contract requires {field.logical_type!r}"
+                )
+    if violations:
+        raise ArtifactProjectionError(violations)
 
 
 def generate_web_catalog(
@@ -152,19 +177,30 @@ def generate_web_catalog(
             "The Web Catalog output directory must not contain the export database."
         )
 
+    artifact_plan = ARTIFACT_PLAN
+    validate_artifact_projection(artifact_plan)
+    artifact_plan.table_plan(
+        artifact_contract.ArtifactTable.SPECIES
+    ).indexed_asset_paths(species_shard_count)
+    artifact_plan.table_plan(
+        artifact_contract.ArtifactTable.IMAGES
+    ).indexed_asset_paths(image_shard_count)
+
     projection = storage_contract.project(
         storage_contract.ProjectionTarget.WEB_CATALOG
     )
     assert isinstance(projection, storage_contract.WebCatalogProjection)
     storage_contract.validate_web_catalog_behavior(
         projection,
-        emitted_species_fields=tuple(SPECIES_FIELDS),
+        emitted_species_fields=artifact_plan.field_names(
+            artifact_contract.ArtifactTable.SPECIES
+        ),
         filters=tuple(
             storage_contract.WebFilterUse(
-                filter_definition["key"],
-                tuple(filter_definition["predicate"]["columns"]),
+                filter_definition.key,
+                filter_definition.columns,
             )
-            for filter_definition in WEB_SUPPORTED_FILTERS
+            for filter_definition in artifact_plan.supported_filters
         ),
         storage_uses=WEB_STORAGE_USES,
     )
@@ -189,23 +225,39 @@ def generate_web_catalog(
                 staging_dir,
                 climate_zones,
                 source_columns=projection.species_columns,
+                table_plan=artifact_plan.table_plan(
+                    artifact_contract.ArtifactTable.SPECIES
+                ),
                 shard_count=species_shard_count,
             )
-            name_assets = write_name_assets(conn, staging_dir)
+            name_assets = write_name_assets(
+                conn,
+                staging_dir,
+                locales=artifact_plan.locales,
+                table_plan=artifact_plan.table_plan(
+                    artifact_contract.ArtifactTable.NAMES
+                ),
+            )
             image_assets = write_image_assets(
                 conn,
                 staging_dir,
+                table_plan=artifact_plan.table_plan(
+                    artifact_contract.ArtifactTable.IMAGES
+                ),
                 shard_count=image_shard_count,
             )
 
-            manifest = build_manifest(
-                output_dir=staging_dir,
-                export_path=export_path,
-                export_schema_version=verification.observed_schema_version,
-                storage_contract_fingerprint=projection.fingerprint,
-                species_assets=species_assets,
-                name_assets=name_assets,
-                image_assets=image_assets,
+            manifest = artifact_plan.build_manifest(
+                source=artifact_contract.ArtifactSource(
+                    export_file=export_path.name,
+                    export_schema_version=verification.observed_schema_version,
+                    storage_contract_fingerprint=projection.fingerprint,
+                ),
+                assets=artifact_contract.ArtifactAssets(
+                    species=tuple(species_assets),
+                    names=tuple(name_assets.items()),
+                    images=tuple(image_assets),
+                ),
                 max_asset_bytes=max_asset_bytes,
             )
             write_json(staging_dir / "manifest.json", manifest)
@@ -257,7 +309,10 @@ def validate_output_destination(output_dir: Path) -> OutputDestinationAdmission:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         manifest = None
-    if isinstance(manifest, dict) and manifest.get("generated_by") == WEB_CATALOG_OWNER:
+    if (
+        isinstance(manifest, dict)
+        and manifest.get("generated_by") == ARTIFACT_PLAN.generated_by
+    ):
         return output_destination_admission(metadata)
     legacy_children = {"images", "manifest.json", "names", "species"}
     if (
@@ -412,10 +467,13 @@ def write_species_assets(
     climate_zones: dict[str, list[str]],
     *,
     source_columns: tuple[storage_contract.StorageColumn, ...],
+    table_plan: artifact_contract.ArtifactTablePlan,
     shard_count: int,
-) -> list[dict[str, Any]]:
-    species_dir = output_dir / "species"
-    species_dir.mkdir(parents=True, exist_ok=True)
+) -> list[artifact_contract.ArtifactAsset]:
+    relative_paths = table_plan.indexed_asset_paths(shard_count)
+    output_paths = tuple(output_dir / path for path in relative_paths)
+    for parent in {path.parent for path in output_paths}:
+        parent.mkdir(parents=True, exist_ok=True)
     shards: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
     species_columns = table_columns(conn, "species")
     select_columns = [column.name for column in source_columns]
@@ -429,42 +487,51 @@ def write_species_assets(
     )
     for row in rows:
         species_id = row["id"]
-        payload = {
-            "id": species_id,
-            "slug": row["slug"],
-            "canonical_name": row["canonical_name"],
-            "common_name": row["common_name"],
-            "climate_zones": climate_zones.get(species_id) or parse_list_field(row["climate_zones"]),
-            "habit": row["habit"],
-            "growth_form": first_present(
-                row["growth_form_type"],
-                row["growth_form_shape"],
-                row["growth_habit"],
-            ),
-            "life_cycles": life_cycles_from_flags(
-                row["is_annual"],
-                row["is_biennial"],
-                row["is_perennial"],
-            ),
-        }
+        payload = table_plan.admit_row(
+            {
+                "id": species_id,
+                "slug": row["slug"],
+                "canonical_name": row["canonical_name"],
+                "common_name": row["common_name"],
+                "climate_zones": climate_zones.get(species_id)
+                or parse_list_field(row["climate_zones"]),
+                "habit": row["habit"],
+                "growth_form": first_present(
+                    row["growth_form_type"],
+                    row["growth_form_shape"],
+                    row["growth_habit"],
+                ),
+                "life_cycles": life_cycles_from_flags(
+                    row["is_annual"],
+                    row["is_biennial"],
+                    row["is_perennial"],
+                ),
+            },
+            path=f"species[{species_id!r}]",
+        )
         shards[shard_index(species_id, shard_count)].append(payload)
 
-    for index, shard_rows in enumerate(shards):
+    for path, shard_rows in zip(output_paths, shards, strict=True):
         write_simple_parquet(
-            species_dir / f"species-{index:04d}.parquet",
-            SPECIES_FIELDS,
+            path,
+            list(table_plan.field_names),
             shard_rows,
         )
-    return asset_entries(output_dir, species_dir.glob("*.parquet"))
+    return [asset_entry(output_dir, path) for path in output_paths]
 
 
-def write_name_assets(conn: sqlite3.Connection, output_dir: Path) -> dict[str, dict[str, Any]]:
-    names_dir = output_dir / "names"
-    names_dir.mkdir(parents=True, exist_ok=True)
-    assets: dict[str, dict[str, Any]] = {}
+def write_name_assets(
+    conn: sqlite3.Connection,
+    output_dir: Path,
+    *,
+    locales: tuple[str, ...],
+    table_plan: artifact_contract.ArtifactTablePlan,
+) -> dict[str, artifact_contract.ArtifactAsset]:
+    assets: dict[str, artifact_contract.ArtifactAsset] = {}
     has_common_names = table_exists(conn, "species_common_names")
-    for locale in UI_LOCALES:
-        path = names_dir / f"names-{locale}.parquet"
+    for locale in locales:
+        path = output_dir / table_plan.locale_asset_path(locale)
+        path.parent.mkdir(parents=True, exist_ok=True)
         locale_rows = []
         if has_common_names:
             rows = conn.execute(
@@ -488,15 +555,19 @@ def write_name_assets(conn: sqlite3.Connection, output_dir: Path) -> dict[str, d
                 normalized_name = normalize_search_name(row["common_name"] or "")
                 if not normalized_name:
                     continue
-                locale_rows.append({
-                    "species_id": row["species_id"],
-                    "language": row["language"],
-                    "common_name": row["common_name"],
-                    "normalized_name": normalized_name,
-                    "is_primary": bool(row["is_primary"]),
-                    "display_order": int(row["display_order"] or 0),
-                })
-        write_simple_parquet(path, NAME_FIELDS, locale_rows)
+                payload = table_plan.admit_row(
+                    {
+                        "species_id": row["species_id"],
+                        "language": row["language"],
+                        "common_name": row["common_name"],
+                        "normalized_name": normalized_name,
+                        "is_primary": bool(row["is_primary"]),
+                        "display_order": int(row["display_order"] or 0),
+                    },
+                    path=f"names.{locale}[{len(locale_rows)}]",
+                )
+                locale_rows.append(payload)
+        write_simple_parquet(path, list(table_plan.field_names), locale_rows)
         assets[locale] = asset_entry(output_dir, path)
     return assets
 
@@ -505,10 +576,13 @@ def write_image_assets(
     conn: sqlite3.Connection,
     output_dir: Path,
     *,
+    table_plan: artifact_contract.ArtifactTablePlan,
     shard_count: int,
-) -> list[dict[str, Any]]:
-    images_dir = output_dir / "images"
-    images_dir.mkdir(parents=True, exist_ok=True)
+) -> list[artifact_contract.ArtifactAsset]:
+    relative_paths = table_plan.indexed_asset_paths(shard_count)
+    output_paths = tuple(output_dir / path for path in relative_paths)
+    for parent in {path.parent for path in output_paths}:
+        parent.mkdir(parents=True, exist_ok=True)
     shards: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
     species_with_images: set[str] = set()
     if table_exists(conn, "species_images"):
@@ -527,7 +601,14 @@ def write_image_assets(
             if species_id in species_with_images:
                 continue
             species_with_images.add(species_id)
-            append_image_row(shards, species_id, row["url"], row["source"], shard_count)
+            append_image_row(
+                shards,
+                species_id,
+                row["url"],
+                row["source"],
+                shard_count,
+                table_plan,
+            )
 
     species_columns = table_columns(conn, "species")
     if "image_urls" in species_columns:
@@ -547,15 +628,22 @@ def write_image_assets(
             if not urls:
                 continue
             species_with_images.add(species_id)
-            append_image_row(shards, species_id, urls[0], None, shard_count)
+            append_image_row(
+                shards,
+                species_id,
+                urls[0],
+                None,
+                shard_count,
+                table_plan,
+            )
 
-    for index, shard_rows in enumerate(shards):
+    for path, shard_rows in zip(output_paths, shards, strict=True):
         write_simple_parquet(
-            images_dir / f"images-{index:04d}.parquet",
-            IMAGE_FIELDS,
+            path,
+            list(table_plan.field_names),
             shard_rows,
         )
-    return asset_entries(output_dir, images_dir.glob("*.parquet"))
+    return [asset_entry(output_dir, path) for path in output_paths]
 
 
 def append_image_row(
@@ -564,8 +652,9 @@ def append_image_row(
     url: str,
     source: str | None,
     shard_count: int,
+    table_plan: artifact_contract.ArtifactTablePlan,
 ) -> None:
-    shards[shard_index(species_id, shard_count)].append(
+    payload = table_plan.admit_row(
         {
             "species_id": species_id,
             "url": url,
@@ -573,8 +662,11 @@ def append_image_row(
             "source_page_url": None,
             "credit": None,
             "license": None,
-        }
+        },
+        path=f"images[{species_id!r}]",
     )
+    shards[shard_index(species_id, shard_count)].append(payload)
+
 
 def load_climate_zones(conn: sqlite3.Connection) -> dict[str, list[str]]:
     if not table_exists(conn, "species_climate_zones"):
@@ -591,58 +683,6 @@ def load_climate_zones(conn: sqlite3.Connection) -> dict[str, list[str]]:
     for row in rows:
         zones.setdefault(row["species_id"], set()).add(row["climate_zone"])
     return {species_id: sorted(values) for species_id, values in zones.items()}
-
-
-def build_manifest(
-    *,
-    output_dir: Path,
-    export_path: Path,
-    export_schema_version: int | None,
-    storage_contract_fingerprint: str,
-    species_assets: list[dict[str, Any]],
-    name_assets: dict[str, dict[str, Any]],
-    image_assets: list[dict[str, Any]],
-    max_asset_bytes: int,
-) -> dict[str, Any]:
-    return {
-        "generated_by": WEB_CATALOG_OWNER,
-        "version": 1,
-        "asset_format": "parquet",
-        "asset_formats": {
-            "species": "parquet",
-            "names": "parquet",
-            "images": "parquet",
-        },
-        "source": {
-            "export_file": export_path.name,
-            "export_schema_version": export_schema_version,
-            "storage_contract_fingerprint": storage_contract_fingerprint,
-        },
-        "cloudflare_pages": {
-            "max_asset_bytes": max_asset_bytes,
-        },
-        "locales": UI_LOCALES,
-        "supported_filters": WEB_SUPPORTED_FILTERS,
-        "schema": {
-            "species_fields": SPECIES_FIELDS,
-            "name_fields": NAME_FIELDS,
-            "image_fields": IMAGE_FIELDS,
-            "excluded_detail_fields": EXCLUDED_DETAIL_FIELDS,
-        },
-        "duckdb": {
-            "reader": "read_parquet",
-            "tables": {
-                "web_species": [asset["path"] for asset in species_assets],
-                "web_species_names": [asset["path"] for asset in name_assets.values()],
-                "web_species_images": [asset["path"] for asset in image_assets],
-            },
-        },
-        "assets": {
-            "species": species_assets,
-            "names": name_assets,
-            "images": image_assets,
-        },
-    }
 
 
 def assert_asset_sizes(output_dir: Path, *, max_asset_bytes: int) -> None:
@@ -698,7 +738,9 @@ def write_simple_parquet(path: Path, columns: list[str], rows: list[dict[str, An
 
     for column in columns:
         offset = len(body)
-        values = b"".join(plain_byte_array(parquet_cell(row.get(column))) for row in rows)
+        values = b"".join(
+            plain_byte_array(parquet_cell(row[column])) for row in rows
+        )
         page_header = parquet_data_page_header(num_values=len(rows), data_size=len(values))
         page = page_header + values
         body.extend(page)
@@ -906,16 +948,12 @@ def varint(value: int) -> bytes:
             return bytes(output)
 
 
-def asset_entries(output_dir: Path, paths: Any) -> list[dict[str, Any]]:
-    return [asset_entry(output_dir, path) for path in sorted(paths)]
-
-
-def asset_entry(output_dir: Path, path: Path) -> dict[str, Any]:
-    return {
-        "path": path.relative_to(output_dir).as_posix(),
-        "bytes": path.stat().st_size,
-        "sha256": sha256_file(path),
-    }
+def asset_entry(output_dir: Path, path: Path) -> artifact_contract.ArtifactAsset:
+    return artifact_contract.ArtifactAsset(
+        path=path.relative_to(output_dir).as_posix(),
+        bytes=path.stat().st_size,
+        sha256=sha256_file(path),
+    )
 
 
 def sha256_file(path: Path) -> str:

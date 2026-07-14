@@ -5,6 +5,11 @@ import {
   type ReducedSpeciesRow,
   type WebSupportedFilterOptionsKey,
 } from './reduced-species-catalog'
+import {
+  admitWebCatalogManifest,
+  type AdmittedWebCatalog as WebCatalogManifest,
+  type WebCatalogSupportedFilter as WebSupportedFilter,
+} from '../generated/web-catalog-artifact.mjs'
 import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
 import type {
   DynamicFilterOptions,
@@ -13,34 +18,6 @@ import type {
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../types/species'
-
-interface CatalogAssetEntry {
-  readonly path: string
-}
-
-interface WebSupportedFilterPredicate {
-  readonly kind: 'json_array_any' | 'text_any'
-  readonly columns: readonly string[]
-}
-
-interface WebSupportedFilter {
-  readonly key: string
-  readonly optionsKey: WebSupportedFilterOptionsKey
-  readonly predicate: WebSupportedFilterPredicate
-}
-
-interface WebCatalogManifest {
-  readonly asset_format: 'parquet'
-  readonly duckdb?: {
-    readonly reader?: string
-  }
-  readonly supportedFilters: readonly WebSupportedFilter[]
-  readonly assets: {
-    readonly species: readonly CatalogAssetEntry[]
-    readonly names: Readonly<Record<string, CatalogAssetEntry>>
-    readonly images: readonly CatalogAssetEntry[]
-  }
-}
 
 interface DuckDbQueryTable {
   toArray(): unknown[]
@@ -130,7 +107,7 @@ async function loadDuckDbCatalogReader(
 ): Promise<ReducedSpeciesCatalogReader> {
   const catalogBaseUrl = options.catalogBaseUrl ?? defaultCatalogBaseUrl()
   const fetchJson = options.fetchJson ?? fetchCatalogJson
-  const manifest = parseManifest(await fetchJson(new URL('manifest.json', catalogBaseUrl)))
+  const manifest = admitWebCatalogManifest(await fetchJson(new URL('manifest.json', catalogBaseUrl)))
   const database = await (options.createDatabase ?? instantiateDuckDb)()
   const connection = await Promise.resolve(database.connect())
 
@@ -241,7 +218,9 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     fields: readonly string[],
     _locale: string,
   ): Promise<DynamicFilterOptions[]> {
-    const supportedByKey = new Map(this.manifest.supportedFilters.map((filter) => [filter.key, filter]))
+    const supportedByKey = new Map<string, WebSupportedFilter>(
+      this.manifest.supportedFilters.map((filter) => [filter.key, filter]),
+    )
     const options = await this.getFilterOptions()
     return fields.flatMap((field): DynamicFilterOptions[] => {
       const supported = supportedByKey.get(field)
@@ -544,7 +523,7 @@ function speciesWhereSql({
   const predicates = [
     searchPredicateSql(searchText),
     ...supportedFilters.flatMap((filter) => {
-      const values = stringFilterValues(filters[filter.key as keyof typeof filters])
+      const values = stringFilterValues(filters[filter.key])
       return values.length === 0 ? [] : [supportedFilterPredicateSql(filter, values)]
     }),
   ].filter((predicate) => predicate.length > 0)
@@ -753,89 +732,6 @@ function parseSpeciesProjection(row: Record<string, unknown>): SpeciesProjection
   }
 }
 
-function parseManifest(value: unknown): WebCatalogManifest {
-  if (
-    !isRecord(value) ||
-    value.asset_format !== 'parquet' ||
-    !isRecord(value.assets)
-  ) {
-    throw new Error('Invalid Web Edition Species Catalog manifest: production Web catalogs must use Parquet assets.')
-  }
-  if (isRecord(value.duckdb) && value.duckdb.reader !== 'read_parquet') {
-    throw new Error('Invalid Web Edition Species Catalog DuckDB reader.')
-  }
-  const assets = value.assets
-  if (!Array.isArray(assets.species) || !isRecord(assets.names) || !Array.isArray(assets.images)) {
-    throw new Error('Invalid Web Edition Species Catalog asset manifest.')
-  }
-  return {
-    asset_format: value.asset_format,
-    duckdb: isRecord(value.duckdb) ? { reader: optionalString(value.duckdb.reader) ?? undefined } : undefined,
-    supportedFilters: Array.isArray(value.supported_filters)
-      ? value.supported_filters.map(parseSupportedFilter)
-      : [],
-    assets: {
-      species: assets.species.map(parseAssetEntry),
-      names: Object.fromEntries(
-        Object.entries(assets.names).map(([locale, entry]) => [locale, parseAssetEntry(entry)]),
-      ),
-      images: assets.images.map(parseAssetEntry),
-    },
-  }
-}
-
-function parseSupportedFilter(value: unknown): WebSupportedFilter {
-  if (!isRecord(value) || typeof value.key !== 'string') {
-    throw new Error('Invalid Web Edition Species Catalog supported filter.')
-  }
-  if (typeof value.options_key !== 'string' || !isSupportedFilterOptionsKey(value.options_key)) {
-    throw new Error(`Invalid Web Edition Species Catalog supported filter options key for ${value.key}.`)
-  }
-  if (!isRecord(value.predicate) || !Array.isArray(value.predicate.columns)) {
-    throw new Error(`Invalid Web Edition Species Catalog supported filter predicate for ${value.key}.`)
-  }
-  if (value.predicate.kind !== 'json_array_any' && value.predicate.kind !== 'text_any') {
-    throw new Error(`Invalid Web Edition Species Catalog supported filter predicate kind for ${value.key}.`)
-  }
-  const columns = value.predicate.columns.map(parseSafeSqlColumn)
-  if (columns.length === 0) {
-    throw new Error(`Invalid Web Edition Species Catalog supported filter columns for ${value.key}.`)
-  }
-  return {
-    key: value.key,
-    optionsKey: value.options_key,
-    predicate: {
-      kind: value.predicate.kind,
-      columns,
-    },
-  }
-}
-
-function isSupportedFilterOptionsKey(value: string): value is WebSupportedFilterOptionsKey {
-  return [
-    'climate_zones',
-    'habits',
-    'life_cycles',
-    'sun_tolerances',
-    'soil_tolerances',
-    'growth_rates',
-  ].includes(value)
-}
-
-function parseSafeSqlColumn(value: unknown): string {
-  if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-    throw new Error('Invalid Web Edition Species Catalog supported filter column.')
-  }
-  return value
-}
-
-function parseAssetEntry(value: unknown): CatalogAssetEntry {
-  if (!isRecord(value) || typeof value.path !== 'string' || value.path.trim().length === 0) {
-    throw new Error('Invalid Web Edition Species Catalog asset entry.')
-  }
-  return { path: value.path }
-}
-
 async function fetchCatalogJson(url: URL): Promise<unknown> {
   const response = await fetch(url)
   if (!response.ok) {
@@ -888,10 +784,6 @@ function numberValue(value: unknown): number {
     if (Number.isFinite(parsed)) return parsed
   }
   return 0
-}
-
-function optionalString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
 function cursorToOffset(cursor: string | null): number {
