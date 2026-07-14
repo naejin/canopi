@@ -64,6 +64,7 @@ function createRuntime(): CanvasQuerySurface {
       canClearSelectedSymbol: false,
     }),
     getPlacedPlants: () => [],
+    getSettledPlacedPlants: () => [],
     getLocalizedCommonNames: () => new Map(),
   }
 }

@@ -1,12 +1,12 @@
 import { getAnnotationScreenFrame } from '../annotation-layout'
 import type { CameraController } from '../camera'
-import type { SceneAnnotationEntity, SceneStore } from '../scene'
+import type { SceneAnnotationEntity, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 
 export interface AnnotationInlineEditorContext {
   readonly container: HTMLElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
   readonly canEditAnnotation: (annotationId: string) => boolean
   readonly refreshSelectionDependent: () => void
@@ -38,7 +38,10 @@ export function createAnnotationInlineEditor(
       active.textarea.select()
       return true
     }
-    if (active) commit()
+    if (active) {
+      commit()
+      if (active) return false
+    }
 
     const annotation = findAnnotation(annotationId)
     if (!annotation || annotation.annotationType !== 'text') return false
@@ -88,13 +91,14 @@ export function createAnnotationInlineEditor(
     const edit = active
     if (!edit) return
     const rawText = edit.textarea.value
-    cleanup()
 
     const annotation = findAnnotation(edit.annotationId)
-    if (!annotation) return
-    if (!context.canEditAnnotation(edit.annotationId)) return
+    if (!annotation || !context.canEditAnnotation(edit.annotationId)) {
+      cleanup()
+      return
+    }
     if (rawText.trim().length === 0) {
-      const committed = context.sceneEdits.run('interaction-annotation-text', (tx) => {
+      context.sceneEdits.run('interaction-annotation-text', (tx) => {
         tx.mutate((draft) => {
           draft.annotations = draft.annotations.filter((entry) => entry.id !== edit.annotationId)
           draft.groups = draft.groups
@@ -107,20 +111,31 @@ export function createAnnotationInlineEditor(
             .filter((group) => group.members.length >= 2)
         })
         tx.setSelection([])
+      }, {
+        onCommitted: () => {
+          cleanup()
+          context.refreshSelectionDependent()
+        },
       })
-      if (committed) context.refreshSelectionDependent()
       return
     }
 
-    if (rawText === annotation.text) return
-    const committed = context.sceneEdits.run('interaction-annotation-text', (tx) => {
+    if (rawText === annotation.text) {
+      cleanup()
+      return
+    }
+    context.sceneEdits.run('interaction-annotation-text', (tx) => {
       tx.mutate((draft) => {
         draft.annotations = draft.annotations.map((entry) => (
           entry.id === edit.annotationId ? { ...entry, text: rawText } : entry
         ))
       })
+    }, {
+      onCommitted: () => {
+        cleanup()
+        context.refreshSelectionDependent()
+      },
     })
-    if (committed) context.refreshSelectionDependent()
   }
 
   function cancel(): void {

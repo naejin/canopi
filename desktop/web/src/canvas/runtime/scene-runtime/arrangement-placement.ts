@@ -32,6 +32,7 @@ export interface SceneArrangementPlacementInput {
   readonly template: SceneArrangementTemplate
   readonly translateBy: ScenePoint
   readonly historyType: string
+  readonly onCommitted?: () => void
 }
 
 export interface SceneArrangementPlacementReceipt {
@@ -54,7 +55,7 @@ export function createSceneArrangementPlacement({
   createId = createUuid,
 }: SceneArrangementPlacementDeps): SceneArrangementPlacement {
   return {
-    place({ template, translateBy, historyType }): SceneArrangementPlacementReceipt {
+    place({ template, translateBy, historyType, onCommitted }): SceneArrangementPlacementReceipt {
       let createdCount = 0
       let selectedTopLevelIds = new Set<string>()
       const committed = sceneEdits.run(historyType, (tx) => {
@@ -65,7 +66,7 @@ export function createSceneArrangementPlacement({
           selectedTopLevelIds = placement.selectedTopLevelIds
         })
         if (selectedTopLevelIds.size > 0) tx.setSelection(selectedTopLevelIds)
-      })
+      }, { onCommitted })
 
       return { committed, createdCount, selectedTopLevelIds }
     },

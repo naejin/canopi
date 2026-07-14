@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
 import { SceneHistory } from '../canvas/runtime/scene-history'
-import type { SceneCommand, SceneCommandRuntime } from '../canvas/runtime/scene-commands'
+import type { SceneCommand } from '../canvas/runtime/scene-commands'
 import { canvasClean, canvasDirty, markCanvasDetachedDirty } from './support/design-session-state'
 import {
   nonCanvasRevision,
@@ -20,17 +20,14 @@ import {
   markSaved,
 } from './support/design-session-state'
 
-const mockRuntime: SceneCommandRuntime = {
-  sceneStore: null as never,
-  setSelection() {},
-}
+const applyHistoryCommand = () => {}
 
 function noop(): SceneCommand {
   return {
     type: 'test',
-    execute() {},
-    undo() {},
     diffs: ['plants'],
+    before: {},
+    after: {},
   }
 }
 
@@ -71,18 +68,32 @@ describe('canvas edits', () => {
 
   it('history record/undo/redo reconcile canvas cleanliness', () => {
     history.record(noop())
-    history.undo(mockRuntime)
-    history.redo(mockRuntime)
+    history.undo(applyHistoryCommand)
+    history.redo(applyHistoryCommand)
 
     expect(canvasClean.value).toBe(false)
+  })
+
+  it('does not move history stacks when command replay fails', () => {
+    history.record(noop())
+
+    expect(() => history.undo(() => {
+      throw new Error('replay failed')
+    })).toThrow('replay failed')
+    expect(history.canUndo.value).toBe(true)
+    expect(history.canRedo.value).toBe(false)
+
+    expect(history.undo(applyHistoryCommand)).toBe(true)
+    expect(history.canUndo.value).toBe(false)
+    expect(history.canRedo.value).toBe(true)
   })
 
   it('history record marks dirty', () => {
     const cmd: SceneCommand = {
       type: 'recorded-test',
-      execute() {},
-      undo() {},
       diffs: ['annotations'],
+      before: {},
+      after: {},
     }
 
     history.record(cmd)
@@ -103,7 +114,7 @@ describe('canvas edits', () => {
     markSaved()
     history.record(noop())
     expect(designDirty.value).toBe(true)
-    history.undo(mockRuntime)
+    history.undo(applyHistoryCommand)
     // Stack is back to saved position — canvas is clean
     expect(designDirty.value).toBe(false)
   })
@@ -112,9 +123,9 @@ describe('canvas edits', () => {
     history.markSaved()
     markSaved()
     history.record(noop())
-    history.undo(mockRuntime)
+    history.undo(applyHistoryCommand)
     expect(designDirty.value).toBe(false)
-    history.redo(mockRuntime)
+    history.redo(applyHistoryCommand)
     expect(designDirty.value).toBe(true)
   })
 
@@ -149,7 +160,7 @@ describe('canvas edits', () => {
     // One more edit, then undo — back to saved
     history.record(noop())
     expect(designDirty.value).toBe(true)
-    history.undo(mockRuntime)
+    history.undo(applyHistoryCommand)
     expect(designDirty.value).toBe(false)
   })
 
@@ -184,7 +195,7 @@ describe('non-canvas edits (timeline/budget/consortium)', () => {
 
     // Canvas edit + undo (returns to saved canvas state)
     history.record(noop())
-    history.undo(mockRuntime)
+    history.undo(applyHistoryCommand)
 
     // Still dirty because non-canvas edit remains unsaved
     expect(designDirty.value).toBe(true)

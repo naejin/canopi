@@ -39,13 +39,14 @@ vi.mock("../app/canvas-runtime/host", () => ({
       loadDocument: vi.fn(() => {
         loaded = true;
       }),
-      replaceDocument: vi.fn(() => {
+      replaceDocument: vi.fn((_file: unknown, _token: unknown, finalizeReplacement: () => void) => {
         loaded = true;
+        finalizeReplacement();
+        return { callerFinalizerInvoked: true };
       }),
       hasLoadedDocument: vi.fn(() => loaded),
       serializeDocument: vi.fn((_metadata, doc) => doc),
       markSaved: vi.fn(),
-      clearHistory: vi.fn(),
       resize: vi.fn(),
       destroy: vi.fn(),
     };
@@ -96,6 +97,7 @@ vi.mock("../app/settings/projection", () => ({
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
 import { currentCanvasDocumentSurface, currentCanvasSession, setCurrentCanvasSession } from "../canvas/session";
+import { createCanvasDocumentReplacementToken } from "../canvas/runtime/runtime";
 import { autoSaveIntervalMs } from "../app/settings/state";
 import {
   autosaveFailed,
@@ -331,7 +333,7 @@ describe("useCanvasDocumentSession", () => {
   it("snapshots after a queued document replacement loads through replaceDocument", async () => {
     const queuedDesign = makeDesign("Queued");
     mocks.consumeQueuedDocumentLoad.mockImplementation((session: any) => {
-      session.replaceDocument(queuedDesign);
+      session.replaceDocument(queuedDesign, createCanvasDocumentReplacementToken(), () => {});
       currentDesign.value = queuedDesign;
       return mocks.cancelQueuedLoad;
     });

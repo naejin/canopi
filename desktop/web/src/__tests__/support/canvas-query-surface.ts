@@ -20,6 +20,7 @@ export type TestCanvasQuerySurface = CanvasQuerySurface & {
   bumpSceneRevision(): void
   bumpPlantNamesRevision(): void
   bumpViewportRevision(): void
+  setSettled(settled: boolean): void
   setPlants(plants: readonly PlacedPlant[]): void
   setLocalizedNames(names: ReadonlyMap<string, string | null>): void
 }
@@ -33,6 +34,7 @@ export function createTestCanvasQuerySurface({
   const sceneRevision = signal(0)
   const plantNamesRevision = signal(0)
   const viewportRevision = signal(0)
+  const admissionRevision = signal(0)
   const revision = {
     scene: sceneRevision,
     plantNames: plantNamesRevision,
@@ -40,6 +42,7 @@ export function createTestCanvasQuerySurface({
   }
   let currentPlants = [...plants]
   let currentLocalizedNames = localizedNames
+  let settled = true
 
   return {
     revision,
@@ -78,6 +81,10 @@ export function createTestCanvasQuerySurface({
       canClearSelectedSymbol: false,
     }),
     getPlacedPlants: () => [...currentPlants],
+    getSettledPlacedPlants: () => {
+      void admissionRevision.value
+      return settled ? [...currentPlants] : null
+    },
     getLocalizedCommonNames: () => currentLocalizedNames,
     bumpSceneRevision: () => {
       sceneRevision.value += 1
@@ -87,6 +94,11 @@ export function createTestCanvasQuerySurface({
     },
     bumpViewportRevision: () => {
       viewportRevision.value += 1
+    },
+    setSettled: (nextSettled) => {
+      if (settled === nextSettled) return
+      settled = nextSettled
+      admissionRevision.value += 1
     },
     setPlants: (nextPlants) => {
       currentPlants = [...nextPlants]

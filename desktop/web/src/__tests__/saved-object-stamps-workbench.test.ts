@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
+import type { CanvasRuntimeSavedObjectStampCapture } from '../canvas/runtime/app-adapter'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createSavedObjectStampWorkbench } from '../app/saved-object-stamps/workbench'
 import type { CanopiFile } from '../types/design'
@@ -21,6 +22,80 @@ describe('Saved Object Stamp Workbench', () => {
     sort_order: sortOrder,
     created_at: `2026-06-19T09:00:0${sortOrder}Z`,
     updated_at: `2026-06-19T09:00:0${sortOrder}Z`,
+  })
+
+  const captureFromQuery = (query: CanvasQuerySurface): CanvasRuntimeSavedObjectStampCapture => ({
+    scene: query.getSceneSnapshot(),
+    selection: query.getDesignObjectSelection(),
+    localizedCommonNames: query.getLocalizedCommonNames(),
+  })
+
+  it('saves the admitted canvas capture when the mounted canvas has changed', async () => {
+    const admittedScene = createDefaultScenePersistedState()
+    admittedScene.annotations = [{
+      kind: 'annotation',
+      id: 'admitted-note',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 2, y: 3 },
+      text: 'Runtime A',
+      fontSize: 12,
+      rotationDeg: null,
+    }]
+    const admittedQuery = {
+      ...createTestCanvasQuerySurface({ scene: admittedScene }),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'annotation' as const, id: 'admitted-note' }],
+        lockedTargets: [],
+        blockedTargets: [],
+        bounds: { minX: 2, minY: 3, maxX: 2, maxY: 3 },
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    } satisfies CanvasQuerySurface
+
+    const mountedScene = createDefaultScenePersistedState()
+    mountedScene.annotations = [{
+      kind: 'annotation',
+      id: 'mounted-note',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 8, y: 9 },
+      text: 'Runtime B',
+      fontSize: 12,
+      rotationDeg: null,
+    }]
+    const mountedQuery = {
+      ...createTestCanvasQuerySurface({ scene: mountedScene }),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'annotation' as const, id: 'mounted-note' }],
+        lockedTargets: [],
+        blockedTargets: [],
+        bounds: { minX: 8, minY: 9, maxX: 8, maxY: 9 },
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    } satisfies CanvasQuerySurface
+    const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
+      id: 'stamp-capture',
+      name,
+      payload_json: payloadJson,
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+    }))
+    const getMountedQuery = vi.fn(() => mountedQuery)
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      createSavedObjectStamp: createStamp,
+      getCanvasQuerySurface: getMountedQuery,
+    })
+
+    await workbench.saveSelection(captureFromQuery(admittedQuery))
+
+    expect(getMountedQuery).not.toHaveBeenCalled()
+    const payload = JSON.parse(createStamp.mock.calls[0]![1])
+    expect(payload.annotations).toEqual([
+      expect.objectContaining({ text: 'Runtime A' }),
+    ])
   })
 
   it('saves the current locked plant selection as an unlocked visible stamp payload', async () => {
@@ -73,7 +148,7 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface: () => query,
     })
 
-    const saved = await workbench.saveCurrentSelection()
+    const saved = await workbench.saveSelection(captureFromQuery(query))
 
     expect(saved?.name).toBe('Pommier')
     expect(createStamp).toHaveBeenCalledTimes(1)
@@ -139,7 +214,7 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface: () => query,
     })
 
-    await workbench.saveCurrentSelection()
+    await workbench.saveSelection(captureFromQuery(query))
 
     const payload = JSON.parse(createStamp.mock.calls[0]![1])
     expect(payload.plants[0].symbol).toBe('tree')
@@ -206,7 +281,7 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface: () => query,
     })
 
-    const saved = await workbench.saveCurrentSelection()
+    const saved = await workbench.saveSelection(captureFromQuery(query))
 
     expect(saved).toBeNull()
     expect(workbench.selection.value).toMatchObject({
@@ -290,7 +365,7 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface: () => query,
     })
 
-    await workbench.saveCurrentSelection()
+    await workbench.saveSelection(captureFromQuery(query))
 
     const payload = JSON.parse(createStamp.mock.calls[0]![1])
     expect(payload.zones[0]).not.toHaveProperty('locked')
@@ -355,7 +430,7 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface: () => query,
     })
 
-    const saved = await workbench.saveCurrentSelection()
+    const saved = await workbench.saveSelection(captureFromQuery(query))
 
     expect(saved?.name).toBe('1 zone, 1 annotation')
   })

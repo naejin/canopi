@@ -4,15 +4,14 @@ import { plantSymbolMenuOpen } from '../../plant-symbol-menu-state'
 import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
 import { guides, northBearingAvailable, northBearingDeg } from '../../scene-metadata-state'
-import { clearCanvasSelection, setCanvasSelection } from '../../session-state'
-import type { SceneStore } from '../scene'
+import { setCanvasSelection } from '../../session-state'
+import type { SceneStateReader } from '../scene'
 import type { CanvasRuntimeLayerProjectionAdapter } from '../app-adapter'
 
 export function resetTransientRuntimeState(
   setTool: (name: string) => void,
 ): void {
   setTool('select')
-  clearCanvasSelection()
   plantColorMenuOpen.value = false
   plantSymbolMenuOpen.value = false
 }
@@ -31,7 +30,7 @@ function syncCanvasSignalsFromDocument(
 }
 
 function syncCanvasSignalsFromPersistedScene(
-  sceneStore: SceneStore,
+  sceneStore: SceneStateReader,
   layerProjections: CanvasRuntimeLayerProjectionAdapter,
 ): void {
   const persisted = sceneStore.persisted
@@ -46,26 +45,11 @@ function syncCanvasSignalsFromPersistedScene(
 export { syncCanvasSignalsFromDocument }
 
 export function syncCanvasSignalsFromScene(
-  sceneStore: SceneStore,
+  sceneStore: SceneStateReader,
   layerProjections: CanvasRuntimeLayerProjectionAdapter,
 ): void {
   syncCanvasSignalsFromPersistedScene(sceneStore, layerProjections)
   batch(() => {
     setCanvasSelection(sceneStore.session.selectedEntityIds)
   })
-}
-
-export function syncSceneLayerSignalsFromScene(
-  sceneStore: SceneStore,
-  layerName: string,
-  layerProjections: CanvasRuntimeLayerProjectionAdapter,
-): void {
-  if (layerProjections.isAppOwnedLayerProjection(layerName)) return
-  const layer = sceneStore.persisted.layers.find((entry) => entry.name === layerName)
-  if (!layer) return
-  layerProjections.syncLayer(layer)
-}
-
-export function syncGuideSignalsFromScene(sceneStore: SceneStore): void {
-  guides.value = sceneStore.persisted.guides.map((guide) => ({ ...guide }))
 }

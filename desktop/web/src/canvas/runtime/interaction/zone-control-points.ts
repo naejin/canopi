@@ -1,6 +1,6 @@
 import type { CameraController } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
-import type { ScenePoint, SceneStore, SceneZoneEntity } from '../scene'
+import type { ScenePoint, SceneStateReader, SceneZoneEntity } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import { getRectangularZoneCorners } from '../zone-geometry'
@@ -9,7 +9,7 @@ import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter
 interface ZoneControlPointOptions {
   readonly container: HTMLElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint

@@ -5,7 +5,7 @@ import type {
   ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
-  SceneStore,
+  SceneStateReader,
   SceneZoneEntity,
 } from '../scene'
 import {
@@ -74,7 +74,7 @@ type ObjectStampSource =
 export interface ObjectStampToolContext {
   readonly preview: HTMLDivElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly sceneEdits: SceneEditCoordinator
@@ -177,12 +177,12 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
   function placeObjectStamp(anchorWorld: ScenePoint): void {
     const source = objectStampSource
     if (!source || !canUseObjectStampSource(source)) return
-    const receipt = arrangementPlacement.place({
+    arrangementPlacement.place({
       template: objectStampArrangementTemplate(source),
       translateBy: objectStampDelta(source, anchorWorld),
       historyType: 'interaction-object-stamp',
+      onCommitted: () => previewAtAnchor(anchorWorld),
     })
-    if (receipt.committed) previewAtAnchor(anchorWorld)
   }
 
   function canUseObjectStampSource(source: ObjectStampSource): boolean {

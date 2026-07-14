@@ -16,7 +16,7 @@ import {
   resolvePlantDisplayColor,
   type PlantPresentationContext,
 } from '../plant-presentation'
-import type { ScenePlantEntity, ScenePoint, SceneStore } from '../scene'
+import type { ScenePlantEntity, ScenePoint, SceneStateReader } from '../scene'
 import { isSceneDesignObjectLocked, isSceneObjectGroupMemberTarget } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
@@ -46,7 +46,7 @@ export interface PlantSpacingPointerDownResult {
 export interface PlantSpacingToolContext {
   readonly container: HTMLElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
@@ -274,7 +274,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     if (!activeSource) return
 
     const generatedIds: string[] = []
-    const committed = context.sceneEdits.run('interaction-plant-spacing', (tx) => {
+    context.sceneEdits.run('interaction-plant-spacing', (tx) => {
       tx.mutate((draft) => {
         const generated = createPlantSpacingGeneratedPlants(activeSource.plant, positions, () => {
           const id = createUuid()
@@ -284,11 +284,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
         draft.plants = [...draft.plants, ...generated]
       })
       tx.setSelection([activeSource.sourceId, ...generatedIds])
-    })
-
-    if (committed) {
-      clear()
-    }
+    }, { onCommitted: clear })
   }
 
   function canUseSource(candidate: PlantSpacingSource): boolean {

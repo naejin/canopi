@@ -18,7 +18,7 @@ import type {
   ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
-  SceneStore,
+  SceneStateReader,
   SceneZoneEntity,
 } from '../scene'
 import {
@@ -41,7 +41,7 @@ const PLANT_SYMBOL_STROKE_WIDTH_PX = 1.6
 export interface SavedObjectStampPlacementContext {
   readonly preview: HTMLDivElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint
@@ -67,11 +67,10 @@ export function createSavedObjectStampTool(context: SavedObjectStampToolContext)
   function pointerDown(world: ScenePoint): void {
     const source = readSavedObjectStampSource()
     if (!source || !canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) return
-    const committed = placeSavedObjectStampAt(context, source, world)
-    if (committed) {
+    placeSavedObjectStampAt(context, source, world, () => {
       clear()
       context.switchTool('select')
-    }
+    })
   }
 
   function updatePreview(world: ScenePoint): void {
@@ -127,6 +126,7 @@ export function placeSavedObjectStampAt(
   context: SavedObjectStampPlacementContext,
   source: SavedObjectStampPayload,
   rawAnchorWorld: ScenePoint,
+  onCommitted?: () => void,
 ): boolean {
   if (!canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) return false
   const delta = stampDelta(source, context.applySnapping(rawAnchorWorld))
@@ -134,6 +134,7 @@ export function placeSavedObjectStampAt(
     template: savedObjectStampArrangementTemplate(source),
     translateBy: delta,
     historyType: 'interaction-saved-object-stamp',
+    onCommitted,
   }).committed
 }
 

@@ -56,8 +56,10 @@ export class SceneStore {
   }
 
   hydrate(file: CanopiFile): this {
-    this._persisted = hydrateScenePersistedState(file)
-    this._session = createDefaultSceneSessionState()
+    const persisted = hydrateScenePersistedState(file)
+    const session = createDefaultSceneSessionState()
+    this._persisted = persisted
+    this._session = session
     return this
   }
 
@@ -69,14 +71,14 @@ export class SceneStore {
   updatePersisted(mutator: (draft: ScenePersistedState) => void): this {
     const draft = cloneScenePersistedState(this._persisted)
     mutator(draft)
-    this._persisted = draft
+    this._persisted = cloneScenePersistedState(draft)
     return this
   }
 
   updateSession(mutator: (draft: SceneSessionState) => void): this {
     const draft = cloneSceneSessionState(this._session)
     mutator(draft)
-    this._session = draft
+    this._session = cloneSceneSessionState(draft)
     return this
   }
 
@@ -84,6 +86,14 @@ export class SceneStore {
     this._session = {
       ...this._session,
       selectedEntityIds: new Set(entityIds),
+    }
+    return this
+  }
+
+  setHoveredEntityId(id: string | null): this {
+    this._session = {
+      ...this._session,
+      hoveredEntityId: id,
     }
     return this
   }
@@ -114,16 +124,17 @@ export class SceneStore {
     }
   }
 
-  restoreSnapshot(snapshot: { persisted: ScenePersistedState; session: SceneSessionState }): this {
-    this._persisted = cloneScenePersistedState(snapshot.persisted)
-    this._session = cloneSceneSessionState(snapshot.session)
-    return this
-  }
-
   toCanopiFile(options: SceneSerializeOptions = {}): CanopiFile {
     return serializeScenePersistedState(this._persisted, options)
   }
 }
+
+export type SceneStateReader = Pick<SceneStore, 'persisted' | 'session'>
+export type SceneDocumentReader = Pick<SceneStore, 'toCanopiFile'>
+export type SceneSessionWriter = Pick<
+  SceneStore,
+  'setSelection' | 'setViewport' | 'setHoveredEntityId'
+>
 
 export {
   createDefaultScenePersistedState,

@@ -116,8 +116,14 @@ function makeSession() {
   engine.loadDocument.mockImplementation(() => {
     loaded = true
   })
-  engine.replaceDocument.mockImplementation(() => {
+  engine.replaceDocument.mockImplementation((
+    _file: CanopiFile,
+    _token: unknown,
+    finalizeReplacement: () => void,
+  ) => {
     loaded = true
+    finalizeReplacement()
+    return { callerFinalizerInvoked: true }
   })
   return {
     engine,
@@ -127,7 +133,6 @@ function makeSession() {
     hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
     hasLoadedDocument: vi.fn(() => loaded),
-    clearHistory: engine.history.clear,
     markSaved: engine.history.markSaved,
     serializeDocument: vi.fn((metadata: { name: string }) => makeFile(metadata.name)),
     initializeViewport: vi.fn(),
@@ -189,11 +194,12 @@ describe('document replacement actions', () => {
     expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
     expect(mocks.canvasSession.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Next', extra: {} }),
+      expect.any(Object),
+      expect.any(Function),
     )
     expect(currentDesign.value?.name).toBe('Next')
     expect(designName.value).toBe('Next')
     expect(designPath.value).toBe('/designs/next.canopi')
-    expect(mocks.canvasSession.engine.history.clear).toHaveBeenCalled()
     expect(mocks.canvasSession.showCanvasChrome).toHaveBeenCalled()
     expect(mocks.canvasSession.zoomToFit).toHaveBeenCalled()
   })
@@ -372,6 +378,8 @@ describe('document replacement actions', () => {
     expect(mocks.loadDesign).toHaveBeenCalledWith('/tmp/template.canopi')
     expect(nextSession.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Downloaded Template', extra: {} }),
+      expect.any(Object),
+      expect.any(Function),
     )
     expect(nextSession.zoomToFit).toHaveBeenCalled()
     expect(designName.value).toBe('Forest Edge')

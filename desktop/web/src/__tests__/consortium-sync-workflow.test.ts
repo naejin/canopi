@@ -68,6 +68,7 @@ describe('consortium-sync-workflow', () => {
 
   afterEach(() => {
     workflowRunner.dispose()
+    setCurrentCanvasSession(null)
   })
 
   it('adds consortium entries for new plant species', () => {
@@ -113,6 +114,23 @@ describe('consortium-sync-workflow', () => {
     session.bumpSceneRevision()
 
     expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('retries skipped derivation when Scene admission settles without a Scene revision', () => {
+    const session = mockSession([makePlant('Quercus robur')])
+    session.setSettled(false)
+    const sceneRevision = session.revision.scene.value
+    currentDesign.value = makeDesign()
+    mountQuerySurface(session)
+
+    workflowRunner.install()
+    expect(currentDesign.value!.consortiums).toEqual([])
+
+    session.setSettled(true)
+
+    expect(session.revision.scene.value).toBe(sceneRevision)
+    expect(currentDesign.value!.consortiums.map(getConsortiumCanonicalName))
+      .toEqual(['Quercus robur'])
   })
 
   it('is a no-op when plant set has not changed', () => {

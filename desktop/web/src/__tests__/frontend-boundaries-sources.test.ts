@@ -242,6 +242,8 @@ describe('frontend boundary sources', () => {
     expect(appSource).not.toContain('stampPrototype')
     expect(appSource).not.toContain('URLSearchParams')
     expect(favoritesSource).toContain('savedObjectStampWorkbench')
+    expect(favoritesSource).toContain('saveCanvasSelectionAsObjectStamp')
+    expect(favoritesSource).not.toContain('savedObjectStampWorkbench.saveCurrentSelection')
     expect(favoritesSource).toContain('data-saved-stamps-frame')
     expect(favoritesSource).not.toContain('SavedStampsPrototype')
   })
@@ -325,7 +327,7 @@ describe('frontend boundary sources', () => {
     expect(controllerSource).not.toContain('layerLockState.value =')
     expect(controllerSource).not.toContain('layerOpacity.value =')
     expect(commandSurfaceSource).toContain('setSceneLayerVisibility')
-    expect(runtimeSource).toContain("_sceneEdits.begin('guide-add')")
+    expect(runtimeSource).toContain("_sceneCommands.run('guide-add'")
     expect(runtimeSource).not.toContain('applySignalBackedSceneState')
     expect(effectsSource).not.toContain('layerVisibility')
     expect(effectsSource).not.toContain('guides')
@@ -357,6 +359,7 @@ describe('frontend boundary sources', () => {
   it('keeps focused canvas callers on role-specific command surfaces', () => {
     const focusedCanvasCommandConsumers = [
       '../app/canvas-layer-presentation/presentation.ts',
+      '../app/favorites/controller.ts',
       '../components/canvas/PlantColorMenu.tsx',
       '../components/canvas/ZoomControls.tsx',
       '../components/plant-db/PlantCard.tsx',
@@ -366,6 +369,9 @@ describe('frontend boundary sources', () => {
     expectNamedImportsFrom('../app/canvas-layer-presentation/presentation.ts', '../../canvas/session', [
       'getCurrentCanvasLayerCommandSurface',
       'currentCanvasQuerySurface',
+    ])
+    expectNamedImportsFrom('../app/favorites/controller.ts', '../../canvas/session', [
+      'currentCanvasSceneEditCommandSurface',
     ])
     expectNamedImportsFrom('../components/canvas/ZoomControls.tsx', '../../canvas/session', [
       'currentCanvasViewportCommandSurface',
@@ -714,12 +720,17 @@ describe('frontend boundary sources', () => {
     const runtimeSurfaceSource = readSource('../canvas/runtime/runtime.ts')
     const mountedRuntimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const documentBridgeSource = readSource('../canvas/runtime/scene-runtime/document.ts')
+    const sceneAuthoritySource = readSource('../canvas/runtime/scene-runtime/transactions.ts')
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
+    const consortiumWorkflowSource = readSource('../app/consortium/workflow.ts')
 
     expect(runtimeSurfaceSource).toContain('CanvasQueryRevision')
     expect(mountedRuntimeSource).toContain('_incrementSceneRevision')
-    expect(documentBridgeSource).toContain('incrementSceneRevision')
+    expect(sceneAuthoritySource).toContain('incrementSceneRevision')
+    expect(documentBridgeSource).not.toContain('incrementSceneRevision')
     expect(documentBridgeSource).not.toContain('sceneEntityRevision')
+    expect(consortiumWorkflowSource).toContain('getSettledPlacedPlants()')
+    expect(consortiumWorkflowSource).not.toContain('getPlacedPlants()')
     expect(sourceExists('../app/document/controller.ts')).toBe(false)
     expect(sourceExists('../app/document/edit-transaction.ts')).toBe(false)
     expect(sourceExists('../app/budget/controller.ts')).toBe(false)
@@ -890,6 +901,19 @@ describe('frontend boundary sources', () => {
     expectNoImportsMatching('../canvas/runtime/scene-runtime.ts', [
       /app\/contracts\/document$/,
     ])
+  })
+
+  it('passes settled Saved Object Stamp captures through the Canvas Runtime App Adapter', () => {
+    const commandSurfaceSource = readSource('../canvas/runtime/command-surface.ts')
+    const runtimeAdapterSource = readSource('../canvas/runtime/app-adapter.ts')
+    const appAdapterSource = readSource('../app/canvas-runtime/app-adapter.ts')
+    const workbenchSource = readSource('../app/saved-object-stamps/workbench.ts')
+
+    expect(runtimeAdapterSource).toContain('CanvasRuntimeSavedObjectStampCapture')
+    expect(commandSurfaceSource).toContain('getDesignObjectSelectionModel')
+    expect(commandSurfaceSource).toContain('localizedCommonNames: new Map')
+    expect(appAdapterSource).toContain('saveSelection(capture)')
+    expect(workbenchSource).not.toContain('saveCurrentSelection')
   })
 
   it('routes shared runtime settings through the Canvas Runtime App Adapter', () => {

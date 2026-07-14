@@ -8,9 +8,7 @@ import {
 import {
   resetTransientRuntimeState,
   syncCanvasSignalsFromScene,
-  syncGuideSignalsFromScene,
 } from './scene-runtime/scene-sync'
-import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import type { SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import type { ScenePersistedState } from './scene'
@@ -25,7 +23,7 @@ import type {
   CanvasQuerySurface,
 } from './runtime'
 import { targets, speciesTarget } from '../../target'
-import { throwCanvasRuntimeCleanupErrors } from './cleanup'
+import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -38,12 +36,9 @@ export class SceneCanvasRuntime {
   constructor(options: SceneCanvasRuntimeOptions = {}) {
     this._construction = createSceneRuntimeConstruction(options, {
       resolveHighlightedTargets: (scene) => this._resolveHighlightedTargets(scene),
-      currentPresentationRevision: () => this._currentPresentationRevision(),
-      applyPresentationBackfillsIfCurrent: (revision, backfills) =>
-        this._applyPresentationBackfillsIfCurrent(revision, backfills),
       incrementPlantNamesRevision: () => this._incrementPlantNamesRevision(),
       setSelection: (ids) => this._setSelection(ids),
-      resetTransientRuntimeState: () => this._resetTransientRuntimeState(),
+      prepareForDocumentReplacement: () => this._prepareForDocumentReplacement(),
       syncHoveredCanvasTargets: (id) => this._syncHoveredCanvasTargets(id),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidate: (kind) => this._invalidate(kind),
@@ -74,8 +69,12 @@ export class SceneCanvasRuntime {
     this._installEffects()
   }
 
-  private get _sceneStore(): SceneRuntimeConstruction['sceneStore'] {
-    return this._construction.sceneStore
+  private get _sceneState(): SceneRuntimeConstruction['sceneState'] {
+    return this._construction.sceneState
+  }
+
+  private get _sceneSession(): SceneRuntimeConstruction['sceneSession'] {
+    return this._construction.sceneSession
   }
 
   private get _camera(): SceneRuntimeConstruction['camera'] {
@@ -118,12 +117,12 @@ export class SceneCanvasRuntime {
     return this._construction.commandSurface
   }
 
-  private get _sceneEdits(): SceneRuntimeConstruction['sceneEdits'] {
-    return this._construction.sceneEdits
+  private get _sceneCommands(): SceneRuntimeConstruction['sceneCommands'] {
+    return this._construction.sceneCommands
   }
 
-  private get _documents(): SceneRuntimeDocumentBridge {
-    return this._construction.documents
+  private get _settledReader(): SceneRuntimeConstruction['settledReader'] {
+    return this._construction.settledReader
   }
 
   private get _documentSurface(): CanvasDocumentSurface {
@@ -153,22 +152,35 @@ export class SceneCanvasRuntime {
       this._setViewport(viewport, { forceRevision: true })
       this._interaction = createSceneInteractionSession({
         container,
-        getSceneStore: () => this._sceneStore,
+        getSceneStore: () => this._sceneState,
         camera: this._camera,
         setViewport: (viewport) => this._setViewport(viewport),
         getSpeciesCache: () => this._presentation.getSpeciesCache(),
         getPlantPresentationContext: (viewportScale) =>
           this._presentation.createPlantPresentationContext(viewportScale),
-        getSelection: () => this._sceneStore.session.selectedEntityIds,
-        setSelection: (ids) => this._setSelection(ids),
-        clearSelection: () => this._setSelection([]),
-        sceneEdits: this._sceneEdits,
+        getSelection: () => this._sceneState.session.selectedEntityIds,
+        setSelection: (ids) => {
+          this._sceneCommands.runWhenSettled(
+            () => this._setSelection(ids),
+            undefined,
+            { resumePending: true },
+          )
+        },
+        clearSelection: () => {
+          this._sceneCommands.runWhenSettled(
+            () => this._setSelection([]),
+            undefined,
+            { resumePending: true },
+          )
+        },
+        sceneEdits: this._sceneCommands,
+        commandAdmission: this._sceneCommands,
+        settledReader: this._settledReader,
         getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
         selectionCommands: this._commandSurface.sceneEdits,
         contextualCommands: {
-          saveSelectionAsObjectStamp: () => {
-            void this._appAdapter.savedObjectStamps?.saveCurrentSelection()
-          },
+          saveSelectionAsObjectStamp: () =>
+            this._commandSurface.sceneEdits.saveSelectionAsObjectStamp(),
         },
         setTool: (name) => this._commandSurface.tools.setTool(name),
         render: (kind) => this._invalidate(kind),
@@ -215,8 +227,8 @@ export class SceneCanvasRuntime {
     viewport: { x: number; y: number; scale: number },
     options: { forceRevision?: boolean } = {},
   ): void {
-    const previous = this._sceneStore.session.viewport
-    this._sceneStore.setViewport(viewport)
+    const previous = this._sceneState.session.viewport
+    this._sceneSession.setViewport(viewport)
     if (
       options.forceRevision
       || previous.x !== viewport.x
@@ -234,21 +246,9 @@ export class SceneCanvasRuntime {
     }
   }
 
-  private _currentPresentationRevision(): number {
-    return this._sceneRevision.peek()
-  }
-
-  private _applyPresentationBackfillsIfCurrent(
-    expectedRevision: number,
-    backfills: Parameters<SceneRuntimeDocumentBridge['applyPresentationBackfills']>[0],
-  ): boolean {
-    if (expectedRevision !== this._currentPresentationRevision()) return false
-    return this._documents.applyPresentationBackfills(backfills)
-  }
-
   private _setSelection(ids: Iterable<string>): void {
     const nextIds = new Set(ids)
-    this._sceneStore.setSelection(nextIds)
+    this._sceneSession.setSelection(nextIds)
     setCanvasSelection(nextIds)
   }
 
@@ -258,9 +258,16 @@ export class SceneCanvasRuntime {
     })
   }
 
+  private _prepareForDocumentReplacement(): void {
+    runCanvasRuntimeCleanups([
+      () => this._interaction?.prepareForDocumentReplacement(),
+      () => this._resetTransientRuntimeState(),
+    ], 'Scene Canvas document replacement preparation failed')
+  }
+
   private _syncHoveredCanvasTargets(id: string | null): void {
     const plant = id
-      ? this._sceneStore.persisted.plants.find((entry) => entry.id === id)
+      ? this._sceneState.persisted.plants.find((entry) => entry.id === id)
       : null
     const targets = plant ? [speciesTarget(plant.canonicalName)] : []
     this._panelTargetAdapter.setCanvasHoverTargets(targets)
@@ -268,17 +275,17 @@ export class SceneCanvasRuntime {
 
   private _setHoveredEntityId(id: string | null, options: { invalidate?: boolean } = {}): void {
     const invalidate = options.invalidate ?? true
-    if (this._sceneStore.session.hoveredEntityId === id) {
+    if (this._sceneState.session.hoveredEntityId === id) {
       this._syncHoveredCanvasTargets(id)
       return
     }
-    this._sceneStore.updateSession((s) => { s.hoveredEntityId = id })
+    this._sceneSession.setHoveredEntityId(id)
     this._syncHoveredCanvasTargets(id)
     if (invalidate) this._invalidate('scene')
   }
 
   private _syncCanvasSignalsFromScene(): void {
-    syncCanvasSignalsFromScene(this._sceneStore, this._appAdapter.settings.layerProjections)
+    syncCanvasSignalsFromScene(this._sceneState, this._appAdapter.settings.layerProjections)
   }
 
   private _installEffects(): void {
@@ -332,25 +339,19 @@ export class SceneCanvasRuntime {
       height: Math.max(1, container.clientHeight),
       rulersVisible: chromeSettings.rulersVisible,
       gridVisible: chromeSettings.gridVisible,
-      guides: this._sceneStore.persisted.guides,
+      guides: this._sceneState.persisted.guides,
     })
   }
 
   private _addGuide(axis: 'h' | 'v', position: number): void {
-    const tx = this._sceneEdits.begin('guide-add')
-    try {
+    this._sceneCommands.run('guide-add', (tx) => {
       tx.mutate((draft) => {
         draft.guides.push({ id: createUuid(), axis, position })
       })
-      const committed = tx.commit({ invalidate: 'chrome' })
-      if (committed) {
-        syncGuideSignalsFromScene(this._sceneStore)
-        this._renderChrome()
-      }
-    } catch (error) {
-      tx.abort()
-      throw error
-    }
+    }, {
+      invalidate: 'chrome',
+      onCommitted: () => this._renderChrome(),
+    })
   }
 
   private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {

@@ -9,6 +9,44 @@ import {
 } from './store'
 
 describe('scene store', () => {
+  it('owns committed persisted drafts after the mutator returns', () => {
+    const store = new SceneStore()
+    let mutateEscapedGuide = (): void => {}
+
+    store.updatePersisted((draft) => {
+      const guide = { id: 'guide-1', axis: 'h' as const, position: 10 }
+      draft.guides.push(guide)
+      mutateEscapedGuide = () => {
+        guide.position = 99
+      }
+    })
+
+    mutateEscapedGuide()
+
+    expect(store.persisted.guides).toEqual([
+      { id: 'guide-1', axis: 'h', position: 10 },
+    ])
+  })
+
+  it('owns committed session drafts after the mutator returns', () => {
+    const store = new SceneStore()
+    let mutateEscapedViewport = (): void => {}
+
+    store.updateSession((draft) => {
+      draft.selectedEntityIds = new Set(['plant-1'])
+      draft.viewport.x = 10
+      const viewport = draft.viewport
+      mutateEscapedViewport = () => {
+        viewport.x = 99
+      }
+    })
+
+    mutateEscapedViewport()
+
+    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.viewport.x).toBe(10)
+  })
+
   it('hydrates and serializes CanopiFile data without crossing the session boundary', () => {
     const file: CanopiFile = {
       version: 2,

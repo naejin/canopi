@@ -3,7 +3,6 @@ import {
   resolvePlantSymbolId,
   type ScenePersistedState,
   type ScenePoint,
-  type SceneStore,
 } from '../scene'
 import { createUuid } from '../../../utils/ids'
 
@@ -12,16 +11,6 @@ export interface SceneRect {
   y: number
   width: number
   height: number
-}
-
-export function appendRectangleZone(store: SceneStore, rect: SceneRect): string | null {
-  if (rect.width < 0.5 || rect.height < 0.5) return null
-
-  let zoneName: string | null = null
-  store.updatePersisted((draft) => {
-    zoneName = appendRectangleZoneToDraft(draft, rect)
-  })
-  return zoneName
 }
 
 export function appendRectangleZoneToDraft(
@@ -186,18 +175,6 @@ export function appendPlantStampSourceToDraft(
       locked: false,
     },
   ]
-  return id
-}
-
-export function appendTextAnnotation(
-  store: SceneStore,
-  position: ScenePoint,
-  text: string,
-): string {
-  let id = ''
-  store.updatePersisted((draft) => {
-    id = appendTextAnnotationToDraft(draft, position, text)
-  })
   return id
 }
 

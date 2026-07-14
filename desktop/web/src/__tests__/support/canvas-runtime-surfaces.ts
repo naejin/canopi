@@ -45,6 +45,7 @@ export function createTestCanvasCommandSurface(
       redo: () => {},
     },
     sceneEdits: {
+      saveSelectionAsObjectStamp: () => {},
       copy: () => {},
       paste: () => {},
       pasteAt: () => {},
@@ -111,11 +112,13 @@ export function createTestCanvasDocumentSurface(
     hideCanvasChrome: () => {},
     zoomToFit: () => {},
     loadDocument: () => {},
-    replaceDocument: () => {},
+    replaceDocument: (_file, _token, finalizeReplacement) => {
+      finalizeReplacement()
+      return { callerFinalizerInvoked: true }
+    },
     hasLoadedDocument: () => false,
     serializeDocument: (metadata, doc) => ({ ...doc, name: metadata.name }),
     markSaved: () => {},
-    clearHistory: () => {},
     resize: () => {},
     destroy: () => {},
   }

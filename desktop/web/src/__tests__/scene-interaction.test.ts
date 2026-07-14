@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearPlantStampSource,
@@ -30,10 +31,13 @@ import {
 } from '../canvas/runtime/scene-interaction'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { getDesignObjectSelectionModel } from '../canvas/runtime/scene-runtime/selection'
+import { SceneHistory } from '../canvas/runtime/scene-history'
 import {
   SceneRuntimeEditCoordinator,
+  type SceneCommandAdmission,
   type SceneEditCoordinator,
   type SceneEditTransaction,
+  type SettledSceneReader,
 } from '../canvas/runtime/scene-runtime/transactions'
 import {
   CANVAS_NOTICE_MARGIN_PX,
@@ -58,6 +62,8 @@ function createInteractionDeps(
   overrides: Partial<Pick<SceneInteractionSessionDeps,
     | 'render'
     | 'sceneEdits'
+    | 'commandAdmission'
+    | 'settledReader'
     | 'getDesignObjectSelection'
     | 'selectionCommands'
     | 'setTool'
@@ -81,24 +87,38 @@ function createInteractionDeps(
     selectedObjectIds.value = new Set()
   })
   const render = (overrides.render ?? (() => {})) as SceneInteractionSessionDeps['render']
+  const history = new SceneHistory()
+  if (overrides.onSceneEditCommit) {
+    const record = history.record.bind(history)
+    vi.spyOn(history, 'record').mockImplementation((command, transaction) => {
+      overrides.onSceneEditCommit?.(command.type)
+      return record(command, transaction)
+    })
+  }
   const sceneEdits = overrides.sceneEdits ?? new SceneRuntimeEditCoordinator({
     sceneStore: store,
-    captureSnapshot: () => {
-      const snapshot = store.snapshot()
-      return {
-        persisted: snapshot.persisted,
-        session: snapshot.session,
-      }
-    },
-    markDirty: (_before, type) => {
-      overrides.onSceneEditCommit?.(type ?? 'scene-mutation')
-      return true
-    },
+    history,
     setSelection,
+    incrementSceneRevision: () => {},
+    syncCanvasSignalsFromScene: () => {},
     invalidate: (kind) => {
       if (kind === 'scene' || kind === 'viewport') render(kind)
     },
   })
+  const commandAdmission = overrides.commandAdmission
+    ?? ('runWhenSettled' in sceneEdits
+      ? sceneEdits as unknown as SceneCommandAdmission
+      : {
+          revision: signal(0),
+          runWhenSettled: <T,>(operation: () => T): T => operation(),
+        })
+  const settledReader = overrides.settledReader
+    ?? ('readWhenSettled' in sceneEdits
+      ? sceneEdits as unknown as SettledSceneReader
+      : {
+          revision: signal(0),
+          readWhenSettled: <T,>(operation: () => T): T => operation(),
+        })
 
   return {
     container,
@@ -113,6 +133,8 @@ function createInteractionDeps(
     setSelection,
     clearSelection,
     sceneEdits,
+    commandAdmission,
+    settledReader,
     getDesignObjectSelection: overrides.getDesignObjectSelection ?? (() =>
       getDesignObjectSelectionFromStore(store, camera)
     ),
@@ -167,6 +189,32 @@ function createSelectionCommands(
   }
 }
 
+function createRecoveringCommandAdmission(): {
+  readonly admission: SceneCommandAdmission
+  readonly recoveryCalls: ReturnType<typeof vi.fn>
+} {
+  let pendingSettlement = true
+  const recoveryCalls = vi.fn()
+  return {
+    admission: {
+      revision: signal(0),
+      runWhenSettled<T>(
+        operation: () => T,
+        busyResult: T,
+        options: { resumePending?: boolean } = {},
+      ): T {
+        if (pendingSettlement) {
+          pendingSettlement = false
+          recoveryCalls(options.resumePending === true)
+          return busyResult
+        }
+        return operation()
+      },
+    },
+    recoveryCalls,
+  }
+}
+
 function createAbortFailingSceneEdits(
   base: SceneEditCoordinator,
   targetType: string,
@@ -183,10 +231,10 @@ function createAbortFailingSceneEdits(
   const beginTypes: string[] = []
   return {
     sceneEdits: {
-      run: (type, edit) => base.run(type, edit),
-      begin(type) {
+      run: (type, edit, options) => base.run(type, edit, options),
+      begin(type, options) {
         beginTypes.push(type)
-        const transaction = base.begin(type)
+        const transaction = base.begin(type, options)
         if (type !== targetType) return transaction
         beginCallCount += 1
         return {
@@ -2418,6 +2466,126 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('quarantines the pointerdown that recovers pending Scene settlement', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 30 }),
+      ]
+    })
+    const { admission, recoveryCalls } = createRecoveringCommandAdmission()
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const deps: SceneInteractionSessionDeps = {
+      ...baseDeps,
+      commandAdmission: admission,
+      setSelection: (ids) => admission.runWhenSettled(
+        () => baseDeps.setSelection(ids),
+        undefined,
+        { resumePending: true },
+      ),
+    }
+    const session = createTestSession(deps)
+    session.setTool('select')
+    baseDeps.setSelection(['plant-1'])
+    const before = store.snapshot().persisted
+
+    events.pointerDown({ x: 120, y: 30 }, { pointerId: 43 })
+    events.pointerMove({ x: 150, y: 60 }, { pointerId: 43 })
+    events.pointerUp({ x: 150, y: 60 }, { pointerId: 43 })
+
+    expect(recoveryCalls).toHaveBeenCalledOnce()
+    expect(recoveryCalls).toHaveBeenCalledWith(true)
+    expect(store.persisted).toEqual(before)
+    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+  })
+
+  it('quarantines the contextmenu that recovers pending Scene settlement', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 30 }),
+      ]
+    })
+    const { admission, recoveryCalls } = createRecoveringCommandAdmission()
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const deps: SceneInteractionSessionDeps = {
+      ...baseDeps,
+      commandAdmission: admission,
+      setSelection: (ids) => admission.runWhenSettled(
+        () => baseDeps.setSelection(ids),
+        undefined,
+        { resumePending: true },
+      ),
+    }
+    const session = createTestSession(deps)
+    session.setTool('select')
+    baseDeps.setSelection(['plant-1'])
+    const point = events.clientPoint({ x: 120, y: 30 })
+    const contextMenu = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    })
+
+    container.dispatchEvent(contextMenu)
+
+    expect(recoveryCalls).toHaveBeenCalledOnce()
+    expect(recoveryCalls).toHaveBeenCalledWith(true)
+    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(container.querySelector<HTMLElement>('[data-canvas-context-menu]')?.style.display)
+      .not.toBe('block')
+  })
+
+  it('quarantines Scene events when admission recovery throws', () => {
+    const admissionFailure = new Error('admission recovery failed')
+    const deps = createInteractionDeps(container, store, camera, {
+      commandAdmission: {
+        revision: signal(0),
+        runWhenSettled: () => {
+          throw admissionFailure
+        },
+      },
+    })
+    createTestSession(deps)
+    const downstreamPointerDown = vi.fn()
+    const downstreamContextMenu = vi.fn()
+    const downstreamDrop = vi.fn()
+    container.addEventListener('pointerdown', downstreamPointerDown)
+    container.addEventListener('contextmenu', downstreamContextMenu)
+    container.addEventListener('drop', downstreamDrop)
+    let pointerDown!: PointerEvent
+    let contextMenu!: MouseEvent
+    let drop!: DragEvent
+
+    const errors = captureWindowErrors(() => {
+      pointerDown = events.pointerDown({ x: 20, y: 30 })
+      const point = events.clientPoint({ x: 20, y: 30 })
+      contextMenu = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+      })
+      container.dispatchEvent(contextMenu)
+      drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+      Object.defineProperties(drop, {
+        clientX: { configurable: true, value: point.x },
+        clientY: { configurable: true, value: point.y },
+        dataTransfer: { configurable: true, value: null },
+      })
+      container.dispatchEvent(drop)
+    })
+
+    expect(errors).toEqual([admissionFailure, admissionFailure, admissionFailure])
+    expect(pointerDown.defaultPrevented).toBe(true)
+    expect(contextMenu.defaultPrevented).toBe(true)
+    expect(drop.defaultPrevented).toBe(true)
+    expect(downstreamPointerDown).not.toHaveBeenCalled()
+    expect(downstreamContextMenu).not.toHaveBeenCalled()
+    expect(downstreamDrop).not.toHaveBeenCalled()
+  })
+
   it('routes Enter from a focused Canvas Context Menu button instead of the active tool', () => {
     const pasteAt = vi.fn()
     const deps = createInteractionDeps(container, store, camera, {
@@ -2484,6 +2652,33 @@ describe('SceneInteractionSession', () => {
     expect(pasteAt).toHaveBeenCalledWith({ x: 200, y: 180 })
     expect(menu.style.display).toBe('none')
     session.dispose()
+  })
+
+  it('invalidates hidden Canvas Context Menu actions before document replacement', () => {
+    const pasteAt = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, {
+      selectionCommands: createSelectionCommands({
+        canPaste: () => true,
+        pasteAt,
+      }),
+    }))
+    const contextPoint = events.clientPoint({ x: 200, y: 180 })
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: contextPoint.x,
+      clientY: contextPoint.y,
+    }))
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    const paste = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
+    paste.focus()
+
+    session.prepareForDocumentReplacement()
+    paste.click()
+
+    expect(menu.style.display).toBe('none')
+    expect(document.activeElement).not.toBe(paste)
+    expect(pasteAt).not.toHaveBeenCalled()
   })
 
   it('opens a Canvas Context Menu with disabled edit commands on empty canvas', () => {
@@ -4677,6 +4872,39 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('keeps a new text Annotation draft recoverable while the Scene is busy', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('text')
+
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Deferred guild note'
+    const active = deps.sceneEdits.begin('external-preview')
+
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')).toBe(textarea)
+    expect(textarea.value).toBe('Deferred guild note')
+
+    active.abort()
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations).toEqual([
+      expect.objectContaining({
+        annotationType: 'text',
+        position: { x: 24, y: 32 },
+        text: 'Deferred guild note',
+      }),
+    ])
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-text')
+    expect(container.querySelector('textarea')).toBeNull()
+    session.dispose()
+  })
+
   it('does not create text Annotations on a locked Annotations Layer', () => {
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => (
@@ -4753,6 +4981,50 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('clears a committed text draft when a later event settles retained publication', () => {
+    let invalidationFailures = 2
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const sceneEdits = new SceneRuntimeEditCoordinator({
+      sceneStore: store,
+      history: new SceneHistory(),
+      setSelection: baseDeps.setSelection,
+      incrementSceneRevision: () => {},
+      syncCanvasSignalsFromScene: () => {},
+      invalidate: () => {
+        if (invalidationFailures > 0) {
+          invalidationFailures -= 1
+          throw new Error('text publication failed')
+        }
+      },
+    })
+    const session = createTestSession({
+      ...baseDeps,
+      sceneEdits,
+      commandAdmission: sceneEdits,
+    })
+    session.setTool('text')
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Retained note'
+
+    const errors = captureWindowErrors(() => {
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(errors).toHaveLength(1)
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(container.querySelector('textarea')).toBe(textarea)
+
+    const recoveryPointerDown = events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+
+    expect(recoveryPointerDown.defaultPrevented).toBe(true)
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(container.querySelector('textarea')).toBeNull()
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(store.persisted.annotations).toHaveLength(1)
+    session.dispose()
+  })
+
   it('cleans up pending text Annotation editors on tool change and disposal', () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
@@ -4812,6 +5084,60 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-annotation-text')
     expect(container.querySelector('textarea')).toBeNull()
     session.dispose()
+  })
+
+  it('keeps an inline text Annotation edit recoverable while the Scene is busy', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('select')
+
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Deferred inline note'
+    const active = deps.sceneEdits.begin('external-preview')
+
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations[0]?.text).toBe('Original note')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')).toBe(textarea)
+    expect(textarea.value).toBe('Deferred inline note')
+
+    active.abort()
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations[0]?.text).toBe('Deferred inline note')
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-annotation-text')
+    expect(container.querySelector('textarea')).toBeNull()
+    session.dispose()
+  })
+
+  it('detaches an inline Annotation draft before document replacement', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Old document')]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection(['annotation-1'])
+    events.keyDown({ key: 'F2', cancelable: true, target: container })
+    const oldTextarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    oldTextarea.value = 'Stale draft'
+
+    session.prepareForDocumentReplacement()
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'New document')]
+    })
+    oldTextarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(container.querySelector('textarea')).toBeNull()
+    expect(store.persisted.annotations[0]?.text).toBe('New document')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
   })
 
   it('opens existing text Annotation editing from two primary clicks without pointer detail', () => {
@@ -5247,6 +5573,408 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
     session.dispose()
+  })
+
+  it.each([
+    { label: 'Rectangle', tool: 'rectangle' },
+    { label: 'Measurement Guide', tool: 'measurement-guide' },
+  ])('keeps a $label drag authoritative until pointer-up commits it', ({ tool }) => {
+    const history = new SceneHistory()
+    const record = history.record.bind(history)
+    let unrelatedRecordFailures = 2
+    vi.spyOn(history, 'record').mockImplementation((command, transaction) => {
+      const recorded = record(command, transaction)
+      if (command.type === 'unrelated-immediate' && unrelatedRecordFailures > 0) {
+        unrelatedRecordFailures -= 1
+        throw new Error('unrelated publication failed')
+      }
+      return recorded
+    })
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const coordinator = new SceneRuntimeEditCoordinator({
+      sceneStore: store,
+      history,
+      setSelection: baseDeps.setSelection,
+      incrementSceneRevision: () => {},
+      syncCanvasSignalsFromScene: () => {},
+      invalidate: () => {},
+    })
+    const deps: SceneInteractionSessionDeps = {
+      ...baseDeps,
+      sceneEdits: coordinator,
+      commandAdmission: coordinator,
+    }
+    const session = createTestSession(deps)
+    session.setTool(tool)
+
+    events.pointerDown({ x: 10, y: 20 })
+    events.pointerMove({ x: 40, y: 60 })
+    const unrelatedEdit = vi.fn((tx: SceneEditTransaction) => {
+      tx.mutate((draft) => {
+        draft.plantSpeciesColors['Malus domestica'] = '#335577'
+      })
+    })
+    let unrelatedResult: boolean | undefined
+    expect(() => {
+      unrelatedResult = coordinator.run('unrelated-immediate', unrelatedEdit)
+    }).not.toThrow()
+    expect(unrelatedResult).toBe(false)
+    events.pointerUp({ x: 40, y: 60 })
+
+    expect(unrelatedEdit).not.toHaveBeenCalled()
+    if (tool === 'rectangle') {
+      expect(store.persisted.zones).toHaveLength(1)
+      expect(store.persisted.zones[0]).toMatchObject({
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 20 },
+          { x: 40, y: 20 },
+          { x: 40, y: 60 },
+          { x: 10, y: 60 },
+        ],
+      })
+    } else {
+      expect(store.persisted.measurementGuides).toEqual([
+        expect.objectContaining({
+          start: { x: 10, y: 20 },
+          end: { x: 40, y: 60 },
+        }),
+      ])
+    }
+    session.dispose()
+  })
+
+  it.each([
+    {
+      label: 'Rectangle',
+      tool: 'rectangle',
+      editType: 'interaction-rectangle',
+    },
+    {
+      label: 'Measurement Guide',
+      tool: 'measurement-guide',
+      editType: 'interaction-measurement-guide',
+    },
+  ])('retries a failed $label drag abort before admitting another gesture', ({
+    tool,
+    editType,
+  }) => {
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const abortFailure = createAbortFailingSceneEdits(
+      baseDeps.sceneEdits,
+      editType,
+      `${editType} abort failed`,
+    )
+    const session = createTestSession({
+      ...baseDeps,
+      sceneEdits: abortFailure.sceneEdits,
+    })
+    session.setTool(tool)
+
+    events.pointerDown({ x: 10, y: 20 }, { pointerId: 71 })
+    events.pointerMove({ x: 40, y: 60 }, { pointerId: 71 })
+    const errors = captureWindowErrors(() => {
+      events.pointerCancel({ x: 40, y: 60 }, { pointerId: 71 })
+    })
+
+    expect(errors).toEqual([
+      expect.objectContaining({ message: `${editType} abort failed` }),
+    ])
+    expect(abortFailure.abortCalls()).toBe(1)
+    expect(abortFailure.beginTypes()).toEqual([editType])
+
+    events.pointerDown({ x: 10, y: 20 }, { pointerId: 72 })
+    expect(abortFailure.abortCalls()).toBe(2)
+    expect(abortFailure.beginTypes()).toEqual([editType])
+    events.pointerMove({ x: 40, y: 60 }, { pointerId: 72 })
+    events.pointerUp({ x: 40, y: 60 }, { pointerId: 72 })
+
+    events.pointerDown({ x: 10, y: 20 }, { pointerId: 73 })
+    events.pointerMove({ x: 40, y: 60 }, { pointerId: 73 })
+    events.pointerUp({ x: 40, y: 60 }, { pointerId: 73 })
+
+    expect(abortFailure.beginTypes()).toEqual([editType, editType])
+    if (tool === 'rectangle') {
+      expect(store.persisted.zones).toHaveLength(1)
+    } else {
+      expect(store.persisted.measurementGuides).toHaveLength(1)
+    }
+    session.dispose()
+  })
+
+  it('quarantines pointer-up while a drag commit finishes retained publication', () => {
+    const history = new SceneHistory()
+    const record = history.record.bind(history)
+    let publicationFailures = 2
+    vi.spyOn(history, 'record').mockImplementation((command, transaction) => {
+      const recorded = record(command, transaction)
+      if (command.type === 'interaction-rectangle' && publicationFailures > 0) {
+        publicationFailures -= 1
+        throw new Error('rectangle publication failed')
+      }
+      return recorded
+    })
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const coordinator = new SceneRuntimeEditCoordinator({
+      sceneStore: store,
+      history,
+      setSelection: baseDeps.setSelection,
+      incrementSceneRevision: () => {},
+      syncCanvasSignalsFromScene: () => {},
+      invalidate: () => {},
+    })
+    const session = createTestSession({
+      ...baseDeps,
+      sceneEdits: coordinator,
+      commandAdmission: coordinator,
+    })
+    session.setTool('rectangle')
+    const downstreamPointerUp = vi.fn()
+    window.addEventListener('pointerup', downstreamPointerUp)
+
+    try {
+      events.pointerDown({ x: 10, y: 20 }, { pointerId: 81 })
+      events.pointerMove({ x: 40, y: 60 }, { pointerId: 81 })
+      const pointerUpEvents: PointerEvent[] = []
+      const errors = captureWindowErrors(() => {
+        pointerUpEvents.push(events.pointerUp({ x: 40, y: 60 }, { pointerId: 81 }))
+      })
+
+      expect(errors).toHaveLength(1)
+      expect(pointerUpEvents[0]?.defaultPrevented).toBe(true)
+      expect(downstreamPointerUp).not.toHaveBeenCalled()
+      expect(store.persisted.zones).toHaveLength(1)
+      expect(coordinator.canUndo.value).toBe(false)
+
+      events.pointerDown({ x: 10, y: 20 }, { pointerId: 82 })
+
+      expect(store.persisted.zones).toHaveLength(1)
+      expect(coordinator.canUndo.value).toBe(true)
+      expect(coordinator.undo()).toBe(true)
+      expect(coordinator.undo()).toBe(false)
+      expect(store.persisted.zones).toHaveLength(0)
+    } finally {
+      window.removeEventListener('pointerup', downstreamPointerUp)
+      session.dispose()
+    }
+  })
+
+  it.each([
+    { label: 'Rectangle', tool: 'rectangle' },
+    { label: 'Measurement Guide', tool: 'measurement-guide' },
+  ])('retries retained $label cleanup before admitting another drag', ({ tool }) => {
+    const history = new SceneHistory()
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const coordinator = new SceneRuntimeEditCoordinator({
+      sceneStore: store,
+      history,
+      setSelection: baseDeps.setSelection,
+      incrementSceneRevision: () => {},
+      syncCanvasSignalsFromScene: () => {},
+      invalidate: () => {},
+    })
+    const session = createTestSession({
+      ...baseDeps,
+      sceneEdits: coordinator,
+      commandAdmission: coordinator,
+    })
+    session.setTool(tool)
+
+    events.pointerDown({ x: 10, y: 20 }, { pointerId: 91 })
+    events.pointerMove({ x: 40, y: 60 }, { pointerId: 91 })
+    const measurementOverlay = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-zone-measurement-overlay]'),
+    ).find((overlay) => overlay.childElementCount > 0 && overlay.style.display === 'block')
+    if (!measurementOverlay) throw new Error(`Expected ${tool} draft measurements`)
+    const originalReplaceChildrenDescriptor = Object.getOwnPropertyDescriptor(
+      measurementOverlay,
+      'replaceChildren',
+    )
+    const originalReplaceChildren = measurementOverlay.replaceChildren.bind(measurementOverlay)
+    let cleanupFailures = 2
+    Object.defineProperty(measurementOverlay, 'replaceChildren', {
+      configurable: true,
+      value: (...nodes: (Node | string)[]) => {
+        if (cleanupFailures > 0) {
+          cleanupFailures -= 1
+          throw new Error(`${tool} cleanup failed`)
+        }
+        originalReplaceChildren(...nodes)
+      },
+    })
+
+    try {
+      const errors = captureWindowErrors(() => {
+        events.pointerUp({ x: 40, y: 60 }, { pointerId: 91 })
+      })
+
+      expect(errors).toHaveLength(1)
+      expect(cleanupFailures).toBe(0)
+      expect(coordinator.canUndo.value).toBe(false)
+      if (tool === 'rectangle') {
+        expect(store.persisted.zones).toHaveLength(1)
+      } else {
+        expect(store.persisted.measurementGuides).toHaveLength(1)
+      }
+
+      const retryEvent = events.pointerDown({ x: 10, y: 20 }, { pointerId: 92 })
+
+      expect(retryEvent.defaultPrevented).toBe(true)
+      expect(coordinator.canUndo.value).toBe(true)
+      if (tool === 'rectangle') {
+        expect(store.persisted.zones).toHaveLength(1)
+      } else {
+        expect(store.persisted.measurementGuides).toHaveLength(1)
+      }
+
+      events.pointerDown({ x: 50, y: 70 }, { pointerId: 93 })
+      events.pointerMove({ x: 80, y: 100 }, { pointerId: 93 })
+      events.pointerUp({ x: 80, y: 100 }, { pointerId: 93 })
+
+      if (tool === 'rectangle') {
+        expect(store.persisted.zones).toHaveLength(2)
+        expect(coordinator.undo()).toBe(true)
+        expect(store.persisted.zones).toHaveLength(1)
+        expect(coordinator.undo()).toBe(true)
+        expect(store.persisted.zones).toHaveLength(0)
+      } else {
+        expect(store.persisted.measurementGuides).toHaveLength(2)
+        expect(coordinator.undo()).toBe(true)
+        expect(store.persisted.measurementGuides).toHaveLength(1)
+        expect(coordinator.undo()).toBe(true)
+        expect(store.persisted.measurementGuides).toHaveLength(0)
+      }
+      expect(coordinator.undo()).toBe(false)
+    } finally {
+      if (originalReplaceChildrenDescriptor) {
+        Object.defineProperty(
+          measurementOverlay,
+          'replaceChildren',
+          originalReplaceChildrenDescriptor,
+        )
+      } else {
+        Reflect.deleteProperty(measurementOverlay, 'replaceChildren')
+      }
+      session.dispose()
+    }
+  })
+
+  it.each([
+    { label: 'Rectangle', tool: 'rectangle' },
+    { label: 'Measurement Guide', tool: 'measurement-guide' },
+  ])('keeps the $label handle through retained post-commit backfill publication', ({ tool }) => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 150, y: 150 }, {
+        stratum: null,
+        canopySpreadM: null,
+        scale: null,
+      })]
+    })
+    const history = new SceneHistory()
+    let invalidationCalls = 0
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const coordinator = new SceneRuntimeEditCoordinator({
+      sceneStore: store,
+      history,
+      setSelection: baseDeps.setSelection,
+      incrementSceneRevision: () => {},
+      syncCanvasSignalsFromScene: () => {},
+      invalidate: () => {
+        invalidationCalls += 1
+        if (invalidationCalls === 2 || invalidationCalls === 3) {
+          throw new Error(`${tool} late backfill publication failed`)
+        }
+      },
+    })
+    const session = createTestSession({
+      ...baseDeps,
+      sceneEdits: coordinator,
+      commandAdmission: coordinator,
+    })
+    session.setTool(tool)
+
+    events.pointerDown({ x: 10, y: 20 }, { pointerId: 94 })
+    events.pointerMove({ x: 40, y: 60 }, { pointerId: 94 })
+    const measurementOverlay = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-zone-measurement-overlay]'),
+    ).find((overlay) => overlay.childElementCount > 0 && overlay.style.display === 'block')
+    if (!measurementOverlay) throw new Error(`Expected ${tool} draft measurements`)
+    const originalReplaceChildrenDescriptor = Object.getOwnPropertyDescriptor(
+      measurementOverlay,
+      'replaceChildren',
+    )
+    const originalReplaceChildren = measurementOverlay.replaceChildren.bind(measurementOverlay)
+    let enqueueBackfill = true
+    Object.defineProperty(measurementOverlay, 'replaceChildren', {
+      configurable: true,
+      value: (...nodes: (Node | string)[]) => {
+        if (enqueueBackfill) {
+          enqueueBackfill = false
+          const ticket = coordinator.issueTicket()
+          expect(coordinator.applyBackfills(ticket, [{
+            plantId: 'plant-1',
+            canonicalName: 'Malus domestica',
+            stratum: 'canopy',
+            canopySpreadM: 4,
+            scale: 4,
+          }])).toBe('deferred')
+        }
+        originalReplaceChildren(...nodes)
+      },
+    })
+
+    try {
+      const errors = captureWindowErrors(() => {
+        events.pointerUp({ x: 40, y: 60 }, { pointerId: 94 })
+      })
+
+      expect(errors).toHaveLength(1)
+      expect(store.persisted.plants[0]).toMatchObject({
+        stratum: 'canopy',
+        canopySpreadM: 4,
+        scale: 4,
+      })
+      expect(coordinator.canUndo.value).toBe(false)
+      if (tool === 'rectangle') {
+        expect(store.persisted.zones).toHaveLength(1)
+      } else {
+        expect(store.persisted.measurementGuides).toHaveLength(1)
+      }
+
+      const retryEvent = events.pointerDown({ x: 10, y: 20 }, { pointerId: 95 })
+
+      expect(retryEvent.defaultPrevented).toBe(true)
+      expect(coordinator.canUndo.value).toBe(true)
+      if (tool === 'rectangle') {
+        expect(store.persisted.zones).toHaveLength(1)
+      } else {
+        expect(store.persisted.measurementGuides).toHaveLength(1)
+      }
+
+      events.pointerDown({ x: 50, y: 70 }, { pointerId: 96 })
+      events.pointerMove({ x: 80, y: 100 }, { pointerId: 96 })
+      events.pointerUp({ x: 80, y: 100 }, { pointerId: 96 })
+
+      if (tool === 'rectangle') {
+        expect(store.persisted.zones).toHaveLength(2)
+      } else {
+        expect(store.persisted.measurementGuides).toHaveLength(2)
+      }
+      expect(coordinator.undo()).toBe(true)
+      expect(coordinator.undo()).toBe(true)
+      expect(coordinator.undo()).toBe(false)
+    } finally {
+      if (originalReplaceChildrenDescriptor) {
+        Object.defineProperty(
+          measurementOverlay,
+          'replaceChildren',
+          originalReplaceChildrenDescriptor,
+        )
+      } else {
+        Reflect.deleteProperty(measurementOverlay, 'replaceChildren')
+      }
+      session.dispose()
+    }
   })
 
   it('does not create rectangle zones on a locked Zones Layer', () => {
@@ -6015,6 +6743,43 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 80, y: 60 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
+    session.dispose()
+  })
+
+  it('quarantines band-selection completion while another Scene Edit owns authority', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 20 }),
+        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 120 }),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection(['plant-2'])
+
+    events.pointerDown({ x: 0, y: 0 }, { button: 0, pointerId: 101 })
+    events.pointerMove({ x: 50, y: 50 }, { button: 0, pointerId: 101 })
+    expect(store.session.selectedEntityIds).toEqual(new Set())
+    const unrelated = deps.sceneEdits.begin('external-preview')
+    unrelated.mutate((draft) => {
+      draft.plants[1]!.position = { x: 130, y: 130 }
+    })
+
+    const blockedPointerUp = events.pointerUp(
+      { x: 50, y: 50 },
+      { button: 0, pointerId: 101 },
+    )
+
+    expect(blockedPointerUp.defaultPrevented).toBe(true)
+    expect(store.session.selectedEntityIds).toEqual(new Set())
+    unrelated.abort()
+
+    events.pointerDown({ x: 0, y: 0 }, { button: 0, pointerId: 102 })
+    events.pointerMove({ x: 50, y: 50 }, { button: 0, pointerId: 102 })
+    events.pointerUp({ x: 50, y: 50 }, { button: 0, pointerId: 102 })
+
+    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
     session.dispose()
   })
 
@@ -8107,6 +8872,80 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('preserves Saved Object Stamp drag state while another Scene edit owns admission', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    const dragData = new Map<string, string>()
+    let protectedDragData = true
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'copy',
+      get types() {
+        return Array.from(dragData.keys())
+      },
+      setData(type: string, value: string) {
+        dragData.set(type, value)
+      },
+      getData(type: string) {
+        if (protectedDragData) return ''
+        return dragData.get(type) ?? ''
+      },
+    }
+    writeSavedObjectStampDragData(dataTransfer, {
+      id: 'stamp-1',
+      name: 'Apple',
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+      payload_json: JSON.stringify({
+        version: 1,
+        anchor: { x: 0, y: 0 },
+        plants: [{
+          id: 'plant-1',
+          canonicalName: 'Malus domestica',
+          commonName: 'Apple',
+          color: null,
+          symbol: null,
+          position: { x: 0, y: 0 },
+          rotationDeg: null,
+          scale: 2,
+        }],
+        zones: [],
+        annotations: [],
+        groups: [],
+      }),
+    })
+    const dragEvent = (type: 'dragover' | 'drop') => {
+      const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
+      Object.defineProperties(event, {
+        clientX: { configurable: true, value: 80 },
+        clientY: { configurable: true, value: 90 },
+        dataTransfer: { configurable: true, value: dataTransfer },
+      })
+      return event
+    }
+    const active = deps.sceneEdits.begin('external-preview')
+
+    container.dispatchEvent(dragEvent('dragover'))
+    expect(dataTransfer.dropEffect).toBe('none')
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+
+    protectedDragData = false
+    container.dispatchEvent(dragEvent('drop'))
+    expect(store.persisted.plants).toHaveLength(0)
+
+    active.abort()
+    protectedDragData = true
+    container.dispatchEvent(dragEvent('dragover'))
+    expect(dataTransfer.dropEffect).toBe('copy')
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).not.toBeNull()
+
+    protectedDragData = false
+    container.dispatchEvent(dragEvent('drop'))
+    expect(store.persisted.plants).toHaveLength(1)
+    session.dispose()
+  })
+
   it('blocks Saved Object Stamp drops when any target Layer is locked', () => {
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) =>
@@ -8363,6 +9202,167 @@ describe('SceneInteractionSession', () => {
     })
     expect(preview?.style.display).toBe('none')
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drop')
+    session.dispose()
+  })
+
+  it('clears and quarantines accepted dragover feedback when the settled read fails', () => {
+    const settledReadFailure = new Error('dragover settled read failed')
+    let failRead = false
+    const settledReader: SettledSceneReader = {
+      revision: signal(0),
+      readWhenSettled<T>(operation: () => T): T {
+        if (failRead) throw settledReadFailure
+        return operation()
+      },
+    }
+    const deps = createInteractionDeps(container, store, camera, { settledReader })
+    const session = createTestSession(deps)
+    const dragData = new Map<string, string>()
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      get types() {
+        return Array.from(dragData.keys())
+      },
+      setData(type: string, value: string) {
+        dragData.set(type, value)
+      },
+      getData(type: string) {
+        return dragData.get(type) ?? ''
+      },
+    }
+    writePlantStampDragData(dataTransfer, {
+      canonical_name: 'Pyrus communis',
+      common_name: 'Pear',
+      stratum: 'mid',
+      width_max_m: 3,
+    })
+    const dragOverEvent = () => {
+      const event = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+      Object.defineProperties(event, {
+        clientX: { configurable: true, value: 80 },
+        clientY: { configurable: true, value: 90 },
+        dataTransfer: { configurable: true, value: dataTransfer },
+      })
+      return event
+    }
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+
+    container.dispatchEvent(dragOverEvent())
+    expect(dataTransfer.dropEffect).toBe('copy')
+    expect(preview?.style.display).toBe('block')
+
+    failRead = true
+    const downstreamDragOver = vi.fn()
+    container.addEventListener('dragover', downstreamDragOver)
+    const rejectedDragOver = dragOverEvent()
+    const errors = captureWindowErrors(() => {
+      container.dispatchEvent(rejectedDragOver)
+    })
+
+    expect(errors).toEqual([settledReadFailure])
+    expect(rejectedDragOver.defaultPrevented).toBe(true)
+    expect(downstreamDragOver).not.toHaveBeenCalled()
+    expect(dataTransfer.dropEffect).toBe('none')
+    expect(preview?.style.display).toBe('none')
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+
+    container.removeEventListener('dragover', downstreamDragOver)
+    failRead = false
+    writeSavedObjectStampDragData(dataTransfer, {
+      id: 'stamp-1',
+      name: 'Apple',
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+      payload_json: JSON.stringify({
+        version: 1,
+        anchor: { x: 0, y: 0 },
+        plants: [{
+          id: 'plant-1',
+          canonicalName: 'Malus domestica',
+          commonName: 'Apple',
+          color: null,
+          symbol: null,
+          position: { x: 0, y: 0 },
+          rotationDeg: null,
+          scale: 2,
+        }],
+        zones: [],
+        annotations: [],
+        groups: [],
+      }),
+    })
+    container.dispatchEvent(dragOverEvent())
+    expect(dataTransfer.dropEffect).toBe('copy')
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).not.toBeNull()
+
+    failRead = true
+    const savedStampErrors = captureWindowErrors(() => {
+      container.dispatchEvent(dragOverEvent())
+    })
+    expect(savedStampErrors).toEqual([settledReadFailure])
+    expect(dataTransfer.dropEffect).toBe('none')
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    session.dispose()
+  })
+
+  it('previews dragover without invoking recovery-capable command admission', () => {
+    const commandAdmission: SceneCommandAdmission = {
+      revision: signal(0),
+      runWhenSettled: vi.fn(() => {
+        throw new Error('dragover must not resume pending maintenance')
+      }),
+    }
+    const readWhenSettled = vi.fn()
+    const settledReader: SettledSceneReader = {
+      revision: signal(0),
+      readWhenSettled<T>(operation: () => T): T {
+        readWhenSettled()
+        return operation()
+      },
+    }
+    const deps = {
+      ...createInteractionDeps(container, store, camera, { commandAdmission }),
+      settledReader,
+    } as SceneInteractionSessionDeps
+    const session = createTestSession(deps)
+    const dragData = new Map<string, string>()
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      get types() {
+        return Array.from(dragData.keys())
+      },
+      setData(type: string, value: string) {
+        dragData.set(type, value)
+      },
+      getData(type: string) {
+        return dragData.get(type) ?? ''
+      },
+    }
+    writePlantStampDragData(dataTransfer, {
+      canonical_name: 'Pyrus communis',
+      common_name: 'Pear',
+      stratum: 'mid',
+      width_max_m: 3,
+    })
+    const event = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(event, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: { configurable: true, value: dataTransfer },
+    })
+
+    const errors = captureWindowErrors(() => {
+      container.dispatchEvent(event)
+    })
+
+    expect(errors).toEqual([])
+    expect(commandAdmission.runWhenSettled).not.toHaveBeenCalled()
+    expect(readWhenSettled).toHaveBeenCalledOnce()
+    expect(dataTransfer.dropEffect).toBe('copy')
     session.dispose()
   })
 

@@ -97,13 +97,14 @@ function makeSession(): CanvasDocumentSurface {
     loadDocument: vi.fn(() => {
       loaded = true;
     }),
-    replaceDocument: vi.fn(() => {
+    replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
       loaded = true;
+      finalizeReplacement();
+      return { callerFinalizerInvoked: true };
     }),
     hasLoadedDocument: vi.fn(() => loaded),
     serializeDocument: vi.fn((metadata, doc) => ({ ...doc, name: metadata.name })),
     markSaved: vi.fn(),
-    clearHistory: vi.fn(),
     resize: vi.fn(),
     destroy: vi.fn(),
   };
@@ -171,13 +172,16 @@ describe("document session transition", () => {
 
     expect(result).toEqual({ status: "applied", documentLoaded: true });
     expect(mocks.saveDesign).not.toHaveBeenCalled();
-    expect(session.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ name: "Next", extra: {} }));
+    expect(session.replaceDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Next", extra: {} }),
+      expect.any(Object),
+      expect.any(Function),
+    );
     expect(session.loadDocument).not.toHaveBeenCalled();
     expect(store.readCurrentDesign()?.name).toBe("Next");
     expect(store.readDesignName()).toBe("Next");
     expect(store.readDesignPath()).toBe("/designs/next.canopi");
     expect(store.designDirty.value).toBe(false);
-    expect(session.clearHistory).toHaveBeenCalledTimes(1);
     expect(session.showCanvasChrome).toHaveBeenCalledTimes(1);
     expect(session.zoomToFit).toHaveBeenCalledTimes(1);
     expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
@@ -491,7 +495,6 @@ describe("document session transition", () => {
     expect(session.replaceDocument).not.toHaveBeenCalled();
     expect(store.readCurrentDesign()).toBe(mounted);
     expect(store.designDirty.value).toBe(true);
-    expect(session.clearHistory).toHaveBeenCalledTimes(1);
     expect(session.zoomToFit).toHaveBeenCalledTimes(1);
   });
 
@@ -507,7 +510,11 @@ describe("document session transition", () => {
     await flushMicrotasks();
 
     expect(mocks.loadDesign).toHaveBeenCalledWith("/designs/queued.canopi");
-    expect(session.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ name: "Queued" }));
+    expect(session.replaceDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Queued" }),
+      expect.any(Object),
+      expect.any(Function),
+    );
     expect(store.readPendingDesignPath()).toBe(null);
     expect(results).toEqual([{ status: "applied", documentLoaded: true }]);
     cancel();

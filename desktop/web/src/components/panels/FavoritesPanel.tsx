@@ -13,7 +13,10 @@ import {
   SAVED_OBJECT_STAMP_THUMBNAIL_HEIGHT,
   SAVED_OBJECT_STAMP_THUMBNAIL_WIDTH,
 } from '../../app/saved-object-stamps/thumbnail-renderer'
-import { commitSavedStampsFrameHeight } from '../../app/favorites/controller'
+import {
+  commitSavedStampsFrameHeight,
+  saveCanvasSelectionAsObjectStamp,
+} from '../../app/favorites/controller'
 import {
   clearSavedObjectStampDragSource,
   writeSavedObjectStampDragData,
@@ -382,7 +385,7 @@ export function FavoritesPanel() {
               type="button"
               className={styles.saveStampButton}
               disabled={!savedStampSelection.canSave}
-              onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
+              onClick={saveCanvasSelectionAsObjectStamp}
             >
               {t('savedObjectStamps.saveSelection')}
             </button>

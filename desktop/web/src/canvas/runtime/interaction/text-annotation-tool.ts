@@ -1,5 +1,5 @@
 import type { CameraController } from '../camera'
-import type { ScenePoint, SceneStore } from '../scene'
+import type { ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { appendTextAnnotationToDraft } from './tool-actions'
 import type { SceneToolAdapter } from './tool-adapter'
@@ -8,7 +8,7 @@ import { isSceneLayerOpenForCreation } from './layer-guards'
 export interface TextAnnotationToolContext {
   readonly container: HTMLElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
 }
 
@@ -102,8 +102,10 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
       cancel()
       return
     }
-    cancel()
-    if (!text) return
+    if (!text) {
+      cancel()
+      return
+    }
 
     context.sceneEdits.run('interaction-text', (tx) => {
       let nextId = ''
@@ -111,7 +113,7 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
         nextId = appendTextAnnotationToDraft(draft, position, text)
       })
       tx.setSelection([nextId])
-    })
+    }, { onCommitted: cancel })
   }
 
   function cancel(): void {

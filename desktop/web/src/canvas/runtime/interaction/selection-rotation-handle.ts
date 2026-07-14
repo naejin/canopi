@@ -1,7 +1,7 @@
 import { t } from '../../../i18n'
 import type { CameraController, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
-import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStore } from '../scene'
+import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStateReader } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter'
@@ -9,7 +9,7 @@ import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter
 interface SelectionRotationHandleOptions {
   readonly container: HTMLElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void

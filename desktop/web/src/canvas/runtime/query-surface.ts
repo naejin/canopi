@@ -3,16 +3,23 @@ import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { CameraController } from './camera'
 import type { CanvasDesignObjectSelectionModel, CanvasQueryRevision, CanvasQuerySurface } from './runtime'
-import type { ScenePersistedState, SceneStore, SceneViewportState } from './scene'
+import type {
+  SceneDocumentReader,
+  ScenePersistedState,
+  SceneStateReader,
+  SceneViewportState,
+} from './scene'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
+import type { SettledSceneReader } from './scene-runtime/transactions'
 
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
-  readonly sceneStore: Pick<SceneStore, 'persisted' | 'session' | 'toCanopiFile'>
+  readonly sceneStore: SceneStateReader & SceneDocumentReader
   readonly camera: Pick<CameraController, 'viewport' | 'screenSize'>
   readonly viewportRevision: CanvasQueryRevision['viewport']
+  readonly settledReader: SettledSceneReader
   readonly mutations: Pick<
     SceneRuntimeMutationController,
     'getSelectedPlantColorContext' | 'getSelectedPlantSymbolContext'
@@ -56,6 +63,13 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
     return this.options.mutations.getSelectedPlantSymbolContext()
   }
   getPlacedPlants(): PlacedPlant[] { return this.options.sceneStore.toCanopiFile().plants }
+  getSettledPlacedPlants(): PlacedPlant[] | null {
+    void this.options.settledReader.revision.value
+    return this.options.settledReader.readWhenSettled(
+      () => this.options.sceneStore.toCanopiFile().plants,
+      null,
+    )
+  }
   getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
     return this.options.presentation.getLocalizedCommonNames()
   }

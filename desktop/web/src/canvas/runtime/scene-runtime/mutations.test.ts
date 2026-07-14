@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { CanopiFile } from '../../../types/design'
 import { resolvePlantSymbolForPlant, SceneStore } from '../scene'
+import { SceneHistory } from '../scene-history'
 import { SceneRuntimeMutationController } from './mutations'
 import { SceneRuntimeEditCoordinator } from './transactions'
 
@@ -91,24 +92,23 @@ function createController(file = makeFile()) {
     dirtyTypes: [] as string[],
     plantSpeciesColorSyncs: 0,
   }
-  const captureSnapshot = () => {
-    const snapshot = sceneStore.snapshot()
-    return {
-      persisted: snapshot.persisted,
-      session: snapshot.session,
-    }
-  }
   const setSelection = (ids: Iterable<string>) => {
     sceneStore.setSelection(ids)
   }
+  const history = new SceneHistory()
+  const record = history.record.bind(history)
+  vi.spyOn(history, 'record').mockImplementation((command, transaction) => {
+    state.dirtyTypes.push(command.type)
+    return record(command, transaction)
+  })
   const sceneEdits = new SceneRuntimeEditCoordinator({
     sceneStore,
-    captureSnapshot,
-    markDirty: (_before, type) => {
-      state.dirtyTypes.push(type ?? 'scene-mutation')
-      return true
-    },
+    history,
     setSelection,
+    incrementSceneRevision: () => {},
+    syncCanvasSignalsFromScene: () => {
+      state.plantSpeciesColorSyncs += 1
+    },
     invalidate: (kind) => {
       if (kind === 'scene') state.invalidations += 1
     },
@@ -119,10 +119,9 @@ function createController(file = makeFile()) {
       set: setSelection,
     },
     sceneEdits,
+    commandAdmission: sceneEdits,
+    settledReader: sceneEdits,
     presentation: {
-      syncPlantSpeciesColors: () => {
-        state.plantSpeciesColorSyncs += 1
-      },
       getViewportScale: () => 1,
       createPlantPresentationContext: (viewportScale = 1) => ({
         viewport: { x: 0, y: 0, scale: viewportScale },

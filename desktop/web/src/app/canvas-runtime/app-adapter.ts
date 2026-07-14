@@ -30,7 +30,7 @@ export function createAppCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
     cleanState: { setCanvasClean },
     document: { composeDocumentForSave },
     savedObjectStamps: {
-      saveCurrentSelection: () => savedObjectStampWorkbench.saveCurrentSelection(),
+      saveCurrentSelection: (capture) => savedObjectStampWorkbench.saveSelection(capture),
     },
     presentationData: {
       plantLabels,

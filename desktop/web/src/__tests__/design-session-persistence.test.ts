@@ -49,11 +49,13 @@ function makeSession(
     hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
     loadDocument: vi.fn(),
-    replaceDocument: vi.fn(),
+    replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
+      finalizeReplacement()
+      return { callerFinalizerInvoked: true }
+    }),
     hasLoadedDocument: vi.fn(() => true),
     serializeDocument: vi.fn(serializeDocument),
     markSaved: vi.fn(),
-    clearHistory: vi.fn(),
     resize: vi.fn(),
     destroy: vi.fn(),
   }

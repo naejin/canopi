@@ -3,7 +3,6 @@ import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
 } from '../app-adapter'
-import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import { CameraController } from '../camera'
 import { createSceneCanvasCommandSurface } from '../command-surface'
 import { createSceneCanvasDocumentSurface } from '../document-surface'
@@ -22,7 +21,13 @@ import type {
   CanvasQueryRevision,
   CanvasQuerySurface,
 } from '../runtime'
-import { SceneStore, type ScenePersistedState, type SceneViewportState } from '../scene'
+import {
+  SceneStore,
+  type ScenePersistedState,
+  type SceneSessionWriter,
+  type SceneStateReader,
+  type SceneViewportState,
+} from '../scene'
 import { SceneHistory } from '../scene-history'
 import { SceneRuntimeChromeCoordinator } from './chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './document'
@@ -38,7 +43,9 @@ import {
 } from './scene-sync'
 import {
   SceneRuntimeEditCoordinator,
+  type SceneCommandAdmission,
   type SceneEditCoordinator,
+  type SettledSceneReader,
 } from './transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 
@@ -55,14 +62,9 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly resolveHighlightedTargets: (
     scene: ScenePersistedState,
   ) => { plantIds: readonly string[]; zoneIds: readonly string[] }
-  readonly currentPresentationRevision: () => number
-  readonly applyPresentationBackfillsIfCurrent: (
-    expectedRevision: number,
-    backfills: Parameters<SceneRuntimeDocumentBridge['applyPresentationBackfills']>[0],
-  ) => boolean
   readonly incrementPlantNamesRevision: () => void
   readonly setSelection: (ids: Iterable<string>) => void
-  readonly resetTransientRuntimeState: () => void
+  readonly prepareForDocumentReplacement: () => void
   readonly syncHoveredCanvasTargets: (id: string | null) => void
   readonly syncCanvasSignalsFromScene: () => void
   readonly invalidate: (kind: RuntimeInvalidationKind) => void
@@ -85,7 +87,8 @@ export interface SceneRuntimeConstructionCallbacks {
 }
 
 export interface SceneRuntimeConstruction {
-  readonly sceneStore: SceneStore
+  readonly sceneState: SceneStateReader
+  readonly sceneSession: SceneSessionWriter
   readonly camera: CameraController
   readonly sceneRevision: Signal<number>
   readonly plantNamesQueryRevision: Signal<number>
@@ -100,11 +103,9 @@ export interface SceneRuntimeConstruction {
   readonly presentation: SceneRuntimePresentationController
   readonly chrome: SceneRuntimeChromeCoordinator
   readonly appAdapter: CanvasRuntimeAppAdapter
-  readonly history: SceneHistory
   readonly commandSurface: CanvasCommandSurface
-  readonly sceneEdits: SceneEditCoordinator
-  readonly mutations: SceneRuntimeMutationController
-  readonly documents: SceneRuntimeDocumentBridge
+  readonly sceneCommands: SceneEditCoordinator & SceneCommandAdmission
+  readonly settledReader: SettledSceneReader
   readonly documentSurface: CanvasDocumentSurface
   readonly querySurface: CanvasQuerySurface
   readonly panelTargetAdapter: SceneRuntimePanelTargetAdapter
@@ -121,6 +122,7 @@ export function createSceneRuntimeConstruction(
   const plantNamesQueryRevision = signal(0)
   const viewportRevision = signal(0)
   const transientHistoryRevision = signal(0)
+  let runtimeActive = true
   const revision: CanvasQueryRevision = {
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
@@ -136,6 +138,16 @@ export function createSceneRuntimeConstruction(
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
   })
+  const sceneEdits = new SceneRuntimeEditCoordinator({
+    sceneStore,
+    history,
+    setSelection: callbacks.setSelection,
+    incrementSceneRevision: callbacks.incrementSceneRevision,
+    incrementViewportRevision: callbacks.incrementViewportRevision,
+    syncCanvasSignalsFromScene: callbacks.syncCanvasSignalsFromScene,
+    invalidate: callbacks.invalidate,
+  })
+  const settledReader: SettledSceneReader = sceneEdits
   const panelTargetAdapter =
     options.targetPresentation ?? createDetachedSceneRuntimePanelTargetAdapter()
   const presentationData = appAdapter.presentationData
@@ -153,31 +165,28 @@ export function createSceneRuntimeConstruction(
   const rendering = new SceneRuntimeRenderScheduler({
     getRendererHost: () => rendererHost,
     getViewport: () => camera.viewport,
-    prepareSceneSnapshot: async () => {
-      const presentationRevision = callbacks.currentPresentationRevision()
-      const snapshot = await presentation.refreshCurrentPresentationData()
-      callbacks.applyPresentationBackfillsIfCurrent(
-        presentationRevision,
-        snapshot.backfills,
-      )
-      return presentation.buildRendererSnapshot()
+    prepareSceneRender: async () => {
+      const ticket = sceneEdits.issueTicket()
+      const refresh = await presentation.refreshCurrentPresentationData()
+      return {
+        publish: () => {
+          presentation.publishRefresh(refresh)
+          if (!refresh.failure) sceneEdits.applyBackfills(ticket, refresh.backfills)
+          return presentation.buildRendererSnapshot()
+        },
+      }
     },
     renderChrome: callbacks.renderChrome,
   })
   const documents = new SceneRuntimeDocumentBridge({
     sceneStore,
-    history,
-    setSelection: callbacks.setSelection,
-    resetTransientRuntimeState: callbacks.resetTransientRuntimeState,
+    authority: sceneEdits,
+    prepareForDocumentReplacement: callbacks.prepareForDocumentReplacement,
     clearHoveredTargets: () => callbacks.syncHoveredCanvasTargets(null),
     clearPanelOriginTargets: () => panelTargetAdapter.clearPanelOriginTargets(),
     composeDocumentForSave: (input) => appAdapter.document.composeDocumentForSave(input),
     syncCanvasSignalsFromDocument: (file) =>
       syncCanvasSignalsFromDocument(file, appAdapter.settings.layerProjections),
-    syncCanvasSignalsFromScene: callbacks.syncCanvasSignalsFromScene,
-    invalidateScene: () => callbacks.invalidate('scene'),
-    incrementSceneRevision: callbacks.incrementSceneRevision,
-    incrementViewportRevision: callbacks.incrementViewportRevision,
   })
   const documentSurface = createSceneCanvasDocumentSurface({
     documents,
@@ -192,6 +201,9 @@ export function createSceneRuntimeConstruction(
     renderChrome: callbacks.renderChrome,
     addGuide: callbacks.addGuide,
     clearHoveredEntity: () => callbacks.setHoveredEntityId(null, { invalidate: false }),
+    disposeRuntime: () => {
+      runtimeActive = false
+    },
     disposeInteraction: callbacks.disposeInteraction,
     disposeEffects: () => {
       runCanvasRuntimeCleanups(
@@ -200,22 +212,15 @@ export function createSceneRuntimeConstruction(
       )
     },
   })
-  const sceneEdits = new SceneRuntimeEditCoordinator({
-    sceneStore,
-    captureSnapshot: () => documents.captureCommandSnapshot(),
-    markDirty: (before, type) => documents.markDirty(before, type),
-    setSelection: callbacks.setSelection,
-    invalidate: callbacks.invalidate,
-  })
   const mutations = new SceneRuntimeMutationController({
     sceneStore,
     selection: {
       set: callbacks.setSelection,
     },
     sceneEdits,
+    commandAdmission: sceneEdits,
+    settledReader,
     presentation: {
-      syncPlantSpeciesColors: () =>
-        syncPlantSpeciesColorDefaults(sceneStore.persisted.plantSpeciesColors),
       getViewportScale: () => camera.viewport.scale,
       createPlantPresentationContext: (viewportScale) =>
         presentation.createPlantPresentationContext(viewportScale),
@@ -228,7 +233,10 @@ export function createSceneRuntimeConstruction(
   const commandSurface = createSceneCanvasCommandSurface({
     sceneStore,
     camera,
-    history,
+    history: sceneEdits,
+    commandAdmission: sceneEdits,
+    settledReader,
+    savedObjectStamps: appAdapter.savedObjectStamps,
     transientHistory: {
       revision: transientHistoryRevision,
       canUndo: callbacks.canUndoTransientHistory,
@@ -236,29 +244,29 @@ export function createSceneRuntimeConstruction(
       undo: callbacks.undoTransientHistory,
       redo: callbacks.redoTransientHistory,
     },
-    documents,
     mutations,
     sceneEdits,
+    presentationMaintenance: sceneEdits,
     presentation,
     settings: appAdapter.settings,
     setViewport: callbacks.setViewport,
     setInteractionTool: callbacks.setInteractionTool,
-    syncCanvasSignalsFromScene: callbacks.syncCanvasSignalsFromScene,
-    incrementSceneRevision: callbacks.incrementSceneRevision,
-    currentPresentationRevision: callbacks.currentPresentationRevision,
     invalidate: callbacks.invalidate,
+    isRuntimeActive: () => runtimeActive,
   })
   const querySurface = createSceneCanvasQuerySurface({
     revision,
     sceneStore,
     camera,
     viewportRevision,
+    settledReader,
     mutations,
     presentation,
   })
 
   return {
-    sceneStore,
+    sceneState: sceneStore,
+    sceneSession: sceneStore,
     camera,
     sceneRevision,
     plantNamesQueryRevision,
@@ -275,11 +283,9 @@ export function createSceneRuntimeConstruction(
     presentation,
     chrome,
     appAdapter,
-    history,
     commandSurface,
-    sceneEdits,
-    mutations,
-    documents,
+    sceneCommands: sceneEdits,
+    settledReader,
     documentSurface,
     querySurface,
     panelTargetAdapter,

@@ -4,7 +4,8 @@ import type {
   CanvasPlantLabelSource,
   CanvasSpeciesPresentationCache,
 } from './presentation-data'
-import type { CanvasRuntimeDocumentMetadata } from './runtime'
+import type { ScenePersistedState } from './scene'
+import type { CanvasDesignObjectSelectionModel, CanvasRuntimeDocumentMetadata } from './runtime'
 
 export interface CanvasRuntimeLayerProjectionSource {
   readonly name: string
@@ -32,8 +33,14 @@ export interface CanvasRuntimeDocumentAdapter {
   composeDocumentForSave(input: CanvasRuntimeDocumentCompositionInput): CanopiFile
 }
 
+export interface CanvasRuntimeSavedObjectStampCapture {
+  readonly scene: ScenePersistedState
+  readonly selection: CanvasDesignObjectSelectionModel
+  readonly localizedCommonNames: ReadonlyMap<string, string | null>
+}
+
 export interface CanvasRuntimeSavedObjectStampAdapter {
-  saveCurrentSelection(): void | Promise<unknown>
+  saveCurrentSelection(capture: CanvasRuntimeSavedObjectStampCapture): void | Promise<unknown>
 }
 
 export interface CanvasRuntimeSettingsAdapter {

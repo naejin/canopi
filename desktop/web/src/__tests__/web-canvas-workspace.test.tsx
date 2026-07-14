@@ -224,13 +224,14 @@ function fakeRuntimeHost(): {
     loadDocument: vi.fn(() => {
       loaded = true
     }),
-    replaceDocument: vi.fn(() => {
+    replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
       loaded = true
+      finalizeReplacement()
+      return { callerFinalizerInvoked: true }
     }),
     hasLoadedDocument: vi.fn(() => loaded),
     serializeDocument: vi.fn((metadata, doc) => ({ ...doc, name: metadata.name })),
     markSaved: vi.fn(),
-    clearHistory: vi.fn(),
     resize: vi.fn(),
     destroy: vi.fn(),
   }
@@ -261,6 +262,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       redo: vi.fn(),
     },
     sceneEdits: {
+      saveSelectionAsObjectStamp: vi.fn(),
       copy: vi.fn(),
       paste: vi.fn(),
       pasteAt: vi.fn(),
@@ -337,6 +339,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       canClearSelectedSymbol: false,
     })),
     getPlacedPlants: vi.fn(() => []),
+    getSettledPlacedPlants: vi.fn(() => []),
     getLocalizedCommonNames: vi.fn(() => new Map()),
   }
 }

@@ -373,7 +373,6 @@ describe('browser Design Session lifecycle', () => {
       'Template Replacement',
       'Draft Replacement',
     ])
-    expect(canvas.clearHistory).toHaveBeenCalledTimes(4)
     expect(canvas.showCanvasChrome).toHaveBeenCalledTimes(4)
     expect(canvas.zoomToFit).toHaveBeenCalledTimes(4)
     expect(workflowRunner.install).toHaveBeenCalledTimes(5)
@@ -485,11 +484,13 @@ function testCanvasDocumentSurface(
     hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
     loadDocument: vi.fn(),
-    replaceDocument: vi.fn(),
+    replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
+      finalizeReplacement()
+      return { callerFinalizerInvoked: true }
+    }),
     hasLoadedDocument: vi.fn(() => true),
     serializeDocument: vi.fn((_metadata, doc) => doc),
     markSaved: vi.fn(),
-    clearHistory: vi.fn(),
     resize: vi.fn(),
     destroy: vi.fn(),
     ...overrides,

@@ -1,7 +1,7 @@
 import type { CameraController } from '../camera'
 import { createMeasurementGuideDraftMeasurements } from '../measurement-guides'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
-import type { SceneMeasurementGuideEntity, ScenePoint, SceneStore } from '../scene'
+import type { SceneMeasurementGuideEntity, ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter'
@@ -10,7 +10,7 @@ import { createZoneMeasurementOverlay, type ZoneMeasurementOverlayController } f
 interface MeasurementGuideControlPointOptions {
   readonly container: HTMLElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint

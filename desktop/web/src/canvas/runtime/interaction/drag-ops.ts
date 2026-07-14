@@ -3,7 +3,6 @@ import {
   type SceneMeasurementGuideEntity,
   type ScenePersistedState,
   type ScenePoint,
-  type SceneStore,
 } from '../scene'
 
 type MeasurementGuideDragStart = Pick<SceneMeasurementGuideEntity, 'start' | 'end'>
@@ -78,16 +77,6 @@ export function captureSceneDragState(
       if (annotation) state.annotationStarts.set(annotation.id, { ...annotation.position })
     }
   }
-}
-
-export function applySceneDragDelta(
-  store: SceneStore,
-  state: SceneDragState,
-  delta: ScenePoint,
-): void {
-  store.updatePersisted((draft) => {
-    applySceneDragDeltaToDraft(draft, state, delta)
-  })
 }
 
 export function applySceneDragDeltaToDraft(

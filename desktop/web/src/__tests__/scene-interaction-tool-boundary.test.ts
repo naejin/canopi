@@ -28,6 +28,12 @@ function importSpecifiers(source: string): string[] {
   )
 }
 
+function importsSceneHistory(source: string): boolean {
+  return importSpecifiers(source).some((specifier) =>
+    /(?:^|\/)scene-history(?:\.[cm]?[jt]sx?)?$/.test(specifier),
+  )
+}
+
 function runtimeModuleSources(
   path = '../canvas/runtime/',
 ): Array<{ readonly name: string; readonly source: string }> {
@@ -47,6 +53,123 @@ function runtimeModuleSources(
 }
 
 describe('Scene Interaction tool module boundaries', () => {
+  it('keeps persisted Scene writes behind the Settled Scene Authority', () => {
+    const runtimeSources = [
+      ...runtimeModuleSources(),
+      {
+        name: '../canvas/runtime/scene-interaction.ts',
+        source: readSource('../canvas/runtime/scene-interaction.ts'),
+      },
+    ]
+    const authorityPath = '../canvas/runtime/scene-runtime/transactions.ts'
+    const concreteStoreOwners = [
+      '../canvas/runtime/scene/store.ts',
+      '../canvas/runtime/scene-runtime/construction.ts',
+      authorityPath,
+    ]
+    const removedBypasses = [
+      'historyRuntime',
+      'SceneCommandRuntime',
+      'currentPresentationRevision',
+      'applyPresentationBackfillsIfCurrent',
+    ]
+
+    for (const { name, source } of runtimeSources) {
+      for (const bypass of removedBypasses) expect(source, name).not.toContain(bypass)
+      if (!concreteStoreOwners.includes(name)) {
+        expect(source, `${name} should receive a read-only Scene role`).not.toMatch(
+          /\bSceneStore\b/,
+        )
+      }
+      if (name !== authorityPath) {
+        expect(source, name).not.toContain('.updatePersisted(')
+        expect(source, name).not.toContain('.restoreSnapshot(')
+      }
+      if (name !== '../canvas/runtime/scene-runtime.ts') {
+        expect(source, name).not.toContain('_sceneStore.setSelection(')
+      }
+      if (
+        name !== authorityPath
+        && name !== '../canvas/runtime/scene-runtime/document.ts'
+      ) {
+        expect(source, name).not.toContain('.hydrate(')
+      }
+      if (importsSceneHistory(source)) {
+        expect([authorityPath, '../canvas/runtime/scene-runtime/construction.ts']).toContain(name)
+      }
+    }
+
+    const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
+    expect(documentSource).not.toContain('.updatePersisted(')
+    expect(documentSource).not.toContain("from '../scene-history'")
+    expect(documentSource).toContain('this._authority.hydrate(file,')
+    expect(documentSource).toContain('this._authority.replaceDocument(file, {')
+    expect(documentSource).toContain('token: CanvasDocumentReplacementToken,')
+    expect(documentSource).toContain('this._authority.replaceDocument(file, {\n      token,')
+    expect(documentSource).toContain('finalizeReplacement: () => void,')
+    expect(documentSource).toContain('): CanvasDocumentReplacementReceipt {')
+    expect(documentSource).toContain('return { callerFinalizerInvoked }')
+    expect(documentSource).not.toContain('finalizeReplacement: () => void = () => {}')
+    expect(documentSource.indexOf('this._prepareForDocumentReplacement()'))
+      .toBeGreaterThan(documentSource.indexOf('this._authority.replaceDocument(file, {'))
+
+    const toolActionsSource = readSource('../canvas/runtime/interaction/tool-actions.ts')
+    const dragOpsSource = readSource('../canvas/runtime/interaction/drag-ops.ts')
+    expect(toolActionsSource).not.toContain('appendRectangleZone(store')
+    expect(toolActionsSource).not.toContain('appendTextAnnotation(\n  store')
+    expect(dragOpsSource).not.toContain('applySceneDragDelta(\n  store')
+  })
+
+  it('gives the runtime shell only explicit Scene read, session-write, and command roles', () => {
+    const constructionSource = readSource('../canvas/runtime/scene-runtime/construction.ts')
+    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+    const storeSource = readSource('../canvas/runtime/scene/store.ts')
+
+    expect(constructionSource).toContain('readonly sceneState: SceneStateReader')
+    expect(constructionSource).toContain('readonly sceneSession: SceneSessionWriter')
+    expect(constructionSource).toContain(
+      'readonly sceneCommands: SceneEditCoordinator & SceneCommandAdmission',
+    )
+    expect(constructionSource).not.toContain('readonly sceneStore: SceneStore')
+    expect(constructionSource).not.toContain('readonly sceneEdits: SceneRuntimeAuthority')
+    expect(constructionSource).not.toContain('readonly mutations: SceneRuntimeMutationController')
+    expect(constructionSource).not.toContain('readonly documents: SceneRuntimeDocumentBridge')
+    expect(runtimeSource).not.toContain("SceneRuntimeConstruction['sceneStore']")
+    expect(runtimeSource).not.toContain('this._construction.sceneStore')
+    expect(runtimeSource).not.toContain("SceneRuntimeConstruction['sceneEdits']")
+    const sessionWriterSource = storeSource.slice(
+      storeSource.indexOf('export type SceneSessionWriter'),
+      storeSource.indexOf('\n\nexport {'),
+    )
+    expect(sessionWriterSource).toContain(
+      "'setSelection' | 'setViewport' | 'setHoveredEntityId'",
+    )
+    expect(sessionWriterSource).not.toContain('updateSession')
+    expect(runtimeSource).toContain('this._sceneSession.setHoveredEntityId(id)')
+    expect(runtimeSource).not.toContain('this._sceneSession.updateSession(')
+  })
+
+  it('separates Scene history commands from saved-checkpoint authority', () => {
+    const commandSource = readSource('../canvas/runtime/command-surface.ts')
+    const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
+
+    expect(commandSource).toContain('readonly history: SceneHistoryCommands')
+    expect(commandSource).not.toContain('readonly history: SettledSceneHistory')
+    expect(documentSource).toContain(
+      'authority: SceneDocumentAuthority & SceneSavedCheckpoint',
+    )
+    expect(documentSource).not.toContain('SceneDocumentAuthority & SettledSceneHistory')
+  })
+
+  it('recognizes SceneHistory imports independently of relative depth', () => {
+    expect(importsSceneHistory("import type { SceneHistory } from '../../scene-history'"))
+      .toBe(true)
+    expect(importsSceneHistory("import { SceneHistory } from './scene-history.ts'"))
+      .toBe(true)
+    expect(importsSceneHistory("import { SceneHistoryTool } from './scene-history-tools'"))
+      .toBe(false)
+  })
+
   it('keeps broad Scene Interaction tests on the user-equivalent event harness', () => {
     const guardedSources = [
       readSource('scene-interaction.test.ts'),
@@ -71,6 +194,7 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(interactionSource).toContain("removeEventListener('blur'")
     expect(interactionSource).toContain('_cancelTransientInteraction')
     expect(interactionSource).toContain('_cancelPendingInteractionHostFocus')
+    expect(interactionSource).toContain('prepareForDocumentReplacement')
     expect(interactionSource).toContain('_selectionToolbar.dispose()')
     expect(sourceExists('../canvas/runtime/interaction/frame.ts')).toBe(false)
   })

@@ -1,3 +1,4 @@
+import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../ipc/species', () => ({
@@ -32,12 +33,15 @@ import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtim
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../target'
+import { createCanvasDocumentReplacementToken } from './runtime'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
 import type { PlantNameLabel } from './selection-labels'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
-import type {
-  SceneEditCoordinator,
-  SceneEditTransaction,
+import type { ScenePresentationRefreshResult } from './scene-runtime/presentation'
+import {
+  SceneEditBusyError,
+  type SceneEditCoordinator,
+  type SceneEditTransaction,
 } from './scene-runtime/transactions'
 import type {
   CanvasRuntimeAppAdapter,
@@ -123,6 +127,28 @@ function fileWithOnlyPlants(...ids: string[]): CanopiFile {
     zones: [],
     annotations: [],
     groups: [],
+  }
+}
+
+function fileWithOnlyAnnotation(text: string): CanopiFile {
+  const file = makeFile()
+  return {
+    ...file,
+    plants: [],
+    zones: [],
+    annotations: [{
+      id: 'annotation-1',
+      annotation_type: 'text',
+      position: { x: 24, y: 32 },
+      text,
+      font_size: 20,
+      rotation: null,
+      locked: false,
+    }],
+    groups: [],
+    layers: [
+      { name: 'annotations', visible: true, locked: false, opacity: 1 },
+    ],
   }
 }
 
@@ -460,7 +486,7 @@ describe('scene canvas runtime', () => {
     setInteractionViewport(runtime)
     runtime.commandSurface.tools.setTool('select')
 
-    const sceneEdits = (runtime as unknown as { _sceneEdits: SceneEditCoordinator })._sceneEdits
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
     const beginSceneEdit = sceneEdits.begin.bind(sceneEdits)
     let abortCalls = 0
     const beginSpy = vi.spyOn(sceneEdits, 'begin').mockImplementation((type: string) => {
@@ -496,6 +522,181 @@ describe('scene canvas runtime', () => {
     expect(container.style.cursor).toBe('crosshair')
 
     beginSpy.mockRestore()
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('retries interaction cancellation before replacing a document', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    const beginSceneEdit = sceneEdits.begin.bind(sceneEdits)
+    let abortCalls = 0
+    const beginSpy = vi.spyOn(sceneEdits, 'begin').mockImplementation((type: string) => {
+      const transaction = beginSceneEdit(type)
+      if (type !== 'interaction-drag') return transaction
+      return {
+        mutate: (edit) => transaction.mutate(edit),
+        setSelection: (ids: Iterable<string>) => transaction.setSelection(ids),
+        commit: (options) => transaction.commit(options),
+        get changed() {
+          return transaction.changed
+        },
+        abort: () => {
+          abortCalls += 1
+          if (abortCalls === 1) throw new Error('drag abort failed')
+          transaction.abort()
+        },
+      } satisfies SceneEditTransaction
+    })
+    const replacementToken = createCanvasDocumentReplacementToken()
+
+    try {
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 61 })
+      events.pointerMove({ x: 30, y: 30 }, { pointerId: 61 })
+
+      expect(() => runtime.documentSurface.replaceDocument(
+        fileWithOnlyPlants('plant-2'),
+        replacementToken,
+        () => {},
+      ))
+        .toThrow('drag abort failed')
+      expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
+        .toEqual(['plant-1'])
+
+      runtime.documentSurface.replaceDocument(
+        fileWithOnlyPlants('plant-2'),
+        replacementToken,
+        () => {},
+      )
+
+      expect(abortCalls).toBe(2)
+      expect(runtime.querySurface.getSceneSnapshot().plants).toEqual([
+        expect.objectContaining({ id: 'plant-2', position: { x: 20, y: 20 } }),
+      ])
+
+      events.pointerUp({ x: 30, y: 30 }, { pointerId: 61 })
+      expect(runtime.querySurface.getSceneSnapshot().plants).toEqual([
+        expect.objectContaining({ id: 'plant-2', position: { x: 20, y: 20 } }),
+      ])
+    } finally {
+      beginSpy.mockRestore()
+      events.dispose()
+      runtime.destroy()
+    }
+  })
+
+  it('reserves replacement authority before a live gesture releases', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+    let admitReleaseObserver = false
+    let attemptingAdmission = false
+    const committedScenes: string[][] = []
+    const dispose = effect(() => {
+      const settledPlants = runtime.querySurface.getSettledPlacedPlants()
+      if (!admitReleaseObserver || !settledPlants || attemptingAdmission) return
+      attemptingAdmission = true
+      try {
+        const changed = runtime.commandSurface.plantPresentation.setPlantColorForSpecies(
+          'Malus domestica',
+          '#335577',
+        )
+        if (changed > 0) {
+          committedScenes.push(settledPlants.map((plant) => plant.id))
+          admitReleaseObserver = false
+        }
+      } finally {
+        attemptingAdmission = false
+      }
+    })
+
+    try {
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 62 })
+      events.pointerMove({ x: 30, y: 30 }, { pointerId: 62 })
+      admitReleaseObserver = true
+
+      runtime.documentSurface.replaceDocument(
+        fileWithOnlyPlants('plant-2'),
+        createCanvasDocumentReplacementToken(),
+        () => {},
+      )
+
+      expect(committedScenes).toEqual([['plant-2']])
+      expect(runtime.querySurface.getSceneSnapshot().plantSpeciesColors)
+        .toEqual({ 'Malus domestica': '#335577' })
+      expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+      runtime.commandSurface.history.undo()
+      expect(runtime.querySurface.getSceneSnapshot().plantSpeciesColors).toEqual({})
+    } finally {
+      dispose()
+      events.dispose()
+      runtime.destroy()
+    }
+  })
+
+  it('cannot commit an old Annotation editor into a replacement document', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyAnnotation('Old document'))
+    setInteractionViewport(runtime)
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
+    const oldTextarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    oldTextarea.value = 'Stale draft'
+
+    runtime.documentSurface.replaceDocument(
+      fileWithOnlyAnnotation('New document'),
+      createCanvasDocumentReplacementToken(),
+      () => {},
+    )
+    oldTextarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(container.querySelector('textarea')).toBeNull()
+    expect(runtime.querySurface.getSceneSnapshot().annotations[0]?.text).toBe('New document')
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('cannot invoke an old Context Menu action against a replacement document', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.sceneEdits.selectAll()
+    const point = events.clientPoint({ x: 200, y: 180 })
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    }))
+    const remove = container.querySelector<HTMLButtonElement>(
+      '[data-canvas-context-command="delete"]',
+    )!
+    remove.focus()
+
+    runtime.documentSurface.replaceDocument(
+      fileWithOnlyPlants('plant-2'),
+      createCanvasDocumentReplacementToken(),
+      () => {},
+    )
+    remove.click()
+
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
+      .toEqual(['plant-2'])
+    expect(container.querySelector<HTMLElement>('[data-canvas-context-menu]')?.style.display)
+      .toBe('none')
+    expect(document.activeElement).not.toBe(remove)
     events.dispose()
     runtime.destroy()
   })
@@ -558,6 +759,148 @@ describe('scene canvas runtime', () => {
 
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
     events.dispose()
+    runtime.destroy()
+  })
+
+  it('blocks history while a long-lived Scene Edit owns the Scene', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    sceneEdits.run('move-before-drag', (tx) => {
+      tx.mutate((draft) => {
+        draft.plants[0]!.position.x = 20
+      })
+    })
+    const active = sceneEdits.begin('interaction-drag')
+    active.mutate((draft) => {
+      draft.plants[0]!.position.x = 30
+    })
+
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    runtime.commandSurface.history.undo()
+
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(30)
+    active.abort()
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(20)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+    runtime.commandSurface.history.undo()
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    runtime.destroy()
+  })
+
+  it('retries a quarantined history replay through the public command surface', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    sceneEdits.run('move-before-undo', (tx) => {
+      tx.mutate((draft) => {
+        draft.plants[0]!.position.x = 20
+      })
+    })
+    const invalidate = vi.spyOn(runtime as any, '_invalidate')
+      .mockImplementationOnce(() => {
+        throw new Error('history render publication failed')
+      })
+
+    expect(() => runtime.commandSurface.history.undo())
+      .toThrow('history render publication failed')
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(false)
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+
+    runtime.commandSurface.history.undo()
+
+    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(true)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    invalidate.mockRestore()
+    runtime.destroy()
+  })
+
+  it('admits whole Scene commands only while the Scene is settled', () => {
+    const runtime = new SceneCanvasRuntime()
+    const file = fileWithOnlyPlants('plant-1', 'plant-2')
+    file.plant_species_colors['Malus domestica'] = '#335577'
+    runtime.documentSurface.loadDocument(file)
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    sceneEdits.run('seed-selection', (tx) => {
+      tx.setSelection(['plant-1'])
+    })
+    runtime.commandSurface.sceneEdits.copy()
+    expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(true)
+    const active = sceneEdits.begin('interaction-drag')
+    active.mutate((draft) => {
+      draft.plants[1]!.canonicalName = 'Pyrus communis'
+    })
+    active.setSelection(['plant-2'])
+
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.copy()
+    runtime.commandSurface.sceneEdits.paste()
+
+    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-2']))
+    expect(runtime.querySurface.getSettledPlacedPlants()).toBeNull()
+    expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
+    expect(runtime.commandSurface.layers.setSceneLayerVisibility('plants', false)).toBe(false)
+    expect(runtime.commandSurface.plantPresentation.clearPlantSpeciesColor('Malus domestica')).toBe(false)
+    expect(runtime.querySurface.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
+      .toBe(true)
+    expect(runtime.querySurface.getSceneSnapshot().plantSpeciesColors['Malus domestica'])
+      .toBe('#335577')
+    active.abort()
+    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getSettledPlacedPlants()).toHaveLength(2)
+    expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(true)
+    runtime.commandSurface.sceneEdits.paste()
+    const pastedScene = runtime.querySurface.getSceneSnapshot()
+    expect(pastedScene.plants).toHaveLength(3)
+    expect(
+      pastedScene.plants.find((plant) => !['plant-1', 'plant-2'].includes(plant.id))?.canonicalName,
+    ).toBe('Malus domestica')
+    runtime.destroy()
+  })
+
+  it('captures Saved Object Stamps only while the Scene is settled', () => {
+    const saveCurrentSelection = vi.fn()
+    const localizedCommonNames = new Map<string, string | null>([
+      ['Malus domestica', 'Orchard Apple'],
+    ])
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...createAppCanvasRuntimeAppAdapter(),
+        settings: createTestSettingsAdapter(),
+        savedObjectStamps: { saveCurrentSelection },
+      },
+      plantLabels: {
+        getLocaleSnapshot: () => localizedCommonNames,
+        ensureEntries: async () => false,
+      },
+    })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    runtime.commandSurface.sceneEdits.selectAll()
+
+    runtime.commandSurface.sceneEdits.saveSelectionAsObjectStamp()
+    expect(saveCurrentSelection).toHaveBeenCalledTimes(1)
+    const firstCapture = saveCurrentSelection.mock.calls[0]![0]
+    expect(firstCapture.scene.plants[0]?.id).toBe('plant-1')
+    expect(firstCapture.selection.editableTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
+    expect(firstCapture.localizedCommonNames).toEqual(new Map([
+      ['Malus domestica', 'Orchard Apple'],
+    ]))
+    expect(firstCapture.localizedCommonNames).not.toBe(localizedCommonNames)
+
+    const active = sceneEdits.begin('interaction-drag')
+    runtime.commandSurface.sceneEdits.saveSelectionAsObjectStamp()
+    expect(saveCurrentSelection).toHaveBeenCalledTimes(1)
+
+    active.abort()
+    runtime.commandSurface.sceneEdits.saveSelectionAsObjectStamp()
+    expect(saveCurrentSelection).toHaveBeenCalledTimes(2)
     runtime.destroy()
   })
 
@@ -793,34 +1136,38 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.revision.viewport.value).toBeGreaterThan(before)
   })
 
-  it('skips stale presentation backfills after scene revision changes', async () => {
+  it('publishes current cache changes while skipping stale persisted presentation backfills', async () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(makeFile())
+    const invalidate = vi.spyOn(runtime as any, '_invalidate')
 
-    const applyPresentationBackfills = vi.spyOn(
-      (runtime as any)._documents,
-      'applyPresentationBackfills',
-    )
-    let resolveRefresh!: (value: { changed: boolean; backfills: Array<{ plantId: string; stratum: string | null; canopySpreadM: number | null; scale: number | null }> | null }) => void
-    const pendingRefresh = new Promise<{ changed: boolean; backfills: Array<{ plantId: string; stratum: string | null; canopySpreadM: number | null; scale: number | null }> | null }>((resolve) => {
+    let resolveRefresh!: (value: ScenePresentationRefreshResult) => void
+    const pendingRefresh = new Promise<ScenePresentationRefreshResult>((resolve) => {
       resolveRefresh = resolve
     })
     ;(runtime as any)._presentation.refreshSpeciesCacheEntries = vi.fn(() => pendingRefresh)
 
     const pending = runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(['Malus domestica'], 'en')
     runtime.commandSurface.plantPresentation.setPlantColorForSpecies('Malus domestica', '#335577')
+    const invalidationsBeforeRefresh = invalidate.mock.calls.length
     resolveRefresh({
       changed: true,
+      plantNamesRevision: 0,
       backfills: [{
         plantId: 'plant-1',
+        canonicalName: 'Malus domestica',
         stratum: 'canopy',
         canopySpreadM: 4,
         scale: 4,
       }],
+      failure: null,
     })
 
-    await expect(pending).resolves.toBe(false)
-    expect(applyPresentationBackfills).not.toHaveBeenCalled()
+    await expect(pending).resolves.toBe(true)
+    expect(invalidate.mock.calls.slice(invalidationsBeforeRefresh)).toEqual([['scene']])
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.stratum).toBeNull()
+    invalidate.mockRestore()
+    runtime.destroy()
   })
 
   it('derives selected plant context from scene session, not the mirror signal', () => {
@@ -842,14 +1189,96 @@ describe('scene canvas runtime', () => {
 
     expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
 
-    runtime.documentSurface.replaceDocument(fileWithOnlyPlants('plant-2'))
+    runtime.documentSurface.replaceDocument(
+      fileWithOnlyPlants('plant-2'),
+      createCanvasDocumentReplacementToken(),
+      () => {},
+    )
     runtime.commandSurface.sceneEdits.selectAll()
     expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-2']))
     expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
 
-    runtime.documentSurface.replaceDocument(fileWithOnlyPlants('plant-2'))
+    runtime.documentSurface.replaceDocument(
+      fileWithOnlyPlants('plant-2'),
+      createCanvasDocumentReplacementToken(),
+      () => {},
+    )
     expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
+  })
+
+  it('keeps document replacement behind settled Scene admission', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    const active = sceneEdits.begin('interaction-drag')
+    active.mutate((draft) => {
+      draft.plants[0]!.position = { x: 99, y: 99 }
+    })
+    const replacementToken = createCanvasDocumentReplacementToken()
+
+    expect(() => runtime.documentSurface.replaceDocument(
+      fileWithOnlyPlants('plant-2'),
+      replacementToken,
+      () => {},
+    ))
+      .toThrowError(SceneEditBusyError)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
+      id: 'plant-1',
+      position: { x: 99, y: 99 },
+    })
+
+    active.abort()
+    runtime.documentSurface.replaceDocument(
+      fileWithOnlyPlants('plant-2'),
+      replacementToken,
+      () => {},
+    )
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
+      .toEqual(['plant-2'])
+    runtime.destroy()
+  })
+
+  it('keeps the old Scene authoritative when pre-hydration target cleanup fails', () => {
+    let failPanelTargetCleanup = false
+    const targetPresentation: SceneRuntimePanelTargetAdapter = {
+      readPanelOriginTargets: () => [],
+      setCanvasHoverTargets: () => {},
+      clearPanelOriginTargets: () => {
+        if (failPanelTargetCleanup) throw new Error('panel target cleanup failed')
+      },
+      subscribePanelOriginTargetChanges: () => () => {},
+    }
+    const runtime = new SceneCanvasRuntime({ targetPresentation })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    runtime.commandSurface.sceneEdits.selectAll()
+    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    failPanelTargetCleanup = true
+    const replacementToken = createCanvasDocumentReplacementToken()
+
+    expect(() => runtime.documentSurface.replaceDocument(
+      fileWithOnlyPlants('plant-2'),
+      replacementToken,
+      () => {},
+    ))
+      .toThrow('panel target cleanup failed')
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
+      .toEqual(['plant-1'])
+    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+
+    failPanelTargetCleanup = false
+    runtime.documentSurface.replaceDocument(
+      fileWithOnlyPlants('plant-2'),
+      replacementToken,
+      () => {},
+    )
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
+      .toEqual(['plant-2'])
+    expect(runtime.querySurface.getSelection()).toEqual(new Set())
+    expect(selectedObjectIds.value).toEqual(new Set())
+    runtime.destroy()
   })
 
   it('rolls back renderer ownership when interaction Session construction fails', async () => {
@@ -901,6 +1330,230 @@ describe('scene canvas runtime', () => {
     expect((runtime as any)._rendering.container).toBeNull()
     events.dispose()
     runtime.destroy()
+  })
+
+  it('does not publish deferred presentation backfills after runtime teardown', async () => {
+    const cache = new Map<string, Record<string, unknown>>()
+    let resolveRefresh!: () => void
+    const refresh = new Promise<void>((resolve) => {
+      resolveRefresh = resolve
+    })
+    const ensureEntries = vi.fn(async (canonicalNames: string[]) => {
+      await refresh
+      for (const canonicalName of canonicalNames) {
+        cache.set(canonicalName, { stratum: 'canopy', width_max_m: 4 })
+      }
+      return true
+    })
+    const runtime = new SceneCanvasRuntime({
+      speciesCache: {
+        getCache: () => cache,
+        ensureEntries,
+        getSuggestedPlantColor: () => null,
+      },
+    })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const container = createRuntimeContainer()
+    const renderer = createRendererStub()
+    ;(runtime as any)._construction.replaceRendererHost({
+      initialize: async () => renderer,
+      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
+      dispose: async () => {},
+    })
+    const initialize = runtime.init(container)
+    await vi.waitFor(() => expect(ensureEntries).toHaveBeenCalledOnce())
+    const sceneRevision = runtime.querySurface.revision.scene.value
+    const invalidate = vi.spyOn((runtime as any)._rendering, 'invalidate')
+    invalidate.mockClear()
+
+    runtime.destroy()
+    resolveRefresh()
+    await initialize
+
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
+      stratum: null,
+      canopySpreadM: null,
+      scale: null,
+    })
+    expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
+    expect(invalidate).not.toHaveBeenCalled()
+  })
+
+  it('does not publish a deferred presentation command after runtime teardown', async () => {
+    const cache = new Map<string, Record<string, unknown>>()
+    let resolveRefresh!: () => void
+    const refresh = new Promise<void>((resolve) => {
+      resolveRefresh = resolve
+    })
+    const ensureEntries = vi.fn(async (canonicalNames: string[]) => {
+      await refresh
+      for (const canonicalName of canonicalNames) {
+        cache.set(canonicalName, { stratum: 'canopy', width_max_m: 4 })
+      }
+      return true
+    })
+    const runtime = new SceneCanvasRuntime({
+      speciesCache: {
+        getCache: () => cache,
+        ensureEntries,
+        getSuggestedPlantColor: () => null,
+      },
+    })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const publication = runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(
+      ['Malus domestica'],
+      'en',
+    )
+    await vi.waitFor(() => expect(ensureEntries).toHaveBeenCalledOnce())
+    const sceneRevision = runtime.querySurface.revision.scene.value
+    const invalidate = vi.spyOn((runtime as any)._rendering, 'invalidate')
+    invalidate.mockClear()
+
+    runtime.destroy()
+    resolveRefresh()
+
+    await expect(publication).resolves.toBe(false)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
+      stratum: null,
+      canopySpreadM: null,
+      scale: null,
+    })
+    expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
+    expect(invalidate).not.toHaveBeenCalled()
+  })
+
+  it('publishes prepared plant labels before surfacing a later species-cache failure', async () => {
+    const labelsByLocale = new Map<string, Map<string, string | null>>()
+    const speciesFailure = new Error('species refresh failed')
+    let activeLocale = 'en'
+    let failSpeciesRefresh = false
+    const appAdapterProbe = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...appAdapterProbe.adapter,
+        settings: createTestSettingsAdapter({
+          readLocale: () => activeLocale,
+        }),
+      },
+      plantLabels: {
+        getLocaleSnapshot: (locale) => labelsByLocale.get(locale) ?? new Map(),
+        ensureEntries: async (_canonicalNames, locale) => {
+          if (labelsByLocale.has(locale)) return false
+          labelsByLocale.set(locale, new Map([
+            ['Malus domestica', locale === 'fr' ? 'Pommier' : 'Apple'],
+          ]))
+          return true
+        },
+      },
+      speciesCache: {
+        getCache: () => new Map(),
+        ensureEntries: async () => {
+          if (failSpeciesRefresh) throw speciesFailure
+          return false
+        },
+        getSuggestedPlantColor: () => null,
+      },
+    })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    const plantNamesRevision = runtime.querySurface.revision.plantNames.value
+    const initialRenderCount = renderer.renderScene.mock.calls.length
+    activeLocale = 'fr'
+    failSpeciesRefresh = true
+
+    await expect(runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(
+      ['Malus domestica'],
+      'fr',
+    )).rejects.toBe(speciesFailure)
+    await vi.waitFor(() => {
+      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+    })
+
+    const rendered = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    expect(rendered?.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
+    expect(runtime.querySurface.getLocalizedCommonNames().get('Malus domestica')).toBe('Pommier')
+    expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision + 1)
+    runtime.destroy()
+  })
+
+  it('invalidates and reports a cached refresh that publishes pending plant labels', async () => {
+    const labels = new Map<string, string | null>()
+    let labelsLoaded = false
+    const runtime = new SceneCanvasRuntime({
+      plantLabels: {
+        getLocaleSnapshot: () => labels,
+        ensureEntries: async () => {
+          if (labelsLoaded) return false
+          labelsLoaded = true
+          labels.set('Malus domestica', 'Apple')
+          return true
+        },
+      },
+      speciesCache: {
+        getCache: () => new Map(),
+        ensureEntries: async () => false,
+        getSuggestedPlantColor: () => null,
+      },
+    })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const plantNamesRevision = runtime.querySurface.revision.plantNames.value
+    const stagedRefresh = await (runtime as any)._presentation.refreshSpeciesCacheEntries(
+      ['Malus domestica'],
+      'en',
+    )
+    expect(stagedRefresh.changed).toBe(true)
+    expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision)
+    const invalidate = vi.spyOn((runtime as any)._rendering, 'invalidate')
+
+    await expect(runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(
+      ['Malus domestica'],
+      'en',
+    )).resolves.toBe(true)
+
+    expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision + 1)
+    expect(invalidate).toHaveBeenCalledWith('scene')
+    runtime.destroy()
+  })
+
+  it('does not publish prepared plant labels when a later species failure settles after teardown', async () => {
+    const labels = new Map<string, string | null>()
+    const speciesFailure = new Error('deferred species refresh failed')
+    let rejectSpecies!: (error: Error) => void
+    const speciesRefresh = new Promise<boolean>((_resolve, reject) => {
+      rejectSpecies = reject
+    })
+    const ensureSpeciesEntries = vi.fn(() => speciesRefresh)
+    const runtime = new SceneCanvasRuntime({
+      plantLabels: {
+        getLocaleSnapshot: () => labels,
+        ensureEntries: async () => {
+          labels.set('Malus domestica', 'Apple')
+          return true
+        },
+      },
+      speciesCache: {
+        getCache: () => new Map(),
+        ensureEntries: ensureSpeciesEntries,
+        getSuggestedPlantColor: () => null,
+      },
+    })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const plantNamesRevision = runtime.querySurface.revision.plantNames.value
+    const invalidate = vi.spyOn((runtime as any)._rendering, 'invalidate')
+    const publication = runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(
+      ['Malus domestica'],
+      'en',
+    )
+    const rejection = expect(publication).rejects.toBe(speciesFailure)
+    await vi.waitFor(() => expect(ensureSpeciesEntries).toHaveBeenCalledOnce())
+
+    runtime.destroy()
+    rejectSpecies(speciesFailure)
+
+    await rejection
+    expect(runtime.querySurface.getLocalizedCommonNames().get('Malus domestica')).toBe('Apple')
+    expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision)
+    expect(invalidate).not.toHaveBeenCalled()
   })
 
   it('describes editable top-level Design Object selection with visual bounds', () => {
@@ -976,7 +1629,11 @@ describe('scene canvas runtime', () => {
       '8000 m²',
     ])
 
-    runtime.documentSurface.replaceDocument(fileWithOnlyZone(file.zones[0]!))
+    runtime.documentSurface.replaceDocument(
+      fileWithOnlyZone(file.zones[0]!),
+      createCanvasDocumentReplacementToken(),
+      () => {},
+    )
 
     expect(zoneMeasurementTexts(container)).toEqual([])
     runtime.destroy()
@@ -1106,7 +1763,11 @@ describe('scene canvas runtime', () => {
     expect(panelTargetProbe.canvasHoverTargets).toEqual([speciesTarget('Malus domestica')])
 
     panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_name: 'zone-1' }])
-    runtime.documentSurface.replaceDocument(makeFile())
+    runtime.documentSurface.replaceDocument(
+      makeFile(),
+      createCanvasDocumentReplacementToken(),
+      () => {},
+    )
     expect(panelTargetProbe.panelOriginTargets).toEqual([])
     runtime.destroy()
   })
@@ -1131,9 +1792,6 @@ describe('scene canvas runtime', () => {
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
     runtime.documentSurface.markSaved()
-    expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
-
-    runtime.documentSurface.clearHistory()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
   })
 
@@ -1324,7 +1982,11 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.selectAll()
 
     renderer.renderScene.mockClear()
-    runtime.documentSurface.replaceDocument(makeFile())
+    runtime.documentSurface.replaceDocument(
+      makeFile(),
+      createCanvasDocumentReplacementToken(),
+      () => {},
+    )
     await Promise.resolve()
     await Promise.resolve()
 

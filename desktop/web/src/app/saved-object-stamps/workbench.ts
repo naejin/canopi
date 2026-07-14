@@ -1,5 +1,9 @@
 import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
-import type { CanvasDesignObjectSelectionTarget, CanvasQuerySurface } from '../../canvas/runtime/runtime'
+import type {
+  CanvasDesignObjectSelectionModel,
+  CanvasDesignObjectSelectionTarget,
+  CanvasQuerySurface,
+} from '../../canvas/runtime/runtime'
 import {
   resolvePlantSymbolForPlant,
   type SceneAnnotationEntity,
@@ -10,6 +14,7 @@ import {
   type SceneZoneEntity,
 } from '../../canvas/runtime/scene'
 import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
+import type { CanvasRuntimeSavedObjectStampCapture } from '../../canvas/runtime/app-adapter'
 import { canSaveSelectionAsObjectStamp } from '../../canvas/runtime/interaction/contextual-selection-actions'
 import { beginSavedObjectStampPlacement } from '../../canvas/saved-object-stamp-source'
 import { parseSavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
@@ -52,7 +57,7 @@ export interface SavedObjectStampWorkbench {
   readonly library: ReadonlySignal<SavedObjectStampLibraryView>
   readonly selection: ReadonlySignal<SavedObjectStampSelectionView>
   loadLibrary(): Promise<void>
-  saveCurrentSelection(): Promise<SavedObjectStamp | null>
+  saveSelection(capture: CanvasRuntimeSavedObjectStampCapture): Promise<SavedObjectStamp | null>
   renameStamp(id: string, name: string): Promise<SavedObjectStamp | null>
   deleteStamp(id: string): Promise<boolean>
   reorderStamps(ids: string[]): Promise<void>
@@ -121,11 +126,10 @@ export function createSavedObjectStampWorkbench({
     }
   }
 
-  async function saveCurrentSelection(): Promise<SavedObjectStamp | null> {
-    const query = getCanvasQuerySurface()
-    if (!query) return null
-
-    const normalized = normalizeCurrentSelection(query)
+  async function saveSelection(
+    capture: CanvasRuntimeSavedObjectStampCapture,
+  ): Promise<SavedObjectStamp | null> {
+    const normalized = normalizeSelection(capture)
     if (!normalized) {
       selectionRevision.value += 1
       return null
@@ -218,7 +222,7 @@ export function createSavedObjectStampWorkbench({
     library,
     selection,
     loadLibrary,
-    saveCurrentSelection,
+    saveSelection,
     renameStamp,
     deleteStamp,
     reorderStamps,
@@ -238,7 +242,12 @@ function savedObjectStampFileName(name: string): string {
 }
 
 function readSelectionView(query: CanvasQuerySurface): SavedObjectStampSelectionView {
-  const selection = query.getDesignObjectSelection()
+  return readSelectionModelView(query.getDesignObjectSelection())
+}
+
+function readSelectionModelView(
+  selection: CanvasDesignObjectSelectionModel,
+): SavedObjectStampSelectionView {
   const selectedCount = selection.editableTargets.length + selection.lockedTargets.length
   if (canSaveSelectionAsObjectStamp(selection)) return { canSave: true, reason: null, selectedCount }
   return {
@@ -250,12 +259,11 @@ function readSelectionView(query: CanvasQuerySurface): SavedObjectStampSelection
   }
 }
 
-function normalizeCurrentSelection(query: CanvasQuerySurface): NormalizedSelection | null {
-  const selectionView = readSelectionView(query)
+function normalizeSelection(capture: CanvasRuntimeSavedObjectStampCapture): NormalizedSelection | null {
+  const selectionView = readSelectionModelView(capture.selection)
   if (!selectionView.canSave) return null
 
-  const scene = query.getSceneSnapshot()
-  const selection = query.getDesignObjectSelection()
+  const { scene, selection } = capture
   const selectedTargets = [...selection.editableTargets, ...selection.lockedTargets]
   const selected = collectSelectedConcreteTargets(scene, selectedTargets)
   const selectedGroups = collectSelectedGroups(scene, selectedTargets)
@@ -304,7 +312,7 @@ function normalizeCurrentSelection(query: CanvasQuerySurface): NormalizedSelecti
     groups,
   }
   return {
-    name: defaultStampName(payload, query.getLocalizedCommonNames()),
+    name: defaultStampName(payload, capture.localizedCommonNames),
     payload,
   }
 }

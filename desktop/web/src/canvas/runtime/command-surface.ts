@@ -1,8 +1,12 @@
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
-import type { CanvasRuntimeSettingsAdapter } from './app-adapter'
+import type {
+  CanvasRuntimeSavedObjectStampAdapter,
+  CanvasRuntimeSettingsAdapter,
+} from './app-adapter'
 import type { CameraController } from './camera'
-import type { PlantPresentationBackfill, SceneRuntimePresentationController } from './scene-runtime/presentation'
+import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
+import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
   CanvasChromeCommandSurface,
   CanvasCommandSurface,
@@ -13,20 +17,26 @@ import type {
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime'
-import type { SceneLayerEntity, SceneStore, SceneViewportState } from './scene'
-import type { SceneHistory } from './scene-history'
-import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
+import type { SceneLayerEntity, SceneStateReader, SceneViewportState } from './scene'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
-import { syncSceneLayerSignalsFromScene } from './scene-runtime/scene-sync'
-import type { SceneEditCoordinator } from './scene-runtime/transactions'
+import type {
+  SceneCommandAdmission,
+  SceneEditCoordinator,
+  SceneHistoryCommands,
+  ScenePresentationMaintenance,
+  SettledSceneReader,
+} from './scene-runtime/transactions'
 
 type CommandInvalidationKind = 'scene' | 'viewport' | 'chrome'
 type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 interface SceneCanvasCommandSurfaceOptions {
-  readonly sceneStore: Pick<SceneStore, 'persisted'>
+  readonly sceneStore: SceneStateReader
   readonly camera: Pick<CameraController, 'zoomIn' | 'zoomOut' | 'zoomToFit' | 'viewport'>
-  readonly history: Pick<SceneHistory, 'canUndo' | 'canRedo' | 'undo' | 'redo'>
+  readonly history: SceneHistoryCommands
+  readonly commandAdmission: SceneCommandAdmission
+  readonly settledReader: SettledSceneReader
+  readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
   readonly transientHistory: {
     readonly revision: ReadonlySignal<number>
     readonly canUndo: () => boolean
@@ -34,10 +44,6 @@ interface SceneCanvasCommandSurfaceOptions {
     readonly undo: () => boolean
     readonly redo: () => boolean
   }
-  readonly documents: Pick<
-    SceneRuntimeDocumentBridge,
-    'historyRuntime' | 'applyPresentationBackfills'
-  >
   readonly mutations: Pick<
     SceneRuntimeMutationController,
     | 'copy'
@@ -63,9 +69,13 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'clearPlantSpeciesSymbol'
   >
   readonly sceneEdits: SceneEditCoordinator
+  readonly presentationMaintenance: ScenePresentationMaintenance
   readonly presentation: Pick<
     SceneRuntimePresentationController,
-    'createPlantPresentationContext' | 'refreshSpeciesCacheEntries'
+    | 'createPlantPresentationContext'
+    | 'getLocalizedCommonNames'
+    | 'refreshSpeciesCacheEntries'
+    | 'publishRefresh'
   >
   readonly settings: Pick<
     CanvasRuntimeSettingsAdapter,
@@ -73,10 +83,8 @@ interface SceneCanvasCommandSurfaceOptions {
   >
   readonly setViewport: (viewport: SceneViewportState) => void
   readonly setInteractionTool: (name: string) => void
-  readonly syncCanvasSignalsFromScene: () => void
-  readonly incrementSceneRevision: () => void
-  readonly currentPresentationRevision: () => number
   readonly invalidate: (kind: CommandInvalidationKind) => void
+  readonly isRuntimeActive: () => boolean
 }
 
 export function createSceneCanvasCommandSurface(
@@ -97,11 +105,19 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   constructor(private readonly options: SceneCanvasCommandSurfaceOptions) {
     const canUndo = computed(() => {
       void options.transientHistory.revision.value
-      return options.transientHistory.canUndo() || options.history.canUndo.value
+      void options.settledReader.revision.value
+      return options.settledReader.readWhenSettled(
+        () => options.transientHistory.canUndo() || options.history.canUndo.value,
+        false,
+      )
     })
     const canRedo = computed(() => {
       void options.transientHistory.revision.value
-      return options.transientHistory.canRedo() || options.history.canRedo.value
+      void options.settledReader.revision.value
+      return options.settledReader.readWhenSettled(
+        () => options.transientHistory.canRedo() || options.history.canRedo.value,
+        false,
+      )
     })
 
     this.tools = {
@@ -119,6 +135,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       redo: () => this.redo(),
     }
     this.sceneEdits = {
+      saveSelectionAsObjectStamp: () => this.saveSelectionAsObjectStamp(),
       copy: () => this.options.mutations.copy(),
       paste: () => this.options.mutations.paste(),
       pasteAt: (point) => this.options.mutations.pasteAt(point),
@@ -164,6 +181,29 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     setCanvasTool(name)
   }
 
+  private saveSelectionAsObjectStamp(): void {
+    this.options.commandAdmission.runWhenSettled(() => {
+      const savedObjectStamps = this.options.savedObjectStamps
+      if (!savedObjectStamps) return
+
+      const scene = this.options.sceneStore.persisted
+      const viewportScale = this.options.camera.viewport.scale
+      const selection = getDesignObjectSelectionModel(
+        scene,
+        this.options.sceneStore.session.selectedEntityIds,
+        {
+          annotationViewportScale: viewportScale,
+          plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),
+        },
+      )
+      void savedObjectStamps.saveCurrentSelection({
+        scene,
+        selection,
+        localizedCommonNames: new Map(this.options.presentation.getLocalizedCommonNames()),
+      })
+    }, undefined, { resumePending: true })
+  }
+
   private zoomIn(): void {
     this.options.setViewport(this.options.camera.zoomIn())
     this.options.invalidate('viewport')
@@ -182,19 +222,17 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private undo(): void {
-    if (this.options.transientHistory.undo()) return
-    this.options.history.undo(this.options.documents.historyRuntime())
-    this.options.syncCanvasSignalsFromScene()
-    this.options.incrementSceneRevision()
-    this.options.invalidate('scene')
+    this.options.commandAdmission.runWhenSettled(() => {
+      if (this.options.transientHistory.undo()) return
+      this.options.history.undo()
+    }, undefined, { resumePending: true })
   }
 
   private redo(): void {
-    if (this.options.transientHistory.redo()) return
-    this.options.history.redo(this.options.documents.historyRuntime())
-    this.options.syncCanvasSignalsFromScene()
-    this.options.incrementSceneRevision()
-    this.options.invalidate('scene')
+    this.options.commandAdmission.runWhenSettled(() => {
+      if (this.options.transientHistory.redo()) return
+      this.options.history.redo()
+    }, undefined, { resumePending: true })
   }
 
   private toggleRulers(): void {
@@ -203,16 +241,26 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private setSceneLayerOpacity(name: string, opacity: number): boolean {
-    if (!Number.isFinite(opacity)) return false
-    return this.setSceneLayerState(name, {
-      opacity: Math.min(1, Math.max(0, opacity)),
-    })
+    return this.options.commandAdmission.runWhenSettled(() => {
+      if (!Number.isFinite(opacity)) return false
+      return this.setSceneLayerStateWhenSettled(name, {
+        opacity: Math.min(1, Math.max(0, opacity)),
+      })
+    }, false, { resumePending: true })
   }
 
   private setSceneLayerState(name: string, edit: SceneLayerEdit): boolean {
+    return this.options.commandAdmission.runWhenSettled(
+      () => this.setSceneLayerStateWhenSettled(name, edit),
+      false,
+      { resumePending: true },
+    )
+  }
+
+  private setSceneLayerStateWhenSettled(name: string, edit: SceneLayerEdit): boolean {
     if (this.options.settings.layerProjections.isAppOwnedLayerProjection(name)) return false
 
-    const committed = this.options.sceneEdits.run('scene-layer-settings', (tx) => {
+    return this.options.sceneEdits.run('scene-layer-settings', (tx) => {
       tx.mutate((draft) => {
         const layer = draft.layers.find((entry) => entry.name === name)
         if (!layer) return
@@ -221,36 +269,26 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         if (edit.opacity !== undefined) layer.opacity = edit.opacity
       })
     })
-    if (committed) {
-      syncSceneLayerSignalsFromScene(
-        this.options.sceneStore as SceneStore,
-        name,
-        this.options.settings.layerProjections,
-      )
-    }
-    return committed
   }
 
   private async ensureSpeciesCacheEntries(
     canonicalNames: string[],
     activeLocale: string,
   ): Promise<boolean> {
-    const presentationRevision = this.options.currentPresentationRevision()
+    if (!this.options.isRuntimeActive()) return false
+    const ticket = this.options.presentationMaintenance.issueTicket()
     const result = await this.options.presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
-    const appliedBackfills = this.applyPresentationBackfillsIfCurrent(
-      presentationRevision,
-      result.backfills,
-    )
-    if (presentationRevision !== this.options.currentPresentationRevision()) return false
-    if (result.changed) this.options.invalidate('scene')
-    return result.changed || appliedBackfills
-  }
-
-  private applyPresentationBackfillsIfCurrent(
-    expectedRevision: number,
-    backfills: ReadonlyArray<PlantPresentationBackfill> | null,
-  ): boolean {
-    if (expectedRevision !== this.options.currentPresentationRevision()) return false
-    return this.options.documents.applyPresentationBackfills(backfills)
+    if (!this.options.isRuntimeActive()) {
+      if (result.failure) throw result.failure.error
+      return false
+    }
+    const plantNamesPublished = this.options.presentation.publishRefresh(result)
+    if (result.failure) {
+      if (result.changed || plantNamesPublished) this.options.invalidate('scene')
+      throw result.failure.error
+    }
+    const backfillResult = this.options.presentationMaintenance.applyBackfills(ticket, result.backfills)
+    if (result.changed || plantNamesPublished) this.options.invalidate('scene')
+    return result.changed || plantNamesPublished || backfillResult === 'applied'
   }
 }

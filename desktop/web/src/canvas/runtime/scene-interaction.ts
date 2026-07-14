@@ -2,8 +2,8 @@ import { getCanvasTool } from '../session-state'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import type {
-  SceneStore,
   ScenePoint,
+  SceneStateReader,
 } from './scene'
 import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from './scene'
 import type { CameraController } from './camera'
@@ -52,7 +52,11 @@ import {
   type AnnotationInlineEditorController,
 } from './interaction/annotation-inline-editor'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
-import type { SceneEditCoordinator } from './scene-runtime/transactions'
+import type {
+  SceneCommandAdmission,
+  SceneEditCoordinator,
+  SettledSceneReader,
+} from './scene-runtime/transactions'
 import {
   createSelectionActionToolbar,
   type SelectionActionToolbarController,
@@ -105,7 +109,7 @@ interface SceneInteractionCancellationOptions extends SceneToolTransientOptions 
 
 export interface SceneInteractionSessionDeps {
   container: HTMLElement
-  getSceneStore: () => SceneStore
+  getSceneStore: () => SceneStateReader
   camera: CameraController
   setViewport: (viewport: SceneViewportState) => void
   getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
@@ -114,6 +118,8 @@ export interface SceneInteractionSessionDeps {
   setSelection: (ids: Iterable<string>) => void
   clearSelection: () => void
   sceneEdits: SceneEditCoordinator
+  commandAdmission: SceneCommandAdmission
+  settledReader: SettledSceneReader
   getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
   selectionCommands: Pick<
     CanvasSceneEditCommandSurface,
@@ -147,6 +153,7 @@ export interface SceneInteractionSessionDeps {
 
 export interface SceneInteractionSession {
   setTool(name: string): void
+  prepareForDocumentReplacement(): void
   refreshMeasurements(): void
   canUndoTransientHistory(): boolean
   canRedoTransientHistory(): boolean
@@ -358,6 +365,24 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
+  prepareForDocumentReplacement(): void {
+    if (this._disposed) return
+    this._designObjectDragPresentationSuppressed = false
+    runCanvasRuntimeCleanups([
+      () => this._cancelPendingInteractionHostFocus(),
+      () => this._annotationEditor.cancel(),
+      () => this._cancelTransientInteraction({ releaseSpace: true }),
+      () => this._contextMenu.hide(),
+      () => hideInteractionPreview(this._preview),
+      () => clearSavedObjectStampGhosts(this._preview),
+      () => this._selectionToolbar.hide(),
+      () => this._rotationHandle.hide(),
+      () => this._zoneControlPoints.hide(),
+      () => this._measurementGuideControlPoints.hide(),
+      () => this._clearPassiveHoverPresentation(),
+    ], 'Scene Interaction document replacement preparation failed')
+  }
+
   dispose(): void {
     if (this._disposed) return
     this._disposed = true
@@ -422,9 +447,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._contextMenu.contains(event.target)) return
     this._contextMenu.hide()
     if (this._annotationEditor.contains(event.target)) return
-    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     if (this._selectionToolbar.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
+
+    this._runAdmittedSceneEvent(event, () => {
+      this._pointerDownWhenSettled(event)
+    }, { resumePending: true })
+  }
+
+  private _pointerDownWhenSettled(event: PointerEvent): void {
+    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     if (this._activeToolAdapter()?.shouldIgnorePointerEvent?.(event.target) ?? false) return
 
     this._claimInteractionPointerDown(event)
@@ -577,24 +609,48 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (!hasPointerGesture && this._isOwnedOverlayPointerTarget(event.target)) return
     if (!hasPointerGesture && (this._activeToolAdapter()?.shouldIgnorePointerUpWithoutCapture?.() ?? false)) return
     if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
+
+    if (this._sharedGestures.requiresSettledPointerUp) {
+      const admitted = this._runAdmittedSceneEvent(event, () => {
+        this._finishPointerUp(event)
+      }, { resumePending: true })
+      if (!admitted) {
+        try {
+          this._cancelTransientInteraction()
+        } finally {
+          this._refreshViewportDependentMeasurements()
+        }
+      }
+      return
+    }
+
+    this._finishPointerUp(event)
+  }
+
+  private _finishPointerUp(event: PointerEvent): void {
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
-    let preserveActiveDraft = false
     try {
-      this._toolPointerDrag?.commit({ event, screen, rawWorld })
-      const sharedResult = this._sharedGestures.pointerUp({
-        screen,
-        rawWorld,
-        preserveActiveDraft: this._activeToolAdapter()?.shouldPreserveTransientOnPan?.() ?? false,
-      })
-      preserveActiveDraft = sharedResult.preserveActiveDraft
-    } finally {
+      let preserveActiveDraft = false
       try {
-        this._cancelTransientInteraction({ preserveActiveDraft })
+        this._toolPointerDrag?.commit({ event, screen, rawWorld })
+        const sharedResult = this._sharedGestures.pointerUp({
+          screen,
+          rawWorld,
+          preserveActiveDraft: this._activeToolAdapter()?.shouldPreserveTransientOnPan?.() ?? false,
+        })
+        preserveActiveDraft = sharedResult.preserveActiveDraft
       } finally {
-        this._refreshViewportDependentMeasurements()
+        try {
+          this._cancelTransientInteraction({ preserveActiveDraft })
+        } finally {
+          this._refreshViewportDependentMeasurements()
+        }
       }
+    } catch (error) {
+      this._quarantineUnsettledSceneEvent(event)
+      throw error
     }
   }
 
@@ -634,6 +690,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._retryPendingTransientCancellation(event)) return
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
+    this._runAdmittedSceneEvent(event, () => {
+      this._showContextMenuWhenSettled(event)
+    }, { resumePending: true })
+  }
+
+  private _showContextMenuWhenSettled(event: MouseEvent): void {
     if (this._hasActiveSceneEdit()) {
       event.stopImmediatePropagation()
       return
@@ -648,6 +710,28 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _onDragOver = (event: DragEvent): void => {
     if (this._retryPendingTransientCancellation(event)) return
     event.preventDefault()
+    let admitted: boolean
+    try {
+      admitted = this._deps.settledReader.readWhenSettled(() => {
+        this._dragOverWhenSettled(event)
+        return true
+      }, false)
+    } catch (error) {
+      this._rejectDragOver(event)
+      throw error
+    }
+    if (admitted) return
+    this._rejectDragOver(event)
+  }
+
+  private _rejectDragOver(event: DragEvent): void {
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none'
+    hideInteractionPreview(this._preview)
+    clearSavedObjectStampGhosts(this._preview)
+    this._quarantineUnsettledSceneEvent(event)
+  }
+
+  private _dragOverWhenSettled(event: DragEvent): void {
     if (hasSavedObjectStampDragData(event.dataTransfer)) {
       const source = readSavedObjectStampDragPreviewSource(event.dataTransfer)
       const canDropStamp = source !== null
@@ -681,18 +765,24 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     hideInteractionPreview(this._preview)
     clearSavedObjectStampGhosts(this._preview)
     if (this._retryPendingTransientCancellation(event)) return
+    this._runAdmittedSceneEvent(event, () => this._dropWhenSettled(event), {
+      resumePending: true,
+    })
+  }
+
+  private _dropWhenSettled(event: DragEvent): void {
     const savedObjectStampSource = readSavedObjectStampDropSource(event)
     if (savedObjectStampSource) {
-      clearSavedObjectStampDragSource()
-      const committed = placeSavedObjectStampAt(
+      placeSavedObjectStampAt(
         this._savedObjectStampPlacementContext(),
         savedObjectStampSource,
         this._dragEventWorld(event),
+        () => {
+          clearSavedObjectStampDragSource()
+          this._switchTool('select')
+          this._activateInteractionHostAfterDrop()
+        },
       )
-      if (committed) {
-        this._switchTool('select')
-        this._activateInteractionHostAfterDrop()
-      }
       return
     }
 
@@ -701,16 +791,17 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (!isSceneLayerOpenForCreation(this._deps.getSceneStore().persisted, 'plants')) return
     const world = this._applySnapping(this._deps.camera.screenToWorld(this._screenPoint(event)))
     let placedPlantId: string | null = null
-    const committed = this._deps.sceneEdits.run('interaction-drop', (tx) => {
+    this._deps.sceneEdits.run('interaction-drop', (tx) => {
       tx.mutate((draft) => {
         placedPlantId = appendPlantStampSourceToDraft(draft, source, world)
       })
       if (placedPlantId) tx.setSelection([placedPlantId])
+    }, {
+      onCommitted: () => {
+        this._switchTool('select')
+        this._activateInteractionHostAfterDrop()
+      },
     })
-    if (committed) {
-      this._switchTool('select')
-      this._activateInteractionHostAfterDrop()
-    }
   }
 
   private _savedObjectStampPlacementContext() {
@@ -922,6 +1013,29 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._focusInteractionHost()
   }
 
+  private _quarantineUnsettledSceneEvent(event: Event): void {
+    if (event.cancelable) event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+
+  private _runAdmittedSceneEvent(
+    event: Event,
+    operation: () => void,
+    options: { resumePending?: boolean } = {},
+  ): boolean {
+    try {
+      const admitted = this._deps.commandAdmission.runWhenSettled(() => {
+        operation()
+        return true
+      }, false, options)
+      if (!admitted) this._quarantineUnsettledSceneEvent(event)
+      return admitted
+    } catch (error) {
+      this._quarantineUnsettledSceneEvent(event)
+      throw error
+    }
+  }
+
   private _activateInteractionHostAfterDrop(): void {
     this._focusInteractionHost()
     this._cancelPendingInteractionHostFocus()
@@ -1004,10 +1118,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _unlockLockedObject(id: string): void {
-    const committed = this._deps.sceneEdits.run('unlock-design-object', (tx) => {
+    this._deps.sceneEdits.run('unlock-design-object', (tx) => {
       tx.mutate((draft) => setSceneDesignObjectLocks(draft, [id], false))
-    })
-    if (committed) this._lockedAffordance.hide()
+    }, { onCommitted: () => this._lockedAffordance.hide() })
   }
 
   private _activeToolAdapter(): SceneToolAdapter | null {
@@ -1030,6 +1143,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       || this._rotationHandle.dragActive
       || this._zoneControlPoints.dragActive
       || this._measurementGuideControlPoints.dragActive
+      || (this._activeToolAdapter()?.hasActiveSceneEdit?.() ?? false)
   }
 
   private _forEachUniqueToolHook(

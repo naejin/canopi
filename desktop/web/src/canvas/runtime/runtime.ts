@@ -72,6 +72,7 @@ export interface CanvasHistoryCommandSurface {
 }
 
 export interface CanvasSceneEditCommandSurface {
+  saveSelectionAsObjectStamp(): void
   copy(): void
   paste(): void
   pasteAt(point: ScenePoint): void
@@ -132,7 +133,24 @@ export interface CanvasQuerySurface {
   getSelectedPlantColorContext(): SelectedPlantColorContext
   getSelectedPlantSymbolContext(): SelectedPlantSymbolContext
   getPlacedPlants(): PlacedPlant[]
+  getSettledPlacedPlants(): PlacedPlant[] | null
   getLocalizedCommonNames(): ReadonlyMap<string, string | null>
+}
+
+export interface CanvasDocumentReplacementReceipt {
+  readonly callerFinalizerInvoked: boolean
+}
+
+const canvasDocumentReplacementTokenBrand = Symbol('canvas-document-replacement-token')
+
+export interface CanvasDocumentReplacementToken {
+  readonly [canvasDocumentReplacementTokenBrand]: true
+}
+
+export function createCanvasDocumentReplacementToken(): CanvasDocumentReplacementToken {
+  return Object.freeze({
+    [canvasDocumentReplacementTokenBrand]: true as const,
+  })
 }
 
 export interface CanvasDocumentSurface {
@@ -142,11 +160,14 @@ export interface CanvasDocumentSurface {
   hideCanvasChrome(): void
   zoomToFit(): void
   loadDocument(file: CanopiFile): void
-  replaceDocument(file: CanopiFile): void
+  replaceDocument(
+    file: CanopiFile,
+    token: CanvasDocumentReplacementToken,
+    finalizeReplacement: () => void,
+  ): CanvasDocumentReplacementReceipt
   hasLoadedDocument(): boolean
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile
   markSaved(): void
-  clearHistory(): void
   resize(width: number, height: number): void
   destroy(): void
 }

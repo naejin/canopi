@@ -1,6 +1,9 @@
 import type { CameraController } from '../camera'
-import type { ScenePoint, SceneStore } from '../scene'
-import type { SceneEditCoordinator } from '../scene-runtime/transactions'
+import type { ScenePoint, SceneStateReader } from '../scene'
+import type {
+  SceneEditCoordinator,
+  SceneEditTransaction,
+} from '../scene-runtime/transactions'
 import { createMeasurementGuideDraftMeasurements } from '../measurement-guides'
 import { hideInteractionPreview, showInteractionPreview } from './overlay-ui'
 import { createZoneMeasurementOverlay } from './zone-measurement-overlay'
@@ -11,18 +14,20 @@ import { appendMeasurementGuideToDraft } from './tool-actions'
 interface ActiveMeasurementGuideDraft {
   readonly startWorld: ScenePoint
   readonly startScreen: ScenePoint
+  readonly transaction: SceneEditTransaction
 }
 
 export interface MeasurementGuideToolContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint
 }
 
 export interface MeasurementGuideTool {
+  readonly hasActiveDrag: () => boolean
   readonly beginDrag: (world: ScenePoint) => void
   readonly updateDrag: (rawWorld: ScenePoint) => void
   readonly commitDrag: (rawWorld: ScenePoint) => void
@@ -40,10 +45,20 @@ export function createMeasurementGuideTool(
     if (!isMeasurementGuideLayerOpen()) return
     const snappedWorld = context.applySnapping(world)
     const snappedScreen = context.camera.worldToScreen(snappedWorld)
-    activeDraft = {
+    let nextDraft!: ActiveMeasurementGuideDraft
+    const transaction = context.sceneEdits.begin('interaction-measurement-guide', {
+      onCommitted: () => {
+        if (activeDraft !== nextDraft) return
+        measurements.hide()
+        hideInteractionPreview(context.preview)
+      },
+    })
+    nextDraft = {
       startWorld: snappedWorld,
       startScreen: snappedScreen,
+      transaction,
     }
+    activeDraft = nextDraft
     showInteractionPreview(context.preview, 'line', snappedScreen, snappedScreen)
   }
 
@@ -65,25 +80,34 @@ export function createMeasurementGuideTool(
   function commitDrag(rawWorld: ScenePoint): void {
     if (!activeDraft) return
     const draft = activeDraft
+    if (!isMeasurementGuideLayerOpen()) {
+      cancelTransient()
+      return
+    }
+
+    const endWorld = context.applySnapping(rawWorld)
+    let guideId: string | null = null
+    draft.transaction.mutate((sceneDraft) => {
+      guideId = appendMeasurementGuideToDraft(sceneDraft, draft.startWorld, endWorld)
+    })
+    if (guideId) draft.transaction.setSelection([guideId])
+    draft.transaction.commit()
     activeDraft = null
     measurements.hide()
     hideInteractionPreview(context.preview)
-    if (!isMeasurementGuideLayerOpen()) return
-
-    const endWorld = context.applySnapping(rawWorld)
-    context.sceneEdits.run('interaction-measurement-guide', (tx) => {
-      let guideId: string | null = null
-      tx.mutate((sceneDraft) => {
-        guideId = appendMeasurementGuideToDraft(sceneDraft, draft.startWorld, endWorld)
-      })
-      if (guideId) tx.setSelection([guideId])
-    })
   }
 
   function cancelTransient(): void {
-    activeDraft = null
-    measurements.hide()
-    hideInteractionPreview(context.preview)
+    const draft = activeDraft
+    let settled = draft === null
+    try {
+      if (draft) draft.transaction.abort()
+      settled = true
+    } finally {
+      if (settled && activeDraft === draft) activeDraft = null
+      measurements.hide()
+      hideInteractionPreview(context.preview)
+    }
   }
 
   function isMeasurementGuideLayerOpen(): boolean {
@@ -91,6 +115,7 @@ export function createMeasurementGuideTool(
   }
 
   return {
+    hasActiveDrag: () => activeDraft !== null,
     beginDrag,
     updateDrag,
     commitDrag,
@@ -104,6 +129,7 @@ export function createMeasurementGuideToolAdapter(
 ): SceneToolAdapter {
   return {
     onDeactivate: () => tool.cancelTransient(),
+    hasActiveSceneEdit: tool.hasActiveDrag,
     pointerDown({ event, rawWorld, beginDrag }) {
       event.preventDefault()
       tool.beginDrag(rawWorld)

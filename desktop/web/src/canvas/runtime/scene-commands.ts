@@ -1,4 +1,4 @@
-import type { ScenePersistedState, SceneSessionState, SceneStore } from './scene'
+import type { ScenePersistedState } from './scene'
 
 export type SceneDiffKind =
   | 'layers'
@@ -23,26 +23,21 @@ type PersistedPatchKey =
   | 'groups'
   | 'guides'
 
-export interface SceneCommandRuntime {
-  readonly sceneStore: SceneStore
-  setSelection(ids: Iterable<string>): void
-}
-
 export interface SceneCommandSnapshot {
   persisted: ScenePersistedState
-  session: SceneSessionState
+  selectedEntityIds: ReadonlySet<string>
 }
 
-interface ScenePatch {
-  persisted?: Partial<ScenePersistedState>
-  selection?: string[]
+export interface SceneCommandPatch {
+  readonly persisted?: Partial<ScenePersistedState>
+  readonly selection?: readonly string[]
 }
 
 export interface SceneCommand {
   readonly type: string
   readonly diffs: readonly SceneDiffKind[]
-  execute(runtime: SceneCommandRuntime): void
-  undo(runtime: SceneCommandRuntime): void
+  readonly before: SceneCommandPatch
+  readonly after: SceneCommandPatch
 }
 
 const PATCH_KEYS: PersistedPatchKey[] = [
@@ -74,8 +69,8 @@ export function createScenePatchCommand(
   before: SceneCommandSnapshot,
   after: SceneCommandSnapshot,
 ): SceneCommand | null {
-  const beforePatch: ScenePatch = {}
-  const afterPatch: ScenePatch = {}
+  const beforePatch: MutableSceneCommandPatch = {}
+  const afterPatch: MutableSceneCommandPatch = {}
   const diffs = new Set<SceneDiffKind>()
 
   for (const key of PATCH_KEYS) {
@@ -89,8 +84,8 @@ export function createScenePatchCommand(
     diffs.add(DIFF_BY_KEY[key])
   }
 
-  const beforeSelection = [...before.session.selectedEntityIds].sort()
-  const afterSelection = [...after.session.selectedEntityIds].sort()
+  const beforeSelection = [...before.selectedEntityIds].sort()
+  const afterSelection = [...after.selectedEntityIds].sort()
   if (stableStringify(beforeSelection) !== stableStringify(afterSelection)) {
     beforePatch.selection = beforeSelection
     afterPatch.selection = afterSelection
@@ -102,22 +97,23 @@ export function createScenePatchCommand(
   return {
     type,
     diffs: [...diffs],
-    execute(runtime) {
-      applyScenePatch(runtime, afterPatch)
-    },
-    undo(runtime) {
-      applyScenePatch(runtime, beforePatch)
-    },
+    before: beforePatch,
+    after: afterPatch,
   }
 }
 
-function applyScenePatch(runtime: SceneCommandRuntime, patch: ScenePatch): void {
+interface MutableSceneCommandPatch {
+  persisted?: Partial<ScenePersistedState>
+  selection?: string[]
+}
+
+export function applySceneCommandPersistedPatch(
+  draft: ScenePersistedState,
+  patch: SceneCommandPatch,
+): void {
   if (patch.persisted) {
-    runtime.sceneStore.updatePersisted((draft) => {
-      Object.assign(draft, cloneValue(patch.persisted))
-    })
+    Object.assign(draft, cloneValue(patch.persisted))
   }
-  if (patch.selection) runtime.setSelection(patch.selection)
 }
 
 function stableStringify(value: unknown): string {

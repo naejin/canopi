@@ -9,10 +9,12 @@ describe('Scene Canvas document surface lifecycle', () => {
     const surface = createSceneCanvasDocumentSurface({
       documents: {
         loadDocument: vi.fn(),
-        replaceDocument: vi.fn(),
+        replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
+          finalizeReplacement()
+          return { callerFinalizerInvoked: true }
+        }),
         serializeDocument: vi.fn((_metadata, document) => document),
         markSaved: vi.fn(),
-        clearHistory: vi.fn(),
       },
       camera: new CameraController(),
       chrome: {
@@ -42,6 +44,9 @@ describe('Scene Canvas document surface lifecycle', () => {
       clearHoveredEntity: () => {
         calls.push('hover')
       },
+      disposeRuntime: () => {
+        calls.push('runtime')
+      },
       disposeInteraction: () => {
         calls.push('interaction')
         throw new Error('interaction disposal failed')
@@ -52,6 +57,6 @@ describe('Scene Canvas document surface lifecycle', () => {
     })
 
     expect(() => surface.destroy()).toThrow('interaction disposal failed')
-    expect(calls).toEqual(['hover', 'interaction', 'chrome', 'effects', 'rendering'])
+    expect(calls).toEqual(['runtime', 'hover', 'interaction', 'chrome', 'effects', 'rendering'])
   })
 })

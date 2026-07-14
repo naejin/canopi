@@ -1,12 +1,12 @@
 import { clearPlantStampSource, readPlantStampSource } from '../../plant-stamp-source'
 import { appendPlantStampSourceToDraft } from './tool-actions'
-import type { ScenePoint, SceneStore } from '../scene'
+import type { ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { SceneToolAdapter } from './tool-adapter'
 import { isSceneLayerOpenForCreation } from './layer-guards'
 
 export interface PlantStampToolContext {
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint
 }

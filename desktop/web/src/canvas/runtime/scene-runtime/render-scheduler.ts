@@ -4,10 +4,14 @@ import type { SceneViewportState } from '../scene'
 
 export type SceneRuntimeRenderKind = 'scene' | 'viewport' | 'chrome'
 
+export interface SceneRuntimePreparedRender {
+  publish(): SceneRendererSnapshot
+}
+
 interface SceneRuntimeRenderSchedulerOptions {
   getRendererHost(): RendererHost<SceneRendererContext, SceneRendererInstance>
   getViewport(): SceneViewportState
-  prepareSceneSnapshot(): Promise<SceneRendererSnapshot>
+  prepareSceneRender(): Promise<SceneRuntimePreparedRender>
   renderChrome(): void
 }
 
@@ -43,7 +47,9 @@ export class SceneRuntimeRenderScheduler {
     if (!container) return
 
     const renderEpoch = ++this._renderEpoch
-    const snapshot = await this._options.prepareSceneSnapshot()
+    const prepared = await this._options.prepareSceneRender()
+    if (renderEpoch !== this._renderEpoch || container !== this._container) return
+    const snapshot = prepared.publish()
     if (renderEpoch !== this._renderEpoch || container !== this._container) return
 
     await this._options.getRendererHost().run((renderer) => {

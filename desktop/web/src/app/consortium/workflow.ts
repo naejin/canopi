@@ -18,7 +18,8 @@ function installConsortiumSync(): void {
     if (!design) return
 
     if (!session) return
-    const currentPlants = session.getPlacedPlants()
+    const currentPlants = session.getSettledPlacedPlants()
+    if (!currentPlants) return
     const currentConsortiums = design.consortiums
     const currentNames = new Set<string>()
     for (const plant of currentPlants) currentNames.add(plant.canonical_name)

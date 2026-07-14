@@ -15,6 +15,7 @@ import type {
   CanvasPlantPresentationCommandSurface,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
+  CanvasSceneEditCommandSurface,
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime/runtime'
@@ -31,6 +32,9 @@ export const currentCanvasViewportCommandSurface = computed<CanvasViewportComman
 )
 export const currentCanvasLayerCommandSurface = computed<CanvasLayerCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value)?.layers ?? null,
+)
+export const currentCanvasSceneEditCommandSurface = computed<CanvasSceneEditCommandSurface | null>(() =>
+  commandSurfaceFrom(currentCanvasSession.value)?.sceneEdits ?? null,
 )
 export const currentCanvasPlantPresentationCommandSurface = computed<CanvasPlantPresentationCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value)?.plantPresentation ?? null,

@@ -1,7 +1,12 @@
 import type { CanopiFile } from '../../types/design'
 import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
-import type { CanvasDocumentSurface, CanvasRuntimeDocumentMetadata } from './runtime'
+import type {
+  CanvasDocumentReplacementReceipt,
+  CanvasDocumentReplacementToken,
+  CanvasDocumentSurface,
+  CanvasRuntimeDocumentMetadata,
+} from './runtime'
 import type { ScenePersistedState, SceneViewportState } from './scene'
 import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
@@ -11,7 +16,7 @@ import { runCanvasRuntimeCleanups } from './cleanup'
 interface SceneCanvasDocumentSurfaceOptions {
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
-    'loadDocument' | 'replaceDocument' | 'serializeDocument' | 'markSaved' | 'clearHistory'
+    'loadDocument' | 'replaceDocument' | 'serializeDocument' | 'markSaved'
   >
   readonly camera: Pick<CameraController, 'initialize' | 'resize' | 'zoomToFit' | 'viewport'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
@@ -26,6 +31,7 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
   readonly clearHoveredEntity: () => void
+  readonly disposeRuntime: () => void
   readonly disposeInteraction: () => void
   readonly disposeEffects: () => void
 }
@@ -82,9 +88,14 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this._documentLoaded = true
   }
 
-  replaceDocument(file: CanopiFile): void {
-    this.options.documents.replaceDocument(file)
+  replaceDocument(
+    file: CanopiFile,
+    token: CanvasDocumentReplacementToken,
+    finalizeReplacement: () => void,
+  ): CanvasDocumentReplacementReceipt {
+    const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
     this._documentLoaded = true
+    return receipt
   }
 
   hasLoadedDocument(): boolean {
@@ -102,10 +113,6 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this.options.documents.markSaved()
   }
 
-  clearHistory(): void {
-    this.options.documents.clearHistory()
-  }
-
   resize(width: number, height: number): void {
     this.options.setViewport(this.options.camera.resize({ width, height }), { forceRevision: true })
     this.options.rendering.resize(width, height)
@@ -113,6 +120,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
 
   destroy(): void {
     runCanvasRuntimeCleanups([
+      () => this.options.disposeRuntime(),
       () => this.options.clearHoveredEntity(),
       () => this.options.disposeInteraction(),
       () => this.options.chrome.destroy(),

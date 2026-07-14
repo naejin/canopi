@@ -9,7 +9,7 @@ import type {
   SceneObjectGroupMember,
   ScenePoint,
   ScenePersistedState,
-  SceneStore,
+  SceneStateReader,
 } from '../scene'
 import {
   dedupeSceneObjectGroupMembers,
@@ -47,7 +47,11 @@ import {
   getSameSpeciesReferenceCanonicalName,
   getSelectablePlantIdsForSpecies,
 } from './species-selection'
-import type { SceneEditCoordinator } from './transactions'
+import type {
+  SceneCommandAdmission,
+  SceneEditCoordinator,
+  SettledSceneReader,
+} from './transactions'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   plantIds: [],
@@ -72,13 +76,14 @@ const EMPTY_PLANT_SYMBOL_CONTEXT: SelectedPlantSymbolContext = {
 const NORMAL_PASTE_OFFSET_M: ScenePoint = { x: 1, y: 0 }
 
 interface SceneRuntimeMutationControllerOptions {
-  sceneStore: SceneStore
+  sceneStore: SceneStateReader
   selection: {
     set(ids: Iterable<string>): void
   }
   sceneEdits: SceneEditCoordinator
+  commandAdmission: SceneCommandAdmission
+  settledReader: SettledSceneReader
   presentation: {
-    syncPlantSpeciesColors(): void
     getViewportScale(): number
     createPlantPresentationContext(viewportScale?: number): PlantPresentationContext
     getLocalizedCommonNames(): ReadonlyMap<string, string | null>
@@ -88,9 +93,11 @@ interface SceneRuntimeMutationControllerOptions {
 }
 
 export class SceneRuntimeMutationController {
-  private readonly _sceneStore: SceneStore
+  private readonly _sceneStore: SceneStateReader
   private readonly _selection: SceneRuntimeMutationControllerOptions['selection']
   private readonly _sceneEdits: SceneEditCoordinator
+  private readonly _commandAdmission: SceneCommandAdmission
+  private readonly _settledReader: SettledSceneReader
   private readonly _arrangementPlacement: SceneArrangementPlacement
   private readonly _presentation: SceneRuntimeMutationControllerOptions['presentation']
   private readonly _invalidateScene: () => void
@@ -101,12 +108,130 @@ export class SceneRuntimeMutationController {
     this._sceneStore = options.sceneStore
     this._selection = options.selection
     this._sceneEdits = options.sceneEdits
+    this._commandAdmission = options.commandAdmission
+    this._settledReader = options.settledReader
     this._arrangementPlacement = createSceneArrangementPlacement({ sceneEdits: options.sceneEdits })
     this._presentation = options.presentation
     this._invalidateScene = options.invalidateScene
   }
 
   copy(): void {
+    this._runCommandWhenSettled(() => this._copyWhenSettled(), undefined)
+  }
+
+  paste(): void {
+    this._runCommandWhenSettled(() => this._pasteWhenSettled(), undefined)
+  }
+
+  pasteAt(point: ScenePoint): void {
+    this._runCommandWhenSettled(() => this._pasteAtWhenSettled(point), undefined)
+  }
+
+  canPaste(): boolean {
+    return this._settledReader.readWhenSettled(() => this._canPasteWhenSettled(), false)
+  }
+
+  duplicateSelected(): void {
+    this._runCommandWhenSettled(() => this._duplicateSelectedWhenSettled(), undefined)
+  }
+
+  toggleSelectedPlantNamePins(): void {
+    this._runCommandWhenSettled(
+      () => this._toggleSelectedPlantNamePinsWhenSettled(),
+      undefined,
+    )
+  }
+
+  deleteSelected(): void {
+    this._runCommandWhenSettled(() => this._deleteSelectedWhenSettled(), undefined)
+  }
+
+  selectAll(): void {
+    this._runCommandWhenSettled(() => this._selectAllWhenSettled(), undefined)
+  }
+
+  selectSameSpecies(canonicalName?: string, options: { additive?: boolean } = {}): void {
+    this._runCommandWhenSettled(
+      () => this._selectSameSpeciesWhenSettled(canonicalName, options),
+      undefined,
+    )
+  }
+
+  bringToFront(): void {
+    this._runCommandWhenSettled(() => this._bringToFrontWhenSettled(), undefined)
+  }
+
+  sendToBack(): void {
+    this._runCommandWhenSettled(() => this._sendToBackWhenSettled(), undefined)
+  }
+
+  lockSelected(): void {
+    this._runCommandWhenSettled(() => this._lockSelectedWhenSettled(), undefined)
+  }
+
+  unlockSelected(): void {
+    this._runCommandWhenSettled(() => this._unlockSelectedWhenSettled(), undefined)
+  }
+
+  groupSelected(): void {
+    this._runCommandWhenSettled(() => this._groupSelectedWhenSettled(), undefined)
+  }
+
+  ungroupSelected(): void {
+    this._runCommandWhenSettled(() => this._ungroupSelectedWhenSettled(), undefined)
+  }
+
+  setSelectedPlantColor(color: string | null): number {
+    return this._runCommandWhenSettled(
+      () => this._setSelectedPlantColorWhenSettled(color),
+      0,
+    )
+  }
+
+  setSelectedPlantSymbol(symbol: PlantSymbolId | null): number {
+    return this._runCommandWhenSettled(
+      () => this._setSelectedPlantSymbolWhenSettled(symbol),
+      0,
+    )
+  }
+
+  setPlantColorForSpecies(canonicalName: string, color: string | null): number {
+    return this._runCommandWhenSettled(
+      () => this._setPlantColorForSpeciesWhenSettled(canonicalName, color),
+      0,
+    )
+  }
+
+  setPlantSymbolForSpecies(canonicalName: string, symbol: PlantSymbolId): number {
+    return this._runCommandWhenSettled(
+      () => this._setPlantSymbolForSpeciesWhenSettled(canonicalName, symbol),
+      0,
+    )
+  }
+
+  clearPlantSpeciesColor(canonicalName: string): boolean {
+    return this._runCommandWhenSettled(
+      () => this._clearPlantSpeciesColorWhenSettled(canonicalName),
+      false,
+    )
+  }
+
+  clearPlantSpeciesSymbol(canonicalName: string): boolean {
+    return this._runCommandWhenSettled(
+      () => this._clearPlantSpeciesSymbolWhenSettled(canonicalName),
+      false,
+    )
+  }
+
+  private _runCommandWhenSettled<T>(operation: () => T, busyResult: T): T {
+    return this._commandAdmission.runWhenSettled(
+      operation,
+      busyResult,
+      { resumePending: true },
+    )
+  }
+
+  private _copyWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()
     const selected = this._getSelectionModel(selectionOptions).editableTargets
@@ -114,19 +239,21 @@ export class SceneRuntimeMutationController {
     this._normalPasteCount = 0
   }
 
-  paste(): void {
+  private _pasteWhenSettled(): void {
     if (!this._clipboard) return
 
     const offset = normalPasteOffset(this._normalPasteCount + 1)
-    const receipt = this._arrangementPlacement.place({
+    this._arrangementPlacement.place({
       template: createClipboardArrangementTemplate(this._clipboard),
       translateBy: offset,
       historyType: 'paste',
+      onCommitted: () => {
+        this._normalPasteCount += 1
+      },
     })
-    if (receipt.committed) this._normalPasteCount += 1
   }
 
-  pasteAt(point: ScenePoint): void {
+  private _pasteAtWhenSettled(point: ScenePoint): void {
     if (!this._clipboard) return
     const sourceCenter = this._getClipboardSourceCenter(this._clipboard)
     if (!sourceCenter) return
@@ -142,11 +269,11 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  canPaste(): boolean {
+  private _canPasteWhenSettled(): boolean {
     return this._clipboard !== null
   }
 
-  duplicateSelected(): void {
+  private _duplicateSelectedWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()
     const selected = this._getSelectionModel(selectionOptions).editableTargets
@@ -160,7 +287,7 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  toggleSelectedPlantNamePins(): void {
+  private _toggleSelectedPlantNamePinsWhenSettled(): void {
     const selectedPlantIds = this._getEditableSelectedPlantIds()
     if (selectedPlantIds.size === 0) return
 
@@ -180,7 +307,7 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  deleteSelected(): void {
+  private _deleteSelectedWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selected = this._getEditableTopLevelTargets()
     if (selected.length === 0) return
@@ -212,7 +339,7 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  selectAll(): void {
+  private _selectAllWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const ids = new Set<string>()
     const groupedMemberKeys = getSceneGroupedMemberKeys(persisted)
@@ -259,7 +386,10 @@ export class SceneRuntimeMutationController {
     this._invalidateScene()
   }
 
-  selectSameSpecies(canonicalName?: string, options: { additive?: boolean } = {}): void {
+  private _selectSameSpeciesWhenSettled(
+    canonicalName?: string,
+    options: { additive?: boolean } = {},
+  ): void {
     const persisted = this._sceneStore.persisted
     const referenceCanonicalName = canonicalName
       ?? getSameSpeciesReferenceCanonicalName(persisted, this._getSelectionModel().editableTargets)
@@ -278,15 +408,15 @@ export class SceneRuntimeMutationController {
     this._invalidateScene()
   }
 
-  bringToFront(): void {
+  private _bringToFrontWhenSettled(): void {
     this._reorderSelected('end')
   }
 
-  sendToBack(): void {
+  private _sendToBackWhenSettled(): void {
     this._reorderSelected('start')
   }
 
-  lockSelected(): void {
+  private _lockSelectedWhenSettled(): void {
     const selected = this._getEditableTopLevelTargets()
     if (selected.length === 0) return
     const selectedIds = selected.map((target) => target.id)
@@ -298,7 +428,7 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  unlockSelected(): void {
+  private _unlockSelectedWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
     const selectedIds = selected.map((target) => target.id)
@@ -310,7 +440,7 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  groupSelected(): void {
+  private _groupSelectedWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selectionModel = this._getSelectionModel()
     const plan = createGroupSelectedPlan(persisted, selectionModel.editableTargets)
@@ -338,7 +468,7 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  ungroupSelected(): void {
+  private _ungroupSelectedWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selectedGroupIds = new Set(
       this._getEditableTopLevelTargets()
@@ -462,7 +592,7 @@ export class SceneRuntimeMutationController {
     return commonNames.size === 1 ? [...commonNames][0]! : null
   }
 
-  setSelectedPlantColor(color: string | null): number {
+  private _setSelectedPlantColorWhenSettled(color: string | null): number {
     const selectedPlantIds = this._getEditableSelectedPlantIds()
     const nextColor = normalizeHexColor(color)
     let changed = 0
@@ -483,7 +613,7 @@ export class SceneRuntimeMutationController {
     return changed
   }
 
-  setSelectedPlantSymbol(symbol: PlantSymbolId | null): number {
+  private _setSelectedPlantSymbolWhenSettled(symbol: PlantSymbolId | null): number {
     const selectedPlantIds = this._getEditableSelectedPlantIds()
     const nextSymbol = symbol === null ? null : resolvePlantSymbolId(symbol)
     let changed = 0
@@ -503,13 +633,13 @@ export class SceneRuntimeMutationController {
     return changed
   }
 
-  setPlantColorForSpecies(canonicalName: string, color: string | null): number {
+  private _setPlantColorForSpeciesWhenSettled(canonicalName: string, color: string | null): number {
     const nextColor = normalizeHexColor(color)
     const speciesTargets = getSpeciesPlantEditTargets(this._sceneStore.persisted, canonicalName)
     if (speciesTargets.plantIds.size > 0 && speciesTargets.editablePlantIds.size === 0) return 0
     let changed = 0
 
-    this._sceneEdits.run('set-plant-color-for-species', (tx) => {
+    const committed = this._sceneEdits.run('set-plant-color-for-species', (tx) => {
       tx.mutate((persisted) => {
         persisted.plants = persisted.plants.map((plant) => {
           if (!speciesTargets.editablePlantIds.has(plant.id)) return plant
@@ -526,13 +656,12 @@ export class SceneRuntimeMutationController {
         else delete nextSpeciesColors[canonicalName]
         persisted.plantSpeciesColors = nextSpeciesColors
       })
-      this._presentation.syncPlantSpeciesColors()
     })
 
-    return changed
+    return committed ? changed : 0
   }
 
-  setPlantSymbolForSpecies(canonicalName: string, symbol: PlantSymbolId): number {
+  private _setPlantSymbolForSpeciesWhenSettled(canonicalName: string, symbol: PlantSymbolId): number {
     const nextSymbol = resolvePlantSymbolId(symbol)
     const speciesTargets = getSpeciesPlantEditTargets(this._sceneStore.persisted, canonicalName)
     if (speciesTargets.plantIds.size > 0 && speciesTargets.editablePlantIds.size === 0) return 0
@@ -570,21 +699,20 @@ export class SceneRuntimeMutationController {
     return changed
   }
 
-  clearPlantSpeciesColor(canonicalName: string): boolean {
+  private _clearPlantSpeciesColorWhenSettled(canonicalName: string): boolean {
     const hadColor = normalizeHexColor(this._sceneStore.persisted.plantSpeciesColors[canonicalName] ?? null) !== null
     if (!hadColor) return false
-    this._sceneEdits.run('clear-plant-species-color', (tx) => {
+    const committed = this._sceneEdits.run('clear-plant-species-color', (tx) => {
       tx.mutate((persisted) => {
         const nextSpeciesColors = { ...persisted.plantSpeciesColors }
         delete nextSpeciesColors[canonicalName]
         persisted.plantSpeciesColors = nextSpeciesColors
       })
-      this._presentation.syncPlantSpeciesColors()
     })
-    return true
+    return committed
   }
 
-  clearPlantSpeciesSymbol(canonicalName: string): boolean {
+  private _clearPlantSpeciesSymbolWhenSettled(canonicalName: string): boolean {
     const hadSymbol = Object.prototype.hasOwnProperty.call(this._sceneStore.persisted.plantSpeciesSymbols, canonicalName)
     if (!hadSymbol) return false
     const speciesTargets = getSpeciesPlantEditTargets(this._sceneStore.persisted, canonicalName)

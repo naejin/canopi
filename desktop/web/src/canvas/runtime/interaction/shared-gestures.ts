@@ -2,7 +2,7 @@ import { computeSelectionRect } from '../../operations'
 import type { CameraController } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
-import type { ScenePoint, SceneStore } from '../scene'
+import type { ScenePoint, SceneStateReader } from '../scene'
 import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
 import {
   applySpeciesSelection,
@@ -37,7 +37,7 @@ export interface SceneInteractionSharedGestureContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly getSelection: () => ReadonlySet<string>
@@ -81,6 +81,7 @@ export interface SharedGesturePointerUpResult {
 export interface SceneInteractionSharedGestures {
   readonly active: boolean
   readonly editActive: boolean
+  readonly requiresSettledPointerUp: boolean
   readonly panning: boolean
   beginPan(context: SharedGesturePointerDownContext): boolean
   beginSelectionGesture(context: SharedGesturePointerDownContext): boolean
@@ -127,6 +128,10 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
 
   get editActive(): boolean {
     return this.dragEdit !== null
+  }
+
+  get requiresSettledPointerUp(): boolean {
+    return this.mode === 'band'
   }
 
   get panning(): boolean {

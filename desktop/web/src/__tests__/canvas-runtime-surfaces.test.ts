@@ -17,6 +17,7 @@ import type {
   CanvasDocumentSurface,
   CanvasQuerySurface,
 } from '../canvas/runtime/runtime'
+import { createCanvasDocumentReplacementToken } from '../canvas/runtime/runtime'
 
 function createQuerySurface() {
   return {
@@ -52,6 +53,7 @@ function createQuerySurface() {
       canClearSelectedSymbol: false,
     }),
     getPlacedPlants: () => [],
+    getSettledPlacedPlants: () => [],
     getLocalizedCommonNames: () => new Map<string, string | null>(),
   } satisfies CanvasQuerySurface
 }
@@ -73,6 +75,7 @@ function createCommandSurface() {
       redo: () => {},
     },
     sceneEdits: {
+      saveSelectionAsObjectStamp: () => {},
       copy: () => {},
       paste: () => {},
       pasteAt: () => {},
@@ -119,11 +122,13 @@ function createDocumentSurface() {
     hideCanvasChrome: () => {},
     zoomToFit: () => {},
     loadDocument: (_file) => {},
-    replaceDocument: (_file) => {},
+    replaceDocument: (_file, _token, finalizeReplacement: () => void) => {
+      finalizeReplacement()
+      return { callerFinalizerInvoked: true }
+    },
     hasLoadedDocument: () => false,
     serializeDocument: (metadata, doc) => ({ ...doc, name: metadata.name }),
     markSaved: () => {},
-    clearHistory: () => {},
     resize: () => {},
     destroy: () => {},
   } satisfies CanvasDocumentSurface
@@ -156,12 +161,22 @@ describe('canvas runtime surfaces', () => {
   it('keeps document lifecycle behavior inside the document role module', () => {
     const documentSurfaceSource = readPackageSource('../canvas/runtime/document-surface.ts')
     const runtimeSource = readPackageSource('../canvas/runtime/scene-runtime.ts')
+    const runtimeContractSource = readPackageSource('../canvas/runtime/runtime.ts')
 
     expect(documentSurfaceSource).not.toContain("from './scene-runtime'")
     expect(documentSurfaceSource).not.toContain('this.runtime.')
     expect(documentSurfaceSource).toContain('loadDocument(file')
     expect(documentSurfaceSource).toContain('replaceDocument(file')
+    expect(runtimeContractSource).toContain('export interface CanvasDocumentReplacementReceipt')
+    expect(runtimeContractSource).toContain('token: CanvasDocumentReplacementToken,')
+    expect(runtimeContractSource).toContain('finalizeReplacement: () => void,')
+    expect(runtimeContractSource).toContain('): CanvasDocumentReplacementReceipt')
+    expect(documentSurfaceSource).toContain('finalizeReplacement: () => void,')
+    expect(documentSurfaceSource).toContain('): CanvasDocumentReplacementReceipt {')
+    expect(documentSurfaceSource).not.toContain('finalizeReplacement?:')
     expect(documentSurfaceSource).toContain('serializeDocument(')
+    expect(documentSurfaceSource).not.toContain('clearHistory')
+    expect(runtimeContractSource).not.toContain('clearHistory(): void')
     expect(documentSurfaceSource).toContain('resize(width')
     expect(runtimeSource).toContain('get documentSurface')
     expect(runtimeSource).not.toContain('loadDocument(file')
@@ -185,6 +200,11 @@ describe('canvas runtime surfaces', () => {
     expect(querySurfaceSource).toContain('getViewport()')
     expect(querySurfaceSource).toContain('getSelection()')
     expect(querySurfaceSource).toContain('getPlacedPlants()')
+    expect(querySurfaceSource).toContain('SettledSceneReader')
+    expect(querySurfaceSource).toContain('.readWhenSettled(')
+    expect(querySurfaceSource).not.toContain('SceneCommandAdmission')
+    expect(querySurfaceSource).not.toContain('.runWhenSettled(')
+    expect(querySurfaceSource).not.toContain('resumePending')
     expect(runtimeSource).toContain('get querySurface')
     expect(runtimeSource).not.toContain('getSceneStore():')
     expect(runtimeSource).not.toContain('getSceneSnapshot():')
@@ -195,6 +215,32 @@ describe('canvas runtime surfaces', () => {
     expect(runtimeSource).not.toContain('return this._camera.viewport')
     expect(runtimeSource).not.toContain('return new Set(this._sceneStore.session.selectedEntityIds)')
     expect(runtimeSource).not.toContain('return this._sceneStore.toCanopiFile().plants')
+  })
+
+  it('keeps computed command availability on the observational settled-read role', () => {
+    const commandSurfaceSource = readPackageSource('../canvas/runtime/command-surface.ts')
+    const mutationsSource = readPackageSource('../canvas/runtime/scene-runtime/mutations.ts')
+    const interactionSource = readPackageSource('../canvas/runtime/scene-interaction.ts')
+    const canUndoSource = commandSurfaceSource.slice(
+      commandSurfaceSource.indexOf('const canUndo = computed'),
+      commandSurfaceSource.indexOf('const canRedo = computed'),
+    )
+    const canRedoSource = commandSurfaceSource.slice(
+      commandSurfaceSource.indexOf('const canRedo = computed'),
+      commandSurfaceSource.indexOf('this.tools ='),
+    )
+
+    expect(commandSurfaceSource).toContain('settledReader: SettledSceneReader')
+    for (const historyAvailabilitySource of [canUndoSource, canRedoSource]) {
+      expect(historyAvailabilitySource).toContain('options.settledReader.readWhenSettled(')
+      expect(historyAvailabilitySource).not.toContain('commandAdmission')
+      expect(historyAvailabilitySource).not.toContain('runWhenSettled')
+      expect(historyAvailabilitySource).not.toContain('resumePending')
+    }
+    expect(mutationsSource).toContain('settledReader: SettledSceneReader')
+    expect(mutationsSource).toContain('this._settledReader.readWhenSettled(')
+    expect(interactionSource).toContain('settledReader: SettledSceneReader')
+    expect(interactionSource).toContain('this._deps.settledReader.readWhenSettled(')
   })
 
   it('keeps command mutation behavior inside the command role module', () => {
@@ -302,8 +348,13 @@ describe('canvas runtime surfaces', () => {
   it('keeps document consumers away from panel queries and toolbar commands', () => {
     const documentSurface = createDocumentSurface()
     const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    const replacementToken = createCanvasDocumentReplacementToken()
 
-    documentSurface.replaceDocument(file)
+    if (false) {
+      // @ts-expect-error document replacement requires a pre-release finalizer.
+      documentSurface.replaceDocument(file, replacementToken)
+    }
+    documentSurface.replaceDocument(file, replacementToken, () => {})
     expect(documentSurface.serializeDocument({ name: 'Doc' }, file).name).toBe('Doc')
     // @ts-expect-error document surfaces cannot read placed plant lists.
     documentSurface.getPlacedPlants

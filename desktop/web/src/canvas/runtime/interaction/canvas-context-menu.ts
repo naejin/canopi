@@ -66,7 +66,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
   root.addEventListener('click', stopCanvasEvent)
   root.addEventListener('contextmenu', stopCanvasEvent)
 
-  let activeWorld: ScenePoint = { x: 0, y: 0 }
+  let activeWorld: ScenePoint | null = null
   const actions: readonly CanvasContextMenuAction[] = [
     {
       id: 'copy',
@@ -96,7 +96,9 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
     },
   ]
   const buttons = actions.map((action) => createMenuButton(action, () => {
-    action.run(activeWorld)
+    const world = activeWorld
+    if (!world) return
+    action.run(world)
     hide()
   }))
   root.replaceChildren(...buttons)
@@ -123,6 +125,10 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
 
   function hide(): void {
     root.style.display = 'none'
+    activeWorld = null
+    if (root.contains(document.activeElement)) {
+      (document.activeElement as HTMLElement).blur()
+    }
   }
 
   return {
@@ -132,6 +138,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
       return target instanceof Node && root.contains(target)
     },
     dispose() {
+      hide()
       root.remove()
     },
   }

@@ -105,6 +105,7 @@ describe('FavoritesPanel', () => {
   let getFavoritesMock: ReturnType<typeof vi.fn>
   let loadStampLibraryMock: ReturnType<typeof vi.fn>
   let saveSelectionMock: ReturnType<typeof vi.fn>
+  let saveCanvasSelectionMock: ReturnType<typeof vi.fn>
   let renameStampMock: ReturnType<typeof vi.fn>
   let deleteStampMock: ReturnType<typeof vi.fn>
   let reorderStampMock: ReturnType<typeof vi.fn>
@@ -142,6 +143,7 @@ describe('FavoritesPanel', () => {
     })
     loadStampLibraryMock = vi.fn(async () => {})
     saveSelectionMock = vi.fn(async () => null)
+    saveCanvasSelectionMock = vi.fn()
     renameStampMock = vi.fn(async () => null)
     deleteStampMock = vi.fn(async () => true)
     reorderStampMock = vi.fn(async () => {})
@@ -227,6 +229,15 @@ describe('FavoritesPanel', () => {
         importStampFile: importStampFileMock,
       },
     }))
+    vi.doMock('../app/favorites/controller', async () => {
+      const actual = await vi.importActual<typeof import('../app/favorites/controller')>(
+        '../app/favorites/controller',
+      )
+      return {
+        ...actual,
+        saveCanvasSelectionAsObjectStamp: saveCanvasSelectionMock,
+      }
+    })
     ;({ FavoritesPanel } = await import('../components/panels/FavoritesPanel'))
 
     container = document.createElement('div')
@@ -240,6 +251,7 @@ describe('FavoritesPanel', () => {
     workbench.dispose()
     vi.doUnmock('../app/plant-browser')
     vi.doUnmock('../app/saved-object-stamps')
+    vi.doUnmock('../app/favorites/controller')
   })
 
   it('requests favorites on mount and renders the current favorite list', async () => {
@@ -280,7 +292,8 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
 
-    expect(saveSelectionMock).toHaveBeenCalledTimes(1)
+    expect(saveCanvasSelectionMock).toHaveBeenCalledTimes(1)
+    expect(saveSelectionMock).not.toHaveBeenCalled()
 
     const importButton = [...container.querySelectorAll('button')]
       .find((button) => button.textContent === 'Import')

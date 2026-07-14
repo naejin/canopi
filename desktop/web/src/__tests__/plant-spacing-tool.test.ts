@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore, type ScenePlantEntity, type ScenePoint } from '../canvas/runtime/scene'
+import { SceneHistory } from '../canvas/runtime/scene-history'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
 import {
   createPlantSpacingTool,
@@ -22,15 +23,10 @@ function createPlantPresentationContext(viewportScale: number) {
 function createSceneEdits(store: SceneStore): SceneRuntimeEditCoordinator {
   return new SceneRuntimeEditCoordinator({
     sceneStore: store,
-    captureSnapshot: () => {
-      const snapshot = store.snapshot()
-      return {
-        persisted: snapshot.persisted,
-        session: snapshot.session,
-      }
-    },
-    markDirty: () => true,
+    history: new SceneHistory(),
     setSelection: (ids) => store.setSelection(ids),
+    incrementSceneRevision: () => {},
+    syncCanvasSignalsFromScene: () => {},
     invalidate: () => {},
   })
 }

@@ -123,6 +123,8 @@ describe('scene runtime presentation controller', () => {
     const { controller, sceneStore, state } = createController()
 
     const result = await controller.refreshCurrentPresentationData()
+    expect(state.namesChanged).toBe(0)
+    controller.publishRefresh(result)
     if (result.backfills) {
       const byId = new Map(result.backfills.map((entry) => [entry.plantId, entry]))
       sceneStore.updatePersisted((draft) => {
@@ -220,5 +222,28 @@ describe('scene runtime presentation controller', () => {
 
     expect(result.changed).toBe(true)
     expect(controller.getLocalizedCommonNames().get('Malus domestica')).toBe('Pommier')
+  })
+
+  it('publishes an unpublished label revision through a later cached refresh', async () => {
+    vi.mocked(getCommonNames).mockResolvedValue({
+      'Malus domestica': 'Pommier',
+    })
+    const { controller, sceneStore, state } = createController()
+    sceneStore.updatePersisted((draft) => {
+      draft.plants[0]!.stratum = 'canopy'
+      draft.plants[0]!.canopySpreadM = 4
+      draft.plants[0]!.scale = 4
+    })
+
+    const staleRefresh = await controller.refreshCurrentPresentationData()
+    const currentRefresh = await controller.refreshCurrentPresentationData()
+    expect(currentRefresh.plantNamesRevision).toBe(staleRefresh.plantNamesRevision)
+    expect(currentRefresh.changed).toBe(false)
+
+    expect(controller.publishRefresh(currentRefresh)).toBe(true)
+
+    expect(staleRefresh.plantNamesRevision).toBeGreaterThan(0)
+    expect(state.namesChanged).toBe(1)
+    expect(controller.publishRefresh(staleRefresh)).toBe(false)
   })
 })

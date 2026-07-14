@@ -158,6 +158,7 @@ function createRuntime(
       canClearSelectedSymbol: false,
     }),
     getPlacedPlants: () => [],
+    getSettledPlacedPlants: () => [],
     getLocalizedCommonNames: () => new Map(),
   }
 }

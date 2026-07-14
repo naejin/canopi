@@ -30,6 +30,7 @@ export interface SceneToolCapturedPointerContext extends SceneToolPointerEvent {
 export interface SceneToolAdapter {
   readonly onActivate?: () => void
   readonly onDeactivate?: () => void
+  readonly hasActiveSceneEdit?: () => boolean
   readonly shouldIgnorePointerEvent?: (target: EventTarget | null) => boolean
   readonly shouldIgnorePointerUpWithoutCapture?: () => boolean
   readonly shouldPreserveTransientOnPan?: () => boolean

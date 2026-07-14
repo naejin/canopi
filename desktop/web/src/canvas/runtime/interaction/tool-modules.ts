@@ -4,7 +4,7 @@ import type {
 } from '../plant-presentation'
 import type {
   ScenePoint,
-  SceneStore,
+  SceneStateReader,
 } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
@@ -44,7 +44,7 @@ export interface SceneToolRegistryContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
   readonly camera: CameraController
-  readonly getSceneStore: () => SceneStore
+  readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
