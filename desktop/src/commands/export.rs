@@ -12,7 +12,7 @@ pub fn export_file(data: String, path: String) -> Result<String, String> {
 
 /// Export a canvas snapshot as PNG at the specified DPI.
 ///
-/// `snapshot_base64`: base64-encoded PNG data from Konva `toDataURL`
+/// `snapshot_base64`: base64-encoded PNG data captured by the frontend renderer
 /// `width`, `height`: logical canvas dimensions in pixels
 /// `dpi`: target DPI (72 = 1x, 150, 300)
 /// `path`: destination file path (chosen by frontend dialog)
@@ -30,7 +30,7 @@ pub fn export_native_png(
 
 /// Export a canvas snapshot as PDF with the given layout.
 ///
-/// `snapshot_base64`: base64-encoded PNG data from Konva `toDataURL`
+/// `snapshot_base64`: base64-encoded PNG data captured by the frontend renderer
 /// `width`, `height`: logical canvas dimensions in pixels
 /// Layout fields: page dimensions in mm, margins, title, etc.
 /// `path`: destination file path (chosen by frontend dialog)

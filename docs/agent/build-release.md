@@ -104,15 +104,14 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 ## Platform Boundary
 
 - Platform trait lives in `desktop/src/platform/mod.rs`, not `common-types`.
-- `FileWatchHandle` contains closures and is not serializable.
 - Lib crates export marker structs; `platform/mod.rs` implements the trait through conditional modules.
-- `FileWatchHandle` must cancel on drop and join watcher threads.
+- The platform trait intentionally exposes only native PNG/PDF snapshot export. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
 - macOS and Windows platform code is stubbed behind `#[cfg(target_os = "...")]`.
 - CI validates platform compilation on actual platforms.
 
 ## Linux Native
 
-- Linux native code uses Cairo PNG/PDF and inotify.
+- Linux native code uses Cairo PNG/PDF.
 - Cairo deps use `cairo-rs` with `png` and `pdf` features.
 - Linux system deps include GTK/WebKitGTK, librsvg, and patchelf.
 - Linux desktop startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` in process before Tauri/WebKitGTK initializes. Keep `cargo tauri dev` as the normal local command; do not move this workaround into shell-only launch instructions or release wrappers.

@@ -83,7 +83,6 @@ png_targets = {
     "32x32.png": 32,
     "128x128.png": 128,
     "128x128@2x.png": 256,
-    "256x256.png": 256,
 }
 
 for filename, size in png_targets.items():
@@ -101,4 +100,4 @@ img.save(
 PY
 
 echo "Generated icon set:"
-file "$OUTPUT_DIR"/32x32.png "$OUTPUT_DIR"/128x128.png "$OUTPUT_DIR"/128x128@2x.png "$OUTPUT_DIR"/256x256.png "$OUTPUT_DIR"/icon.ico "$OUTPUT_DIR"/icon.icns
+file "$OUTPUT_DIR"/32x32.png "$OUTPUT_DIR"/128x128.png "$OUTPUT_DIR"/128x128@2x.png "$OUTPUT_DIR"/icon.ico "$OUTPUT_DIR"/icon.icns

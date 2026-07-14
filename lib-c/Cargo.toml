@@ -5,5 +5,3 @@ edition.workspace = true
 
 [dependencies]
 cairo-rs = { version = "0.20", features = ["png", "pdf"] }
-inotify = "0.11"
-libc = "0.2"

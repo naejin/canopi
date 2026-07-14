@@ -95,8 +95,8 @@ fn write_bytes_to_path(path: String, bytes: &[u8], kind: &str) -> Result<String,
 #[cfg(test)]
 mod tests {
     use super::{export_file, export_native_pdf, export_native_png};
-    use crate::platform::{CanvasSnapshot, FileWatchHandle, Platform, PlatformError, PrintLayout};
-    use std::path::{Path, PathBuf};
+    use crate::platform::{CanvasSnapshot, Platform, PlatformError, PrintLayout};
+    use std::path::PathBuf;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -175,18 +175,6 @@ mod tests {
                 include_plant_schedule: layout.include_plant_schedule,
             });
             Ok(self.pdf_result.clone())
-        }
-
-        fn watch_file(&self, _path: &Path) -> Result<FileWatchHandle, PlatformError> {
-            Err(PlatformError::NotImplemented)
-        }
-
-        fn generate_thumbnail(
-            &self,
-            _snapshot: &CanvasSnapshot,
-            _size: u32,
-        ) -> Result<Vec<u8>, PlatformError> {
-            Err(PlatformError::NotImplemented)
         }
     }
 
