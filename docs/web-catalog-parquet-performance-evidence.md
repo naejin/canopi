@@ -36,5 +36,15 @@ Interpretation:
 
 - The static artifact is materially smaller, and the largest catalog asset is comfortably below the 25 MiB Cloudflare Pages per-asset limit.
 - The old path paid a multi-second upfront eager-load cost and then scanned in memory.
-- The current production path is designed for DuckDB projection/filter pushdown and lazy active-locale/image registration, so the Python test-reader timings should not be treated as user-visible query latency.
-- Browser-level DuckDB-WASM timings for `/app/` browse, two-character search, backed filter use, and locale switch should be recorded during `canopi-bgcv` website artifact smoke, where the built artifact can run in a browser with the same static routing behavior users receive.
+- The production reader queries Parquet through DuckDB-WASM and lazily registers active-locale and image assets, so the Python test-reader timings are not user-visible query latency.
+
+## Published Artifact Smoke
+
+The `canopi-bgcv` website artifact smoke completed on 2026-07-08 with app artifact commit `b5f0448` and website installer commit `f1b922b`:
+
+- `npm run build:with-web` verified and installed the app-produced artifact without importing app source or adding website-side catalog compute.
+- Browser smoke against the built static app browsed and searched a 175,473-Species catalog and exercised the backed `life_cycle` filter. The admitted filter set was `climate_zones`, `habit`, and `life_cycle`.
+- Catalog manifest and Parquet requests were served directly under `/app/canopi-catalog/`, not by the SPA fallback.
+- Artifact checks covered checksums, byte counts, required files, supported-filter metadata, the per-asset byte limit, and the total file-count limit.
+
+That smoke established publication and query correctness, not a browser latency budget; it did not record comparable browser timing samples for the four proxy rows above.

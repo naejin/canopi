@@ -48,7 +48,7 @@ Canopi is a desktop design tool that combines a 175,000-species plant database w
 ## Getting started
 
 ```bash
-# Prerequisites: Rust toolchain, Node.js 18+
+# Prerequisites: Rust toolchain, Node.js 22.13+ (Node 22 LTS)
 
 # Linux system dependencies
 sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf

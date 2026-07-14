@@ -206,7 +206,6 @@ cargo build --release
 - Right: `PanelBar` with Canvas/Location primary navigation and Design Notebook, Species Catalog, and Favorites side panels.
 - Bottom: bottom panel with Timeline, Budget, and Consortium tabs.
 - Title bar: logo, file name, lang/theme toggle, menu controls, and window controls.
-- Legacy activity/status bar components may exist in the tree; check `desktop/web/src/app.tsx` before assuming a component is mounted.
 
 ### Design Direction
 

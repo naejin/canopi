@@ -94,7 +94,7 @@ The searchable collection of species and their supporting data used when selecti
 _Avoid_: Plant catalog, plant database
 
 **Species Catalog Workbench**:
-The interaction surface for browsing, filtering, selecting, favoriting, and inspecting species from the Species Catalog. The workbench coordinates Species Catalog UI state, but it does not own Species Catalog data and must not own Design workflows such as Site Adaptation.
+The interaction surface for browsing, filtering, selecting, favoriting, and inspecting species from the Species Catalog. The workbench coordinates Species Catalog UI state, but it does not own Species Catalog data or Design workflows.
 _Avoid_: Plant browser state, plant DB panel state
 
 **Species Catalog Search**:
@@ -106,7 +106,7 @@ A search criterion that narrows Species Catalog results by Species attributes su
 _Avoid_: Plant filter, SQL filter, column filter
 
 **Species Catalog Read Projection**:
-A backend read model that translates Species Catalog storage rows into caller-oriented data for search, detail, compatibility checks, or replacement suggestions. A species catalog read projection owns SQL shape, row mapping, parameter placeholders, and localized Common Name hydration; consuming workflows add their own interpretation.
+A storage-backed read model that translates Species Catalog rows into caller-oriented data for search, detail, favorites, or recently viewed Species. A species catalog read projection owns query shape, row mapping, parameter binding, and localized Common Name hydration; consuming workflows add their own interpretation.
 For `SpeciesListItem`, search results and canonical-name hydration share the same list projection row mapper so list display fields, secondary Common Names, and fallback flags stay consistent across Species Catalog workflows.
 _Avoid_: Raw species row, SQL result, ad hoc lookup
 
@@ -351,16 +351,8 @@ A reusable design that can be imported as the starting point for a new design. A
 _Avoid_: Community template, file template
 
 **Site Adaptation**:
-The process of checking whether species in a design or design template suit the target site. Site adaptation may surface compatibility results and replacement suggestions. Web Edition v1 omits Site Adaptation; static web templates import as-is.
+A retired concept for checking whether Species in a Design or Design Template suit a target site. ADR 0023 records that Canopi has no mounted Site Adaptation workflow; current Design Template imports open as Designs without compatibility or replacement steps.
 _Avoid_: Template adaptation, plant review
-
-**Compatibility Check**:
-An assessment of whether a species fits a target site condition, such as hardiness zone. A compatibility check describes fit; it does not by itself change the design.
-_Avoid_: Validation, health check
-
-**Replacement Suggestion**:
-A species proposed as a better fit for the target site than an incompatible species. A replacement suggestion is optional guidance, not an automatic substitution.
-_Avoid_: Alternative, recommendation
 
 ## Flagged Ambiguities
 
@@ -393,9 +385,6 @@ The **Species Catalog** is the collection of Species data. The **Species Catalog
 
 **Species Catalog Filter vs SQL Column**:
 A **Species Catalog Filter** describes user-facing search behavior. A SQL column is only one possible implementation detail behind that behavior.
-
-**Species Catalog Read Projection vs Site Adaptation**:
-A **Species Catalog Read Projection** reports Species Catalog facts in a caller-oriented shape. **Site Adaptation** interprets those facts for a target site, such as hardiness compatibility and replacement suggestion response shape.
 
 **Canonical Name vs Scientific Name**:
 Use **Canonical Name** for species identity in Canopi. "Scientific name" may be used in explanatory copy, but it is not the canonical identity term.
@@ -503,12 +492,6 @@ A **Timeline Action** is the scheduled work in the Design. The **Timeline Action
 **Timeline Action Canvas vs Planning Canvas Interaction Frame**:
 The **Timeline Action Canvas** owns Timeline Action planning presentation. The **Planning Canvas Interaction Frame** owns interaction ordering shared with other planning canvases, such as Consortium planning.
 
-**Site Adaptation vs Template Adaptation**:
-Use **Site Adaptation** for the domain concept of fitting a design to a site. "Template adaptation" is acceptable only when discussing the specific import workflow.
-
-**Compatibility Check vs Health Check**:
-A **Compatibility Check** evaluates species fit for a site. A health check evaluates whether an app subsystem is available.
-
 ## Example Dialogue
 
 Designer: "I want to create a design for a small food forest."
@@ -591,10 +574,10 @@ Designer: "Can two species share the same line in the emergent stratum?"
 
 Developer: "Yes, if their consortium entries occupy different succession phases. They are sharing a consortium lane, not becoming the same consortium entry."
 
-Designer: "If a template includes a species outside my hardiness zone, does Canopi replace it?"
+Designer: "If a template includes a Species outside my hardiness zone, does Canopi replace it?"
 
-Developer: "No. Site adaptation shows the compatibility check and may offer replacement suggestions, but the designer chooses whether to replace the species."
+Developer: "No. Canopi currently imports Design Templates unchanged. ADR 0023 retired Site Adaptation, Compatibility Checks, and Replacement Suggestions."
 
-Designer: "Is the template's climate zone the same as a species hardiness zone?"
+Designer: "Is the template's climate zone the same as a Species hardiness zone?"
 
-Developer: "No. The climate zone describes the site or template broadly; the hardiness zone is used for species compatibility."
+Developer: "No. Climate zone describes the site or template broadly, while hardiness zone describes Species cold tolerance. No current import workflow interprets the two as a compatibility result."
