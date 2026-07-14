@@ -5,6 +5,7 @@ use std::{fs, path::Path};
 #[derive(Deserialize)]
 pub(crate) struct SchemaContractFixture {
     pub(crate) schema_version: i32,
+    pub(crate) min_export_schema_version: i32,
     pub(crate) columns: Vec<SchemaColumnFixture>,
     pub(crate) indexes: BTreeMap<String, Vec<SchemaIndexFixture>>,
     pub(crate) translations: serde_json::Map<String, serde_json::Value>,

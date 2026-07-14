@@ -18,6 +18,9 @@ jobs:
       CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -37,6 +40,9 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Species Catalog contract tests
+        run: python3 -m unittest scripts.test_species_catalog_contract scripts.test_prepare_db scripts.test_generate_web_catalog
 
       - uses: actions/setup-node@v4
         with:
@@ -143,6 +149,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -178,6 +187,13 @@ jobs:
             --pattern "$CANOPI_CORE_DB_ASSET_NAME" \
             --dir desktop/resources
           test -s "desktop/resources/$CANOPI_CORE_DB_ASSET_NAME"
+
+      - name: Verify bundled plant DB contract
+        shell: bash
+        run: >-
+          python scripts/species_catalog_contract.py verify-db
+          --profile prepared
+          "desktop/resources/$CANOPI_CORE_DB_ASSET_NAME"
 
       - name: Build Tauri app
         run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}

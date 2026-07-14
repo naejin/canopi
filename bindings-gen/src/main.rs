@@ -2,7 +2,9 @@ use serde::Deserialize;
 use specta::TypeCollection;
 use specta_typescript::{BigIntExportBehavior, SerdeMode, Typescript};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::OsString;
 use std::fmt::Write as _;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<common_types::species::SpeciesUse>();
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    validate_species_catalog_contract(&root)?;
     let output = root.join("../desktop/web/src/generated/contracts.ts");
     let keys_output = root.join("../desktop/web/src/generated/known-canopi-keys.ts");
     let plant_filter_schema = root.join("../common-types/plant-filter-fields.json");
@@ -75,6 +78,87 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     Ok(())
+}
+
+fn validate_species_catalog_contract(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let repo_root = root
+        .parent()
+        .ok_or("bindings-gen manifest directory has no repository parent")?;
+    let override_program = std::env::var_os("PYTHON").filter(|value| !value.is_empty());
+    let candidates = python_command_candidates(override_program, cfg!(windows));
+    let mut unavailable = Vec::new();
+    for (program, prefix_args) in candidates {
+        let display = std::iter::once(program.to_string_lossy().into_owned())
+            .chain(
+                prefix_args
+                    .iter()
+                    .map(|argument| argument.to_string_lossy().into_owned()),
+            )
+            .collect::<Vec<_>>()
+            .join(" ");
+        let output = std::process::Command::new(&program)
+            .args(&prefix_args)
+            .arg(repo_root.join("scripts/species_catalog_contract.py"))
+            .arg("check")
+            .current_dir(repo_root)
+            .output();
+        let output = match output {
+            Ok(output) => output,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                unavailable.push(display);
+                continue;
+            }
+            Err(error) => {
+                return Err(format!(
+                    "failed to launch Species Catalog contract validator with '{display}': {error}"
+                )
+                .into());
+            }
+        };
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let details = if stderr.trim().is_empty() {
+            stdout.trim()
+        } else {
+            stderr.trim()
+        };
+        return Err(format!(
+            "Species Catalog storage contract validation failed before binding generation \
+             using '{display}':\n{details}"
+        )
+        .into());
+    }
+
+    Err(format!(
+        "no Python 3 interpreter was available for Species Catalog contract validation \
+         (tried: {}); set PYTHON to a Python 3 executable",
+        unavailable.join(", ")
+    )
+    .into())
+}
+
+fn python_command_candidates(
+    override_program: Option<OsString>,
+    windows: bool,
+) -> Vec<(OsString, Vec<OsString>)> {
+    if let Some(program) = override_program {
+        return vec![(program, Vec::new())];
+    }
+    if windows {
+        return vec![
+            (OsString::from("py"), vec![OsString::from("-3")]),
+            (OsString::from("python"), Vec::new()),
+            (OsString::from("python3"), Vec::new()),
+        ];
+    }
+    vec![
+        (OsString::from("python3"), Vec::new()),
+        (OsString::from("python"), Vec::new()),
+    ]
 }
 
 fn write_known_canopi_keys(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
@@ -1280,5 +1364,27 @@ fn format_number(value: f64) -> String {
         format!("{}", value as i64)
     } else {
         value.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::python_command_candidates;
+    use std::ffi::OsString;
+
+    #[test]
+    fn python_candidates_respect_override_and_windows_launcher() {
+        assert_eq!(
+            python_command_candidates(Some(OsString::from("/custom/python")), false),
+            vec![(OsString::from("/custom/python"), Vec::new())],
+        );
+        assert_eq!(
+            python_command_candidates(None, true),
+            vec![
+                (OsString::from("py"), vec![OsString::from("-3")]),
+                (OsString::from("python"), Vec::new()),
+                (OsString::from("python3"), Vec::new()),
+            ],
+        );
     }
 }

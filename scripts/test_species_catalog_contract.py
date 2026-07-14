@@ -1,0 +1,955 @@
+import json
+from pathlib import Path
+import sqlite3
+import stat
+import subprocess
+import sys
+import tempfile
+import unittest
+
+from scripts import species_catalog_contract as contract
+
+
+SCRIPT_DIR = Path(__file__).parent
+CONTRACT_CLI = SCRIPT_DIR / "species_catalog_contract.py"
+CONTRACT_PATH = SCRIPT_DIR / "schema-contract.json"
+FILTER_PATH = SCRIPT_DIR.parent / "common-types/plant-filter-fields.json"
+
+
+def copy_contract_sources(root: Path) -> None:
+    contract_dir = root / "scripts"
+    filter_dir = root / "common-types"
+    contract_dir.mkdir(parents=True)
+    filter_dir.mkdir(parents=True)
+    (contract_dir / "schema-contract.json").write_text(
+        CONTRACT_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (filter_dir / "plant-filter-fields.json").write_text(
+        FILTER_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+
+def create_minimal_export_database(path: Path) -> None:
+    source = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)")
+        connection.execute(
+            "INSERT INTO _metadata (key, value) VALUES ('schema_version', ?)",
+            (str(source["min_export_schema_version"]),),
+        )
+        species_columns = [
+            column for column in source["columns"] if column.get("required", False)
+        ]
+        connection.execute(
+            "CREATE TABLE species ("
+            + ", ".join(
+                f"{column['name']} {column['type']}" for column in species_columns
+            )
+            + ")"
+        )
+        for table in source["supporting_tables"]:
+            required_columns = [
+                column
+                for column in table["columns"]
+                if column.get("required", False)
+            ]
+            connection.execute(
+                f"CREATE TABLE {table['name']} ("
+                + ", ".join(
+                    f"{column['name']} {column['type']}"
+                    for column in required_columns
+                )
+                + ")"
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def create_prepared_database(path: Path) -> None:
+    source = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "CREATE TABLE species ("
+            + ", ".join(
+                f"{column['name']} {column['type']}" for column in source["columns"]
+            )
+            + ")"
+        )
+        for table in source["supporting_tables"]:
+            connection.execute(
+                f"CREATE TABLE {table['name']} ("
+                + ", ".join(
+                    f"{column['name']} {column['type']}"
+                    for column in table["columns"]
+                )
+                + ")"
+            )
+        for table in source["prepared_tables"]:
+            columns = ", ".join(
+                f"{column['name']} {column['type']}" for column in table["columns"]
+            )
+            if table.get("virtual_module") == "fts5":
+                options = ", ".join(
+                    f"{key}='{value}'"
+                    for key, value in table["virtual_options"].items()
+                )
+                connection.execute(
+                    f"CREATE VIRTUAL TABLE {table['name']} USING fts5("
+                    + ", ".join(column["name"] for column in table["columns"])
+                    + f", {options})"
+                )
+            else:
+                connection.execute(f"CREATE TABLE {table['name']} ({columns})")
+        for table, indexes in source["indexes"].items():
+            for index in indexes:
+                connection.execute(
+                    f"CREATE INDEX {index['name']} ON {table}({index['columns']})"
+                )
+        connection.execute(f"PRAGMA user_version = {source['schema_version']}")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+class SpeciesCatalogContractCliTests(unittest.TestCase):
+    def test_value_commands_read_versions_from_the_authored_contract(self):
+        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+
+        cases = {
+            "prepared-schema-version": contract["schema_version"],
+            "minimum-export-schema-version": contract["min_export_schema_version"],
+        }
+        for value_name, expected in cases.items():
+            with self.subTest(value_name=value_name):
+                result = subprocess.run(
+                    [sys.executable, str(CONTRACT_CLI), "value", value_name],
+                    cwd=SCRIPT_DIR.parent,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"{expected}\n")
+                self.assertEqual(result.stderr, "")
+
+    def test_emit_rust_write_command_uses_the_selected_repository_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(CONTRACT_CLI),
+                    "--root",
+                    str(root),
+                    "emit-rust",
+                    "--write",
+                ],
+                cwd=SCRIPT_DIR.parent,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(
+                (root / "desktop/src/db/schema_contract_generated.rs").is_file()
+            )
+            self.assertIn("Wrote generated Species Catalog Rust facts", result.stdout)
+            self.assertEqual(result.stderr, "")
+
+    def test_release_callers_use_contract_commands_without_source_scraping(self):
+        callers = [
+            SCRIPT_DIR / "publish-db-release.sh",
+            SCRIPT_DIR.parent / ".github/workflows/release-candidate.yml",
+        ]
+        for caller in callers:
+            with self.subTest(caller=caller):
+                source = caller.read_text(encoding="utf-8")
+                self.assertIn("species_catalog_contract.py check", source)
+                self.assertIn(
+                    "species_catalog_contract.py value prepared-schema-version",
+                    source,
+                )
+                self.assertIn(
+                    "species_catalog_contract.py verify-db --profile prepared",
+                    source,
+                )
+                self.assertNotIn("schema_contract.rs", source)
+                self.assertNotIn("EXPECTED_PLANT_SCHEMA_VERSION", source)
+
+    def test_release_builds_pin_code_and_database_to_preflight(self):
+        workflow = (
+            SCRIPT_DIR.parent / ".github/workflows/release-candidate.yml"
+        ).read_text(encoding="utf-8")
+        build_job = workflow.split("\n  build:\n", 1)[1].split(
+            "\n  manifest:\n",
+            1,
+        )[0]
+
+        self.assertIn(
+            'expected_db_sha256="${{ needs.preflight.outputs.db_sha256 }}"',
+            build_job,
+        )
+        self.assertIn(
+            'DB_PATH="$db_path" node <<\'NODE\'',
+            build_job,
+        )
+        self.assertIn(
+            "fs.createReadStream(process.env.DB_PATH)",
+            build_job,
+        )
+        self.assertIn(
+            'if [[ "$actual_db_sha256" != "$expected_db_sha256" ]]; then',
+            build_job,
+        )
+        self.assertNotIn("sha256sum", build_job)
+        self.assertIn(
+            "ref: ${{ needs.preflight.outputs.head_sha }}",
+            build_job,
+        )
+        self.assertNotIn("ref: ${{ inputs.ref }}", build_job)
+
+
+class GeneratedRustContractTests(unittest.TestCase):
+    def test_check_rejects_stale_generated_rust_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generated_dir = root / "desktop/src/db"
+            copy_contract_sources(root)
+            generated_dir.mkdir(parents=True)
+            generated_path = generated_dir / "schema_contract_generated.rs"
+            generated_path.write_text("stale generated facts\n", encoding="utf-8")
+
+            with self.assertRaises(contract.GeneratedArtifactDriftError):
+                contract.sync_generated(contract.SyncMode.CHECK, root=root)
+
+            self.assertEqual(
+                generated_path.read_text(encoding="utf-8"),
+                "stale generated facts\n",
+            )
+
+    def test_write_emits_all_storage_facts_and_makes_check_green(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generated_dir = root / "desktop/src/db"
+            copy_contract_sources(root)
+            generated_dir.mkdir(parents=True)
+            mode_probe = generated_dir / "mode-probe"
+            mode_probe.touch(mode=0o666)
+            expected_mode = stat.S_IMODE(mode_probe.stat().st_mode)
+            mode_probe.unlink()
+
+            generated_path = contract.sync_generated(
+                contract.SyncMode.WRITE,
+                root=root,
+            )
+            generated = generated_path.read_text(encoding="utf-8")
+            self.assertEqual(
+                stat.S_IMODE(generated_path.stat().st_mode),
+                expected_mode,
+            )
+
+            self.assertIn("SPECIES_STORAGE_CONTRACT_FINGERPRINT", generated)
+            self.assertIn('(\"id\", \"TEXT\", true)', generated)
+            self.assertIn('\"species_common_names\"', generated)
+            self.assertIn('(\"species_search_fts\", Some(\"fts5\"))', generated)
+            self.assertIn(
+                '(\"species_search_fts\", \"content\", \"species_search_text\")',
+                generated,
+            )
+            self.assertIn(
+                '(\"species\", \"idx_species_id\", &[\"id\"])',
+                generated,
+            )
+            self.assertEqual(
+                contract.sync_generated(contract.SyncMode.CHECK, root=root),
+                generated_path,
+            )
+
+    def test_write_preserves_existing_generated_file_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generated_dir = root / "desktop/src/db"
+            copy_contract_sources(root)
+            generated_dir.mkdir(parents=True)
+            generated_path = generated_dir / "schema_contract_generated.rs"
+            generated_path.write_text("stale\n", encoding="utf-8")
+            generated_path.chmod(0o640)
+
+            contract.sync_generated(contract.SyncMode.WRITE, root=root)
+
+            self.assertEqual(
+                stat.S_IMODE(generated_path.stat().st_mode),
+                0o640,
+            )
+
+
+class ContractValidationTests(unittest.TestCase):
+    def test_project_aggregates_contract_invariant_violations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_dir = root / "scripts"
+            source = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+            source["contract_format_version"] = 1
+            source["schema_version"] = 0
+            source["columns"].append({"name": "id", "type": "TEXT"})
+            source["supporting_tables"].append("species_common_names")
+            source["indexes"]["species"].append(
+                {"name": "not a safe index", "columns": "missing_column"}
+            )
+            (contract_dir / "schema-contract.json").write_text(
+                json.dumps(source),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            message = str(raised.exception)
+            self.assertIn("schema_version", message)
+            self.assertIn("columns[154].name", message)
+            self.assertIn("supporting_tables[6]", message)
+            self.assertIn("indexes.species[28].name", message)
+            self.assertIn("indexes.species[28].columns", message)
+
+    def test_project_rejects_index_columns_absent_from_contracted_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            source["indexes"]["species_images"][0]["columns"] = (
+                "definitely_missing"
+            )
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            self.assertIn(
+                "indexes.species_images[0].columns: unknown species_images "
+                "column 'definitely_missing'",
+                str(raised.exception),
+            )
+
+    def test_project_rejects_sql_bearing_values_outside_closed_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            source["columns"][0]["type"] = "TEXT); DROP TABLE species; --"
+            source["columns"][1]["type"] = []
+            source["translations"]["habit"]["Tree"]["xx"] = "Tree"
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            message = str(raised.exception)
+            self.assertIn(
+                "columns[0].type: unsupported SQLite declared type",
+                message,
+            )
+            self.assertIn(
+                "columns[1].type: unsupported SQLite declared type",
+                message,
+            )
+            self.assertIn(
+                "translations.habit.Tree.xx: locale has no contracted "
+                "translated_values column",
+                message,
+            )
+
+    def test_project_requires_storage_table_column_shapes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            del source["supporting_tables"][1]["columns"]
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            self.assertIn(
+                "supporting_tables[1].columns: expected an array",
+                str(raised.exception),
+            )
+
+    def test_project_rejects_supporting_table_named_species(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            source["supporting_tables"].append(
+                {
+                    "name": "species",
+                    "required": True,
+                    "columns": source["columns"],
+                }
+            )
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            self.assertIn(
+                "supporting_tables[6].name: storage table 'species' is already "
+                "contracted",
+                str(raised.exception),
+            )
+
+    def test_project_validates_translated_values_storage_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            translated_values = next(
+                table
+                for table in source["supporting_tables"]
+                if table["name"] == "translated_values"
+            )
+            translated_values["columns"] = [
+                column
+                for column in translated_values["columns"]
+                if column["name"] != "field_name"
+            ]
+            next(
+                column
+                for column in translated_values["columns"]
+                if column["name"] == "value_fr"
+            )["type"] = "REAL"
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            message = str(raised.exception)
+            self.assertIn(
+                "translated_values.field_name: required TEXT column is missing",
+                message,
+            )
+            self.assertIn(
+                "translated_values.value_fr: locale column must have TEXT affinity",
+                message,
+            )
+
+
+class ContractProjectionTests(unittest.TestCase):
+    def test_prepare_db_projection_is_typed_and_caller_shaped(self):
+        projection = contract.project(contract.ProjectionTarget.PREPARE_DB)
+        authored = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            projection.prepared_schema_version,
+            authored["schema_version"],
+        )
+        self.assertEqual(
+            projection.minimum_export_schema_version,
+            authored["min_export_schema_version"],
+        )
+        self.assertEqual(projection.species_columns[0].name, "id")
+        self.assertEqual(
+            projection.species_columns[0].affinity,
+            contract.SQLiteAffinity.TEXT,
+        )
+        self.assertEqual(projection.supporting_tables[0].name, "species_common_names")
+        self.assertEqual(projection.prepared_tables[0].name, "best_common_names")
+        self.assertEqual(projection.prepared_tables[2].virtual_module, "fts5")
+        self.assertIsInstance(projection.translations[0], contract.TranslationEntry)
+        self.assertFalse(any(isinstance(value, dict) for value in projection.__dict__.values()))
+
+    def test_web_catalog_projection_is_reduced_to_physical_dependencies(self):
+        projection = contract.project(contract.ProjectionTarget.WEB_CATALOG)
+
+        column_names = tuple(column.name for column in projection.species_columns)
+        self.assertEqual(
+            column_names,
+            (
+                "id",
+                "slug",
+                "canonical_name",
+                "common_name",
+                "habit",
+                "growth_form_type",
+                "growth_form_shape",
+                "growth_habit",
+                "is_annual",
+                "is_biennial",
+                "is_perennial",
+                "climate_zones",
+                "image_urls",
+            ),
+        )
+        self.assertNotIn("growth_form", column_names)
+        self.assertNotIn("life_cycles", column_names)
+        self.assertEqual(
+            tuple(table.name for table in projection.supporting_tables),
+            (
+                "species_common_names",
+                "species_images",
+                "species_climate_zones",
+            ),
+        )
+        self.assertEqual(
+            projection.supported_filter_keys,
+            ("climate_zones", "habit", "life_cycle"),
+        )
+
+    def test_web_behavior_validation_rejects_unknown_keys_and_output_columns(self):
+        projection = contract.project(contract.ProjectionTarget.WEB_CATALOG)
+        self.assertIsInstance(projection, contract.WebCatalogProjection)
+
+        with self.assertRaises(contract.WebProjectionError) as raised:
+            contract.validate_web_catalog_behavior(
+                projection,
+                emitted_species_fields=("id", "climate_zones"),
+                filters=(
+                    contract.WebFilterUse("climate_zones", ("climate_zones",)),
+                    contract.WebFilterUse("not_a_filter", ("not_emitted",)),
+                ),
+                storage_uses=(),
+            )
+
+        message = str(raised.exception)
+        self.assertIn("unsupported Filter key 'not_a_filter'", message)
+        self.assertIn("required Filter key 'habit' is missing", message)
+        self.assertIn("required Filter key 'life_cycle' is missing", message)
+        self.assertIn("output column 'not_emitted' is not emitted", message)
+
+
+class FilterStorageValidationTests(unittest.TestCase):
+    def test_project_rejects_missing_and_wrong_affinity_filter_columns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            filter_path = root / "common-types/plant-filter-fields.json"
+            source = json.loads(filter_path.read_text(encoding="utf-8"))
+            source["fields"][1]["sql_column"] = "s.not_a_species_column"
+            source["fields"][2]["sql_column"] = "s.family"
+            source["fixed_filters"][0]["predicate"]["clauses"][0]["clause"] = (
+                "s.also_missing = 1"
+            )
+            source["fixed_filters"][5]["predicate"]["column"] = "s.family"
+            filter_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.FilterContractError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            message = str(raised.exception)
+            self.assertIn("fields[1].sql_column", message)
+            self.assertIn("unknown Species column 'not_a_species_column'", message)
+            self.assertIn("fields[2].sql_column", message)
+            self.assertIn("expected INTEGER affinity, found TEXT", message)
+            self.assertIn("fixed_filters[0].predicate.clauses[0].clause", message)
+            self.assertIn("unknown Species column 'also_missing'", message)
+            self.assertIn("fixed_filters[5].predicate.column", message)
+            self.assertIn("expected numeric affinity, found TEXT", message)
+
+    def test_project_validates_climate_zone_join_storage_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            climate_table = next(
+                table
+                for table in source["supporting_tables"]
+                if table["name"] == "species_climate_zones"
+            )
+            climate_table["columns"] = [
+                column
+                for column in climate_table["columns"]
+                if column["name"] != "climate_zone"
+            ]
+            web_climate_table = next(
+                table
+                for table in source["web_projection"]["supporting_tables"]
+                if table["name"] == "species_climate_zones"
+            )
+            web_climate_table["columns"].remove("climate_zone")
+            source["indexes"]["species_climate_zones"][0]["columns"] = "species_id"
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.FilterContractError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            self.assertIn(
+                "fixed_filters[8].predicate: supporting table "
+                "'species_climate_zones' is missing TEXT column 'climate_zone'",
+                str(raised.exception),
+            )
+
+
+class DatabaseVerificationTests(unittest.TestCase):
+    def test_export_profile_rejects_fractional_schema_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "export.db"
+            create_minimal_export_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP TABLE _metadata")
+                connection.execute("CREATE TABLE _metadata (key TEXT, value REAL)")
+                connection.execute(
+                    "INSERT INTO _metadata VALUES ('schema_version', 14.5)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.EXPORT,
+                    database_path,
+                    root=root,
+                )
+
+            self.assertIn(
+                "_metadata.schema_version: expected a decimal integer value",
+                str(raised.exception),
+            )
+
+    def test_export_profile_accepts_required_shape_and_reports_optional_columns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "export.db"
+            create_minimal_export_database(database_path)
+
+            receipt = contract.verify_database(
+                contract.DatabaseProfile.EXPORT,
+                database_path,
+                root=root,
+            )
+
+            authored = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+            self.assertEqual(
+                receipt.observed_schema_version,
+                authored["min_export_schema_version"],
+            )
+            self.assertEqual(receipt.profile, contract.DatabaseProfile.EXPORT)
+            self.assertIn(
+                "optional Species column 'common_name' is absent",
+                receipt.warnings,
+            )
+
+    def test_web_export_profile_keeps_supporting_sources_optional(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "web-export.db"
+            create_minimal_export_database(database_path)
+            source = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+            connection = sqlite3.connect(database_path)
+            try:
+                for table in source["supporting_tables"]:
+                    connection.execute(f"DROP TABLE {table['name']}")
+                connection.commit()
+            finally:
+                connection.close()
+
+            receipt = contract.verify_database(
+                contract.DatabaseProfile.WEB_EXPORT,
+                database_path,
+                root=root,
+            )
+
+            authored = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+            self.assertEqual(
+                receipt.observed_schema_version,
+                authored["min_export_schema_version"],
+            )
+            self.assertIn(
+                "optional table 'species_common_names' is absent",
+                receipt.warnings,
+            )
+            self.assertIn(
+                "optional table 'species_images' is absent",
+                receipt.warnings,
+            )
+            self.assertIn(
+                "optional table 'species_climate_zones' is absent",
+                receipt.warnings,
+            )
+
+    def test_prepared_profile_accepts_exact_schema_and_contracted_indexes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+
+            receipt = contract.verify_database(
+                contract.DatabaseProfile.PREPARED,
+                database_path,
+                root=root,
+            )
+
+            authored = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+            self.assertEqual(
+                receipt.observed_schema_version,
+                authored["schema_version"],
+            )
+            self.assertEqual(receipt.profile, contract.DatabaseProfile.PREPARED)
+            self.assertEqual(receipt.warnings, ())
+
+    def test_prepared_profile_rejects_missing_runtime_generated_tables(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP TABLE species_search_fts")
+                connection.execute("DROP TABLE best_common_names")
+                connection.execute(
+                    "CREATE TABLE best_common_names "
+                    "(species_id TEXT, language TEXT)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            message = str(raised.exception)
+            self.assertIn("species_search_fts", message)
+            self.assertIn("best_common_names.common_name", message)
+
+    def test_prepared_profile_rejects_ordinary_table_in_place_of_fts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP TABLE species_search_fts")
+                connection.execute(
+                    "CREATE TABLE species_search_fts ("
+                    "canonical_name BLOB, common_names BLOB, family_genus BLOB, "
+                    "uses_text BLOB, other_text BLOB)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            self.assertIn(
+                "species_search_fts: expected SQLite virtual table module 'fts5'",
+                str(raised.exception),
+            )
+
+    def test_prepared_profile_rejects_wrong_fts_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP TABLE species_search_fts")
+                connection.execute(
+                    "CREATE VIRTUAL TABLE species_search_fts USING fts5("
+                    "canonical_name, common_names, family_genus, uses_text, "
+                    "other_text, tokenize='porter')"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            message = str(raised.exception)
+            self.assertIn(
+                "species_search_fts: expected virtual option "
+                "content='species_search_text'",
+                message,
+            )
+            self.assertIn(
+                "species_search_fts: expected virtual option "
+                "tokenize='unicode61 remove_diacritics 2'",
+                message,
+            )
+
+    def test_prepared_profile_rejects_reordered_fts_columns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP TABLE species_search_fts")
+                connection.execute(
+                    "CREATE VIRTUAL TABLE species_search_fts USING fts5("
+                    "common_names, canonical_name, family_genus, uses_text, "
+                    "other_text, content='species_search_text', "
+                    "content_rowid='species_rowid', "
+                    "tokenize='unicode61 remove_diacritics 2')"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            self.assertIn(
+                "species_search_fts: expected ordered virtual columns "
+                "('canonical_name', 'common_names', 'family_genus', "
+                "'uses_text', 'other_text')",
+                str(raised.exception),
+            )
+
+    def test_prepared_profile_aggregates_version_affinity_and_index_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            source = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("PRAGMA user_version = 1")
+                connection.execute("DROP TABLE species")
+                connection.execute(
+                    "CREATE TABLE species ("
+                    + ", ".join(
+                        f"{column['name']} "
+                        f"{'INTEGER' if column['name'] == 'id' else column['type']}"
+                        for column in source["columns"]
+                    )
+                    + ")"
+                )
+                connection.execute("DROP INDEX idx_cn_species_lang")
+                connection.execute(
+                    "CREATE INDEX idx_cn_species_lang "
+                    "ON species_common_names(language, species_id)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            message = str(raised.exception)
+            self.assertIn(
+                "PRAGMA user_version: prepared schema version 1 does not equal",
+                message,
+            )
+            self.assertIn(
+                "species.id: expected TEXT affinity, found INTEGER",
+                message,
+            )
+            self.assertIn(
+                "indexes.idx_species_id: required index on 'species' is missing",
+                message,
+            )
+            self.assertIn(
+                "indexes.idx_cn_species_lang: expected columns "
+                "('species_id', 'language'), found ('language', 'species_id')",
+                message,
+            )
+
+    def test_prepared_profile_rejects_partial_required_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP INDEX idx_species_id")
+                connection.execute(
+                    "CREATE INDEX idx_species_id ON species(id) WHERE 0"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            self.assertIn(
+                "indexes.idx_species_id: required index must not be partial",
+                str(raised.exception),
+            )
+
+    def test_prepared_profile_rejects_required_index_with_nonbinary_collation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP INDEX idx_species_id")
+                connection.execute(
+                    "CREATE INDEX idx_species_id ON species(id COLLATE NOCASE)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            self.assertIn(
+                "indexes.idx_species_id: expected BINARY collation for column "
+                "'id', found NOCASE",
+                str(raised.exception),
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

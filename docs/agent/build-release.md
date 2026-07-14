@@ -32,6 +32,12 @@ cd desktop/web && npm run package:web:root
 # Reduced Web Edition Species Catalog assets
 cd desktop/web && npm run generate:web-catalog
 
+# Species Catalog contract/generated-fact drift
+python3 scripts/species_catalog_contract.py check
+
+# Strictly verify the checked-in bundled DB
+python3 scripts/species_catalog_contract.py verify-db --profile prepared desktop/resources/canopi-core.db
+
 # Release build
 cargo build --release
 ```
@@ -42,6 +48,8 @@ cargo build --release
 - When set, it overrides Tauri bundle resources to an empty list so the crate compiles without `desktop/resources/canopi-core.db`.
 - CI lint/test jobs set this flag.
 - CI release builds download `canopi-core.db` from the `canopi-core-db` GitHub release tag into `desktop/resources/` before `tauri build`.
+- The normal Linux/macOS/Windows build matrix verifies that downloaded database against the prepared profile before packaging, so contract drift cannot hide outside the release-candidate workflow.
+- Release-candidate preflight runs the Species Catalog contract check and full prepared-database verification: exact version, Species affinities, required copied and generated tables, the FTS5 virtual-table shape, and every contracted index. Packaging jobs check out the resolved preflight commit and require their downloaded DB checksum to match the preflight checksum, so mutable refs or release assets cannot change between verification and packaging. A matching `PRAGMA user_version` alone is insufficient.
 - The bundled DB is large; package size is expected to be hundreds of MB.
 
 ## Release Workflow
@@ -49,6 +57,8 @@ cargo build --release
 - Release candidate workflow: `.github/workflows/release-candidate.yml`.
 - Promotion script: `scripts/promote-release.sh`.
 - DB release upload script: `scripts/publish-db-release.sh`.
+- Publishing and release workflows obtain schema metadata through `scripts/species_catalog_contract.py value` and verify databases through `verify-db`; do not parse generated Rust or duplicate inline SQLite checks.
+- Intentional storage changes must update `scripts/schema-contract.json`, refresh `desktop/src/db/schema_contract_generated.rs` with `emit-rust --write`, and pass `check` before publishing.
 - `desktop/tauri.conf.json` is the app release-version authority. Keep `Cargo.toml`, `desktop/web/package.json`, and `desktop/web/package-lock.json` synchronized with it; the About dialog reads the Tauri config version, and release-candidate preflight validates drift.
 - Linux bundles are deb and AppImage, not RPM.
 - Debian dependencies in `tauri.conf.json` intentionally use alternatives for Ubuntu t64 transitions. Tauri merges custom depends with detected depends.

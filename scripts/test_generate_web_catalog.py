@@ -1,9 +1,14 @@
 import importlib.util
+from dataclasses import replace
 import json
 import sqlite3
+import stat
 import tempfile
 from pathlib import Path
 import unittest
+from unittest import mock
+
+from scripts import species_catalog_contract as contract
 
 
 def load_generator_module():
@@ -179,11 +184,393 @@ class GenerateWebCatalogTests(unittest.TestCase):
             with self.assertRaises(generator.AssetSizeError):
                 generator.assert_asset_sizes(output_dir, max_asset_bytes=5)
 
+    def test_late_asset_size_failure_preserves_existing_catalog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            (output_dir / "species").mkdir(parents=True)
+            (output_dir / "species" / "existing.parquet").write_bytes(
+                b"existing species asset"
+            )
+            mark_owned_catalog(output_dir)
+            catalog_before = snapshot_directory(output_dir)
+            siblings_before = snapshot_directory(root)
+
+            with self.assertRaises(generator.AssetSizeError):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                    max_asset_bytes=1,
+                )
+
+            self.assertEqual(snapshot_directory(output_dir), catalog_before)
+            self.assertEqual(snapshot_directory(root), siblings_before)
+
+    def test_success_replaces_existing_catalog_without_work_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            output_dir.mkdir()
+            mark_owned_catalog(output_dir)
+            stale_asset = output_dir / "stale.parquet"
+            stale_asset.write_bytes(b"stale catalog")
+            output_dir.chmod(0o555)
+            expected_mode = stat.S_IMODE(output_dir.stat().st_mode)
+
+            manifest = generator.generate_web_catalog(
+                export_path=export_path,
+                output_dir=output_dir,
+                species_shard_count=1,
+                image_shard_count=1,
+            )
+
+            self.assertFalse(stale_asset.exists())
+            self.assertEqual(
+                json.loads((output_dir / "manifest.json").read_text(encoding="utf-8")),
+                manifest,
+            )
+            self.assertEqual(
+                {child.name for child in root.iterdir()},
+                {export_path.name, output_dir.name},
+            )
+            self.assertEqual(
+                stat.S_IMODE(output_dir.stat().st_mode),
+                expected_mode,
+            )
+
+    def test_destination_created_during_generation_is_preserved_and_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            original_size_check = generator.assert_asset_sizes
+
+            def create_unowned_destination(*args, **kwargs):
+                original_size_check(*args, **kwargs)
+                output_dir.mkdir()
+                (output_dir / "keep-me.txt").write_bytes(b"unrelated user data")
+
+            with (
+                mock.patch.object(
+                    generator,
+                    "assert_asset_sizes",
+                    side_effect=create_unowned_destination,
+                ),
+                self.assertRaises(ValueError) as raised,
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertIn("changed during generation", str(raised.exception))
+            self.assertEqual(
+                (output_dir / "keep-me.txt").read_bytes(),
+                b"unrelated user data",
+            )
+            self.assertEqual(
+                {child.name for child in root.iterdir()},
+                {export_path.name, output_dir.name},
+            )
+
+    def test_destination_swap_after_revalidation_is_preserved_and_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            externally_moved_catalog = root / "catalog-moved-by-external-writer"
+            create_export_fixture(export_path)
+            output_dir.mkdir()
+            mark_owned_catalog(output_dir)
+            (output_dir / "existing.parquet").write_bytes(b"existing catalog")
+            original_mkdtemp = generator.tempfile.mkdtemp
+
+            def swap_destination_before_backup(*args, **kwargs):
+                temporary_path = original_mkdtemp(*args, **kwargs)
+                prefix = kwargs.get("prefix", "")
+                if prefix.startswith(f".{output_dir.name}.backup-"):
+                    generator.os.replace(output_dir, externally_moved_catalog)
+                    output_dir.mkdir()
+                    (output_dir / "keep-me.txt").write_bytes(
+                        b"unrelated replacement"
+                    )
+                return temporary_path
+
+            with (
+                mock.patch.object(
+                    generator.tempfile,
+                    "mkdtemp",
+                    side_effect=swap_destination_before_backup,
+                ),
+                self.assertRaises(ValueError) as raised,
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertIn("changed during publication", str(raised.exception))
+            self.assertEqual(
+                (output_dir / "keep-me.txt").read_bytes(),
+                b"unrelated replacement",
+            )
+            self.assertTrue((externally_moved_catalog / "manifest.json").is_file())
+            self.assertEqual(
+                {child.name for child in root.iterdir()},
+                {
+                    export_path.name,
+                    output_dir.name,
+                    externally_moved_catalog.name,
+                },
+            )
+
+    def test_publication_failure_restores_original_catalog_and_cleans_work_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            output_dir.mkdir()
+            mark_owned_catalog(output_dir)
+            (output_dir / "existing.parquet").write_bytes(b"existing catalog")
+            catalog_before = snapshot_directory(output_dir)
+            original_replace = generator.os.replace
+
+            def fail_staging_publication(source, destination):
+                if (
+                    Path(source).name.startswith(f".{output_dir.name}.staging-")
+                    and Path(destination) == output_dir
+                ):
+                    raise OSError("simulated publication failure")
+                return original_replace(source, destination)
+
+            with (
+                mock.patch.object(
+                    generator.os,
+                    "replace",
+                    side_effect=fail_staging_publication,
+                ),
+                self.assertRaisesRegex(OSError, "simulated publication failure"),
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertEqual(snapshot_directory(output_dir), catalog_before)
+            self.assertEqual(
+                {child.name for child in root.iterdir()},
+                {export_path.name, output_dir.name},
+            )
+
+    def test_recursive_cleanup_makes_read_only_files_writable_before_removal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "catalog-backup"
+            nested = root / "species"
+            nested.mkdir(parents=True)
+            asset = nested / "species-0000.parquet"
+            asset.write_bytes(b"catalog")
+            asset.chmod(0o444)
+            nested.chmod(0o555)
+            root.chmod(0o555)
+            original_rmtree = generator.shutil.rmtree
+
+            def require_writable_files(path):
+                self.assertNotEqual(
+                    stat.S_IMODE(asset.stat().st_mode) & stat.S_IWUSR,
+                    0,
+                )
+                original_rmtree(path)
+
+            with mock.patch.object(
+                generator.shutil,
+                "rmtree",
+                side_effect=require_writable_files,
+            ):
+                generator.remove_path_if_present(root)
+
+            self.assertFalse(root.exists())
+
+    def test_unversioned_export_fails_before_existing_output_is_cleared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            connection = sqlite3.connect(export_path)
+            try:
+                connection.execute("DROP TABLE _metadata")
+                connection.commit()
+            finally:
+                connection.close()
+            output_dir.mkdir()
+            sentinel = output_dir / "keep-me.txt"
+            sentinel.write_text("existing output", encoding="utf-8")
+
+            with self.assertRaises(contract.DatabaseContractError):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "existing output")
+
+    def test_output_aliasing_export_is_rejected_before_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nested = root / "nested"
+            nested.mkdir()
+            export_path = root / "canopi-export-test.db"
+            create_export_fixture(export_path)
+            export_before = export_path.read_bytes()
+            equivalent_output = nested / ".." / export_path.name
+
+            with (
+                mock.patch.object(generator, "publish_output_dir") as publish,
+                self.assertRaises(ValueError) as raised,
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=equivalent_output,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertIn("must not contain the export database", str(raised.exception))
+            publish.assert_not_called()
+            self.assertEqual(export_path.read_bytes(), export_before)
+
+    def test_output_containing_export_is_rejected_before_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_dir = root / "catalog"
+            output_dir.mkdir()
+            export_path = output_dir / "canopi-export-test.db"
+            create_export_fixture(export_path)
+            export_before = export_path.read_bytes()
+
+            with (
+                mock.patch.object(generator, "publish_output_dir") as publish,
+                self.assertRaises(ValueError) as raised,
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertIn("must not contain the export database", str(raised.exception))
+            publish.assert_not_called()
+            self.assertEqual(export_path.read_bytes(), export_before)
+
+    def test_unowned_output_directory_is_rejected_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "important-user-directory"
+            create_export_fixture(export_path)
+            output_dir.mkdir()
+            sentinel = output_dir / "keep-me.txt"
+            sentinel.write_bytes(b"unrelated user data")
+            output_before = snapshot_directory(output_dir)
+
+            with (
+                mock.patch.object(generator, "publish_output_dir") as publish,
+                self.assertRaises(ValueError) as raised,
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertIn("not a generator-owned catalog", str(raised.exception))
+            publish.assert_not_called()
+            self.assertEqual(snapshot_directory(output_dir), output_before)
+
+    def test_generation_rejects_missing_caller_owned_storage_dependencies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            projection = contract.project(contract.ProjectionTarget.WEB_CATALOG)
+            missing_species_columns = {
+                "growth_form_type",
+                "growth_form_shape",
+                "growth_habit",
+                "climate_zones",
+            }
+            reduced_projection = replace(
+                projection,
+                species_columns=tuple(
+                    column
+                    for column in projection.species_columns
+                    if column.name not in missing_species_columns
+                ),
+                supporting_tables=tuple(
+                    replace(
+                        table,
+                        columns=tuple(
+                            column
+                            for column in table.columns
+                            if column.name != "source"
+                        ),
+                    )
+                    if table.name == "species_images"
+                    else table
+                    for table in projection.supporting_tables
+                    if table.name != "species_climate_zones"
+                ),
+            )
+
+            with (
+                mock.patch.object(
+                    generator.storage_contract,
+                    "project",
+                    return_value=reduced_projection,
+                ),
+                self.assertRaises(contract.WebProjectionError) as raised,
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            message = str(raised.exception)
+            self.assertIn("species.growth_form_type", message)
+            self.assertIn("species.climate_zones", message)
+            self.assertIn("species_images.source", message)
+            self.assertIn("species_climate_zones", message)
+
 
 def create_export_fixture(path: Path):
     conn = sqlite3.connect(path)
     conn.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-    conn.execute("INSERT INTO _metadata (key, value) VALUES ('schema_version', '14')")
+    projection = contract.project(contract.ProjectionTarget.WEB_CATALOG)
+    conn.execute(
+        "INSERT INTO _metadata (key, value) VALUES ('schema_version', ?)",
+        (str(projection.minimum_export_schema_version),),
+    )
     conn.execute("""
         CREATE TABLE species (
             id TEXT PRIMARY KEY,
@@ -343,6 +730,23 @@ def read_jsonl(path: Path):
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def snapshot_directory(path: Path):
+    return [
+        (
+            child.relative_to(path).as_posix(),
+            None if child.is_dir() else child.read_bytes(),
+        )
+        for child in sorted(path.rglob("*"))
+    ]
+
+
+def mark_owned_catalog(path: Path):
+    (path / "manifest.json").write_text(
+        json.dumps({"generated_by": "canopi-web-catalog-v1"}),
+        encoding="utf-8",
+    )
 
 
 def read_simple_parquet_rows(path: Path, fields):

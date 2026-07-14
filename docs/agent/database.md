@@ -4,15 +4,34 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 
 ## Schema Contract
 
-- `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns.
-- `prepare-db.py` reads from the contract. Update the contract when canopi-data changes column names.
-- Runtime schema validation lives in `desktop/src/db/schema_contract.rs`.
-- Startup warns on schema drift but does not block app startup.
-- Plant DB schema version is `PRAGMA user_version = 11` for the current core DB.
-- canopi-data export schema version is tracked in the contract; the current minimum export schema is v14.
+- `scripts/schema-contract.json` is the only authored source for the prepared schema version, minimum export version, Species columns/affinities, copied supporting-table shapes, prepared-only generated table/FTS shapes, required indexes, supplemental translations, and the reduced Web storage projection.
+- `scripts/species_catalog_contract.py` strictly compiles that source into typed `prepare-db`, `web-catalog`, and `release` projections. It also cross-validates `common-types/plant-filter-fields.json`, verifies local SQLite profiles, and checks or writes generated Rust facts.
+- `desktop/src/db/schema_contract_generated.rs` is committed generated output included by `desktop/src/db/schema_contract.rs`. Never edit or copy its constants by hand.
+- Runtime startup compares `PRAGMA user_version` with the generated expected version. Startup warns on drift but does not block app startup; build and release verification is strict.
+- The prepared profile treats FTS column order, external-content/tokenizer options, and full non-partial B-tree indexes as semantic storage facts; do not weaken these to name-only checks.
 - Species table name is `species`.
-- `prepare-db.py` builds `species` with `CREATE TABLE AS`; keep `idx_species_id` in the schema contract because search hydration joins ranked ids back through `species.id`.
+- `prepare-db.py` verifies the export profile before touching its output, builds in a sibling staging database, verifies the complete prepared profile, and only then atomically replaces the destination. Missing optional Species columns are projected as typed `CAST(NULL AS <contract type>)` values so the prepared table retains its contracted affinity.
+- Preparation derives `translated_values` compatibility columns and inserted locale columns from the projected supporting-table shape; do not add parallel locale lists to the script.
+- Keep `idx_species_id` in the schema contract because search hydration joins ranked ids back through `species.id`.
+- `bindings-gen` runs the full contract check before generating Filter adapters. A syntactically valid `s.<column>` reference still fails when the contracted column is missing or has an incompatible affinity. It discovers standard Python 3 launchers on Linux/macOS and Windows; set `PYTHON` to an executable path when an explicit interpreter is required.
 - User DB migrations also use `PRAGMA user_version`; check before adding migrations.
+
+```bash
+# Validate the authored storage/Filter contracts and committed Rust facts
+python3 scripts/species_catalog_contract.py check
+
+# Refresh generated Rust facts after an intentional contract change
+python3 scripts/species_catalog_contract.py emit-rust --write
+
+# Inspect authored release metadata without scraping source code
+python3 scripts/species_catalog_contract.py value prepared-schema-version
+python3 scripts/species_catalog_contract.py value minimum-export-schema-version
+
+# Verify local canopi-data or prepared bundle shapes
+python3 scripts/species_catalog_contract.py verify-db --profile export <export.db>
+python3 scripts/species_catalog_contract.py verify-db --profile web-export <export.db>
+python3 scripts/species_catalog_contract.py verify-db --profile prepared <canopi-core.db>
+```
 
 ## User DB Personal Libraries
 
@@ -30,13 +49,13 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 
 When canopi-data removes or adds columns, update atomically:
 
-1. `scripts/schema-contract.json`: bump schema version, min export schema version, and columns.
-2. `desktop/src/db/schema_contract.rs`: bump expected plant schema version.
-3. `common-types/src/species.rs`: update shared structs.
-4. `desktop/src/services/species_catalog_read/detail_projection.rs` and `detail_row_map.rs`: update projection columns and row mapping order.
-5. Backend test fixtures.
-6. `scripts/prepare-db.py`: update search index generation if FTS columns or Common Name ranking fields change.
-7. Frontend generated bindings if shared types changed.
+1. Update the relevant version, Species/copied-supporting facts, prepared-only generated table/FTS facts, indexes, and reduced Web dependencies in `scripts/schema-contract.json`.
+2. Run `python3 scripts/species_catalog_contract.py emit-rust --write`, then `python3 scripts/species_catalog_contract.py check`. Commit the generated Rust file with the authored source.
+3. Update `common-types/src/species.rs` when the caller-facing contract changes.
+4. Update `desktop/src/services/species_catalog_read/detail_projection.rs` and its row mapping when desktop read behavior changes; do not derive that caller model from physical storage automatically.
+5. Update backend fixtures and `scripts/prepare-db.py` only when preparation/search behavior changes.
+6. Keep the `web_projection` physical dependencies reduced. Web row derivation, Parquet layout, and manifest predicates remain in `generate-web-catalog.py` and are cross-validated at generation time.
+7. Run the Python contract/preparation/Web tests, regenerate shared bindings, prepare a real DB when data is available, and run the Rust/database gates.
 
 ## Query Builder And Filters
 
@@ -48,6 +67,8 @@ When canopi-data removes or adds columns, update atomically:
 - Web Edition catalog assets should be generated from canopi-data export lineage in this repository, not hand-maintained in `canopi-website`. The generator should emit DuckDB-queryable Parquet shards as the primary catalog format, locale/search shards, current Web Edition filter fields, a supported-filter projection, and image metadata with deterministic names and size checks for the versioned Web Edition artifact.
 - Generate Web Edition Species Catalog assets with `cd desktop/web && npm run generate:web-catalog`, which runs `scripts/generate-web-catalog.py` against the latest local canopi-data export by default. The target artifact is DuckDB-queryable Parquet shards under ignored `desktop/web/public/canopi-catalog/`; do not commit generated catalog output. If NDJSON fixtures remain during migration, keep them out of the browser performance path.
 - The Web Edition catalog generator enforces Cloudflare Pages' 25 MiB per-asset limit across every emitted catalog, locale/search, filter metadata, image metadata, manifest, or worker-adjacent file in the output directory. Adjust shard counts, compression, or file format rather than weakening this guardrail.
+- The Web catalog manifest records the semantic Species storage-contract fingerprint. Generation verifies the `web-export` profile, builds and validates a sibling staged artifact, publishes it through a failure-safe staged replacement, and cross-checks local manifest Filter keys/columns against the reduced projection. Pre-publication failures preserve the previous artifact, and publication failure attempts to restore its owned backup; do not describe the directory swap as visibility-atomic.
+- Web catalog publication may replace only an absent/empty destination or an existing catalog identified by its generated manifest (with a constrained legacy-layout migration). Never point `--output-dir` at a repository root or unrelated directory; unowned destinations and destinations containing the source export are rejected.
 - The live Species Catalog Workbench singleton is selected through `#species-catalog-live`: desktop uses `app/plant-browser/live.desktop.ts` with Tauri IPC adapters, and Web Edition uses `app/plant-browser/live.browser.ts` with `web/duckdb-wasm-catalog.ts`, `web/reduced-species-catalog.ts`, and browser-local app data. Keep `app/plant-browser/workbench.ts` dependency-injected and free of IPC imports.
 - `web/duckdb-wasm-catalog.ts` must use DuckDB-WASM CDN bundle selection (`getJsDelivrBundles()`/`selectBundle()`) rather than importing raw `duckdb-*.wasm` assets. The raw npm WASM files exceed Cloudflare Pages' 25 MiB per-file limit.
 - Web Edition v1 should reuse the desktop Species Catalog Workbench filter UI shape where possible, but the current browser catalog data scope remains climate zone, habit or growth form, life cycle, selected-locale Common Names/search data, and one hero image metadata row. Do not export new Species attributes for desktop-only dynamic filters in the Parquet migration unless a later bead explicitly expands the Web Edition data scope.
@@ -86,6 +107,8 @@ When canopi-data removes or adds columns, update atomically:
 5. Add `filters.field.<key>` labels to all 11 locale files for new dynamic fields, plus any fixed-filter UI labels referenced by the catalog.
 6. If the field appears in detail UI, update `PlantDetailCard`/detail components and `plantDetail.*` i18n keys.
 7. Add focused backend and frontend tests for filtering behavior.
+
+`npm run gen:types` fails before writing adapters when a dynamic or fixed predicate references a missing column, a categorical/boolean/numeric field has an incompatible SQLite affinity, or the climate-zone join shape is absent.
 
 ## FTS5 Search
 

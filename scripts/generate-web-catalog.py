@@ -8,24 +8,39 @@ while still producing DuckDB-queryable static assets for the browser adapter.
 """
 
 import argparse
+from dataclasses import dataclass
 import hashlib
 import json
+import os
 import re
 import shutil
 import sqlite3
+import stat
 import sys
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import species_catalog_contract as storage_contract
+
 DEFAULT_EXPORTS_DIR = Path.home() / "projects/canopi-data/data/exports"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "desktop/web/public/canopi-catalog"
 
 UI_LOCALES = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"]
 CLOUDFLARE_PAGES_MAX_ASSET_BYTES = 25 * 1024 * 1024
-MIN_EXPORT_SCHEMA_VERSION = 14
+WEB_CATALOG_OWNER = "canopi-web-catalog-v1"
+
+
+@dataclass(frozen=True)
+class OutputDestinationAdmission:
+    identity: tuple[int, int, int] | None
+    publication_mode: int | None
 
 SPECIES_FIELDS = [
     "id",
@@ -65,6 +80,44 @@ WEB_SUPPORTED_FILTERS = [
         },
     },
 ]
+WEB_STORAGE_USES = (
+    storage_contract.WebStorageUse(
+        "species",
+        (
+            "id",
+            "slug",
+            "canonical_name",
+            "common_name",
+            "habit",
+            "growth_form_type",
+            "growth_form_shape",
+            "growth_habit",
+            "is_annual",
+            "is_biennial",
+            "is_perennial",
+            "climate_zones",
+            "image_urls",
+        ),
+    ),
+    storage_contract.WebStorageUse(
+        "species_common_names",
+        (
+            "species_id",
+            "language",
+            "common_name",
+            "is_primary",
+            "display_order",
+        ),
+    ),
+    storage_contract.WebStorageUse(
+        "species_images",
+        ("id", "species_id", "url", "sort_order", "source"),
+    ),
+    storage_contract.WebStorageUse(
+        "species_climate_zones",
+        ("species_id", "climate_zone"),
+    ),
+)
 EXCLUDED_DETAIL_FIELDS = [
     "edibility",
     "hardiness",
@@ -94,41 +147,77 @@ def generate_web_catalog(
     output_dir = output_dir or DEFAULT_OUTPUT_DIR
     if species_shard_count < 1 or image_shard_count < 1:
         raise ValueError("Shard counts must be positive.")
+    if output_would_replace_export(export_path, output_dir):
+        raise ValueError(
+            "The Web Catalog output directory must not contain the export database."
+        )
 
-    conn = sqlite3.connect(export_path)
-    conn.row_factory = sqlite3.Row
+    projection = storage_contract.project(
+        storage_contract.ProjectionTarget.WEB_CATALOG
+    )
+    assert isinstance(projection, storage_contract.WebCatalogProjection)
+    storage_contract.validate_web_catalog_behavior(
+        projection,
+        emitted_species_fields=tuple(SPECIES_FIELDS),
+        filters=tuple(
+            storage_contract.WebFilterUse(
+                filter_definition["key"],
+                tuple(filter_definition["predicate"]["columns"]),
+            )
+            for filter_definition in WEB_SUPPORTED_FILTERS
+        ),
+        storage_uses=WEB_STORAGE_USES,
+    )
+    verification = storage_contract.verify_database(
+        storage_contract.DatabaseProfile.WEB_EXPORT,
+        export_path,
+    )
+    destination_admission = validate_output_destination(output_dir)
+
+    staging_dir, publication_mode = create_staging_output_dir(
+        output_dir,
+        destination_admission,
+    )
     try:
-        export_schema_version = validate_export_schema(conn)
-        prepare_output_dir(output_dir)
-        climate_zones = load_climate_zones(conn)
+        conn = sqlite3.connect(export_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            climate_zones = load_climate_zones(conn)
 
-        species_assets = write_species_assets(
-            conn,
-            output_dir,
-            climate_zones,
-            shard_count=species_shard_count,
-        )
-        name_assets = write_name_assets(conn, output_dir)
-        image_assets = write_image_assets(
-            conn,
-            output_dir,
-            shard_count=image_shard_count,
-        )
+            species_assets = write_species_assets(
+                conn,
+                staging_dir,
+                climate_zones,
+                source_columns=projection.species_columns,
+                shard_count=species_shard_count,
+            )
+            name_assets = write_name_assets(conn, staging_dir)
+            image_assets = write_image_assets(
+                conn,
+                staging_dir,
+                shard_count=image_shard_count,
+            )
 
-        manifest = build_manifest(
-            output_dir=output_dir,
-            export_path=export_path,
-            export_schema_version=export_schema_version,
-            species_assets=species_assets,
-            name_assets=name_assets,
-            image_assets=image_assets,
-            max_asset_bytes=max_asset_bytes,
-        )
-        write_json(output_dir / "manifest.json", manifest)
-        assert_asset_sizes(output_dir, max_asset_bytes=max_asset_bytes)
+            manifest = build_manifest(
+                output_dir=staging_dir,
+                export_path=export_path,
+                export_schema_version=verification.observed_schema_version,
+                storage_contract_fingerprint=projection.fingerprint,
+                species_assets=species_assets,
+                name_assets=name_assets,
+                image_assets=image_assets,
+                max_asset_bytes=max_asset_bytes,
+            )
+            write_json(staging_dir / "manifest.json", manifest)
+            assert_asset_sizes(staging_dir, max_asset_bytes=max_asset_bytes)
+        finally:
+            conn.close()
+
+        staging_dir.chmod(publication_mode)
+        publish_output_dir(staging_dir, output_dir, destination_admission)
         return manifest
     finally:
-        conn.close()
+        remove_path_if_present(staging_dir)
 
 
 def find_latest_export(exports_dir: Path) -> Path:
@@ -138,27 +227,183 @@ def find_latest_export(exports_dir: Path) -> Path:
     return db_files[0]
 
 
-def validate_export_schema(conn: sqlite3.Connection) -> int | None:
-    if not table_exists(conn, "_metadata"):
-        return None
-    row = conn.execute("SELECT value FROM _metadata WHERE key = 'schema_version'").fetchone()
-    if row is None:
-        return None
-    version = int(row["value"])
-    if version < MIN_EXPORT_SCHEMA_VERSION:
-        raise RuntimeError(
-            f"Export schema version {version} is below minimum {MIN_EXPORT_SCHEMA_VERSION}."
+def output_would_replace_export(export_path: Path, output_dir: Path) -> bool:
+    """Return whether publishing the output could replace or delete the export."""
+    resolved_export = export_path.resolve()
+    resolved_output = output_dir.resolve()
+    if resolved_export == resolved_output or resolved_output in resolved_export.parents:
+        return True
+    try:
+        return export_path.samefile(output_dir)
+    except OSError:
+        return False
+
+
+def validate_output_destination(output_dir: Path) -> OutputDestinationAdmission:
+    """Refuse to replace a nonempty directory the generator does not own."""
+    try:
+        metadata = output_dir.stat(follow_symlinks=False)
+    except FileNotFoundError:
+        return OutputDestinationAdmission(identity=None, publication_mode=None)
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise ValueError(
+            f"Web Catalog output '{output_dir}' is not a generator-owned catalog."
         )
-    return version
+    children = {child.name for child in output_dir.iterdir()}
+    if not children:
+        return output_destination_admission(metadata)
+    manifest_path = output_dir / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        manifest = None
+    if isinstance(manifest, dict) and manifest.get("generated_by") == WEB_CATALOG_OWNER:
+        return output_destination_admission(metadata)
+    legacy_children = {"images", "manifest.json", "names", "species"}
+    if (
+        isinstance(manifest, dict)
+        and manifest.get("version") == 1
+        and manifest.get("asset_format") == "parquet"
+        and children <= legacy_children
+    ):
+        return output_destination_admission(metadata)
+    raise ValueError(
+        f"Web Catalog output '{output_dir}' is not a generator-owned catalog."
+    )
 
 
-def prepare_output_dir(output_dir: Path) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    for child in ["species", "names", "images"]:
-        shutil.rmtree(output_dir / child, ignore_errors=True)
-    manifest = output_dir / "manifest.json"
-    if manifest.exists():
-        manifest.unlink()
+def output_destination_admission(
+    metadata: os.stat_result,
+) -> OutputDestinationAdmission:
+    return OutputDestinationAdmission(
+        identity=(metadata.st_dev, metadata.st_ino, metadata.st_ctime_ns),
+        publication_mode=stat.S_IMODE(metadata.st_mode),
+    )
+
+
+def create_staging_output_dir(
+    output_dir: Path,
+    destination_admission: OutputDestinationAdmission,
+) -> tuple[Path, int]:
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    publication_mode = destination_admission.publication_mode
+    staging_dir = Path(
+        tempfile.mkdtemp(
+            prefix=f".{output_dir.name}.staging-",
+            dir=output_dir.parent,
+        )
+    )
+    if publication_mode is None:
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        publication_mode = 0o777 & ~current_umask
+    staging_dir.chmod(publication_mode | 0o700)
+    return staging_dir, publication_mode
+
+
+def publish_output_dir(
+    staging_dir: Path,
+    output_dir: Path,
+    destination_admission: OutputDestinationAdmission,
+) -> None:
+    try:
+        current_admission = validate_output_destination(output_dir)
+    except ValueError as error:
+        raise ValueError(
+            f"Web Catalog output '{output_dir}' changed during generation: {error}"
+        ) from error
+    if current_admission != destination_admission:
+        raise ValueError(
+            f"Web Catalog output '{output_dir}' changed during generation; "
+            "refusing to replace it."
+        )
+
+    backup_candidate = Path(
+        tempfile.mkdtemp(
+            prefix=f".{output_dir.name}.backup-",
+            dir=output_dir.parent,
+        )
+    )
+    backup_candidate.rmdir()
+    try:
+        os.replace(output_dir, backup_candidate)
+    except FileNotFoundError:
+        backup_dir = None
+    else:
+        backup_dir = backup_candidate
+
+    captured_admission: OutputDestinationAdmission | None = None
+    if backup_dir is not None:
+        try:
+            captured_admission = validate_output_destination(backup_dir)
+        except ValueError:
+            captured_admission = None
+
+    if not captured_destination_matches(
+        destination_admission,
+        captured_admission,
+        captured_path_exists=backup_dir is not None,
+    ):
+        if backup_dir is not None:
+            restore_captured_destination(backup_dir, output_dir)
+        raise ValueError(
+            f"Web Catalog output '{output_dir}' changed during publication; "
+            "the replacement was preserved and publication was refused."
+        )
+
+    try:
+        os.replace(staging_dir, output_dir)
+    except BaseException:
+        if backup_dir is not None:
+            restore_captured_destination(backup_dir, output_dir)
+        raise
+    else:
+        if backup_dir is not None:
+            remove_path_if_present(backup_dir)
+
+
+def captured_destination_matches(
+    admitted: OutputDestinationAdmission,
+    captured: OutputDestinationAdmission | None,
+    *,
+    captured_path_exists: bool,
+) -> bool:
+    if not captured_path_exists:
+        return admitted.identity is None
+    if admitted.identity is None or captured is None or captured.identity is None:
+        return False
+    return (
+        admitted.identity[:2] == captured.identity[:2]
+        and admitted.publication_mode == captured.publication_mode
+    )
+
+
+def restore_captured_destination(backup_dir: Path, output_dir: Path) -> None:
+    if output_dir.exists() or output_dir.is_symlink():
+        raise RuntimeError(
+            f"Refusing to overwrite '{output_dir}' while restoring a captured "
+            f"catalog; the prior catalog remains at '{backup_dir}'."
+        )
+    os.replace(backup_dir, output_dir)
+
+
+def remove_path_if_present(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        path.chmod(stat.S_IMODE(path.stat().st_mode) | 0o700)
+        for current_root, directories, files in os.walk(path):
+            current = Path(current_root)
+            current.chmod(stat.S_IMODE(current.stat().st_mode) | 0o700)
+            for directory in directories:
+                child = current / directory
+                if not child.is_symlink():
+                    child.chmod(stat.S_IMODE(child.stat().st_mode) | 0o700)
+            for filename in files:
+                child = current / filename
+                if not child.is_symlink():
+                    child.chmod(stat.S_IMODE(child.stat().st_mode) | 0o600)
+        shutil.rmtree(path)
+    elif path.exists() or path.is_symlink():
+        path.unlink()
 
 
 def write_species_assets(
@@ -166,26 +411,14 @@ def write_species_assets(
     output_dir: Path,
     climate_zones: dict[str, list[str]],
     *,
+    source_columns: tuple[storage_contract.StorageColumn, ...],
     shard_count: int,
 ) -> list[dict[str, Any]]:
     species_dir = output_dir / "species"
     species_dir.mkdir(parents=True, exist_ok=True)
     shards: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
     species_columns = table_columns(conn, "species")
-    select_columns = [
-        "id",
-        "slug",
-        "canonical_name",
-        "common_name",
-        "habit",
-        "growth_form_type",
-        "growth_form_shape",
-        "growth_habit",
-        "is_annual",
-        "is_biennial",
-        "is_perennial",
-        "climate_zones",
-    ]
+    select_columns = [column.name for column in source_columns]
     select_sql = ", ".join(select_expr(species_columns, column) for column in select_columns)
     rows = conn.execute(
         f"""
@@ -365,12 +598,14 @@ def build_manifest(
     output_dir: Path,
     export_path: Path,
     export_schema_version: int | None,
+    storage_contract_fingerprint: str,
     species_assets: list[dict[str, Any]],
     name_assets: dict[str, dict[str, Any]],
     image_assets: list[dict[str, Any]],
     max_asset_bytes: int,
 ) -> dict[str, Any]:
     return {
+        "generated_by": WEB_CATALOG_OWNER,
         "version": 1,
         "asset_format": "parquet",
         "asset_formats": {
@@ -381,6 +616,7 @@ def build_manifest(
         "source": {
             "export_file": export_path.name,
             "export_schema_version": export_schema_version,
+            "storage_contract_fingerprint": storage_contract_fingerprint,
         },
         "cloudflare_pages": {
             "max_asset_bytes": max_asset_bytes,

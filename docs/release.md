@@ -25,7 +25,7 @@ scripts/publish-db-release.sh --export-path ~/projects/canopi-data/data/exports/
 
 Optional flags: `--tag <tag>`, `--asset-name <name>`, `--repo <owner/repo>`.
 
-This script fails if: the generated DB is empty, schema version does not match `desktop/src/db/schema_contract.rs`, the target release tag does not exist, or `gh release upload` fails.
+This script fails if: the generated DB is empty, the prepared database does not satisfy the compiled storage contract in `scripts/schema-contract.json`, the target release tag does not exist, or `gh release upload` fails.
 
 ## 2. Run The Release Candidate Workflow
 
@@ -35,7 +35,7 @@ From GitHub Actions, run `Release Candidate` with:
 - `db_release_tag`: usually `canopi-core-db`
 - `db_asset_name`: usually `canopi-core.db`
 
-The workflow preflight validates: candidate ref resolves cleanly, requested release version matches app config, app version metadata is synchronized, bundled DB asset exists and is non-empty, bundled DB schema version matches the app expectation, packaged artifacts exist before checksum manifest upload.
+The workflow preflight validates: candidate ref resolves cleanly, requested release version matches app config, app version metadata is synchronized, bundled DB asset exists and is non-empty, the bundled DB satisfies the compiled prepared profile (version, table/column affinities, generated search/FTS structures, and indexes), and packaged artifacts exist before checksum manifest upload. Every platform packaging job checks out the resolved preflight commit and checks its downloaded DB against the preflight SHA-256 before building.
 
 ## 3. Smoke-Test The Exact CI Artifacts
 

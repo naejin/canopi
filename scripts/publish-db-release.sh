@@ -113,6 +113,8 @@ fi
 
 log "Building bundled DB from export: $export_path"
 log "Target release: $repo@$tag"
+python3 scripts/species_catalog_contract.py check
+expected_schema_version="$(python3 scripts/species_catalog_contract.py value prepared-schema-version)"
 python3 scripts/prepare-db.py --export-path "$export_path" --output-path "$output_path"
 
 if [[ ! -s "$output_path" ]]; then
@@ -120,35 +122,7 @@ if [[ ! -s "$output_path" ]]; then
   exit 1
 fi
 
-expected_schema_version="$(python3 - <<'PY'
-import re
-from pathlib import Path
-
-text = Path("desktop/src/db/schema_contract.rs").read_text()
-match = re.search(r"EXPECTED_PLANT_SCHEMA_VERSION:\s*i32\s*=\s*(\d+);", text)
-if not match:
-    raise SystemExit("Failed to locate EXPECTED_PLANT_SCHEMA_VERSION")
-print(match.group(1))
-PY
-)"
-
-actual_schema_version="$(python3 - "$output_path" <<'PY'
-import sqlite3
-import sys
-
-conn = sqlite3.connect(sys.argv[1])
-try:
-    row = conn.execute("PRAGMA user_version").fetchone()
-    print(0 if row is None else row[0])
-finally:
-    conn.close()
-PY
-)"
-
-if [[ "$actual_schema_version" != "$expected_schema_version" ]]; then
-  echo "ERROR: Generated DB schema version '$actual_schema_version' does not match expected '$expected_schema_version'." >&2
-  exit 1
-fi
+python3 scripts/species_catalog_contract.py verify-db --profile prepared "$output_path"
 
 db_sha256="$(sha256sum "$output_path" | awk '{print $1}')"
 checksum_path="${output_path}.sha256"
@@ -165,5 +139,5 @@ gh release upload "$tag" \
   --clobber
 
 log "Published $asset_name to $repo@$tag"
-log "Schema version: $actual_schema_version"
+log "Schema version: $expected_schema_version"
 log "SHA256: $db_sha256"

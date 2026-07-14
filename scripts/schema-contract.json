@@ -1,4 +1,5 @@
 {
+  "contract_format_version": 1,
   "schema_version": 11,
   "min_export_schema_version": 14,
   "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v11: canopi-data export v14 minimum, provenance/audit columns removed, unused supporting tables omitted from the prepared DB, and generated species_search_name_entries uses display_order for Common Name ranking.",
@@ -176,13 +177,195 @@
     {"name": "overall_confidence", "type": "REAL"}
   ],
   "supporting_tables": [
-    "species_common_names",
-    "species_uses",
-    "species_images",
-    "species_external_links",
-    "translated_values",
-    "species_climate_zones"
+    {
+      "name": "species_common_names",
+      "required": true,
+      "columns": [
+        {"name": "id", "type": "TEXT", "required": true},
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "language", "type": "TEXT", "required": true},
+        {"name": "common_name", "type": "TEXT", "required": true},
+        {"name": "is_primary", "type": "INTEGER", "required": true},
+        {"name": "display_order", "type": "INTEGER", "required": true}
+      ]
+    },
+    {
+      "name": "species_uses",
+      "required": true,
+      "columns": [
+        {"name": "id", "type": "TEXT", "required": true},
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "use_category", "type": "TEXT", "required": true},
+        {"name": "use_description", "type": "TEXT", "required": true},
+        {"name": "glossary_description", "type": "TEXT"}
+      ]
+    },
+    {
+      "name": "species_images",
+      "required": true,
+      "columns": [
+        {"name": "id", "type": "TEXT", "required": true},
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "url", "type": "TEXT", "required": true},
+        {"name": "sort_order", "type": "INTEGER", "required": true},
+        {"name": "source", "type": "TEXT"}
+      ]
+    },
+    {
+      "name": "species_external_links",
+      "required": true,
+      "columns": [
+        {"name": "id", "type": "TEXT", "required": true},
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "link_type", "type": "TEXT", "required": true},
+        {"name": "url", "type": "TEXT", "required": true}
+      ]
+    },
+    {
+      "name": "translated_values",
+      "required": true,
+      "columns": [
+        {"name": "id", "type": "TEXT", "required": true},
+        {"name": "field_name", "type": "TEXT", "required": true},
+        {"name": "value_en", "type": "TEXT", "required": true},
+        {"name": "value_fr", "type": "TEXT", "required": true},
+        {"name": "value_es", "type": "TEXT", "required": true},
+        {"name": "value_pt", "type": "TEXT", "required": true},
+        {"name": "value_it", "type": "TEXT", "required": true},
+        {"name": "value_zh", "type": "TEXT"},
+        {"name": "value_de", "type": "TEXT"},
+        {"name": "value_ja", "type": "TEXT"},
+        {"name": "value_ko", "type": "TEXT"},
+        {"name": "value_nl", "type": "TEXT"},
+        {"name": "value_ru", "type": "TEXT"}
+      ]
+    },
+    {
+      "name": "species_climate_zones",
+      "required": true,
+      "columns": [
+        {"name": "id", "type": "TEXT", "required": true},
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "climate_zone", "type": "TEXT", "required": true},
+        {"name": "confidence", "type": "REAL", "required": true}
+      ]
+    }
   ],
+  "prepared_tables": [
+    {
+      "name": "best_common_names",
+      "required": true,
+      "columns": [
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "language", "type": "TEXT", "required": true},
+        {"name": "common_name", "type": "TEXT", "required": true}
+      ]
+    },
+    {
+      "name": "species_search_text",
+      "required": true,
+      "columns": [
+        {"name": "species_rowid", "type": "INTEGER", "required": true},
+        {"name": "canonical_name", "type": "TEXT", "required": true},
+        {"name": "common_names", "type": "TEXT", "required": true},
+        {"name": "family_genus", "type": "TEXT", "required": true},
+        {"name": "uses_text", "type": "TEXT", "required": true},
+        {"name": "other_text", "type": "TEXT", "required": true}
+      ]
+    },
+    {
+      "name": "species_search_fts",
+      "required": true,
+      "virtual_module": "fts5",
+      "virtual_options": {
+        "content": "species_search_text",
+        "content_rowid": "species_rowid",
+        "tokenize": "unicode61 remove_diacritics 2"
+      },
+      "columns": [
+        {"name": "canonical_name", "type": "BLOB", "required": true},
+        {"name": "common_names", "type": "BLOB", "required": true},
+        {"name": "family_genus", "type": "BLOB", "required": true},
+        {"name": "uses_text", "type": "BLOB", "required": true},
+        {"name": "other_text", "type": "BLOB", "required": true}
+      ]
+    },
+    {
+      "name": "species_search_common_name_tokens",
+      "required": true,
+      "columns": [
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "language", "type": "TEXT", "required": true},
+        {"name": "token", "type": "TEXT", "required": true},
+        {"name": "first_token_position", "type": "INTEGER", "required": true}
+      ]
+    },
+    {
+      "name": "species_search_name_entries",
+      "required": true,
+      "columns": [
+        {"name": "entry_id", "type": "INTEGER", "required": true},
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "language", "type": "TEXT", "required": true},
+        {"name": "entry_kind", "type": "TEXT", "required": true},
+        {"name": "common_name", "type": "TEXT", "required": true},
+        {"name": "normalized_name", "type": "TEXT", "required": true},
+        {"name": "is_display_name", "type": "INTEGER", "required": true},
+        {"name": "is_primary", "type": "INTEGER", "required": true},
+        {"name": "display_order", "type": "INTEGER", "required": true},
+        {"name": "name_length", "type": "INTEGER", "required": true}
+      ]
+    },
+    {
+      "name": "species_search_name_entry_tokens",
+      "required": true,
+      "columns": [
+        {"name": "entry_id", "type": "INTEGER", "required": true},
+        {"name": "species_id", "type": "TEXT", "required": true},
+        {"name": "language", "type": "TEXT", "required": true},
+        {"name": "token", "type": "TEXT", "required": true},
+        {"name": "first_token_position", "type": "INTEGER", "required": true}
+      ]
+    }
+  ],
+  "web_projection": {
+    "species_columns": [
+      "id",
+      "slug",
+      "canonical_name",
+      "common_name",
+      "habit",
+      "growth_form_type",
+      "growth_form_shape",
+      "growth_habit",
+      "is_annual",
+      "is_biennial",
+      "is_perennial",
+      "climate_zones",
+      "image_urls"
+    ],
+    "supporting_tables": [
+      {
+        "name": "species_common_names",
+        "columns": [
+          "species_id",
+          "language",
+          "common_name",
+          "is_primary",
+          "display_order"
+        ]
+      },
+      {
+        "name": "species_images",
+        "columns": ["id", "species_id", "url", "sort_order", "source"]
+      },
+      {
+        "name": "species_climate_zones",
+        "columns": ["species_id", "climate_zone"]
+      }
+    ],
+    "filter_keys": ["climate_zones", "habit", "life_cycle"]
+  },
   "indexes": {
     "species": [
       {"name": "idx_species_id", "columns": "id"},
@@ -233,6 +416,17 @@
     ],
     "best_common_names": [
       {"name": "idx_bcn_species_lang", "columns": "species_id, language"}
+    ],
+    "species_search_common_name_tokens": [
+      {"name": "idx_species_search_common_name_tokens_language_token", "columns": "language, token, species_id"}
+    ],
+    "species_search_name_entries": [
+      {"name": "idx_species_search_name_entries_language_norm", "columns": "language, normalized_name, species_id"},
+      {"name": "idx_species_search_name_entries_species_lang", "columns": "species_id, language"}
+    ],
+    "species_search_name_entry_tokens": [
+      {"name": "idx_species_search_name_entry_tokens_language_token", "columns": "language, token, species_id, entry_id"},
+      {"name": "idx_species_search_name_entry_tokens_entry", "columns": "entry_id"}
     ]
   },
   "translations": {

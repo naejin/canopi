@@ -12,69 +12,29 @@ Usage:
 """
 
 import argparse
-import json
+import os
 import re
 import sqlite3
+import stat
 import sys
+import tempfile
 import time
 import unicodedata
 import uuid
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
+REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-
-def load_contract() -> dict:
-    """Load and validate the schema contract."""
-    contract_path = SCRIPT_DIR / "schema-contract.json"
-    if not contract_path.exists():
-        print(f"ERROR: Schema contract not found: {contract_path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(contract_path) as f:
-        contract = json.load(f)
-
-    required_keys = ["schema_version", "columns", "indexes", "translations"]
-    for key in required_keys:
-        if key not in contract:
-            print(f"ERROR: Schema contract missing required key: {key}", file=sys.stderr)
-            sys.exit(1)
-
-    return contract
+from scripts import species_catalog_contract as storage_contract
 
 
 def get_export_columns(dst: sqlite3.Connection) -> set[str]:
     """Get the set of column names available in the export species table."""
     rows = dst.execute("PRAGMA export_db.table_info(species)").fetchall()
     return {row[1] for row in rows}
-
-
-def validate_export_version(dst: sqlite3.Connection, min_version: int) -> int | None:
-    """Check the export's schema version from its _metadata table. Returns the version or None."""
-    exists = dst.execute(
-        "SELECT COUNT(*) FROM export_db.sqlite_master WHERE type='table' AND name='_metadata'"
-    ).fetchone()[0]
-    if not exists:
-        print("  WARN: Export has no _metadata table — cannot verify schema version")
-        return None
-
-    row = dst.execute(
-        "SELECT value FROM export_db._metadata WHERE key = 'schema_version'"
-    ).fetchone()
-    if not row:
-        print("  WARN: Export _metadata has no schema_version entry")
-        return None
-
-    version = int(row[0])
-    if version < min_version:
-        print(
-            f"ERROR: Export schema version {version} is below minimum {min_version}. "
-            f"Update canopi-data and re-export.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    return version
 
 
 def find_latest_export(exports_dir: Path) -> Path:
@@ -86,9 +46,19 @@ def find_latest_export(exports_dir: Path) -> Path:
     return db_files[0]
 
 
+def paths_refer_to_same_file(source_path: Path, output_path: Path) -> bool:
+    """Return whether two path spellings identify the same filesystem entry."""
+    if source_path.resolve() == output_path.resolve():
+        return True
+    try:
+        return source_path.samefile(output_path)
+    except OSError:
+        return False
+
+
 def create_core_species_table(
     dst: sqlite3.Connection,
-    contract_columns: list[dict],
+    contract_columns: tuple[storage_contract.StorageColumn, ...],
     export_columns: set[str],
 ) -> list[str]:
     """Copy contracted columns from export species table. Returns list of selected column names."""
@@ -96,12 +66,12 @@ def create_core_species_table(
     missing = []
 
     for col_def in contract_columns:
-        name = col_def["name"]
+        name = col_def.name
         if name in export_columns:
             selected.append(name)
         else:
             missing.append(name)
-            if col_def.get("required"):
+            if col_def.required:
                 print(f"ERROR: Required column '{name}' missing from export", file=sys.stderr)
                 sys.exit(1)
 
@@ -112,11 +82,13 @@ def create_core_species_table(
     # Build SELECT with NULL placeholders for missing columns
     select_parts = []
     for col_def in contract_columns:
-        name = col_def["name"]
+        name = col_def.name
         if name in export_columns:
             select_parts.append(name)
         else:
-            select_parts.append(f"NULL AS {name}")
+            select_parts.append(
+                f"CAST(NULL AS {col_def.declared_type}) AS {name}"
+            )
 
     select_str = ", ".join(select_parts)
     dst.execute(f"CREATE TABLE species AS SELECT {select_str} FROM export_db.species")
@@ -127,9 +99,13 @@ def create_core_species_table(
     return selected
 
 
-def copy_supporting_tables(dst: sqlite3.Connection, tables: list[str]):
+def copy_supporting_tables(
+    dst: sqlite3.Connection,
+    tables: tuple[storage_contract.StorageTable, ...],
+):
     """Copy supporting tables verbatim from export."""
-    for table in tables:
+    for table_contract in tables:
+        table = table_contract.name
         exists = dst.execute(
             "SELECT COUNT(*) FROM export_db.sqlite_master WHERE type='table' AND name=?",
             (table,),
@@ -147,12 +123,27 @@ def copy_supporting_tables(dst: sqlite3.Connection, tables: list[str]):
         tcount = dst.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         print(f"  -> {table}: {tcount:,} rows")
 
-    # Ensure all language columns exist on translated_values
-    cols = {c[1] for c in dst.execute("PRAGMA table_info(translated_values)").fetchall()}
-    for lang_col in ["value_zh", "value_de", "value_ja", "value_ko", "value_nl", "value_ru"]:
-        if lang_col not in cols:
-            dst.execute(f"ALTER TABLE translated_values ADD COLUMN {lang_col} TEXT")
-            print(f"  -> Added {lang_col} column to translated_values")
+    translated_values = next(
+        (table for table in tables if table.name == "translated_values"),
+        None,
+    )
+    if translated_values is None:
+        return
+    columns = {
+        row[1] for row in dst.execute("PRAGMA table_info(translated_values)")
+    }
+    for column in translated_values.columns:
+        if column.name in columns:
+            continue
+        if column.required:
+            raise RuntimeError(
+                f"Required translated_values column '{column.name}' was not copied"
+            )
+        dst.execute(
+            f"ALTER TABLE translated_values ADD COLUMN "
+            f"{column.name} {column.declared_type}"
+        )
+        print(f"  -> Added {column.name} column to translated_values")
 
 
 def build_search_index(dst: sqlite3.Connection):
@@ -325,10 +316,6 @@ def build_common_name_token_index(dst: sqlite3.Connection):
             for (species_id, language, token), position in token_positions.items()
         ),
     )
-    dst.execute("""
-        CREATE INDEX idx_species_search_common_name_tokens_language_token
-            ON species_search_common_name_tokens(language, token, species_id)
-    """)
     print(f"  -> {len(token_positions):,} common name token rows")
     dst.commit()
 
@@ -507,85 +494,190 @@ def build_search_name_entry_index(dst: sqlite3.Connection):
         """,
         token_rows,
     )
-    dst.execute("""
-        CREATE INDEX idx_species_search_name_entries_language_norm
-            ON species_search_name_entries(language, normalized_name, species_id)
-    """)
-    dst.execute("""
-        CREATE INDEX idx_species_search_name_entries_species_lang
-            ON species_search_name_entries(species_id, language)
-    """)
-    dst.execute("""
-        CREATE INDEX idx_species_search_name_entry_tokens_language_token
-            ON species_search_name_entry_tokens(language, token, species_id, entry_id)
-    """)
-    dst.execute("""
-        CREATE INDEX idx_species_search_name_entry_tokens_entry
-            ON species_search_name_entry_tokens(entry_id)
-    """)
     print(f"  -> {len(entry_rows):,} search name entries, {len(token_rows):,} entry token rows")
     dst.commit()
 
-def populate_translations(dst: sqlite3.Connection, translations: dict):
+def populate_translations(
+    dst: sqlite3.Connection,
+    translations: tuple[storage_contract.TranslationEntry, ...],
+    translated_values: storage_contract.StorageTable | None,
+):
     """Populate non-English translations for categorical values from contract."""
+    if translated_values is None:
+        if translations:
+            raise RuntimeError("translated_values storage contract is missing")
+        print("  -> Updated/inserted 0 translations")
+        return
+    localized_columns = tuple(
+        (column.name.removeprefix("value_"), column.name)
+        for column in translated_values.columns
+        if column.name.startswith("value_") and column.name != "value_en"
+    )
+    localized_column_by_locale = dict(localized_columns)
     updated = 0
-    for field_name, values in translations.items():
-        for value_en, lang_map in values.items():
-            # Check if row exists
-            row = dst.execute(
-                "SELECT id FROM translated_values WHERE field_name = ? AND value_en = ?",
-                (field_name, value_en),
-            ).fetchone()
+    for entry in translations:
+        lang_map = dict(entry.localized_values)
+        row = dst.execute(
+            "SELECT id FROM translated_values WHERE field_name = ? AND value_en = ?",
+            (entry.field_name, entry.value_en),
+        ).fetchone()
 
-            if row:
-                for lang, translated in lang_map.items():
-                    col = f"value_{lang}"
-                    dst.execute(
-                        f"UPDATE translated_values SET {col} = ? WHERE field_name = ? AND value_en = ?",
-                        (translated, field_name, value_en),
-                    )
-                    updated += 1
-            else:
-                row_id = str(uuid.uuid4())
+        if row:
+            for lang, translated in entry.localized_values:
+                col = localized_column_by_locale[lang]
                 dst.execute(
-                    """INSERT INTO translated_values
-                       (id, field_name, value_en, value_fr, value_es, value_pt, value_it, value_zh,
-                        value_de, value_ja, value_ko, value_nl, value_ru)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        row_id,
-                        field_name,
-                        value_en,
-                        lang_map.get("fr"),
-                        lang_map.get("es"),
-                        lang_map.get("pt"),
-                        lang_map.get("it"),
-                        lang_map.get("zh"),
-                        lang_map.get("de"),
-                        lang_map.get("ja"),
-                        lang_map.get("ko"),
-                        lang_map.get("nl"),
-                        lang_map.get("ru"),
-                    ),
+                    f"UPDATE translated_values SET {col} = ? WHERE field_name = ? AND value_en = ?",
+                    (translated, entry.field_name, entry.value_en),
                 )
-                updated += len(lang_map)
+                updated += 1
+        else:
+            row_id = str(uuid.uuid4())
+            insert_columns = (
+                "id",
+                "field_name",
+                "value_en",
+                *(column for _locale, column in localized_columns),
+            )
+            placeholders = ", ".join("?" for _column in insert_columns)
+            dst.execute(
+                f"INSERT INTO translated_values ({', '.join(insert_columns)}) "
+                f"VALUES ({placeholders})",
+                (
+                    row_id,
+                    entry.field_name,
+                    entry.value_en,
+                    *(lang_map.get(locale) for locale, _column in localized_columns),
+                ),
+            )
+            updated += len(lang_map)
 
     print(f"  -> Updated/inserted {updated} translations")
 
 
-def create_btree_indexes(dst: sqlite3.Connection, index_defs: dict):
+def create_btree_indexes(
+    dst: sqlite3.Connection,
+    index_defs: tuple[storage_contract.StorageIndex, ...],
+):
     """Create B-tree indexes from contract definitions."""
     created = 0
-    for _table, indexes in index_defs.items():
-        for idx in indexes:
-            try:
-                dst.execute(f"CREATE INDEX {idx['name']} ON {_table}({idx['columns']})")
-                created += 1
-            except sqlite3.OperationalError as e:
-                if "already exists" not in str(e):
-                    print(f"  WARN: Index {idx['name']}: {e}")
+    for index in index_defs:
+        try:
+            columns = ", ".join(index.columns)
+            dst.execute(f"CREATE INDEX {index.name} ON {index.table}({columns})")
+            created += 1
+        except sqlite3.OperationalError as error:
+            if "already exists" not in str(error):
+                print(f"  WARN: Index {index.name}: {error}")
 
     print(f"  -> Created {created} B-tree indexes")
+
+
+def create_staging_database_path(output_path: Path) -> tuple[Path, int]:
+    """Reserve a sibling path for a database that is not ready to publish."""
+    existing_mode = (
+        stat.S_IMODE(output_path.stat().st_mode)
+        if output_path.is_file()
+        else None
+    )
+    with tempfile.NamedTemporaryFile(
+        dir=output_path.parent,
+        prefix=".canopi-prepare-",
+        suffix=".db",
+        delete=False,
+    ) as handle:
+        staging_path = Path(handle.name)
+    if existing_mode is None:
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        existing_mode = 0o666 & ~current_umask
+    staging_path.chmod(existing_mode | 0o600)
+    return staging_path, existing_mode
+
+
+def cleanup_staging_database(staging_path: Path) -> None:
+    """Remove a staged database and any SQLite sidecars left by a failed build."""
+    for path in (
+        staging_path,
+        Path(f"{staging_path}-wal"),
+        Path(f"{staging_path}-shm"),
+        Path(f"{staging_path}-journal"),
+    ):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def build_prepared_database(
+    staging_path: Path,
+    export_path: Path,
+    contract: storage_contract.PrepareDbProjection,
+    export_receipt: storage_contract.VerificationReceipt,
+) -> None:
+    """Build a complete prepared database at an unpublished staging path."""
+    dst = sqlite3.connect(str(staging_path))
+    try:
+        dst.execute("PRAGMA journal_mode=WAL")
+        dst.execute("PRAGMA synchronous=OFF")
+        export_uri = f"{export_path.resolve().as_uri()}?mode=ro"
+        dst.execute("ATTACH DATABASE ? AS export_db", (export_uri,))
+
+        print("[0/10] Validated export storage contract")
+        print(f"  -> Export schema version: {export_receipt.observed_schema_version}")
+
+        # Discover available export columns
+        export_columns = get_export_columns(dst)
+        print(f"  -> Export has {len(export_columns)} columns in species table")
+
+        print("[1/10] Creating core species table...")
+        create_core_species_table(dst, contract.species_columns, export_columns)
+
+        print("[2/10] Copying supporting tables...")
+        copy_supporting_tables(dst, contract.supporting_tables)
+
+        # Detach export DB — no longer needed
+        dst.commit()
+        dst.execute("DETACH DATABASE export_db")
+
+        print("[3/10] Building unified search index...")
+        build_search_index(dst)
+
+        print("[4/10] Building best_common_names lookup table...")
+        build_best_common_names(dst)
+
+        print("[5/10] Building common name token index...")
+        build_common_name_token_index(dst)
+
+        print("[6/10] Building search name entry index...")
+        build_search_name_entry_index(dst)
+
+        print("[7/10] Populating translations...")
+        translated_values = next(
+            (
+                table
+                for table in contract.supporting_tables
+                if table.name == "translated_values"
+            ),
+            None,
+        )
+        populate_translations(dst, contract.translations, translated_values)
+        dst.commit()
+
+        print("[8/10] Creating B-tree indexes...")
+        create_btree_indexes(dst, contract.indexes)
+        dst.commit()
+
+        print("[9/10] Optimizing (ANALYZE + VACUUM)...")
+        dst.execute("ANALYZE")
+        dst.execute("VACUUM")
+
+        print("[10/10] Finalizing...")
+        # Set schema version so Rust backend can detect DB format
+        dst.execute(f"PRAGMA user_version = {contract.prepared_schema_version}")
+        # Switch to DELETE journal mode — read-only at runtime
+        dst.execute("PRAGMA journal_mode=DELETE")
+    finally:
+        dst.close()
 
 
 def main():
@@ -604,9 +696,12 @@ def main():
     args = parser.parse_args()
 
     # Load schema contract
-    contract = load_contract()
-    print(f"Schema contract: version {contract['schema_version']}, "
-          f"{len(contract['columns'])} columns defined")
+    contract = storage_contract.project(storage_contract.ProjectionTarget.PREPARE_DB)
+    assert isinstance(contract, storage_contract.PrepareDbProjection)
+    print(
+        f"Schema contract: version {contract.prepared_schema_version}, "
+        f"{len(contract.species_columns)} columns defined"
+    )
 
     # Find export DB
     if args.export_path:
@@ -620,83 +715,50 @@ def main():
         sys.exit(1)
 
     output_path = args.output_path
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if paths_refer_to_same_file(export_path, output_path):
+        parser.error("--export-path and --output-path must refer to different files")
 
-    if output_path.exists():
-        output_path.unlink()
+    export_receipt = storage_contract.verify_database(
+        storage_contract.DatabaseProfile.EXPORT,
+        export_path,
+    )
+    for warning in export_receipt.warnings:
+        print(f"  WARN: {warning}")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"Source: {export_path}")
     print(f"Output: {output_path}")
     print()
 
     start = time.time()
-
-    # Create output DB — attach source for cross-DB queries
-    dst = sqlite3.connect(str(output_path))
-    dst.execute("PRAGMA journal_mode=WAL")
-    dst.execute("PRAGMA synchronous=OFF")
-    dst.execute(f"ATTACH DATABASE 'file:{export_path}?mode=ro' AS export_db")
-
-    # Validate export schema version
-    min_version = contract.get("min_export_schema_version", 0)
-    if min_version > 0:
-        print("[0/10] Validating export schema version...")
-        export_version = validate_export_version(dst, min_version)
-        if export_version is not None:
-            print(f"  -> Export schema version: {export_version}")
-
-    # Discover available export columns
-    export_columns = get_export_columns(dst)
-    print(f"  -> Export has {len(export_columns)} columns in species table")
-
-    print("[1/10] Creating core species table...")
-    create_core_species_table(dst, contract["columns"], export_columns)
-
-    print("[2/10] Copying supporting tables...")
-    copy_supporting_tables(dst, contract.get("supporting_tables", []))
-
-    # Detach export DB — no longer needed
-    dst.commit()
-    dst.execute("DETACH DATABASE export_db")
-
-    print("[3/10] Building unified search index...")
-    build_search_index(dst)
-
-    print("[4/10] Building best_common_names lookup table...")
-    build_best_common_names(dst)
-
-    print("[5/10] Building common name token index...")
-    build_common_name_token_index(dst)
-
-    print("[6/10] Building search name entry index...")
-    build_search_name_entry_index(dst)
-
-    print("[7/10] Populating translations...")
-    populate_translations(dst, contract.get("translations", {}))
-    dst.commit()
-
-    print("[8/10] Creating B-tree indexes...")
-    create_btree_indexes(dst, contract.get("indexes", {}))
-    dst.commit()
-
-    print("[9/10] Optimizing (ANALYZE + VACUUM)...")
-    dst.execute("ANALYZE")
-    dst.execute("VACUUM")
-
-    print("[10/10] Finalizing...")
-    # Set schema version so Rust backend can detect DB format
-    dst.execute(f"PRAGMA user_version = {contract['schema_version']}")
-    # Switch to DELETE journal mode — read-only at runtime
-    dst.execute("PRAGMA journal_mode=DELETE")
-    dst.close()
+    staging_path, publication_mode = create_staging_database_path(output_path)
+    try:
+        build_prepared_database(staging_path, export_path, contract, export_receipt)
+        prepared_receipt = storage_contract.verify_database(
+            storage_contract.DatabaseProfile.PREPARED,
+            staging_path,
+        )
+        for warning in prepared_receipt.warnings:
+            print(f"  WARN: {warning}")
+        staging_path.chmod(publication_mode)
+        staging_path.replace(output_path)
+    finally:
+        cleanup_staging_database(staging_path)
 
     elapsed = time.time() - start
     size_mb = output_path.stat().st_size / (1024 * 1024)
     print()
     print(f"Done in {elapsed:.1f}s")
     print(f"Output: {output_path} ({size_mb:.1f} MB)")
-    print(f"Schema version: {contract['schema_version']} (PRAGMA user_version)")
+    print(
+        f"Schema version: {contract.prepared_schema_version} (PRAGMA user_version)"
+    )
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except storage_contract.SpeciesCatalogContractError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
