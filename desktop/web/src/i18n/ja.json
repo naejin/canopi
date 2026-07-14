@@ -446,17 +446,6 @@
       "duration_60y": "60年以上",
       "empty": "キャンバスに植物を配置して遷移図を表示"
     },
-    "export": {
-      "exportPng": "PNG として書き出し",
-      "exportSvg": "SVG として書き出し",
-      "exportCsv": "植物リストを書き出し（CSV）",
-      "exportGeoJSON": "GeoJSON として書き出し",
-      "exportBudgetCsv": "予算を書き出し（CSV）",
-      "importImage": "背景画像を読み込み",
-      "exportSuccess": "{{path}} に書き出しました",
-      "exportFailed": "書き出しに失敗しました",
-      "chooseExportLocation": "書き出し先を選択"
-    },
     "rightPanel": {
       "title": "植物の詳細",
       "plantDetail": "植物の詳細",

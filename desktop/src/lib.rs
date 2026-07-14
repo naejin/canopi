@@ -98,8 +98,6 @@ pub fn run() {
             commands::design::list_autosaves,
             commands::design::recover_autosave,
             commands::export::export_file,
-            commands::export::export_binary,
-            commands::export::read_file_bytes,
             commands::export::export_native_png,
             commands::export::export_native_pdf,
             commands::health::get_health,

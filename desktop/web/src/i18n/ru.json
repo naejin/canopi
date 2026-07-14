@@ -446,17 +446,6 @@
       "duration_60y": "60+ лет",
       "empty": "Разместите растения на холсте для заполнения диаграммы сукцессии"
     },
-    "export": {
-      "exportPng": "Экспорт в PNG",
-      "exportSvg": "Экспорт в SVG",
-      "exportCsv": "Экспорт списка растений (CSV)",
-      "exportGeoJSON": "Экспорт в GeoJSON",
-      "exportBudgetCsv": "Экспорт бюджета (CSV)",
-      "importImage": "Импорт фонового изображения",
-      "exportSuccess": "Экспортировано в {{path}}",
-      "exportFailed": "Ошибка экспорта",
-      "chooseExportLocation": "Выберите место для экспорта"
-    },
     "rightPanel": {
       "title": "Карточка растения",
       "plantDetail": "Карточка растения",

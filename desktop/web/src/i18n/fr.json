@@ -446,17 +446,6 @@
       "duration_60y": "60+ ans",
       "empty": "Placez des plantes sur le canevas pour peupler le diagramme de succession"
     },
-    "export": {
-      "exportPng": "Exporter en PNG",
-      "exportSvg": "Exporter en SVG",
-      "exportCsv": "Exporter la liste de plantes (CSV)",
-      "exportGeoJSON": "Exporter en GeoJSON",
-      "exportBudgetCsv": "Exporter le budget (CSV)",
-      "importImage": "Importer une image de fond",
-      "exportSuccess": "Exporté vers {{path}}",
-      "exportFailed": "Échec de l'exportation",
-      "chooseExportLocation": "Choisir l'emplacement d'exportation"
-    },
     "rightPanel": {
       "title": "Détail de la plante",
       "plantDetail": "Détail de la plante",

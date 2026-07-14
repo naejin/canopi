@@ -6,19 +6,6 @@ pub fn export_file(data: String, path: String) -> Result<String, String> {
     crate::services::export::export_file(data, path)
 }
 
-/// Write `data` (raw bytes) to `path`. Used for PNG export.
-#[tauri::command]
-pub fn export_binary(data: Vec<u8>, path: String) -> Result<String, String> {
-    crate::services::export::export_binary(data, path)
-}
-
-/// Read a file and return `(bytes, filename)`. Used for background image import.
-/// The frontend shows the open dialog and passes the chosen path.
-#[tauri::command]
-pub fn read_file_bytes(path: String) -> Result<(Vec<u8>, String), String> {
-    crate::services::export::read_file_bytes(path)
-}
-
 // ---------------------------------------------------------------------------
 // Native platform export commands (PNG at DPI, PDF with layout)
 // ---------------------------------------------------------------------------
@@ -84,9 +71,7 @@ pub fn export_native_pdf(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        export_binary, export_file, export_native_pdf, export_native_png, read_file_bytes,
-    };
+    use super::{export_file, export_native_pdf, export_native_png};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -117,22 +102,13 @@ mod tests {
     }
 
     #[test]
-    fn file_commands_round_trip_through_service_boundary() {
+    fn text_export_command_writes_through_service_boundary() {
         let temp_dir = TempTestDir::new("files");
         let text_path = temp_dir.file("export.txt");
-        let binary_path = temp_dir.file("export.bin");
 
         export_file("hello".to_string(), text_path.display().to_string()).unwrap();
-        export_binary(vec![7, 8, 9], binary_path.display().to_string()).unwrap();
 
-        let (text_bytes, text_name) = read_file_bytes(text_path.display().to_string()).unwrap();
-        let (binary_bytes, binary_name) =
-            read_file_bytes(binary_path.display().to_string()).unwrap();
-
-        assert_eq!(text_bytes, b"hello");
-        assert_eq!(text_name, "export.txt");
-        assert_eq!(binary_bytes, vec![7, 8, 9]);
-        assert_eq!(binary_name, "export.bin");
+        assert_eq!(std::fs::read(text_path).unwrap(), b"hello");
     }
 
     #[test]

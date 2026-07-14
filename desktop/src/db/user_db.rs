@@ -1,8 +1,5 @@
 use rusqlite::Connection;
 
-#[allow(dead_code)]
-const CURRENT_SCHEMA_VERSION: i32 = 8;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedObjectStampRow {
     pub id: String,

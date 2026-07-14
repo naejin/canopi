@@ -63,8 +63,9 @@ function collectMissingKeys(
 
 describe('i18n completeness', () => {
   for (const [locale, translations] of Object.entries(locales)) {
-    it(`${locale} contains every english translation key`, () => {
+    it(`${locale} has exactly the english translation key tree`, () => {
       expect(collectMissingKeys(en as TranslationTree, translations)).toEqual([])
+      expect(collectMissingKeys(translations, en as TranslationTree)).toEqual([])
     })
   }
 

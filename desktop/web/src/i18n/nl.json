@@ -446,17 +446,6 @@
       "duration_60y": "60+ jaar",
       "empty": "Plaats planten op het canvas om het successiediagram te vullen"
     },
-    "export": {
-      "exportPng": "Exporteren als PNG",
-      "exportSvg": "Exporteren als SVG",
-      "exportCsv": "Plantenlijst exporteren (CSV)",
-      "exportGeoJSON": "Exporteren als GeoJSON",
-      "exportBudgetCsv": "Budget exporteren (CSV)",
-      "importImage": "Achtergrondafbeelding importeren",
-      "exportSuccess": "Geëxporteerd naar {{path}}",
-      "exportFailed": "Exporteren mislukt",
-      "chooseExportLocation": "Exportlocatie kiezen"
-    },
     "rightPanel": {
       "title": "Plantdetail",
       "plantDetail": "Plantdetail",

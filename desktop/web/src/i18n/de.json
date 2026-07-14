@@ -446,17 +446,6 @@
       "duration_60y": "60+ Jahre",
       "empty": "Pflanzen auf der Leinwand platzieren, um das Sukzessionsdiagramm zu füllen"
     },
-    "export": {
-      "exportPng": "Als PNG exportieren",
-      "exportSvg": "Als SVG exportieren",
-      "exportCsv": "Pflanzenliste exportieren (CSV)",
-      "exportGeoJSON": "Als GeoJSON exportieren",
-      "exportBudgetCsv": "Budget exportieren (CSV)",
-      "importImage": "Hintergrundbild importieren",
-      "exportSuccess": "Exportiert nach {{path}}",
-      "exportFailed": "Export fehlgeschlagen",
-      "chooseExportLocation": "Exportziel wählen"
-    },
     "rightPanel": {
       "title": "Pflanzendetails",
       "plantDetail": "Pflanzendetails",

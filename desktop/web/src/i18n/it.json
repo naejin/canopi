@@ -446,17 +446,6 @@
       "duration_60y": "60+ anni",
       "empty": "Posiziona piante sulla tela per popolare il diagramma di successione"
     },
-    "export": {
-      "exportPng": "Esporta come PNG",
-      "exportSvg": "Esporta come SVG",
-      "exportCsv": "Esporta elenco piante (CSV)",
-      "exportGeoJSON": "Esporta come GeoJSON",
-      "exportBudgetCsv": "Esporta budget (CSV)",
-      "importImage": "Importa immagine di sfondo",
-      "exportSuccess": "Esportato in {{path}}",
-      "exportFailed": "Esportazione non riuscita",
-      "chooseExportLocation": "Scegli la posizione di esportazione"
-    },
     "rightPanel": {
       "title": "Dettaglio pianta",
       "plantDetail": "Dettaglio pianta",

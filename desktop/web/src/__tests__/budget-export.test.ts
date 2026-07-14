@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../ipc/design', () => ({
+vi.mock('../ipc/export', () => ({
   exportFile: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { exportFile } from '../ipc/design'
+import { exportFile } from '../ipc/export'
 import { exportBudgetCsv } from '../app/budget/export'
 
 describe('budget export', () => {

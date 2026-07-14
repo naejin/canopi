@@ -446,17 +446,6 @@
       "duration_60y": "60+년",
       "empty": "캔버스에 식물을 배치하여 천이도를 채우세요"
     },
-    "export": {
-      "exportPng": "PNG로 내보내기",
-      "exportSvg": "SVG로 내보내기",
-      "exportCsv": "식물 목록 내보내기 (CSV)",
-      "exportGeoJSON": "GeoJSON으로 내보내기",
-      "exportBudgetCsv": "예산 내보내기 (CSV)",
-      "importImage": "배경 이미지 가져오기",
-      "exportSuccess": "{{path}}에 내보냄",
-      "exportFailed": "내보내기 실패",
-      "chooseExportLocation": "내보내기 위치 선택"
-    },
     "rightPanel": {
       "title": "식물 상세",
       "plantDetail": "식물 상세",

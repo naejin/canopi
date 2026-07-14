@@ -446,17 +446,6 @@
       "duration_60y": "60+年",
       "empty": "在画布上放置植物以填充演替图"
     },
-    "export": {
-      "exportPng": "导出为 PNG",
-      "exportSvg": "导出为 SVG",
-      "exportCsv": "导出植物列表（CSV）",
-      "exportGeoJSON": "导出为 GeoJSON",
-      "exportBudgetCsv": "导出预算（CSV）",
-      "importImage": "导入背景图片",
-      "exportSuccess": "已导出至 {{path}}",
-      "exportFailed": "导出失败",
-      "chooseExportLocation": "选择导出位置"
-    },
     "rightPanel": {
       "title": "植物详情",
       "plantDetail": "植物详情",

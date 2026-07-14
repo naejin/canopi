@@ -4,22 +4,6 @@ pub fn export_file(data: String, path: String) -> Result<String, String> {
     write_bytes_to_path(path, data.as_bytes(), "text")
 }
 
-pub fn export_binary(data: Vec<u8>, path: String) -> Result<String, String> {
-    write_bytes_to_path(path, &data, "binary")
-}
-
-pub fn read_file_bytes(path: String) -> Result<(Vec<u8>, String), String> {
-    let file_path = std::path::Path::new(&path);
-    let data = std::fs::read(file_path).map_err(|e| format!("Failed to read {path}: {e}"))?;
-    let filename = file_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("unknown")
-        .to_string();
-    tracing::info!("Read file '{}' ({} bytes)", filename, data.len());
-    Ok((data, filename))
-}
-
 pub fn export_native_png(
     platform: &dyn Platform,
     snapshot_base64: String,
@@ -110,9 +94,7 @@ fn write_bytes_to_path(path: String, bytes: &[u8], kind: &str) -> Result<String,
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        export_binary, export_file, export_native_pdf, export_native_png, read_file_bytes,
-    };
+    use super::{export_file, export_native_pdf, export_native_png};
     use crate::platform::{CanvasSnapshot, FileWatchHandle, Platform, PlatformError, PrintLayout};
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
@@ -233,25 +215,13 @@ mod tests {
     }
 
     #[test]
-    fn text_and_binary_exports_round_trip_from_disk() {
-        let temp_dir = TempTestDir::new("round-trip");
+    fn text_export_writes_to_disk() {
+        let temp_dir = TempTestDir::new("text");
         let text_path = temp_dir.file("text.txt");
-        let binary_path = temp_dir.file("image.bin");
 
         export_file("hello".to_string(), text_path.display().to_string()).unwrap();
-        export_binary(vec![1, 2, 3], binary_path.display().to_string()).unwrap();
 
-        let (text_bytes, text_name) = read_file_bytes(text_path.display().to_string()).unwrap();
-        let (binary_bytes, binary_name) =
-            read_file_bytes(binary_path.display().to_string()).unwrap();
-
-        assert_eq!(text_bytes, b"hello");
-        assert_eq!(text_name, text_path.file_name().unwrap().to_string_lossy());
-        assert_eq!(binary_bytes, vec![1, 2, 3]);
-        assert_eq!(
-            binary_name,
-            binary_path.file_name().unwrap().to_string_lossy()
-        );
+        assert_eq!(std::fs::read(&text_path).unwrap(), b"hello");
     }
 
     #[test]

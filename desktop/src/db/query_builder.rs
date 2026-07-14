@@ -13,8 +13,8 @@ mod text;
 pub(crate) use crate::db::plant_filter_fields::{PlantFilterFieldKind, filter_field_kind};
 pub use builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
 pub(crate) use columns::validated_column;
-#[allow(unused_imports)]
-pub use cursor::{decode_cursor, encode_cursor};
+#[cfg(test)]
+use cursor::{decode_cursor, encode_cursor};
 pub(crate) use projection::{species_list_common_name_join_sql, species_list_select_sql};
 
 #[cfg(test)]

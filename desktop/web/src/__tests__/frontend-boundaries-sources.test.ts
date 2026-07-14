@@ -688,6 +688,8 @@ describe('frontend boundary sources', () => {
     expect(budgetSource).not.toContain('app/budget/controller')
     expect(budgetSource).not.toContain('app/budget/export')
     expect(budgetWorkbenchSource).toContain('../planning-projection')
+    expect(budgetExportSource).toContain('../../ipc/export')
+    expect(budgetExportSource).not.toContain('../../ipc/design')
     expect(budgetExportSource).not.toContain('components/canvas')
 
     for (const source of [budgetSource, timelineSource, consortiumSource]) {

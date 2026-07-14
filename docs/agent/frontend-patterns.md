@@ -201,11 +201,13 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Use `Number.isFinite(parsed) && parsed >= 0` style guards.
 - Check entry existence with `priceMap.has(key)` when distinguishing unset from price `0`.
 - Updaters must compare fields before spreading to avoid dirtying on no-op updates.
+- Budget CSV serialization belongs in `app/budget/export.ts`; native save-dialog and text-write I/O crosses the focused `ipc/export.ts` adapter, not the Design persistence IPC module.
 
 ## Testing
 
 - Vitest tests live in `desktop/web/src/__tests__/`.
 - The i18n module loads real locale files in tests; do not mock it unless the test specifically needs to.
+- `i18n-completeness.test.ts` enforces exact key-tree parity with English; add and remove translation keys in all 11 locales together.
 - For Vitest partial mocks of modules exporting signals, use `importOriginal` spread and override only what the test owns.
 - `@preact/preset-vite` is the Vite plugin package.
 - `display: flex` on `<td>` is unreliable in WebKitGTK; wrap flex content inside the cell.

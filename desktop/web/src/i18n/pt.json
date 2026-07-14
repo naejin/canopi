@@ -446,17 +446,6 @@
       "duration_60y": "60+ anos",
       "empty": "Coloque plantas na tela para preencher o diagrama de sucessão"
     },
-    "export": {
-      "exportPng": "Exportar como PNG",
-      "exportSvg": "Exportar como SVG",
-      "exportCsv": "Exportar lista de plantas (CSV)",
-      "exportGeoJSON": "Exportar como GeoJSON",
-      "exportBudgetCsv": "Exportar orçamento (CSV)",
-      "importImage": "Importar imagem de fundo",
-      "exportSuccess": "Exportado para {{path}}",
-      "exportFailed": "Falha ao exportar",
-      "chooseExportLocation": "Escolher local de exportação"
-    },
     "rightPanel": {
       "title": "Detalhe da planta",
       "plantDetail": "Detalhe da planta",

@@ -446,17 +446,6 @@
       "duration_60y": "60+ years",
       "empty": "Place plants on the canvas to populate the succession chart"
     },
-    "export": {
-      "exportPng": "Export as PNG",
-      "exportSvg": "Export as SVG",
-      "exportCsv": "Export Plant List (CSV)",
-      "exportGeoJSON": "Export as GeoJSON",
-      "exportBudgetCsv": "Export Budget (CSV)",
-      "importImage": "Import Background Image",
-      "exportSuccess": "Exported to {{path}}",
-      "exportFailed": "Export failed",
-      "chooseExportLocation": "Choose export location"
-    },
     "rightPanel": {
       "title": "Plant detail",
       "plantDetail": "Plant detail",

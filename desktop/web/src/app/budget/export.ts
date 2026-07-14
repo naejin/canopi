@@ -1,4 +1,4 @@
-import { exportFile } from '../../ipc/design'
+import { exportFile } from '../../ipc/export'
 import { t } from '../../i18n'
 import { escapeBudgetCsvField } from './formatting'
 
