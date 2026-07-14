@@ -302,6 +302,13 @@ export function createTimelineActionInteractionFrame({
     }),
 
     syncActions(actions): void {
+      const activeDrag = planningFrame.getActiveDrag<TimelineDragState>()
+      if (
+        isTimelineEditDrag(activeDrag)
+        && !actions.some((action) => action.id === activeDrag.edit.actionId)
+      ) {
+        abortActiveDrag()
+      }
       planningFrame.syncVisibleItems(actions)
     },
 

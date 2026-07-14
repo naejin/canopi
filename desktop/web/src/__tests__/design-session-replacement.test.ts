@@ -11,13 +11,17 @@ import { SceneHistory } from "../canvas/runtime/scene-history";
 import { SceneStore } from "../canvas/runtime/scene";
 import { SceneRuntimeEditCoordinator } from "../canvas/runtime/scene-runtime/transactions";
 import type { CanopiFile } from "../types/design";
+import {
+  editDesignSessionForTest,
+  markDesignSessionDirtyForTest,
+} from "./support/design-session-edit";
 
 describe("Design Session replacement", () => {
   it("attaches the current Design without replacing identity or dirty baselines", () => {
     const events: string[] = [];
     const file = makeFile("Existing");
     const store = createMemoryDesignSessionStore({ file, path: "/existing.canopi", name: "Existing" });
-    store.markDocumentDirty();
+    store.markCanvasDetachedDirty(true);
     const replaceState = vi.spyOn(store, "replaceCurrentDesignState");
     const resetBaselines = vi.spyOn(store, "resetDirtyBaselines");
     const canvas = makeCanvas(events);
@@ -73,7 +77,7 @@ describe("Design Session replacement", () => {
       path: "/previous.canopi",
       name: "Previous",
     });
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     recordStoreEvents(store, events);
     const canvas = makeCanvas(events);
     const replacement = createDesignSessionReplacement({ store, workflowRunner: makeWorkflowRunner(events) });
@@ -401,7 +405,7 @@ describe("Design Session replacement", () => {
     expect(replaceState).toHaveBeenCalledOnce();
     expect(resetBaselines).toHaveBeenCalledOnce();
 
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Intervening field note",
     }));
@@ -470,7 +474,7 @@ describe("Design Session replacement", () => {
 
     expect(() => replacement.replace(input, canvas))
       .toThrow("Design identity publication failed");
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Intervening field note",
     }));
@@ -532,7 +536,7 @@ describe("Design Session replacement", () => {
     };
 
     expect(() => replacement.replace(input, canvas)).toThrow("failed");
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Intervening field note",
     }));
@@ -581,7 +585,7 @@ describe("Design Session replacement", () => {
     };
 
     expect(() => replacement.replace(input)).toThrow("workflow installation failed");
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Intervening field note",
     }));

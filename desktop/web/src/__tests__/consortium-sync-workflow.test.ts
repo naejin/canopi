@@ -105,7 +105,7 @@ describe('consortium-sync-workflow', () => {
     expect(consortiums).toContainEqual({ target: consortiumTarget('Acer campestre'), stratum: 'medium', start_phase: 0, end_phase: 2 })
   })
 
-  it('does not increment nonCanvasRevision (markDirty: false)', () => {
+  it('does not record derived reconciliation as user intent', () => {
     const session = mockSession([makePlant('Quercus robur')])
     currentDesign.value = makeDesign()
     mountQuerySurface(session)

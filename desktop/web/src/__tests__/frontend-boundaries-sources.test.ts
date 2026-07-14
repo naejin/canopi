@@ -1108,6 +1108,65 @@ describe('frontend boundary sources', () => {
     }
   })
 
+  it('confines committed and visible Design Edit authority capabilities', () => {
+    const storeSource = readSource('../app/document-session/store.ts')
+    const publicStoreContract = storeSource.slice(
+      storeSource.indexOf('export interface DesignSessionStore {'),
+      storeSource.indexOf('\n}\n\ndeclare const persistenceCapableDesignSessionStoreBrand'),
+    )
+    expect(publicStoreContract).not.toContain('mutateCurrentDesign')
+    expect(publicStoreContract).not.toContain('reconcileCurrentDesign')
+    expect(publicStoreContract).not.toContain('markDocumentDirty')
+    expect(publicStoreContract).not.toContain('updateDesignArray')
+
+    const productionSources = sourceFilesUnder('..')
+      .filter(isTypescriptSource)
+      .filter((sourcePath) => !sourcePath.startsWith('../__tests__/'))
+    const authorityModule = '../app/design-edit/authority-capability.ts'
+    const authorityImporters = new Set([
+      authorityModule,
+      '../app/design-edit/core.ts',
+      '../app/design-edit/index.ts',
+      '../app/document-session/store.ts',
+    ])
+
+    for (const sourcePath of productionSources) {
+      const source = readSource(sourcePath)
+      if (!authorityImporters.has(sourcePath)) {
+        expect(source, sourcePath).not.toContain('authority-capability')
+      }
+      if (
+        sourcePath !== authorityModule
+        && sourcePath !== '../app/design-edit/core.ts'
+      ) {
+        expect(source, sourcePath).not.toContain('disposeDesignEditAuthority')
+      }
+      if (
+        sourcePath !== authorityModule
+        && sourcePath !== '../app/document-session/store.ts'
+      ) {
+        expect(source, sourcePath).not.toContain('registerDesignEditAuthorityCapability')
+      }
+      if (sourcePath !== '../app/document-session/store.ts') {
+        expect(source, sourcePath).not.toMatch(/\bcommittedDesign\b/)
+      }
+      expect(source, sourcePath).not.toMatch(/markDirty\s*:\s*false/)
+      expect(source, sourcePath).not.toContain('DocumentMutationOptions')
+      expect(source, sourcePath).not.toContain('markDesignEdited')
+      if (
+        sourcePath !== '../app/document-session/store.ts'
+        && sourcePath !== '../app/design-edit/core.ts'
+      ) {
+        expect(source, sourcePath).not.toMatch(/\.(?:mutateCurrentDesign|reconcileCurrentDesign|updateDesignArray)\s*\(/)
+      }
+    }
+
+    const publicDesignEditSource = readSource('../app/design-edit/index.ts')
+    expect(publicDesignEditSource).not.toContain('DesignPreviewTransaction')
+    expect(publicDesignEditSource).not.toContain('designEditAuthorityCapability')
+    expect(publicDesignEditSource).not.toContain('disposeDesignEditAuthority')
+  })
+
   it('keeps tests behind the Design Session test adapter', () => {
     const sourcePaths = [
       '../__tests__',

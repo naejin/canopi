@@ -2,11 +2,15 @@ export {
   beginDesignArrayEdit,
   editCurrentDesign,
   editDesignArray,
-  markDesignEdited,
+  reconcileCurrentDesign,
   setDesignName,
   type DesignArrayEditKey,
   type DesignArrayEditTransaction,
 } from './core'
+export {
+  DesignEditBusyError,
+  DesignEditUnavailableError,
+} from './authority-capability'
 export {
   clearDesignLocation,
   setDesignLocation,

@@ -230,13 +230,19 @@ export function createDesignSessionPersistence({
     capturedAttachmentEpoch: number,
     capturedWriteEpoch: number,
   ): PersistenceCapture {
+    const storeFile = sessionCapture.file;
+    if (!storeFile) {
+      throw new DesignPersistenceBusyError(
+        "Cannot capture persistence state without a loaded Design",
+      );
+    }
     const activeCanvas = leasedCanvas?.hasLoadedDocument() ? leasedCanvas : null;
     const canvasCapture = activeCanvas?.captureForPersistence(
       { name: sessionCapture.name },
-      sessionCapture.file,
+      storeFile,
     ) ?? null;
     const content = canvasCapture?.content ?? {
-      ...sessionCapture.file,
+      ...storeFile,
       name: sessionCapture.name,
     };
 
@@ -290,8 +296,10 @@ export function createDesignSessionPersistence({
     const leasedCanvas = attachedCanvas;
     const capturedAttachmentEpoch = attachmentEpoch;
     const capturedWriteEpoch = writeEpoch;
-    if (!store.hasCurrentDesign()) {
-      const designBaselineIsCurrent = () => !store.hasCurrentDesign()
+    const storeBaseline = captureDesignSessionPersistenceState(store);
+    if (!storeBaseline.file) {
+      const designBaselineIsCurrent = () => storeBaseline.isExactCurrent()
+        && !store.hasCurrentDesign()
         && leasedCanvas === attachedCanvas
         && capturedAttachmentEpoch === attachmentEpoch;
       const guard = Object.freeze({
@@ -300,7 +308,6 @@ export function createDesignSessionPersistence({
       return completedReplacementGuardCapture(guard, designBaselineIsCurrent);
     }
 
-    const storeBaseline = captureDesignSessionPersistenceState(store);
     const designBaselineIsCurrent = () => storeBaseline.isExactCurrent()
       && leasedCanvas === attachedCanvas
       && capturedAttachmentEpoch === attachmentEpoch;

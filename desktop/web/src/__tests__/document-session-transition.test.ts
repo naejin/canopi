@@ -1,5 +1,10 @@
 import { effect } from "@preact/signals";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  editDesignSessionForTest,
+  markDesignSessionDirtyForTest,
+  reconcileDesignSessionForTest,
+} from "./support/design-session-edit";
 
 const mocks = vi.hoisted(() => ({
   installConsortiumSync: vi.fn(),
@@ -79,6 +84,7 @@ import {
   type DocumentTransitionResult,
 } from "../app/document-session/state-machine";
 import { createDesignSessionPersistence } from "../app/document-session/persistence";
+import { prepareDesignWriteDestination } from "../app/document-session/write-admission";
 import {
   createMemoryDesignSessionStore,
   type PersistenceCapableDesignSessionStore,
@@ -302,7 +308,7 @@ beforeEach(() => {
 describe("document session transition", () => {
   it("applies a discarded open-path replacement through the full post-load sequence", async () => {
     const session = makeSession();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockResolvedValue("Don't Save");
 
     const result = await machine.transitionDocument({
@@ -439,7 +445,7 @@ describe("document session transition", () => {
     const session = makeSession();
 
     const mounting = machine.startAttachedDesignSession(session);
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Field note published while mount returns",
     }));
@@ -701,7 +707,7 @@ describe("document session transition", () => {
     expect(store.readDesignName()).toBe("Recovered");
     expect(replaceState).toHaveBeenCalledOnce();
 
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edit made after Design finalization",
     }));
@@ -729,7 +735,7 @@ describe("document session transition", () => {
         name: "First Target",
       }),
     })).resolves.toMatchObject({ status: "failed" });
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edit made after First Target finalized",
     }));
@@ -768,7 +774,7 @@ describe("document session transition", () => {
         name: "First Target",
       }),
     });
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edit requiring a fresh decision",
     }));
@@ -842,7 +848,7 @@ describe("document session transition", () => {
         name: "Replacement",
       }),
     })).resolves.toMatchObject({ status: "failed" });
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Field note added after replacement failed",
     }));
@@ -1022,7 +1028,7 @@ describe("document session transition", () => {
     });
 
     await expect(transition()).resolves.toMatchObject({ status: "failed" });
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edit made after failed replacement",
     }));
@@ -1076,7 +1082,7 @@ describe("document session transition", () => {
       load: () => retryLoad.promise,
     });
     await flushMicrotasks();
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edit made during retry load",
     }));
@@ -1129,7 +1135,7 @@ describe("document session transition", () => {
 
   it("saves a dirty current document before applying the replacement", async () => {
     const session = makeSession();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockResolvedValue("Save");
 
     const result = await machine.transitionDocument({
@@ -1151,9 +1157,50 @@ describe("document session transition", () => {
     expect(store.readCurrentDesign()?.name).toBe("Next");
   });
 
+  it("saves persistence-diverged content before applying the replacement", async () => {
+    const olderPersistence = createDesignSessionPersistence({ store });
+    const pendingWrite = deferred<void>();
+    const olderSave = olderPersistence.beginSave().execute(
+      prepareDesignWriteDestination({
+        resource: "native-design:/designs/current.canopi",
+        destinationPath: "/designs/current.canopi",
+        write: () => pendingWrite.promise,
+      }),
+    );
+    await flushMicrotasks();
+    reconcileDesignSessionForTest(store, (design) => ({
+      ...design,
+      description: "derived reconciliation",
+    }));
+    pendingWrite.resolve();
+    await expect(olderSave).resolves.toMatchObject({ status: "applied" });
+    expect(store.isDesignDirty()).toBe(true);
+
+    const session = makeSession();
+    mocks.message.mockResolvedValue("Save");
+    const result = await machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      session,
+      load: async () => ({
+        file: makeFile("Next"),
+        path: "/designs/next.canopi",
+        name: "Next",
+      }),
+    });
+
+    expect(result.status).toBe("applied");
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      "/designs/current.canopi",
+      expect.objectContaining({ description: "derived reconciliation" }),
+    );
+    expect(store.readCurrentDesign()?.name).toBe("Next");
+    olderPersistence.dispose();
+  });
+
   it("does not let a superseded dirty prompt save the successor Design", async () => {
     const session = makeSession();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     const prompt = deferred<string>();
     mocks.message.mockReturnValue(prompt.promise);
     const stale = machine.transitionDocument({
@@ -1196,7 +1243,7 @@ describe("document session transition", () => {
       load: () => pending.promise,
     });
 
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edit committed while loading",
     }));
@@ -1223,7 +1270,7 @@ describe("document session transition", () => {
       captureNumber += 1;
       const content = { ...document, name: metadata.name };
       if (captureNumber === 3) {
-        store.mutateCurrentDesign((current) => ({
+        editDesignSessionForTest(store, (current) => ({
           ...current,
           description: "Reentrant final-guard edit",
         }));
@@ -1332,7 +1379,7 @@ describe("document session transition", () => {
   it("cancels replacement when Design changes while the requested save is pending", async () => {
     const session = makeSession();
     session.loadDocument(makeFile("Current"));
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockResolvedValue("Save");
     const pending = deferred<string>();
     mocks.saveDesign.mockReturnValue(pending.promise);
@@ -1351,7 +1398,7 @@ describe("document session transition", () => {
     await flushMicrotasks();
     expect(mocks.saveDesign).toHaveBeenCalledTimes(1);
 
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edited while save was pending",
     }));
@@ -1371,12 +1418,12 @@ describe("document session transition", () => {
   it("acknowledges the captured save without replacing edits made during I/O", async () => {
     const session = makeSession();
     session.loadDocument(makeFile("Current"));
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     const pending = deferred<string>();
     mocks.saveDesign.mockReturnValue(pending.promise);
 
     const saving = machine.saveCurrentDesign({ session });
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edited while save was pending",
     }));
@@ -1558,7 +1605,7 @@ describe("document session transition", () => {
     const decision = deferred<string>();
     const pendingLoad = deferred<DocumentTransitionLoadResult>();
     const load = vi.fn(() => pendingLoad.promise);
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockReturnValue(decision.promise);
 
     const transitioning = machine.transitionDocument({
@@ -1598,7 +1645,7 @@ describe("document session transition", () => {
     const session = makeSession();
     const pendingWrite = deferred<string>();
     const decision = deferred<string>();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.saveDesign.mockReturnValue(pendingWrite.promise);
     mocks.message.mockReturnValue(decision.promise);
 
@@ -1787,7 +1834,7 @@ describe("document session transition", () => {
       isCurrent: () => true,
       acknowledgeSaved,
     }));
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
 
     await expect(machine.saveCurrentDesign({ session })).resolves.toMatchObject({
       status: "applied",
@@ -1803,7 +1850,7 @@ describe("document session transition", () => {
     mocks.saveDesign.mockReturnValue(pending.promise);
 
     const saving = machine.saveAsCurrentDesign({ session: null });
-    store.mutateCurrentDesign((design) => ({
+    editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Later field note",
     }));
@@ -1867,7 +1914,7 @@ describe("document session transition", () => {
 
   it("cancels before loading and preserves dirty baselines", async () => {
     const session = makeSession();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockResolvedValue("Cancel");
     const load = vi.fn(async () => ({
       file: makeFile("Next"),
@@ -1891,7 +1938,7 @@ describe("document session transition", () => {
 
   it("cancels after an async load without replacing state or dirty baselines", async () => {
     const session = makeSession();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
 
     const result = await machine.transitionDocument({
       source: "open-path",
@@ -1947,7 +1994,7 @@ describe("document session transition", () => {
     const session = makeSession();
     const pending = deferred<void>();
     const logError = vi.fn();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.autosaveDesign.mockReturnValue(pending.promise);
 
     const autosave = machine.autosaveDesignSession({
@@ -1982,7 +2029,7 @@ describe("document session transition", () => {
     const firstPending = deferred<void>();
     const secondPending = deferred<void>();
     const logError = vi.fn();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.autosaveDesign
       .mockReturnValueOnce(firstPending.promise)
       .mockReturnValueOnce(secondPending.promise);
@@ -2027,7 +2074,7 @@ describe("document session transition", () => {
     };
     vi.spyOn(persistence, "beginRecovery").mockReturnValue(recovery);
     machine = createDesignSessionStateMachine({ store, persistence });
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
 
     await expect(machine.autosaveDesignSession({
       session,
@@ -2046,7 +2093,7 @@ describe("document session transition", () => {
     const session = makeSession();
     const firstPending = deferred<void>();
     const secondPending = deferred<void>();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.autosaveDesign
       .mockReturnValueOnce(firstPending.promise)
       .mockReturnValueOnce(secondPending.promise);
@@ -2081,7 +2128,7 @@ describe("document session transition", () => {
     const session = makeSession();
     const pending = deferred<void>();
     const logError = vi.fn();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.autosaveDesign.mockReturnValue(pending.promise);
 
     const autosave = machine.autosaveDesignSession({
@@ -2123,7 +2170,7 @@ describe("document session transition", () => {
   });
 
   it("applies detached replacements without requiring a canvas session", async () => {
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockResolvedValue("Don't Save");
 
     const result = await machine.transitionDocument({
@@ -2146,7 +2193,7 @@ describe("document session transition", () => {
   });
 
   it("saves dirty detached documents before applying a transition", async () => {
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockResolvedValue("Save");
 
     const result = await machine.transitionDocument({
@@ -2171,7 +2218,7 @@ describe("document session transition", () => {
   it("does not use the current canvas session when a transition is explicitly detached", async () => {
     const currentSession = makeSession();
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: currentSession }));
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     mocks.message.mockResolvedValue("Save");
 
     const result = await machine.transitionDocument({
@@ -2218,7 +2265,7 @@ describe("document session transition", () => {
 
   it("loads an existing mounted document without replacing canonical document state", async () => {
     const session = makeSession();
-    store.markDocumentDirty();
+    markDesignSessionDirtyForTest(store);
     const mounted = store.readCurrentDesign()!;
 
     const result = await machine.transitionDocument({

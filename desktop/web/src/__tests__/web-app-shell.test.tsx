@@ -9,6 +9,7 @@ import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/br
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { BrowserAppShell, type BrowserShellCommandHandlers } from '../web/BrowserAppShell'
 import { WebApp } from '../web/WebApp'
+import { editDesignSessionForTest } from './support/design-session-edit'
 
 function commandIds(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll<HTMLElement>('[data-web-command-id]'))
@@ -494,7 +495,7 @@ describe('Web Edition Browser App Shell', () => {
 
     storage.failWrites = true
     await act(async () => {
-      store.mutateCurrentDesign((design) => ({ ...design, description: 'Browser edit' }))
+      editDesignSessionForTest(store, (design) => ({ ...design, description: 'Browser edit' }))
     })
 
     expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Untitled Design')

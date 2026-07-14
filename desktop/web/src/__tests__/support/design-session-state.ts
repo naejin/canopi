@@ -10,6 +10,7 @@ export const pendingTemplateImport = designState.pendingTemplateImport
 
 export const nonCanvasRevision = designState.nonCanvasRevision
 export const nonCanvasSavedRevision = designState.nonCanvasSavedRevision
+export const persistenceDiverged = designState.persistenceDiverged
 export const autosaveFailed = designState.autosaveFailed
 export const canvasClean = designState.canvasClean
 export const detachedCanvasDirty = designState.detachedCanvasDirty
@@ -21,6 +22,7 @@ export function markSaved(): void {
   designState.detachedCanvasDirty.value = false
   designState.canvasClean.value = true
   designState.nonCanvasSavedRevision.value = designState.nonCanvasRevision.value
+  designState.persistenceDiverged.value = false
   designState.autosaveFailed.value = false
 }
 export const markCanvasDetachedDirty = designState.markCanvasDetachedDirty

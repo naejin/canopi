@@ -34,6 +34,8 @@ export const pendingTemplateImport = signal<{ path: string; name: string } | nul
 export const nonCanvasRevision = signal<number>(0)
 /** nonCanvasRevision at the time of last save. */
 export const nonCanvasSavedRevision = signal<number>(0)
+/** A successful write captured older committed content than the current Design. */
+export const persistenceDiverged = signal<boolean>(false)
 
 /** Whether the last autosave attempt failed. */
 export const autosaveFailed = signal<boolean>(false)
@@ -58,6 +60,7 @@ export const canvasDirty = computed(() =>
 export const designDirty = computed(() =>
   canvasDirty.value
   || nonCanvasRevision.value !== nonCanvasSavedRevision.value
+  || persistenceDiverged.value
 )
 
 /** Reset all dirty baselines to zero (used on open/new/queued-load). */
@@ -67,6 +70,7 @@ export function resetDirtyBaselines(): void {
     detachedCanvasDirty.value = false
     nonCanvasRevision.value = 0
     nonCanvasSavedRevision.value = 0
+    persistenceDiverged.value = false
     autosaveFailed.value = false
   })
 }

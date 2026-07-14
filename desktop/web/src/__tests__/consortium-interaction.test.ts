@@ -12,8 +12,9 @@ import {
   phaseToX,
 } from '../canvas/consortium-renderer'
 import { stratumToRow } from '../app/consortium/time-model'
+import { designSessionStore } from '../app/document-session/store'
 import { consortiumTarget } from '../target'
-import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import type { CanopiFile, Consortium, PlacedPlant } from '../types/design'
 
 const CANVAS_WIDTH = 800
@@ -109,7 +110,7 @@ function buildSnapshot() {
 
 describe('Consortium interaction', () => {
   beforeEach(() => {
-    currentDesign.value = makeDesign([
+    const initial = makeDesign([
       makeConsortium('Malus domestica'),
       makeConsortium('Acer campestre', {
         stratum: 'medium',
@@ -117,8 +118,8 @@ describe('Consortium interaction', () => {
         end_phase: 5,
       }),
     ])
-    nonCanvasRevision.value = 0
-    nonCanvasSavedRevision.value = 0
+    designSessionStore.replaceCurrentDesignState(initial, null, initial.name)
+    designSessionStore.resetDirtyBaselines()
   })
 
   it('previews and commits Consortium move drags through one module interface', () => {
@@ -195,6 +196,7 @@ describe('Consortium interaction', () => {
     })
 
     expect(currentDesign.value!.consortiums).toBe(originalOrder)
+    drag.edit.abort()
   })
 
   it('recomputes derived Consortium Lanes after a move preview changes phase overlap', () => {
@@ -225,6 +227,7 @@ describe('Consortium interaction', () => {
     })
     expect(nextSnapshot.bars.map((bar) => bar.subLane)).toEqual([0, 1])
     expect(nextSnapshot.bars.map((bar) => bar.totalSubLanes)).toEqual([2, 2])
+    drag.edit.abort()
   })
 
   it('recomputes derived Consortium Lanes after a resize preview changes phase overlap', () => {
@@ -255,5 +258,6 @@ describe('Consortium interaction', () => {
     })
     expect(nextSnapshot.bars.map((bar) => bar.subLane)).toEqual([0, 1])
     expect(nextSnapshot.bars.map((bar) => bar.totalSubLanes)).toEqual([2, 2])
+    drag.edit.abort()
   })
 })

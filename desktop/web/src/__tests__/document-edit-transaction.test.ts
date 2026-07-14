@@ -1,7 +1,22 @@
+import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { beginDesignArrayEdit } from '../app/design-edit'
+import {
+  beginDesignArrayEdit,
+  DesignEditBusyError,
+  reconcileCurrentDesign,
+} from '../app/design-edit'
+import { createDesignSessionPersistence } from '../app/document-session/persistence'
+import { designSessionStore } from '../app/document-session/store'
+import { prepareDesignWriteDestination } from '../app/document-session/write-admission'
 import { consortiumTarget } from '../target'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  currentDesign,
+  designDirty,
+  designName,
+  designPath,
+  nonCanvasRevision,
+  nonCanvasSavedRevision,
+} from './support/design-session-state'
 import type { CanopiFile, Consortium, TimelineAction } from '../types/design'
 
 function timelineAction(id: string, overrides: Partial<TimelineAction> = {}): TimelineAction {
@@ -56,10 +71,244 @@ function design(overrides: Partial<CanopiFile> = {}): CanopiFile {
 
 beforeEach(() => {
   nonCanvasRevision.value = 0
+  nonCanvasSavedRevision.value = 0
   currentDesign.value = design()
+  designPath.value = '/designs/test.canopi'
+  designName.value = 'test'
 })
 
 describe('Design Edit array transactions', () => {
+  it('persists committed content while a preview stays visible and later commits dirty', async () => {
+    const persistence = createDesignSessionPersistence({ store: designSessionStore })
+    const written: CanopiFile[] = []
+    const edit = beginDesignArrayEdit('timeline')
+    try {
+      edit.preview((timeline) => timeline.map((action) => (
+        action.id === 'a' ? { ...action, description: 'preview' } : action
+      )))
+
+      expect(currentDesign.value?.timeline[0]?.description).toBe('preview')
+
+      const settlement = await persistence.beginSave().execute(
+        prepareDesignWriteDestination({
+          resource: 'native-design:/designs/test.canopi',
+          destinationPath: '/designs/test.canopi',
+          write: (content) => {
+            written.push(content)
+          },
+        }),
+      )
+
+      expect(settlement.status).toBe('applied')
+      expect(written[0]?.timeline[0]?.description).toBe('initial')
+
+      edit.commit()
+
+      expect(currentDesign.value?.timeline[0]?.description).toBe('preview')
+      expect(designDirty.value).toBe(true)
+    } finally {
+      edit.abort()
+      persistence.dispose()
+    }
+  })
+
+  it('stays clean when a visible preview aborts after committed content was saved', async () => {
+    const persistence = createDesignSessionPersistence({ store: designSessionStore })
+    const written: CanopiFile[] = []
+    const edit = beginDesignArrayEdit('timeline')
+    try {
+      edit.preview((timeline) => timeline.map((action) => (
+        action.id === 'a' ? { ...action, description: 'preview' } : action
+      )))
+
+      await persistence.beginSave().execute(
+        prepareDesignWriteDestination({
+          resource: 'native-design:/designs/test.canopi',
+          destinationPath: '/designs/test.canopi',
+          write: (content) => {
+            written.push(content)
+          },
+        }),
+      )
+      edit.abort()
+
+      expect(written[0]?.timeline[0]?.description).toBe('initial')
+      expect(currentDesign.value?.timeline[0]?.description).toBe('initial')
+      expect(designDirty.value).toBe(false)
+    } finally {
+      edit.abort()
+      persistence.dispose()
+    }
+  })
+
+  it('aborts only the preview while preserving a committed reconciliation', () => {
+    const edit = beginDesignArrayEdit('consortiums')
+    edit.preview((consortiums) => consortiums.map((entry) => ({
+      ...entry,
+      start_phase: 1,
+    })))
+
+    reconcileCurrentDesign((design) => ({
+      ...design,
+      consortiums: [...design.consortiums, consortium('Acer campestre')],
+    }))
+
+    expect(currentDesign.value?.consortiums).toMatchObject([
+      { start_phase: 1 },
+      { target: consortiumTarget('Acer campestre') },
+    ])
+
+    edit.abort()
+
+    expect(currentDesign.value?.consortiums).toMatchObject([
+      { start_phase: 0 },
+      { target: consortiumTarget('Acer campestre') },
+    ])
+    expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('publishes no committed or visible state when preview replay fails', () => {
+    const persistence = createDesignSessionPersistence({ store: designSessionStore })
+    const edit = beginDesignArrayEdit('timeline')
+    let replayFails = false
+    try {
+      edit.preview((timeline) => {
+        if (replayFails) throw new Error('preview replay failed')
+        return timeline.map((action) => (
+          action.id === 'a' ? { ...action, description: 'preview' } : action
+        ))
+      })
+      replayFails = true
+
+      expect(() => designSessionStore.replaceCurrentDesignSnapshot(design({
+        description: 'new committed snapshot',
+      }))).toThrow('preview replay failed')
+
+      expect(currentDesign.value?.description).toBeNull()
+      expect(currentDesign.value?.timeline[0]?.description).toBe('preview')
+      expect(persistence.captureObservation(null)?.description).toBeNull()
+      expect(nonCanvasRevision.value).toBe(0)
+    } finally {
+      replayFails = false
+      edit.abort()
+      persistence.dispose()
+    }
+  })
+
+  it('rejects a competing preview before changing either Design projection', () => {
+    const edit = beginDesignArrayEdit('timeline')
+    try {
+      edit.preview((timeline) => timeline.map((action) => (
+        action.id === 'a' ? { ...action, description: 'preview' } : action
+      )))
+
+      let failure: unknown
+      try {
+        beginDesignArrayEdit('consortiums')
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toBeInstanceOf(DesignEditBusyError)
+      expect(currentDesign.value?.timeline[0]?.description).toBe('preview')
+      expect(currentDesign.value?.consortiums).toEqual([
+        consortium('Quercus robur'),
+      ])
+      expect(nonCanvasRevision.value).toBe(0)
+    } finally {
+      edit.abort()
+    }
+  })
+
+  it('permanently invalidates a replacement guard after preview activity', () => {
+    const persistence = createDesignSessionPersistence({ store: designSessionStore })
+    const guard = persistence.beginReplacementGuard().guard
+    expect(guard?.isCurrent()).toBe(true)
+
+    const edit = beginDesignArrayEdit('timeline')
+    try {
+      expect(guard?.isCurrent()).toBe(false)
+
+      edit.preview((timeline) => timeline.map((action) => (
+        action.id === 'a' ? { ...action, description: 'preview' } : action
+      )))
+
+      expect(guard?.isCurrent()).toBe(false)
+
+      edit.abort()
+
+      expect(guard?.isCurrent()).toBe(false)
+    } finally {
+      edit.abort()
+      persistence.dispose()
+    }
+  })
+
+  it('keeps late preview callbacks inert after a replacement Design is installed', () => {
+    const edit = beginDesignArrayEdit('timeline')
+    edit.preview((timeline) => timeline.map((action) => (
+      action.id === 'a' ? { ...action, description: 'predecessor preview' } : action
+    )))
+    const successor = design({
+      name: 'Successor',
+      timeline: [timelineAction('successor', { description: 'successor committed' })],
+    })
+
+    designSessionStore.resetDirtyBaselines()
+    designSessionStore.replaceCurrentDesignState(
+      successor,
+      '/designs/successor.canopi',
+      successor.name,
+    )
+
+    edit.preview(() => [timelineAction('late-preview', { description: 'late preview' })])
+    edit.commit()
+    edit.abort()
+
+    expect(currentDesign.value).toBe(successor)
+    expect(currentDesign.value?.timeline).toEqual([
+      timelineAction('successor', { description: 'successor committed' }),
+    ])
+    expect(designDirty.value).toBe(false)
+  })
+
+  it('invalidates the predecessor before reactive successor publication', () => {
+    const edit = beginDesignArrayEdit('timeline')
+    edit.preview((timeline) => timeline.map((action) => (
+      action.id === 'a' ? { ...action, description: 'predecessor preview' } : action
+    )))
+    const successor = design({
+      name: 'Successor',
+      timeline: [timelineAction('successor', { description: 'successor committed' })],
+    })
+    let invokeLateCallbacks = false
+    let observedName: string | null = null
+    const dispose = effect(() => {
+      const visible = currentDesign.value
+      if (!invokeLateCallbacks || visible?.name !== 'Successor') return
+      observedName = visible.name
+      edit.preview(() => [timelineAction('late-preview', { description: 'late preview' })])
+      edit.commit()
+      edit.abort()
+    })
+
+    try {
+      designSessionStore.resetDirtyBaselines()
+      invokeLateCallbacks = true
+      designSessionStore.replaceCurrentDesignState(
+        successor,
+        '/designs/successor.canopi',
+        successor.name,
+      )
+
+      expect(observedName).toBe('Successor')
+      expect(currentDesign.value).toBe(successor)
+      expect(currentDesign.value?.timeline[0]?.description).toBe('successor committed')
+      expect(designDirty.value).toBe(false)
+    } finally {
+      dispose()
+    }
+  })
+
   it('previews document array updates without advancing the non-canvas revision', () => {
     const edit = beginDesignArrayEdit('timeline')
 
@@ -70,6 +319,8 @@ describe('Design Edit array transactions', () => {
     expect(currentDesign.value?.timeline[0]?.description).toBe('preview')
     expect(edit.hasMutated).toBe(true)
     expect(nonCanvasRevision.value).toBe(0)
+
+    edit.abort()
   })
 
   it('commits one dirty revision after one or many preview mutations', () => {

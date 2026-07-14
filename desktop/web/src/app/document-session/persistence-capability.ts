@@ -1,7 +1,7 @@
 import type { CanopiFile } from '../../types/design'
 
 export interface DesignSessionPersistenceCapture {
-  readonly file: CanopiFile
+  readonly file: CanopiFile | null
   readonly path: string | null
   readonly name: string
   isCurrent(): boolean

@@ -109,6 +109,7 @@ export function createBrowserDesignSessionController({
   let activeDraftId: string | null = null;
   let canvasSession: CanvasDocumentSurface | null = null;
   let draftWriteEpoch = 0;
+  let latestDraftedCommittedRevision: number | null = null;
   let nextDownloadWrite = 0;
   let replacementIntent = 0;
   let workflowInstallAttempt = 0;
@@ -309,6 +310,7 @@ export function createBrowserDesignSessionController({
   function saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null {
     if (!store.hasCurrentDesign()) return null;
 
+    const capturedCommittedRevision = store.committedDesignRevision.value;
     draftWriteEpoch += 1;
     const draftId = activeDraftId ?? createDraftId();
     const operation = persistence.beginBrowserDraft();
@@ -340,6 +342,7 @@ export function createBrowserDesignSessionController({
     }
     const result = resultBox.current;
     if (!result) throw new Error("Browser Draft write completed without a result");
+    latestDraftedCommittedRevision = capturedCommittedRevision;
     if (previousDraftId && previousDraftId !== result.value.id) {
       const deleted = appDataStore.deleteDraft(previousDraftId);
       if (!deleted.ok) store.setAutosaveFailed(true);
@@ -450,7 +453,8 @@ export function createBrowserDesignSessionController({
   }
 
   function installAutosave({ onDraftSaved }: BrowserDesignSessionAutosaveOptions = {}): () => void {
-    let lastDesign = store.readCurrentDesign();
+    let lastCommittedRevision = store.committedDesignRevision.value;
+    let lastDirty = false;
     let disposed = false;
     let scheduled = false;
     const scheduleAutosave = () => {
@@ -462,7 +466,13 @@ export function createBrowserDesignSessionController({
         if (disposed) return;
         if (scheduledWriteEpoch !== draftWriteEpoch) {
           const current = store.readCurrentDesign();
-          if (current && store.isDesignDirty()) {
+          if (
+            current
+            && (
+              store.isDesignDirty()
+              || store.committedDesignRevision.value !== latestDraftedCommittedRevision
+            )
+          ) {
             scheduleAutosave();
           }
           return;
@@ -488,11 +498,13 @@ export function createBrowserDesignSessionController({
       });
     };
     const disposeEffect = effect(() => {
-      const current = store.currentDesign.value;
+      const committedRevision = store.committedDesignRevision.value;
       const dirty = store.designDirty.value;
-      if (current === lastDesign && !dirty) return;
-      lastDesign = current;
-      if (!current) return;
+      const shouldSchedule = committedRevision !== lastCommittedRevision
+        || (dirty && !lastDirty);
+      lastCommittedRevision = committedRevision;
+      lastDirty = dirty;
+      if (!shouldSchedule || !store.hasCurrentDesign()) return;
 
       scheduleAutosave();
     });

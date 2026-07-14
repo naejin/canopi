@@ -6,6 +6,10 @@ import {
   timelineActionPatchFromFormData,
 } from '../app/design-edit'
 import {
+  replaceCurrentDesignState,
+  resetDirtyBaselines,
+} from '../app/document-session/store'
+import {
   compensateFrozenTimelineOriginScroll,
   computeTimelineAutoScrollSpeed,
 } from '../app/timeline/editing'
@@ -60,8 +64,9 @@ function design(overrides: Partial<CanopiFile> = {}): CanopiFile {
 }
 
 beforeEach(() => {
-  currentDesign.value = design()
-  nonCanvasRevision.value = 0
+  const initial = design()
+  replaceCurrentDesignState(initial, null, initial.name)
+  resetDirtyBaselines()
 })
 
 describe('Timeline Action editing', () => {
@@ -122,6 +127,7 @@ describe('Timeline Action editing', () => {
       start_date: '2026-04-01',
       end_date: '2026-04-01',
     })
+    right.abort()
   })
 
   it('keeps auto-scroll and frozen-origin math behind the edit module', () => {

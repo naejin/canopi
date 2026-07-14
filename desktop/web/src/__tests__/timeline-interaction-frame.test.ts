@@ -6,6 +6,7 @@ import {
   type TimelinePlanningProjection,
 } from '../app/planning-projection'
 import { createTimelineActionInteractionFrame } from '../app/timeline/canvas/interaction-frame'
+import { designSessionStore } from '../app/document-session/store'
 import {
   type TimelineRenderState,
 } from '../canvas/timeline-renderer'
@@ -250,8 +251,10 @@ function createFrameHarness({
 
 describe('Timeline Action interaction frame', () => {
   beforeEach(() => {
+    const initial = makeDesign(makeAction())
+    designSessionStore.replaceCurrentDesignState(initial, null, initial.name)
+    designSessionStore.resetDirtyBaselines()
     document.body.style.cursor = ''
-    nonCanvasRevision.value = 0
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
@@ -611,12 +614,19 @@ describe('Timeline Action interaction frame', () => {
       cancelable: true,
     })
     harness.frame.handleKeyDown(event)
+    harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
+      button: 0,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
 
     expect(event.defaultPrevented).toBe(true)
     expect(currentDesign.value!.timeline).toEqual([])
     expect(nonCanvasRevision.value).toBe(1)
     expect(selectedPanelTargets.value).toEqual([])
     expect(selectedPanelTargetOrigin.value).toBeNull()
+    expect(harness.popover).toBeNull()
   })
 
   it('cleans up stale hover and selection when Timeline Actions disappear', () => {
@@ -635,13 +645,27 @@ describe('Timeline Action interaction frame', () => {
       clientY: harness.chartY,
       bubbles: true,
     }))
+    harness.frame.handleDocumentMouseMove(new MouseEvent('mousemove', {
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 70,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
 
     expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
     expect(selectedPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+    expect(currentDesign.value!.timeline[0]).toMatchObject({
+      start_date: '2026-04-12',
+      end_date: '2026-04-18',
+    })
 
     harness.frame.syncActions([])
 
     expect(harness.selectedId).toBeNull()
+    expect(currentDesign.value!.timeline[0]).toMatchObject({
+      start_date: '2026-04-10',
+      end_date: '2026-04-16',
+    })
+    expect(nonCanvasRevision.value).toBe(0)
     expect(hoveredPanelTargets.value).toEqual([])
     expect(selectedPanelTargets.value).toEqual([])
     expect(selectedPanelTargetOrigin.value).toBeNull()

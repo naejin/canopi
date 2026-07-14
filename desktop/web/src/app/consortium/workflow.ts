@@ -1,7 +1,7 @@
 import { effect } from '@preact/signals'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { getConsortiumCanonicalName } from '../../target'
-import { editCurrentDesign } from '../design-edit'
+import { reconcileCurrentDesign } from '../design-edit'
 import { currentDesign } from '../document-session/store'
 import type { DesignSessionWorkflow } from '../document-session/workflow-runner'
 import { createDefaultConsortiumEntry } from './time-model'
@@ -38,11 +38,11 @@ function installConsortiumSync(): void {
 
     if (toAdd.length === 0) return
 
-    editCurrentDesign((nextDesign) => {
+    reconcileCurrentDesign((nextDesign) => {
       const newEntries = toAdd.map(createDefaultConsortiumEntry)
       const consortiums = [...nextDesign.consortiums, ...newEntries]
       return { ...nextDesign, consortiums }
-    }, { markDirty: false })
+    })
   })
 }
 

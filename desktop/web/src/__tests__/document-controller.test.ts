@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { editCurrentDesign, editDesignArray } from '../app/design-edit'
+import {
+  editCurrentDesign,
+  editDesignArray,
+  reconcileCurrentDesign,
+} from '../app/design-edit'
 import { speciesBudgetTarget } from '../target'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 
@@ -37,8 +41,8 @@ describe('Design Edit core', () => {
     expect(nonCanvasRevision.value).toBe(0)
   })
 
-  it('supports markDirty: false for whole-design updates', () => {
-    editCurrentDesign((design) => ({ ...design, name: 'updated' }), { markDirty: false })
+  it('reconciles derived Design content without recording user intent', () => {
+    reconcileCurrentDesign((design) => ({ ...design, name: 'updated' }))
 
     expect(currentDesign.value?.name).toBe('updated')
     expect(nonCanvasRevision.value).toBe(0)
@@ -50,7 +54,7 @@ describe('Design Edit core', () => {
     expect(nonCanvasRevision.value).toBe(0)
   })
 
-  it('supports markDirty: false for array updates', () => {
+  it('records user intent for changed array updates', () => {
     editDesignArray('budget', () => [{
       target: speciesBudgetTarget('Quercus robur'),
       category: 'plants',
@@ -58,9 +62,9 @@ describe('Design Edit core', () => {
       quantity: 1,
       unit_cost: 42,
       currency: 'EUR',
-    }], { markDirty: false })
+    }])
 
     expect(currentDesign.value?.budget).toHaveLength(1)
-    expect(nonCanvasRevision.value).toBe(0)
+    expect(nonCanvasRevision.value).toBe(1)
   })
 })

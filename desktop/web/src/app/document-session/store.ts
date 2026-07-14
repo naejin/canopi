@@ -2,6 +2,14 @@ import { batch, computed, signal, type ReadonlySignal, type Signal } from '@prea
 import type { CanopiFile } from '../../types/design'
 import * as designState from '../../state/design'
 import {
+  DesignEditBusyError,
+  DesignEditUnavailableError,
+  registerDesignEditAuthorityCapability,
+  type DesignPreviewOutcome,
+  type DesignPreviewTransaction,
+  type DesignProjector,
+} from '../design-edit/authority-capability'
+import {
   registerDesignSessionPersistenceCapability,
   type DesignSessionPersistenceCapture,
 } from './persistence-capability'
@@ -21,10 +29,6 @@ export interface DesignSessionMetadataSnapshot {
   readonly northBearingDeg: number | null
 }
 
-export interface DocumentMutationOptions {
-  readonly markDirty?: boolean
-}
-
 export interface DesignSessionStore {
   readonly currentDesign: ReadonlySignal<CanopiFile | null>
   readonly designPath: ReadonlySignal<string | null>
@@ -32,6 +36,7 @@ export interface DesignSessionStore {
   readonly designDirty: ReadonlySignal<boolean>
   readonly canvasDirty: ReadonlySignal<boolean>
   readonly autosaveFailed: ReadonlySignal<boolean>
+  readonly committedDesignRevision: ReadonlySignal<number>
 
   readIdentity(): DesignSessionIdentity
   readMetadata(): DesignSessionMetadataSnapshot
@@ -45,16 +50,6 @@ export interface DesignSessionStore {
   replaceCurrentDesignState(file: CanopiFile, path: string | null, name: string): void
   replaceCurrentDesignSnapshot(file: CanopiFile): void
   renameCurrentDesign(name: string): boolean
-  mutateCurrentDesign(
-    updater: (design: CanopiFile) => CanopiFile,
-    options?: DocumentMutationOptions,
-  ): CanopiFile | null
-  markDocumentDirty(): void
-  updateDesignArray<K extends keyof CanopiFile>(
-    key: K,
-    updater: (arr: CanopiFile[K]) => CanopiFile[K],
-    options?: DocumentMutationOptions,
-  ): void
 
   resetDirtyBaselines(): void
   markCanvasDetachedDirty(dirty: boolean): void
@@ -79,6 +74,7 @@ interface DesignSessionStoreSignals {
   readonly designName: Signal<string>
   readonly nonCanvasRevision: Signal<number>
   readonly nonCanvasSavedRevision: Signal<number>
+  readonly persistenceDiverged: Signal<boolean>
   readonly autosaveFailed: Signal<boolean>
   readonly canvasClean: Signal<boolean>
   readonly detachedCanvasDirty: Signal<boolean>
@@ -93,6 +89,133 @@ function createDesignSessionStore(
 ): PersistenceCapableDesignSessionStore {
   let sessionGeneration = 0
   let detachedCanvasRevision = 0
+  let committedContentRevision = 0
+  let previewGeneration = 0
+  let acknowledgementGeneration = 0
+  let committedDesign = signals.currentDesign.value
+  const committedDesignRevision = signal(0)
+  let activePreview: {
+    readonly identity: object
+    readonly intent: string
+    projector: DesignProjector | null
+    mutated: boolean
+  } | null = null
+
+  function syncExternallyInstalledDesign(): CanopiFile | null {
+    if (!activePreview && committedDesign !== signals.currentDesign.value) {
+      committedDesign = signals.currentDesign.value
+      committedContentRevision += 1
+      committedDesignRevision.value += 1
+    }
+    return committedDesign
+  }
+
+  function invalidateActivePreview(): void {
+    if (activePreview) previewGeneration += 1
+    activePreview = null
+  }
+
+  function visibleProjectionFor(file: CanopiFile): CanopiFile {
+    return activePreview?.projector?.(file) ?? file
+  }
+
+  function applyCommittedDesign(
+    updater: (design: CanopiFile) => CanopiFile,
+    markDirty: boolean,
+  ): CanopiFile | null {
+    const current = syncExternallyInstalledDesign()
+    if (!current) return null
+
+    const next = updater(current)
+    if (next === current) return current
+    const visible = visibleProjectionFor(next)
+
+    committedDesign = next
+    committedContentRevision += 1
+    if (activePreview) activePreview.mutated = visible !== next
+    batch(() => {
+      signals.currentDesign.value = visible
+      committedDesignRevision.value += 1
+      if (markDirty) {
+        signals.nonCanvasRevision.value += 1
+      }
+    })
+    return next
+  }
+
+  function beginPreview(intent: string): DesignPreviewTransaction {
+    const current = syncExternallyInstalledDesign()
+    if (!current) throw new DesignEditUnavailableError()
+    if (activePreview) throw new DesignEditBusyError(activePreview.intent)
+
+    const identity = Object.freeze({})
+    let outcome: DesignPreviewOutcome | null = null
+    activePreview = {
+      identity,
+      intent,
+      projector: null,
+      mutated: false,
+    }
+    previewGeneration += 1
+
+    const isCurrent = () => activePreview?.identity === identity
+    const superseded = (): DesignPreviewOutcome => {
+      outcome ??= Object.freeze({ status: 'superseded' })
+      return outcome
+    }
+
+    return Object.freeze({
+      get hasMutated() {
+        return isCurrent() ? activePreview!.mutated : outcome?.status === 'committed'
+          ? outcome.changed
+          : false
+      },
+      preview(projector: DesignProjector) {
+        if (!isCurrent()) return
+        const next = projector(committedDesign!)
+        const mutated = next !== committedDesign
+        activePreview!.projector = projector
+        activePreview!.mutated = mutated
+        previewGeneration += 1
+        signals.currentDesign.value = next
+      },
+      commit(): DesignPreviewOutcome {
+        if (outcome) return outcome
+        if (!isCurrent()) return superseded()
+        const next = activePreview!.projector?.(committedDesign!) ?? committedDesign!
+        const changed = next !== committedDesign
+        activePreview = null
+        previewGeneration += 1
+        if (changed) {
+          committedDesign = next
+          committedContentRevision += 1
+        }
+        outcome = Object.freeze({ status: 'committed', changed })
+        batch(() => {
+          signals.currentDesign.value = committedDesign
+          if (changed) committedDesignRevision.value += 1
+          if (changed) signals.nonCanvasRevision.value += 1
+        })
+        return outcome
+      },
+      abort(): DesignPreviewOutcome {
+        if (outcome) return outcome
+        if (!isCurrent()) return superseded()
+        activePreview = null
+        previewGeneration += 1
+        outcome = Object.freeze({ status: 'aborted' })
+        signals.currentDesign.value = committedDesign
+        return outcome
+      },
+    })
+  }
+
+  function rolloverDesignEditAuthority(): void {
+    sessionGeneration += 1
+    previewGeneration += 1
+    activePreview = null
+    signals.currentDesign.value = committedDesign
+  }
 
   const store = {
     currentDesign: signals.currentDesign,
@@ -101,6 +224,7 @@ function createDesignSessionStore(
     designDirty: signals.designDirty,
     canvasDirty: signals.canvasDirty,
     autosaveFailed: signals.autosaveFailed,
+    committedDesignRevision,
 
     readIdentity() {
       return {
@@ -143,63 +267,45 @@ function createDesignSessionStore(
     replaceCurrentDesignState(file, path, name) {
       sessionGeneration += 1
       detachedCanvasRevision = 0
+      committedContentRevision += 1
+      invalidateActivePreview()
+      committedDesign = file
       batch(() => {
         signals.currentDesign.value = file
+        committedDesignRevision.value += 1
+        signals.persistenceDiverged.value = false
         signals.designPath.value = path
         signals.designName.value = name
       })
     },
 
     replaceCurrentDesignSnapshot(file) {
+      const visible = visibleProjectionFor(file)
       detachedCanvasRevision += 1
-      signals.currentDesign.value = file
+      committedContentRevision += 1
+      committedDesign = file
+      if (activePreview) activePreview.mutated = visible !== file
+      batch(() => {
+        signals.currentDesign.value = visible
+        committedDesignRevision.value += 1
+      })
     },
 
     renameCurrentDesign(name) {
-      const design = signals.currentDesign.value
+      const design = syncExternallyInstalledDesign()
       if (!design || name === signals.designName.value) return false
+      const next = { ...design, name }
+      const visible = visibleProjectionFor(next)
+      committedDesign = next
+      committedContentRevision += 1
+      if (activePreview) activePreview.mutated = visible !== next
       batch(() => {
-        signals.currentDesign.value = { ...design, name }
+        signals.currentDesign.value = visible
+        committedDesignRevision.value += 1
         signals.designName.value = name
         signals.nonCanvasRevision.value += 1
       })
       return true
-    },
-
-    mutateCurrentDesign(updater, options = {}) {
-      const design = signals.currentDesign.value
-      if (!design) return null
-
-      const next = updater(design)
-      if (next === design) return design
-
-      batch(() => {
-        signals.currentDesign.value = next
-        if (options.markDirty !== false) {
-          signals.nonCanvasRevision.value += 1
-        }
-      })
-
-      return next
-    },
-
-    markDocumentDirty() {
-      signals.nonCanvasRevision.value += 1
-    },
-
-    updateDesignArray(key, updater, options = {}) {
-      const design = signals.currentDesign.value
-      if (!design) return
-
-      const next = updater(design[key])
-      if (next === design[key]) return
-
-      batch(() => {
-        signals.currentDesign.value = { ...design, [key]: next }
-        if (options.markDirty !== false) {
-          signals.nonCanvasRevision.value += 1
-        }
-      })
     },
 
     resetDirtyBaselines() {
@@ -208,6 +314,7 @@ function createDesignSessionStore(
         signals.detachedCanvasDirty.value = false
         signals.nonCanvasRevision.value = 0
         signals.nonCanvasSavedRevision.value = 0
+        signals.persistenceDiverged.value = false
         signals.autosaveFailed.value = false
       })
     },
@@ -241,34 +348,66 @@ function createDesignSessionStore(
     },
   } as PersistenceCapableDesignSessionStore
 
+  registerDesignEditAuthorityCapability(
+    store,
+    {
+      editCommitted: (projector) => applyCommittedDesign(projector, true),
+      reconcileCommitted: (projector) => applyCommittedDesign(projector, false),
+      markCommittedDirty: () => {
+        signals.nonCanvasRevision.value += 1
+      },
+      beginPreview,
+    },
+    rolloverDesignEditAuthority,
+  )
+
   registerDesignSessionPersistenceCapability(store, () => {
-    const file = signals.currentDesign.value
-    if (!file) throw new Error('Cannot capture persistence state without a loaded Design')
+    const file = syncExternallyInstalledDesign()
     const generation = sessionGeneration
     const canvasRevision = detachedCanvasRevision
+    const contentRevision = committedContentRevision
+    const capturedPreviewGeneration = previewGeneration
     const nonCanvasRevision = signals.nonCanvasRevision.value
+    const persistenceDiverged = signals.persistenceDiverged.value
+    // A guard captured while dirty may survive the exact Save that cleans it;
+    // a guard captured clean must become stale if an older write later diverges.
+    const divergenceBaselineIsCurrent = () =>
+      persistenceDiverged || !signals.persistenceDiverged.value
     const capture: DesignSessionPersistenceCapture = {
-      file: cloneDocument(file),
+      file: file ? cloneDocument(file) : null,
       path: signals.designPath.value,
       name: signals.designName.value,
       isCurrent: () => generation === sessionGeneration
         && canvasRevision === detachedCanvasRevision,
       isExactCurrent: () => generation === sessionGeneration
         && canvasRevision === detachedCanvasRevision
-        && nonCanvasRevision === signals.nonCanvasRevision.value,
+        && contentRevision === committedContentRevision
+        && capturedPreviewGeneration === previewGeneration
+        && nonCanvasRevision === signals.nonCanvasRevision.value
+        && divergenceBaselineIsCurrent(),
       acknowledgeSaved(options = {}) {
         if (
           generation !== sessionGeneration
           || canvasRevision !== detachedCanvasRevision
         ) return 'stale'
+        const acknowledgement = ++acknowledgementGeneration
         batch(() => {
           if (options.canvasAcknowledged || options.canvasDetached) {
             signals.detachedCanvasDirty.value = false
           }
           if (options.canvasDetached) signals.canvasClean.value = true
           signals.nonCanvasSavedRevision.value = nonCanvasRevision
+          signals.persistenceDiverged.value = contentRevision !== committedContentRevision
           signals.autosaveFailed.value = false
         })
+        if (
+          acknowledgement === acknowledgementGeneration
+          && generation === sessionGeneration
+          && canvasRevision === detachedCanvasRevision
+          && contentRevision !== committedContentRevision
+        ) {
+          signals.persistenceDiverged.value = true
+        }
         return 'applied'
       },
       updatePath(path) {
@@ -302,6 +441,7 @@ export function createMemoryDesignSessionStore(
   const designName = signal<string>(initial.name ?? initial.file?.name ?? 'Untitled')
   const nonCanvasRevision = signal(0)
   const nonCanvasSavedRevision = signal(0)
+  const persistenceDiverged = signal(false)
   const autosaveFailed = signal(false)
   const canvasClean = signal(true)
   const detachedCanvasDirty = signal(false)
@@ -309,7 +449,9 @@ export function createMemoryDesignSessionStore(
   const pendingTemplateImport = signal<PendingTemplateImport | null>(null)
   const canvasDirty = computed(() => detachedCanvasDirty.value || !canvasClean.value)
   const designDirty = computed(() =>
-    canvasDirty.value || nonCanvasRevision.value !== nonCanvasSavedRevision.value
+    canvasDirty.value
+    || nonCanvasRevision.value !== nonCanvasSavedRevision.value
+    || persistenceDiverged.value
   )
 
   return createDesignSessionStore({
@@ -318,6 +460,7 @@ export function createMemoryDesignSessionStore(
     designName,
     nonCanvasRevision,
     nonCanvasSavedRevision,
+    persistenceDiverged,
     autosaveFailed,
     canvasClean,
     detachedCanvasDirty,
@@ -334,6 +477,7 @@ export const designSessionStore: PersistenceCapableDesignSessionStore = createDe
   designName: designState.designName,
   nonCanvasRevision: designState.nonCanvasRevision,
   nonCanvasSavedRevision: designState.nonCanvasSavedRevision,
+  persistenceDiverged: designState.persistenceDiverged,
   autosaveFailed: designState.autosaveFailed,
   canvasClean: designState.canvasClean,
   detachedCanvasDirty: designState.detachedCanvasDirty,
