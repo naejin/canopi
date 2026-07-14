@@ -25,10 +25,9 @@ pub(crate) fn build_report_summary(
     };
     let settings_line = match (&context.settings, &context.settings_error) {
         (Some(settings), _) => format!(
-            "Settings: locale {}, theme {}, measurement {}",
+            "Settings: locale {}, theme {}",
             locale_label(settings),
-            theme_label(settings),
-            settings.measurement_units
+            theme_label(settings)
         ),
         (None, Some(error)) => format!("Settings: unavailable ({})", redactions.sanitize(error)),
         (None, None) => "Settings: unavailable".to_owned(),

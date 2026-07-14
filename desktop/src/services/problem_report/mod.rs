@@ -188,7 +188,6 @@ mod tests {
                 app_version: "0.5.0".to_owned(),
                 target: "test-os/test-arch".to_owned(),
                 settings: Some(Settings {
-                    default_design_dir: "/home/alice/designs".to_owned(),
                     plant_spacing_interval_m: 0.75,
                     ..Settings::default()
                 }),
@@ -231,7 +230,6 @@ mod tests {
         assert!(!bundle_text.contains("current-design.canopi"));
         assert!(!bundle_text.contains("/home/alice"));
         assert!(!bundle_text.contains("Garden Site.canopi"));
-        assert!(!bundle_text.contains("default_design_dir"));
     }
 
     #[test]

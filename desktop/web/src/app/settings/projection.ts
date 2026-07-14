@@ -227,9 +227,8 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
   })
 }
 
-function settingsFromDraft(base: Settings, draft: SettingsProjectionDraft): Settings {
+function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
   return {
-    ...base,
     locale: draft.locale,
     theme: draft.theme,
     snap_to_grid: draft.snapToGrid,
@@ -255,7 +254,12 @@ function settingsFromDraft(base: Settings, draft: SettingsProjectionDraft): Sett
 }
 
 function settingsEqual(left: Settings, right: Settings): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
+  const leftKeys = Object.keys(left) as Array<keyof Settings>
+  if (leftKeys.length !== Object.keys(right).length) return false
+
+  return leftKeys.every((key) => (
+    Object.prototype.hasOwnProperty.call(right, key) && Object.is(left[key], right[key])
+  ))
 }
 
 function clearQueuedPersist(): void {
@@ -344,7 +348,7 @@ export function snapshotSettingsProjection(): Settings {
   if (!sourceSettings) {
     throw new Error('Cannot snapshot settings before Rust settings bootstrap')
   }
-  return settingsFromDraft(sourceSettings, normalizeDraft(createDraftFromProjection()))
+  return settingsFromDraft(normalizeDraft(createDraftFromProjection()))
 }
 
 export function mutateSettingsProjection(

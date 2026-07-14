@@ -147,6 +147,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Settings Persistence
 
 - Rust `Settings` in the user DB is the durable source of truth for user preferences.
+- Keep the shared `Settings` contract limited to preferences with a live runtime or persistence owner. Serde ignores retired unknown keys so older settings JSON remains readable; a retired key must not be emitted by the current serializer or generated TypeScript contract.
 - Web Edition settings and personal app data are browser-local convenience state backed by browser storage, not cloud-synced durable state. Keep web adapters behind the same caller-shaped seams instead of importing browser storage directly from components. See `docs/adr/0014-web-edition-browser-local-app-data.md`.
 - Frontend signals are runtime projections.
 - `desktop/web/src/app/settings/projection.ts` owns hydration, snapshotting, mutation, queued persistence, and flush behavior.

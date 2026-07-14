@@ -17,12 +17,6 @@ impl Redactions {
         if let Some(path) = &context.app_data_dir {
             push_redaction(&mut known_paths, path, "<app-data-dir>");
         }
-        if let Some(settings) = &context.settings {
-            let default_dir = settings.default_design_dir.trim();
-            if !default_dir.is_empty() {
-                known_paths.push((default_dir.to_owned(), "<default-design-dir>"));
-            }
-        }
         if let Some(home) = std::env::var_os("HOME") {
             let path = PathBuf::from(home);
             push_redaction(&mut known_paths, &path, "<home-dir>");

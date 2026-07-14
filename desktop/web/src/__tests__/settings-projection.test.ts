@@ -47,17 +47,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     theme: 'light',
     snap_to_grid: false,
     snap_to_guides: true,
-    show_smart_guides: true,
     auto_save_interval_s: 60,
-    confirm_destructive: true,
-    default_currency: 'EUR',
-    measurement_units: 'metric',
-    show_botanical_names: true,
-    debug_logging: false,
-    check_updates: true,
-    default_design_dir: '',
-    recent_files_max: 20,
-    last_active_panel: 'canvas',
     side_panel_width: null,
     bottom_panel_open: false,
     bottom_panel_timeline_height: null,
@@ -171,12 +161,8 @@ describe('settings projection', () => {
     expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
   })
 
-  it('snapshots the projection back to Rust settings while preserving unprojected fields', () => {
-    hydrateSettingsProjection(baseSettings({
-      confirm_destructive: false,
-      default_currency: 'USD',
-      default_design_dir: '/designs',
-    }))
+  it('snapshots the projection back to Rust settings', () => {
+    hydrateSettingsProjection(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'de'
@@ -201,15 +187,12 @@ describe('settings projection', () => {
       settings.plantSpacingIntervalM = 0.25
     }, { persist: 'none' })
 
-    expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
+    expect(snapshotSettingsProjection()).toEqual({
       locale: 'de',
       theme: 'dark',
       snap_to_grid: true,
       snap_to_guides: false,
       auto_save_interval_s: 15,
-      confirm_destructive: false,
-      default_currency: 'USD',
-      default_design_dir: '/designs',
       side_panel_width: 440,
       saved_stamps_frame_height: 260,
       bottom_panel_open: true,
@@ -218,6 +201,7 @@ describe('settings projection', () => {
       bottom_panel_consortium_height: 260,
       bottom_panel_tab: 'consortium',
       map_layer_visible: false,
+      map_style: 'street',
       map_opacity: 0.6,
       contour_visible: true,
       contour_opacity: 0.3,
@@ -225,7 +209,7 @@ describe('settings projection', () => {
       hillshade_visible: true,
       hillshade_opacity: 0.25,
       plant_spacing_interval_m: 0.25,
-    }))
+    })
     expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
   })
 

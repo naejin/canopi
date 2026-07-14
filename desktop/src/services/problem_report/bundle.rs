@@ -119,10 +119,7 @@ fn settings_summary(context: &ProblemReportContext) -> serde_json::Value {
         json!({
             "locale": settings.locale,
             "theme": settings.theme,
-            "measurement_units": settings.measurement_units,
-            "show_botanical_names": settings.show_botanical_names,
             "auto_save_interval_s": settings.auto_save_interval_s,
-            "debug_logging": settings.debug_logging,
             "map_style": settings.map_style,
             "map_layer_visible": settings.map_layer_visible,
             "contour_visible": settings.contour_visible,
