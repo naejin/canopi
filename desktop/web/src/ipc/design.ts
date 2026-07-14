@@ -8,26 +8,51 @@ import type {
   DesignSummary,
 } from '../types/design'
 import { designPath } from '../app/document-session/store'
+import {
+  prepareDesignWriteDestination,
+  type PreparedDesignWriteDestination,
+} from '../app/document-session/write-admission'
 
 // ---------------------------------------------------------------------------
 // File dialogs — run in the frontend (JS) to avoid GTK deadlock on Linux.
 // The Rust side only handles file read/write, never shows dialogs.
 // ---------------------------------------------------------------------------
 
-/**
- * Show a native Save-As dialog, then write the design to the chosen path.
- * Returns the saved path. Throws "Dialog cancelled" if user dismisses.
- */
-export async function saveDesignAs(content: CanopiFile): Promise<string> {
-  const currentPath = designPath.peek()
-  const defaultName = `${content.name || 'Untitled'}.canopi`
+export interface DesignSaveDestinationHint {
+  readonly currentPath: string | null
+  readonly suggestedName: string
+}
+
+/** Select a native Design destination without starting external I/O. */
+export async function selectDesignSavePath({
+  currentPath,
+  suggestedName,
+}: DesignSaveDestinationHint): Promise<string> {
   const filePath = await save({
-    defaultPath: currentPath ?? defaultName,
+    defaultPath: currentPath ?? `${suggestedName || 'Untitled'}.canopi`,
     filters: [{ name: 'Canopi Design', extensions: ['canopi'] }],
   })
   if (!filePath) throw new Error('Dialog cancelled')
-  // Write file via Rust (atomic write + backup)
-  return invoke('save_design', { path: filePath, content })
+  return filePath
+}
+
+/** Couple one native target family to its matching write effect. */
+export function prepareDesignWrite(path: string): PreparedDesignWriteDestination {
+  return prepareDesignWriteDestination({
+    resource: `native-design:${path}`,
+    destinationPath: path,
+    write: (content) => saveDesign(path, content).then(() => undefined),
+  })
+}
+
+/** Couple recovery to the shared autosave store and its pruning side effect. */
+export function prepareRecoveryWrite(
+  destinationHint: string | null,
+): PreparedDesignWriteDestination {
+  return prepareDesignWriteDestination({
+    resource: 'native-recovery-store',
+    write: (content) => autosaveDesign(content, destinationHint),
+  })
 }
 
 /**
@@ -50,11 +75,11 @@ export async function openDesignDialog(): Promise<{ file: CanopiFile; path: stri
 }
 
 // ---------------------------------------------------------------------------
-// Direct IPC wrappers — no dialogs involved
+// Direct IPC wrappers — keep Design writers private to prepared destinations.
 // ---------------------------------------------------------------------------
 
 /** Save design to an existing path (Ctrl+S after first save). */
-export async function saveDesign(path: string, content: CanopiFile): Promise<string> {
+async function saveDesign(path: string, content: CanopiFile): Promise<string> {
   return invoke('save_design', { path, content })
 }
 
@@ -122,7 +147,7 @@ export async function reorderDesignReferences(paths: string[]): Promise<void> {
 }
 
 /** Silent autosave to app data dir. */
-export async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
+async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
   return invoke('autosave_design', { content, path })
 }
 

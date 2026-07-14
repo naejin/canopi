@@ -9,26 +9,31 @@ const CURRENT_VERSION: u32 = 5;
 ///
 /// Steps:
 /// 1. If the target file already exists, copy it to `{path}.prev` as a backup.
-/// 2. Serialize and write to `{path}.tmp`.
-/// 3. Rename `{path}.tmp` → `{path}`.
+/// 2. Serialize and write to an operation-owned temporary sidecar.
+/// 3. Rename the temporary sidecar to `{path}`.
 ///
-/// On any write/rename error the `.tmp` file is removed before returning.
+/// On any write/rename error the operation's sidecar is removed before returning.
 pub fn save_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
     let json = serde_json::to_string_pretty(content)
         .map_err(|e| format!("Failed to serialize design: {e}"))?;
+    let backup = path.with_extension("canopi.prev");
+    super::with_write_admissions(&[path, backup.as_path()], || {
+        save_to_file_admitted(path, &backup, &json)
+    })
+}
 
+fn save_to_file_admitted(path: &Path, backup: &Path, json: &str) -> Result<(), String> {
     // Backup the existing file, ignoring errors (e.g. first save).
-    if path.exists() {
-        let backup = path.with_extension("canopi.prev");
-        if let Err(e) = std::fs::copy(path, &backup) {
-            tracing::warn!("Could not create backup at {}: {e}", backup.display());
-        }
+    if path.exists()
+        && let Err(e) = std::fs::copy(path, backup)
+    {
+        tracing::warn!("Could not create backup at {}: {e}", backup.display());
     }
 
-    let tmp_path = path.with_extension("canopi.tmp");
+    let tmp_path = super::operation_sidecar_path(path, "tmp");
 
-    // Write to .tmp first.
-    if let Err(e) = std::fs::write(&tmp_path, &json) {
+    // Write to the operation's sidecar first.
+    if let Err(e) = std::fs::write(&tmp_path, json) {
         let _ = std::fs::remove_file(&tmp_path);
         return Err(format!("Failed to write {}: {e}", tmp_path.display()));
     }
@@ -550,6 +555,21 @@ mod tests {
     use common_types::design::PanelTarget;
     use std::path::PathBuf;
 
+    fn owned_sidecars(dir: &Path, role: &str) -> Vec<PathBuf> {
+        let suffix = format!(".{role}");
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    return false;
+                };
+                name.starts_with(".canopi-") && name.ends_with(&suffix)
+            })
+            .collect()
+    }
+
     #[test]
     fn test_create_default_has_eight_layers() {
         let design = create_default();
@@ -602,22 +622,216 @@ mod tests {
     }
 
     #[test]
-    fn test_atomic_write_creates_tmp_then_final() {
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_atomic.canopi");
-        let tmp_path = path.with_extension("canopi.tmp");
+    fn save_waits_for_existing_target_admission() {
+        use std::sync::mpsc;
+        use std::time::Duration;
 
-        // Ensure clean state
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&tmp_path);
+        let dir = std::env::temp_dir().join(format!(
+            "canopi_save_admission_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("garden.canopi");
+        let initial = create_default();
+        std::fs::write(&path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
+
+        let mut replacement = create_default();
+        replacement.name = "Admitted replacement".to_owned();
+        let writer_path = path.clone();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let writer = crate::design::with_write_admission(&path, || {
+            let writer = std::thread::spawn(move || {
+                started_tx.send(()).unwrap();
+                finished_tx
+                    .send(save_to_file(&writer_path, &replacement))
+                    .unwrap();
+            });
+            started_rx.recv().unwrap();
+            assert!(
+                finished_rx
+                    .recv_timeout(Duration::from_millis(250))
+                    .is_err(),
+                "save completed while another operation held target admission"
+            );
+            writer
+        });
+
+        finished_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("save should complete after target admission is released")
+            .expect("save should succeed");
+        writer.join().unwrap();
+        assert_eq!(load_from_file(&path).unwrap().name, "Admitted replacement");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn primary_save_waits_for_admitted_stable_backup_target() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let dir = std::env::temp_dir().join(format!(
+            "canopi_save_family_admission_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let primary_path = dir.join("garden.canopi");
+        let backup_path = primary_path.with_extension("canopi.prev");
+        let mut design = create_default();
+        design.name = "Overlapping backup target".to_owned();
+        let writer_path = primary_path.clone();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+
+        let writer = crate::design::with_write_admission(&backup_path, || {
+            let writer = std::thread::spawn(move || {
+                started_tx.send(()).unwrap();
+                finished_tx
+                    .send(save_to_file(&writer_path, &design))
+                    .unwrap();
+            });
+            started_rx.recv().unwrap();
+            assert!(
+                finished_rx
+                    .recv_timeout(Duration::from_millis(250))
+                    .is_err(),
+                "a primary save entered while its stable backup target was admitted"
+            );
+            writer
+        });
+
+        finished_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("primary save should continue after backup admission releases")
+            .expect("primary save should succeed");
+        writer.join().unwrap();
+        assert_eq!(
+            load_from_file(&primary_path).unwrap().name,
+            "Overlapping backup target"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn concurrent_saves_preserve_final_and_previous_designs() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = std::env::temp_dir().join(format!(
+            "canopi_concurrent_saves_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("garden.canopi");
+        let mut initial = create_default();
+        initial.name = "Initial".to_owned();
+        save_to_file(&path, &initial).unwrap();
+
+        let writer_count = 8;
+        let barrier = Arc::new(Barrier::new(writer_count + 1));
+        let mut writers = Vec::new();
+        let mut expected_names = std::collections::HashSet::new();
+        for index in 0..writer_count {
+            let name = format!("Concurrent {index}");
+            expected_names.insert(name.clone());
+            let mut design = create_default();
+            design.name = name;
+            let writer_path = path.clone();
+            let writer_barrier = Arc::clone(&barrier);
+            writers.push(std::thread::spawn(move || {
+                writer_barrier.wait();
+                save_to_file(&writer_path, &design)
+            }));
+        }
+        barrier.wait();
+        for writer in writers {
+            writer.join().unwrap().unwrap();
+        }
+
+        let final_design = load_from_file(&path).unwrap();
+        let previous_design = load_from_file(&path.with_extension("canopi.prev")).unwrap();
+        assert!(expected_names.contains(&final_design.name));
+        assert!(expected_names.contains(&previous_design.name));
+        assert_ne!(final_design.name, previous_design.name);
+        assert!(
+            owned_sidecars(&dir, "tmp").is_empty(),
+            "concurrent saves must not leak owned temporary sidecars"
+        );
+        assert!(
+            owned_sidecars(&dir, "old").is_empty(),
+            "concurrent saves must not leak owned rollback sidecars"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_atomic_write_creates_tmp_then_final() {
+        let dir = std::env::temp_dir().join(format!(
+            "canopi_atomic_save_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path: PathBuf = dir.join("garden.canopi");
 
         let design = create_default();
         save_to_file(&path, &design).expect("save should succeed");
 
         assert!(path.exists(), "final file should exist");
-        assert!(!tmp_path.exists(), "tmp file should have been renamed away");
+        assert!(
+            owned_sidecars(&dir, "tmp").is_empty(),
+            "successful save must not leak an owned temporary sidecar"
+        );
+        assert!(
+            owned_sidecars(&dir, "old").is_empty(),
+            "successful save must not leak an owned rollback sidecar"
+        );
 
-        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn save_does_not_claim_an_existing_legacy_temp_sidecar() {
+        let dir = std::env::temp_dir().join(format!(
+            "canopi_owned_save_temp_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("garden.canopi");
+        let legacy_tmp = path.with_extension("canopi.tmp");
+        std::fs::write(&legacy_tmp, "another operation owns this").unwrap();
+
+        save_to_file(&path, &create_default()).expect("save should succeed");
+
+        assert_eq!(
+            std::fs::read_to_string(&legacy_tmp).unwrap(),
+            "another operation owns this"
+        );
+        assert!(load_from_file(&path).is_ok());
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

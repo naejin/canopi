@@ -17,9 +17,12 @@ import {
 import {
   createDesignSessionPersistence,
   DesignPersistenceLeaseError,
-  settleWrittenDesignOperation,
   type DesignReplacementGuardCapture,
 } from "../app/document-session/persistence";
+import {
+  prepareDesignWriteDestination,
+  prepareSynchronousDesignWriteDestination,
+} from "../app/document-session/write-admission";
 import {
   CanvasAuthorityBusyError,
   type CanvasDocumentSurface,
@@ -106,6 +109,7 @@ export function createBrowserDesignSessionController({
   let activeDraftId: string | null = null;
   let canvasSession: CanvasDocumentSurface | null = null;
   let draftWriteEpoch = 0;
+  let nextDownloadWrite = 0;
   let replacementIntent = 0;
   let workflowInstallAttempt = 0;
   const replacement = createDesignSessionReplacement({
@@ -278,18 +282,16 @@ export function createBrowserDesignSessionController({
 
     const name = current.name || store.readDesignName() || "Untitled";
     const operation = persistence.beginBrowserDownload();
-    const content = operation.content;
-    const fileName = `${safeFileStem(content.name || name || "Untitled")}.canopi`;
-    try {
-      await fileAdapter.downloadCanopiFile({
-        fileName,
-        text: `${JSON.stringify(content, null, 2)}\n`,
-      });
-    } catch (error) {
-      operation.fail(error);
-      throw error;
-    }
-    settleWrittenDesignOperation(operation);
+    await operation.execute(prepareDesignWriteDestination({
+      resource: `browser-download:${++nextDownloadWrite}`,
+      blocksReplacement: false,
+      async write(content) {
+        await fileAdapter.downloadCanopiFile({
+          fileName: `${safeFileStem(content.name || name || "Untitled")}.canopi`,
+          text: `${JSON.stringify(content, null, 2)}\n`,
+        });
+      },
+    }));
     saveCurrentDraft();
   }
 
@@ -310,21 +312,37 @@ export function createBrowserDesignSessionController({
     draftWriteEpoch += 1;
     const draftId = activeDraftId ?? createDraftId();
     const operation = persistence.beginBrowserDraft();
-    const result = appDataStore.saveDraft({
-      id: draftId,
-      file: operation.content,
-      now: now().toISOString(),
-    });
-    if (result.ok) {
-      const previousDraftId = activeDraftId;
-      activeDraftId = result.value.id;
-      settleWrittenDesignOperation(operation);
-      if (previousDraftId && previousDraftId !== result.value.id) {
-        const deleted = appDataStore.deleteDraft(previousDraftId);
-        if (!deleted.ok) store.setAutosaveFailed(true);
-      }
-    } else {
-      operation.fail(result.error);
+    const previousDraftId = activeDraftId;
+    const resultBox: {
+      current: Extract<
+        BrowserAppDataWriteResult<BrowserDraftSummary>,
+        { readonly ok: true }
+      > | null;
+    } = { current: null };
+    try {
+      operation.executeImmediately(prepareSynchronousDesignWriteDestination({
+        resource: "browser-app-data:canopi:web-app-data:v1",
+        write(content) {
+          const result = appDataStore.saveDraft({
+            id: draftId,
+            file: content,
+            now: now().toISOString(),
+          });
+          if (!result.ok) throw new BrowserDraftStorageError(result);
+          resultBox.current = result;
+          activeDraftId = result.value.id;
+          return undefined;
+        },
+      }));
+    } catch (error) {
+      if (error instanceof BrowserDraftStorageError) return error.result;
+      throw error;
+    }
+    const result = resultBox.current;
+    if (!result) throw new Error("Browser Draft write completed without a result");
+    if (previousDraftId && previousDraftId !== result.value.id) {
+      const deleted = appDataStore.deleteDraft(previousDraftId);
+      if (!deleted.ok) store.setAutosaveFailed(true);
     }
     return result;
   }
@@ -453,7 +471,11 @@ export function createBrowserDesignSessionController({
         try {
           result = saveCurrentDraft();
         } catch (error) {
-          store.setAutosaveFailed(true);
+          try {
+            store.setAutosaveFailed(true);
+          } catch (publicationError) {
+            logBrowserDesignSessionError(publicationError);
+          }
           logBrowserDesignSessionError(error);
           return;
         }
@@ -508,6 +530,19 @@ export function createBrowserDesignSessionController({
       };
     },
   };
+}
+
+class BrowserDraftStorageError extends Error {
+  readonly result: Extract<
+    BrowserAppDataWriteResult<BrowserDraftSummary>,
+    { readonly ok: false }
+  >;
+
+  constructor(result: BrowserDraftStorageError["result"]) {
+    super("Browser Draft storage failed");
+    this.name = "BrowserDraftStorageError";
+    this.result = result;
+  }
 }
 
 export const browserDesignSessionController = createBrowserDesignSessionController();

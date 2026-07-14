@@ -57,6 +57,18 @@ fn write_autosave_file(
     content: &CanopiFile,
     design_path: Option<&str>,
 ) -> Result<(), String> {
+    let json = serde_json::to_string(content)
+        .map_err(|e| format!("Failed to serialize design for autosave: {e}"))?;
+    super::with_write_admission(dir, || {
+        write_autosave_file_admitted(dir, &json, design_path)
+    })
+}
+
+fn write_autosave_file_admitted(
+    dir: &std::path::Path,
+    json: &str,
+    design_path: Option<&str>,
+) -> Result<(), String> {
     std::fs::create_dir_all(dir)
         .map_err(|e| format!("Failed to create autosave dir {}: {e}", dir.display()))?;
 
@@ -66,15 +78,23 @@ fn write_autosave_file(
     };
     let dest = dir.join(&filename);
 
-    let json = serde_json::to_string(content)
-        .map_err(|e| format!("Failed to serialize design for autosave: {e}"))?;
-    // Write atomically: write to a .tmp sidecar, then rename into place so a
-    // mid-write crash never leaves a corrupt autosave file.
-    let tmp = dest.with_extension("tmp");
-    std::fs::write(&tmp, &json)
-        .map_err(|e| format!("Failed to write autosave tmp {}: {e}", tmp.display()))?;
-    super::atomic_replace(&tmp, &dest)
-        .map_err(|e| format!("Failed to commit autosave to {}: {e}", dest.display()))?;
+    // Write atomically through an operation-owned sidecar so overlapping
+    // operations never claim or remove one another's temporary file.
+    let tmp = super::operation_sidecar_path(&dest, "tmp");
+    if let Err(e) = std::fs::write(&tmp, json) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "Failed to write autosave tmp {}: {e}",
+            tmp.display()
+        ));
+    }
+    if let Err(e) = super::atomic_replace(&tmp, &dest) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "Failed to commit autosave to {}: {e}",
+            dest.display()
+        ));
+    }
 
     prune_autosaves(dir, 5);
 
@@ -221,6 +241,21 @@ mod tests {
         design
     }
 
+    fn owned_sidecars(dir: &std::path::Path, role: &str) -> Vec<PathBuf> {
+        let suffix = format!(".{role}");
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    return false;
+                };
+                name.starts_with(".canopi-") && name.ends_with(&suffix)
+            })
+            .collect()
+    }
+
     #[test]
     fn test_stem_for_path_is_stable() {
         let a = stem_for_path("/home/user/garden.canopi");
@@ -253,6 +288,117 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "Autosave Demo");
         assert!(entries[0].path.ends_with(".canopi"));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn autosave_waits_for_existing_store_admission() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let dir = temp_autosave_dir("admission");
+        std::fs::create_dir_all(&dir).unwrap();
+        let design = test_design("Admitted Autosave");
+        let writer_dir = dir.clone();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let writer = crate::design::with_write_admission(&dir, || {
+            let writer = std::thread::spawn(move || {
+                started_tx.send(()).unwrap();
+                finished_tx
+                    .send(write_autosave_file(
+                        &writer_dir,
+                        &design,
+                        Some("/tmp/admitted.canopi"),
+                    ))
+                    .unwrap();
+            });
+            started_rx.recv().unwrap();
+            assert!(
+                finished_rx
+                    .recv_timeout(Duration::from_millis(250))
+                    .is_err(),
+                "autosave completed while another operation held store admission"
+            );
+            writer
+        });
+
+        finished_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("autosave should complete after store admission is released")
+            .expect("autosave should succeed");
+        writer.join().unwrap();
+        assert_eq!(
+            list_autosaves_in_dir(&dir).unwrap()[0].name,
+            "Admitted Autosave"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn autosave_does_not_claim_an_existing_legacy_temp_sidecar() {
+        let dir = temp_autosave_dir("owned_temp");
+        std::fs::create_dir_all(&dir).unwrap();
+        let design_path = "/tmp/owned-autosave.canopi";
+        let dest = dir.join(format!("{}.canopi", stem_for_path(design_path)));
+        let legacy_tmp = dest.with_extension("tmp");
+        std::fs::write(&legacy_tmp, "another operation owns this").unwrap();
+
+        write_autosave_file(&dir, &test_design("Owned Autosave Temp"), Some(design_path))
+            .expect("autosave should succeed");
+
+        assert_eq!(
+            std::fs::read_to_string(&legacy_tmp).unwrap(),
+            "another operation owns this"
+        );
+        assert_eq!(
+            list_autosaves_in_dir(&dir).unwrap()[0].name,
+            "Owned Autosave Temp"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn concurrent_autosaves_for_one_design_leave_one_valid_snapshot() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = temp_autosave_dir("concurrent");
+        std::fs::create_dir_all(&dir).unwrap();
+        let writer_count = 8;
+        let barrier = Arc::new(Barrier::new(writer_count + 1));
+        let mut writers = Vec::new();
+        let mut expected_names = std::collections::HashSet::new();
+        for index in 0..writer_count {
+            let name = format!("Concurrent Autosave {index}");
+            expected_names.insert(name.clone());
+            let design = test_design(&name);
+            let writer_dir = dir.clone();
+            let writer_barrier = Arc::clone(&barrier);
+            writers.push(std::thread::spawn(move || {
+                writer_barrier.wait();
+                write_autosave_file(&writer_dir, &design, Some("/tmp/concurrent.canopi"))
+            }));
+        }
+        barrier.wait();
+        for writer in writers {
+            writer.join().unwrap().unwrap();
+        }
+
+        let entries = list_autosaves_in_dir(&dir).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(expected_names.contains(&entries[0].name));
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        assert!(
+            owned_sidecars(&dir, "tmp").is_empty(),
+            "concurrent autosaves must not leak owned temporary sidecars"
+        );
+        assert!(
+            owned_sidecars(&dir, "old").is_empty(),
+            "concurrent autosaves must not leak owned rollback sidecars"
+        );
 
         let _ = std::fs::remove_dir_all(dir);
     }

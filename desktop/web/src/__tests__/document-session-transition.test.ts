@@ -7,21 +7,36 @@ const mocks = vi.hoisted(() => ({
   loadDesign: vi.fn(),
   message: vi.fn(),
   saveDesign: vi.fn(),
-  saveDesignAs: vi.fn(),
+  selectDesignSavePath: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   message: mocks.message,
 }));
 
-vi.mock("../ipc/design", () => ({
-  loadDesign: mocks.loadDesign,
-  autosaveDesign: mocks.autosaveDesign,
-  saveDesign: mocks.saveDesign,
-  saveDesignAs: mocks.saveDesignAs,
-  openDesignDialog: vi.fn(),
-  newDesign: vi.fn(),
-}));
+vi.mock("../ipc/design", async () => {
+  const { prepareDesignWriteDestination } = await import(
+    "../app/document-session/write-admission"
+  );
+  return {
+    loadDesign: mocks.loadDesign,
+    autosaveDesign: mocks.autosaveDesign,
+    saveDesign: mocks.saveDesign,
+    selectDesignSavePath: mocks.selectDesignSavePath,
+    prepareDesignWrite: (path: string) => prepareDesignWriteDestination({
+      resource: `native-design:${path}`,
+      destinationPath: path,
+      write: (content) => mocks.saveDesign(path, content).then(() => undefined),
+    }),
+    prepareRecoveryWrite: (destinationHint: string | null) =>
+      prepareDesignWriteDestination({
+        resource: 'native-recovery-store',
+        write: (content) => mocks.autosaveDesign(content, destinationHint),
+      }),
+    openDesignDialog: vi.fn(),
+    newDesign: vi.fn(),
+  };
+});
 
 vi.mock("../i18n", () => ({
   t: (key: string) => {
@@ -215,6 +230,33 @@ function makePostFinalizerFailureSession(): CanvasDocumentSurface {
   };
 }
 
+function makePreFinalizerFailureSession(): CanvasDocumentSurface {
+  let settling = false;
+  return {
+    initializeViewport: vi.fn(),
+    attachRulersTo: vi.fn(),
+    showCanvasChrome: vi.fn(),
+    hideCanvasChrome: vi.fn(),
+    zoomToFit: vi.fn(),
+    loadDocument: vi.fn(),
+    replaceDocument: vi.fn(() => {
+      settling = true;
+      throw new Error("pre-finalizer Scene publication failed");
+    }),
+    hasLoadedDocument: vi.fn(() => true),
+    captureForPersistence: vi.fn((metadata, document) => {
+      if (settling) throw new CanvasAuthorityBusyError("document-settlement");
+      return {
+        content: { ...document, name: metadata.name },
+        isCurrent: () => true,
+        acknowledgeSaved: () => "applied" as const,
+      };
+    }),
+    resize: vi.fn(),
+    destroy: vi.fn(),
+  };
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -226,9 +268,7 @@ function deferred<T>() {
 }
 
 async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let pass = 0; pass < 6; pass += 1) await Promise.resolve();
 }
 
 function resetMachine({
@@ -253,7 +293,8 @@ beforeEach(() => {
   mocks.message.mockReset();
   mocks.saveDesign.mockReset();
   mocks.saveDesign.mockResolvedValue("/designs/current.canopi");
-  mocks.saveDesignAs.mockReset();
+  mocks.selectDesignSavePath.mockReset();
+  mocks.selectDesignSavePath.mockResolvedValue("/designs/current.canopi");
 
   resetMachine();
 });
@@ -458,6 +499,10 @@ describe("document session transition", () => {
       name: "Second",
     });
     await expect(second).resolves.toMatchObject({ status: "applied" });
+    expect(machine.getState()).toMatchObject({
+      status: "attached-ready",
+      operation: null,
+    });
     firstPending.resolve({
       file: makeFile("First"),
       path: "/designs/first.canopi",
@@ -516,6 +561,41 @@ describe("document session transition", () => {
     expect(store.readDesignName()).toBe("First");
     expect(store.readDesignPath()).toBe("/designs/first.canopi");
     disposeEffect();
+  });
+
+  it("executes a successor Save issued by replacement finalization", async () => {
+    const session = makeSession();
+    let successorSave: ReturnType<typeof machine.saveCurrentDesign> | null = null;
+    const disposeEffect = effect(() => {
+      if (store.currentDesign.value?.name !== "First" || successorSave) return;
+      successorSave = machine.saveCurrentDesign({ session });
+    });
+
+    try {
+      await expect(machine.transitionDocument({
+        source: "open-path",
+        dirtyGuard: "skip",
+        session,
+        load: async () => ({
+          file: makeFile("First"),
+          path: "/designs/first.canopi",
+          name: "First",
+        }),
+      })).resolves.toEqual({ status: "applied", documentLoaded: true });
+
+      expect(successorSave).not.toBeNull();
+      await expect(successorSave!).resolves.toMatchObject({
+        status: "applied",
+        path: "/designs/first.canopi",
+        content: { name: "First" },
+      });
+      expect(mocks.saveDesign).toHaveBeenCalledWith(
+        "/designs/first.canopi",
+        expect.objectContaining({ name: "First" }),
+      );
+    } finally {
+      disposeEffect();
+    }
   });
 
   it("admits a reactive successor after the predecessor Scene replacement settles", async () => {
@@ -1315,6 +1395,385 @@ describe("document session transition", () => {
     expect(store.isDesignDirty()).toBe(true);
   });
 
+  it("does not load a replacement until admitted predecessor writes drain", async () => {
+    const session = makeSession();
+    const pendingWrite = deferred<string>();
+    mocks.saveDesign.mockReturnValue(pendingWrite.promise);
+    const saving = machine.saveCurrentDesign({ session });
+    const load = vi.fn(async () => ({
+      file: makeFile('Replacement'),
+      path: '/designs/replacement.canopi',
+      name: 'Replacement',
+    }));
+
+    const transitioning = machine.transitionDocument({
+      source: 'open-path',
+      dirtyGuard: 'skip',
+      session,
+      load,
+    });
+    await flushMicrotasks();
+
+    expect(load).not.toHaveBeenCalled();
+
+    pendingWrite.resolve('/designs/current.canopi');
+    await saving;
+    await expect(transitioning).resolves.toMatchObject({ status: 'applied' });
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it("skips predecessor writes queued while a successful replacement is fenced", async () => {
+    const session = makeSession();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const transitioning = machine.transitionDocument({
+      source: 'open-path',
+      dirtyGuard: 'skip',
+      session,
+      load: () => pendingLoad.promise,
+    });
+    const saving = machine.saveCurrentDesign({ session });
+    await flushMicrotasks();
+
+    expect(mocks.saveDesign).not.toHaveBeenCalled();
+
+    pendingLoad.resolve({
+      file: makeFile('Replacement'),
+      path: '/designs/replacement.canopi',
+      name: 'Replacement',
+    });
+    await expect(transitioning).resolves.toMatchObject({ status: 'applied' });
+    await expect(saving).resolves.toMatchObject({ status: 'stale' });
+    expect(mocks.saveDesign).not.toHaveBeenCalled();
+  });
+
+  it("resumes still-current writes after a fenced replacement load fails", async () => {
+    const session = makeSession();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const transitioning = machine.transitionDocument({
+      source: 'open-path',
+      dirtyGuard: 'skip',
+      session,
+      load: () => pendingLoad.promise,
+    });
+    const saving = machine.saveCurrentDesign({ session });
+    await flushMicrotasks();
+
+    expect(mocks.saveDesign).not.toHaveBeenCalled();
+
+    pendingLoad.reject(new Error('read failed'));
+    await expect(transitioning).resolves.toMatchObject({ status: 'failed' });
+    await expect(saving).resolves.toMatchObject({ status: 'applied' });
+    expect(mocks.saveDesign).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a newer Save state authoritative when a fenced load fails", async () => {
+    const session = makeSession();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const pendingWrite = deferred<string>();
+    mocks.saveDesign.mockReturnValue(pendingWrite.promise);
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load: () => pendingLoad.promise,
+    });
+    const saving = machine.saveCurrentDesign({ session });
+
+    expect(machine.getState()).toMatchObject({
+      status: "saving",
+      operation: "save",
+    });
+
+    pendingLoad.reject(new Error("read failed"));
+    await expect(transitioning).resolves.toMatchObject({ status: "failed" });
+    await flushMicrotasks();
+
+    expect(mocks.saveDesign).toHaveBeenCalledOnce();
+    expect(machine.getState()).toMatchObject({
+      status: "saving",
+      operation: "save",
+    });
+
+    pendingWrite.resolve("/designs/current.canopi");
+    await expect(saving).resolves.toMatchObject({ status: "applied" });
+    expect(machine.getState()).toMatchObject({
+      status: "attached-ready",
+      operation: null,
+    });
+  });
+
+  it("does not let a draining older transition publish over a newer Save", async () => {
+    const session = makeSession();
+    const predecessorWrite = deferred<string>();
+    const successorWrite = deferred<string>();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const load = vi.fn(() => pendingLoad.promise);
+    mocks.saveDesign
+      .mockReturnValueOnce(predecessorWrite.promise)
+      .mockReturnValueOnce(successorWrite.promise);
+
+    const predecessorSave = machine.saveCurrentDesign({ session });
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load,
+    });
+    const successorSave = machine.saveCurrentDesign({ session });
+
+    expect(load).not.toHaveBeenCalled();
+    expect(machine.getState()).toMatchObject({
+      status: "saving",
+      operation: "save",
+    });
+
+    predecessorWrite.resolve("/designs/current.canopi");
+    await expect(predecessorSave).resolves.toMatchObject({ status: "stale" });
+    await flushMicrotasks();
+    expect(load).toHaveBeenCalledOnce();
+    expect(machine.getState()).toMatchObject({
+      status: "saving",
+      operation: "save",
+    });
+
+    pendingLoad.reject(new Error("read failed"));
+    await expect(transitioning).resolves.toMatchObject({ status: "failed" });
+    await flushMicrotasks();
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(2);
+    expect(machine.getState()).toMatchObject({
+      status: "saving",
+      operation: "save",
+    });
+
+    successorWrite.resolve("/designs/current.canopi");
+    await expect(successorSave).resolves.toMatchObject({ status: "applied" });
+    expect(machine.getState()).toMatchObject({
+      status: "attached-ready",
+      operation: null,
+    });
+  });
+
+  it("restores an older active transition after a newer Save finishes", async () => {
+    const session = makeSession();
+    const decision = deferred<string>();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const load = vi.fn(() => pendingLoad.promise);
+    store.markDocumentDirty();
+    mocks.message.mockReturnValue(decision.promise);
+
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      session,
+      load,
+    });
+    await flushMicrotasks();
+    expect(mocks.message).toHaveBeenCalledOnce();
+
+    await expect(machine.saveCurrentDesign({ session })).resolves.toMatchObject({
+      status: "applied",
+    });
+    expect(machine.getState()).toMatchObject({
+      status: "attached-ready",
+      operation: null,
+    });
+
+    decision.resolve("Don't Save");
+    await flushMicrotasks();
+    expect(load).toHaveBeenCalledOnce();
+    expect(machine.getState()).toMatchObject({
+      status: "loading",
+      operation: "open-path",
+    });
+
+    pendingLoad.reject(new Error("read failed"));
+    await expect(transitioning).resolves.toMatchObject({ status: "failed" });
+    expect(machine.getState()).toMatchObject({
+      status: "failed",
+      operation: "open-path",
+    });
+  });
+
+  it("clears a finished Save presentation while a newer dirty prompt waits", async () => {
+    const session = makeSession();
+    const pendingWrite = deferred<string>();
+    const decision = deferred<string>();
+    store.markDocumentDirty();
+    mocks.saveDesign.mockReturnValue(pendingWrite.promise);
+    mocks.message.mockReturnValue(decision.promise);
+
+    const saving = machine.saveCurrentDesign({ session });
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      session,
+      load: vi.fn(),
+    });
+    await flushMicrotasks();
+    expect(mocks.message).toHaveBeenCalledOnce();
+    expect(machine.getState()).toMatchObject({
+      status: "saving",
+      operation: "save",
+    });
+
+    pendingWrite.resolve("/designs/current.canopi");
+    await expect(saving).resolves.toMatchObject({ status: "applied" });
+    expect(machine.getState()).toMatchObject({
+      status: "attached-ready",
+      operation: null,
+    });
+
+    decision.resolve("Cancel");
+    await expect(transitioning).resolves.toMatchObject({ status: "cancelled" });
+  });
+
+  it("restores an active transition after a newer foreign-session Save is rejected", async () => {
+    const session = makeSession();
+    const foreignSession = makeSession();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load: () => pendingLoad.promise,
+    });
+
+    await expect(machine.saveCurrentDesign({ session: foreignSession })).rejects.toThrow(
+      "Canvas persistence lease belongs to another session",
+    );
+    expect(machine.getState()).toMatchObject({
+      status: "loading",
+      operation: "open-path",
+    });
+
+    pendingLoad.reject(new Error("read failed"));
+    await expect(transitioning).resolves.toMatchObject({ status: "failed" });
+    expect(machine.getState()).toMatchObject({
+      status: "failed",
+      operation: "open-path",
+    });
+  });
+
+  it("keeps a predecessor transition active when a foreign successor cannot acquire its lease", async () => {
+    const session = makeSession();
+    const foreignSession = makeSession();
+    const predecessorLoad = deferred<DocumentTransitionLoadResult>();
+    const predecessor = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load: () => predecessorLoad.promise,
+    });
+    const foreignLoad = vi.fn(async () => ({
+      file: makeFile("Foreign"),
+      path: "/designs/foreign.canopi",
+      name: "Foreign",
+    }));
+
+    await expect(machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session: foreignSession,
+      load: foreignLoad,
+    })).resolves.toMatchObject({ status: "failed" });
+    expect(foreignLoad).not.toHaveBeenCalled();
+    expect(machine.getState()).toMatchObject({
+      status: "loading",
+      operation: "open-path",
+    });
+
+    predecessorLoad.resolve({
+      file: makeFile("Predecessor"),
+      path: "/designs/predecessor.canopi",
+      name: "Predecessor",
+    });
+    await expect(predecessor).resolves.toMatchObject({ status: "applied" });
+    expect(store.readDesignName()).toBe("Predecessor");
+    expect(machine.getState()).toMatchObject({
+      status: "attached-ready",
+      operation: null,
+    });
+  });
+
+  it("does not supersede an active transition before an empty foreign session acquires its lease", async () => {
+    const session = makeSession();
+    const foreignSession = makeSession();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load: () => pendingLoad.promise,
+    });
+
+    expect(() => machine.beginEmptyDocumentSession(foreignSession)).toThrow(
+      "Canvas persistence lease belongs to another session",
+    );
+    expect(machine.getState()).toMatchObject({
+      status: "loading",
+      operation: "open-path",
+    });
+
+    pendingLoad.reject(new Error("read failed"));
+    await expect(transitioning).resolves.toMatchObject({ status: "failed" });
+  });
+
+  it("opens an obsolete replacement gate when the session machine resets", async () => {
+    const predecessor = makeSession();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session: predecessor,
+      load: () => pendingLoad.promise,
+    });
+    await flushMicrotasks();
+
+    machine.resetState();
+    const successor = makeSession();
+    await expect(machine.saveCurrentDesign({ session: successor })).resolves.toMatchObject({
+      status: "applied",
+    });
+    expect(mocks.saveDesign).toHaveBeenCalledOnce();
+
+    pendingLoad.resolve({
+      file: makeFile("Obsolete replacement"),
+      path: "/designs/obsolete.canopi",
+      name: "Obsolete replacement",
+    });
+    await expect(transitioning).resolves.toMatchObject({ status: "cancelled" });
+    expect(store.readDesignName()).toBe("Current");
+  });
+
+  it("skips predecessor writes after Scene admits a replacement that fails before Design finalization", async () => {
+    const session = makePreFinalizerFailureSession();
+    const pendingLoad = deferred<DocumentTransitionLoadResult>();
+    const transitioning = machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load: () => pendingLoad.promise,
+    });
+    const saving = machine.saveCurrentDesign({ session });
+    await flushMicrotasks();
+
+    expect(mocks.saveDesign).not.toHaveBeenCalled();
+
+    pendingLoad.resolve({
+      file: makeFile("Replacement"),
+      path: "/designs/replacement.canopi",
+      name: "Replacement",
+    });
+    await expect(transitioning).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({
+        message: "pre-finalizer Scene publication failed",
+      }),
+    });
+    await expect(saving).resolves.toMatchObject({ status: "stale" });
+    expect(mocks.saveDesign).not.toHaveBeenCalled();
+  });
+
   it("retries exact settlement without rewriting after persistence publication fails", async () => {
     const session = makeSession();
     session.loadDocument(makeFile("Current"));
@@ -1340,7 +1799,8 @@ describe("document session transition", () => {
 
   it("applies only the Save As path while preserving later Design state and name", async () => {
     const pending = deferred<string>();
-    mocks.saveDesignAs.mockReturnValue(pending.promise);
+    mocks.selectDesignSavePath.mockResolvedValue("/designs/saved-snapshot.canopi");
+    mocks.saveDesign.mockReturnValue(pending.promise);
 
     const saving = machine.saveAsCurrentDesign({ session: null });
     store.mutateCurrentDesign((design) => ({
@@ -1366,6 +1826,43 @@ describe("document session transition", () => {
     expect(store.readDesignName()).toBe("Later Name");
     expect(store.readDesignPath()).toBe("/designs/saved-snapshot.canopi");
     expect(store.isDesignDirty()).toBe(true);
+  });
+
+  it("selects a Save As destination before starting its write", async () => {
+    mocks.selectDesignSavePath.mockResolvedValue('/designs/selected.canopi');
+
+    const settlement = await machine.saveAsCurrentDesign({ session: null });
+
+    expect(mocks.selectDesignSavePath).toHaveBeenCalledWith({
+      currentPath: '/designs/current.canopi',
+      suggestedName: 'Current',
+    });
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      '/designs/selected.canopi',
+      expect.objectContaining({ name: 'Current' }),
+    );
+    expect(settlement).toMatchObject({
+      status: 'applied',
+      path: '/designs/selected.canopi',
+    });
+  });
+
+  it("skips a Save As write when its destination dialog returns after replacement", async () => {
+    const selected = deferred<string>();
+    mocks.selectDesignSavePath.mockReturnValue(selected.promise);
+    const saving = machine.saveAsCurrentDesign({ session: null });
+
+    store.replaceCurrentDesignState(
+      makeFile('Replacement'),
+      '/designs/replacement.canopi',
+      'Replacement',
+    );
+    selected.resolve('/designs/predecessor.canopi');
+
+    await expect(saving).resolves.toMatchObject({ status: 'stale' });
+    expect(mocks.saveDesign).not.toHaveBeenCalled();
+    expect(store.readDesignName()).toBe('Replacement');
+    expect(store.readDesignPath()).toBe('/designs/replacement.canopi');
   });
 
   it("cancels before loading and preserves dirty baselines", async () => {
@@ -1501,28 +1998,31 @@ describe("document session transition", () => {
       logError,
     });
 
-    secondPending.reject(new Error("latest autosave failed"));
-    await expect(second).resolves.toBe(false);
-    expect(store.autosaveFailed.value).toBe(true);
+    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(1);
 
     firstPending.resolve(undefined);
     await expect(first).resolves.toBe(false);
+    await flushMicrotasks();
+    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(2);
+
+    secondPending.reject(new Error("latest autosave failed"));
+    await expect(second).resolves.toBe(false);
     expect(store.autosaveFailed.value).toBe(true);
     expect(logError).toHaveBeenCalledTimes(1);
   });
 
-  it("retries recovery settlement without repeating autosave I/O", async () => {
+  it("delegates autosave I/O and settlement to the recovery operation", async () => {
     const session = makeSession();
     const logError = vi.fn();
     const persistence = createDesignSessionPersistence({ store });
     const recovery = {
       content: makeFile("Current"),
       destinationHint: "/designs/current.canopi",
-      succeed: vi.fn()
-        .mockImplementationOnce(() => {
-          throw new Error("recovery publication failed");
-        })
-        .mockReturnValue(true),
+      execute: vi.fn(async () => {
+        await mocks.autosaveDesign(makeFile("Current"), "/designs/current.canopi");
+        return true;
+      }),
+      succeed: vi.fn(),
       fail: vi.fn(),
     };
     vi.spyOn(persistence, "beginRecovery").mockReturnValue(recovery);
@@ -1536,7 +2036,8 @@ describe("document session transition", () => {
     })).resolves.toBe(true);
 
     expect(mocks.autosaveDesign).toHaveBeenCalledOnce();
-    expect(recovery.succeed).toHaveBeenCalledTimes(2);
+    expect(recovery.execute).toHaveBeenCalledOnce();
+    expect(recovery.succeed).not.toHaveBeenCalled();
     expect(recovery.fail).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
   });

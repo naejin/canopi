@@ -813,6 +813,8 @@ describe('frontend boundary sources', () => {
     const transitionSource = readSource('../app/document-session/transition.ts')
     const stateMachineSource = readSource('../app/document-session/state-machine.ts')
     const browserSessionSource = readSource('../web/browser-design-session.ts')
+    const persistenceSource = readSource('../app/document-session/persistence.ts')
+    const designIpcSource = readSource('../ipc/design.ts')
     const webWorkspaceSource = readSource('../web/WebCanvasWorkspace.tsx')
 
     expectImportsToContain('../app/document-session/use-canvas-document-session.ts', ['./lifecycle'])
@@ -837,6 +839,9 @@ describe('frontend boundary sources', () => {
     expect(stateMachineSource).toContain('.beginSave(')
     expect(stateMachineSource).toContain('.beginSaveAs(')
     expect(stateMachineSource).toContain('.beginRecovery(')
+    expect(stateMachineSource).toContain('.execute(')
+    expect(stateMachineSource).not.toContain('.succeed(')
+    expect(stateMachineSource).not.toContain('.fail(')
     expect(stateMachineSource).not.toContain('buildPersistedDesignSessionContent')
     expect(stateMachineSource).not.toContain('.markSaved(')
     expect(stateMachineSource).not.toContain('replaceCurrentDesignState(')
@@ -860,6 +865,12 @@ describe('frontend boundary sources', () => {
     expect(browserSessionSource).toContain('createDesignSessionPersistence')
     expect(browserSessionSource).toContain('.beginBrowserDownload(')
     expect(browserSessionSource).toContain('.beginBrowserDraft(')
+    expect(browserSessionSource).toContain('.execute(')
+    expect(browserSessionSource).toContain('.executeImmediately(')
+    expect(browserSessionSource).not.toContain('operation.content')
+    expect(browserSessionSource).not.toContain('operation.succeed')
+    expect(browserSessionSource).not.toContain('operation.fail')
+    expect(browserSessionSource).not.toContain('settleWrittenDesignOperation')
     expect(browserSessionSource).not.toContain('buildPersistedDesignSessionContent')
     expect(browserSessionSource).not.toContain('.markSaved(')
     expect(browserSessionSource).not.toContain('replaceCurrentDesignState(')
@@ -875,9 +886,30 @@ describe('frontend boundary sources', () => {
       /document-session\/workflows$/,
       /canvas\/runtime\/scene-runtime\/transactions$/,
     ])
-    expect(readSource('../app/document-session/persistence.ts')).not.toContain(
-      'SceneEditBusyError',
-    )
+    expect(persistenceSource).not.toContain('SceneEditBusyError')
+    expect(persistenceSource).not.toContain('DesignPersistenceWriteOperation')
+    expect(persistenceSource).not.toContain('settleWrittenDesignOperation')
+    expect(persistenceSource).not.toContain('succeed():')
+    expect(persistenceSource).not.toContain('fail(error?: unknown)')
+    expect(designIpcSource).not.toContain('function saveDesignAs(')
+    expect(designIpcSource).not.toContain('export async function saveDesign(')
+    expect(designIpcSource).not.toContain('export async function autosaveDesign(')
+  })
+
+  it('confines prepared Design write destinations to persistence adapters', () => {
+    const importers = sourceFilesUnder('../')
+      .filter(isTypescriptSource)
+      .filter((sourcePath) => importSpecifiers(readSource(sourcePath)).some(
+        (specifier) => specifier === './write-admission'
+          || specifier.endsWith('/document-session/write-admission'),
+      ))
+      .sort()
+
+    expect(importers).toEqual([
+      '../app/document-session/persistence.ts',
+      '../ipc/design.ts',
+      '../web/browser-design-session.ts',
+    ])
   })
 
   it('routes canvas clean-state reporting through the Canvas Runtime App Adapter', () => {

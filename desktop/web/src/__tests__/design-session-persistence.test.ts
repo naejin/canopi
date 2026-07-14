@@ -1,13 +1,21 @@
 import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
-import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
+import type {
+  CanvasDocumentSurface,
+  CanvasPersistenceAcknowledgement,
+} from '../canvas/runtime/runtime'
 import type { CanopiFile } from '../types/design'
 
 import {
   createDesignSessionPersistence,
+  DesignPersistenceBusyError,
+  DesignPersistenceFailurePolicyError,
   DesignPersistenceSettlementError,
-  settleWrittenDesignOperation,
 } from '../app/document-session/persistence'
+import {
+  prepareDesignWriteDestination,
+  prepareSynchronousDesignWriteDestination,
+} from '../app/document-session/write-admission'
 import {
   createMemoryDesignSessionStore,
 } from '../app/document-session/store'
@@ -35,15 +43,63 @@ function makeDesign(name = 'Design'): CanopiFile {
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+type TestWrite = (content: CanopiFile) => void | Promise<void>
+
+function designDestination(path: string, write: TestWrite = () => undefined) {
+  return prepareDesignWriteDestination({
+    resource: `native-design:${path}`,
+    destinationPath: path,
+    write,
+  })
+}
+
+function downloadDestination(write: TestWrite = () => undefined) {
+  return prepareDesignWriteDestination({
+    resource: 'browser-download:test',
+    blocksReplacement: false,
+    write,
+  })
+}
+
+function recoveryDestination(write: TestWrite = () => undefined) {
+  return prepareDesignWriteDestination({
+    resource: 'native-recovery-store',
+    write,
+  })
+}
+
+function draftDestination(
+  write: (content: CanopiFile) => undefined = () => undefined,
+) {
+  return prepareSynchronousDesignWriteDestination({
+    resource: 'browser-app-data:canopi:web-app-data:v1',
+    write,
+  })
+}
+
 describe('purpose-aware Design persistence operations', () => {
   function checkpointSession(
     capture: (metadata: { name: string }, doc: CanopiFile) => CanopiFile =
       (metadata, doc) => ({ ...doc, name: metadata.name }),
   ): {
     readonly session: CanvasDocumentSurface
-    readonly acknowledgeSaved: ReturnType<typeof vi.fn>
+    readonly acknowledgeSaved: ReturnType<
+      typeof vi.fn<() => CanvasPersistenceAcknowledgement>
+    >
   } {
-    const acknowledgeSaved = vi.fn(() => 'applied' as const)
+    const acknowledgeSaved = vi.fn<() => CanvasPersistenceAcknowledgement>(
+      () => 'applied',
+    )
     const session: CanvasDocumentSurface = {
       initializeViewport: vi.fn(),
       attachRulersTo: vi.fn(),
@@ -67,7 +123,344 @@ describe('purpose-aware Design persistence operations', () => {
     return { session, acknowledgeSaved }
   }
 
-  it('acknowledges only the captured revisions and preserves later Design edits', () => {
+  it('writes captures to one durable resource in issue order', async () => {
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({
+      file: original,
+      path: '/designs/original.canopi',
+      name: original.name,
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const firstWrite = deferred<void>()
+    const writes: Array<string | null> = []
+    const destination = prepareDesignWriteDestination({
+      resource: 'native-design:/designs/original.canopi',
+      destinationPath: '/designs/original.canopi',
+      async write(content) {
+        writes.push(content.description)
+        if (writes.length === 1) await firstWrite.promise
+      },
+    })
+
+    const first = persistence.beginSave().execute(destination)
+    await Promise.resolve()
+    expect(writes).toEqual([null])
+
+    operationStore.mutateCurrentDesign((design) => ({
+      ...design,
+      description: 'newer capture',
+    }))
+    const second = persistence.beginSave().execute(destination)
+    await Promise.resolve()
+
+    expect(writes).toEqual([null])
+
+    firstWrite.resolve()
+    await expect(first).resolves.toMatchObject({ status: 'stale' })
+    await expect(second).resolves.toMatchObject({
+      status: 'applied',
+      content: { description: 'newer capture' },
+    })
+    expect(writes).toEqual([null, 'newer capture'])
+  })
+
+  it('executes Save As only after a destination has been prepared', async () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Garden Plan'),
+      name: 'Garden Plan',
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const writes: string[] = []
+    const destination = prepareDesignWriteDestination({
+      resource: 'native-design:/designs/garden-plan.canopi',
+      destinationPath: '/designs/garden-plan.canopi',
+      write(content) {
+        writes.push(content.name)
+      },
+    })
+
+    const operation = persistence.beginSaveAs()
+    const settlement = await operation.execute(destination)
+
+    expect(writes).toEqual(['Garden Plan'])
+    expect(settlement).toMatchObject({
+      status: 'applied',
+      path: '/designs/garden-plan.canopi',
+    })
+    expect(operationStore.readDesignPath()).toBe('/designs/garden-plan.canopi')
+  })
+
+  it('starts writes to different durable resources concurrently', async () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Garden Plan'),
+      name: 'Garden Plan',
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const firstWrite = deferred<void>()
+    const started: string[] = []
+    const firstDestination = prepareDesignWriteDestination({
+      resource: 'native-design:/designs/first.canopi',
+      destinationPath: '/designs/first.canopi',
+      async write() {
+        started.push('first')
+        await firstWrite.promise
+      },
+    })
+    const secondDestination = prepareDesignWriteDestination({
+      resource: 'native-design:/designs/second.canopi',
+      destinationPath: '/designs/second.canopi',
+      write() {
+        started.push('second')
+      },
+    })
+
+    const first = persistence.beginSaveAs().execute(firstDestination)
+    await Promise.resolve()
+    const second = persistence.beginSaveAs().execute(secondDestination)
+    await Promise.resolve()
+
+    expect(started).toEqual(['first', 'second'])
+    await expect(second).resolves.toMatchObject({ status: 'applied' })
+
+    firstWrite.resolve()
+    await expect(first).resolves.toMatchObject({ status: 'stale' })
+  })
+
+  it('skips queued writes whose Design Session was replaced', async () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Predecessor'),
+      path: '/designs/shared.canopi',
+      name: 'Predecessor',
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const firstWrite = deferred<void>()
+    const writes: string[] = []
+    const destination = prepareDesignWriteDestination({
+      resource: 'native-design:/designs/shared.canopi',
+      destinationPath: '/designs/shared.canopi',
+      async write(content) {
+        writes.push(content.name)
+        if (writes.length === 1) await firstWrite.promise
+      },
+    })
+
+    const first = persistence.beginSave().execute(destination)
+    await Promise.resolve()
+    const queued = persistence.beginSave().execute(destination)
+    operationStore.replaceCurrentDesignState(
+      makeDesign('Successor'),
+      '/designs/shared.canopi',
+      'Successor',
+    )
+    firstWrite.resolve()
+
+    await expect(first).resolves.toMatchObject({ status: 'stale' })
+    await expect(queued).resolves.toMatchObject({ status: 'stale' })
+    expect(writes).toEqual(['Predecessor'])
+  })
+
+  it('skips a queued capture after its Canvas attachment lease changes', async () => {
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({
+      file: original,
+      path: '/designs/original.canopi',
+      name: original.name,
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const firstCanvas = checkpointSession()
+    const secondCanvas = checkpointSession()
+    persistence.attachCanvas(firstCanvas.session)
+    const firstWrite = deferred<void>()
+    const writes: string[] = []
+    const destination = designDestination('/designs/original.canopi', async (content) => {
+      writes.push(content.name)
+      if (writes.length === 1) await firstWrite.promise
+    })
+
+    const active = persistence.beginBrowserDownload().execute(destination)
+    await Promise.resolve()
+    const queued = persistence.beginSave().execute(destination)
+    persistence.detachCanvas(firstCanvas.session)
+    persistence.attachCanvas(secondCanvas.session)
+    firstWrite.resolve()
+
+    await expect(active).resolves.toMatchObject({ status: 'stale' })
+    await expect(queued).resolves.toMatchObject({ status: 'stale' })
+    expect(writes).toEqual(['Original'])
+    expect(secondCanvas.session.captureForPersistence).not.toHaveBeenCalled()
+  })
+
+  it('releases a durable-resource lane after its writer fails', async () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Garden Plan'),
+      path: '/designs/shared.canopi',
+      name: 'Garden Plan',
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const failedWrite = deferred<void>()
+    const writes: string[] = []
+    const destination = prepareDesignWriteDestination({
+      resource: 'native-design:/designs/shared.canopi',
+      destinationPath: '/designs/shared.canopi',
+      async write() {
+        writes.push(writes.length === 0 ? 'failed' : 'successor')
+        if (writes.length === 1) await failedWrite.promise
+      },
+    })
+
+    const first = persistence.beginSave().execute(destination)
+    await Promise.resolve()
+    const second = persistence.beginSave().execute(destination)
+    failedWrite.reject(new Error('disk full'))
+
+    await expect(first).rejects.toThrow('disk full')
+    await expect(second).resolves.toMatchObject({ status: 'applied' })
+    expect(writes).toEqual(['failed', 'successor'])
+  })
+
+  it('retries exact settlement without repeating a successful write', async () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Garden Plan'),
+      path: '/designs/garden-plan.canopi',
+      name: 'Garden Plan',
+    })
+    const capture = checkpointSession()
+    capture.acknowledgeSaved
+      .mockImplementationOnce(() => {
+        throw new Error('clean publication failed')
+      })
+      .mockReturnValue('applied')
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    persistence.attachCanvas(capture.session)
+    const write = vi.fn()
+    const destination = prepareDesignWriteDestination({
+      resource: 'native-design:/designs/garden-plan.canopi',
+      destinationPath: '/designs/garden-plan.canopi',
+      write,
+    })
+
+    await expect(persistence.beginSave().execute(destination)).resolves.toMatchObject({
+      status: 'applied',
+    })
+    expect(write).toHaveBeenCalledOnce()
+    expect(capture.acknowledgeSaved).toHaveBeenCalledTimes(2)
+  })
+
+  it('reserves one operation execution before its writer reenters', async () => {
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({
+      file: original,
+      path: '/designs/original.canopi',
+      name: original.name,
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const operation = persistence.beginSave()
+    let reentrantExecution!: Promise<unknown>
+    const write = vi.fn()
+    const destination = designDestination('/designs/original.canopi', () => {
+      write()
+      reentrantExecution = operation.execute(destination)
+    })
+
+    const execution = operation.execute(destination)
+    await execution
+    await reentrantExecution
+
+    expect(reentrantExecution).toBe(execution)
+    expect(write).toHaveBeenCalledOnce()
+  })
+
+  it('rejects synchronous same-operation reentry with a typed busy error', () => {
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({
+      file: original,
+      name: original.name,
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const operation = persistence.beginBrowserDraft()
+    let reentrantError: unknown
+    const destination = draftDestination(() => {
+      try {
+        operation.executeImmediately(destination)
+      } catch (error) {
+        reentrantError = error
+      }
+      return undefined
+    })
+
+    expect(operation.executeImmediately(destination)).toMatchObject({
+      status: 'applied',
+    })
+    expect(reentrantError).toBeInstanceOf(DesignPersistenceBusyError)
+    expect(operation.executeImmediately(destination)).toMatchObject({
+      status: 'applied',
+    })
+  })
+
+  it('executes recovery through the shared autosave-store resource', async () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Garden Plan'),
+      path: '/designs/garden-plan.canopi',
+      name: 'Garden Plan',
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const writes: string[] = []
+    const destination = prepareDesignWriteDestination({
+      resource: 'native-recovery-store',
+      write(content) {
+        writes.push(content.name)
+      },
+    })
+
+    const recovered = await persistence.beginRecovery().execute(destination)
+
+    expect(recovered).toBe(true)
+    expect(writes).toEqual(['Garden Plan'])
+  })
+
+  it('executes browser download without exposing its captured content', async () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Garden Plan'),
+      name: 'Garden Plan',
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const downloads: string[] = []
+    const destination = prepareDesignWriteDestination({
+      resource: 'browser-download:1',
+      blocksReplacement: false,
+      write(content) {
+        downloads.push(content.name)
+      },
+    })
+
+    const settlement = await persistence.beginBrowserDownload().execute(destination)
+
+    expect(settlement.status).toBe('applied')
+    expect(downloads).toEqual(['Garden Plan'])
+  })
+
+  it('executes browser draft storage synchronously without exposing captured content', () => {
+    const operationStore = createMemoryDesignSessionStore({
+      file: makeDesign('Garden Plan'),
+      name: 'Garden Plan',
+    })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const drafts: string[] = []
+    const destination = prepareSynchronousDesignWriteDestination({
+      resource: 'browser-app-data:canopi:web-app-data:v1',
+      write(content) {
+        drafts.push(content.name)
+        return undefined
+      },
+    })
+
+    const settlement = persistence.beginBrowserDraft().executeImmediately(destination)
+
+    expect(settlement.status).toBe('applied')
+    expect(drafts).toEqual(['Garden Plan'])
+  })
+
+  it('acknowledges only the captured revisions and preserves later Design edits', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({
       file: original,
@@ -84,7 +477,9 @@ describe('purpose-aware Design persistence operations', () => {
       ...design,
       description: 'edit made during I/O',
     }))
-    const settlement = operation.succeed()
+    const settlement = await operation.execute(
+      designDestination('/designs/original.canopi'),
+    )
 
     expect(settlement.status).toBe('applied')
     expect(settlement.content.description).toBeNull()
@@ -92,7 +487,29 @@ describe('purpose-aware Design persistence operations', () => {
     expect(operationStore.isDesignDirty()).toBe(true)
   })
 
-  it('makes a completion inert after Design replacement', () => {
+  it('does not discard a requested snapshot when its exact Scene checkpoint later diverges', async () => {
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
+    const capture = checkpointSession()
+    let checkpointCurrent = true
+    vi.mocked(capture.session.captureForPersistence).mockImplementation((metadata, document) => ({
+      content: { ...document, name: metadata.name },
+      isCurrent: () => checkpointCurrent,
+      acknowledgeSaved: () => capture.acknowledgeSaved(),
+    }))
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    persistence.attachCanvas(capture.session)
+    const operation = persistence.beginBrowserDownload()
+    checkpointCurrent = false
+    const write = vi.fn()
+
+    await expect(operation.execute(downloadDestination(write)))
+      .resolves.toMatchObject({ status: 'applied' })
+    expect(write).toHaveBeenCalledOnce()
+    expect(capture.acknowledgeSaved).toHaveBeenCalledOnce()
+  })
+
+  it('makes a completion inert after Design replacement', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
@@ -101,13 +518,14 @@ describe('purpose-aware Design persistence operations', () => {
     operationStore.replaceCurrentDesignState(makeDesign('Replacement'), null, 'Replacement')
     operationStore.resetDirtyBaselines()
 
-    expect(operation.succeed('/designs/original.canopi').status).toBe('stale')
+    await expect(operation.execute(designDestination('/designs/original.canopi')))
+      .resolves.toMatchObject({ status: 'stale' })
     expect(operationStore.readDesignPath()).toBeNull()
     expect(operationStore.readDesignName()).toBe('Replacement')
     expect(operationStore.isDesignDirty()).toBe(false)
   })
 
-  it('rejects an empty Save As destination before acknowledging captured state', () => {
+  it('rejects an empty Save As destination before acknowledging captured state', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capture = checkpointSession()
@@ -116,13 +534,16 @@ describe('purpose-aware Design persistence operations', () => {
     operationStore.markDocumentDirty()
     const operation = persistence.beginSaveAs()
 
-    expect(() => operation.succeed('')).toThrow('destination path')
+    const write = vi.fn()
+    await expect(operation.execute(designDestination('', write)))
+      .rejects.toThrow('destination path')
+    expect(write).not.toHaveBeenCalled()
     expect(capture.acknowledgeSaved).not.toHaveBeenCalled()
     expect(operationStore.readDesignPath()).toBeNull()
     expect(operationStore.isDesignDirty()).toBe(true)
   })
 
-  it('returns stale when saved-baseline publication reentrantly replaces the Design', () => {
+  it('returns stale when saved-baseline publication reentrantly replaces the Design', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({
       file: original,
@@ -142,7 +563,9 @@ describe('purpose-aware Design persistence operations', () => {
     })
 
     replaceWhenClean = true
-    const settlement = operation.succeed()
+    const settlement = await operation.execute(
+      designDestination('/designs/original.canopi'),
+    )
     dispose()
 
     expect(settlement.status).toBe('stale')
@@ -150,7 +573,7 @@ describe('purpose-aware Design persistence operations', () => {
     expect(operationStore.readDesignPath()).toBeNull()
   })
 
-  it('finishes an irreversible settlement when clean publication issues a newer save', () => {
+  it('finishes an irreversible settlement when clean publication issues a newer save', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
@@ -166,20 +589,24 @@ describe('purpose-aware Design persistence operations', () => {
     })
 
     issueWhenClean = true
-    expect(older.succeed('/designs/older.canopi').status).toBe('applied')
+    await expect(older.execute(designDestination('/designs/older.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
     expect(operationStore.readDesignPath()).toBe('/designs/older.canopi')
     expect(newer).not.toBeNull()
-    expect(newer!.succeed('/designs/newer.canopi').status).toBe('applied')
+    await expect(newer!.execute(designDestination('/designs/newer.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
     expect(operationStore.readDesignPath()).toBe('/designs/newer.canopi')
     dispose()
   })
 
-  it('records manual success when path publication reentrantly issues a newer save', () => {
+  it('records manual success when path publication reentrantly issues a newer save', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
     operationStore.markDocumentDirty()
     const recovery = persistence.beginRecovery()
+    const recoveryWrite = deferred<void>()
+    const recoveryResult = recovery.execute(recoveryDestination(() => recoveryWrite.promise))
     const manual = persistence.beginSaveAs()
     let issueDuringPath = false
     let newer: ReturnType<typeof persistence.beginBrowserDownload> | null = null
@@ -191,8 +618,10 @@ describe('purpose-aware Design persistence operations', () => {
     })
 
     issueDuringPath = true
-    expect(manual.succeed('/designs/manual.canopi').status).toBe('applied')
-    recovery.fail(new Error('older recovery failed late'))
+    await expect(manual.execute(designDestination('/designs/manual.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
+    recoveryWrite.reject(new Error('older recovery failed late'))
+    await expect(recoveryResult).rejects.toThrow('older recovery failed late')
 
     expect(newer).not.toBeNull()
     expect(operationStore.readDesignPath()).toBe('/designs/manual.canopi')
@@ -200,41 +629,49 @@ describe('purpose-aware Design persistence operations', () => {
     dispose()
   })
 
-  it('blocks an older recovery failure before Save As publishes its path', () => {
+  it('blocks an older recovery failure before Save As publishes its path', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
     operationStore.markDocumentDirty()
     const recovery = persistence.beginRecovery()
+    const recoveryWrite = deferred<void>()
+    const recoveryResult = recovery.execute(recoveryDestination(() => recoveryWrite.promise))
     const manual = persistence.beginSaveAs()
     let failRecoveryDuringPath = false
     const dispose = effect(() => {
       void operationStore.designPath.value
       if (!failRecoveryDuringPath) return
       failRecoveryDuringPath = false
-      recovery.fail(new Error('older recovery failed during path publication'))
+      recoveryWrite.reject(new Error('older recovery failed during path publication'))
     })
 
     failRecoveryDuringPath = true
-    expect(manual.succeed('/designs/manual.canopi').status).toBe('applied')
+    await expect(manual.execute(designDestination('/designs/manual.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
+    await expect(recoveryResult).rejects.toThrow(
+      'older recovery failed during path publication',
+    )
 
     expect(operationStore.autosaveFailed.value).toBe(false)
     dispose()
   })
 
-  it('orders overlapping Save As destinations by issue order, not completion order', () => {
+  it('orders overlapping Save As destinations by issue order, not completion order', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
     const first = persistence.beginSaveAs()
     const second = persistence.beginSaveAs()
 
-    expect(second.succeed('/designs/second.canopi').status).toBe('applied')
-    expect(first.succeed('/designs/first.canopi').status).toBe('stale')
+    await expect(second.execute(designDestination('/designs/second.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
+    await expect(first.execute(designDestination('/designs/first.canopi')))
+      .resolves.toMatchObject({ status: 'stale' })
     expect(operationStore.readDesignPath()).toBe('/designs/second.canopi')
   })
 
-  it('does not let an old-path Save supersede a pending Save As', () => {
+  it('does not let an old-path Save supersede a pending Save As', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({
       file: original,
@@ -245,12 +682,14 @@ describe('purpose-aware Design persistence operations', () => {
     const oldPathSave = persistence.beginSave()
     const saveAs = persistence.beginSaveAs()
 
-    expect(saveAs.succeed('/designs/new.canopi').status).toBe('applied')
-    expect(oldPathSave.succeed().status).toBe('stale')
+    await expect(saveAs.execute(designDestination('/designs/new.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
+    await expect(oldPathSave.execute(designDestination('/designs/original.canopi')))
+      .resolves.toMatchObject({ status: 'stale' })
     expect(operationStore.readDesignPath()).toBe('/designs/new.canopi')
   })
 
-  it('rejects a captured canvas checkpoint after detach and reattach', () => {
+  it('rejects a captured canvas checkpoint after detach and reattach', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
@@ -262,11 +701,12 @@ describe('purpose-aware Design persistence operations', () => {
     persistence.detachCanvas(first.session)
     persistence.attachCanvas(second.session)
 
-    expect(operation.succeed().status).toBe('stale')
+    await expect(operation.execute(downloadDestination()))
+      .resolves.toMatchObject({ status: 'stale' })
     expect(first.acknowledgeSaved).not.toHaveBeenCalled()
   })
 
-  it('rejects a second Canvas attachment until the current lease is released', () => {
+  it('rejects a second Canvas attachment until the current lease is released', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
@@ -276,13 +716,16 @@ describe('purpose-aware Design persistence operations', () => {
 
     expect(() => persistence.attachCanvas(second.session)).toThrow('Canvas persistence lease')
 
-    const operation = persistence.beginBrowserDownload()
-    expect(operation.content.name).toBe('Original')
+    const capturedNames: string[] = []
+    await persistence.beginBrowserDownload().execute(downloadDestination((content) => {
+      capturedNames.push(content.name)
+    }))
+    expect(capturedNames).toEqual(['Original'])
     expect(first.session.captureForPersistence).toHaveBeenCalledOnce()
     expect(second.session.captureForPersistence).not.toHaveBeenCalled()
   })
 
-  it('rejects handoff from a stale Canvas without displacing the current lease', () => {
+  it('rejects handoff from a stale Canvas without displacing the current lease', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
@@ -294,12 +737,15 @@ describe('purpose-aware Design persistence operations', () => {
 
     expect(() => persistence.settleCanvasHandoff(first.session)).toThrow('Canvas persistence lease')
 
-    const operation = persistence.beginBrowserDownload()
-    expect(operation.content.name).toBe('Original')
+    const capturedNames: string[] = []
+    await persistence.beginBrowserDownload().execute(downloadDestination((content) => {
+      capturedNames.push(content.name)
+    }))
+    expect(capturedNames).toEqual(['Original'])
     expect(second.session.captureForPersistence).toHaveBeenCalledOnce()
   })
 
-  it('finishes Canvas acknowledgement before a reentrantly issued save takes over', () => {
+  it('finishes Canvas acknowledgement before a reentrantly issued save takes over', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capture = checkpointSession()
@@ -312,13 +758,15 @@ describe('purpose-aware Design persistence operations', () => {
       return 'applied'
     })
 
-    expect(older.succeed('/designs/older.canopi').status).toBe('applied')
+    await expect(older.execute(designDestination('/designs/older.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
     expect(operationStore.readDesignPath()).toBe('/designs/older.canopi')
-    expect(newer.succeed('/designs/newer.canopi').status).toBe('applied')
+    await expect(newer.execute(designDestination('/designs/newer.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
     expect(operationStore.readDesignPath()).toBe('/designs/newer.canopi')
   })
 
-  it('retries a started settlement after acknowledgement issues a newer save and throws', () => {
+  it('retries a started settlement after acknowledgement issues a newer save and throws', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capture = checkpointSession()
@@ -333,19 +781,22 @@ describe('purpose-aware Design persistence operations', () => {
       })
       .mockReturnValue('applied')
 
-    const settlement = settleWrittenDesignOperation({
-      succeed: () => older.succeed('/designs/older.canopi'),
-    })
+    const write = vi.fn()
+    const settlement = await older.execute(
+      designDestination('/designs/older.canopi', write),
+    )
 
     expect(settlement.status).toBe('applied')
     expect(operationStore.readDesignPath()).toBe('/designs/older.canopi')
     expect(capture.acknowledgeSaved).toHaveBeenCalledTimes(2)
+    expect(write).toHaveBeenCalledOnce()
     expect(newer).not.toBeNull()
-    expect(newer!.succeed('/designs/newer.canopi').status).toBe('applied')
+    await expect(newer!.execute(designDestination('/designs/newer.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
     expect(operationStore.readDesignPath()).toBe('/designs/newer.canopi')
   })
 
-  it('retries every Save As settlement phase without repeating external I/O', () => {
+  it('retries every Save As settlement phase without repeating external I/O', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capture = checkpointSession()
@@ -375,38 +826,47 @@ describe('purpose-aware Design persistence operations', () => {
 
     failStorePublication = true
     failPathPublication = true
-    const settlement = settleWrittenDesignOperation({
-      succeed: () => operation.succeed('/designs/retried.canopi'),
-    })
+    const write = vi.fn()
+    const settlement = await operation.execute(
+      designDestination('/designs/retried.canopi', write),
+    )
 
     expect(settlement.status).toBe('applied')
     expect(operationStore.readDesignPath()).toBe('/designs/retried.canopi')
     expect(operationStore.isDesignDirty()).toBe(false)
     expect(capture.acknowledgeSaved).toHaveBeenCalledTimes(4)
+    expect(write).toHaveBeenCalledOnce()
     disposeStoreEffect()
     disposePathEffect()
   })
 
-  it('reports every bounded exact-settlement failure in attempt order', () => {
+  it('reports every bounded exact-settlement failure in attempt order', async () => {
     const causes = Array.from({ length: 4 }, (_, index) =>
       new Error(`settlement failure ${index + 1}`))
-    const succeed = vi.fn(() => {
-      throw causes[succeed.mock.calls.length - 1]
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
+    const capture = checkpointSession()
+    capture.acknowledgeSaved.mockImplementation(() => {
+      throw causes[capture.acknowledgeSaved.mock.calls.length - 1]
     })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    persistence.attachCanvas(capture.session)
+    const write = vi.fn()
 
     let settlementError: unknown
     try {
-      settleWrittenDesignOperation({ succeed })
+      await persistence.beginBrowserDownload().execute(downloadDestination(write))
     } catch (error) {
       settlementError = error
     }
 
-    expect(succeed).toHaveBeenCalledTimes(4)
+    expect(capture.acknowledgeSaved).toHaveBeenCalledTimes(4)
+    expect(write).toHaveBeenCalledOnce()
     expect(settlementError).toBeInstanceOf(DesignPersistenceSettlementError)
     expect(settlementError).toMatchObject({ errors: causes })
   })
 
-  it('reserves save issue order before Canvas composition can reenter persistence', () => {
+  it('reserves save issue order before Canvas composition can reenter persistence', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     let nested: ReturnType<ReturnType<typeof createDesignSessionPersistence>['beginSaveAs']> | null = null
@@ -425,30 +885,36 @@ describe('purpose-aware Design persistence operations', () => {
     const outer = persistence.beginSaveAs()
 
     expect(nested).not.toBeNull()
-    expect(nested!.succeed('/designs/nested.canopi').status).toBe('applied')
-    expect(outer.succeed('/designs/outer.canopi').status).toBe('stale')
+    await expect(nested!.execute(designDestination('/designs/nested.canopi')))
+      .resolves.toMatchObject({ status: 'applied' })
+    await expect(outer.execute(designDestination('/designs/outer.canopi')))
+      .resolves.toMatchObject({ status: 'stale' })
     expect(operationStore.readDesignPath()).toBe('/designs/nested.canopi')
   })
 
-  it('reports recovery failure only for the still-current Design without advancing baselines', () => {
+  it('reports recovery failure only for the still-current Design without advancing baselines', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
     operationStore.markDocumentDirty()
     const recovery = persistence.beginRecovery()
 
-    recovery.succeed()
+    await expect(recovery.execute(recoveryDestination())).resolves.toBe(true)
     expect(operationStore.isDesignDirty()).toBe(true)
     expect(operationStore.autosaveFailed.value).toBe(false)
 
     const stale = persistence.beginRecovery()
+    const staleWrite = deferred<void>()
+    const staleResult = stale.execute(recoveryDestination(() => staleWrite.promise))
+    await Promise.resolve()
     operationStore.replaceCurrentDesignState(makeDesign('Replacement'), null, 'Replacement')
     operationStore.resetDirtyBaselines()
-    stale.fail(new Error('late failure'))
+    staleWrite.reject(new Error('late failure'))
+    await expect(staleResult).rejects.toThrow('late failure')
     expect(operationStore.autosaveFailed.value).toBe(false)
   })
 
-  it('defensively owns the exact Canvas-composed snapshot', () => {
+  it('defensively owns the exact Canvas-composed snapshot', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capturedPlant = { id: 'captured-plant' } as CanopiFile['plants'][number]
@@ -460,18 +926,23 @@ describe('purpose-aware Design persistence operations', () => {
     const persistence = createDesignSessionPersistence({ store: operationStore })
     persistence.attachCanvas(capture.session)
 
-    const operation = persistence.beginBrowserDownload()
-    const callerCopy = operation.content
-    callerCopy.plants.length = 0
+    const writerCopies: CanopiFile[] = []
+    const settlement = await persistence.beginBrowserDownload().execute(
+      downloadDestination((content) => {
+        writerCopies.push(content)
+        content.plants.length = 0
+      }),
+    )
 
-    expect(operation.content.plants).toEqual([capturedPlant])
+    expect(writerCopies[0]?.plants).toEqual([])
+    expect(settlement.content.plants).toEqual([capturedPlant])
     expect(capture.session.captureForPersistence).toHaveBeenCalledWith(
       { name: 'Original' },
       expect.objectContaining({ name: 'Original' }),
     )
   })
 
-  it('settles idempotently without acknowledging Canvas twice', () => {
+  it('settles idempotently without acknowledging Canvas twice', async () => {
     const original = {
       ...makeDesign('Original'),
       plants: [{ id: 'captured-plant' } as CanopiFile['plants'][number]],
@@ -482,46 +953,59 @@ describe('purpose-aware Design persistence operations', () => {
     persistence.attachCanvas(capture.session)
     operationStore.markDocumentDirty()
     const operation = persistence.beginBrowserDownload()
+    const write = vi.fn()
+    const destination = downloadDestination(write)
 
-    const first = operation.succeed()
+    const firstExecution = operation.execute(destination)
+    const secondExecution = operation.execute(destination)
+
+    expect(secondExecution).toBe(firstExecution)
+    const first = await firstExecution
     first.content.plants.length = 0
-    const second = operation.succeed()
+    const second = await secondExecution
 
     expect(second).toBe(first)
     expect(second.content.plants).toHaveLength(1)
+    expect(write).toHaveBeenCalledOnce()
     expect(capture.acknowledgeSaved).toHaveBeenCalledTimes(1)
     expect(operationStore.isDesignDirty()).toBe(false)
   })
 
-  it('lets only the latest recovery outcome control autosave failure', () => {
+  it('lets only the latest recovery outcome control autosave failure', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
     const first = persistence.beginRecovery()
     const second = persistence.beginRecovery()
 
-    second.fail(new Error('latest failure'))
+    await expect(second.execute(recoveryDestination(() => {
+      throw new Error('latest failure')
+    }))).rejects.toThrow('latest failure')
     expect(operationStore.autosaveFailed.value).toBe(true)
 
-    expect(first.succeed()).toBe(false)
+    await expect(first.execute(recoveryDestination())).resolves.toBe(false)
     expect(operationStore.autosaveFailed.value).toBe(true)
   })
 
-  it('prevents an older recovery failure from overriding a manual success', () => {
+  it('prevents an older recovery failure from overriding a manual success', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const persistence = createDesignSessionPersistence({ store: operationStore })
     operationStore.markDocumentDirty()
     const recovery = persistence.beginRecovery()
+    const recoveryWrite = deferred<void>()
+    const recoveryResult = recovery.execute(recoveryDestination(() => recoveryWrite.promise))
     const manual = persistence.beginBrowserDownload()
 
-    expect(manual.succeed().status).toBe('applied')
-    recovery.fail(new Error('late recovery failure'))
+    await expect(manual.execute(downloadDestination()))
+      .resolves.toMatchObject({ status: 'applied' })
+    recoveryWrite.reject(new Error('late recovery failure'))
+    await expect(recoveryResult).rejects.toThrow('late recovery failure')
 
     expect(operationStore.autosaveFailed.value).toBe(false)
   })
 
-  it('cleans a store-authoritative Canvas baseline while attachment is still hydrating', () => {
+  it('cleans a store-authoritative Canvas baseline while attachment is still hydrating', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capture = checkpointSession()
@@ -531,12 +1015,13 @@ describe('purpose-aware Design persistence operations', () => {
     operationStore.markCanvasDetachedDirty(true)
     const operation = persistence.beginBrowserDownload()
 
-    expect(operation.succeed().status).toBe('applied')
+    await expect(operation.execute(downloadDestination()))
+      .resolves.toMatchObject({ status: 'applied' })
     expect(capture.session.captureForPersistence).not.toHaveBeenCalled()
     expect(operationStore.isDesignDirty()).toBe(false)
   })
 
-  it('makes an unloaded Canvas capture stale when hydration admits a later Scene edit', () => {
+  it('makes an unloaded Canvas capture stale when hydration admits a later Scene edit', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capture = checkpointSession()
@@ -550,11 +1035,12 @@ describe('purpose-aware Design persistence operations', () => {
     loaded = true
     operationStore.setCanvasClean(false)
 
-    expect(operation.succeed().status).toBe('stale')
+    await expect(operation.execute(downloadDestination()))
+      .resolves.toMatchObject({ status: 'stale' })
     expect(operationStore.isDesignDirty()).toBe(true)
   })
 
-  it('makes a detached capture stale when a newer canvas handoff replaces its snapshot', () => {
+  it('makes a detached capture stale when a newer canvas handoff replaces its snapshot', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({
       file: original,
@@ -569,10 +1055,11 @@ describe('purpose-aware Design persistence operations', () => {
       plants: [{ id: 'newer-handoff' } as CanopiFile['plants'][number]],
     })
 
-    expect(operation.succeed().status).toBe('stale')
+    await expect(operation.execute(designDestination('/designs/original.canopi')))
+      .resolves.toMatchObject({ status: 'stale' })
   })
 
-  it('invalidates detached captures before publishing a newer handoff snapshot', () => {
+  it('invalidates detached captures before publishing a newer handoff snapshot', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({
       file: original,
@@ -582,12 +1069,14 @@ describe('purpose-aware Design persistence operations', () => {
     const persistence = createDesignSessionPersistence({ store: operationStore })
     const operation = persistence.beginSave()
     let settleDuringPublication = false
-    const settlement: { current: ReturnType<typeof operation.succeed> | null } = { current: null }
+    const settlement: { current: ReturnType<typeof operation.execute> | null } = { current: null }
     const dispose = effect(() => {
       void operationStore.currentDesign.value
       if (!settleDuringPublication) return
       settleDuringPublication = false
-      settlement.current = operation.succeed()
+      settlement.current = operation.execute(
+        designDestination('/designs/original.canopi'),
+      )
     })
 
     settleDuringPublication = true
@@ -597,7 +1086,7 @@ describe('purpose-aware Design persistence operations', () => {
     })
     dispose()
 
-    expect(settlement.current?.status).toBe('stale')
+    await expect(settlement.current).resolves.toMatchObject({ status: 'stale' })
   })
 
   it('marks a current Browser Draft failure without exposing acknowledgement policy', () => {
@@ -606,9 +1095,76 @@ describe('purpose-aware Design persistence operations', () => {
     const persistence = createDesignSessionPersistence({ store: operationStore })
     const operation = persistence.beginBrowserDraft()
 
-    operation.fail(new Error('storage unavailable'))
+    expect(() => operation.executeImmediately(draftDestination(() => {
+      throw new Error('storage unavailable')
+    }))).toThrow('storage unavailable')
 
     expect(operationStore.autosaveFailed.value).toBe(true)
+  })
+
+  it('caches a Browser Draft write error when failure publication also throws', () => {
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const operation = persistence.beginBrowserDraft()
+    const storageError = new Error('storage unavailable')
+    const publicationError = new Error('failure publication failed')
+    const write = vi.fn(() => {
+      throw storageError
+    })
+    const destination = draftDestination(write)
+    const disposeEffect = effect(() => {
+      if (operationStore.autosaveFailed.value) throw publicationError
+    })
+
+    try {
+      let firstError: unknown
+      try {
+        operation.executeImmediately(destination)
+      } catch (error) {
+        firstError = error
+      }
+      expect(firstError).toBeInstanceOf(DesignPersistenceFailurePolicyError)
+      expect(firstError).toMatchObject({ storageError, publicationError })
+
+      let repeatedError: unknown
+      try {
+        operation.executeImmediately(destination)
+      } catch (error) {
+        repeatedError = error
+      }
+      expect(repeatedError).toBe(firstError)
+      expect(write).toHaveBeenCalledOnce()
+    } finally {
+      disposeEffect()
+    }
+  })
+
+  it('preserves a recovery write error when failure publication also throws', async () => {
+    const original = makeDesign('Original')
+    const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
+    const persistence = createDesignSessionPersistence({ store: operationStore })
+    const operation = persistence.beginRecovery()
+    const storageError = new Error('recovery storage unavailable')
+    const publicationError = new Error('recovery failure publication failed')
+    const write = vi.fn(() => {
+      throw storageError
+    })
+    const destination = recoveryDestination(write)
+    const disposeEffect = effect(() => {
+      if (operationStore.autosaveFailed.value) throw publicationError
+    })
+
+    try {
+      const execution = operation.execute(destination)
+      expect(operation.execute(destination)).toBe(execution)
+      const error = await execution.catch((reason: unknown) => reason)
+      expect(error).toBeInstanceOf(DesignPersistenceFailurePolicyError)
+      expect(error).toMatchObject({ storageError, publicationError })
+      expect(write).toHaveBeenCalledOnce()
+    } finally {
+      disposeEffect()
+    }
   })
 
   it('captures handoff and diagnostic content without advancing a baseline', () => {
@@ -685,7 +1241,7 @@ describe('purpose-aware Design persistence operations', () => {
     expect(guard?.isCurrent()).toBe(false)
   })
 
-  it('retries Canvas acknowledgement publication before consuming success', () => {
+  it('retries Canvas acknowledgement publication before consuming success', async () => {
     const original = makeDesign('Original')
     const operationStore = createMemoryDesignSessionStore({ file: original, name: original.name })
     const capture = checkpointSession()
@@ -697,9 +1253,11 @@ describe('purpose-aware Design persistence operations', () => {
     const persistence = createDesignSessionPersistence({ store: operationStore })
     persistence.attachCanvas(capture.session)
     const operation = persistence.beginBrowserDownload()
+    const write = vi.fn()
 
-    expect(() => operation.succeed()).toThrow('clean publication failed')
-    expect(operation.succeed().status).toBe('applied')
+    await expect(operation.execute(downloadDestination(write)))
+      .resolves.toMatchObject({ status: 'applied' })
+    expect(write).toHaveBeenCalledOnce()
     expect(capture.acknowledgeSaved).toHaveBeenCalledTimes(2)
   })
 })

@@ -108,7 +108,8 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 ## Cross-Platform File Replace
 
 - `std::fs::rename` can fail on Windows when files are locked.
-- Use the project `atomic_replace()` path for design file writes and rollback sidecars.
+- Use the project `atomic_replace()` path for design file writes. Design saves take process-local admission for the normalized target family across backup, temporary write, and replace; autosaves take one admission for the whole autosave store across write, replace, and prune.
+- Temporary and rollback sidecars are operation-owned, same-directory files. Never return to fixed `.tmp` or `.old` ownership or clean up another operation's sidecar. The stable `.canopi.prev` backup intentionally remains target-owned and is protected by the target admission.
 
 ## Tauri Config Gotchas
 

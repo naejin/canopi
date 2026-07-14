@@ -12,6 +12,11 @@ import {
   captureDesignSessionPersistenceState,
   type DesignSessionPersistenceCapture,
 } from "./persistence-capability";
+import {
+  createDesignWriteAdmission,
+  type PreparedDesignWriteDestination,
+  type PreparedSynchronousDesignWriteDestination,
+} from "./write-admission";
 
 export interface DesignSaveSettlement {
   readonly status: "applied" | "stale";
@@ -19,29 +24,32 @@ export interface DesignSaveSettlement {
   readonly content: CanopiFile;
 }
 
-export interface DesignPersistenceWriteOperation {
-  readonly content: CanopiFile;
-  fail(error?: unknown): void;
-}
-
-export interface DesignExistingPathSaveOperation extends DesignPersistenceWriteOperation {
+export interface DesignExistingPathSaveOperation {
   readonly destinationPath: string;
-  succeed(): DesignSaveSettlement;
+  execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
 }
 
-export interface DesignSaveAsOperation extends DesignPersistenceWriteOperation {
-  succeed(path: string): DesignSaveSettlement;
+export interface DesignSaveAsOperation {
+  readonly destinationHint: {
+    readonly currentPath: string | null;
+    readonly suggestedName: string;
+  };
+  execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
 }
 
-export interface DesignSnapshotSaveOperation extends DesignPersistenceWriteOperation {
-  succeed(): DesignSaveSettlement;
+export interface DesignSnapshotSaveOperation {
+  execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
+}
+
+export interface DesignSynchronousSnapshotSaveOperation {
+  executeImmediately(
+    destination: PreparedSynchronousDesignWriteDestination,
+  ): DesignSaveSettlement;
 }
 
 export interface DesignRecoveryOperation {
-  readonly content: CanopiFile;
   readonly destinationHint: string | null;
-  succeed(): boolean;
-  fail(error?: unknown): void;
+  execute(destination: PreparedDesignWriteDestination): Promise<boolean>;
 }
 
 export interface DesignPersistenceCanvasLease {
@@ -59,16 +67,23 @@ export interface DesignReplacementGuardCapture {
   resume(): DesignReplacementGuard | null;
 }
 
+export interface DesignReplacementWriteFence {
+  invalidatePredecessorWrites(): void;
+}
+
 export interface DesignSessionPersistence {
   isCanvasAttached(session: CanvasDocumentSurface): boolean;
   attachCanvas(session: CanvasDocumentSurface): DesignPersistenceCanvasLease;
   acquireDetachedCanvasLease(): DesignPersistenceCanvasLease;
   beginReplacementGuard(): DesignReplacementGuardCapture;
+  withReplacementWriteFence<T>(
+    replace: (fence: DesignReplacementWriteFence) => Promise<T>,
+  ): Promise<T>;
   detachCanvas(session: CanvasDocumentSurface): void;
   beginSave(): DesignExistingPathSaveOperation;
   beginSaveAs(): DesignSaveAsOperation;
   beginBrowserDownload(): DesignSnapshotSaveOperation;
-  beginBrowserDraft(): DesignSnapshotSaveOperation;
+  beginBrowserDraft(): DesignSynchronousSnapshotSaveOperation;
   beginRecovery(): DesignRecoveryOperation;
   captureObservation(session: CanvasDocumentSurface | null): CanopiFile | null;
   settleCanvasHandoff(session: CanvasDocumentSurface): CanopiFile | null;
@@ -84,11 +99,30 @@ interface PersistenceCapture {
   readonly canvas: CanvasPersistenceCapture | null;
   readonly leasedCanvas: CanvasDocumentSurface | null;
   readonly attachmentEpoch: number;
+  readonly writeEpoch: number;
   readonly canvasLoaded: boolean;
   readonly content: CanopiFile;
 }
 
 type SaveIntent = "save" | "save-as" | "browser-download" | "browser-draft";
+
+interface WriteExecution<T> {
+  readonly destination: PreparedDesignWriteDestination;
+  readonly result: Promise<T>;
+}
+
+interface ReservedWriteExecution<T> {
+  readonly execution: WriteExecution<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason?: unknown) => void;
+}
+
+interface SynchronousWriteExecution<T> {
+  readonly destination: PreparedSynchronousDesignWriteDestination;
+  readonly outcome:
+    | { readonly status: "fulfilled"; readonly result: T }
+    | { readonly status: "rejected"; readonly error: unknown };
+}
 
 interface SaveIntentState {
   readonly capture: PersistenceCapture;
@@ -120,6 +154,18 @@ export class DesignPersistenceSettlementError extends Error {
   }
 }
 
+export class DesignPersistenceFailurePolicyError extends Error {
+  constructor(
+    readonly storageError: unknown,
+    readonly publicationError: unknown,
+  ) {
+    super(
+      `Design persistence failed and failure publication also failed: ${formatError(storageError)}`,
+    );
+    this.name = "DesignPersistenceFailurePolicyError";
+  }
+}
+
 // One initial attempt plus a retry after each fallible reactive publication:
 // Canvas baseline, Design baseline, and Save As destination path.
 const EXACT_SETTLEMENT_ATTEMPTS = 4;
@@ -129,11 +175,13 @@ export function createDesignSessionPersistence({
 }: DesignSessionPersistenceOptions = {}): DesignSessionPersistence {
   let attachedCanvas: CanvasDocumentSurface | null = null;
   let attachmentEpoch = 0;
+  let writeEpoch = 0;
   let nextSaveIntent = 0;
   let latestSaveIntent = 0;
   let nextRecoveryIntent = 0;
   let latestRecoveryIntent = 0;
   let manualSuccessEpoch = 0;
+  const writeAdmission = createDesignWriteAdmission();
 
   function isCanvasAttached(session: CanvasDocumentSurface): boolean {
     return attachedCanvas === session;
@@ -180,6 +228,7 @@ export function createDesignSessionPersistence({
     sessionCapture: DesignSessionPersistenceCapture,
     leasedCanvas: CanvasDocumentSurface | null,
     capturedAttachmentEpoch: number,
+    capturedWriteEpoch: number,
   ): PersistenceCapture {
     const activeCanvas = leasedCanvas?.hasLoadedDocument() ? leasedCanvas : null;
     const canvasCapture = activeCanvas?.captureForPersistence(
@@ -205,20 +254,30 @@ export function createDesignSessionPersistence({
       canvas: canvasCapture,
       leasedCanvas,
       attachmentEpoch: capturedAttachmentEpoch,
+      writeEpoch: capturedWriteEpoch,
       canvasLoaded: activeCanvas !== null,
       content: cloneDocument(content),
     };
   }
 
   function capture(): PersistenceCapture {
+    const capturedWriteEpoch = writeEpoch;
     return captureFromStoreBaseline(
       captureDesignSessionPersistenceState(store),
       attachedCanvas,
       attachmentEpoch,
+      capturedWriteEpoch,
     );
   }
 
   function captureIsCurrent(persistenceCapture: PersistenceCapture): boolean {
+    return captureSessionIsCurrent(persistenceCapture)
+      && persistenceCapture.writeEpoch === writeEpoch;
+  }
+
+  function captureSessionIsCurrent(
+    persistenceCapture: PersistenceCapture,
+  ): boolean {
     return persistenceCapture.store.isCurrent()
       && persistenceCapture.attachmentEpoch === attachmentEpoch
       && persistenceCapture.leasedCanvas === attachedCanvas
@@ -230,6 +289,7 @@ export function createDesignSessionPersistence({
   function beginReplacementGuard(): DesignReplacementGuardCapture {
     const leasedCanvas = attachedCanvas;
     const capturedAttachmentEpoch = attachmentEpoch;
+    const capturedWriteEpoch = writeEpoch;
     if (!store.hasCurrentDesign()) {
       const designBaselineIsCurrent = () => !store.hasCurrentDesign()
         && leasedCanvas === attachedCanvas
@@ -248,6 +308,7 @@ export function createDesignSessionPersistence({
       storeBaseline,
       leasedCanvas,
       capturedAttachmentEpoch,
+      capturedWriteEpoch,
     );
     try {
       return completedReplacementGuardCapture(
@@ -276,13 +337,13 @@ export function createDesignSessionPersistence({
       isCurrent() {
         if (
           !baseline.store.isExactCurrent()
-          || !captureIsCurrent(baseline)
+          || !captureSessionIsCurrent(baseline)
           || baseline.canvas?.isCurrent() === false
         ) return false;
         try {
           const current = capture();
           return baseline.store.isExactCurrent()
-            && captureIsCurrent(baseline)
+            && captureSessionIsCurrent(baseline)
             && (baseline.canvas?.isCurrent() ?? true)
             && (current.canvas?.isCurrent() ?? true)
             && replacementContentFingerprint(current.content) === contentFingerprint;
@@ -384,44 +445,147 @@ export function createDesignSessionPersistence({
     return cloneDocument(state.capture.content);
   }
 
+  async function executeSave(
+    state: SaveIntentState,
+    destination: PreparedDesignWriteDestination,
+    path: string | null,
+    updatePath: boolean,
+  ): Promise<DesignSaveSettlement> {
+    let writeCompleted = false;
+    try {
+      const admission = await writeAdmission.execute(
+        destination,
+        operationContent(state),
+        () => !state.failed
+          && state.intent === latestSaveIntent
+          && captureIsCurrent(state.capture),
+        () => {
+          writeCompleted = true;
+          return settleWrittenOperation(() => settleSave(state, path, updatePath));
+        },
+      );
+      return admission.status === "stale"
+        ? settleStale(state)
+        : admission.value;
+    } catch (error) {
+      throw writeCompleted
+        ? error
+        : preserveFailurePolicyError(error, () => failSave(state));
+    }
+  }
+
   function beginSave(): DesignExistingPathSaveOperation {
     const state = createIntent("save");
     const destinationPath = state.capture.store.path;
+    let execution: WriteExecution<DesignSaveSettlement> | null = null;
     if (!destinationPath) {
       state.failed = true;
       throw new Error("Existing-path save requires a destination path");
     }
     return Object.freeze({
-      get content() {
-        return operationContent(state);
-      },
       destinationPath,
-      succeed: () => settleSave(state, destinationPath, false),
-      fail: () => failSave(state),
+      execute(destination: PreparedDesignWriteDestination) {
+        if (execution) return repeatExecution(execution, destination);
+        if (writeAdmission.destinationPath(destination) !== destinationPath) {
+          return Promise.reject(
+            new Error("Existing-path save destination does not match its capture"),
+          );
+        }
+        const reserved = reserveWriteExecution<DesignSaveSettlement>(destination);
+        execution = reserved.execution;
+        void executeSave(state, destination, destinationPath, false).then(
+          reserved.resolve,
+          reserved.reject,
+        );
+        return reserved.execution.result;
+      },
     });
   }
 
   function beginSaveAs(): DesignSaveAsOperation {
     const state = createIntent("save-as");
+    let execution: WriteExecution<DesignSaveSettlement> | null = null;
     return Object.freeze({
-      get content() {
-        return operationContent(state);
+      destinationHint: Object.freeze({
+        currentPath: state.capture.store.path,
+        suggestedName: state.capture.content.name || state.capture.store.name || "Untitled",
+      }),
+      execute(destination: PreparedDesignWriteDestination) {
+        if (execution) return repeatExecution(execution, destination);
+        const destinationPath = writeAdmission.destinationPath(destination);
+        if (!destinationPath) {
+          return Promise.reject(new Error("Save As execution requires a destination path"));
+        }
+        const reserved = reserveWriteExecution<DesignSaveSettlement>(destination);
+        execution = reserved.execution;
+        void executeSave(state, destination, destinationPath, true).then(
+          reserved.resolve,
+          reserved.reject,
+        );
+        return reserved.execution.result;
       },
-      succeed: (path: string) => settleSave(state, path, true),
-      fail: () => failSave(state),
     });
   }
 
-  function beginSnapshotSave(
-    kind: "browser-download" | "browser-draft",
-  ): DesignSnapshotSaveOperation {
-    const state = createIntent(kind);
+  function beginBrowserDownload(): DesignSnapshotSaveOperation {
+    const state = createIntent("browser-download");
+    let execution: WriteExecution<DesignSaveSettlement> | null = null;
     return Object.freeze({
-      get content() {
-        return operationContent(state);
+      execute(destination: PreparedDesignWriteDestination) {
+        if (execution) return repeatExecution(execution, destination);
+        const reserved = reserveWriteExecution<DesignSaveSettlement>(destination);
+        execution = reserved.execution;
+        void executeSave(state, destination, null, false).then(
+          reserved.resolve,
+          reserved.reject,
+        );
+        return reserved.execution.result;
       },
-      succeed: () => settleSave(state, null, false),
-      fail: () => failSave(state),
+    });
+  }
+
+  function beginBrowserDraft(): DesignSynchronousSnapshotSaveOperation {
+    const state = createIntent("browser-draft");
+    let execution: SynchronousWriteExecution<DesignSaveSettlement> | null = null;
+    let executingDestination: PreparedSynchronousDesignWriteDestination | null = null;
+    return Object.freeze({
+      executeImmediately(destination: PreparedSynchronousDesignWriteDestination) {
+        if (execution) return repeatSynchronousExecution(execution, destination);
+        if (executingDestination) {
+          if (executingDestination !== destination) {
+            throw new Error("Design write operation already has a destination");
+          }
+          throw new DesignPersistenceBusyError(
+            "Synchronous Design write operation is already executing",
+          );
+        }
+        executingDestination = destination;
+        try {
+          const admission = writeAdmission.executeImmediately(
+            destination,
+            operationContent(state),
+            () => intentMaySettle(state),
+            () => settleWrittenOperation(() => settleSave(state, null, false)),
+          );
+          const result = admission.status === "stale"
+            ? settleStale(state)
+            : admission.value;
+          execution = { destination, outcome: { status: "fulfilled", result } };
+          return result;
+        } catch (error) {
+          const preservedError = preserveFailurePolicyError(
+            error,
+            () => failSave(state),
+          );
+          execution = {
+            destination,
+            outcome: { status: "rejected", error: preservedError },
+          };
+          throw preservedError;
+        } finally {
+          executingDestination = null;
+        }
+      },
     });
   }
 
@@ -431,6 +595,7 @@ export function createDesignSessionPersistence({
     const capturedManualSuccessEpoch = manualSuccessEpoch;
     const persistenceCapture = capture();
     let settled = false;
+    let execution: WriteExecution<boolean> | null = null;
 
     function maySettle(): boolean {
       return !settled
@@ -439,24 +604,59 @@ export function createDesignSessionPersistence({
         && captureIsCurrent(persistenceCapture);
     }
 
+    function mayWrite(): boolean {
+      return !settled
+        && intent === latestRecoveryIntent
+        && capturedManualSuccessEpoch === manualSuccessEpoch
+        && captureIsCurrent(persistenceCapture);
+    }
+
+    function settleSuccess(): boolean {
+      if (!maySettle()) return false;
+      const applied = persistenceCapture.store.setAutosaveFailed(false);
+      settled = true;
+      return applied
+        && intent === latestRecoveryIntent
+        && capturedManualSuccessEpoch === manualSuccessEpoch
+        && captureIsCurrent(persistenceCapture);
+    }
+
+    function settleFailure(): void {
+      if (!maySettle()) return;
+      persistenceCapture.store.setAutosaveFailed(true);
+      settled = true;
+    }
+
     return Object.freeze({
-      get content() {
-        return cloneDocument(persistenceCapture.content);
-      },
       destinationHint: persistenceCapture.store.path,
-      succeed() {
-        if (!maySettle()) return false;
-        const applied = persistenceCapture.store.setAutosaveFailed(false);
-        settled = true;
-        return applied
-          && intent === latestRecoveryIntent
-          && capturedManualSuccessEpoch === manualSuccessEpoch
-          && captureIsCurrent(persistenceCapture);
-      },
-      fail() {
-        if (!maySettle()) return;
-        persistenceCapture.store.setAutosaveFailed(true);
-        settled = true;
+      execute(destination: PreparedDesignWriteDestination) {
+        if (execution) return repeatExecution(execution, destination);
+        const reserved = reserveWriteExecution<boolean>(destination);
+        execution = reserved.execution;
+        void (async () => {
+          let writeCompleted = false;
+          try {
+            const admission = await writeAdmission.execute(
+              destination,
+              cloneDocument(persistenceCapture.content),
+              mayWrite,
+              () => {
+                writeCompleted = true;
+                return settleWrittenOperation(settleSuccess);
+              },
+            );
+            if (admission.status === "stale") {
+              settled = true;
+              return false;
+            }
+            return admission.value;
+          } catch (error) {
+            throw writeCompleted
+              ? error
+              : preserveFailurePolicyError(error, settleFailure);
+          }
+        })().then(reserved.resolve, reserved.reject);
+        return reserved.execution.result;
       },
     });
   }
@@ -466,11 +666,22 @@ export function createDesignSessionPersistence({
     attachCanvas,
     acquireDetachedCanvasLease,
     beginReplacementGuard,
+    withReplacementWriteFence: (replace) => writeAdmission.withReplacementFence(() => {
+      let invalidated = false;
+      const fence = Object.freeze({
+        invalidatePredecessorWrites() {
+          if (invalidated) return;
+          invalidated = true;
+          writeEpoch += 1;
+        },
+      });
+      return replace(fence);
+    }),
     detachCanvas,
     beginSave,
     beginSaveAs,
-    beginBrowserDownload: () => beginSnapshotSave("browser-download"),
-    beginBrowserDraft: () => beginSnapshotSave("browser-draft"),
+    beginBrowserDownload,
+    beginBrowserDraft,
     beginRecovery,
     captureObservation(session) {
       if (attachedCanvas !== session) throw new DesignPersistenceLeaseError();
@@ -513,20 +724,73 @@ export function createDesignSessionPersistence({
     dispose() {
       attachedCanvas = null;
       attachmentEpoch += 1;
+      writeAdmission.dispose();
     },
   };
 }
 
-export function settleWrittenDesignOperation<T>(operation: { succeed(): T }): T {
+function settleWrittenOperation<T>(succeed: () => T): T {
   const errors: unknown[] = [];
   for (let attempt = 0; attempt < EXACT_SETTLEMENT_ATTEMPTS; attempt += 1) {
     try {
-      return operation.succeed();
+      return succeed();
     } catch (error) {
       errors.push(error);
     }
   }
   throw new DesignPersistenceSettlementError(errors);
+}
+
+function preserveFailurePolicyError(
+  storageError: unknown,
+  publishFailure: () => void,
+): unknown {
+  try {
+    publishFailure();
+    return storageError;
+  } catch (publicationError) {
+    return new DesignPersistenceFailurePolicyError(storageError, publicationError);
+  }
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function repeatExecution<T>(
+  execution: WriteExecution<T>,
+  destination: PreparedDesignWriteDestination,
+): Promise<T> {
+  return execution.destination === destination
+    ? execution.result
+    : Promise.reject(new Error("Design write operation already has a destination"));
+}
+
+function reserveWriteExecution<T>(
+  destination: PreparedDesignWriteDestination,
+): ReservedWriteExecution<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const result = new Promise<T>((resolveResult, rejectResult) => {
+    resolve = resolveResult;
+    reject = rejectResult;
+  });
+  return {
+    execution: { destination, result },
+    resolve,
+    reject,
+  };
+}
+
+function repeatSynchronousExecution<T>(
+  execution: SynchronousWriteExecution<T>,
+  destination: PreparedSynchronousDesignWriteDestination,
+): T {
+  if (execution.destination !== destination) {
+    throw new Error("Design write operation already has a destination");
+  }
+  if (execution.outcome.status === "rejected") throw execution.outcome.error;
+  return execution.outcome.result;
 }
 
 function createSettlement(

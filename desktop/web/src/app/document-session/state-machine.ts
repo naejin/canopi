@@ -13,8 +13,7 @@ import {
 } from "./store";
 import {
   createDesignSessionPersistence,
-  settleWrittenDesignOperation,
-  type DesignRecoveryOperation,
+  DesignPersistenceSettlementError,
   type DesignReplacementGuard,
   type DesignSaveSettlement,
   type DesignSessionPersistence,
@@ -106,10 +105,10 @@ export interface TeardownDesignSessionOptions {
 export interface DesignSessionStateMachineDeps {
   readonly store: PersistenceCapableDesignSessionStore;
   readonly getCurrentSession: () => CanvasDocumentSurface | null;
-  readonly saveDesign: typeof designIpc.saveDesign;
-  readonly saveDesignAs: typeof designIpc.saveDesignAs;
+  readonly selectDesignSavePath: typeof designIpc.selectDesignSavePath;
+  readonly prepareDesignWrite: typeof designIpc.prepareDesignWrite;
+  readonly prepareRecoveryWrite: typeof designIpc.prepareRecoveryWrite;
   readonly loadDesign: typeof designIpc.loadDesign;
-  readonly autosaveDesign: typeof designIpc.autosaveDesign;
   readonly showMessage: typeof message;
   readonly translate: typeof t;
   readonly persistence: DesignSessionPersistence;
@@ -135,10 +134,10 @@ const INITIAL_STATE: DesignSessionState = {
 const DEFAULT_DEPS: Omit<DesignSessionStateMachineDeps, "persistence"> = {
   store: designSessionStore,
   getCurrentSession: getCurrentCanvasDocumentSurface,
-  saveDesign: (path, content) => designIpc.saveDesign(path, content),
-  saveDesignAs: (content) => designIpc.saveDesignAs(content),
+  selectDesignSavePath: (hint) => designIpc.selectDesignSavePath(hint),
+  prepareDesignWrite: (path) => designIpc.prepareDesignWrite(path),
+  prepareRecoveryWrite: (path) => designIpc.prepareRecoveryWrite(path),
   loadDesign: (path) => designIpc.loadDesign(path),
-  autosaveDesign: (content, path) => designIpc.autosaveDesign(content, path),
   showMessage: (text, options) => message(text, options),
   translate: t,
   workflowRunner: createDesignSessionWorkflowRunner(DESIGN_SESSION_WORKFLOWS),
@@ -147,6 +146,10 @@ const DEFAULT_DEPS: Omit<DesignSessionStateMachineDeps, "persistence"> = {
 export class DesignSessionStateMachine {
   private state: DesignSessionState = INITIAL_STATE;
   private stateEpoch = 0;
+  private operationIntent = 0;
+  private readonly activeOperationStates = new Map<number, DesignSessionState | null>();
+  private activeTransitionOperationIntent: number | null = null;
+  private presentedOperationIntent: number | null = null;
   private transitionIntent = 0;
   private readonly replacement: DesignSessionReplacement;
   private retainedReplacementAuthorization: {
@@ -174,6 +177,10 @@ export class DesignSessionStateMachine {
 
   resetState(): void {
     this.transitionIntent += 1;
+    this.operationIntent += 1;
+    this.activeOperationStates.clear();
+    this.activeTransitionOperationIntent = null;
+    this.presentedOperationIntent = null;
     this.retainedReplacementAuthorization = null;
     this.deps.persistence.dispose();
     this.publishState(INITIAL_STATE);
@@ -182,32 +189,42 @@ export class DesignSessionStateMachine {
   async startAttachedDesignSession(
     session: CanvasDocumentSurface,
   ): Promise<DocumentTransitionResult | null> {
-    const canvasLease = this.deps.persistence.attachCanvas(session);
+    const operationIntent = this.claimOperationIntent();
+    let canvasLease: ReturnType<DesignSessionPersistence["attachCanvas"]>;
+    try {
+      canvasLease = this.deps.persistence.attachCanvas(session);
+    } catch (error) {
+      this.finishTransitionOperationState(operationIntent, null, null);
+      throw error;
+    }
     if (!this.deps.store.hasCurrentDesign()) {
       this.beginEmptyDocumentSession(session);
       return null;
     }
 
-    const intent = ++this.transitionIntent;
-    this.publishState(this.operationState("loading", "mount-existing", session));
+    this.activateTransitionOperation(operationIntent, this.steadyStateFor(session));
+    const stateEpoch = this.publishOperationState(
+      operationIntent,
+      this.operationState("loading", "mount-existing", session),
+    );
     try {
       this.replacement.attach(session);
       this.retainedReplacementAuthorization = null;
       canvasLease.assertCurrent();
-      if (intent === this.transitionIntent) {
-        this.publishState(this.steadyStateFor(session));
-      }
+      this.finishTransitionOperationState(
+        operationIntent,
+        stateEpoch,
+        this.steadyStateFor(session),
+      );
       return {
         status: "applied",
         documentLoaded: session.hasLoadedDocument(),
       };
     } catch (error) {
-      if (intent === this.transitionIntent && canvasLease.isCurrent()) {
-        this.publishState({
-          ...this.operationState("failed", "mount-existing", session),
-          error,
-        });
-      }
+      this.finishTransitionOperationState(operationIntent, stateEpoch, {
+        ...this.operationState("failed", "mount-existing", session),
+        error,
+      });
       return {
         status: "failed",
         documentLoaded: session.hasLoadedDocument(),
@@ -217,8 +234,12 @@ export class DesignSessionStateMachine {
   }
 
   beginEmptyDocumentSession(session: CanvasDocumentSurface): void {
-    this.transitionIntent += 1;
     this.deps.persistence.attachCanvas(session);
+    this.operationIntent += 1;
+    this.activeOperationStates.clear();
+    this.activeTransitionOperationIntent = null;
+    this.presentedOperationIntent = null;
+    this.transitionIntent += 1;
     this.publishState({
       status: "attached-empty",
       attached: true,
@@ -231,63 +252,84 @@ export class DesignSessionStateMachine {
   async saveCurrentDesign(
     options: SaveCurrentDesignOptions = {},
   ): Promise<DesignSaveSettlement | null> {
+    return this.saveCurrentDesignForIntent(
+      options,
+      this.claimOperationIntent(),
+      true,
+    );
+  }
+
+  private async saveCurrentDesignForIntent(
+    options: SaveCurrentDesignOptions,
+    operationIntent: number,
+    finishIntent: boolean,
+  ): Promise<DesignSaveSettlement | null> {
     const session = this.sessionForOption(options.session);
-    if (session) this.deps.persistence.attachCanvas(session);
-    const stateEpoch = this.publishState(this.operationState("saving", "save", session));
+    let stateEpoch: number | null = null;
+    let stateStarted = false;
     try {
+      if (session) this.deps.persistence.attachCanvas(session);
+      stateEpoch = this.publishOperationState(
+        operationIntent,
+        this.operationState("saving", "save", session),
+      );
+      stateStarted = true;
       if (this.deps.store.readDesignPath()) {
         const save = this.deps.persistence.beginSave();
-        try {
-          await this.deps.saveDesign(save.destinationPath, save.content);
-        } catch (error) {
-          save.fail(error);
-          throw error;
-        }
-        return settleWrittenDesignOperation(save);
+        return await save.execute(this.deps.prepareDesignWrite(save.destinationPath));
       }
       const saveAs = this.deps.persistence.beginSaveAs();
-      let savedPath: string;
-      try {
-        savedPath = await this.deps.saveDesignAs(saveAs.content);
-      } catch (error) {
-        saveAs.fail(error);
-        throw error;
-      }
-      return settleWrittenDesignOperation({
-        succeed: () => saveAs.succeed(savedPath),
-      });
+      const savedPath = await this.deps.selectDesignSavePath(saveAs.destinationHint);
+      return await saveAs.execute(this.deps.prepareDesignWrite(savedPath));
     } finally {
-      this.finishState(stateEpoch, this.steadyStateFor(session));
+      if (finishIntent) {
+        this.finishOperationState(
+          operationIntent,
+          stateEpoch,
+          stateStarted ? this.steadyStateFor(session) : null,
+        );
+      } else if (stateStarted) {
+        this.publishOperationState(operationIntent, this.steadyStateFor(session));
+      }
     }
   }
 
   async saveAsCurrentDesign(
     options: SaveCurrentDesignOptions = {},
   ): Promise<DesignSaveSettlement | null> {
+    const operationIntent = this.claimOperationIntent();
     const session = this.sessionForOption(options.session);
-    if (session) this.deps.persistence.attachCanvas(session);
-    const stateEpoch = this.publishState(this.operationState("saving", "save-as", session));
+    let stateEpoch: number | null = null;
+    let stateStarted = false;
     try {
+      if (session) this.deps.persistence.attachCanvas(session);
+      stateEpoch = this.publishOperationState(
+        operationIntent,
+        this.operationState("saving", "save-as", session),
+      );
+      stateStarted = true;
       const saveAs = this.deps.persistence.beginSaveAs();
       let path: string;
       try {
-        path = await this.deps.saveDesignAs(saveAs.content);
+        path = await this.deps.selectDesignSavePath(saveAs.destinationHint);
       } catch (error) {
-        saveAs.fail(error);
         if (isCancelled(error)) return null;
         throw error;
       }
-      return settleWrittenDesignOperation({
-        succeed: () => saveAs.succeed(path),
-      });
+      return await saveAs.execute(this.deps.prepareDesignWrite(path));
     } finally {
-      this.finishState(stateEpoch, this.steadyStateFor(session));
+      this.finishOperationState(
+        operationIntent,
+        stateEpoch,
+        stateStarted ? this.steadyStateFor(session) : null,
+      );
     }
   }
 
   async transitionDocument(
     request: DocumentTransitionRequest,
   ): Promise<DocumentTransitionResult> {
+    const operationIntent = this.claimOperationIntent();
     const session = this.sessionForTransition(request);
     let canvasLease: ReturnType<DesignSessionPersistence["attachCanvas"]> | null = null;
     let replacementGuard: DesignReplacementGuard | null = null;
@@ -297,6 +339,7 @@ export class DesignSessionStateMachine {
     let retainedReplacementIdentity: DesignSessionPendingCanvasReplacementIdentity | null = null;
     let designBaselineIsCurrent = () => false;
     let intent: number | null = null;
+    let transitionStateEpoch: number | null = null;
     const transitionIsCurrent = () => intent !== null
       && intent === this.transitionIntent
       && canvasLease?.isCurrent() === true;
@@ -314,15 +357,26 @@ export class DesignSessionStateMachine {
       }
       assertReplacementCurrent();
     };
+    const publishCompletionIfOwned = (state: DesignSessionState) => {
+      this.finishTransitionOperationState(
+        operationIntent,
+        transitionStateEpoch,
+        intent === null ? null : state,
+      );
+    };
 
     try {
       canvasLease = session
         ? this.deps.persistence.attachCanvas(session)
         : this.deps.persistence.acquireDetachedCanvasLease();
-      intent = ++this.transitionIntent;
+      const activeCanvasLease = canvasLease;
+      intent = this.activateTransitionOperation(
+        operationIntent,
+        this.steadyStateFor(session),
+      );
       if (!session && !this.deps.store.hasCurrentDesign() && request.deferWhenDetachedAndEmpty) {
         request.deferWhenDetachedAndEmpty();
-        this.publishState(this.steadyStateFor(session));
+        publishCompletionIfOwned(this.steadyStateFor(session));
         return {
           status: "queued",
           documentLoaded: false,
@@ -373,7 +427,7 @@ export class DesignSessionStateMachine {
         && !retainedReplacementDesignWasApplied
         && request.dirtyGuard === "skip"
       ) {
-        if (transitionIsCurrent()) this.publishState(this.steadyStateFor(session));
+        publishCompletionIfOwned(this.steadyStateFor(session));
         return cancelledResult(session);
       }
 
@@ -386,112 +440,123 @@ export class DesignSessionStateMachine {
           retainedReplacementRetry
             ? () => transitionIsCurrent() && designBaselineIsCurrent()
             : replacementIsCurrent,
+          operationIntent,
         );
         if (decision === "cancel") {
-          if (transitionIsCurrent()) {
-            this.publishState(this.steadyStateFor(session));
-          }
+          publishCompletionIfOwned(this.steadyStateFor(session));
           return cancelledResult(session);
         }
       }
 
-      assertReplacementAttemptCurrent();
-      this.publishState(this.operationState("loading", request.source, session));
-      const loaded = await request.load();
-      if (request.isCancelled?.()) {
-        if (transitionIsCurrent()) {
-          this.publishState(this.steadyStateFor(session));
-        }
-        return cancelledResult(session);
-      }
-      assertReplacementAttemptCurrent();
-
-      const replacementInput = {
-        file: loaded.file,
-        kind: request.source === "new" ? "new" as const : "loaded" as const,
-        path: loaded.path,
-        name: loaded.name,
-      };
-      if (
-        retainedReplacementRetry
-        && retainedReplacementIdentity
-        && session
-        && request.source !== "mount-existing"
-        && !this.replacement.matchesPendingCanvasReplacement(
-          replacementInput,
-          session,
-          retainedReplacementIdentity,
-        )
-      ) {
-        const resumed = this.replacement.resumePendingCanvasReplacement(
-          session,
-          retainedReplacementIdentity,
-          {
-            preserveCurrentDesign:
-              !retainedReplacementDesignWasApplied
-              && !retainedReplacementWasAuthorized,
-          },
+      return await this.deps.persistence.withReplacementWriteFence(async (writeFence) => {
+        assertReplacementAttemptCurrent();
+        transitionStateEpoch = this.publishOperationState(
+          operationIntent,
+          this.operationState("loading", request.source, session),
         );
-        if (!resumed) {
-          throw new CanvasAuthorityBusyError("document-settlement");
+        const loaded = await request.load();
+        if (request.isCancelled?.()) {
+          publishCompletionIfOwned(this.steadyStateFor(session));
+          return cancelledResult(session);
+        }
+        assertReplacementAttemptCurrent();
+
+        const replacementInput = {
+          file: loaded.file,
+          kind: request.source === "new" ? "new" as const : "loaded" as const,
+          path: loaded.path,
+          name: loaded.name,
+        };
+        if (
+          retainedReplacementRetry
+          && retainedReplacementIdentity
+          && session
+          && request.source !== "mount-existing"
+          && !this.replacement.matchesPendingCanvasReplacement(
+            replacementInput,
+            session,
+            retainedReplacementIdentity,
+          )
+        ) {
+          const resumed = this.replacement.resumePendingCanvasReplacement(
+            session,
+            retainedReplacementIdentity,
+            {
+              preserveCurrentDesign:
+                !retainedReplacementDesignWasApplied
+                && !retainedReplacementWasAuthorized,
+            },
+          );
+          if (!resumed) {
+            throw new CanvasAuthorityBusyError("document-settlement");
+          }
+          if (
+            !retainedReplacementDesignWasApplied
+            && !retainedReplacementWasAuthorized
+          ) {
+            writeFence.invalidatePredecessorWrites();
+          }
+          this.retainedReplacementAuthorization = null;
+          activeCanvasLease.assertCurrent();
+          publishCompletionIfOwned(this.steadyStateFor(session));
+          return cancelledResult(session);
+        }
+
+        try {
+          if (request.source === "mount-existing") {
+            if (!session) {
+              throw new Error("mount-existing document transitions require an attached canvas session");
+            }
+            this.replacement.attach(session);
+          } else {
+            this.replacement.replace(replacementInput, session);
+          }
+        } catch (error) {
+          const pendingIdentity = session
+            ? this.replacement.pendingCanvasReplacementIdentity(session)
+            : null;
+          const pendingDesignWasApplied = pendingIdentity && session
+            ? this.replacement.isPendingCanvasReplacementDesignFinalized(
+                session,
+                pendingIdentity,
+              )
+            : false;
+          this.retainedReplacementAuthorization = pendingIdentity && session
+            ? {
+                canvas: session,
+                identity: pendingIdentity,
+                isDesignBaselineCurrent: designBaselineIsCurrent,
+              }
+            : null;
+          if (pendingIdentity && !pendingDesignWasApplied) {
+            writeFence.invalidatePredecessorWrites();
+          }
+          throw error;
         }
         this.retainedReplacementAuthorization = null;
-        canvasLease.assertCurrent();
-        if (transitionIsCurrent()) {
-          this.publishState(this.steadyStateFor(session));
-        }
-        return cancelledResult(session);
-      }
+        // Design publication can synchronously issue a successor transition. Once the
+        // replacement is applied, supersession may hide this state but cannot cancel it.
+        activeCanvasLease.assertCurrent();
 
-      try {
-        if (request.source === "mount-existing") {
-          if (!session) {
-            throw new Error("mount-existing document transitions require an attached canvas session");
-          }
-          this.replacement.attach(session);
-        } else {
-          this.replacement.replace(replacementInput, session);
-        }
-      } catch (error) {
-        const pendingIdentity = session
-          ? this.replacement.pendingCanvasReplacementIdentity(session)
-          : null;
-        this.retainedReplacementAuthorization = pendingIdentity && session
-          ? {
-              canvas: session,
-              identity: pendingIdentity,
-              isDesignBaselineCurrent: designBaselineIsCurrent,
-            }
-          : null;
-        throw error;
-      }
-      this.retainedReplacementAuthorization = null;
-      // Design publication can synchronously issue a successor transition. Once the
-      // replacement is applied, supersession may hide this state but cannot cancel it.
-      canvasLease.assertCurrent();
-
-      if (transitionIsCurrent()) {
-        this.publishState(this.steadyStateFor(session));
-      }
-      return {
-        status: "applied",
-        documentLoaded: session?.hasLoadedDocument() ?? false,
-      };
+        publishCompletionIfOwned(this.steadyStateFor(session));
+        return {
+          status: "applied",
+          documentLoaded: session?.hasLoadedDocument() ?? false,
+        };
+      });
     } catch (error) {
       if (error instanceof DesignSessionTransitionSupersededError) {
-        if (transitionIsCurrent()) this.publishState(this.steadyStateFor(session));
+        publishCompletionIfOwned(this.steadyStateFor(session));
         return cancelledResult(session);
       }
       if (isCancelled(error)) {
-        if (transitionIsCurrent()) this.publishState(this.steadyStateFor(session));
+        publishCompletionIfOwned(this.steadyStateFor(session));
         return cancelledResult(session);
       }
-      if (transitionIsCurrent()) {
-        this.publishState({
-          ...this.operationState("failed", request.source, session),
-          error,
-        });
-      }
+      publishCompletionIfOwned({
+        ...this.operationState("failed", request.source, session),
+        error,
+      });
       return {
         status: "failed",
         documentLoaded: session?.hasLoadedDocument() ?? false,
@@ -565,26 +630,36 @@ export class DesignSessionStateMachine {
     if (!this.deps.store.isDesignDirty()) return false;
     if (!runtimeInitialized) return false;
 
-    this.deps.persistence.attachCanvas(session);
-    const stateEpoch = this.publishState(this.operationState("autosaving", "autosave", session));
-    let operation: DesignRecoveryOperation | null = null;
+    const operationIntent = this.claimOperationIntent();
+    let stateEpoch: number | null = null;
+    let stateStarted = false;
     try {
+      this.deps.persistence.attachCanvas(session);
+      stateEpoch = this.publishOperationState(
+        operationIntent,
+        this.operationState("autosaving", "autosave", session),
+      );
+      stateStarted = true;
       try {
-        operation = this.deps.persistence.beginRecovery();
-        await this.deps.autosaveDesign(operation.content, operation.destinationHint);
+        const operation = this.deps.persistence.beginRecovery();
+        return await operation.execute(
+          this.deps.prepareRecoveryWrite(operation.destinationHint),
+        );
       } catch (error) {
-        logError("Autosave failed:", error);
-        operation?.fail(error);
-        return false;
-      }
-      try {
-        return settleWrittenDesignOperation(operation);
-      } catch (error) {
-        logError("Autosave settlement failed:", error);
+        logError(
+          error instanceof DesignPersistenceSettlementError
+            ? "Autosave settlement failed:"
+            : "Autosave failed:",
+          error,
+        );
         return false;
       }
     } finally {
-      this.finishState(stateEpoch, this.steadyStateFor(session));
+      this.finishOperationState(
+        operationIntent,
+        stateEpoch,
+        stateStarted ? this.steadyStateFor(session) : null,
+      );
     }
   }
 
@@ -594,9 +669,19 @@ export class DesignSessionStateMachine {
     logError,
   }: TeardownDesignSessionOptions): void {
     if (!this.deps.persistence.isCanvasAttached(session)) return;
-    this.transitionIntent += 1;
-    const canvasLease = this.deps.persistence.attachCanvas(session);
-    const stateEpoch = this.publishState(this.operationState("tearing-down", "teardown", session));
+    const operationIntent = this.claimOperationIntent();
+    let canvasLease: ReturnType<DesignSessionPersistence["attachCanvas"]>;
+    try {
+      canvasLease = this.deps.persistence.attachCanvas(session);
+    } catch (error) {
+      this.finishTransitionOperationState(operationIntent, null, null);
+      throw error;
+    }
+    this.activateTransitionOperation(operationIntent, this.steadyStateFor(session));
+    const stateEpoch = this.publishOperationState(
+      operationIntent,
+      this.operationState("tearing-down", "teardown", session),
+    );
 
     if (runtimeInitialized && session.hasLoadedDocument()) {
       try {
@@ -609,7 +694,11 @@ export class DesignSessionStateMachine {
         }
       } catch (error) {
         logError("Failed to snapshot canvas before teardown:", error);
-        this.finishState(stateEpoch, this.steadyStateFor(session));
+        this.finishTransitionOperationState(
+          operationIntent,
+          stateEpoch,
+          this.steadyStateFor(session),
+        );
         throw error;
       }
     }
@@ -623,7 +712,11 @@ export class DesignSessionStateMachine {
       canvasDetached = true;
       this.deps.persistence.dispose();
     } finally {
-      this.finishState(stateEpoch, this.steadyStateFor(canvasDetached ? null : session));
+      this.finishTransitionOperationState(
+        operationIntent,
+        stateEpoch,
+        this.steadyStateFor(canvasDetached ? null : session),
+      );
     }
   }
 
@@ -695,6 +788,7 @@ export class DesignSessionStateMachine {
   private async confirmReplacement(
     session: CanvasDocumentSurface | null,
     replacementIsCurrent: () => boolean,
+    operationIntent: number,
   ): Promise<ReplacementDecision> {
     if (!this.deps.store.hasCurrentDesign()) return "proceed";
     if (!this.deps.store.isDesignDirty()) return "proceed";
@@ -717,7 +811,11 @@ export class DesignSessionStateMachine {
     if (result === cancelLabel) return "cancel";
     if (result === saveLabel) {
       try {
-        const settlement = await this.saveCurrentDesign({ session });
+        const settlement = await this.saveCurrentDesignForIntent(
+          { session },
+          operationIntent,
+          false,
+        );
         if (settlement?.status !== "applied" || this.deps.store.isDesignDirty()) {
           return "cancel";
         }
@@ -761,9 +859,77 @@ export class DesignSessionStateMachine {
     return this.stateEpoch;
   }
 
-  private finishState(epoch: number, state: DesignSessionState): void {
-    if (epoch !== this.stateEpoch) return;
-    this.publishState(state);
+  private claimOperationIntent(): number {
+    this.operationIntent += 1;
+    this.activeOperationStates.set(this.operationIntent, null);
+    return this.operationIntent;
+  }
+
+  private activateTransitionOperation(
+    intent: number,
+    fallbackState: DesignSessionState,
+  ): number {
+    const predecessor = this.activeTransitionOperationIntent;
+    this.activeTransitionOperationIntent = intent;
+    if (predecessor !== null) {
+      this.finishOperationState(predecessor, null, fallbackState);
+    }
+    this.transitionIntent += 1;
+    return this.transitionIntent;
+  }
+
+  private publishOperationState(
+    intent: number,
+    state: DesignSessionState,
+  ): number | null {
+    if (!this.activeOperationStates.has(intent)) return null;
+    this.activeOperationStates.set(intent, state);
+    if (intent !== this.latestActiveOperationIntent()) return null;
+    this.presentedOperationIntent = intent;
+    return this.publishState(state);
+  }
+
+  private finishOperationState(
+    intent: number,
+    _epoch: number | null,
+    state: DesignSessionState | null,
+  ): void {
+    if (!this.activeOperationStates.has(intent)) return;
+    const wasPresented = intent === this.presentedOperationIntent;
+    this.activeOperationStates.delete(intent);
+    if (!wasPresented && this.presentedOperationIntent !== null) return;
+    const next = this.latestActiveOperationState();
+    this.presentedOperationIntent = next?.intent ?? null;
+    const presentation = next?.state ?? state;
+    if (presentation) this.publishState(presentation);
+  }
+
+  private finishTransitionOperationState(
+    intent: number,
+    epoch: number | null,
+    state: DesignSessionState | null,
+  ): void {
+    if (this.activeTransitionOperationIntent === intent) {
+      this.activeTransitionOperationIntent = null;
+    }
+    this.finishOperationState(intent, epoch, state);
+  }
+
+  private latestActiveOperationIntent(): number | null {
+    let latest: number | null = null;
+    for (const intent of this.activeOperationStates.keys()) latest = intent;
+    return latest;
+  }
+
+  private latestActiveOperationState(): {
+    readonly intent: number;
+    readonly state: DesignSessionState;
+  } | null {
+    let latest: { intent: number; state: DesignSessionState } | null = null;
+    for (const [intent, state] of this.activeOperationStates) {
+      if (state) latest = { intent, state };
+    }
+    return latest;
   }
 
   private steadyStateFor(session: CanvasDocumentSurface | null): DesignSessionState {

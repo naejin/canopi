@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => {
   return {
     canvasSession: null as any,
     saveDesign: vi.fn(),
-    saveDesignAs: vi.fn(),
+    autosaveDesign: vi.fn(),
+    selectDesignSavePath: vi.fn(),
     openDesignDialog: vi.fn(),
     loadDesign: vi.fn(),
     newDesign: vi.fn(),
@@ -25,13 +26,29 @@ vi.mock('../canvas/session', async (importOriginal) => {
   }
 })
 
-vi.mock('../ipc/design', () => ({
-  saveDesign: mocks.saveDesign,
-  saveDesignAs: mocks.saveDesignAs,
-  openDesignDialog: mocks.openDesignDialog,
-  loadDesign: mocks.loadDesign,
-  newDesign: mocks.newDesign,
-}))
+vi.mock('../ipc/design', async () => {
+  const { prepareDesignWriteDestination } = await import(
+    '../app/document-session/write-admission'
+  )
+  return {
+    saveDesign: mocks.saveDesign,
+    autosaveDesign: mocks.autosaveDesign,
+    selectDesignSavePath: mocks.selectDesignSavePath,
+    prepareDesignWrite: (path: string) => prepareDesignWriteDestination({
+      resource: `native-design:${path}`,
+      destinationPath: path,
+      write: (content) => mocks.saveDesign(path, content).then(() => undefined),
+    }),
+    prepareRecoveryWrite: (destinationHint: string | null) =>
+      prepareDesignWriteDestination({
+        resource: 'native-recovery-store',
+        write: (content) => mocks.autosaveDesign(content, destinationHint),
+      }),
+    openDesignDialog: mocks.openDesignDialog,
+    loadDesign: mocks.loadDesign,
+    newDesign: mocks.newDesign,
+  }
+})
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   message: mocks.message,
@@ -158,6 +175,9 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
 beforeEach(() => {
@@ -165,7 +185,10 @@ beforeEach(() => {
   mocks.canvasSession = makeSession()
   mocks.saveDesign.mockReset()
   mocks.saveDesign.mockResolvedValue('/designs/current.canopi')
-  mocks.saveDesignAs.mockReset()
+  mocks.autosaveDesign.mockReset()
+  mocks.autosaveDesign.mockResolvedValue(undefined)
+  mocks.selectDesignSavePath.mockReset()
+  mocks.selectDesignSavePath.mockResolvedValue('/designs/current.canopi')
   mocks.openDesignDialog.mockReset()
   mocks.loadDesign.mockReset()
   mocks.newDesign.mockReset()
@@ -238,7 +261,7 @@ describe('document replacement actions', () => {
     nonCanvasRevision.value = 1
     designPath.value = null
     mocks.message.mockResolvedValue('Save')
-    mocks.saveDesignAs.mockRejectedValue(new Error('Dialog cancelled'))
+    mocks.selectDesignSavePath.mockRejectedValue(new Error('Dialog cancelled'))
 
     await openDesignFromPath('/designs/next.canopi')
 

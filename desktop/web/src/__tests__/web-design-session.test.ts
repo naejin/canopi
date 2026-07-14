@@ -795,6 +795,60 @@ describe('browser Design Session lifecycle', () => {
     }
   })
 
+  it('contains autosave-failure publication errors inside the queued task', async () => {
+    const initial = makeCanopiFile({ name: 'Autosave Publication Garden' })
+    const store = createMemoryDesignSessionStore({
+      file: initial,
+      path: null,
+      name: initial.name,
+    })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => 'draft-autosave-publication',
+    })
+    const captureFailure = new CanvasAuthorityBusyError('document-settlement')
+    const publicationFailure = new Error('autosave failure publication failed')
+    let captureIsBusy = true
+    const canvas = testCanvasDocumentSurface({
+      captureForPersistence: vi.fn(() => {
+        if (captureIsBusy) throw captureFailure
+        return persistenceCapture(initial)
+      }),
+    })
+    const detach = controller.attachCanvasSession(canvas)
+    const disposeAutosave = controller.installAutosave()
+    const disposeFailureEffect = effect(() => {
+      if (store.autosaveFailed.value) throw publicationFailure
+    })
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      store.mutateCurrentDesign((design) => ({
+        ...design,
+        description: 'Trigger contained failure',
+      }))
+      await Promise.resolve()
+
+      expect(logError).toHaveBeenCalledWith(
+        'Browser Design Session command failed:',
+        captureFailure,
+      )
+      expect(logError).toHaveBeenCalledWith(
+        'Browser Design Session command failed:',
+        publicationFailure,
+      )
+    } finally {
+      captureIsBusy = false
+      disposeFailureEffect()
+      disposeAutosave()
+      logError.mockRestore()
+      detach()
+    }
+  })
+
   it('rejects overlapping browser Canvas attachments before hydrating stale store state', () => {
     const initial = makeCanopiFile({ name: 'Leased Garden' })
     const store = createMemoryDesignSessionStore({
