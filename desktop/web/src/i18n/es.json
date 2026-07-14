@@ -455,15 +455,7 @@
       "contours": "Curvas de nivel",
       "contourInterval": "Intervalo de curvas",
       "hillshade": "Sombreado",
-      "hillshadeOpacity": "Opacidad del sombreado",
-      "offlineTiles": "Teselas sin conexión",
-      "downloadTiles": "Descargar teselas",
-      "downloadProgress": "Descargando...",
-      "downloadComplete": "Descarga completa",
-      "tileRegion": "Región de teselas",
-      "zoomRange": "Rango de zoom",
-      "offlineStatus": "Sin conexión",
-      "removeOffline": "Eliminar teselas sin conexión"
+      "hillshadeOpacity": "Opacidad del sombreado"
     },
     "pinnedPlantNames": {
       "legend": "Leyenda"

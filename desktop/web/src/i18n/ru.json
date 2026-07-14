@@ -455,15 +455,7 @@
       "contours": "Изолинии",
       "contourInterval": "Интервал изолиний",
       "hillshade": "Отмывка рельефа",
-      "hillshadeOpacity": "Прозрачность отмывки",
-      "offlineTiles": "Офлайн-тайлы",
-      "downloadTiles": "Скачать тайлы",
-      "downloadProgress": "Загрузка...",
-      "downloadComplete": "Загрузка завершена",
-      "tileRegion": "Регион тайлов",
-      "zoomRange": "Диапазон масштаба",
-      "offlineStatus": "Офлайн",
-      "removeOffline": "Удалить офлайн-тайлы"
+      "hillshadeOpacity": "Прозрачность отмывки"
     },
     "pinnedPlantNames": {
       "legend": "Легенда"

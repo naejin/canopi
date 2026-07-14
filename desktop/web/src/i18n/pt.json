@@ -455,15 +455,7 @@
       "contours": "Curvas de nível",
       "contourInterval": "Intervalo das curvas",
       "hillshade": "Sombreamento",
-      "hillshadeOpacity": "Opacidade do sombreamento",
-      "offlineTiles": "Tiles offline",
-      "downloadTiles": "Baixar tiles",
-      "downloadProgress": "Baixando...",
-      "downloadComplete": "Download concluído",
-      "tileRegion": "Região dos tiles",
-      "zoomRange": "Faixa de zoom",
-      "offlineStatus": "Offline",
-      "removeOffline": "Remover tiles offline"
+      "hillshadeOpacity": "Opacidade do sombreamento"
     },
     "pinnedPlantNames": {
       "legend": "Legenda"

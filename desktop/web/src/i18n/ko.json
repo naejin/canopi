@@ -455,15 +455,7 @@
       "contours": "등고선",
       "contourInterval": "등고선 간격",
       "hillshade": "음영기복",
-      "hillshadeOpacity": "음영 불투명도",
-      "offlineTiles": "오프라인 타일",
-      "downloadTiles": "타일 다운로드",
-      "downloadProgress": "다운로드 중...",
-      "downloadComplete": "다운로드 완료",
-      "tileRegion": "타일 지역",
-      "zoomRange": "줌 범위",
-      "offlineStatus": "오프라인",
-      "removeOffline": "오프라인 타일 삭제"
+      "hillshadeOpacity": "음영 불투명도"
     },
     "pinnedPlantNames": {
       "legend": "범례"

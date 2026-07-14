@@ -44,6 +44,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - `gridVisible` is separate canvas chrome and must not be coupled to the base layer row.
 - `activeLayerName` can be any layer string used by scene and terrain layer UI.
 - Web Edition v1 scope is street basemap only: no satellite basemap, terrain contours, hillshade, offline tile download, service-worker tile precache, or offline map promise. See `docs/adr/0013-web-edition-map-scope.md` and `docs/adr/0022-web-edition-not-offline-first.md`.
+- Canopi has no app-managed offline tile downloader or cache on desktop or Web. MapLibre reads its configured live sources; do not reintroduce a parallel Tauri tile store without a product and cache/update decision.
 - Contours use `layerVisibility.contours` and `layerOpacity.contours`.
 - Hillshading uses `hillshadeVisible` and `hillshadeOpacity`.
 - Canvas Layer Presentation bridges scene/map/terrain layer asymmetry for `LayerPanel`, Canvas shell Location Notices, and Canvas Map Surface snapshots. Map readiness callers should consume its map-surface projection instead of recomputing base/contour/hillshade visibility.

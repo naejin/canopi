@@ -10,4 +10,3 @@ pub mod saved_object_stamps;
 pub mod settings;
 pub mod species_catalog;
 pub(crate) mod species_catalog_read;
-pub mod tiles;

@@ -455,15 +455,7 @@
       "contours": "等高線",
       "contourInterval": "等高線間隔",
       "hillshade": "陰影起伏",
-      "hillshadeOpacity": "陰影の不透明度",
-      "offlineTiles": "オフラインタイル",
-      "downloadTiles": "タイルをダウンロード",
-      "downloadProgress": "ダウンロード中...",
-      "downloadComplete": "ダウンロード完了",
-      "tileRegion": "タイル地域",
-      "zoomRange": "ズーム範囲",
-      "offlineStatus": "オフライン",
-      "removeOffline": "オフラインタイルを削除"
+      "hillshadeOpacity": "陰影の不透明度"
     },
     "pinnedPlantNames": {
       "legend": "凡例"

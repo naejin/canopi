@@ -455,15 +455,7 @@
       "contours": "Courbes de niveau",
       "contourInterval": "Intervalle des courbes",
       "hillshade": "Ombrage",
-      "hillshadeOpacity": "Opacité de l'ombrage",
-      "offlineTiles": "Tuiles hors ligne",
-      "downloadTiles": "Télécharger les tuiles",
-      "downloadProgress": "Téléchargement...",
-      "downloadComplete": "Téléchargement terminé",
-      "tileRegion": "Région des tuiles",
-      "zoomRange": "Plage de zoom",
-      "offlineStatus": "Hors ligne",
-      "removeOffline": "Supprimer les tuiles hors ligne"
+      "hillshadeOpacity": "Opacité de l'ombrage"
     },
     "pinnedPlantNames": {
       "legend": "Légende"

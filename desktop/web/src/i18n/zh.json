@@ -455,15 +455,7 @@
       "contours": "等高线",
       "contourInterval": "等高线间距",
       "hillshade": "山体阴影",
-      "hillshadeOpacity": "阴影透明度",
-      "offlineTiles": "离线地图",
-      "downloadTiles": "下载地图",
-      "downloadProgress": "下载中...",
-      "downloadComplete": "下载完成",
-      "tileRegion": "地图区域",
-      "zoomRange": "缩放范围",
-      "offlineStatus": "离线",
-      "removeOffline": "删除离线地图"
+      "hillshadeOpacity": "阴影透明度"
     },
     "pinnedPlantNames": {
       "legend": "图例"

@@ -455,15 +455,7 @@
       "contours": "Höhenlinien",
       "contourInterval": "Höhenlinienintervall",
       "hillshade": "Schummerung",
-      "hillshadeOpacity": "Schummerungsdeckkraft",
-      "offlineTiles": "Offline-Kacheln",
-      "downloadTiles": "Kacheln herunterladen",
-      "downloadProgress": "Wird heruntergeladen...",
-      "downloadComplete": "Download abgeschlossen",
-      "tileRegion": "Kachelregion",
-      "zoomRange": "Zoombereich",
-      "offlineStatus": "Offline",
-      "removeOffline": "Offline-Kacheln entfernen"
+      "hillshadeOpacity": "Schummerungsdeckkraft"
     },
     "pinnedPlantNames": {
       "legend": "Legende"

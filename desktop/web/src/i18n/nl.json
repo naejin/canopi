@@ -455,15 +455,7 @@
       "contours": "Hoogtelijnen",
       "contourInterval": "Hoogtelijneninterval",
       "hillshade": "Reliëfschaduw",
-      "hillshadeOpacity": "Schaduwdekking",
-      "offlineTiles": "Offline tegels",
-      "downloadTiles": "Tegels downloaden",
-      "downloadProgress": "Downloaden...",
-      "downloadComplete": "Download voltooid",
-      "tileRegion": "Tegelgebied",
-      "zoomRange": "Zoombereik",
-      "offlineStatus": "Offline",
-      "removeOffline": "Offline tegels verwijderen"
+      "hillshadeOpacity": "Schaduwdekking"
     },
     "pinnedPlantNames": {
       "legend": "Legenda"

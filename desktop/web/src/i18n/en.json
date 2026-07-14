@@ -455,15 +455,7 @@
       "contours": "Contour lines",
       "contourInterval": "Contour interval",
       "hillshade": "Hillshading",
-      "hillshadeOpacity": "Hillshade opacity",
-      "offlineTiles": "Offline tiles",
-      "downloadTiles": "Download tiles",
-      "downloadProgress": "Downloading...",
-      "downloadComplete": "Download complete",
-      "tileRegion": "Tile region",
-      "zoomRange": "Zoom range",
-      "offlineStatus": "Offline",
-      "removeOffline": "Remove offline tiles"
+      "hillshadeOpacity": "Hillshade opacity"
     },
     "pinnedPlantNames": {
       "legend": "Legend"
