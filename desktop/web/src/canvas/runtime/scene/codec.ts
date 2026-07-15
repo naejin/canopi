@@ -55,7 +55,7 @@ export function serializeScenePersistedState(
     name: 'Untitled',
     description: null,
     location: null,
-    north_bearing_deg: 0,
+    north_bearing_deg: null,
     plant_species_colors: { ...state.plantSpeciesColors },
     plant_species_symbols: { ...state.plantSpeciesSymbols },
     layers: state.layers.map(serializeLayerEntity),

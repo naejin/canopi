@@ -119,7 +119,7 @@ describe('file format round-trip', () => {
       name: 'Untitled',
       description: null,
       location: null,
-      north_bearing_deg: 0,
+      north_bearing_deg: null,
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
       extra: { guides: [{ id: 'guide-1', axis: 'h', position: 42 }] },

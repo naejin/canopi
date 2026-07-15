@@ -26,7 +26,7 @@ export function composeSavedObjectStampCanopiFile({
     name,
     description: null,
     location: null,
-    north_bearing_deg: 0,
+    north_bearing_deg: null,
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: STAMP_FILE_LAYERS.map((layer) => ({ ...layer })),
