@@ -96,7 +96,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Renderers are projections of scene state, never the source of truth.
 - Camera transforms go through `CameraController`; its snapshot signal owns transient viewport state and revision publication.
 - The in-canvas basemap is a sibling visualization layer, not part of the renderer contract.
-- Screen-space chrome such as rulers stays outside the world renderer.
+- Screen-space chrome such as rulers stays outside the world renderer. `canvas/rulers.ts` owns the complete ruler/scale overlay lifetime: its DOM, per-owner theme palette, latest atomic Camera snapshot, at-most-one active drag, document/window listeners, exact cursor restoration, screen-to-world guide conversion, construction rollback, and terminal idempotent teardown. Scene Chrome may compose grid/guide rendering around that owner, but must not expose ruler DOM parts or reconstruct renderer-shaped viewport adapters.
 - Strokes, outlines, stack badges, labels, handles, and measurement text are readability aids. Keep their visual weight screen-readable across zoom instead of scaling them as physical design geometry.
 - Selected, hover, locked-object hover, and locked-Layer hover strokes are screen-space interaction cues owned by `scene-visuals.ts`. Pixi and Canvas2D renderers should consume the same interaction visual helper so selected states remain stronger than hover and locked states do not imply editable selection.
 - Canvas notice placement uses the Canvas Notice Layout seam for safe screen-space slots. Active Tool HUDs use the top-left safe slot; Location Notices use the bottom-left safe slot and reserve the scale bar before compacting.

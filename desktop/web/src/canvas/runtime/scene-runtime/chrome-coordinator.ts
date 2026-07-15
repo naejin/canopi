@@ -1,11 +1,9 @@
 import type { Guide } from '../../guides'
 import { SceneChromeOverlay } from '../scene-chrome'
-import type { SceneViewportState } from '../scene'
+import type { CameraViewportSnapshot } from '../camera'
 
 interface SceneRuntimeChromeSnapshot {
-  viewport: SceneViewportState
-  width: number
-  height: number
+  camera: CameraViewportSnapshot
   rulersVisible: boolean
   gridVisible: boolean
   guides: Guide[]
@@ -20,8 +18,7 @@ export class SceneRuntimeChromeCoordinator {
     onGuideCreate: (axis: 'h' | 'v', worldPosition: number) => void,
   ): void {
     this.destroy()
-    this._overlay = new SceneChromeOverlay(container)
-    this._overlay.setGuideCreate(onGuideCreate)
+    this._overlay = new SceneChromeOverlay(container, onGuideCreate)
   }
 
   show(): void {

@@ -306,9 +306,7 @@ export class SceneCanvasRuntime {
     if (!container) return
     const chromeSettings = this._appAdapter.settings.readChromeOverlay()
     this._chrome.update({
-      viewport: this._camera.viewport,
-      width: Math.max(1, container.clientWidth),
-      height: Math.max(1, container.clientHeight),
+      camera: this._camera.snapshot.peek(),
       rulersVisible: chromeSettings.rulersVisible,
       gridVisible: chromeSettings.gridVisible,
       guides: this._sceneState.persisted.guides,
