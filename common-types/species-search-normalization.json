@@ -38,6 +38,14 @@
       "admission": "browse"
     },
     {
+      "name": "scalar-newer-than-pinned-unicode-data",
+      "input": "\ud839\uddd0",
+      "normalized_text": "",
+      "tokens": [],
+      "query_tokens": [],
+      "admission": "browse"
+    },
+    {
       "name": "one-normalized-scalar",
       "input": " É ",
       "normalized_text": "e",
