@@ -76,6 +76,7 @@ describe('Saved Object Stamp Workbench', () => {
 
   it('does not let an older library load overwrite a newly created stamp', async () => {
     const pendingLoad = deferred<SavedObjectStamp[]>()
+    const getSavedObjectStamps = vi.fn(() => pendingLoad.promise)
     const scene = createDefaultScenePersistedState()
     scene.annotations = [{
       kind: 'annotation',
@@ -99,12 +100,13 @@ describe('Saved Object Stamp Workbench', () => {
     } satisfies CanvasQuerySurface
     const created = makeStamp('stamp-new', 'New', 0)
     const workbench = createSavedObjectStampWorkbench({
-      getSavedObjectStamps: () => pendingLoad.promise,
+      getSavedObjectStamps,
       createSavedObjectStamp: async () => created,
       getCanvasQuerySurface: () => query,
     })
 
     const load = workbench.loadLibrary()
+    expect(getSavedObjectStamps).toHaveBeenCalledTimes(1)
     await workbench.saveSelection(captureFromQuery(query))
     pendingLoad.resolve([makeStamp('stamp-old', 'Old', 0)])
     await load
@@ -589,6 +591,35 @@ describe('Saved Object Stamp Workbench', () => {
       'Second name',
     ])
     expect(workbench.library.value.items[0]?.name).toBe('Second name')
+  })
+
+  it('queues a mutation synchronously re-entered by the first adapter', async () => {
+    const initial = makeStamp('stamp-1', 'Initial', 0)
+    const events: string[] = []
+    let reentrantDelete: Promise<boolean> | null = null
+    let workbench!: ReturnType<typeof createSavedObjectStampWorkbench>
+    workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [initial],
+      renameSavedObjectStamp: (_id, name) => {
+        events.push('rename:start')
+        reentrantDelete = workbench.deleteStamp(initial.id)
+        events.push('rename:end')
+        return Promise.resolve({ ...initial, name })
+      },
+      deleteSavedObjectStamp: () => {
+        events.push('delete')
+        return Promise.resolve(true)
+      },
+      getCanvasQuerySurface: () => null,
+    })
+    await workbench.loadLibrary()
+
+    await workbench.renameStamp(initial.id, 'Renamed')
+    if (!reentrantDelete) throw new Error('Expected re-entrant delete admission')
+    await reentrantDelete
+
+    expect(events).toEqual(['rename:start', 'rename:end', 'delete'])
+    expect(workbench.library.value.items).toEqual([])
   })
 
   it('disposes idempotently without publishing an in-flight mutation', async () => {

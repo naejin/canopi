@@ -205,6 +205,50 @@ describe('design notebook workbench', () => {
     expect(workbench.view.value.sections[0]?.name).toBe('Second name')
   })
 
+  it('queues a mutation synchronously re-entered by the first adapter', async () => {
+    const events: string[] = []
+    let reentrantRename: Promise<void> | null = null
+    let workbench!: ReturnType<typeof createDesignNotebookWorkbench>
+    workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [{
+          id: 'section-home',
+          name: 'Home',
+          sort_order: 0,
+          created_at: '2026-06-20T08:00:00.000Z',
+          updated_at: '2026-06-20T08:00:00.000Z',
+        }],
+        entries: [],
+      }),
+      openDesign: vi.fn(),
+      createSection: (name) => {
+        events.push('create:start')
+        reentrantRename = workbench.renameSection('section-home', 'Renamed')
+        events.push('create:end')
+        return Promise.resolve({
+          id: 'section-new',
+          name,
+          sort_order: 1,
+          created_at: '2026-06-21T08:00:00.000Z',
+          updated_at: '2026-06-21T08:00:00.000Z',
+        })
+      },
+      renameSection: () => {
+        events.push('rename')
+        return Promise.resolve()
+      },
+    })
+    await workbench.load()
+
+    await workbench.createSection('New')
+    if (!reentrantRename) throw new Error('Expected re-entrant rename admission')
+    await reentrantRename
+
+    expect(events).toEqual(['create:start', 'create:end', 'rename'])
+    expect(workbench.view.value.sections.find(({ id }) => id === 'section-home')?.name)
+      .toBe('Renamed')
+  })
+
   it('does not publish a Notebook mutation continuation after disposal', async () => {
     const pendingRename = deferred<void>()
     const workbench = createDesignNotebookWorkbench({
@@ -273,13 +317,15 @@ describe('design notebook workbench', () => {
   it('does not publish a load snapshot older than an admitted removal', async () => {
     const pendingLoad = deferred<DesignNotebookSnapshot>()
     const pendingRemoval = deferred<void>()
+    const loadNotebook = vi.fn(() => pendingLoad.promise)
     const workbench = createDesignNotebookWorkbench({
-      loadNotebook: () => pendingLoad.promise,
+      loadNotebook,
       openDesign: vi.fn(),
       removeEntry: () => pendingRemoval.promise,
     })
 
     const load = workbench.load()
+    expect(loadNotebook).toHaveBeenCalledTimes(1)
     const removal = workbench.removeEntry('/designs/forest-edge.canopi')
     pendingLoad.resolve({
       sections: [],
@@ -321,16 +367,18 @@ describe('design notebook workbench', () => {
         sort_order: 0,
       }],
     }
+    const loadNotebook = vi.fn()
+      .mockResolvedValueOnce(initialSnapshot)
+      .mockReturnValueOnce(pendingLoad.promise)
     const workbench = createDesignNotebookWorkbench({
-      loadNotebook: vi.fn()
-        .mockResolvedValueOnce(initialSnapshot)
-        .mockReturnValueOnce(pendingLoad.promise),
+      loadNotebook,
       openDesign: vi.fn(),
       moveEntryToSection: () => pendingMove.promise,
     })
     await workbench.load()
 
     const load = workbench.load()
+    expect(loadNotebook).toHaveBeenCalledTimes(2)
     const move = workbench.moveEntryToSection(
       '/designs/forest-edge.canopi',
       'section-home',
@@ -466,6 +514,35 @@ describe('design notebook workbench', () => {
     expect(currentDesign.value).toBe(currentDesignBeforeSave)
     expect(moveEntryToSection).toHaveBeenCalledWith('/designs/current.canopi', 'section-client')
     expect(workbench.view.value.entries[0]?.path).toBe('/designs/current.canopi')
+  })
+
+  it('does not save a different Design Session while Add Current waits in the mutation queue', async () => {
+    const activePath = signal<string | null>('/designs/admitted.canopi')
+    const admittedDesign = testDesign()
+    const currentDesign = signal<CanopiFile | null>(admittedDesign)
+    const pendingRemoval = deferred<void>()
+    const saveCurrent = vi.fn().mockResolvedValue(null)
+    const saveAsCurrent = vi.fn().mockResolvedValue(null)
+    const workbench = createDesignNotebookWorkbench({
+      activePath,
+      currentDesign,
+      loadNotebook: vi.fn().mockResolvedValue({ sections: [], entries: [] }),
+      openDesign: vi.fn(),
+      removeEntry: () => pendingRemoval.promise,
+      saveCurrent,
+      saveAsCurrent,
+    })
+
+    const blockingRemoval = workbench.removeEntry('/designs/old.canopi')
+    const adding = workbench.addCurrentDesignToNotebook(null)
+    currentDesign.value = { ...testDesign(), name: 'Later Design' }
+    activePath.value = '/designs/later.canopi'
+    pendingRemoval.resolve()
+
+    await blockingRemoval
+    await expect(adding).resolves.toBe(false)
+    expect(saveCurrent).not.toHaveBeenCalled()
+    expect(saveAsCurrent).not.toHaveBeenCalled()
   })
 
   it('does not move Add Current into a deleted Notebook Section', async () => {

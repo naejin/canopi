@@ -294,19 +294,38 @@ export function createSavedObjectStampWorkbench({
     const run = () => isLifetimeCurrent(admittedLifetime)
       ? operation(admittedLifetime)
       : disposedResult
-    const result = mutationTail
-      ? mutationTail.then(run, run)
-      : Promise.resolve(run())
-    let settledTail: Promise<void>
-    settledTail = result.then(
-      () => {
-        if (mutationTail === settledTail) mutationTail = null
-      },
-      () => {
-        if (mutationTail === settledTail) mutationTail = null
-      },
-    )
-    mutationTail = settledTail
+    const precedingTail = mutationTail
+    if (precedingTail) {
+      const result = precedingTail.then(run, run)
+      let settledTail: Promise<void>
+      settledTail = result.then(
+        () => {
+          if (mutationTail === settledTail) mutationTail = null
+        },
+        () => {
+          if (mutationTail === settledTail) mutationTail = null
+        },
+      )
+      mutationTail = settledTail
+      return result
+    }
+
+    let releaseAdmission!: () => void
+    const admissionTail = new Promise<void>((resolve) => {
+      releaseAdmission = resolve
+    })
+    mutationTail = admissionTail
+    let result: Promise<T>
+    try {
+      result = Promise.resolve(run())
+    } catch (error) {
+      result = Promise.reject(error)
+    }
+    const settleAdmission = () => {
+      releaseAdmission()
+      if (mutationTail === admissionTail) mutationTail = null
+    }
+    void result.then(settleAdmission, settleAdmission)
     return result
   }
 

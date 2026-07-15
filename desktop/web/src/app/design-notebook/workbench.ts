@@ -204,12 +204,16 @@ export function createDesignNotebookWorkbench(
   }
 
   function addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean> {
-    if (currentDesign.value === null) return Promise.resolve(false)
+    const admittedDesign = currentDesign.value
+    if (admittedDesign === null) return Promise.resolve(false)
+    const admittedPath = activePath.value
 
     return enqueueMutation(false, async (admittedLifetime) => {
-      if (currentDesign.value === null) return false
-      const pathBeforeSave = activePath.value
-      const settlement = pathBeforeSave
+      if (
+        currentDesign.value !== admittedDesign
+        || activePath.value !== admittedPath
+      ) return false
+      const settlement = admittedPath
         ? await saveCurrent()
         : await saveAsCurrent()
       if (!isLifetimeCurrent(admittedLifetime)) return false
@@ -344,19 +348,38 @@ export function createDesignNotebookWorkbench(
     const run = () => isLifetimeCurrent(admittedLifetime)
       ? operation(admittedLifetime)
       : disposedResult
-    const result = mutationTail
-      ? mutationTail.then(run, run)
-      : Promise.resolve(run())
-    let settledTail: Promise<void>
-    settledTail = result.then(
-      () => {
-        if (mutationTail === settledTail) mutationTail = null
-      },
-      () => {
-        if (mutationTail === settledTail) mutationTail = null
-      },
-    )
-    mutationTail = settledTail
+    const precedingTail = mutationTail
+    if (precedingTail) {
+      const result = precedingTail.then(run, run)
+      let settledTail: Promise<void>
+      settledTail = result.then(
+        () => {
+          if (mutationTail === settledTail) mutationTail = null
+        },
+        () => {
+          if (mutationTail === settledTail) mutationTail = null
+        },
+      )
+      mutationTail = settledTail
+      return result
+    }
+
+    let releaseAdmission!: () => void
+    const admissionTail = new Promise<void>((resolve) => {
+      releaseAdmission = resolve
+    })
+    mutationTail = admissionTail
+    let result: Promise<T>
+    try {
+      result = Promise.resolve(run())
+    } catch (error) {
+      result = Promise.reject(error)
+    }
+    const settleAdmission = () => {
+      releaseAdmission()
+      if (mutationTail === admissionTail) mutationTail = null
+    }
+    void result.then(settleAdmission, settleAdmission)
     return result
   }
 
