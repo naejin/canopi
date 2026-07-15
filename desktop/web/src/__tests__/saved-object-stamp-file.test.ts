@@ -89,7 +89,7 @@ describe('Saved Object Stamp file composition', () => {
       name: 'Apple guild',
       description: null,
       location: null,
-      north_bearing_deg: 0,
+      north_bearing_deg: null,
       plant_species_colors: {},
       plant_species_symbols: {},
       consortiums: [],

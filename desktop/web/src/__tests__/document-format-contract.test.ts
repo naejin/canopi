@@ -5,6 +5,7 @@ import {
   DOCUMENT_FILE_FIELD_OWNERS,
   normalizeLoadedDocument,
 } from '../app/contracts/document'
+import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import { KNOWN_CANOPI_KEYS } from '../generated/known-canopi-keys'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 import type { CanopiFile } from '../types/design'
@@ -186,7 +187,7 @@ describe('document format contract', () => {
     })
   })
 
-  it('preserves explicit null north bearings while retaining omitted-field fallback', () => {
+  it('canonicalizes absent north bearings and preserves explicit null through composition', () => {
     const explicitDocumentNull = composeDocumentForSave({
       metadata: { name: 'No bearing' },
       document: { ...BASE_DOCUMENT, north_bearing_deg: null },
@@ -204,6 +205,12 @@ describe('document format contract', () => {
     })
     const legacyWithoutBearing = { ...BASE_DOCUMENT }
     delete (legacyWithoutBearing as Partial<CanopiFile>).north_bearing_deg
+    const ingestedLegacy = decodeCanopiDesign(legacyWithoutBearing)
+    const composedIngestedLegacy = composeDocumentForSave({
+      metadata: { name: 'Ingested legacy bearing' },
+      document: ingestedLegacy,
+      canvas: BASE_DOCUMENT,
+    })
     const omittedEverywhere = composeDocumentForSave({
       metadata: { name: 'Legacy bearing' },
       document: legacyWithoutBearing as CanopiFile,
@@ -213,7 +220,9 @@ describe('document format contract', () => {
     expect(explicitDocumentNull.north_bearing_deg).toBeNull()
     expect(explicitMetadataNull.north_bearing_deg).toBeNull()
     expect(omittedMetadata.north_bearing_deg).toBe(18)
-    expect(omittedEverywhere.north_bearing_deg).toBe(0)
+    expect(ingestedLegacy.north_bearing_deg).toBeNull()
+    expect(composedIngestedLegacy.north_bearing_deg).toBeNull()
+    expect(omittedEverywhere.north_bearing_deg).toBeNull()
   })
 
   it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {

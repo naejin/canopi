@@ -1990,7 +1990,7 @@ describe('scene canvas runtime', () => {
     expect(serialized.plants[0]?.color).toBe('#228833')
   })
 
-  it('keeps explicit null north bearings distinct from omitted legacy values in detached composition', () => {
+  it('canonicalizes explicit null and omitted north bearings in detached composition', () => {
     const runtime = new SceneCanvasRuntime()
     const withoutBearing = { ...makeFile(), north_bearing_deg: null }
     runtime.documentSurface.loadDocument(withoutBearing)
@@ -2009,7 +2009,7 @@ describe('scene canvas runtime', () => {
     ).content
 
     expect(explicitNull.north_bearing_deg).toBeNull()
-    expect(omitted.north_bearing_deg).toBe(0)
+    expect(omitted.north_bearing_deg).toBeNull()
   })
 
   it('publishes canvas-origin species hover targets without mutating selection', async () => {

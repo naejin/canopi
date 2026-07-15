@@ -189,7 +189,7 @@ describe('scene store', () => {
     expect(roundTripped.name).toBe('Untitled')
     expect(roundTripped.description).toBeNull()
     expect(roundTripped.location).toBeNull()
-    expect(roundTripped.north_bearing_deg).toBe(0)
+    expect(roundTripped.north_bearing_deg).toBeNull()
     expect(roundTripped.version).toBe(5)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
