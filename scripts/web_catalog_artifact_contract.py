@@ -1085,8 +1085,8 @@ def render_generated(
     )
     try:
         output_directory.mkdir(parents=True, exist_ok=True)
-        paths[0].write_text(module, encoding="utf-8")
-        paths[1].write_text(declaration, encoding="utf-8")
+        paths[0].write_text(module, encoding="utf-8", newline="\n")
+        paths[1].write_text(declaration, encoding="utf-8", newline="\n")
     except OSError as error:
         raise ArtifactContractError(
             f"failed to stage generated Web Catalog artifact files in "

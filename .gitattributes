@@ -1,0 +1,3 @@
+# Generated contract checks compare exact bytes; keep renderer output platform-stable.
+desktop/web/src/generated/** text eol=lf
+desktop/src/db/plant_filter_fields.rs text eol=lf

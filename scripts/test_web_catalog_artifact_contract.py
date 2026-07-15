@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from scripts import web_catalog_artifact_contract as contract
 
@@ -453,10 +454,31 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
             for path in repository_paths:
                 path.write_text(f"sentinel:{path.name}", encoding="utf-8")
 
-            staged_paths = contract.render_generated(
-                output_directory=output_directory,
-                root=root,
-            )
+            original_write_text = Path.write_text
+            requested_newlines: list[str | None] = []
+
+            def write_text_with_observed_newline(
+                path: Path,
+                data: str,
+                *,
+                encoding: str | None = None,
+                errors: str | None = None,
+                newline: str | None = None,
+            ) -> int:
+                requested_newlines.append(newline)
+                return original_write_text(
+                    path,
+                    data,
+                    encoding=encoding,
+                    errors=errors,
+                    newline=newline,
+                )
+
+            with mock.patch.object(Path, "write_text", write_text_with_observed_newline):
+                staged_paths = contract.render_generated(
+                    output_directory=output_directory,
+                    root=root,
+                )
 
             self.assertEqual(
                 tuple(path.name for path in staged_paths),
@@ -470,6 +492,9 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
                 "AdmittedWebCatalog",
                 staged_paths[1].read_text(encoding="utf-8"),
             )
+            self.assertEqual(requested_newlines, ["\n", "\n"])
+            for path in staged_paths:
+                self.assertNotIn(b"\r\n", path.read_bytes())
             self.assertEqual(
                 tuple(path.read_text(encoding="utf-8") for path in repository_paths),
                 tuple(f"sentinel:{path.name}" for path in repository_paths),
