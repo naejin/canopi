@@ -1,4 +1,6 @@
+import hashlib
 import json
+import os
 from pathlib import Path
 import sqlite3
 import stat
@@ -152,10 +154,14 @@ class SpeciesCatalogContractCliTests(unittest.TestCase):
         cases = {
             "prepared-schema-version": authored["schema_version"],
             "minimum-export-schema-version": authored["min_export_schema_version"],
+            "prepared-source-export-sha256": authored["prepared_artifact"][
+                "source_export_sha256"
+            ],
             "prepared-contract-fingerprint": release.fingerprint,
             "prepared-db-asset-name": (
                 f"canopi-core-v{release.prepared_schema_version}-"
-                f"{release.fingerprint}.db"
+                f"{release.fingerprint}-"
+                f"{release.source_export_sha256}.db"
             ),
         }
         for value_name, expected in cases.items():
@@ -237,10 +243,138 @@ class SpeciesCatalogContractCliTests(unittest.TestCase):
                 "species_catalog_contract.py value prepared-db-asset-name",
                 source,
             )
+        self.assertIn("species_catalog_contract.py verify-source-export", publish)
         self.assertNotIn("--clobber", publish)
         self.assertNotIn("CANOPI_CORE_DB_ASSET_NAME", build)
         self.assertNotIn("db_asset_name:", release_candidate.split("jobs:", 1)[0])
         self.assertIn("desktop/resources/canopi-core.db", build)
+        self.assertIn("github.event.pull_request.head.repo.full_name", build)
+
+    def test_publisher_stages_exact_immutable_asset_basenames_for_custom_output(self):
+        release = contract.project(contract.ProjectionTarget.RELEASE)
+        asset_name = (
+            f"canopi-core-v{release.prepared_schema_version}-"
+            f"{release.fingerprint}-{release.source_export_sha256}.db"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            temp = Path(tmp)
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            gh_log = temp / "gh-args"
+            custom_output = temp / "operator-selected-name.db"
+            custom_output.write_bytes(b"prepared catalog")
+
+            self._write_executable(
+                fake_bin / "python3",
+                f"""#!/usr/bin/env bash
+if [[ "$*" == *"value prepared-schema-version"* ]]; then
+  printf '%s\\n' '{release.prepared_schema_version}'
+elif [[ "$*" == *"value prepared-db-asset-name"* ]]; then
+  printf '%s\\n' '{asset_name}'
+fi
+""",
+            )
+            self._write_executable(
+                fake_bin / "sha256sum",
+                """#!/usr/bin/env bash
+printf '%064d  %s\\n' 0 "$1"
+""",
+            )
+            self._write_executable(
+                fake_bin / "gh",
+                """#!/usr/bin/env bash
+printf '__CALL__\\0' >> "$GH_LOG"
+printf '%s\\0' "$@" >> "$GH_LOG"
+""",
+            )
+            environment = os.environ.copy()
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["GH_LOG"] = str(gh_log)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(SCRIPT_DIR / "publish-db-release.sh"),
+                    "--export-path",
+                    str(temp / "export.db"),
+                    "--output-path",
+                    str(custom_output),
+                    "--repo",
+                    "example/canopi",
+                ],
+                cwd=SCRIPT_DIR.parent,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = [
+                arguments
+                for arguments in (
+                    call.split(b"\0")
+                    for call in gh_log.read_bytes().split(b"__CALL__\0")
+                    if call
+                )
+            ]
+            upload = [argument.decode() for argument in calls[-1] if argument]
+            self.assertEqual(upload[:3], ["release", "upload", "canopi-core-db"])
+            self.assertEqual(Path(upload[3]).name, asset_name)
+            self.assertEqual(Path(upload[4]).name, f"{asset_name}.sha256")
+            self.assertNotIn("#", upload[3])
+            self.assertNotIn("#", upload[4])
+            self.assertEqual(upload[5:], ["--repo", "example/canopi"])
+
+    def test_source_export_identity_changes_asset_not_prepared_semantics(self):
+        baseline = contract.project(contract.ProjectionTarget.RELEASE)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            source["prepared_artifact"]["source_export_sha256"] = "b" * 64
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            changed = contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+        self.assertEqual(changed.fingerprint, baseline.fingerprint)
+        self.assertNotEqual(
+            changed.source_export_sha256,
+            baseline.source_export_sha256,
+        )
+        self.assertNotEqual(
+            contract.prepared_database_asset_name(changed),
+            contract.prepared_database_asset_name(baseline),
+        )
+
+    def test_source_export_identity_verifies_exact_authored_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            export_path = root / "export.db"
+            export_path.write_bytes(b"candidate export bytes")
+            expected_sha256 = hashlib.sha256(export_path.read_bytes()).hexdigest()
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            source["prepared_artifact"]["source_export_sha256"] = expected_sha256
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            self.assertEqual(
+                contract.verify_source_export_identity(export_path, root=root),
+                expected_sha256,
+            )
+            export_path.write_bytes(b"different export bytes")
+            with self.assertRaisesRegex(
+                contract.SpeciesCatalogContractError,
+                r"source export SHA-256.*does not equal authored",
+            ):
+                contract.verify_source_export_identity(export_path, root=root)
+
+    @staticmethod
+    def _write_executable(path: Path, source: str) -> None:
+        path.write_text(source, encoding="utf-8")
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
     def test_release_builds_pin_code_and_database_to_preflight(self):
         workflow = (
