@@ -1,6 +1,12 @@
 import { useSignalEffect } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
+import {
+  createCanvasCommandProjection,
+  type CanvasCommandIntentAdapter,
+  type CanvasToolbarActionCommand,
+  type CanvasToolbarToolCommand,
+} from '../app/canvas-commands'
 import { locale } from '../app/settings/state'
 import {
   gridVisible,
@@ -43,25 +49,58 @@ import styles from '../components/canvas/CanvasToolbar.module.css'
 
 type IconComponent = (props: { className?: string }) => ComponentChildren
 
-interface WebToolbarTool {
-  readonly tool: string
-  readonly label: string
-  readonly description: string
-  readonly Icon: IconComponent
+const TOOL_ICONS: Record<string, IconComponent> = {
+  select: SelectIcon,
+  hand: HandIcon,
+  line: LineIcon,
+  rectangle: RectangleIcon,
+  ellipse: EllipseIcon,
+  polygon: PolygonIcon,
+  text: TextIcon,
+  'measurement-guide': MeasurementGuideIcon,
+  'object-stamp': ObjectStampIcon,
+  'plant-spacing': SpacingIcon,
 }
 
-const WEB_TOOLS: readonly WebToolbarTool[] = [
-  { tool: 'select', label: 'canvas.tools.select', description: 'canvas.tools.selectDesc', Icon: SelectIcon },
-  { tool: 'hand', label: 'canvas.tools.hand', description: 'canvas.tools.handDesc', Icon: HandIcon },
-  { tool: 'line', label: 'canvas.tools.line', description: 'canvas.tools.lineDesc', Icon: LineIcon },
-  { tool: 'rectangle', label: 'canvas.tools.rectangle', description: 'canvas.tools.rectangleDesc', Icon: RectangleIcon },
-  { tool: 'ellipse', label: 'canvas.tools.ellipse', description: 'canvas.tools.ellipseDesc', Icon: EllipseIcon },
-  { tool: 'polygon', label: 'canvas.tools.polygon', description: 'canvas.tools.polygonDesc', Icon: PolygonIcon },
-  { tool: 'text', label: 'canvas.tools.text', description: 'canvas.tools.textDesc', Icon: TextIcon },
-  { tool: 'measurement-guide', label: 'canvas.tools.measurementGuide', description: 'canvas.tools.measurementGuideDesc', Icon: MeasurementGuideIcon },
-  { tool: 'object-stamp', label: 'canvas.tools.objectStamp', description: 'canvas.tools.objectStampDesc', Icon: ObjectStampIcon },
-  { tool: 'plant-spacing', label: 'canvas.tools.plantSpacing', description: 'canvas.tools.plantSpacingDesc', Icon: SpacingIcon },
-]
+const ACTION_ICONS: Record<string, IconComponent> = {
+  undo: UndoIcon,
+  redo: RedoIcon,
+  grid: GridIcon,
+  snap: SnapIcon,
+  rulers: RulerIcon,
+}
+
+function iconForTool(tool: string): IconComponent {
+  const Icon = TOOL_ICONS[tool]
+  if (!Icon) throw new Error(`Missing toolbar tool icon '${tool}'`)
+  return Icon
+}
+
+function iconForAction(id: string): IconComponent {
+  const Icon = ACTION_ICONS[id]
+  if (!Icon) throw new Error(`Missing toolbar action icon '${id}'`)
+  return Icon
+}
+
+const WEB_CANVAS_INTENTS: CanvasCommandIntentAdapter = {
+  selectTool: (tool) => {
+    if (!currentCanvasCommandSurface.value) return
+    setCurrentCanvasTool(tool)
+  },
+  undo: () => {
+    const surface = currentCanvasCommandSurface.value
+    if (!surface?.history.canUndo.value) return
+    surface.history.undo()
+  },
+  redo: () => {
+    const surface = currentCanvasCommandSurface.value
+    if (!surface?.history.canRedo.value) return
+    surface.history.redo()
+  },
+  toggleGrid: () => currentCanvasCommandSurface.value?.chrome.toggleGrid(),
+  toggleSnapToGrid: () => currentCanvasCommandSurface.value?.chrome.toggleSnapToGrid(),
+  toggleRulers: () => currentCanvasCommandSurface.value?.chrome.toggleRulers(),
+}
 
 export function WebCanvasToolbar() {
   void locale.value
@@ -69,6 +108,20 @@ export function WebCanvasToolbar() {
   const commandSurface = currentCanvasCommandSurface.value
   const querySurface = currentCanvasQuerySurface.value
   const activeTool = currentCanvasTool.value
+  const toolbarProjection = createCanvasCommandProjection({
+    state: {
+      activeTool,
+      toolSelectionAvailable: commandSurface !== null,
+      canUndo: commandSurface?.history.canUndo.value ?? false,
+      canRedo: commandSurface?.history.canRedo.value ?? false,
+      settingsAvailable: commandSurface !== null,
+      gridVisible: gridVisible.value,
+      snapToGridEnabled: snapToGridEnabled.value,
+      rulersVisible: rulersVisible.value,
+    },
+    intents: WEB_CANVAS_INTENTS,
+    translate: t,
+  })
   const toolbarRef = useRef<HTMLDivElement>(null)
   const plantColorButtonRef = useRef<HTMLButtonElement>(null)
   const plantSymbolButtonRef = useRef<HTMLButtonElement>(null)
@@ -108,25 +161,46 @@ export function WebCanvasToolbar() {
     }
   })
 
-  function renderToolButton(tool: WebToolbarTool) {
-    const label = t(tool.label)
-    const active = activeTool === tool.tool
+  function renderToolButton(command: CanvasToolbarToolCommand) {
+    const Icon = iconForTool(command.tool)
+    const shortcutLabel = command.shortcut ? `(${command.shortcut})` : ''
     return (
       <button
-        key={tool.tool}
-        data-tool={tool.tool}
+        key={command.tool}
+        data-tool={command.tool}
         type="button"
         role="radio"
-        aria-checked={active}
-        aria-label={label}
-        disabled={!commandSurface}
-        tabIndex={active ? 0 : -1}
-        className={`${styles.toolButton}${!commandSurface ? ` ${styles.toolButtonDisabled}` : ''}`}
-        onClick={() => setCurrentCanvasTool(tool.tool)}
+        aria-checked={command.active}
+        aria-label={command.shortcut ? `${command.label} ${shortcutLabel}` : command.label}
+        aria-keyshortcuts={command.shortcut}
+        aria-disabled={command.disabled}
+        disabled={command.disabled}
+        tabIndex={command.active ? 0 : -1}
+        className={`${styles.toolButton}${command.disabled ? ` ${styles.toolButtonDisabled}` : ''}`}
+        onClick={command.action}
       >
-        <tool.Icon className={styles.toolIcon} />
-        <ButtonTooltip label={label} description={t(tool.description)} />
+        <Icon className={styles.toolIcon} />
+        <ButtonTooltip
+          label={command.label}
+          shortcut={shortcutLabel}
+          description={command.description}
+        />
       </button>
+    )
+  }
+
+  function renderCommandButton(command: CanvasToolbarActionCommand) {
+    return renderActionButton(
+      command.id,
+      command.label,
+      iconForAction(command.id),
+      command.pressed,
+      command.disabled,
+      command.action,
+      undefined,
+      command.description,
+      command.commandId,
+      command.shortcut,
     )
   }
 
@@ -139,20 +213,19 @@ export function WebCanvasToolbar() {
       className={styles.toolbar}
       tabIndex={0}
     >
-      {WEB_TOOLS.slice(0, 2).map(renderToolButton)}
+      {toolbarProjection.primaryTools.map(renderToolButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {WEB_TOOLS.slice(2, 8).map(renderToolButton)}
+      {toolbarProjection.creationTools.map(renderToolButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {WEB_TOOLS.slice(8).map(renderToolButton)}
+      {toolbarProjection.reuseTools.map(renderToolButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {renderActionButton('undo', t('menu.edit.undo'), UndoIcon, false, !commandSurface?.history.canUndo.value, () => commandSurface?.history.undo())}
-      {renderActionButton('redo', t('menu.edit.redo'), RedoIcon, false, !commandSurface?.history.canRedo.value, () => commandSurface?.history.redo())}
+      {toolbarProjection.historyActions.map(renderCommandButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
@@ -189,9 +262,7 @@ export function WebCanvasToolbar() {
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {renderActionButton('grid', t('canvas.grid.grid'), GridIcon, gridVisible.value, !commandSurface, () => commandSurface?.chrome.toggleGrid())}
-      {renderActionButton('snap', t('canvas.grid.snapToGrid'), SnapIcon, snapToGridEnabled.value, !commandSurface, () => commandSurface?.chrome.toggleSnapToGrid())}
-      {renderActionButton('rulers', t('canvas.grid.rulers'), RulerIcon, rulersVisible.value, !commandSurface, () => commandSurface?.chrome.toggleRulers())}
+      {toolbarProjection.settingsToggles.map(renderCommandButton)}
     </div>
   )
 }
@@ -204,15 +275,20 @@ function renderActionButton(
   disabled: boolean,
   onClick: () => void,
   ref?: { current: HTMLButtonElement | null },
+  description?: string,
+  commandId?: string,
+  shortcut?: string,
 ) {
   const pressedProps = pressed === undefined ? {} : { 'aria-pressed': pressed }
   return (
     <button
       ref={ref}
       key={id}
+      data-command={commandId}
       type="button"
       {...pressedProps}
       aria-label={label}
+      aria-keyshortcuts={shortcut}
       aria-disabled={disabled}
       disabled={disabled}
       tabIndex={0}
@@ -220,7 +296,11 @@ function renderActionButton(
       onClick={onClick}
     >
       <Icon className={styles.toolIcon} />
-      <ButtonTooltip label={label} />
+      <ButtonTooltip
+        label={label}
+        shortcut={shortcut ? `(${shortcut})` : undefined}
+        description={description}
+      />
     </button>
   )
 }

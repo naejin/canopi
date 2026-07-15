@@ -1,4 +1,9 @@
 import type { Panel } from '../app/shell/state'
+import {
+  CANVAS_HISTORY_SHORTCUTS,
+  CANVAS_TOOL_SHORTCUTS,
+  canvasToolShortcutKeys,
+} from '../app/canvas-commands'
 
 export const FILE_SHORTCUTS = {
   newDesign: 'Ctrl+N',
@@ -15,10 +20,7 @@ export const PANEL_SHORTCUTS = {
   plantDb: 'Ctrl+2',
 } as const
 
-export const EDIT_SHORTCUTS = {
-  undo: 'Ctrl+Z',
-  redo: 'Ctrl+Shift+Z',
-} as const
+export const EDIT_SHORTCUTS = CANVAS_HISTORY_SHORTCUTS
 
 export const VIEW_SHORTCUTS = {
   zoomIn: 'Ctrl+=',
@@ -26,37 +28,11 @@ export const VIEW_SHORTCUTS = {
   fitToContent: 'Ctrl+0',
 } as const
 
-export const TOOL_SHORTCUTS = {
-  select: 'V',
-  hand: 'H',
-  line: 'L',
-  rectangle: 'R',
-  ellipse: 'E',
-  polygon: 'P',
-  text: 'T',
-  plantSpacing: 'S',
-} as const
+export const TOOL_SHORTCUTS = CANVAS_TOOL_SHORTCUTS
 
 export const panelKeys: Record<string, Panel> = {
   '1': 'canvas',
   '2': 'plant-db',
 }
 
-export const canvasToolKeys: Record<string, string> = {
-  v: 'select',
-  V: 'select',
-  h: 'hand',
-  H: 'hand',
-  l: 'line',
-  L: 'line',
-  r: 'rectangle',
-  R: 'rectangle',
-  e: 'ellipse',
-  E: 'ellipse',
-  p: 'polygon',
-  P: 'polygon',
-  t: 'text',
-  T: 'text',
-  s: 'plant-spacing',
-  S: 'plant-spacing',
-}
+export const canvasToolKeys = canvasToolShortcutKeys

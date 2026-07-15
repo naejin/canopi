@@ -515,6 +515,35 @@ describe('command registry canvas tool switching', () => {
     expect(toggleRulers).toHaveBeenCalledTimes(1)
   })
 
+  it('re-acquires the live Canvas surface for retained toolbar actions', () => {
+    const detachedUndo = vi.fn()
+    const replacementUndo = vi.fn()
+    mountCanvasCommandSurface({
+      history: {
+        canUndo: signal(true),
+        undo: detachedUndo,
+      },
+    })
+    const retainedUndo = appCommandGraphToolbarProjection.value.historyActions
+      .find((entry) => entry.id === 'undo')!.action
+
+    setCurrentCanvasSession(null)
+    retainedUndo()
+
+    expect(detachedUndo).not.toHaveBeenCalled()
+
+    mountCanvasCommandSurface({
+      history: {
+        canUndo: signal(true),
+        undo: replacementUndo,
+      },
+    })
+    retainedUndo()
+
+    expect(detachedUndo).not.toHaveBeenCalled()
+    expect(replacementUndo).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves editable undo shortcuts to native text editing', () => {
     const undo = vi.fn()
     mountCanvasCommandSurface({

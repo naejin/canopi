@@ -1,4 +1,22 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import {
+  canvasCommandDefinitions,
+  createCanvasCommandProjection,
+  dispatchCanvasCommandIntent,
+  isCanvasCommandDisabled,
+  type CanvasCommandDefinition,
+  type CanvasCommandId,
+  type CanvasCommandIntent,
+  type CanvasCommandIntentAdapter,
+  type CanvasCommandProjection,
+  type CanvasCommandProjectionState,
+  type CanvasToolId,
+} from '../../app/canvas-commands'
+import {
+  gridVisible,
+  rulersVisible,
+  snapToGridEnabled,
+} from '../../app/canvas-settings/signals'
 import { currentDesign, designDirty } from '../../app/document-session/store'
 import {
   newDesignAction,
@@ -16,27 +34,24 @@ import { openAboutCanopiDialog } from '../../app/about/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
 import {
   currentCanvasHasSelection,
+  currentCanvasTool,
   getCurrentCanvasCommandSurface,
   setCurrentCanvasTool,
 } from '../../canvas/session'
 import type { CanvasCommandSurface } from '../../canvas/runtime/runtime'
 import { t } from '../../i18n'
 import {
-  EDIT_SHORTCUTS,
   FILE_SHORTCUTS,
   PANEL_SHORTCUTS,
-  TOOL_SHORTCUTS,
   VIEW_SHORTCUTS,
 } from '../../shortcuts/definitions'
 
-export type AppCommandId =
+type NonToolbarAppCommandId =
   | 'file.new'
   | 'file.open'
   | 'file.save'
   | 'file.saveAs'
   | 'file.exit'
-  | 'edit.undo'
-  | 'edit.redo'
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToContent'
@@ -48,19 +63,6 @@ export type AppCommandId =
   | 'nav.favorites'
   | 'nav.designNotebook'
   | 'view.toggleTheme'
-  | 'canvas.tool.select'
-  | 'canvas.tool.hand'
-  | 'canvas.tool.line'
-  | 'canvas.tool.rectangle'
-  | 'canvas.tool.ellipse'
-  | 'canvas.tool.polygon'
-  | 'canvas.tool.text'
-  | 'canvas.tool.measurementGuide'
-  | 'canvas.tool.objectStamp'
-  | 'canvas.tool.plantSpacing'
-  | 'canvas.toggleGrid'
-  | 'canvas.toggleSnapToGrid'
-  | 'canvas.toggleRulers'
   | 'canvas.copy'
   | 'canvas.paste'
   | 'canvas.duplicateSelected'
@@ -71,6 +73,8 @@ export type AppCommandId =
   | 'canvas.lockOrUnlockSelected'
   | 'canvas.groupSelected'
   | 'canvas.ungroupSelected'
+
+export type AppCommandId = NonToolbarAppCommandId | CanvasCommandId
 
 export interface AppCommandState {
   readonly hasDesign: boolean
@@ -105,7 +109,7 @@ function switchPanel(panel: Panel): void {
   navigateTo(panel)
 }
 
-function switchTool(tool: string): void {
+function switchTool(tool: CanvasToolId): void {
   if (activePanel.value !== 'canvas') {
     navigateTo('canvas')
   }
@@ -131,6 +135,84 @@ function runCanvas(
   command: (canvas: CanvasCommandSurface) => void,
 ): void {
   if (state.canvas) command(state.canvas)
+}
+
+function canvasProjectionState(state: AppCommandState): CanvasCommandProjectionState {
+  return {
+    activeTool: currentCanvasTool.value,
+    toolSelectionAvailable: true,
+    canUndo: state.canvas?.history.canUndo.value ?? false,
+    canRedo: state.canvas?.history.canRedo.value ?? false,
+    settingsAvailable: state.canvas !== null,
+    gridVisible: gridVisible.value,
+    snapToGridEnabled: snapToGridEnabled.value,
+    rulersVisible: rulersVisible.value,
+  }
+}
+
+function desktopCanvasIntentAdapter(state: AppCommandState): CanvasCommandIntentAdapter {
+  return {
+    selectTool: switchTool,
+    undo: () => runCanvas(state, (canvas) => canvas.history.undo()),
+    redo: () => runCanvas(state, (canvas) => canvas.history.redo()),
+    toggleGrid: () => runCanvas(state, (canvas) => canvas.chrome.toggleGrid()),
+    toggleSnapToGrid: () => runCanvas(state, (canvas) => canvas.chrome.toggleSnapToGrid()),
+    toggleRulers: () => runCanvas(state, (canvas) => canvas.chrome.toggleRulers()),
+  }
+}
+
+function dispatchCurrentDesktopCanvasIntent(intent: CanvasCommandIntent): void {
+  const state = readAppCommandState()
+  if (isCanvasCommandDisabled(intent, canvasProjectionState(state))) return
+  dispatchCanvasCommandIntent(intent, desktopCanvasIntentAdapter(state))
+}
+
+function liveDesktopCanvasIntentAdapter(): CanvasCommandIntentAdapter {
+  return {
+    selectTool: (tool) => dispatchCurrentDesktopCanvasIntent({ type: 'select-tool', tool }),
+    undo: () => dispatchCurrentDesktopCanvasIntent({ type: 'undo' }),
+    redo: () => dispatchCurrentDesktopCanvasIntent({ type: 'redo' }),
+    toggleGrid: () => dispatchCurrentDesktopCanvasIntent({ type: 'toggle-grid' }),
+    toggleSnapToGrid: () => dispatchCurrentDesktopCanvasIntent({ type: 'toggle-snap-to-grid' }),
+    toggleRulers: () => dispatchCurrentDesktopCanvasIntent({ type: 'toggle-rulers' }),
+  }
+}
+
+function canvasAppCommandDefinition(
+  definition: CanvasCommandDefinition,
+): AppCommandDefinition {
+  return {
+    id: definition.commandId,
+    label: () => t(definition.labelKey),
+    shortcut: definition.shortcut,
+    palette: definition.palette,
+    run: (state) => dispatchCanvasCommandIntent(
+      definition.intent,
+      desktopCanvasIntentAdapter(state),
+    ),
+    disabled: (state) => isCanvasCommandDisabled(
+      definition.intent,
+      canvasProjectionState(state),
+    ),
+  }
+}
+
+const CANVAS_HISTORY_COMMANDS = canvasCommandDefinitions
+  .filter((definition) => definition.kind === 'history')
+  .map(canvasAppCommandDefinition)
+
+const CANVAS_TOOL_AND_SETTINGS_COMMANDS = canvasCommandDefinitions
+  .filter((definition) => definition.kind !== 'history')
+  .map(canvasAppCommandDefinition)
+
+export function createDesktopCanvasCommandProjection(
+  state: AppCommandState,
+): CanvasCommandProjection {
+  return createCanvasCommandProjection({
+    state: canvasProjectionState(state),
+    intents: liveDesktopCanvasIntentAdapter(),
+    translate: t,
+  })
 }
 
 function logCommandFailure(label: string, error: unknown): void {
@@ -182,22 +264,7 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     label: () => t('menu.file.exit'),
     run: () => runAsyncCommand('Close window', () => getCurrentWindow().close()),
   },
-  {
-    id: 'edit.undo',
-    label: () => t('menu.edit.undo'),
-    shortcut: EDIT_SHORTCUTS.undo,
-    palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.history.undo()),
-    disabled: (state) => !state.canvas || !state.canvas.history.canUndo.value,
-  },
-  {
-    id: 'edit.redo',
-    label: () => t('menu.edit.redo'),
-    shortcut: EDIT_SHORTCUTS.redo,
-    palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.history.redo()),
-    disabled: (state) => !state.canvas || !state.canvas.history.canRedo.value,
-  },
+  ...CANVAS_HISTORY_COMMANDS,
   {
     id: 'view.zoomIn',
     label: () => t('menu.view.zoomIn'),
@@ -274,92 +341,7 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     palette: true,
     run: cycleTheme,
   },
-  {
-    id: 'canvas.tool.select',
-    label: () => t('canvas.tools.select'),
-    shortcut: TOOL_SHORTCUTS.select,
-    palette: true,
-    run: () => switchTool('select'),
-  },
-  {
-    id: 'canvas.tool.hand',
-    label: () => t('canvas.tools.hand'),
-    shortcut: TOOL_SHORTCUTS.hand,
-    palette: true,
-    run: () => switchTool('hand'),
-  },
-  {
-    id: 'canvas.tool.line',
-    label: () => t('canvas.tools.line'),
-    shortcut: TOOL_SHORTCUTS.line,
-    palette: true,
-    run: () => switchTool('line'),
-  },
-  {
-    id: 'canvas.tool.rectangle',
-    label: () => t('canvas.tools.rectangle'),
-    shortcut: TOOL_SHORTCUTS.rectangle,
-    palette: true,
-    run: () => switchTool('rectangle'),
-  },
-  {
-    id: 'canvas.tool.ellipse',
-    label: () => t('canvas.tools.ellipse'),
-    shortcut: TOOL_SHORTCUTS.ellipse,
-    palette: true,
-    run: () => switchTool('ellipse'),
-  },
-  {
-    id: 'canvas.tool.polygon',
-    label: () => t('canvas.tools.polygon'),
-    shortcut: TOOL_SHORTCUTS.polygon,
-    palette: true,
-    run: () => switchTool('polygon'),
-  },
-  {
-    id: 'canvas.tool.text',
-    label: () => t('canvas.tools.text'),
-    shortcut: TOOL_SHORTCUTS.text,
-    palette: true,
-    run: () => switchTool('text'),
-  },
-  {
-    id: 'canvas.tool.measurementGuide',
-    label: () => t('canvas.tools.measurementGuide'),
-    palette: true,
-    run: () => switchTool('measurement-guide'),
-  },
-  {
-    id: 'canvas.tool.objectStamp',
-    label: () => t('canvas.tools.objectStamp'),
-    palette: true,
-    run: () => switchTool('object-stamp'),
-  },
-  {
-    id: 'canvas.tool.plantSpacing',
-    label: () => t('canvas.tools.plantSpacing'),
-    shortcut: TOOL_SHORTCUTS.plantSpacing,
-    palette: true,
-    run: () => switchTool('plant-spacing'),
-  },
-  {
-    id: 'canvas.toggleGrid',
-    label: () => t('canvas.grid.grid'),
-    run: (state) => runCanvas(state, (canvas) => canvas.chrome.toggleGrid()),
-    disabled: (state) => !state.canvas,
-  },
-  {
-    id: 'canvas.toggleSnapToGrid',
-    label: () => t('canvas.grid.snapToGrid'),
-    run: (state) => runCanvas(state, (canvas) => canvas.chrome.toggleSnapToGrid()),
-    disabled: (state) => !state.canvas,
-  },
-  {
-    id: 'canvas.toggleRulers',
-    label: () => t('canvas.grid.rulers'),
-    run: (state) => runCanvas(state, (canvas) => canvas.chrome.toggleRulers()),
-    disabled: (state) => !state.canvas,
-  },
+  ...CANVAS_TOOL_AND_SETTINGS_COMMANDS,
   {
     id: 'canvas.copy',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.copy()),

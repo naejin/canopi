@@ -1,9 +1,13 @@
 import { activePanel, type Panel } from '../../app/shell/state'
+import {
+  canvasHistoryCommandIdForShortcut,
+  canvasToolCommandIdForShortcut,
+  type CanvasCommandShortcutInput,
+} from '../../app/canvas-commands'
 import { getCurrentCanvasCommandSurface } from '../../canvas/session'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 import {
   COMMAND_PALETTE_SHORTCUT_KEY,
-  canvasToolKeys,
   panelKeys,
 } from '../../shortcuts/definitions'
 import { runCatalogCommand, type AppCommandId } from './catalog'
@@ -11,18 +15,6 @@ import { runCatalogCommand, type AppCommandId } from './catalog'
 interface AppCommandShortcutMatch {
   readonly commandId: AppCommandId
   readonly preventDefault: boolean
-}
-
-const TOOL_COMMAND_IDS: Record<string, AppCommandId> = {
-  select: 'canvas.tool.select',
-  hand: 'canvas.tool.hand',
-  line: 'canvas.tool.line',
-  rectangle: 'canvas.tool.rectangle',
-  ellipse: 'canvas.tool.ellipse',
-  polygon: 'canvas.tool.polygon',
-  text: 'canvas.tool.text',
-  'object-stamp': 'canvas.tool.objectStamp',
-  'plant-spacing': 'canvas.tool.plantSpacing',
 }
 
 export function isCommandPaletteToggleEvent(event: KeyboardEvent): boolean {
@@ -62,16 +54,17 @@ function shortcutMatchForEvent(event: KeyboardEvent, editable: boolean): AppComm
     }
   }
 
+  const canvasToolCommandId = canvasToolCommandIdForShortcut(shortcutInput(event))
   if (
     !editable
     && !event.ctrlKey
     && !event.metaKey
     && !event.altKey
     && activePanel.value === 'canvas'
-    && canvasToolKeys[event.key]
+    && canvasToolCommandId
   ) {
     return {
-      commandId: TOOL_COMMAND_IDS[canvasToolKeys[event.key]!]!,
+      commandId: canvasToolCommandId,
       preventDefault: true,
     }
   }
@@ -111,6 +104,10 @@ function fileShortcutCommand(event: KeyboardEvent): AppCommandId | null {
 
 function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | null {
   const key = event.key
+  const historyCommandId = canvasHistoryCommandIdForShortcut(shortcutInput(event))
+  if (historyCommandId) {
+    return { commandId: historyCommandId, preventDefault: true }
+  }
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '=') {
     return { commandId: 'view.zoomIn', preventDefault: true }
   }
@@ -119,12 +116,6 @@ function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | 
   }
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '0') {
     return { commandId: 'view.fitToContent', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'z') {
-    return { commandId: 'edit.undo', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && event.shiftKey && key.toLowerCase() === 'z') {
-    return { commandId: 'edit.redo', preventDefault: true }
   }
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'c') {
     return { commandId: 'canvas.copy', preventDefault: true }
@@ -157,4 +148,13 @@ function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | 
     return { commandId: 'canvas.ungroupSelected', preventDefault: true }
   }
   return null
+}
+
+function shortcutInput(event: KeyboardEvent): CanvasCommandShortcutInput {
+  return {
+    key: event.key,
+    primaryModifier: event.ctrlKey || event.metaKey,
+    shiftKey: event.shiftKey,
+    altKey: event.altKey,
+  }
 }

@@ -1,16 +1,16 @@
 import { computed } from '@preact/signals'
+import type {
+  CanvasCommandProjection,
+  CanvasToolbarActionCommand,
+  CanvasToolbarToolCommand,
+} from '../../app/canvas-commands'
 import type { Panel } from '../../app/shell/state'
-import {
-  gridVisible,
-  rulersVisible,
-  snapToGridEnabled,
-} from '../../app/canvas-settings/signals'
 import { designNotebookWorkbench } from '../../app/design-notebook'
 import { locale } from '../../app/settings/state'
-import { currentCanvasTool } from '../../canvas/session'
 import { t } from '../../i18n'
 import {
   APP_COMMANDS,
+  createDesktopCanvasCommandProjection,
   getAppCommandDefinition,
   isCatalogCommandDisabled,
   readAppCommandState,
@@ -84,35 +84,9 @@ export interface AppCommandGraphPanelProjection {
   readonly side: AppCommandGraphPanelCommand[]
 }
 
-export interface AppCommandGraphToolbarToolCommand {
-  readonly tool: string
-  readonly commandId: AppCommandId
-  readonly label: string
-  readonly description: string
-  readonly shortcut?: string
-  readonly active: boolean
-  readonly disabled: boolean
-  readonly action: () => void
-}
-
-export interface AppCommandGraphToolbarActionCommand {
-  readonly id: string
-  readonly commandId: AppCommandId
-  readonly label: string
-  readonly description?: string
-  readonly shortcut?: string
-  readonly disabled: boolean
-  readonly pressed?: boolean
-  readonly action: () => void
-}
-
-export interface AppCommandGraphToolbarProjection {
-  readonly primaryTools: AppCommandGraphToolbarToolCommand[]
-  readonly creationTools: AppCommandGraphToolbarToolCommand[]
-  readonly reuseTools: AppCommandGraphToolbarToolCommand[]
-  readonly historyActions: AppCommandGraphToolbarActionCommand[]
-  readonly settingsToggles: AppCommandGraphToolbarActionCommand[]
-}
+export type AppCommandGraphToolbarToolCommand = CanvasToolbarToolCommand
+export type AppCommandGraphToolbarActionCommand = CanvasToolbarActionCommand
+export type AppCommandGraphToolbarProjection = CanvasCommandProjection
 
 const MENU_ORDER: readonly AppMenuId[] = ['file', 'edit', 'view', 'help']
 const MENU_COMMAND_ORDER: Record<AppMenuId, readonly (AppCommandId | 'separator')[]> = {
@@ -157,68 +131,6 @@ const PANEL_LABELS: Record<Panel, () => string> = {
   'design-notebook': () => t('nav.designNotebook'),
   favorites: () => t('nav.favorites'),
 }
-
-const TOOLBAR_PRIMARY_TOOLS = [
-  { tool: 'select', commandId: 'canvas.tool.select', description: () => t('canvas.tools.selectDesc') },
-  { tool: 'hand', commandId: 'canvas.tool.hand', description: () => t('canvas.tools.handDesc') },
-] as const satisfies readonly {
-  readonly tool: string
-  readonly commandId: AppCommandId
-  readonly description: () => string
-}[]
-
-const TOOLBAR_CREATION_TOOLS = [
-  { tool: 'line', commandId: 'canvas.tool.line', description: () => t('canvas.tools.lineDesc') },
-  { tool: 'rectangle', commandId: 'canvas.tool.rectangle', description: () => t('canvas.tools.rectangleDesc') },
-  { tool: 'ellipse', commandId: 'canvas.tool.ellipse', description: () => t('canvas.tools.ellipseDesc') },
-  { tool: 'polygon', commandId: 'canvas.tool.polygon', description: () => t('canvas.tools.polygonDesc') },
-  { tool: 'text', commandId: 'canvas.tool.text', description: () => t('canvas.tools.textDesc') },
-  { tool: 'measurement-guide', commandId: 'canvas.tool.measurementGuide', description: () => t('canvas.tools.measurementGuideDesc') },
-] as const satisfies readonly {
-  readonly tool: string
-  readonly commandId: AppCommandId
-  readonly description: () => string
-}[]
-
-const TOOLBAR_REUSE_TOOLS = [
-  { tool: 'object-stamp', commandId: 'canvas.tool.objectStamp', description: () => t('canvas.tools.objectStampDesc') },
-  { tool: 'plant-spacing', commandId: 'canvas.tool.plantSpacing', description: () => t('canvas.tools.plantSpacingDesc') },
-] as const satisfies readonly {
-  readonly tool: string
-  readonly commandId: AppCommandId
-  readonly description: () => string
-}[]
-
-const TOOLBAR_HISTORY_ACTIONS = [
-  { id: 'undo', commandId: 'edit.undo' },
-  { id: 'redo', commandId: 'edit.redo' },
-] as const satisfies readonly { readonly id: string, readonly commandId: AppCommandId }[]
-
-const TOOLBAR_SETTINGS_TOGGLES = [
-  {
-    id: 'grid',
-    commandId: 'canvas.toggleGrid',
-    description: () => t('canvas.grid.gridDesc'),
-    pressed: () => gridVisible.value,
-  },
-  {
-    id: 'snap',
-    commandId: 'canvas.toggleSnapToGrid',
-    description: () => t('canvas.grid.snapToGridDesc'),
-    pressed: () => snapToGridEnabled.value,
-  },
-  {
-    id: 'rulers',
-    commandId: 'canvas.toggleRulers',
-    description: () => t('canvas.grid.rulersDesc'),
-    pressed: () => rulersVisible.value,
-  },
-] as const satisfies readonly {
-  readonly id: string
-  readonly commandId: AppCommandId
-  readonly description: () => string
-  readonly pressed: () => boolean
-}[]
 
 function isPanelChromeDisabled(panel: Panel, state: AppCommandState): boolean {
   if (panel === 'canvas') return false
@@ -301,89 +213,10 @@ export const appCommandGraphPanelProjection = computed<AppCommandGraphPanelProje
   }
 })
 
-function toolbarToolProjection(
-  entry: {
-    readonly tool: string
-    readonly commandId: AppCommandId
-    readonly description: () => string
-  },
-  state: AppCommandState,
-): AppCommandGraphToolbarToolCommand {
-  const command = getAppCommandDefinition(entry.commandId)
-  if (!command?.label) {
-    throw new Error(`Missing toolbar tool command '${entry.commandId}'`)
-  }
-  return {
-    tool: entry.tool,
-    commandId: entry.commandId,
-    label: command.label(),
-    description: entry.description(),
-    shortcut: command.shortcut,
-    active: currentCanvasTool.value === entry.tool,
-    disabled: command.disabled?.(state) ?? false,
-    action: () => {
-      runCatalogCommand(entry.commandId)
-    },
-  }
-}
-
-function toolbarActionProjection(
-  entry: { readonly id: string, readonly commandId: AppCommandId },
-  state: AppCommandState,
-): AppCommandGraphToolbarActionCommand {
-  const command = getAppCommandDefinition(entry.commandId)
-  if (!command?.label) {
-    throw new Error(`Missing toolbar action command '${entry.commandId}'`)
-  }
-  return {
-    id: entry.id,
-    commandId: entry.commandId,
-    label: command.label(),
-    shortcut: command.shortcut,
-    disabled: command.disabled?.(state) ?? false,
-    action: () => {
-      runCatalogCommand(entry.commandId)
-    },
-  }
-}
-
-function toolbarToggleProjection(
-  entry: {
-    readonly id: string
-    readonly commandId: AppCommandId
-    readonly description: () => string
-    readonly pressed: () => boolean
-  },
-  state: AppCommandState,
-): AppCommandGraphToolbarActionCommand {
-  const command = getAppCommandDefinition(entry.commandId)
-  if (!command?.label) {
-    throw new Error(`Missing toolbar toggle command '${entry.commandId}'`)
-  }
-  return {
-    id: entry.id,
-    commandId: entry.commandId,
-    label: command.label(),
-    description: entry.description(),
-    disabled: command.disabled?.(state) ?? false,
-    pressed: entry.pressed(),
-    action: () => {
-      runCatalogCommand(entry.commandId)
-    },
-  }
-}
-
 export const appCommandGraphToolbarProjection = computed<AppCommandGraphToolbarProjection>(() => {
   void locale.value
   const state = readAppCommandState()
-
-  return {
-    primaryTools: TOOLBAR_PRIMARY_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
-    creationTools: TOOLBAR_CREATION_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
-    reuseTools: TOOLBAR_REUSE_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
-    historyActions: TOOLBAR_HISTORY_ACTIONS.map((entry) => toolbarActionProjection(entry, state)),
-    settingsToggles: TOOLBAR_SETTINGS_TOGGLES.map((entry) => toolbarToggleProjection(entry, state)),
-  }
+  return createDesktopCanvasCommandProjection(state)
 })
 
 export function getMenuDefinitions(): MenuDefinition[] {

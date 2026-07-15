@@ -23,6 +23,8 @@ describe('WebCanvasToolbar', () => {
   let container: HTMLDivElement
   const canUndo = signal(false)
   const canRedo = signal(false)
+  const undo = vi.fn()
+  const redo = vi.fn()
   const setSelectedPlantColor = vi.fn()
   const setSelectedPlantSymbol = vi.fn()
 
@@ -40,13 +42,17 @@ describe('WebCanvasToolbar', () => {
     rulersVisible.value = true
     setSelectedPlantColor.mockReset()
     setSelectedPlantSymbol.mockReset()
+    undo.mockReset()
+    redo.mockReset()
+    canUndo.value = false
+    canRedo.value = false
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({
         history: {
           canUndo,
           canRedo,
-          undo: vi.fn(),
-          redo: vi.fn(),
+          undo,
+          redo,
         },
         plantPresentation: {
           ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
@@ -147,8 +153,9 @@ describe('WebCanvasToolbar', () => {
       render(<WebCanvasToolbar />, container)
     })
 
-    const plantSpacing = button('Plant Spacing')
+    const plantSpacing = button('Plant Spacing (S)')
     expect(plantSpacing.dataset.tool).toBe('plant-spacing')
+    expect(plantSpacing.getAttribute('aria-keyshortcuts')).toBe('S')
     expect(plantSpacing.disabled).toBe(false)
 
     await act(async () => {
@@ -158,6 +165,26 @@ describe('WebCanvasToolbar', () => {
 
     expect(activeTool.value).toBe('plant-spacing')
     expect(plantSpacing.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('does not dispatch a retained action to a detached Canvas surface', async () => {
+    canUndo.value = true
+    await act(async () => {
+      render(<WebCanvasToolbar />, container)
+      await Promise.resolve()
+    })
+    const undoButton = container.querySelector<HTMLButtonElement>(
+      'button[data-command="edit.undo"]',
+    )
+    if (!undoButton) throw new Error('Missing undo button')
+
+    await act(async () => {
+      setCurrentCanvasSession(null)
+      undoButton.click()
+      await Promise.resolve()
+    })
+
+    expect(undo).not.toHaveBeenCalled()
   })
 
   function button(label: string): HTMLButtonElement {
