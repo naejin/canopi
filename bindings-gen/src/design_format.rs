@@ -1,5 +1,104 @@
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
+use std::path::Path;
+
+pub(crate) fn validate_canopi_design_conformance(
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let content = std::fs::read_to_string(path)?;
+    let corpus: serde_json::Value = serde_json::from_str(&content)?;
+    validate_canopi_design_conformance_value(&corpus)
+}
+
+fn validate_canopi_design_conformance_value(
+    corpus: &serde_json::Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if corpus.get("contract_version") != Some(&serde_json::json!(1)) {
+        return Err("Canopi Design conformance contract_version must be 1".into());
+    }
+    let expected_facts = serde_json::json!({
+        "current_version": common_types::design::CURRENT_CANOPI_FILE_VERSION,
+        "missing_version": common_types::design::MISSING_CANOPI_FILE_VERSION,
+        "minimum_supported_version": common_types::design::MIN_SUPPORTED_CANOPI_FILE_VERSION,
+        "future_version_policy": common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
+        "error_kinds": common_types::design::CanopiDesignIngestionErrorKind::ALL
+            .iter()
+            .map(|kind| kind.as_str())
+            .collect::<Vec<_>>(),
+    });
+    if corpus.get("facts") != Some(&expected_facts) {
+        return Err(format!(
+            "Canopi Design conformance facts differ from generated facts (including current_version): expected {expected_facts}, got {}",
+            corpus.get("facts").unwrap_or(&serde_json::Value::Null),
+        )
+        .into());
+    }
+
+    let accepted_documents = corpus
+        .get("accepted_documents")
+        .and_then(serde_json::Value::as_object)
+        .ok_or("Canopi Design conformance accepted_documents must be an object")?;
+    if accepted_documents
+        .values()
+        .any(|document| !document.is_object())
+    {
+        return Err("Canopi Design conformance accepted documents must be objects".into());
+    }
+    let cases = corpus
+        .get("cases")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("Canopi Design conformance cases must be an array")?;
+    if cases.is_empty() {
+        return Err("Canopi Design conformance must declare at least one case".into());
+    }
+
+    let valid_error_kinds = common_types::design::CanopiDesignIngestionErrorKind::ALL
+        .iter()
+        .map(|kind| kind.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut ids = BTreeSet::new();
+    for case in cases {
+        let case = case
+            .as_object()
+            .ok_or("Canopi Design conformance case must be an object")?;
+        let id = case
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| !id.is_empty())
+            .ok_or("Canopi Design conformance case must have a non-empty id")?;
+        if !ids.insert(id) {
+            return Err(format!("duplicate Canopi Design conformance case id: {id}").into());
+        }
+        if !case.contains_key("input") {
+            return Err(format!("Canopi Design conformance case {id} has no input").into());
+        }
+        let accepted = case.get("accepted").and_then(serde_json::Value::as_str);
+        let error_kind = case.get("error_kind").and_then(serde_json::Value::as_str);
+        match (accepted, error_kind) {
+            (Some(document), None) if accepted_documents.contains_key(document) => {}
+            (Some(document), None) => {
+                return Err(format!(
+                    "Canopi Design conformance case {id} references missing accepted document {document}",
+                )
+                .into());
+            }
+            (None, Some(kind)) if valid_error_kinds.contains(kind) => {}
+            (None, Some(kind)) => {
+                return Err(format!(
+                    "Canopi Design conformance case {id} has unknown error kind {kind}",
+                )
+                .into());
+            }
+            _ => {
+                return Err(format!(
+                    "Canopi Design conformance case {id} must declare exactly one outcome",
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
 
 pub(crate) fn render_known_canopi_keys() -> Result<String, Box<dyn std::error::Error>> {
     let mut file =
@@ -184,7 +283,7 @@ fn validate_supported_canopi_schema_node(
 
 #[cfg(test)]
 mod tests {
-    use super::validate_canopi_design_schema;
+    use super::{validate_canopi_design_conformance_value, validate_canopi_design_schema};
 
     #[test]
     fn generated_canopi_schema_matches_the_file_authority() {
@@ -213,5 +312,19 @@ mod tests {
         let error = validate_canopi_design_schema(&schema)
             .expect_err("unknown numeric format should stop generation");
         assert!(error.to_string().contains("uint64"));
+    }
+
+    #[test]
+    fn generated_canopi_facts_reject_drift_from_the_authored_corpus() {
+        let mut corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../common-types/canopi-design-conformance.json"
+        ))
+        .expect("authored corpus should parse");
+        corpus["facts"]["current_version"] = serde_json::json!(4);
+
+        let error = validate_canopi_design_conformance_value(&corpus)
+            .expect_err("version fact drift should stop generation");
+
+        assert!(error.to_string().contains("current_version"));
     }
 }

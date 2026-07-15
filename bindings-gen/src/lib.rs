@@ -84,6 +84,9 @@ fn compile_native_plan(
     source_root: &Path,
     destination_root: &Path,
 ) -> Result<GenerationPlan, Box<dyn std::error::Error>> {
+    design_format::validate_canopi_design_conformance(
+        &source_root.join("common-types/canopi-design-conformance.json"),
+    )?;
     let (plant_filter_ts, plant_filter_rust) = plant_filter::render_plant_filter_adapters(
         &source_root.join("common-types/plant-filter-fields.json"),
     )?;

@@ -4,6 +4,13 @@ import {
   CanopiDesignIngestionError,
   decodeCanopiDesign,
 } from '../app/contracts/design-ingestion'
+import {
+  CANOPI_DESIGN_INGESTION_ERROR_KINDS,
+  CURRENT_CANOPI_FILE_VERSION,
+  FUTURE_CANOPI_FILE_VERSION_POLICY,
+  MIN_SUPPORTED_CANOPI_FILE_VERSION,
+  MISSING_CANOPI_FILE_VERSION,
+} from '../generated/canopi-design-format'
 
 interface ConformanceCase {
   readonly id: string
@@ -13,6 +20,14 @@ interface ConformanceCase {
 }
 
 interface ConformanceCorpus {
+  readonly contract_version: number
+  readonly facts: {
+    readonly current_version: number
+    readonly missing_version: number
+    readonly minimum_supported_version: number
+    readonly future_version_policy: string
+    readonly error_kinds: readonly string[]
+  }
   readonly accepted_documents: Readonly<Record<string, unknown>>
   readonly cases: readonly ConformanceCase[]
 }
@@ -23,9 +38,23 @@ const corpus = JSON.parse(readFileSync(
 )) as ConformanceCorpus
 
 describe('shared Canopi Design conformance corpus', () => {
+  it('matches generated compatibility facts', () => {
+    expect(corpus.contract_version).toBe(1)
+    expect(corpus.facts).toEqual({
+      current_version: CURRENT_CANOPI_FILE_VERSION,
+      missing_version: MISSING_CANOPI_FILE_VERSION,
+      minimum_supported_version: MIN_SUPPORTED_CANOPI_FILE_VERSION,
+      future_version_policy: FUTURE_CANOPI_FILE_VERSION_POLICY,
+      error_kinds: CANOPI_DESIGN_INGESTION_ERROR_KINDS,
+    })
+  })
+
   it.each(corpus.cases)('$id', ({ accepted, error_kind: errorKind, input }) => {
     if (accepted) {
-      expect(decodeCanopiDesign(input)).toEqual(corpus.accepted_documents[accepted])
+      const expected = corpus.accepted_documents[accepted]
+      const decoded = decodeCanopiDesign(input)
+      expect(decoded).toEqual(expected)
+      expect(decodeCanopiDesign(decoded)).toEqual(expected)
       return
     }
 

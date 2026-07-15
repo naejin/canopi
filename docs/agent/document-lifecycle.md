@@ -16,6 +16,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - `desktop/web/src/app/document-session/workflow-runner.ts` owns Design Session workflow install/dispose idempotence and retains failed disposer obligations for retry.
 - `desktop/web/src/app/document-session/workflows.ts` is the Design Session workflow registry.
 - `desktop/web/src/app/contracts/design-ingestion.ts` is the only trust boundary for raw Web Design values. It applies sequential format migrations, generated-schema validation, serde-compatible defaults, typed legacy Object Group resolution, and top-level unknown-field normalization before returning a `CanopiFile`. Browser file, template, and Draft adapters must not cast raw JSON to `CanopiFile`.
+- `desktop/src/design/format.rs` is the native trust boundary for raw `.canopi` values. It admits the supported version range, applies sequential migrations (including typed legacy Object Group resolution), and only then deserializes the current `CanopiFile` contract. General `CanopiFile` Serde deserialization must not hide compatibility migrations.
+- `common-types/canopi-design-conformance.json` is the authored compatibility contract shared by native and Web ingestion. Accepted cases name one normalized document; rejected cases name one generated stable error kind. Both runners execute every case and round-trip every accepted document.
 - `desktop/web/src/app/consortium/workflow.ts` owns the Consortium sync workflow adapter and effect.
 - `desktop/web/src/app/design-edit/` owns non-canvas Design edits through the Design Session store, including committed-versus-visible projection, no-op detection, dirty marking, one active preview transaction, derived reconciliation, and feature-specific writes for Location, Budget Items, Timeline Actions, and Consortiums. Its authority and lifecycle capabilities are private to Design Edit and the store.
 - `desktop/src/services/design_files.rs` owns Recent Design recording and listing. Design save/load must not create Design Notebook references; explicit notebook-add behavior belongs to the Design Notebook command/workbench seam. Recent Design listing should check saved path availability before returning entries, prune definitely stale paths from the user DB, and hide ambiguous filesystem states without deleting them.
@@ -125,9 +127,10 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## File Format Migrations
 
 - `CURRENT_CANOPI_FILE_VERSION` lives in `common-types/src/design.rs`; it is the single native/Web version authority.
+- Missing-version, minimum-version, future-version, and stable ingestion-error facts live beside it and are emitted in `desktop/web/src/generated/canopi-design-format.ts`. The bindings compiler validates those facts against `common-types/canopi-design-conformance.json` before publishing or checking generated files.
 - Add the native match arm and migration function in `desktop/src/design/format.rs` and the equivalent Web step in `desktop/web/src/app/contracts/canopi-design-migrations.ts`.
 - Bump `CURRENT_CANOPI_FILE_VERSION`, then run `cd desktop/web && npm run gen:types` and `npm run check:types` so the generated Web version/schema remain committed.
-- Add native migration tests and focused Web decoder tests in the same change. Include any custom-deserializer behavior, such as legacy Object Groups, that generated structural schema alone cannot express.
+- Add or update one shared accepted/error case for every compatibility behavior, then keep focused native/Web tests only where they improve fault localization. Do not implement file-format migration in `Deserialize` implementations; raw compatibility belongs at the two ingestion boundaries.
 - The loop runs sequentially, for example v1 -> v2 -> v3.
 - `CURRENT_CANOPI_FILE_VERSION` is a `u32` to match `CanopiFile.version`; cast to `u64` only at JSON boundaries.
 

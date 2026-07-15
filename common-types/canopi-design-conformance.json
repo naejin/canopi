@@ -4,7 +4,12 @@
     "current_version": 5,
     "missing_version": 1,
     "minimum_supported_version": 1,
-    "future_version_policy": "reject"
+    "future_version_policy": "reject",
+    "error_kinds": [
+      "invalid_version",
+      "unsupported_version",
+      "invalid_document"
+    ]
   },
   "accepted_documents": {
     "empty-current": {
@@ -292,6 +297,104 @@
       "created_at": "2026-07-15T00:00:00.000Z",
       "updated_at": "2026-07-15T00:00:00.000Z",
       "extra": {}
+    },
+    "unknown-fields": {
+      "version": 5,
+      "name": "Future Field Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [],
+      "plants": [],
+      "zones": [
+        {
+          "name": "Orchard",
+          "locked": false,
+          "zone_type": "rect",
+          "points": [],
+          "rotation": 0.0,
+          "fill_color": null,
+          "notes": null
+        }
+      ],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {
+        "preserved": "yes",
+        "future_top_level": {
+          "enabled": true,
+          "values": [1, 2, 3]
+        }
+      }
+    },
+    "version-three-pinning": {
+      "version": 5,
+      "name": "Pinned Name Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [
+        {
+          "name": "measurement-guides",
+          "visible": true,
+          "locked": false,
+          "opacity": 1.0
+        }
+      ],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": { "x": 1.0, "y": 2.0 },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-2",
+          "locked": false,
+          "canonical_name": "Pyrus communis",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": true,
+          "position": { "x": 3.0, "y": 4.0 },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {}
     }
   },
   "cases": [
@@ -415,16 +518,28 @@
       "id": "version-three",
       "input": {
         "version": 3,
-        "name": "Conformance Garden",
+        "name": "Pinned Name Garden",
         "plant_species_colors": {},
         "plant_species_symbols": {},
         "layers": [],
-        "plants": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": { "x": 1, "y": 2 }
+          },
+          {
+            "id": "plant-2",
+            "canonical_name": "Pyrus communis",
+            "pinned_name": true,
+            "position": { "x": 3, "y": 4 }
+          }
+        ],
         "zones": [],
         "created_at": "2026-07-15T00:00:00.000Z",
         "updated_at": "2026-07-15T00:00:00.000Z"
       },
-      "accepted": "empty-migrated"
+      "accepted": "version-three-pinning"
     },
     {
       "id": "version-four",
@@ -516,6 +631,33 @@
       "accepted": "legacy-and-typed-groups"
     },
     {
+      "id": "unknown-root-fields-round-trip-and-nested-fields-drop",
+      "input": {
+        "version": 5,
+        "name": "Future Field Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [
+          {
+            "name": "Orchard",
+            "zone_type": "rect",
+            "points": [],
+            "future_nested": "discard like Serde"
+          }
+        ],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z",
+        "extra": { "preserved": "yes" },
+        "future_top_level": {
+          "enabled": true,
+          "values": [1, 2, 3]
+        }
+      },
+      "accepted": "unknown-fields"
+    },
+    {
       "id": "version-zero",
       "input": {
         "version": 0,
@@ -548,6 +690,74 @@
     {
       "id": "malformed-root",
       "input": [],
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "malformed-nested-position",
+      "input": {
+        "version": 5,
+        "name": "Malformed Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [
+          {
+            "canonical_name": "Malus domestica",
+            "position": { "x": "east", "y": 2 }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "malformed-legacy-group-member-list",
+      "input": {
+        "version": 5,
+        "name": "Malformed Group Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "groups": [{ "id": "group-1", "member_ids": "plant-1" }],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "malformed-legacy-group-member-id",
+      "input": {
+        "version": 5,
+        "name": "Malformed Group Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "groups": [{ "id": "group-1", "member_ids": [42] }],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "malformed-typed-group-members",
+      "input": {
+        "version": 5,
+        "name": "Malformed Group Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "groups": [{ "id": "group-1", "members": {} }],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
       "error_kind": "invalid_document"
     }
   ]

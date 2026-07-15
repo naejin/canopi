@@ -638,7 +638,7 @@ fn now_iso8601() -> String {
     crate::design::unix_to_iso8601(secs)
 }
 
-/// Create a new empty design with 7 default layers and sensible defaults.
+/// Create a new empty design with eight default layers and sensible defaults.
 pub fn create_default() -> CanopiFile {
     let now = now_iso8601();
 
@@ -730,6 +730,21 @@ mod tests {
         ))
         .expect("shared Canopi conformance corpus should be valid JSON");
 
+        assert_eq!(corpus["contract_version"], serde_json::json!(1));
+        assert_eq!(
+            corpus["facts"],
+            serde_json::json!({
+                "current_version": CURRENT_CANOPI_FILE_VERSION,
+                "missing_version": MISSING_CANOPI_FILE_VERSION,
+                "minimum_supported_version": MIN_SUPPORTED_CANOPI_FILE_VERSION,
+                "future_version_policy": common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
+                "error_kinds": CanopiDesignIngestionErrorKind::ALL
+                    .iter()
+                    .map(|kind| kind.as_str())
+                    .collect::<Vec<_>>(),
+            }),
+        );
+
         for case in corpus["cases"]
             .as_array()
             .expect("conformance cases should be an array")
@@ -741,6 +756,15 @@ mod tests {
                 let file = decode_design_value(input)
                     .unwrap_or_else(|error| panic!("{id}: ingestion failed: {error}"));
                 assert_eq!(conformance_document_value(&file), expected, "{id}");
+                let wire = serde_json::to_value(file)
+                    .expect("accepted Canopi Design should serialize for round trip");
+                let round_tripped = decode_design_value(wire)
+                    .unwrap_or_else(|error| panic!("{id}: round trip failed: {error}"));
+                assert_eq!(
+                    conformance_document_value(&round_tripped),
+                    expected,
+                    "{id}: round trip",
+                );
                 continue;
             }
             let expected_kind = case["error_kind"].as_str().expect("error case kind");
@@ -1509,12 +1533,5 @@ mod tests {
 
         let legacy: CanopiFile = serde_json::from_value(legacy_value).expect("deserialize legacy");
         assert_eq!(legacy.budget_currency, DEFAULT_BUDGET_CURRENCY);
-    }
-
-    #[test]
-    fn test_migrate_stops_on_unknown_version() {
-        let mut value = serde_json::json!({ "version": 0, "name": "test" });
-        migrate_design_value(&mut value);
-        assert_eq!(value["version"], 0, "version 0 has no migration path");
     }
 }

@@ -352,6 +352,7 @@ export const CANOPI_FILE_SCHEMA = {
           "type": "string"
         },
         "color": {
+          "default": null,
           "type": [
             "string",
             "null"
@@ -419,6 +420,7 @@ export const CANOPI_FILE_SCHEMA = {
           ]
         },
         "symbol": {
+          "default": null,
           "type": [
             "string",
             "null"

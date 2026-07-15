@@ -496,15 +496,38 @@ pub enum ObjectGroupMember {
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Type)]
 pub struct ObjectGroup {
     pub id: String,
     #[cfg_attr(feature = "design-schema", schemars(default))]
-    #[serde(default)]
     pub locked: bool,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub name: Option<String>,
     pub members: Vec<ObjectGroupMember>,
+}
+
+#[derive(Deserialize)]
+struct ObjectGroupSerdeInput {
+    id: String,
+    #[serde(default)]
+    locked: bool,
+    name: Option<String>,
+    members: Vec<ObjectGroupMember>,
+}
+
+impl<'de> Deserialize<'de> for ObjectGroup {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let input = ObjectGroupSerdeInput::deserialize(deserializer)?;
+        Ok(Self {
+            id: input.id,
+            locked: input.locked,
+            name: input.name,
+            members: input.members,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
