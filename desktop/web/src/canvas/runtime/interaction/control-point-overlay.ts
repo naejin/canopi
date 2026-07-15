@@ -132,12 +132,12 @@ export function createControlPointOverlay<
     let handles: HTMLElement[]
     try {
       handles = nextControlPoints.map(createControlPointElement)
+      root.replaceChildren(...handles)
     } catch (error) {
       hide()
       throw error
     }
     controlPoints = new Map(nextControlPoints.map((point) => [point.id, point]))
-    root.replaceChildren(...handles)
     root.style.display = 'block'
   }
 

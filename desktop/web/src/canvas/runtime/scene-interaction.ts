@@ -76,12 +76,11 @@ import {
 } from './interaction/selection-rotation-handle'
 import {
   createZoneControlPoints,
-  type ZoneControlPointController,
 } from './interaction/zone-control-points'
 import {
   createMeasurementGuideControlPoints,
-  type MeasurementGuideControlPointController,
 } from './interaction/measurement-guide-control-points'
+import type { ControlPointOverlayController } from './interaction/control-point-overlay'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
 import {
   createLockedObjectAffordance,
@@ -180,8 +179,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _selectionToolbar: SelectionActionToolbarController
   private readonly _contextMenu: CanvasContextMenuController
   private readonly _rotationHandle: SelectionRotationHandleController
-  private readonly _zoneControlPoints: ZoneControlPointController
-  private readonly _measurementGuideControlPoints: MeasurementGuideControlPointController
+  private readonly _controlPointOverlays: readonly ControlPointOverlayController[]
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
   private _pointerGesture: SceneInteractionPointerGesture | null = null
@@ -278,30 +276,28 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         render: this._deps.render,
         refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
       }), (handle) => handle.dispose())
-      this._zoneControlPoints = own(createZoneControlPoints({
+      const controlPointOverlayOptions = {
         container: this._deps.container,
         camera: this._deps.camera,
         getSceneStore: this._deps.getSceneStore,
         getSelection: this._deps.getDesignObjectSelection,
         sceneEdits: this._deps.sceneEdits,
-        applySnapping: (point) => this._applySnapping(point),
+        applySnapping: (point: ScenePoint) => this._applySnapping(point),
         render: this._deps.render,
         refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
         beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
         endDragPresentation: () => this._endDesignObjectDragPresentation(),
-      }), (controlPoints) => controlPoints.dispose())
-      this._measurementGuideControlPoints = own(createMeasurementGuideControlPoints({
-        container: this._deps.container,
-        camera: this._deps.camera,
-        getSceneStore: this._deps.getSceneStore,
-        getSelection: this._deps.getDesignObjectSelection,
-        sceneEdits: this._deps.sceneEdits,
-        applySnapping: (point) => this._applySnapping(point),
-        render: this._deps.render,
-        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-        beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
-        endDragPresentation: () => this._endDesignObjectDragPresentation(),
-      }), (controlPoints) => controlPoints.dispose())
+      }
+      this._controlPointOverlays = [
+        own(
+          createZoneControlPoints(controlPointOverlayOptions),
+          (controlPoints) => controlPoints.dispose(),
+        ),
+        own(
+          createMeasurementGuideControlPoints(controlPointOverlayOptions),
+          (controlPoints) => controlPoints.dispose(),
+        ),
+      ]
       this._lockedAffordance = own(createLockedObjectAffordance({
         container: this._deps.container,
         onUnlock: (target) => this._unlockLockedObject(target),
@@ -379,8 +375,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       () => clearSavedObjectStampGhosts(this._preview),
       () => this._selectionToolbar.hide(),
       () => this._rotationHandle.hide(),
-      () => this._zoneControlPoints.hide(),
-      () => this._measurementGuideControlPoints.hide(),
+      ...this._controlPointOverlays.map((overlay) => () => overlay.hide()),
       () => this._clearPassiveHoverPresentation(),
     ], 'Scene Interaction document replacement preparation failed')
   }
@@ -404,8 +399,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._selectionToolbar.dispose())
     attempt(() => this._contextMenu.dispose())
     attempt(() => this._rotationHandle.dispose())
-    attempt(() => this._zoneControlPoints.dispose())
-    attempt(() => this._measurementGuideControlPoints.dispose())
+    for (const overlay of this._controlPointOverlays) attempt(() => overlay.dispose())
     attempt(() => this._lockedAffordance.dispose())
     attempt(() => this._annotationEditor.dispose())
     attempt(() => this._sharedGestures.dispose())
@@ -481,18 +475,14 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       return
     }
 
-    if (event.button === 0 && this._zoneControlPoints.contains(event.target)) {
-      const zoneControlPointDrag = this._zoneControlPoints.pointerDown({ event, rawWorld: world })
-      if (zoneControlPointDrag) this._toolPointerDrag = zoneControlPointDrag
-      else this._clearPointerGesture()
-      return
-    }
-
-    if (event.button === 0 && this._measurementGuideControlPoints.contains(event.target)) {
-      const guideControlPointDrag = this._measurementGuideControlPoints.pointerDown({ event, rawWorld: world })
-      if (guideControlPointDrag) this._toolPointerDrag = guideControlPointDrag
-      else this._clearPointerGesture()
-      return
+    if (event.button === 0) {
+      for (const overlay of this._controlPointOverlays) {
+        if (!overlay.contains(event.target)) continue
+        const controlPointDrag = overlay.pointerDown({ event, rawWorld: world })
+        if (controlPointDrag) this._toolPointerDrag = controlPointDrag
+        else this._clearPointerGesture()
+        return
+      }
     }
 
     if (this._sharedGestures.beginPan({
@@ -903,8 +893,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       runCanvasRuntimeCleanups([
         () => this._sharedGestures.cancel(),
         () => this._rotationHandle.cancelActiveDrag(),
-        () => this._zoneControlPoints.cancelActiveDrag(),
-        () => this._measurementGuideControlPoints.cancelActiveDrag(),
+        ...this._controlPointOverlays.map((overlay) => () => overlay.cancelActiveDrag()),
         () => activeAdapter?.cancelTransient?.(options),
         () => this._deps.setHoveredTarget(null),
         () => this._tooltip.hide(),
@@ -923,8 +912,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _refreshViewportDependentMeasurements(): void {
     this._annotationEditor.refresh()
     if (this._activeToolAdapter()?.refreshViewportDependent?.() === true) {
-      this._zoneControlPoints.refresh(this._canShowSelectAffordances())
-      this._measurementGuideControlPoints.refresh(this._canShowSelectAffordances())
+      for (const overlay of this._controlPointOverlays) {
+        overlay.refresh(this._canShowSelectAffordances())
+      }
       if (this._canShowSelectAffordances()) {
         this._rotationHandle.refresh()
         this._selectionToolbar.refresh()
@@ -942,8 +932,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._annotationEditor.refresh()
     this._forEachUniqueToolHook('refreshSelectionDependent', (refresh) => refresh())
     const canShowSelectAffordances = this._canShowSelectAffordances()
-    this._zoneControlPoints.refresh(canShowSelectAffordances)
-    this._measurementGuideControlPoints.refresh(canShowSelectAffordances)
+    for (const overlay of this._controlPointOverlays) overlay.refresh(canShowSelectAffordances)
     if (this._designObjectDragPresentationSuppressed || !canShowSelectAffordances) {
       this._rotationHandle.hide()
       this._selectionToolbar.hide()
@@ -1131,8 +1120,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       || this._selectionToolbar.contains(target)
       || this._contextMenu.contains(target)
       || this._rotationHandle.contains(target)
-      || this._zoneControlPoints.contains(target)
-      || this._measurementGuideControlPoints.contains(target)
+      || this._controlPointOverlays.some((overlay) => overlay.contains(target))
       || this._lockedAffordance.contains(target)
       || (this._activeToolAdapter()?.shouldIgnorePointerEvent?.(target) ?? false)
   }
@@ -1140,8 +1128,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _hasActiveSceneEdit(): boolean {
     return this._sharedGestures.editActive
       || this._rotationHandle.dragActive
-      || this._zoneControlPoints.dragActive
-      || this._measurementGuideControlPoints.dragActive
+      || this._controlPointOverlays.some((overlay) => overlay.dragActive)
       || (this._activeToolAdapter()?.hasActiveSceneEdit?.() ?? false)
   }
 

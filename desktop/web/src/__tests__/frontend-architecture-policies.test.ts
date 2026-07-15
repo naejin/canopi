@@ -602,6 +602,15 @@ const CONFINED_IMPORTER_POLICIES = [
 const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
+    name: 'Control Point adapters delegate shared lifecycle ownership',
+    from: [
+      'src/canvas/runtime/interaction/zone-control-points.ts',
+      'src/canvas/runtime/interaction/measurement-guide-control-points.ts',
+    ],
+    targets: ['src/canvas/runtime/interaction/control-point-overlay.ts'],
+  },
+  {
+    kind: 'require-imports',
     name: 'Panel resize surfaces delegate pointer lifecycle ownership',
     from: [
       'src/app.tsx',
@@ -1156,6 +1165,12 @@ const SOURCE_TOMBSTONE_POLICIES = [
 ] satisfies readonly ArchitecturePolicy[]
 
 const SYMBOL_OWNERSHIP_POLICIES = [
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Scene Interaction uses the Control Point Overlay collection',
+    from: ['src/canvas/runtime/scene-interaction.ts'],
+    names: ['_zoneControlPoints', '_measurementGuideControlPoints'],
+  },
   {
     kind: 'forbid-source-symbols',
     name: 'Scene Session keeps retired active entity and Layer mirrors deleted',

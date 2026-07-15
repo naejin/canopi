@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { CameraController } from '../canvas/runtime/camera'
+import {
+  createControlPointOverlay,
+  type ControlPointOverlayAdapter,
+  type ControlPointOverlayPoint,
+} from '../canvas/runtime/interaction/control-point-overlay'
 import { createMeasurementGuideControlPoints } from '../canvas/runtime/interaction/measurement-guide-control-points'
 import { createZoneControlPoints } from '../canvas/runtime/interaction/zone-control-points'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
@@ -34,6 +39,54 @@ const cases = [
   { label: 'Zone', kind: 'zone' },
   { label: 'Measurement Guide', kind: 'measurement-guide' },
 ] as const
+
+describe('Control Point Overlay owner', () => {
+  it('removes its root when adapter presentation construction fails', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const camera = new CameraController()
+    const adapter: ControlPointOverlayAdapter<{ readonly id: string }, ControlPointOverlayPoint> = {
+      editType: 'test-control-point',
+      rootDataAttribute: 'testControlPoints',
+      activeDataAttribute: 'testControlPointActive',
+      getEligibleEntity: () => null,
+      getEntityId: (entity) => entity.id,
+      ownsControlPoint: () => false,
+      cloneEntity: (entity) => entity,
+      createControlPoints: () => [],
+      reshape: () => null,
+      entitiesEqual: () => true,
+      writeDraft: () => {},
+      decorateHandle: () => {},
+      createDragPresentation() {
+        expect(container.querySelector('[data-control-point-overlay]')).not.toBeNull()
+        throw new Error('presentation construction failed')
+      },
+    }
+
+    try {
+      expect(() => createControlPointOverlay({
+        container,
+        camera,
+        sceneEdits: {
+          run: () => false,
+          begin: () => {
+            throw new Error('unexpected Scene Edit')
+          },
+        },
+        applySnapping: (point) => point,
+        render: () => {},
+        refreshSelectionDependent: () => {},
+        beginDragPresentation: () => {},
+        endDragPresentation: () => {},
+      }, adapter)).toThrow('presentation construction failed')
+
+      expect(container.children).toHaveLength(0)
+    } finally {
+      container.remove()
+    }
+  })
+})
 
 describe.each(cases)('$label Control Point adapter shared lifecycle', ({ kind }) => {
   it('rolls back Scene Edit admission when drag presentation setup fails', () => {
