@@ -323,7 +323,7 @@ export function createBrowserDesignSessionController({
     } = { current: null };
     try {
       operation.executeImmediately(prepareSynchronousDesignWriteDestination({
-        resource: "browser-app-data:canopi:web-app-data:v1",
+        resource: "browser-app-data:drafts",
         write(content) {
           const result = appDataStore.saveDraft({
             id: draftId,

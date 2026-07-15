@@ -61,7 +61,7 @@ describe('Design write admission', () => {
     const events: string[] = []
     let replacing!: Promise<void>
     const destination = prepareSynchronousDesignWriteDestination({
-      resource: 'browser-app-data:canopi:web-app-data:v1',
+      resource: 'browser-app-data:drafts',
       write() {
         events.push('write')
         replacing = admission.withReplacementFence(async () => {

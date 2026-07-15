@@ -93,7 +93,7 @@ function draftDestination(
   write: (content: CanopiFile) => undefined = () => undefined,
 ) {
   return prepareSynchronousDesignWriteDestination({
-    resource: 'browser-app-data:canopi:web-app-data:v1',
+    resource: 'browser-app-data:drafts',
     write,
   })
 }
@@ -707,7 +707,7 @@ describe('purpose-aware Design persistence operations', () => {
     const persistence = createDesignSessionPersistence({ store: operationStore })
     const drafts: string[] = []
     const destination = prepareSynchronousDesignWriteDestination({
-      resource: 'browser-app-data:canopi:web-app-data:v1',
+      resource: 'browser-app-data:drafts',
       write(content) {
         drafts.push(content.name)
         return undefined
