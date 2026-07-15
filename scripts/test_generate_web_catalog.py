@@ -100,6 +100,8 @@ class GenerateWebCatalogTests(unittest.TestCase):
                     {"name": "slug", "logical_type": "required_text"},
                     {"name": "canonical_name", "logical_type": "required_text"},
                     {"name": "common_name", "logical_type": "nullable_text"},
+                    {"name": "normalized_canonical_name", "logical_type": "required_text"},
+                    {"name": "normalized_common_name", "logical_type": "nullable_text"},
                     {"name": "climate_zones", "logical_type": "json_text_array"},
                     {"name": "habit", "logical_type": "nullable_text"},
                     {"name": "growth_form", "logical_type": "nullable_text"},
@@ -131,6 +133,8 @@ class GenerateWebCatalogTests(unittest.TestCase):
             apple = next(row for row in species_rows if row["slug"] == "malus-domestica")
             self.assertEqual(apple["canonical_name"], "Malus domestica")
             self.assertEqual(apple["common_name"], "Apple")
+            self.assertEqual(apple["normalized_canonical_name"], "malus domestica")
+            self.assertEqual(apple["normalized_common_name"], "apple")
             self.assertEqual(apple["climate_zones"], ["Boreal", "Temperate"])
             self.assertEqual(apple["habit"], "Tree")
             self.assertEqual(apple["growth_form"], "Tree")

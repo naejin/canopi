@@ -932,6 +932,10 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     expect(searchSql).toContain("AND primary_names.normalized_name LIKE '%commune%' ESCAPE '\\'")
     expect(searchSql).toContain('WHEN matched_names.species_id IS NOT NULL THEN 3')
     expect(searchSql).toContain('matched_names.match_tier')
+    expect(searchSql).toContain('s.normalized_canonical_name')
+    expect(searchSql).toContain('s.normalized_common_name')
+    expect(searchSql).not.toContain('LOWER(s.canonical_name)')
+    expect(searchSql).not.toContain("LOWER(COALESCE(s.common_name, ''))")
     expect(searchSql).toContain('s.canonical_name,')
     expect(searchSql).toContain('s.id')
     expect(database.registerFileURL).toHaveBeenCalledWith(
