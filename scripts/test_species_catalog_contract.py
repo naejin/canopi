@@ -325,6 +325,72 @@ printf '%s\\0' "$@" >> "$GH_LOG"
             self.assertNotIn("#", upload[4])
             self.assertEqual(upload[5:], ["--repo", "example/canopi"])
 
+    def test_publisher_refuses_identity_changed_during_prepare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            temp = Path(tmp)
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            identity_changed = temp / "identity-changed"
+            gh_log = temp / "gh-args"
+            custom_output = temp / "operator-selected-name.db"
+            custom_output.write_bytes(b"prepared catalog")
+
+            self._write_executable(
+                fake_bin / "python3",
+                """#!/usr/bin/env bash
+if [[ "$*" == *"value prepared-schema-version"* ]]; then
+  printf '%s\\n' '13'
+elif [[ "$*" == *"value prepared-db-asset-name"* ]]; then
+  if [[ -e "$IDENTITY_CHANGED" ]]; then
+    printf '%s\\n' 'canopi-core-v13-new-identity.db'
+  else
+    printf '%s\\n' 'canopi-core-v13-old-identity.db'
+  fi
+elif [[ "$*" == *"prepare-db.py"* ]]; then
+  touch "$IDENTITY_CHANGED"
+fi
+""",
+            )
+            self._write_executable(
+                fake_bin / "sha256sum",
+                """#!/usr/bin/env bash
+printf '%064d  %s\\n' 0 "$1"
+""",
+            )
+            self._write_executable(
+                fake_bin / "gh",
+                """#!/usr/bin/env bash
+printf '%s\\0' "$@" >> "$GH_LOG"
+""",
+            )
+            environment = os.environ.copy()
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["IDENTITY_CHANGED"] = str(identity_changed)
+            environment["GH_LOG"] = str(gh_log)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(SCRIPT_DIR / "publish-db-release.sh"),
+                    "--export-path",
+                    str(temp / "export.db"),
+                    "--output-path",
+                    str(custom_output),
+                    "--repo",
+                    "example/canopi",
+                ],
+                cwd=SCRIPT_DIR.parent,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("identity changed during preparation", result.stderr)
+            if gh_log.exists():
+                self.assertNotIn(b"upload", gh_log.read_bytes().split(b"\0"))
+
     def test_source_export_identity_changes_asset_not_prepared_semantics(self):
         baseline = contract.project(contract.ProjectionTarget.RELEASE)
         baseline_web = contract.project(contract.ProjectionTarget.WEB_CATALOG)
