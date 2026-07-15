@@ -565,6 +565,27 @@ mod tests {
     }
 
     #[test]
+    fn non_active_search_intents_supersede_the_current_active_generation() {
+        let plant_db = test_plant_db();
+
+        for text in ["", " -- / () ", "e"] {
+            let cancellation = SpeciesSearchCancellation::default();
+            let active = cancellation.begin(plant_db.interrupt_handle().unwrap());
+            let _running = active.mark_running().unwrap();
+            let request = search_request(text, SpeciesFilter::default(), 10, false, "en");
+            assert!(!is_active_species_search_request(&request));
+
+            cancellation.supersede();
+
+            assert_eq!(
+                active.ensure_current().unwrap_err(),
+                "Species search cancelled because a newer query superseded it",
+                "{text:?} did not supersede the active search",
+            );
+        }
+    }
+
+    #[test]
     fn queued_active_search_cancellation_does_not_interrupt_unrelated_plant_read() {
         let plant_db = test_plant_db();
         let cancellation = SpeciesSearchCancellation::default();
