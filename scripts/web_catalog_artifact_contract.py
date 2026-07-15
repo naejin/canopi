@@ -8,12 +8,10 @@ from dataclasses import dataclass
 from enum import Enum
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
-import stat
+import subprocess
 import sys
-import tempfile
 from typing import Any
 
 
@@ -76,15 +74,6 @@ class ArtifactRowError(ArtifactContractError):
             f"Web Species Catalog row has {len(violations)} "
             f"violation(s):\n{details}"
         )
-
-
-class GeneratedArtifactDriftError(ArtifactContractError):
-    """Committed shared admission files do not match the authored contract."""
-
-
-class SyncMode(str, Enum):
-    CHECK = "check"
-    WRITE = "write"
 
 
 class ArtifactTable(str, Enum):
@@ -1005,71 +994,27 @@ def _require_positive_safe_integer(
         violations.append(f"{path}: expected a positive safe integer")
 
 
-def sync_generated(
-    mode: SyncMode,
+def run_bindings_generator(
     *,
+    check: bool,
     root: Path = REPO_ROOT,
-) -> tuple[Path, Path]:
-    generated_dir = root / "desktop/web/src/generated"
-    module_path = generated_dir / "web-catalog-artifact.mjs"
-    declaration_path = generated_dir / "web-catalog-artifact.d.mts"
-    module, declaration = _render_generated_contents(root=root)
-    expected = {module_path: module, declaration_path: declaration}
-    if mode is SyncMode.CHECK:
-        stale = []
-        for path, content in expected.items():
-            try:
-                actual = path.read_text(encoding="utf-8")
-            except FileNotFoundError:
-                actual = ""
-            except OSError as error:
-                raise ArtifactContractError(
-                    f"failed to read generated Web Catalog artifact file {path}: {error}"
-                ) from error
-            if actual != content:
-                stale.append(path.name)
-        if stale:
-            raise GeneratedArtifactDriftError(
-                "generated Web Catalog artifact admission files are stale: "
-                + ", ".join(stale)
-            )
-        return module_path, declaration_path
-    if mode is SyncMode.WRITE:
-        generated_dir.mkdir(parents=True, exist_ok=True)
-        temporary_paths: dict[Path, Path] = {}
-        try:
-            for path, content in expected.items():
-                if path.is_file():
-                    publication_mode = stat.S_IMODE(path.stat().st_mode)
-                else:
-                    current_umask = os.umask(0)
-                    os.umask(current_umask)
-                    publication_mode = 0o666 & ~current_umask
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=generated_dir,
-                    prefix=f".{path.name}.",
-                    delete=False,
-                ) as handle:
-                    temporary_path = Path(handle.name)
-                    temporary_paths[path] = temporary_path
-                    handle.write(content)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                temporary_path.chmod(publication_mode)
-            for path, temporary_path in temporary_paths.items():
-                os.replace(temporary_path, path)
-        except OSError as error:
-            raise ArtifactContractError(
-                f"failed to write generated Web Catalog artifact files: {error}"
-            ) from error
-        finally:
-            for temporary_path in temporary_paths.values():
-                if temporary_path.exists():
-                    temporary_path.unlink()
-        return module_path, declaration_path
-    raise ArtifactContractError(f"unsupported generated sync mode: {mode}")
+) -> None:
+    """Delegate checked-in artifact publication to the Rust transaction."""
+    command = ["cargo", "run", "-p", "bindings-gen"]
+    if check:
+        command.extend(["--", "--check"])
+    try:
+        result = subprocess.run(command, cwd=root, check=False)
+    except OSError as error:
+        raise ArtifactContractError(
+            f"failed to launch the bindings generator: {error}"
+        ) from error
+    if result.returncode != 0:
+        operation = "drift check" if check else "publication"
+        raise ArtifactContractError(
+            f"Rust bindings generator {operation} failed with exit code "
+            f"{result.returncode}"
+        )
 
 
 def render_generated(
@@ -1078,6 +1023,21 @@ def render_generated(
     root: Path = REPO_ROOT,
 ) -> tuple[Path, Path]:
     """Render admission artifacts into a caller-owned staging directory."""
+    try:
+        resolved_output = output_directory.resolve()
+        protected_destinations = {
+            (root / "desktop/web/src/generated").resolve(),
+            (REPO_ROOT / "desktop/web/src/generated").resolve(),
+        }
+    except OSError as error:
+        raise ArtifactContractError(
+            f"failed to resolve the Web Catalog staging directory: {error}"
+        ) from error
+    if resolved_output in protected_destinations:
+        raise ArtifactContractError(
+            "the Web Catalog renderer cannot write the checked-in generated "
+            "directory; use the bindings-gen publication authority"
+        )
     module, declaration = _render_generated_contents(root=root)
     paths = (
         output_directory / "web-catalog-artifact.mjs",
@@ -1416,7 +1376,7 @@ function deepFreeze(value) {
 }
 """
     return (
-        "// Generated by `python3 scripts/web_catalog_artifact_contract.py emit --write`.\n"
+        "// Generated by `cargo run -p bindings-gen`.\n"
         "// Do not edit by hand.\n\n"
         + template.replace("__FACTS__", rendered_facts)
     )
@@ -1433,7 +1393,7 @@ def _render_shared_declaration(plan: WebCatalogArtifactPlan) -> str:
         for filter_plan in plan.supported_filters
     )
     return (
-        "// Generated by `python3 scripts/web_catalog_artifact_contract.py emit --write`.\n"
+        "// Generated by `cargo run -p bindings-gen`.\n"
         "// Do not edit by hand.\n\n"
         "export declare const WEB_CATALOG_ARTIFACT_CONTRACT_FINGERPRINT: string;\n"
         f"export type WebCatalogLocale = {locale_union};\n"
@@ -1484,8 +1444,12 @@ def main(argv: list[str] | None = None) -> int:
         description="Compile the Web Species Catalog artifact contract."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("check", help="Validate source and generated drift.")
-    emit_parser = subparsers.add_parser("emit", help="Refresh generated files.")
+    subparsers.add_parser(
+        "check", help="Delegate the generated-adapter drift check to bindings-gen."
+    )
+    emit_parser = subparsers.add_parser(
+        "emit", help="Delegate generated-adapter publication to bindings-gen."
+    )
     emit_parser.add_argument("--write", action="store_true", required=True)
     render_parser = subparsers.add_parser(
         "render", help="Render generated files into a staging directory."
@@ -1496,9 +1460,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "check":
-            sync_generated(SyncMode.CHECK)
+            run_bindings_generator(check=True)
         elif args.command == "emit":
-            sync_generated(SyncMode.WRITE)
+            run_bindings_generator(check=False)
         else:
             render_generated(output_directory=args.output_directory)
     except ArtifactContractError as error:

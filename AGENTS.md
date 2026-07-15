@@ -102,11 +102,9 @@ python3 scripts/species_catalog_contract.py check
 # Refresh committed Species Catalog Rust facts after an authored contract change
 python3 scripts/species_catalog_contract.py emit-rust --write
 
-# Verify the Web Species Catalog artifact contract and shared admission module
-python3 scripts/web_catalog_artifact_contract.py check
-
-# Refresh the Web Species Catalog shared admission module and declaration
-python3 scripts/web_catalog_artifact_contract.py emit --write
+# The bindings commands above also verify and refresh the Web Species Catalog
+# shared admission module and declaration. Their Python CLI aliases delegate to
+# the same Rust transaction; do not publish those files independently.
 
 # Generate plant DB
 python3 scripts/prepare-db.py
@@ -155,7 +153,7 @@ cargo build --release
 - Run `cd desktop/web && npm test` when the frontend surface area is broad or the change touches shared runtime behavior.
 - Shared contract changes require `cd desktop/web && npm run gen:types` and `cd desktop/web && npm run check:types`.
 - Species Catalog storage-contract changes require `python3 scripts/species_catalog_contract.py check`, the focused Python contract/preparation/Web tests, binding regeneration checks, and strict verification of any prepared DB artifact.
-- Web Species Catalog artifact-contract changes require `python3 scripts/web_catalog_artifact_contract.py check`, the focused Python artifact/generator tests, binding regeneration checks, and the focused browser-admission and packaging tests.
+- Web Species Catalog artifact-contract changes require the focused Python artifact/generator tests, `cd desktop/web && npm run gen:types`, `cd desktop/web && npm run check:types`, and the focused browser-admission and packaging tests.
 - Rust changes require `cargo fmt --all -- --check`, `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`, and `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace`.
 - Persistence, database, IPC, or shared type changes require the relevant frontend checks plus `cargo test --workspace`.
 - Before pushing Rust, shared-contract, or mixed architecture branches, rebase or pull onto latest `main` and rerun the relevant CI-parity gates after that rebase.

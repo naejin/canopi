@@ -391,49 +391,53 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
             self.assertRegex(details, r"supported_filters\[1\]\.options_key.*duplicate")
             self.assertRegex(details, r"excluded_detail_fields\[0\].*safe field group")
 
-    def test_generated_check_reports_both_missing_shared_admission_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            raw = json.loads(
-                (REPO_ROOT / "common-types/web-species-catalog-artifact.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-            write_contract(root, raw)
+    def test_generated_check_delegates_to_the_rust_publication_authority(self):
+        completed = mock.Mock(returncode=0)
 
-            with self.assertRaisesRegex(
-                Exception,
-                r"web-catalog-artifact\.mjs.*web-catalog-artifact\.d\.mts",
-            ):
-                contract.sync_generated(contract.SyncMode.CHECK, root=root)
+        with mock.patch(
+            "scripts.web_catalog_artifact_contract.subprocess.run",
+            return_value=completed,
+        ) as run:
+            status = contract.main(["check"])
 
-            self.assertFalse((root / "desktop/web/src/generated").exists())
+        self.assertEqual(status, 0)
+        run.assert_called_once_with(
+            ["cargo", "run", "-p", "bindings-gen", "--", "--check"],
+            cwd=REPO_ROOT,
+            check=False,
+        )
 
-    def test_generated_write_refreshes_both_files_deterministically(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            raw = json.loads(
-                (REPO_ROOT / "common-types/web-species-catalog-artifact.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-            write_contract(root, raw)
+    def test_legacy_emit_delegates_to_the_rust_publication_authority(self):
+        completed = mock.Mock(returncode=0)
 
-            paths = contract.sync_generated(contract.SyncMode.WRITE, root=root)
-            first = tuple(path.read_text(encoding="utf-8") for path in paths)
-            checked_paths = contract.sync_generated(contract.SyncMode.CHECK, root=root)
+        with mock.patch(
+            "scripts.web_catalog_artifact_contract.subprocess.run",
+            return_value=completed,
+        ) as run:
+            status = contract.main(["emit", "--write"])
 
-            self.assertEqual(paths, checked_paths)
-            self.assertEqual(
-                first,
-                tuple(path.read_text(encoding="utf-8") for path in paths),
-            )
-            self.assertIn("admitWebCatalogManifest", first[0])
-            self.assertIn("AdmittedWebCatalog", first[1])
-            self.assertIn(
-                'export type WebCatalogFilterKey = "climate_zones" | "habit" | "life_cycle";',
-                first[1],
-            )
+        self.assertEqual(status, 0)
+        run.assert_called_once_with(
+            ["cargo", "run", "-p", "bindings-gen"],
+            cwd=REPO_ROOT,
+            check=False,
+        )
+
+    def test_delegation_does_not_split_a_repo_path_that_contains_spaces(self):
+        completed = mock.Mock(returncode=0)
+        root = Path("C:/Canopi checkout with spaces")
+
+        with mock.patch(
+            "scripts.web_catalog_artifact_contract.subprocess.run",
+            return_value=completed,
+        ) as run:
+            contract.run_bindings_generator(check=False, root=root)
+
+        run.assert_called_once_with(
+            ["cargo", "run", "-p", "bindings-gen"],
+            cwd=root,
+            check=False,
+        )
 
     def test_generated_render_stages_both_files_without_mutating_repo_destinations(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -498,6 +502,33 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
             self.assertEqual(
                 tuple(path.read_text(encoding="utf-8") for path in repository_paths),
                 tuple(f"sentinel:{path.name}" for path in repository_paths),
+            )
+
+    def test_generated_render_rejects_the_checked_in_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = json.loads(
+                (REPO_ROOT / "common-types/web-species-catalog-artifact.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            write_contract(root, raw)
+            generated = root / "desktop/web/src/generated"
+            generated.mkdir(parents=True)
+            module = generated / "web-catalog-artifact.mjs"
+            declaration = generated / "web-catalog-artifact.d.mts"
+            module.write_text("module sentinel", encoding="utf-8")
+            declaration.write_text("declaration sentinel", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                contract.ArtifactContractError,
+                "bindings-gen publication authority",
+            ):
+                contract.render_generated(output_directory=generated, root=root)
+
+            self.assertEqual(module.read_text(encoding="utf-8"), "module sentinel")
+            self.assertEqual(
+                declaration.read_text(encoding="utf-8"), "declaration sentinel"
             )
 
 

@@ -6,7 +6,7 @@ mod publication;
 mod settings;
 
 use external_contracts::{ExternalContractRenderer, PythonContractRenderer};
-use publication::GenerationPlan;
+use publication::{AdmissionMode, GenerationPlan, acquire_generation_admission};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -46,6 +46,13 @@ impl GenerationMode {
             _ => Err("usage: bindings-gen [--check]".into()),
         }
     }
+
+    fn admission(self) -> AdmissionMode {
+        match self {
+            Self::Write => AdmissionMode::Publish,
+            Self::Check => AdmissionMode::Check,
+        }
+    }
 }
 
 fn execute_generation(
@@ -54,6 +61,7 @@ fn execute_generation(
     external: &impl ExternalContractRenderer,
     mode: GenerationMode,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let admission = acquire_generation_admission(destination_root, mode.admission())?;
     external.validate_species_catalog(source_root)?;
     let mut plan = compile_native_plan(source_root, destination_root)?;
     let web_catalog = external.render_web_catalog(source_root)?;
@@ -66,8 +74,8 @@ fn execute_generation(
         web_catalog.declaration,
     )?;
     match mode {
-        GenerationMode::Write => plan.publish()?,
-        GenerationMode::Check => plan.check()?,
+        GenerationMode::Write => plan.publish_admitted(admission)?,
+        GenerationMode::Check => plan.check_admitted(admission)?,
     }
     Ok(())
 }
@@ -136,9 +144,9 @@ fn format_rust_source(
 #[cfg(test)]
 mod tests {
     use super::{
-        CONTRACTS_TS, DESIGN_FORMAT_TS, ExternalContractRenderer, GenerationMode, KNOWN_KEYS_TS,
-        PLANT_FILTER_RUST, PLANT_FILTER_TS, SETTINGS_TS, WEB_CATALOG_DECLARATION,
-        WEB_CATALOG_MODULE, execute_generation,
+        AdmissionMode, CONTRACTS_TS, DESIGN_FORMAT_TS, ExternalContractRenderer, GenerationMode,
+        KNOWN_KEYS_TS, PLANT_FILTER_RUST, PLANT_FILTER_TS, SETTINGS_TS, WEB_CATALOG_DECLARATION,
+        WEB_CATALOG_MODULE, acquire_generation_admission, execute_generation,
     };
     use crate::external_contracts::WebCatalogArtifacts;
     use std::fs;
@@ -182,6 +190,43 @@ mod tests {
             _repo_root: &Path,
         ) -> Result<WebCatalogArtifacts, Box<dyn std::error::Error>> {
             Err("forced late Web Catalog renderer failure".into())
+        }
+    }
+
+    struct AdmissionLifetimeProbe {
+        admission: PathBuf,
+    }
+
+    impl AdmissionLifetimeProbe {
+        fn assert_exclusive_admission_is_blocked(&self) -> Result<(), Box<dyn std::error::Error>> {
+            let file = fs::OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .read(true)
+                .write(true)
+                .open(&self.admission)?;
+            match file.try_lock() {
+                Err(fs::TryLockError::WouldBlock) => Ok(()),
+                Err(fs::TryLockError::Error(error)) => Err(error.into()),
+                Ok(()) => Err("external rendering began before generation admission".into()),
+            }
+        }
+    }
+
+    impl ExternalContractRenderer for AdmissionLifetimeProbe {
+        fn validate_species_catalog(
+            &self,
+            _repo_root: &Path,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            self.assert_exclusive_admission_is_blocked()
+        }
+
+        fn render_web_catalog(
+            &self,
+            _repo_root: &Path,
+        ) -> Result<WebCatalogArtifacts, Box<dyn std::error::Error>> {
+            self.assert_exclusive_admission_is_blocked()?;
+            Err("forced renderer failure after admission probe".into())
         }
     }
 
@@ -230,5 +275,55 @@ mod tests {
                 .join("target/bindings-gen-publication.in-progress")
                 .exists()
         );
+    }
+
+    #[test]
+    fn generation_admission_is_held_through_external_rendering() {
+        let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let destination = TempRoot::new();
+        let renderer = AdmissionLifetimeProbe {
+            admission: destination.0.join("target/bindings-gen-publication.lock"),
+        };
+
+        let error = execute_generation(
+            source_root,
+            &destination.0,
+            &renderer,
+            GenerationMode::Write,
+        )
+        .expect_err("the renderer probe stops generation after checking admission");
+
+        assert!(
+            error
+                .to_string()
+                .contains("forced renderer failure after admission probe")
+        );
+        let _released = acquire_generation_admission(&destination.0, AdmissionMode::Publish)
+            .expect("renderer failure must release generation admission");
+    }
+
+    #[test]
+    fn drift_check_admission_is_held_through_external_rendering() {
+        let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let destination = TempRoot::new();
+        let renderer = AdmissionLifetimeProbe {
+            admission: destination.0.join("target/bindings-gen-publication.lock"),
+        };
+
+        let error = execute_generation(
+            source_root,
+            &destination.0,
+            &renderer,
+            GenerationMode::Check,
+        )
+        .expect_err("the renderer probe stops checking after testing admission");
+
+        assert!(
+            error
+                .to_string()
+                .contains("forced renderer failure after admission probe")
+        );
+        let _released = acquire_generation_admission(&destination.0, AdmissionMode::Publish)
+            .expect("renderer failure must release drift-check admission");
     }
 }
