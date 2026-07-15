@@ -1,9 +1,7 @@
-use common_types::design::{CanopiFile, DEFAULT_BUDGET_CURRENCY, Layer};
+use common_types::design::{
+    CURRENT_CANOPI_FILE_VERSION, CanopiFile, DEFAULT_BUDGET_CURRENCY, Layer,
+};
 use std::path::Path;
-
-/// The current file-format version this build produces and migrates to.
-/// Bump when adding a new migration step (and add the corresponding match arm).
-const CURRENT_VERSION: u32 = 5;
 
 /// Save a `CanopiFile` to disk atomically.
 ///
@@ -65,13 +63,13 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 
     // Log the version for diagnostics.
     if let Some(v) = value.get("version").and_then(|v| v.as_u64())
-        && v > CURRENT_VERSION as u64
+        && v > CURRENT_CANOPI_FILE_VERSION as u64
     {
         tracing::info!(
             "Loading design version {} from {}; current app supports version {}",
             v,
             path.display(),
-            CURRENT_VERSION,
+            CURRENT_CANOPI_FILE_VERSION,
         );
     }
 
@@ -88,7 +86,7 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 fn migrate_design_value(value: &mut serde_json::Value) {
     loop {
         let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
-        if version >= CURRENT_VERSION {
+        if version >= CURRENT_CANOPI_FILE_VERSION {
             break;
         }
         match version {
@@ -526,7 +524,7 @@ pub fn create_default() -> CanopiFile {
     ];
 
     CanopiFile {
-        version: CURRENT_VERSION,
+        version: CURRENT_CANOPI_FILE_VERSION,
         name: "Untitled".into(),
         description: None,
         location: None,

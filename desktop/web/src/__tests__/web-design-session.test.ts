@@ -103,6 +103,29 @@ describe('browser Design Session lifecycle', () => {
     })
   })
 
+  it('rejects a malformed selected Design before replacing the active session', async () => {
+    const original = makeCanopiFile({ name: 'Working Garden' })
+    const store = createMemoryDesignSessionStore({
+      file: original,
+      path: null,
+      name: original.name,
+    })
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter: testFileAdapter({
+        openCanopiFile: vi.fn(async () => ({
+          fileName: 'malformed.canopi',
+          text: JSON.stringify({ ...makeCanopiFile(), plants: 'not-an-array' }),
+        })),
+      }),
+      now: () => NOW,
+    })
+
+    await expect(controller.openCanopi()).rejects.toThrow('$.plants: expected an array')
+    expect(store.readDesignName()).toBe('Working Garden')
+    expect(store.readCurrentDesign()).toEqual(original)
+  })
+
   it('does not let an older pending Open overwrite a later New Design', async () => {
     const pendingOpen = deferred<BrowserOpenedCanopiFile | null>()
     const store = createMemoryDesignSessionStore({
@@ -264,6 +287,23 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignName()).toBe('Forest Edge')
     expect(store.readDesignPath()).toBeNull()
     expect(store.isDesignDirty()).toBe(false)
+  })
+
+  it('rejects a malformed template before replacing the active session', async () => {
+    const original = makeCanopiFile({ name: 'Working Garden' })
+    const store = createMemoryDesignSessionStore({
+      file: original,
+      path: null,
+      name: original.name,
+    })
+    const controller = createBrowserDesignSessionController({ store, now: () => NOW })
+
+    await expect(controller.openCanopiTemplate({
+      name: 'Malformed Template',
+      text: JSON.stringify({ ...makeCanopiFile(), zones: [{ name: 'missing fields' }] }),
+    })).rejects.toThrow('$.zones[0].points: missing required value')
+    expect(store.readDesignName()).toBe('Working Garden')
+    expect(store.readCurrentDesign()).toEqual(original)
   })
 
   it('does not let an older pending Open overwrite a later template replacement', async () => {
@@ -821,6 +861,8 @@ describe('browser Design Session lifecycle', () => {
         canonical_name: 'Malus domestica',
         common_name: null,
         color: null,
+        symbol: null,
+        pinned_name: false,
         position: { x: 12, y: 24 },
         rotation: null,
         scale: 1,
@@ -1190,7 +1232,21 @@ describe('browser Design Session lifecycle', () => {
         return {
           content: {
             ...document,
-            plants: [{ id: `scene-${captureNumber}` } as CanopiFile['plants'][number]],
+            plants: [{
+              id: `scene-${captureNumber}`,
+              locked: false,
+              canonical_name: 'Malus domestica',
+              common_name: null,
+              color: null,
+              symbol: null,
+              pinned_name: false,
+              position: { x: captureNumber, y: 0 },
+              rotation: null,
+              scale: null,
+              notes: null,
+              planted_date: null,
+              quantity: null,
+            }],
           },
           isCurrent: () => true,
           acknowledgeSaved,

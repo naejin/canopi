@@ -1,3 +1,4 @@
+import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
 import type { CanopiFile } from "../types/design";
 
 const STORAGE_KEY = "canopi:web-app-data:v1";
@@ -113,7 +114,10 @@ export function createBrowserAppDataStore({
     },
 
     loadDraft(id) {
-      return read().draftFiles[id] ?? null;
+      const draftFiles = read().draftFiles;
+      return Object.prototype.hasOwnProperty.call(draftFiles, id)
+        ? draftFiles[id] ?? null
+        : null;
     },
 
     deleteDraft(id) {
@@ -219,18 +223,42 @@ function emptyDocument(): BrowserAppDataDocument {
 }
 
 function normalizeAppDataDocument(value: unknown): BrowserAppDataDocument {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return emptyDocument();
-  const record = value as Partial<BrowserAppDataDocument>;
+  if (!isRecord(value)) return emptyDocument();
+  const draftFiles = decodeDraftFiles(value.draftFiles);
+  const validDraftIds = new Set(Object.keys(draftFiles));
   return {
-    drafts: Array.isArray(record.drafts) ? record.drafts.filter(isDraftSummary) : [],
-    draftFiles: isRecord(record.draftFiles) ? record.draftFiles as Record<string, CanopiFile> : {},
-    settings: isRecord(record.settings) ? { ...record.settings } : null,
-    favoriteSpecies: Array.isArray(record.favoriteSpecies) ? uniqueStrings(record.favoriteSpecies) : [],
-    recentlyViewedSpecies: Array.isArray(record.recentlyViewedSpecies) ? uniqueStrings(record.recentlyViewedSpecies) : [],
-    savedObjectStamps: Array.isArray(record.savedObjectStamps)
-      ? record.savedObjectStamps.filter(isSavedObjectStampRecord)
+    drafts: Array.isArray(value.drafts)
+      ? value.drafts.filter((draft): draft is BrowserDraftSummary => (
+        isDraftSummary(draft) && validDraftIds.has(draft.id)
+      ))
+      : [],
+    draftFiles,
+    settings: isRecord(value.settings) ? { ...value.settings } : null,
+    favoriteSpecies: Array.isArray(value.favoriteSpecies) ? uniqueStrings(value.favoriteSpecies) : [],
+    recentlyViewedSpecies: Array.isArray(value.recentlyViewedSpecies) ? uniqueStrings(value.recentlyViewedSpecies) : [],
+    savedObjectStamps: Array.isArray(value.savedObjectStamps)
+      ? value.savedObjectStamps.filter(isSavedObjectStampRecord)
       : [],
   };
+}
+
+function decodeDraftFiles(value: unknown): Record<string, CanopiFile> {
+  if (!isRecord(value)) return {};
+  const decoded: Record<string, CanopiFile> = {};
+  for (const [id, rawFile] of Object.entries(value)) {
+    try {
+      Object.defineProperty(decoded, id, {
+        configurable: true,
+        enumerable: true,
+        value: decodeCanopiDesign(rawFile),
+        writable: true,
+      });
+    } catch {
+      // A corrupt Draft is local convenience data; omit it without poisoning
+      // settings, Species data, stamps, or other independently valid Drafts.
+    }
+  }
+  return decoded;
 }
 
 function isDraftSummary(value: unknown): value is BrowserDraftSummary {

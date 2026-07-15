@@ -3,6 +3,8 @@ use specta::Type;
 
 pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
 pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
+/// Current `.canopi` format version shared by native loading and generated Web facts.
+pub const CURRENT_CANOPI_FILE_VERSION: u32 = 5;
 pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "round",
     "square",
@@ -122,12 +124,16 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
     },
 ];
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct CanopiFile {
     pub version: u32,
     pub name: String,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub description: Option<String>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub location: Option<Location>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub north_bearing_deg: Option<f64>,
     pub plant_species_colors: std::collections::HashMap<String, String>,
     #[serde(default)]
@@ -156,6 +162,12 @@ pub struct CanopiFile {
     #[serde(flatten)]
     #[specta(skip)]
     pub extra: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[cfg(feature = "design-schema")]
+pub fn canopi_file_json_schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(CanopiFile))
+        .expect("CanopiFile JSON Schema should serialize")
 }
 
 #[derive(Deserialize)]
@@ -232,13 +244,16 @@ impl<'de> Deserialize<'de> for CanopiFile {
     }
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub altitude_m: Option<f64>,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Layer {
     pub name: String,
@@ -247,12 +262,15 @@ pub struct Layer {
     pub opacity: f32,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct PlacedPlant {
     #[serde(default)]
     pub id: String,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub canonical_name: String,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub common_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
@@ -261,10 +279,15 @@ pub struct PlacedPlant {
     #[serde(default)]
     pub pinned_name: bool,
     pub position: Position,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub rotation: Option<f64>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub scale: Option<f64>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub notes: Option<String>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub planted_date: Option<String>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub quantity: Option<u32>,
 }
 
@@ -314,20 +337,26 @@ impl<'de> Deserialize<'de> for PlacedPlant {
     }
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Position {
     pub x: f64,
     pub y: f64,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct Zone {
     pub name: String,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub zone_type: String,
     pub points: Vec<Position>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub rotation: f64,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub fill_color: Option<String>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub notes: Option<String>,
 }
 
@@ -362,17 +391,21 @@ impl<'de> Deserialize<'de> for Zone {
     }
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct Annotation {
     pub id: String,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub annotation_type: String,
     pub position: Position,
     pub text: String,
     pub font_size: f64,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub rotation: Option<f64>,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct MeasurementGuide {
     #[serde(default)]
@@ -434,6 +467,7 @@ impl<'de> Deserialize<'de> for Annotation {
     }
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Consortium {
     pub target: SpeciesPanelTarget,
@@ -442,6 +476,7 @@ pub struct Consortium {
     pub end_phase: u32,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 #[serde(tag = "kind")]
 pub enum PanelTarget {
@@ -458,33 +493,41 @@ pub enum PanelTarget {
     None,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SpeciesPanelTarget {
     pub kind: SpeciesPanelTargetKind,
     pub canonical_name: String,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub enum SpeciesPanelTargetKind {
     #[serde(rename = "species")]
     Species,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct TimelineAction {
     pub id: String,
     pub action_type: String,
     pub description: String,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub start_date: Option<String>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub end_date: Option<String>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub recurrence: Option<String>,
     #[serde(default = "default_manual_targets")]
     pub targets: Vec<PanelTarget>,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub depends_on: Option<Vec<String>>,
     pub completed: bool,
     pub order: i32,
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct BudgetItem {
     #[serde(default = "default_manual_target")]
@@ -508,6 +551,7 @@ pub fn default_budget_currency() -> String {
     DEFAULT_BUDGET_CURRENCY.to_owned()
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind")]
 pub enum ObjectGroupMember {
@@ -519,10 +563,13 @@ pub enum ObjectGroupMember {
     Annotation { id: String },
 }
 
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct ObjectGroup {
     pub id: String,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
+    #[cfg_attr(feature = "design-schema", schemars(default))]
     pub name: Option<String>,
     pub members: Vec<ObjectGroupMember>,
 }

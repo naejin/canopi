@@ -7,6 +7,7 @@ import type {
   PlacedPlant,
   Zone,
 } from '../../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import { DEFAULT_BUDGET_CURRENCY } from '../../../generated/known-canopi-keys'
 import type {
   SceneAnnotationEntity,
@@ -46,7 +47,7 @@ export function serializeScenePersistedState(
   const now = options.now ?? new Date()
 
   return {
-    version: 5,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Untitled',
     description: null,
     location: null,

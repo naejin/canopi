@@ -42,7 +42,12 @@ export function extractDocumentExtra(raw: Record<string, unknown>): Record<strin
   const extra: Record<string, unknown> = {}
   for (const key of Object.keys(raw)) {
     if (!KNOWN_CANOPI_KEY_SET.has(key)) {
-      extra[key] = raw[key]
+      Object.defineProperty(extra, key, {
+        configurable: true,
+        enumerable: true,
+        value: raw[key],
+        writable: true,
+      })
     }
   }
   return extra

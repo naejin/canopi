@@ -60,6 +60,37 @@ describe('browser app data store', () => {
     expect(store.listDrafts()).toEqual([saved.value])
     expect(store.loadDraft(saved.value.id)?.name).toBe('Safe Draft')
   })
+
+  it('isolates corrupted Drafts without discarding unrelated browser app data', () => {
+    const storage = memoryStorage()
+    storage.setItem('canopi:web-app-data:v1', JSON.stringify({
+      drafts: [
+        { id: 'valid', name: 'Valid', updatedAt: '2026-07-04T12:00:00.000Z' },
+        { id: 'corrupt', name: 'Corrupt', updatedAt: '2026-07-04T13:00:00.000Z' },
+        { id: 'missing', name: 'Missing', updatedAt: '2026-07-04T14:00:00.000Z' },
+      ],
+      draftFiles: {
+        valid: makeDesign({ name: 'Valid' }),
+        corrupt: { ...makeDesign({ name: 'Corrupt' }), plants: 'not-an-array' },
+      },
+      settings: { locale: 'fr', theme: 'dark' },
+      favoriteSpecies: ['Malus domestica'],
+      recentlyViewedSpecies: ['Pyrus communis'],
+      savedObjectStamps: [{ id: 'stamp-1', name: 'Guild', payload: { objects: 2 } }],
+    }))
+    const store = createBrowserAppDataStore({ storage })
+
+    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['valid'])
+    expect(store.loadDraft('valid')?.name).toBe('Valid')
+    expect(store.loadDraft('corrupt')).toBeNull()
+    expect(store.loadDraft('missing')).toBeNull()
+    expect(store.loadSettings()).toEqual({ locale: 'fr', theme: 'dark' })
+    expect(store.listFavoriteSpecies()).toEqual(['Malus domestica'])
+    expect(store.listRecentlyViewedSpecies()).toEqual(['Pyrus communis'])
+    expect(store.listSavedObjectStamps()).toEqual([
+      { id: 'stamp-1', name: 'Guild', payload: { objects: 2 } },
+    ])
+  })
 })
 
 interface MemoryStorage extends BrowserStorageAdapter {

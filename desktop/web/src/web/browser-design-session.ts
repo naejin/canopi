@@ -1,4 +1,5 @@
 import { effect } from "@preact/signals";
+import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
 import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
 import {
   createDesignSessionReplacement,
@@ -28,6 +29,7 @@ import {
   type CanvasDocumentSurface,
 } from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
+import { CURRENT_CANOPI_FILE_VERSION } from "../generated/canopi-design-format";
 import {
   browserAppDataStore,
   type BrowserAppDataStore,
@@ -35,8 +37,6 @@ import {
   type BrowserDraftSummary,
 } from "./browser-app-data";
 import type { BrowserShellCommandHandlers, BrowserShellDesignIdentity } from "./BrowserAppShell";
-
-const WEB_CANOPI_FILE_VERSION = 5;
 
 export interface BrowserOpenedCanopiFile {
   readonly fileName: string;
@@ -562,7 +562,7 @@ export const browserDesignSessionController = createBrowserDesignSessionControll
 function createEmptyWebCanopiFile(now: Date): CanopiFile {
   const timestamp = now.toISOString();
   return {
-    version: WEB_CANOPI_FILE_VERSION,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: "Untitled",
     description: null,
     location: null,
@@ -587,10 +587,7 @@ function createEmptyWebCanopiFile(now: Date): CanopiFile {
 
 function parseCanopiJson(text: string): CanopiFile {
   const parsed: unknown = JSON.parse(text);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Selected .canopi file does not contain a design object.");
-  }
-  return parsed as CanopiFile;
+  return decodeCanopiDesign(parsed);
 }
 
 async function openCanopiFile(): Promise<BrowserOpenedCanopiFile | null> {
