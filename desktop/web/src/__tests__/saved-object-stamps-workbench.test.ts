@@ -30,12 +30,15 @@ describe('Saved Object Stamp Workbench', () => {
   function deferred<T>(): {
     readonly promise: Promise<T>
     readonly resolve: (value: T) => void
+    readonly reject: (error: unknown) => void
   } {
     let resolve!: (value: T) => void
-    const promise = new Promise<T>((promiseResolve) => {
+    let reject!: (error: unknown) => void
+    const promise = new Promise<T>((promiseResolve, promiseReject) => {
       resolve = promiseResolve
+      reject = promiseReject
     })
-    return { promise, resolve }
+    return { promise, resolve, reject }
   }
 
   const importableFile = (): CanopiFile => ({
@@ -622,6 +625,35 @@ describe('Saved Object Stamp Workbench', () => {
     expect(workbench.library.value.items).toEqual([])
   })
 
+  it('continues queued Saved Object Stamp mutations after a predecessor rejects', async () => {
+    const initial = makeStamp('stamp-1', 'Initial', 0)
+    const firstRename = deferred<SavedObjectStamp>()
+    const renameStamp = vi.fn((_id: string, name: string) => name === 'Rejected name'
+      ? firstRename.promise
+      : Promise.resolve({ ...initial, name }))
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [initial],
+      renameSavedObjectStamp: renameStamp,
+      getCanvasQuerySurface: () => null,
+    })
+    await workbench.loadLibrary()
+
+    const rejected = workbench.renameStamp(initial.id, 'Rejected name')
+    const recovered = workbench.renameStamp(initial.id, 'Recovered name')
+    await Promise.resolve()
+
+    expect(renameStamp.mock.calls.map(([, name]) => name)).toEqual(['Rejected name'])
+
+    firstRename.reject(new Error('rename failed'))
+    await expect(rejected).rejects.toThrow('rename failed')
+    await expect(recovered).resolves.toMatchObject({ name: 'Recovered name' })
+    expect(renameStamp.mock.calls.map(([, name]) => name)).toEqual([
+      'Rejected name',
+      'Recovered name',
+    ])
+    expect(workbench.library.value.items[0]?.name).toBe('Recovered name')
+  })
+
   it('disposes idempotently without publishing an in-flight mutation', async () => {
     const initial = makeStamp('stamp-1', 'Initial', 0)
     const pendingRename = deferred<SavedObjectStamp>()
@@ -639,6 +671,31 @@ describe('Saved Object Stamp Workbench', () => {
     pendingRename.resolve({ ...initial, name: 'Renamed' })
     await rename
 
+    expect(workbench.library.value.items[0]?.name).toBe('Initial')
+  })
+
+  it('does not invoke an already queued Saved Object Stamp mutation after disposal', async () => {
+    const initial = makeStamp('stamp-1', 'Initial', 0)
+    const pendingRename = deferred<SavedObjectStamp>()
+    const renameStamp = vi.fn((_id: string, name: string) => name === 'First name'
+      ? pendingRename.promise
+      : Promise.resolve({ ...initial, name }))
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [initial],
+      renameSavedObjectStamp: renameStamp,
+      getCanvasQuerySurface: () => null,
+    })
+    await workbench.loadLibrary()
+
+    const inFlight = workbench.renameStamp(initial.id, 'First name')
+    const queued = workbench.renameStamp(initial.id, 'Queued name')
+    expect(renameStamp).toHaveBeenCalledTimes(1)
+
+    workbench.dispose()
+    pendingRename.resolve({ ...initial, name: 'First name' })
+    await Promise.all([inFlight, queued])
+
+    expect(renameStamp).toHaveBeenCalledTimes(1)
     expect(workbench.library.value.items[0]?.name).toBe('Initial')
   })
 

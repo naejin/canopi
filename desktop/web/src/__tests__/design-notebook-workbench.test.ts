@@ -249,6 +249,34 @@ describe('design notebook workbench', () => {
       .toBe('Renamed')
   })
 
+  it('continues queued Notebook mutations after a predecessor throws synchronously', async () => {
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [{
+          id: 'section-home',
+          name: 'Home',
+          sort_order: 0,
+          created_at: '2026-06-20T08:00:00.000Z',
+          updated_at: '2026-06-20T08:00:00.000Z',
+        }],
+        entries: [],
+      }),
+      openDesign: vi.fn(),
+      renameSection: (_sectionId, name) => {
+        if (name === 'Rejected name') throw new Error('rename failed')
+        return Promise.resolve()
+      },
+    })
+    await workbench.load()
+
+    const rejected = workbench.renameSection('section-home', 'Rejected name')
+    const recovered = workbench.renameSection('section-home', 'Recovered name')
+
+    await expect(rejected).rejects.toThrow('rename failed')
+    await expect(recovered).resolves.toBeUndefined()
+    expect(workbench.view.value.sections[0]?.name).toBe('Recovered name')
+  })
+
   it('does not publish a Notebook mutation continuation after disposal', async () => {
     const pendingRename = deferred<void>()
     const workbench = createDesignNotebookWorkbench({
@@ -273,6 +301,39 @@ describe('design notebook workbench', () => {
     pendingRename.resolve()
     await rename
 
+    expect(workbench.view.value.sections[0]?.name).toBe('Home')
+  })
+
+  it('does not invoke an already queued Notebook mutation after disposal', async () => {
+    const pendingRename = deferred<void>()
+    const renameSection = vi.fn((_sectionId: string, name: string) => (
+      name === 'First name' ? pendingRename.promise : Promise.resolve()
+    ))
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [{
+          id: 'section-home',
+          name: 'Home',
+          sort_order: 0,
+          created_at: '2026-06-20T08:00:00.000Z',
+          updated_at: '2026-06-20T08:00:00.000Z',
+        }],
+        entries: [],
+      }),
+      openDesign: vi.fn(),
+      renameSection,
+    })
+    await workbench.load()
+
+    const inFlight = workbench.renameSection('section-home', 'First name')
+    const queued = workbench.renameSection('section-home', 'Queued name')
+    expect(renameSection).toHaveBeenCalledTimes(1)
+
+    workbench.dispose()
+    pendingRename.resolve()
+    await Promise.all([inFlight, queued])
+
+    expect(renameSection).toHaveBeenCalledTimes(1)
     expect(workbench.view.value.sections[0]?.name).toBe('Home')
   })
 

@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -1671,6 +1672,23 @@ describe('declarative frontend architecture policies', () => {
       graph,
       designSessionTestBoundaryPolicies(),
     )).toEqual([])
+  })
+
+  it('keeps Saved Object Stamp HMR disposal with the live Workbench owner', () => {
+    const ownerSource = readFileSync(
+      new URL('../app/saved-object-stamps/index.ts', import.meta.url),
+      'utf8',
+    )
+    expect(ownerSource).toMatch(
+      /const\s+liveSavedObjectStampWorkbench\s*=\s*createSavedObjectStampWorkbench\(\)/,
+    )
+    expect(ownerSource).toMatch(
+      /export\s+const\s+savedObjectStampWorkbench(?:\s*:\s*SavedObjectStampWorkbench)?\s*=\s*liveSavedObjectStampWorkbench/,
+    )
+    expect(ownerSource).toMatch(/if\s*\(\s*import\.meta\.hot\s*\)/)
+    expect(ownerSource).toMatch(
+      /import\.meta\.hot\.dispose\(\s*\(\)\s*=>\s*(?:\{\s*)?liveSavedObjectStampWorkbench\.dispose\(\)\s*;?\s*(?:\})?\s*\)/,
+    )
   })
 
   it('keeps every discovered TypeScript source within its owned dependency seams', () => {
