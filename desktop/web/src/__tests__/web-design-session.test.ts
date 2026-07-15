@@ -1,6 +1,7 @@
 import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { beginTimelineActionEdit } from '../app/design-edit'
+import { composeDocumentForSave } from '../app/contracts/document'
 import {
   createMemoryDesignSessionStore,
   designSessionStore,
@@ -20,6 +21,7 @@ import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/br
 import {
   browserDesignFileAdapter,
   createBrowserDesignSessionController,
+  type BrowserCanopiDownload,
   type BrowserOpenedCanopiFile,
   type BrowserDesignFileAdapter,
 } from '../web/browser-design-session'
@@ -100,6 +102,47 @@ describe('browser Design Session lifecycle', () => {
     expect(firstLayer).not.toBe(secondLayer)
     firstLayer.visible = false
     expect(secondLayer.visible).toBe(true)
+  })
+
+  it('preserves a new browser Design without a north bearing through draft and download composition', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const downloadCanopiFile = vi.fn<(download: BrowserCanopiDownload) => Promise<void>>(
+      async () => undefined,
+    )
+    const lastComposed: { current: CanopiFile | null } = { current: null }
+    const canvas = testCanvasDocumentSurface({
+      captureForPersistence: vi.fn((metadata, document) => {
+        lastComposed.current = composeDocumentForSave({
+          metadata,
+          document,
+          canvas: { ...document, north_bearing_deg: 0 },
+        })
+        return persistenceCapture(lastComposed.current)
+      }),
+    })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter({ downloadCanopiFile }),
+      now: () => NOW,
+      createDraftId: () => 'draft-canonical-new-design',
+    })
+    const detach = controller.attachCanvasSession(canvas)
+
+    try {
+      await controller.newDesign()
+
+      expect(lastComposed.current?.north_bearing_deg).toBeNull()
+      expect(appDataStore.loadDraft('draft-canonical-new-design')?.north_bearing_deg).toBeNull()
+
+      await controller.downloadCanopi()
+      const download = downloadCanopiFile.mock.calls[0]?.[0]
+      if (!download) throw new Error('browser download was not captured')
+      expect((JSON.parse(download.text) as CanopiFile).north_bearing_deg).toBeNull()
+    } finally {
+      detach()
+    }
   })
 
   it('opens a .canopi file as a detached browser Design and preserves future fields', async () => {
