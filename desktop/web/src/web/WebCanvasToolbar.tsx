@@ -206,14 +206,6 @@ export function WebCanvasToolbar() {
       aria-orientation="vertical"
       className={styles.toolbar}
       onKeyDown={handleKeyDown}
-      tabIndex={0}
-      onFocus={(event) => {
-        if (event.target === toolbarRef.current) {
-          toolbarRef.current?.querySelector<HTMLButtonElement>(
-            '[aria-checked="true"]',
-          )?.focus()
-        }
-      }}
     >
       {toolbarProjection.primaryTools.map(renderToolButton)}
 

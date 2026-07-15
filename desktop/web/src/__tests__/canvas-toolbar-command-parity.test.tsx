@@ -169,7 +169,7 @@ describe('Canvas toolbar command parity', () => {
     expect(commandButton(webContainer, 'canvas.toggleGrid').disabled).toBe(true)
   })
 
-  it('keeps both rendered tool groups reachable with the same roving keyboard behavior', async () => {
+  it('gives both tool groups one exit-safe tab entry with the same roving keyboard behavior', async () => {
     const setTool = vi.fn()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ tools: { setTool } }),
@@ -189,9 +189,12 @@ describe('Canvas toolbar command parity', () => {
 
       const toolbar = container.querySelector<HTMLDivElement>('[role="toolbar"]')
       if (!toolbar) throw new Error('Missing Canvas toolbar')
+      expect(toolbar.getAttribute('tabindex')).toBeNull()
+      expect(toolbar.tabIndex).toBe(-1)
+      expect(sequentialToolIds(container)).toEqual(['select'])
 
       await act(async () => {
-        toolbar.focus()
+        toolButton(container, 'select').focus()
         await Promise.resolve()
       })
       expect(document.activeElement).toBe(toolButton(container, 'select'))
@@ -206,6 +209,7 @@ describe('Canvas toolbar command parity', () => {
       })
       expect(activeTool.value).toBe('hand')
       expect(document.activeElement).toBe(toolButton(container, 'hand'))
+      expect(sequentialToolIds(container)).toEqual(['hand'])
 
       await act(async () => {
         toolButton(container, 'hand').dispatchEvent(new KeyboardEvent('keydown', {
@@ -217,6 +221,7 @@ describe('Canvas toolbar command parity', () => {
       })
       expect(activeTool.value).toBe('select')
       expect(document.activeElement).toBe(toolButton(container, 'select'))
+      expect(sequentialToolIds(container)).toEqual(['select'])
     }
 
     expect(setTool.mock.calls).toEqual([
@@ -260,4 +265,10 @@ function toolButton(container: HTMLElement, tool: string): HTMLButtonElement {
   const button = container.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)
   if (!button) throw new Error(`Missing ${tool} button`)
   return button
+}
+
+function sequentialToolIds(container: HTMLElement): Array<string | undefined> {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-tool]'))
+    .filter((button) => !button.disabled && button.tabIndex === 0)
+    .map((button) => button.dataset.tool)
 }

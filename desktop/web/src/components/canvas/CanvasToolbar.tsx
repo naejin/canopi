@@ -248,16 +248,6 @@ export function CanvasToolbar() {
       aria-orientation="vertical"
       className={styles.toolbar}
       onKeyDown={handleKeyDown}
-      // tabIndex={0} puts the toolbar itself in the tab order. When the
-      // container receives focus (not one of its children), we immediately
-      // delegate to the active tool button so the user lands on a real button.
-      tabIndex={0}
-      onFocus={(e) => {
-        if (e.target === toolbarRef.current) {
-          const active = toolbarRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')
-          active?.focus()
-        }
-      }}
     >
       {toolbarProjection.primaryTools.map(renderToolButton)}
 
