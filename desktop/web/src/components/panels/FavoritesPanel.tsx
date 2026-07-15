@@ -25,6 +25,7 @@ import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
+import { usePointerResize } from '../shared/usePointerResize'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import styles from './FavoritesPanel.module.css'
 
@@ -455,11 +456,37 @@ function SavedStampsResizeHandle({
   handleRef: { current: HTMLDivElement | null }
   frameRef: { current: HTMLElement | null }
 }) {
-  const cleanupRef = useRef<((commit: boolean) => void) | null>(null)
+  const resolveHeight = (session: SavedStampsResizeSession, clientY: number) =>
+    resolveSavedStampsFrameHeight(
+      session.startHeight + (session.startY - clientY),
+      mainRef.current,
+      [headerRef.current, handleRef.current],
+    )
 
-  useEffect(() => {
-    return () => { cleanupRef.current?.(false) }
-  }, [])
+  const onPointerDown = usePointerResize<SavedStampsResizeSession>({
+    cursor: 'row-resize',
+    begin: (event) => {
+      const frame = frameRef.current
+      if (!frame) return null
+      return {
+        frame,
+        startY: event.clientY,
+        startHeight: currentSavedStampsFrameHeight(frame),
+        previousInlineHeight: frame.style.height,
+      }
+    },
+    preview: (session, event) => {
+      const height = resolveHeight(session, event.clientY)
+      session.frame.style.height = `${height}px`
+      return height !== session.startHeight
+    },
+    commit: (session, event) => {
+      commitSavedStampsFrameHeight(resolveHeight(session, event.clientY))
+    },
+    rollback: (session) => {
+      session.frame.style.height = session.previousInlineHeight
+    },
+  })
 
   return (
     <div
@@ -469,63 +496,16 @@ function SavedStampsResizeHandle({
       aria-orientation="horizontal"
       aria-label={t('savedObjectStamps.resizeFrame')}
       tabIndex={0}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return
-        event.preventDefault()
-
-        const handle = handleRef.current
-        const frame = frameRef.current
-        if (!handle || !frame) return
-        handle.setPointerCapture(event.pointerId)
-
-        const startY = event.clientY
-        const startHeight = currentSavedStampsFrameHeight(frame)
-        const pointerId = event.pointerId
-        let lastClientY = event.clientY
-
-        const clampHeight = (clientY: number) =>
-          resolveSavedStampsFrameHeight(startHeight + (startY - clientY), mainRef.current, [
-            headerRef.current,
-            handleRef.current,
-          ])
-
-        const onMove = (moveEvent: PointerEvent) => {
-          lastClientY = moveEvent.clientY
-          frame.style.height = `${clampHeight(moveEvent.clientY)}px`
-        }
-
-        let cleaned = false
-        const cleanup = (commit: boolean) => {
-          if (cleaned) return
-          cleaned = true
-          handle.removeEventListener('pointermove', onMove)
-          handle.removeEventListener('pointerup', onUp)
-          handle.removeEventListener('lostpointercapture', onLost)
-          document.body.style.cursor = ''
-          document.body.style.userSelect = ''
-          if (commit) commitSavedStampsFrameHeight(clampHeight(lastClientY))
-          cleanupRef.current = null
-        }
-
-        const onUp = (upEvent: PointerEvent) => {
-          lastClientY = upEvent.clientY
-          handle.releasePointerCapture(pointerId)
-          cleanup(true)
-        }
-
-        const onLost = () => {
-          cleanup(true)
-        }
-
-        handle.addEventListener('pointermove', onMove)
-        handle.addEventListener('pointerup', onUp)
-        handle.addEventListener('lostpointercapture', onLost)
-        document.body.style.cursor = 'row-resize'
-        document.body.style.userSelect = 'none'
-        cleanupRef.current = cleanup
-      }}
+      onPointerDown={onPointerDown}
     />
   )
+}
+
+interface SavedStampsResizeSession {
+  readonly frame: HTMLElement
+  readonly startY: number
+  readonly startHeight: number
+  readonly previousInlineHeight: string
 }
 
 function currentSavedStampsFrameHeight(frame: HTMLElement): number {

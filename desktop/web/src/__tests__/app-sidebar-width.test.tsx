@@ -23,6 +23,16 @@ function resizeHandle(container: HTMLDivElement): HTMLDivElement {
   return handle as HTMLDivElement
 }
 
+function preparePointerCapture(handle: HTMLElement): {
+  setPointerCapture: ReturnType<typeof vi.fn>
+  releasePointerCapture: ReturnType<typeof vi.fn>
+} {
+  const setPointerCapture = vi.fn()
+  const releasePointerCapture = vi.fn()
+  Object.assign(handle, { setPointerCapture, releasePointerCapture })
+  return { setPointerCapture, releasePointerCapture }
+}
+
 function sidePanelElement(container: HTMLDivElement): HTMLDivElement {
   const panel = container.querySelector('[style*="--side-panel-width"]')
   expect(panel).toBeInstanceOf(HTMLDivElement)
@@ -46,6 +56,8 @@ describe('App sidebar width', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
   })
 
   it('uses a responsive first-use width without a fixed pixel cap when no explicit width is saved', async () => {
@@ -93,9 +105,24 @@ describe('App sidebar width', () => {
     })
 
     await act(async () => {
-      resizeHandle(container).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 700 }))
-      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 640 }))
-      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 640 }))
+      const handle = resizeHandle(container)
+      preparePointerCapture(handle)
+      handle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 1,
+        clientX: 700,
+      }))
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 1,
+        clientX: 640,
+      }))
+      document.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 1,
+        clientX: 640,
+      }))
     })
 
     expect(panel.style.width).toBe('540px')
@@ -108,10 +135,127 @@ describe('App sidebar width', () => {
     })
 
     await act(async () => {
-      resizeHandle(container).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 700 }))
-      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 700 }))
+      const handle = resizeHandle(container)
+      preparePointerCapture(handle)
+      handle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 2,
+        clientX: 700,
+      }))
+      document.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 2,
+        clientX: 700,
+      }))
     })
 
     expect(commitSidePanelWidth).not.toHaveBeenCalled()
+  })
+
+  it('does not persist or fix the responsive default when pointer movement stays clamped', async () => {
+    await act(async () => {
+      render(<App />, container)
+    })
+
+    const panel = sidePanelElement(container)
+    panel.getBoundingClientRect = () => ({
+      width: 320,
+      height: 800,
+      top: 0,
+      right: 320,
+      bottom: 800,
+      left: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+
+    await act(async () => {
+      const handle = resizeHandle(container)
+      preparePointerCapture(handle)
+      handle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 5,
+        clientX: 700,
+      }))
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 5,
+        clientX: 760,
+      }))
+      document.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 5,
+        clientX: 760,
+      }))
+    })
+
+    expect(panel.style.width).toBe('')
+    expect(commitSidePanelWidth).not.toHaveBeenCalled()
+  })
+
+  it('releases an active resize and restores body styles when App unmounts', async () => {
+    await act(async () => {
+      render(<App />, container)
+    })
+
+    document.body.style.cursor = 'wait'
+    document.body.style.userSelect = 'text'
+    const handle = resizeHandle(container)
+    const { releasePointerCapture } = preparePointerCapture(handle)
+
+    await act(async () => {
+      handle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 3,
+        clientX: 700,
+      }))
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 3,
+        clientX: 650,
+      }))
+      render(null, container)
+    })
+
+    expect(commitSidePanelWidth).not.toHaveBeenCalled()
+    expect(releasePointerCapture).toHaveBeenCalledWith(3)
+    expect(document.body.style.cursor).toBe('wait')
+    expect(document.body.style.userSelect).toBe('text')
+  })
+
+  it('releases an active resize when the conditional Sidebar surface unmounts', async () => {
+    await act(async () => {
+      render(<App />, container)
+    })
+
+    document.body.style.cursor = 'help'
+    document.body.style.userSelect = 'auto'
+    const handle = resizeHandle(container)
+    const { releasePointerCapture } = preparePointerCapture(handle)
+
+    await act(async () => {
+      handle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 4,
+        clientX: 700,
+      }))
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 4,
+        clientX: 650,
+      }))
+      sidePanel.value = null
+    })
+
+    expect(container.querySelector('[role="separator"][aria-orientation="vertical"]')).toBeNull()
+    expect(commitSidePanelWidth).not.toHaveBeenCalled()
+    expect(releasePointerCapture).toHaveBeenCalledWith(4)
+    expect(document.body.style.cursor).toBe('help')
+    expect(document.body.style.userSelect).toBe('auto')
   })
 })

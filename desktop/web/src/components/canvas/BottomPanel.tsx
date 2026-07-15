@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'preact/hooks'
+import { useRef } from 'preact/hooks'
 import { lazy, Suspense } from 'preact/compat'
 import { bottomPanelView } from '../../app/canvas-settings/state'
 import { commitBottomPanelHeight } from '../../app/canvas-settings/controller'
 import { MIN_BOTTOM_PANEL_HEIGHT } from '../../app/canvas-settings/bottom-panel-state'
+import { usePointerResize } from '../shared/usePointerResize'
 import styles from './BottomPanel.module.css'
 
 const TimelineTab = lazy(async () => {
@@ -44,70 +45,54 @@ function BottomPanelInner() {
 }
 
 function ResizeHandle({ panelRef }: { panelRef: { current: HTMLDivElement | null } }) {
-  const handleRef = useRef<HTMLDivElement>(null)
-  const cleanupRef = useRef<((commit: boolean) => void) | null>(null)
-
-  useEffect(() => {
-    return () => { cleanupRef.current?.(false) }
-  }, [])
+  const onPointerDown = usePointerResize<BottomPanelResizeSession>({
+    cursor: 'row-resize',
+    begin: (event) => {
+      const panel = panelRef.current
+      if (!panel) return null
+      return {
+        panel,
+        startY: event.clientY,
+        startHeight: bottomPanelView.peek().height,
+        maxHeight: Math.max(200, window.innerHeight * 0.8),
+        previousInlineHeight: panel.style.height,
+      }
+    },
+    preview: (session, event) => {
+      const height = resolveBottomPanelResizeHeight(session, event.clientY)
+      session.panel.style.height = `${height}px`
+      return height !== session.startHeight
+    },
+    commit: (session, event) => {
+      commitBottomPanelHeight(resolveBottomPanelResizeHeight(session, event.clientY))
+    },
+    rollback: (session) => {
+      session.panel.style.height = session.previousInlineHeight
+    },
+  })
 
   return (
     <div
-      ref={handleRef}
       className={styles.resizeHandle}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return
-        event.preventDefault()
-
-        const handle = handleRef.current
-        if (!handle) return
-        handle.setPointerCapture(event.pointerId)
-
-        const startY = event.clientY
-        const startHeight = bottomPanelView.peek().height
-        const maxHeight = Math.max(200, window.innerHeight * 0.8)
-
-        const clampHeight = (clientY: number) =>
-          Math.max(MIN_BOTTOM_PANEL_HEIGHT, Math.min(maxHeight, startHeight + (startY - clientY)))
-
-        let lastClientY = event.clientY
-        const pointerId = event.pointerId
-
-        const onMove = (moveEvent: PointerEvent) => {
-          lastClientY = moveEvent.clientY
-          if (panelRef.current) panelRef.current.style.height = `${clampHeight(moveEvent.clientY)}px`
-        }
-
-        let cleaned = false
-        const cleanup = (commit: boolean) => {
-          if (cleaned) return
-          cleaned = true
-          handle.removeEventListener('pointermove', onMove)
-          handle.removeEventListener('pointerup', onUp)
-          handle.removeEventListener('lostpointercapture', onLost)
-          document.body.style.cursor = ''
-          document.body.style.userSelect = ''
-          if (commit) commitBottomPanelHeight(clampHeight(lastClientY))
-          cleanupRef.current = null
-        }
-
-        const onUp = (upEvent: PointerEvent) => {
-          lastClientY = upEvent.clientY
-          handle.releasePointerCapture(pointerId)
-          cleanup(true)
-        }
-
-        const onLost = () => {
-          cleanup(true)
-        }
-
-        handle.addEventListener('pointermove', onMove)
-        handle.addEventListener('pointerup', onUp)
-        handle.addEventListener('lostpointercapture', onLost)
-        document.body.style.cursor = 'row-resize'
-        document.body.style.userSelect = 'none'
-        cleanupRef.current = cleanup
-      }}
+      onPointerDown={onPointerDown}
     />
+  )
+}
+
+interface BottomPanelResizeSession {
+  readonly panel: HTMLDivElement
+  readonly startY: number
+  readonly startHeight: number
+  readonly maxHeight: number
+  readonly previousInlineHeight: string
+}
+
+function resolveBottomPanelResizeHeight(
+  session: BottomPanelResizeSession,
+  clientY: number,
+): number {
+  return Math.max(
+    MIN_BOTTOM_PANEL_HEIGHT,
+    Math.min(session.maxHeight, session.startHeight + (session.startY - clientY)),
   )
 }

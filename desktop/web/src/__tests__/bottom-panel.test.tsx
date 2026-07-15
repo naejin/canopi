@@ -35,6 +35,8 @@ describe('BottomPanel', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
   })
 
   it('commits resized height through the canvas-settings controller', async () => {
@@ -60,12 +62,12 @@ describe('BottomPanel', () => {
         pointerId: 1,
         clientY: 300,
       }))
-      resizeHandle.dispatchEvent(new PointerEvent('pointermove', {
+      document.dispatchEvent(new PointerEvent('pointermove', {
         bubbles: true,
         pointerId: 1,
         clientY: 240,
       }))
-      resizeHandle.dispatchEvent(new PointerEvent('pointerup', {
+      document.dispatchEvent(new PointerEvent('pointerup', {
         bubbles: true,
         pointerId: 1,
         clientY: 240,
@@ -74,5 +76,48 @@ describe('BottomPanel', () => {
 
     expect(vi.mocked(commitBottomPanelHeight)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(commitBottomPanelHeight)).toHaveBeenCalledWith(284)
+  })
+
+  it('rolls back the direct height preview when the resize is cancelled', async () => {
+    await act(async () => {
+      render(<BottomPanel />, container)
+    })
+
+    const panel = Array.from(container.querySelectorAll('div')).find((node) =>
+      typeof node.className === 'string' && node.className.includes('panel'),
+    ) as HTMLDivElement | undefined
+    const resizeHandle = Array.from(container.querySelectorAll('div')).find((node) =>
+      typeof node.className === 'string' && node.className.includes('resizeHandle'),
+    ) as HTMLDivElement | undefined
+    expect(panel).toBeTruthy()
+    expect(resizeHandle).toBeTruthy()
+    if (!panel || !resizeHandle) return
+
+    Object.assign(resizeHandle, {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    })
+
+    await act(async () => {
+      resizeHandle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 2,
+        clientY: 300,
+      }))
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 2,
+        clientY: 240,
+      }))
+      document.dispatchEvent(new PointerEvent('pointercancel', {
+        bubbles: true,
+        pointerId: 2,
+        clientY: 240,
+      }))
+    })
+
+    expect(panel.style.height).toBe('224px')
+    expect(vi.mocked(commitBottomPanelHeight)).not.toHaveBeenCalled()
   })
 })

@@ -1017,7 +1017,7 @@ describe('FavoritesPanel', () => {
         pointerId: 1,
         clientY: 300,
       }))
-      handle.dispatchEvent(new PointerEvent('pointermove', {
+      document.dispatchEvent(new PointerEvent('pointermove', {
         bubbles: true,
         pointerId: 1,
         clientY: 250,
@@ -1028,7 +1028,7 @@ describe('FavoritesPanel', () => {
     expect(savedStampsFrameHeight.value).toBe(240)
 
     await act(async () => {
-      handle.dispatchEvent(new PointerEvent('pointerup', {
+      document.dispatchEvent(new PointerEvent('pointerup', {
         bubbles: true,
         pointerId: 1,
         clientY: 250,

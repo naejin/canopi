@@ -50,9 +50,9 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 
 - Never write signals unconditionally at 60fps. Compare with `.peek()` before writing.
 - Cache `getBoundingClientRect()` in pointer/hover loops.
-- Resize handlers should set DOM style directly during drag and commit the final value to a signal on pointer-up.
-- Prefer pointer capture for resize handles and drag handles.
-- Guard pointer capture cleanup with a boolean because `releasePointerCapture()` can trigger `lostpointercapture`.
+- Desktop panel resize handles use `components/shared/usePointerResize.ts` for serialized global ownership, pointer identity, capture, document listeners, cancel/lost-capture ordering, exact body-style restoration, effective-change behavior, and layout-time owner cleanup. Keep each surface's geometry, direct DOM preview, rollback, and settings commit policy in its component; the preview callback reports whether the effective value differs from the gesture's starting value.
+- Resize previews should set DOM style directly during drag and commit the final value to a signal only when a moved gesture ends. Keep the hook in the conditionally mounted handle component so closing a panel disposes an active gesture.
+- Other drag owners that manage pointer capture must still guard release ordering because `releasePointerCapture()` can synchronously trigger `lostpointercapture`.
 - Avoid per-frame array allocation in Canvas2D hit testing and hover paths.
 
 ## Async Surface Pattern

@@ -602,6 +602,16 @@ const CONFINED_IMPORTER_POLICIES = [
 const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
+    name: 'Panel resize surfaces delegate pointer lifecycle ownership',
+    from: [
+      'src/app.tsx',
+      'src/components/canvas/BottomPanel.tsx',
+      'src/components/panels/FavoritesPanel.tsx',
+    ],
+    targets: ['src/components/shared/usePointerResize.ts'],
+  },
+  {
+    kind: 'require-imports',
     name: 'Desktop and Web entries select a compile-time platform adapter',
     from: ['src/main.tsx', 'src/main.web.tsx'],
     targets: ['#platform'],
