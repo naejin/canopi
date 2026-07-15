@@ -1459,6 +1459,84 @@ mod tests {
     }
 
     #[test]
+    fn legacy_like_search_treats_normalized_underscores_as_literals() {
+        let conn = relevance_fixture_db();
+        conn.execute_batch(
+            "INSERT INTO species (
+                id, canonical_name, slug, common_name, family, genus,
+                height_max_m, hardiness_zone_min, hardiness_zone_max,
+                growth_rate, stratum, edibility_rating, medicinal_rating, width_max_m
+             ) VALUES
+                ('literal-double', 'Exact double token', 'exact-double-token', '__', 'Literalaceae', 'Exacta', 1, 1, 1, 'Slow', 'Low', 0, 0, 1),
+                ('wild-double', 'Wildcard double token', 'wildcard-double-token', 'ab', 'Literalaceae', 'Wilda', 1, 1, 1, 'Slow', 'Low', 0, 0, 1),
+                ('literal-snake', 'Exact snake token', 'exact-snake-token', 'snake_case', 'Literalaceae', 'Exacta', 1, 1, 1, 'Slow', 'Low', 0, 0, 1),
+                ('wild-snake', 'Wildcard snake token', 'wildcard-snake-token', 'snakeXcase', 'Literalaceae', 'Wilda', 1, 1, 1, 'Slow', 'Low', 0, 0, 1);
+
+             INSERT INTO species_common_names VALUES
+                ('literal-double', '__', 'en', 1, 0),
+                ('wild-double', 'ab', 'en', 1, 0),
+                ('literal-snake', 'snake_case', 'en', 1, 0),
+                ('wild-snake', 'snakeXcase', 'en', 1, 0);
+
+             INSERT INTO best_common_names VALUES
+                ('literal-double', 'en', '__'),
+                ('wild-double', 'en', 'ab'),
+                ('literal-snake', 'en', 'snake_case'),
+                ('wild-snake', 'en', 'snakeXcase');
+
+             INSERT INTO species_search_text (
+                species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
+             )
+             SELECT rowid,
+                    canopi_normalize_species_search(canonical_name),
+                    canopi_normalize_species_search(common_name),
+                    canopi_normalize_species_search(family || ' ' || genus),
+                    '',
+                    ''
+             FROM species
+             WHERE id IN ('literal-double', 'wild-double', 'literal-snake', 'wild-snake');
+
+             INSERT INTO species_search_common_name_tokens VALUES
+                ('literal-double', 'en', '__', 0),
+                ('wild-double', 'en', 'ab', 0),
+                ('literal-snake', 'en', 'snake_case', 0),
+                ('wild-snake', 'en', 'snakexcase', 0);
+
+             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
+        )
+        .unwrap();
+
+        for sort in [Sort::Name, Sort::Relevance] {
+            for (query, expected) in [
+                ("__", "Exact double token"),
+                ("snake_case", "Exact snake token"),
+            ] {
+                let result = search(
+                    &conn,
+                    search_request(
+                        Some(query),
+                        SpeciesFilter::default(),
+                        None,
+                        sort.clone(),
+                        20,
+                        true,
+                        "en",
+                    ),
+                )
+                .unwrap();
+                let names = result
+                    .items
+                    .iter()
+                    .map(|item| item.canonical_name.as_str())
+                    .collect::<Vec<_>>();
+
+                assert_eq!(names, vec![expected], "query {query:?}, sort {sort:?}");
+                assert_eq!(result.total_estimate, 1, "query {query:?}, sort {sort:?}");
+            }
+        }
+    }
+
+    #[test]
     fn latency_harness_covers_first_active_prefixes_without_counts() {
         for (label, locale, query) in [
             ("en-ap", "en", "ap"),

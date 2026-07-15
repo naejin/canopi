@@ -146,11 +146,17 @@ def create_prepared_database(path: Path) -> None:
 
 class SpeciesCatalogContractCliTests(unittest.TestCase):
     def test_value_commands_read_versions_from_the_authored_contract(self):
-        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        authored = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        release = contract.project(contract.ProjectionTarget.RELEASE)
 
         cases = {
-            "prepared-schema-version": contract["schema_version"],
-            "minimum-export-schema-version": contract["min_export_schema_version"],
+            "prepared-schema-version": authored["schema_version"],
+            "minimum-export-schema-version": authored["min_export_schema_version"],
+            "prepared-contract-fingerprint": release.fingerprint,
+            "prepared-db-asset-name": (
+                f"canopi-core-v{release.prepared_schema_version}-"
+                f"{release.fingerprint}.db"
+            ),
         }
         for value_name, expected in cases.items():
             with self.subTest(value_name=value_name):
@@ -207,11 +213,34 @@ class SpeciesCatalogContractCliTests(unittest.TestCase):
                     source,
                 )
                 self.assertIn(
+                    "species_catalog_contract.py value prepared-db-asset-name",
+                    source,
+                )
+                self.assertIn(
                     "species_catalog_contract.py verify-db --profile prepared",
                     source,
                 )
                 self.assertNotIn("schema_contract.rs", source)
                 self.assertNotIn("EXPECTED_PLANT_SCHEMA_VERSION", source)
+
+    def test_bundled_database_assets_are_selected_by_compiled_prepared_identity(self):
+        publish = (SCRIPT_DIR / "publish-db-release.sh").read_text(encoding="utf-8")
+        build = (SCRIPT_DIR.parent / ".github/workflows/build.yml").read_text(
+            encoding="utf-8"
+        )
+        release_candidate = (
+            SCRIPT_DIR.parent / ".github/workflows/release-candidate.yml"
+        ).read_text(encoding="utf-8")
+
+        for source in (publish, build, release_candidate):
+            self.assertIn(
+                "species_catalog_contract.py value prepared-db-asset-name",
+                source,
+            )
+        self.assertNotIn("--clobber", publish)
+        self.assertNotIn("CANOPI_CORE_DB_ASSET_NAME", build)
+        self.assertNotIn("db_asset_name:", release_candidate.split("jobs:", 1)[0])
+        self.assertIn("desktop/resources/canopi-core.db", build)
 
     def test_release_builds_pin_code_and_database_to_preflight(self):
         workflow = (
@@ -563,6 +592,36 @@ class ContractProjectionTests(unittest.TestCase):
             ).fingerprint
 
         self.assertNotEqual(changed, baseline)
+
+    def test_web_only_projection_changes_do_not_invalidate_prepared_identity(self):
+        baseline_prepare = contract.project(contract.ProjectionTarget.PREPARE_DB)
+        baseline_release = contract.project(contract.ProjectionTarget.RELEASE)
+        baseline_web = contract.project(contract.ProjectionTarget.WEB_CATALOG)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            self.assertNotIn("family", source["web_projection"]["species_columns"])
+            source["web_projection"]["species_columns"].append("family")
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            changed_prepare = contract.project(
+                contract.ProjectionTarget.PREPARE_DB,
+                root=root,
+            )
+            changed_release = contract.project(
+                contract.ProjectionTarget.RELEASE,
+                root=root,
+            )
+            changed_web = contract.project(
+                contract.ProjectionTarget.WEB_CATALOG,
+                root=root,
+            )
+
+        self.assertEqual(changed_prepare.fingerprint, baseline_prepare.fingerprint)
+        self.assertEqual(changed_release.fingerprint, baseline_release.fingerprint)
+        self.assertNotEqual(changed_web.fingerprint, baseline_web.fingerprint)
 
     def test_web_catalog_projection_is_reduced_to_physical_dependencies(self):
         projection = contract.project(contract.ProjectionTarget.WEB_CATALOG)
