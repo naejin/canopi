@@ -13,13 +13,11 @@ Usage:
 
 import argparse
 import os
-import re
 import sqlite3
 import stat
 import sys
 import tempfile
 import time
-import unicodedata
 import uuid
 from pathlib import Path
 
@@ -29,6 +27,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import species_catalog_contract as storage_contract
+from scripts.species_search_normalization import (
+    common_name_tokens,
+    normalize_search_name,
+    normalize_search_token,
+)
 
 
 def get_export_columns(dst: sqlite3.Connection) -> set[str]:
@@ -254,29 +257,6 @@ def build_best_common_names(dst: sqlite3.Connection):
     bcn_count = dst.execute("SELECT COUNT(*) FROM best_common_names").fetchone()[0]
     print(f"  -> {bcn_count:,} best common names across all languages")
     dst.commit()
-
-
-def normalize_search_token(token: str) -> str:
-    """Normalize a name token to match FTS unicode61 remove_diacritics behavior."""
-    decomposed = unicodedata.normalize("NFKD", token)
-    without_diacritics = "".join(
-        char for char in decomposed if not unicodedata.combining(char)
-    )
-    return without_diacritics.casefold()
-
-
-def common_name_tokens(name: str) -> list[tuple[str, int]]:
-    tokens: list[tuple[str, int]] = []
-    for index, raw_token in enumerate(re.findall(r"\w+", name, flags=re.UNICODE)):
-        token = normalize_search_token(raw_token)
-        if token:
-            tokens.append((token, index))
-    return tokens
-
-
-def normalize_search_name(name: str) -> str:
-    """Normalize a full Common Name for exact, prefix, and contains ranking."""
-    return " ".join(token for token, _position in common_name_tokens(name))
 
 
 def build_common_name_token_index(dst: sqlite3.Connection):

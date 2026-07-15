@@ -18,6 +18,7 @@ import type {
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../types/species'
+import { normalizeSpeciesSearch } from '../utils/species-search-normalization'
 
 interface DuckDbQueryTable {
   toArray(): unknown[]
@@ -1167,13 +1168,8 @@ function speciesProjectionToDetail(
 }
 
 function normalizeSearchText(text: string): NormalizedSearchText {
-  const normalized = text
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase()
-  const tokens = [...new Set(
-    Array.from(normalized.matchAll(/[\p{Letter}\p{Number}_]+/gu), (match) => match[0]),
-  )]
+  const normalized = normalizeSpeciesSearch(text)
+  const tokens = [...new Set(normalized.tokens)]
   return tokens.length === 0
     ? EMPTY_SEARCH_TEXT
     : {

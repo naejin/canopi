@@ -7,6 +7,7 @@ import type {
   SpeciesSearchRequest,
 } from '../types/species'
 import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
+import { normalizeSpeciesSearch } from '../utils/species-search-normalization'
 import type { BrowserAppDataStore } from './browser-app-data'
 
 export type WebSupportedFilterOptionsKey = keyof Pick<
@@ -165,7 +166,7 @@ export function createInMemoryReducedSpeciesCatalogReader(
 
   return {
     async searchSpecies(request, favoriteNames) {
-      const text = normalizeSearchText(request.text)
+      const text = normalizeSpeciesSearch(request.text).text
       const offset = cursorToOffset(request.cursor)
       const matched = species.filter((row) => (
         matchesSupportedFilters(row, request.filters) &&
@@ -318,11 +319,11 @@ function matchesSearchText(
   localeNames: SpeciesNameIndexEntry | undefined,
 ): boolean {
   if (!normalizedSearchText) return true
-  if (normalizeSearchText(row.canonical_name).includes(normalizedSearchText)) return true
-  if (normalizeSearchText(row.common_name ?? '').includes(normalizedSearchText)) return true
+  if (normalizeSpeciesSearch(row.canonical_name).text.includes(normalizedSearchText)) return true
+  if (normalizeSpeciesSearch(row.common_name ?? '').text.includes(normalizedSearchText)) return true
   return localeNames?.names.some((name) => (
     name.normalized_name.includes(normalizedSearchText) ||
-    normalizeSearchText(name.common_name).includes(normalizedSearchText)
+    normalizeSpeciesSearch(name.common_name).text.includes(normalizedSearchText)
   )) ?? false
 }
 
@@ -355,7 +356,7 @@ function toSpeciesListItem({
   const matchedName = normalizedSearchText
     ? localeNames?.names.find((name) => (
         name.normalized_name.includes(normalizedSearchText) ||
-        normalizeSearchText(name.common_name).includes(normalizedSearchText)
+        normalizeSpeciesSearch(name.common_name).text.includes(normalizedSearchText)
       )) ?? null
     : null
   const localizedCommonName = localeNames?.primary?.common_name ?? row.common_name
@@ -417,12 +418,4 @@ function sortedUnique(values: readonly string[]): string[] {
 
 function compact(values: readonly (string | null | undefined)[]): string[] {
   return values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-}
-
-function normalizeSearchText(text: string): string {
-  return text
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase()
-    .trim()
 }

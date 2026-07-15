@@ -5,6 +5,7 @@ mod new_design_defaults;
 mod plant_filter;
 mod publication;
 mod settings;
+mod species_search_normalization;
 
 use external_contracts::{ExternalContractRenderer, PythonContractRenderer};
 use publication::{AdmissionMode, GenerationPlan, acquire_generation_admission};
@@ -20,6 +21,8 @@ const NEW_DESIGN_DEFAULTS_TS: &str = "desktop/web/src/generated/new-design-defau
 const NEW_DESIGN_DEFAULTS_RUST: &str = "desktop/src/design/new_design_defaults.rs";
 const PLANT_FILTER_TS: &str = "desktop/web/src/generated/plant-filter-fields.ts";
 const PLANT_FILTER_RUST: &str = "desktop/src/db/plant_filter_fields.rs";
+const SPECIES_SEARCH_NORMALIZATION_TS: &str =
+    "desktop/web/src/generated/species-search-normalization.ts";
 const WEB_CATALOG_MODULE: &str = "desktop/web/src/generated/web-catalog-artifact.mjs";
 const WEB_CATALOG_DECLARATION: &str = "desktop/web/src/generated/web-catalog-artifact.d.mts";
 
@@ -97,6 +100,9 @@ fn compile_native_plan(
     let (plant_filter_ts, plant_filter_rust) = plant_filter::render_plant_filter_adapters(
         &source_root.join("common-types/plant-filter-fields.json"),
     )?;
+    let species_search_normalization_ts = species_search_normalization::render_typescript_adapter(
+        &source_root.join("common-types/species-search-normalization.json"),
+    )?;
     let plant_filter_rust = format_rust_source(&plant_filter_rust, source_root)?;
     let mut plan = GenerationPlan::new(destination_root);
     plan.add(
@@ -125,6 +131,10 @@ fn compile_native_plan(
     )?;
     plan.add(destination_root.join(PLANT_FILTER_TS), plant_filter_ts)?;
     plan.add(destination_root.join(PLANT_FILTER_RUST), plant_filter_rust)?;
+    plan.add(
+        destination_root.join(SPECIES_SEARCH_NORMALIZATION_TS),
+        species_search_normalization_ts,
+    )?;
     Ok(plan)
 }
 
@@ -164,8 +174,8 @@ mod tests {
     use super::{
         AdmissionMode, CONTRACTS_TS, DESIGN_FORMAT_TS, ExternalContractRenderer, GenerationMode,
         KNOWN_KEYS_TS, NEW_DESIGN_DEFAULTS_RUST, NEW_DESIGN_DEFAULTS_TS, PLANT_FILTER_RUST,
-        PLANT_FILTER_TS, SETTINGS_TS, WEB_CATALOG_DECLARATION, WEB_CATALOG_MODULE,
-        acquire_generation_admission, execute_generation,
+        PLANT_FILTER_TS, SETTINGS_TS, SPECIES_SEARCH_NORMALIZATION_TS, WEB_CATALOG_DECLARATION,
+        WEB_CATALOG_MODULE, acquire_generation_admission, execute_generation,
     };
     use crate::external_contracts::WebCatalogArtifacts;
     use std::fs;
@@ -262,6 +272,7 @@ mod tests {
             NEW_DESIGN_DEFAULTS_RUST,
             PLANT_FILTER_TS,
             PLANT_FILTER_RUST,
+            SPECIES_SEARCH_NORMALIZATION_TS,
             WEB_CATALOG_MODULE,
             WEB_CATALOG_DECLARATION,
         ];

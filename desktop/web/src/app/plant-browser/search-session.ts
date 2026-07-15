@@ -8,6 +8,7 @@ import type {
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../../types/species'
+import { speciesSearchAdmission } from '../../utils/species-search-normalization'
 import { createEmptySpeciesFilter, plantFilterModel } from './plant-filter-model'
 
 export { createEmptySpeciesFilter }
@@ -96,8 +97,6 @@ interface PlantSearchSessionOptions {
 
 const DEFAULT_PAGE_SIZE = 50
 const DEFAULT_TEXT_DEBOUNCE_MS = 150
-const SEARCH_META_CHARS = new Set(['"', '(', ')', '*', '+', '-', '^', ':', '\\'])
-
 type SearchTextPolicy = 'browse' | 'too-short' | 'active-text'
 
 export const DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR =
@@ -116,25 +115,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function normalizedSearchTextLength(rawText: string): number {
-  let sanitized = ''
-  for (const ch of rawText) {
-    sanitized += SEARCH_META_CHARS.has(ch) ? ' ' : ch
-  }
-
-  const normalized = sanitized
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-
-  return Array.from(normalized).length
-}
-
 function searchTextPolicy(rawText: string): SearchTextPolicy {
-  const normalizedLength = normalizedSearchTextLength(rawText)
-  if (normalizedLength === 0) return 'browse'
-  if (normalizedLength === 1) return 'too-short'
-  return 'active-text'
+  return speciesSearchAdmission(rawText)
 }
 
 function buildSearchRequest(

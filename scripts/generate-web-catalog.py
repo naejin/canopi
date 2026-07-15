@@ -12,13 +12,11 @@ from dataclasses import dataclass
 import hashlib
 import json
 import os
-import re
 import shutil
 import sqlite3
 import stat
 import sys
 import tempfile
-import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +27,11 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts import species_catalog_contract as storage_contract
 from scripts import web_catalog_artifact_contract as artifact_contract
+from scripts.species_search_normalization import (
+    common_name_tokens,
+    normalize_search_name,
+    normalize_search_token,
+)
 
 DEFAULT_EXPORTS_DIR = Path.home() / "projects/canopi-data/data/exports"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "desktop/web/public/canopi-catalog"
@@ -1010,27 +1013,6 @@ def parse_list_field(value: Any) -> list[str]:
 
 def sorted_unique_strings(values: Any) -> list[str]:
     return sorted({str(value).strip() for value in values if str(value).strip()})
-
-
-def normalize_search_token(token: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", token)
-    without_diacritics = "".join(
-        char for char in decomposed if not unicodedata.combining(char)
-    )
-    return without_diacritics.casefold()
-
-
-def common_name_tokens(name: str) -> list[tuple[str, int]]:
-    tokens: list[tuple[str, int]] = []
-    for index, raw_token in enumerate(re.findall(r"\w+", name, flags=re.UNICODE)):
-        token = normalize_search_token(raw_token)
-        if token:
-            tokens.append((token, index))
-    return tokens
-
-
-def normalize_search_name(name: str) -> str:
-    return " ".join(token for token, _position in common_name_tokens(name))
 
 
 def main() -> int:

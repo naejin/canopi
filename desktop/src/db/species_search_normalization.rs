@@ -108,3 +108,68 @@ pub(crate) fn register_sqlite_function(connection: &Connection) -> rusqlite::Res
 pub(crate) fn normalized_species_search_sql(expression: &str) -> String {
     format!("{SQLITE_FUNCTION_NAME}({expression})")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Deserialize)]
+    struct CorpusContract {
+        corpus: Vec<CorpusCase>,
+    }
+
+    #[derive(Deserialize)]
+    struct CorpusCase {
+        name: String,
+        input: String,
+        normalized_text: String,
+        tokens: Vec<String>,
+        admission: String,
+    }
+
+    #[test]
+    fn authored_corpus_matches_rust_normalization_and_admission() {
+        let corpus: CorpusContract = serde_json::from_str(CONTRACT_SOURCE).unwrap();
+
+        for case in corpus.corpus {
+            let normalized = normalize_species_search(&case.input);
+            assert_eq!(normalized.text, case.normalized_text, "{} text", case.name);
+            assert_eq!(normalized.tokens, case.tokens, "{} tokens", case.name);
+
+            let admission = match case.admission.as_str() {
+                "browse" => SpeciesSearchAdmission::Browse,
+                "too-short" => SpeciesSearchAdmission::TooShort,
+                "active-text" => SpeciesSearchAdmission::ActiveText,
+                unexpected => panic!("unexpected corpus admission {unexpected:?}"),
+            };
+            assert_eq!(
+                species_search_admission(&case.input),
+                admission,
+                "{} admission",
+                case.name
+            );
+        }
+    }
+
+    #[test]
+    fn sqlite_normalization_function_uses_the_same_authority() {
+        let connection = Connection::open_in_memory().unwrap();
+        register_sqlite_function(&connection).unwrap();
+
+        let normalized: Option<String> = connection
+            .query_row(
+                "SELECT canopi_normalize_species_search(?1)",
+                [Some("Σίσυφος Straße")],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(normalized.as_deref(), Some("σισυφοσ strasse"));
+
+        let normalized_null: Option<String> = connection
+            .query_row("SELECT canopi_normalize_species_search(NULL)", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(normalized_null, None);
+    }
+}
