@@ -212,7 +212,7 @@ export function createMeasurementGuideControlPoints(
     if (!nextGuide) return
     drag.changed = drag.changed || !measurementGuidesEqual(drag.startGuide, nextGuide)
     drag.tx.mutate((draft) => {
-      draft.measurementGuides = (draft.measurementGuides ?? []).map((guide) => (
+      draft.measurementGuides = draft.measurementGuides.map((guide) => (
         guide.id === drag.guideId ? nextGuide : guide
       ))
     })
@@ -233,7 +233,7 @@ export function createMeasurementGuideControlPoints(
     ) return null
     const target = selection.editableTargets[0]
     if (target?.kind !== 'measurement-guide') return null
-    return (options.getSceneStore().persisted.measurementGuides ?? [])
+    return options.getSceneStore().persisted.measurementGuides
       .find((guide) => guide.id === target.id) ?? null
   }
 

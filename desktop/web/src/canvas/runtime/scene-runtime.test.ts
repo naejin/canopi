@@ -2273,7 +2273,7 @@ describe('scene canvas runtime', () => {
     events.pointerMove({ x: 140, y: 10 })
     events.pointerUp({ x: 140, y: 10 })
 
-    const createdGuide = runtime.querySurface.getSceneSnapshot().measurementGuides?.[0]
+    const createdGuide = runtime.querySurface.getSceneSnapshot().measurementGuides[0]
     expect(createdGuide).toBeDefined()
     expect(selectedObjectIds.value).toEqual(new Set([createdGuide!.id]))
     expect(runtime.querySurface.getDesignObjectSelection().editableTargets).toEqual([
@@ -2345,14 +2345,14 @@ describe('scene canvas runtime', () => {
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     runtime.commandSurface.history.undo()
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides?.[0]).toMatchObject({
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]).toMatchObject({
       start: { x: 10, y: 10 },
       end: { x: 40, y: 10 },
     })
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
 
     runtime.commandSurface.history.redo()
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides?.[0]).toMatchObject({
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]).toMatchObject({
       start: { x: 20, y: 20 },
       end: { x: 50, y: 20 },
     })
@@ -2371,7 +2371,7 @@ describe('scene canvas runtime', () => {
     clickAt(events, { x: 25, y: 10 })
     runtime.commandSurface.sceneEdits.duplicateSelected()
 
-    let guides = runtime.querySurface.getSceneSnapshot().measurementGuides ?? []
+    let guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(2)
     const duplicate = guides.find((guide) => guide.id !== 'measurement-guide-1')
     expect(duplicate).toMatchObject({
@@ -2384,7 +2384,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.copy()
     runtime.commandSurface.sceneEdits.paste()
 
-    guides = runtime.querySurface.getSceneSnapshot().measurementGuides ?? []
+    guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(3)
     const pastedId = [...selectedObjectIds.value][0]!
     expect(guides.find((guide) => guide.id === pastedId)).toMatchObject({
@@ -2395,7 +2395,7 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.sceneEdits.deleteSelected()
 
-    guides = runtime.querySurface.getSceneSnapshot().measurementGuides ?? []
+    guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(2)
     expect(guides.some((guide) => guide.id === pastedId)).toBe(false)
     expect(selectedObjectIds.value.size).toBe(0)
@@ -2423,10 +2423,10 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.deleteSelected()
 
     expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(1)
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides?.[0]?.locked).toBe(true)
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]?.locked).toBe(true)
 
     runtime.commandSurface.sceneEdits.unlockSelected()
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides?.[0]?.locked).toBe(false)
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]?.locked).toBe(false)
     runtime.commandSurface.sceneEdits.duplicateSelected()
     expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(2)
     events.dispose()

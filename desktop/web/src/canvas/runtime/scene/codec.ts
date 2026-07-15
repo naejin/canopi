@@ -58,7 +58,7 @@ export function serializeScenePersistedState(
     plants: state.plants.map(serializePlantEntity),
     zones: state.zones.map(serializeZoneEntity),
     annotations: state.annotations.map(serializeAnnotationEntity),
-    measurement_guides: (state.measurementGuides ?? []).map(serializeMeasurementGuideEntity),
+    measurement_guides: state.measurementGuides.map(serializeMeasurementGuideEntity),
     consortiums: [],
     groups: state.groups.map(serializeGroupEntity),
     timeline: [],
@@ -79,7 +79,7 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
     plants: state.plants.map(clonePlantEntity),
     zones: state.zones.map(cloneZoneEntity),
     annotations: state.annotations.map(cloneAnnotationEntity),
-    measurementGuides: (state.measurementGuides ?? []).map(cloneMeasurementGuideEntity),
+    measurementGuides: state.measurementGuides.map(cloneMeasurementGuideEntity),
     groups: state.groups.map(cloneGroupEntity),
     guides: state.guides.map(cloneGuide),
   }

@@ -65,7 +65,7 @@ export function createClipboardPayload(
     plants: persisted.plants.filter((plant) => plantIds.has(plant.id)).map(clonePlantEntity),
     zones: persisted.zones.filter((zone) => zoneIds.has(zone.name)).map(cloneZoneEntity),
     annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)).map(cloneAnnotationEntity),
-    measurementGuides: (persisted.measurementGuides ?? [])
+    measurementGuides: persisted.measurementGuides
       .filter((guide) => measurementGuideIds.has(guide.id))
       .map(cloneMeasurementGuideEntity),
     groups: persisted.groups.filter((group) => groupIds.has(group.id)).map(cloneGroupEntity),

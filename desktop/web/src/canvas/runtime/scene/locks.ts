@@ -10,7 +10,7 @@ export function isDirectSceneDesignObjectLocked(state: ScenePersistedState, id: 
   return state.plants.some((plant) => plant.id === id && plant.locked)
     || state.zones.some((zone) => zone.name === id && zone.locked)
     || state.annotations.some((annotation) => annotation.id === id && annotation.locked)
-    || (state.measurementGuides ?? []).some((guide) => guide.id === id && guide.locked)
+    || state.measurementGuides.some((guide) => guide.id === id && guide.locked)
     || state.groups.some((group) => group.id === id && group.locked)
 }
 
@@ -41,7 +41,7 @@ export function getLockedSceneDesignObjectIds(state: ScenePersistedState): Set<s
   for (const annotation of state.annotations) {
     if (annotation.locked) ids.add(annotation.id)
   }
-  for (const guide of state.measurementGuides ?? []) {
+  for (const guide of state.measurementGuides) {
     if (guide.locked) ids.add(guide.id)
   }
   for (const group of state.groups) {
@@ -65,7 +65,7 @@ export function setSceneDesignObjectLocks(
   for (const annotation of state.annotations) {
     if (idSet.has(annotation.id)) annotation.locked = locked
   }
-  for (const guide of state.measurementGuides ?? []) {
+  for (const guide of state.measurementGuides) {
     if (idSet.has(guide.id)) guide.locked = locked
   }
   for (const group of state.groups) {

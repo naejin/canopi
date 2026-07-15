@@ -1,10 +1,6 @@
 export type RendererBackendId = string
 
-export type RendererBackendPriority = 'primary' | 'secondary' | number
-
 export type RendererAwaitable<T> = T | PromiseLike<T>
-
-export type RendererBackendProbe = Partial<RendererCapabilities>
 
 export interface RendererCapabilities {
   readonly domCanvas: boolean
@@ -49,7 +45,6 @@ export interface RendererBackendDefinition<
   TInstance extends RendererBackendInstance = RendererBackendInstance,
 > {
   readonly id: RendererBackendId
-  readonly priority?: RendererBackendPriority
   readonly supports?: (capabilities: RendererCapabilities) => boolean
   initialize(context: TContext, backendContext: RendererBackendContext): RendererAwaitable<TInstance>
 }

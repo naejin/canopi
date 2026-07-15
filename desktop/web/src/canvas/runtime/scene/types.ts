@@ -93,14 +93,6 @@ export interface SceneGuide {
   position: number
 }
 
-export type SceneEntity =
-  | SceneLayerEntity
-  | ScenePlantEntity
-  | SceneZoneEntity
-  | SceneAnnotationEntity
-  | SceneMeasurementGuideEntity
-  | SceneObjectGroupEntity
-
 export interface ScenePersistedState {
   plantSpeciesColors: Record<string, string>
   plantSpeciesSymbols: Record<string, string>
@@ -108,7 +100,7 @@ export interface ScenePersistedState {
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
-  measurementGuides?: SceneMeasurementGuideEntity[]
+  measurementGuides: SceneMeasurementGuideEntity[]
   groups: SceneObjectGroupEntity[]
   guides: SceneGuide[]
 }
@@ -122,12 +114,5 @@ export interface SceneViewportState {
 export interface SceneSessionState {
   selectedEntityIds: ReadonlySet<string>
   hoveredEntityId: string | null
-  activeEntityId: string | null
-  activeLayerName: string | null
   documentRevision: number
-}
-
-export interface SceneState {
-  persisted: ScenePersistedState
-  session: SceneSessionState
 }

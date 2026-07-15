@@ -1047,6 +1047,18 @@ const NAMED_IMPORT_POLICIES = [
 const FORBIDDEN_EXPORT_POLICIES = [
   {
     kind: 'forbid-exports',
+    name: 'Scene contracts expose only live runtime authorities',
+    from: ['src/canvas/runtime/scene/types.ts'],
+    names: ['SceneEntity', 'SceneState'],
+  },
+  {
+    kind: 'forbid-exports',
+    name: 'Renderer contracts omit retired priority and probe aliases',
+    from: ['src/canvas/runtime/renderers/types.ts'],
+    names: ['RendererBackendPriority', 'RendererBackendProbe'],
+  },
+  {
+    kind: 'forbid-exports',
     name: 'Projection exposes canonical operations instead of strategies',
     from: ['src/canvas/projection.ts'],
     names: [
@@ -1117,6 +1129,22 @@ const SOURCE_TOMBSTONE_POLICIES = [
 ] satisfies readonly ArchitecturePolicy[]
 
 const SYMBOL_OWNERSHIP_POLICIES = [
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Scene Session keeps retired active entity and Layer mirrors deleted',
+    from: [
+      'src/canvas/runtime/scene/types.ts',
+      'src/canvas/runtime/scene/defaults.ts',
+      'src/canvas/runtime/scene/store.ts',
+    ],
+    names: ['activeEntityId', 'activeLayerName', 'setActiveLayerName'],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Renderer definitions keep retired priority metadata deleted',
+    from: ['src/canvas/runtime/renderers/types.ts'],
+    names: ['RendererBackendPriority', 'RendererBackendProbe', 'priority'],
+  },
   {
     kind: 'forbid-source-symbols',
     name: 'Projection source does not revive retired strategy symbols',

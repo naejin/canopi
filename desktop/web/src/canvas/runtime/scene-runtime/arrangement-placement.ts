@@ -175,7 +175,7 @@ function appendPlacement(draft: ScenePersistedState, placement: MaterializedScen
   draft.plants = [...draft.plants, ...placement.plants]
   draft.zones = [...draft.zones, ...placement.zones]
   draft.annotations = [...draft.annotations, ...placement.annotations]
-  draft.measurementGuides = [...(draft.measurementGuides ?? []), ...placement.measurementGuides]
+  draft.measurementGuides = [...draft.measurementGuides, ...placement.measurementGuides]
   draft.groups = [...draft.groups, ...placement.groups]
 }
 
@@ -208,7 +208,7 @@ function existingSceneIds(scene: ScenePersistedState): Set<string> {
     ...scene.plants.map((plant) => plant.id),
     ...scene.zones.map((zone) => zone.name),
     ...scene.annotations.map((annotation) => annotation.id),
-    ...(scene.measurementGuides ?? []).map((guide) => guide.id),
+    ...scene.measurementGuides.map((guide) => guide.id),
     ...scene.groups.map((group) => group.id),
   ])
 }

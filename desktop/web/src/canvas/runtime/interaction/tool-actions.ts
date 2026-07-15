@@ -106,7 +106,7 @@ export function appendMeasurementGuideToDraft(
 
   const guideId = `measurement-guide-${createUuid()}`
   draft.measurementGuides = [
-    ...(draft.measurementGuides ?? []),
+    ...draft.measurementGuides,
     {
       kind: 'measurement-guide',
       id: guideId,

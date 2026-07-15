@@ -4,8 +4,6 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
   return {
     selectedEntityIds: new Set(overrides.selectedEntityIds ?? []),
     hoveredEntityId: overrides.hoveredEntityId ?? null,
-    activeEntityId: overrides.activeEntityId ?? null,
-    activeLayerName: overrides.activeLayerName ?? 'zones',
     documentRevision: overrides.documentRevision ?? 0,
   }
 }

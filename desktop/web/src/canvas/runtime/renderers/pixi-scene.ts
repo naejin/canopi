@@ -152,7 +152,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           if (!snapshot) return
           const labels = computeSelectionLabels(
             snapshot.scene.plants,
-            snapshot.selectedEntityIds ?? snapshot.selectedPlantIds,
+            snapshot.selectedEntityIds,
             viewport,
             snapshot.localizedCommonNames,
             {
@@ -231,7 +231,7 @@ function syncMeasurementGuides(
   if (!layer.visible) return
 
   const nextIds = new Set<string>()
-  for (const guide of snapshot.scene.measurementGuides ?? []) {
+  for (const guide of snapshot.scene.measurementGuides) {
     const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
     if (!presentation) continue
 
@@ -942,7 +942,7 @@ function syncPinnedPlantNameLabels(
   const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
   layer.visible = plantLayer.visible
   layer.alpha = plantLayer.opacity
-  const labels = snapshot.pinnedPlantNameLabels ?? []
+  const labels = snapshot.pinnedPlantNameLabels
   const nextPlantIds = new Set(labels.map((label) => label.plantId))
 
   if (plantLayer.visible) {

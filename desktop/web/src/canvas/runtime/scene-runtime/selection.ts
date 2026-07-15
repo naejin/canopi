@@ -95,7 +95,7 @@ export function getSelectedMeasurementGuideIds(
   selectedIds: ReadonlySet<string>,
 ): Set<string> {
   const resolved = new Set<string>()
-  for (const guide of persisted.measurementGuides ?? []) {
+  for (const guide of persisted.measurementGuides) {
     if (selectedIds.has(guide.id)) resolved.add(guide.id)
   }
   return resolved
@@ -150,7 +150,7 @@ export function getSelectedTopLevelTargets(
     targets.push({ kind: 'annotation', id: annotation.id })
   }
 
-  for (const guide of persisted.measurementGuides ?? []) {
+  for (const guide of persisted.measurementGuides) {
     if (!selectedIds.has(guide.id)) continue
     const key = `measurement-guide:${guide.id}`
     if (seen.has(key)) continue
@@ -302,7 +302,7 @@ export function getTargetBounds(
   }
 
   const guide = target.kind === 'measurement-guide'
-    ? (persisted.measurementGuides ?? []).find((entry) => entry.id === target.id)
+    ? persisted.measurementGuides.find((entry) => entry.id === target.id)
     : null
   if (!guide) return null
   return {
@@ -392,7 +392,7 @@ function resolveTarget(
   if (persisted.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
   if (persisted.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
   if (persisted.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
-  if ((persisted.measurementGuides ?? []).some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
+  if (persisted.measurementGuides.some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
   return null
 }
 

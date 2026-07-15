@@ -55,7 +55,7 @@ export function captureSceneDragState(
     }
   }
 
-  for (const guide of scene.measurementGuides ?? []) {
+  for (const guide of scene.measurementGuides) {
     if (selection.has(guide.id)) {
       state.measurementGuideStarts.set(guide.id, {
         start: { ...guide.start },
@@ -132,7 +132,7 @@ export function applySceneDragDeltaToDraft(
       },
     }
   })
-  draft.measurementGuides = (draft.measurementGuides ?? []).map((guide) => {
+  draft.measurementGuides = draft.measurementGuides.map((guide) => {
     const start = state.measurementGuideStarts.get(guide.id)
     if (!start) return guide
     return {

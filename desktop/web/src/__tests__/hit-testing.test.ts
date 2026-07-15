@@ -30,6 +30,7 @@ function createScene(): ScenePersistedState {
     }],
     zones: [],
     annotations: [],
+    measurementGuides: [],
     groups: [],
     guides: [],
   }

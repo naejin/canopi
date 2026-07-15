@@ -112,8 +112,8 @@ function hitTestTopLevelWithLayerFilter(
     }
   }
 
-  for (let i = (scene.measurementGuides ?? []).length - 1; i >= 0; i -= 1) {
-    const guide = (scene.measurementGuides ?? [])[i]!
+  for (let i = scene.measurementGuides.length - 1; i >= 0; i -= 1) {
+    const guide = scene.measurementGuides[i]!
     if (!isLayerHitEligible(scene, 'measurement-guides')) continue
     if (hitMeasurementGuide(guide, point, viewportScale)) {
       return { kind: 'measurement-guide', id: guide.id }
@@ -176,7 +176,7 @@ export function queryRectTopLevel(
     }
   }
 
-  for (const guide of scene.measurementGuides ?? []) {
+  for (const guide of scene.measurementGuides) {
     if (!isLayerInteractive(scene, 'measurement-guides')) continue
     if (measurementGuideIntersectsRect(guide, rect)) {
       targets.push({ kind: 'measurement-guide', id: guide.id })

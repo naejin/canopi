@@ -272,7 +272,7 @@ function resolveHoverTarget(
   if (scene.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
   if (scene.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
   if (scene.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
-  if ((scene.measurementGuides ?? []).some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
+  if (scene.measurementGuides.some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
   return null
 }
 

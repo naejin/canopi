@@ -212,6 +212,7 @@ describe('LayerPanel', () => {
           plants: [],
           zones: [],
           annotations: [],
+          measurementGuides: [],
           groups: [],
           guides: [],
         },

@@ -18,7 +18,7 @@ export type SceneRendererHoverTarget =
 export interface SceneRendererSnapshot {
   readonly scene: ScenePersistedState
   readonly viewport: SceneViewportState
-  readonly selectedEntityIds?: ReadonlySet<string>
+  readonly selectedEntityIds: ReadonlySet<string>
   readonly selectedPlantIds: ReadonlySet<string>
   readonly selectedZoneIds: ReadonlySet<string>
   readonly selectedAnnotationIds: ReadonlySet<string>
@@ -28,8 +28,8 @@ export interface SceneRendererSnapshot {
   readonly speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
   readonly localizedCommonNames: ReadonlyMap<string, string | null>
   readonly hoveredCanonicalName: string | null
-  readonly hoverTarget?: SceneRendererHoverTarget | null
-  readonly pinnedPlantNameLabels?: readonly PlantNameLabel[]
+  readonly hoverTarget: SceneRendererHoverTarget | null
+  readonly pinnedPlantNameLabels: readonly PlantNameLabel[]
   readonly selectionLabels: readonly SelectionLabel[]
 }
 

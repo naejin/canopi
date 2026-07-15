@@ -111,6 +111,7 @@ describe('Canvas Layer Presentation', () => {
           plants: [],
           zones: [],
           annotations: [],
+          measurementGuides: [],
           groups: [],
           guides: [],
         },

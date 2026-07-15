@@ -319,7 +319,7 @@ export class SceneRuntimeMutationController {
         draft.plants = draft.plants.filter((plant) => !deleted.plantIds.has(plant.id))
         draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.name))
         draft.annotations = draft.annotations.filter((annotation) => !deleted.annotationIds.has(annotation.id))
-        draft.measurementGuides = (draft.measurementGuides ?? [])
+        draft.measurementGuides = draft.measurementGuides
           .filter((guide) => !deleted.measurementGuideIds.has(guide.id))
         draft.groups = draft.groups
           .filter((group) => !deleted.groupIds.has(group.id))
@@ -367,7 +367,7 @@ export class SceneRuntimeMutationController {
     }
 
     if (isSceneLayerEditable(layerState['measurement-guides'])) {
-      for (const guide of persisted.measurementGuides ?? []) {
+      for (const guide of persisted.measurementGuides) {
         if (guide.locked) continue
         ids.add(guide.id)
       }
@@ -749,7 +749,7 @@ export class SceneRuntimeMutationController {
         draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.name)
         draft.annotations = reorderSceneEntities(draft.annotations, resolved.annotationIds, position, (annotation) => annotation.id)
         draft.measurementGuides = reorderSceneEntities(
-          draft.measurementGuides ?? [],
+          draft.measurementGuides,
           resolved.measurementGuideIds,
           position,
           (guide) => guide.id,

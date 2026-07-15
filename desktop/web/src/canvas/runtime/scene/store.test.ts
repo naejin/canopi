@@ -130,11 +130,11 @@ describe('scene store', () => {
 
     const store = SceneStore.fromCanopi(file, {
       selectedEntityIds: new Set(['plant-1']),
-      activeLayerName: 'plants',
     })
 
     expect(store.session.selectedEntityIds.has('plant-1')).toBe(true)
-    expect(store.session.activeLayerName).toBe('plants')
+    expect(store.session).not.toHaveProperty('activeEntityId')
+    expect(store.session).not.toHaveProperty('activeLayerName')
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: 1.2,
@@ -193,8 +193,29 @@ describe('scene store', () => {
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedEntityIds.size).toBe(0)
-    expect(session.activeLayerName).toBe('zones')
+    expect(session).not.toHaveProperty('activeEntityId')
+    expect(session).not.toHaveProperty('activeLayerName')
     expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(5)
+  })
+
+  it('normalizes a legacy Design without Measurement Guides into total runtime state', () => {
+    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    delete file.measurement_guides
+
+    const store = SceneStore.fromCanopi(file)
+    expect(store.persisted.measurementGuides).toEqual([])
+
+    store.updatePersisted((draft) => {
+      draft.measurementGuides.push({
+        kind: 'measurement-guide',
+        id: 'guide-1',
+        locked: false,
+        start: { x: 0, y: 0 },
+        end: { x: 10, y: 0 },
+      })
+    })
+
+    expect(store.persisted.measurementGuides).toHaveLength(1)
   })
 
   it('hydrates and serializes embedded Design Object lock state', () => {

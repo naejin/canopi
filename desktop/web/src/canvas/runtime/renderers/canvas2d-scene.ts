@@ -94,7 +94,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
           if (!snapshot) return
           const labels = computeSelectionLabels(
             snapshot.scene.plants,
-            snapshot.selectedEntityIds ?? snapshot.selectedPlantIds,
+            snapshot.selectedEntityIds,
             viewport,
             snapshot.localizedCommonNames,
             {
@@ -182,7 +182,7 @@ function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneR
 
   ctx.save()
 
-  for (const guide of snapshot.scene.measurementGuides ?? []) {
+  for (const guide of snapshot.scene.measurementGuides) {
     const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
     if (!presentation) continue
     const interactionState = resolveInteractionState(
@@ -215,7 +215,7 @@ function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneR
   ctx.font = `400 ${MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX}px Inter, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  for (const guide of snapshot.scene.measurementGuides ?? []) {
+  for (const guide of snapshot.scene.measurementGuides) {
     const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
     if (!presentation) continue
     const interactionState = resolveInteractionState(
@@ -599,7 +599,7 @@ function renderSelectionLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRen
 }
 
 function renderPinnedPlantNameLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
-  const labels = snapshot.pinnedPlantNameLabels ?? []
+  const labels = snapshot.pinnedPlantNameLabels
   if (labels.length === 0) return
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return

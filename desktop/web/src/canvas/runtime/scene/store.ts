@@ -81,14 +81,6 @@ export class SceneStore {
     return this
   }
 
-  setActiveLayerName(name: string | null): this {
-    this._session = {
-      ...this._session,
-      activeLayerName: name,
-    }
-    return this
-  }
-
   snapshot(): { persisted: ScenePersistedState; session: SceneSessionState } {
     return {
       persisted: this.persisted,

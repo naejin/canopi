@@ -7515,7 +7515,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown(start, { button: 0, target: handle })
     events.pointerMove({ x: 80, y: 10 }, { button: 0 })
 
-    expect(store.persisted.measurementGuides?.[0]?.end).toEqual({ x: 80, y: 10 })
+    expect(store.persisted.measurementGuides[0]?.end).toEqual({ x: 80, y: 10 })
     expect(zoneMeasurementTexts(container)).toEqual(['70 m'])
 
     events.pointerUp({ x: 80, y: 10 }, { button: 0 })
@@ -7549,7 +7549,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 80, y: 10 }, { button: 0 })
     events.keyDown({ key: 'Escape' })
 
-    expect(store.persisted.measurementGuides?.[0]).toMatchObject({
+    expect(store.persisted.measurementGuides[0]).toMatchObject({
       start: { x: 10, y: 10 },
       end: { x: 60, y: 10 },
     })
@@ -7562,7 +7562,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown(start, { button: 0, target: handle })
     events.pointerUp(start, { button: 0, target: handle })
 
-    expect(store.persisted.measurementGuides?.[0]).toMatchObject({
+    expect(store.persisted.measurementGuides[0]).toMatchObject({
       start: { x: 10, y: 10 },
       end: { x: 60, y: 10 },
     })
