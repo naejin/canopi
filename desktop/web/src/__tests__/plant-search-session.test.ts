@@ -215,6 +215,159 @@ describe('plant search session', () => {
     dispose()
   })
 
+  it('supersedes an active backend search immediately before clearing too-short text', async () => {
+    vi.useFakeTimers()
+    const locale = signal('en')
+    const activeSearch = deferred<PaginatedResult<SpeciesListItem>>()
+    const supersession = deferred<void>()
+    const search = vi.fn<PlantSearchAdapter>()
+      .mockResolvedValueOnce(page(['Browse row'], null, 1))
+      .mockReturnValueOnce(activeSearch.promise)
+    const supersedeSearch = vi.fn(() => supersession.promise)
+    const session = createPlantSearchSession({ search, supersedeSearch, locale })
+    const dispose = session.start()
+
+    await flushMicrotasks()
+    session.setText('al')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+    expect(search).toHaveBeenCalledTimes(2)
+
+    session.setText('a')
+    expect(supersedeSearch).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+
+    expect(session.results.value.status).toBe('loading-first-page')
+    supersession.resolve(undefined)
+    await flushMicrotasks()
+    expect(session.results.value).toMatchObject({
+      items: [],
+      nextCursor: null,
+      totalEstimate: 0,
+      status: 'idle',
+    })
+
+    activeSearch.resolve(page(['Stale active row'], null, 0))
+    await flushMicrotasks()
+    expect(session.results.value.items).toEqual([])
+    dispose()
+  })
+
+  it.each([
+    ['active text', 'apple', true],
+    ['browse text', '', true],
+    ['too-short text', 'a', false],
+  ] as const)(
+    'immediately supersedes an active request when scheduling %s',
+    async (_label, nextText, dispatchesSuccessor) => {
+      vi.useFakeTimers()
+      const locale = signal('en')
+      const activeSearch = deferred<PaginatedResult<SpeciesListItem>>()
+      const search = vi.fn<PlantSearchAdapter>()
+        .mockResolvedValueOnce(page([], null, 0))
+        .mockReturnValueOnce(activeSearch.promise)
+        .mockResolvedValueOnce(page([], null, 0))
+      const supersedeSearch = vi.fn(async () => {})
+      const session = createPlantSearchSession({ search, supersedeSearch, locale })
+      const stop = session.start()
+
+      await flushMicrotasks()
+      session.setText('al')
+      vi.advanceTimersByTime(150)
+      await flushMicrotasks()
+      expect(search).toHaveBeenCalledTimes(2)
+
+      session.setText(nextText)
+
+      expect(supersedeSearch).toHaveBeenCalledOnce()
+      expect(search).toHaveBeenCalledTimes(2)
+      vi.advanceTimersByTime(150)
+      await flushMicrotasks()
+      expect(search).toHaveBeenCalledTimes(dispatchesSuccessor ? 3 : 2)
+
+      activeSearch.resolve(page([], null, 0))
+      await flushMicrotasks()
+      stop()
+    },
+  )
+
+  it('serializes supersession and lets only the newest intent dispatch after it', async () => {
+    vi.useFakeTimers()
+    const locale = signal('en')
+    const activeSearch = deferred<PaginatedResult<SpeciesListItem>>()
+    const firstSupersession = deferred<void>()
+    const secondSupersession = deferred<void>()
+    const search = vi.fn<PlantSearchAdapter>()
+      .mockResolvedValueOnce(page([], null, 0))
+      .mockReturnValueOnce(activeSearch.promise)
+      .mockResolvedValueOnce(page(['Newest row'], null, 0))
+    const supersedeSearch = vi.fn()
+      .mockReturnValueOnce(firstSupersession.promise)
+      .mockReturnValueOnce(secondSupersession.promise)
+    const session = createPlantSearchSession({ search, supersedeSearch, locale })
+    const stop = session.start()
+
+    await flushMicrotasks()
+    session.setText('al')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+
+    session.setText('apple')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+    session.setText('pear')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+
+    expect(supersedeSearch).toHaveBeenCalledOnce()
+    expect(search).toHaveBeenCalledTimes(2)
+
+    firstSupersession.resolve(undefined)
+    await flushMicrotasks()
+    expect(supersedeSearch).toHaveBeenCalledTimes(2)
+    expect(search).toHaveBeenCalledTimes(2)
+
+    secondSupersession.resolve(undefined)
+    await flushMicrotasks()
+    expect(search).toHaveBeenCalledTimes(3)
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'pear' }))
+    expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Newest row'])
+
+    activeSearch.resolve(page(['Stale row'], null, 0))
+    await flushMicrotasks()
+    expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Newest row'])
+    stop()
+  })
+
+  it.each(['stop', 'dispose'] as const)(
+    'supersedes an active backend request on session %s',
+    async (lifecycleAction) => {
+      vi.useFakeTimers()
+      const locale = signal('en')
+      const activeSearch = deferred<PaginatedResult<SpeciesListItem>>()
+      const search = vi.fn<PlantSearchAdapter>()
+        .mockResolvedValueOnce(page([], null, 0))
+        .mockReturnValueOnce(activeSearch.promise)
+      const supersedeSearch = vi.fn(async () => {})
+      const session = createPlantSearchSession({ search, supersedeSearch, locale })
+      const stop = session.start()
+
+      await flushMicrotasks()
+      session.setText('al')
+      vi.advanceTimersByTime(150)
+      await flushMicrotasks()
+
+      if (lifecycleAction === 'stop') stop()
+      else session.dispose()
+
+      expect(supersedeSearch).toHaveBeenCalledOnce()
+      activeSearch.resolve(page([], null, 0))
+      await flushMicrotasks()
+      session.dispose()
+    },
+  )
+
   it('keeps exact counts for empty browse and omits them for active text searches', async () => {
     vi.useFakeTimers()
     const locale = signal('en')

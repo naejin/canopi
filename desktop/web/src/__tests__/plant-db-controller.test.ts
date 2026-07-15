@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DynamicFilterOptions, SpeciesListItem } from '../types/species'
 
 const mocks = vi.hoisted(() => ({
@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     next_cursor: null,
     total_estimate: 0,
   })),
+  supersedeSpeciesSearch: vi.fn(async () => {}),
   getFilterOptions: vi.fn(async () => null),
   getDynamicFilterOptions: vi.fn(async () => []),
   toggleFavorite: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../ipc/species', () => ({
   searchSpecies: mocks.searchSpecies,
+  supersedeSpeciesSearch: mocks.supersedeSpeciesSearch,
   getFilterOptions: mocks.getFilterOptions,
   getDynamicFilterOptions: mocks.getDynamicFilterOptions,
 }))
@@ -69,12 +71,17 @@ function makePlant(canonicalName: string, isFavorite = false): SpeciesListItem {
 beforeEach(() => {
   vi.resetModules()
   mocks.searchSpecies.mockClear()
+  mocks.supersedeSpeciesSearch.mockClear()
   mocks.getFilterOptions.mockClear()
   mocks.getDynamicFilterOptions.mockClear()
   mocks.toggleFavorite.mockClear()
   mocks.getFavorites.mockClear()
   mocks.getRecentlyViewed.mockClear()
   vi.restoreAllMocks()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('Species Catalog Workbench lifecycle', () => {
@@ -96,6 +103,28 @@ describe('Species Catalog Workbench lifecycle', () => {
     await flushMicrotasks()
 
     expect(mocks.searchSpecies).not.toHaveBeenCalled()
+  })
+
+  it('routes active-to-too-short search supersession through the desktop IPC adapter', async () => {
+    vi.useFakeTimers()
+    const plantDb = await import('../app/plant-browser')
+    const activeSearch = deferred<Awaited<ReturnType<typeof mocks.searchSpecies>>>()
+    const dispose = plantDb.speciesCatalogWorkbench.mount()
+    await flushMicrotasks()
+
+    mocks.searchSpecies.mockReturnValueOnce(activeSearch.promise)
+    plantDb.speciesCatalogWorkbench.setSearchText('al')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+    expect(mocks.searchSpecies).toHaveBeenCalledTimes(2)
+
+    plantDb.speciesCatalogWorkbench.setSearchText('a')
+    expect(mocks.supersedeSpeciesSearch).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+    activeSearch.resolve({ items: [], next_cursor: null, total_estimate: 0 })
+    await flushMicrotasks()
+    dispose()
   })
 
   it('surfaces explicit unavailable errors when search short-circuits in degraded mode', async () => {

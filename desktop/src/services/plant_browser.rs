@@ -22,6 +22,8 @@ pub struct SpeciesSearchCancellation {
 struct SpeciesSearchCancellationInner {
     next_generation: AtomicU64,
     active: Mutex<Option<ActiveSpeciesSearch>>,
+    #[cfg(test)]
+    before_interrupt: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 struct ActiveSpeciesSearch {
@@ -77,7 +79,7 @@ impl SpeciesSearchCancellation {
             (generation, previous)
         };
 
-        interrupt_running_search(previous);
+        self.interrupt_running_search(previous);
 
         SpeciesSearchCancellationToken {
             cancellation: self.clone(),
@@ -97,7 +99,7 @@ impl SpeciesSearchCancellation {
             active.take()
         };
 
-        interrupt_running_search(previous);
+        self.interrupt_running_search(previous);
     }
 
     fn is_current(&self, generation: u64) -> bool {
@@ -160,13 +162,34 @@ impl SpeciesSearchCancellation {
             *active = None;
         }
     }
-}
 
-fn interrupt_running_search(search: Option<ActiveSpeciesSearch>) {
-    if let Some(search) = search
-        && search.is_running
-    {
-        search.interrupt.interrupt();
+    fn interrupt_running_search(&self, search: Option<ActiveSpeciesSearch>) {
+        if let Some(search) = search
+            && search.is_running
+        {
+            #[cfg(test)]
+            {
+                let hook = self
+                    .inner
+                    .before_interrupt
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .clone();
+                if let Some(hook) = hook {
+                    hook();
+                }
+            }
+            search.interrupt.interrupt();
+        }
+    }
+
+    #[cfg(test)]
+    fn set_before_interrupt_hook(&self, hook: impl Fn() + Send + Sync + 'static) {
+        *self
+            .inner
+            .before_interrupt
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(Arc::new(hook));
     }
 }
 
@@ -377,7 +400,7 @@ mod tests {
     use rusqlite::Connection;
     use std::{
         sync::{
-            Arc,
+            Arc, Barrier,
             atomic::{AtomicBool, Ordering},
             mpsc,
         },
@@ -673,6 +696,116 @@ mod tests {
         assert!(
             read_result.is_ok(),
             "queued active search cancellation interrupted an unrelated plant DB read: {read_result:?}"
+        );
+    }
+
+    #[test]
+    fn interrupt_handoff_keeps_the_old_search_connection_until_interrupt() {
+        let plant_db = test_plant_db();
+        let cancellation = SpeciesSearchCancellation::default();
+        let active = cancellation.begin(plant_db.interrupt_handle().unwrap());
+        let active_db = plant_db.clone();
+        let release_active = Arc::new(AtomicBool::new(false));
+        let release_active_thread = Arc::clone(&release_active);
+        let (active_started_tx, active_started_rx) = mpsc::channel();
+        let (active_released_tx, active_released_rx) = mpsc::channel();
+        let active_thread = std::thread::spawn(move || {
+            let conn = db::require_plant_db(&active_db).unwrap();
+            let running = active.mark_running().unwrap();
+            active_started_tx.send(()).unwrap();
+            while !release_active_thread.load(Ordering::SeqCst) {
+                std::thread::yield_now();
+            }
+            drop(running);
+            drop(conn);
+            active_released_tx.send(()).unwrap();
+        });
+        active_started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("active search should own the PlantDb connection");
+
+        let interrupt_entered = Arc::new(Barrier::new(2));
+        let release_interrupt = Arc::new(Barrier::new(2));
+        let hook_entered = Arc::clone(&interrupt_entered);
+        let hook_release = Arc::clone(&release_interrupt);
+        cancellation.set_before_interrupt_hook(move || {
+            hook_entered.wait();
+            hook_release.wait();
+        });
+
+        let reader_db = plant_db.clone();
+        let release_reader = Arc::new(AtomicBool::new(false));
+        let release_reader_thread = Arc::clone(&release_reader);
+        let (reader_started_tx, reader_started_rx) = mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            let conn = db::require_plant_db(&reader_db).unwrap();
+            let mut reader_started_tx = Some(reader_started_tx);
+            conn.progress_handler(
+                1,
+                Some(move || {
+                    if let Some(started) = reader_started_tx.take() {
+                        let _ = started.send(());
+                    }
+                    while !release_reader_thread.load(Ordering::SeqCst) {
+                        std::thread::yield_now();
+                    }
+                    false
+                }),
+            );
+            conn.query_row(
+                "WITH RECURSIVE cnt(x) AS (
+                     VALUES(0)
+                     UNION ALL
+                     SELECT x + 1 FROM cnt WHERE x < 1000
+                 )
+                 SELECT sum(x) FROM cnt",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+        });
+
+        let superseding_cancellation = cancellation.clone();
+        let superseder = std::thread::spawn(move || superseding_cancellation.supersede());
+        interrupt_entered.wait();
+        release_active.store(true, Ordering::SeqCst);
+
+        let active_released_during_handoff = active_released_rx
+            .recv_timeout(Duration::from_millis(100))
+            .is_ok();
+        let reader_started_during_handoff = active_released_during_handoff
+            && reader_started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .is_ok();
+
+        release_interrupt.wait();
+        superseder.join().unwrap();
+        if !active_released_during_handoff {
+            active_released_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("active search should release after the interrupt handoff");
+        }
+        if !reader_started_during_handoff {
+            reader_started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("unrelated read should start after the interrupt handoff");
+        }
+        release_reader.store(true, Ordering::SeqCst);
+
+        active_thread.join().unwrap();
+        let read_result = reader.join().unwrap();
+        assert!(
+            !active_released_during_handoff,
+            "active search released PlantDb before its interrupt was delivered"
+        );
+        assert!(
+            !reader_started_during_handoff,
+            "unrelated PlantDb read started inside the stale-interrupt handoff window"
+        );
+        assert!(
+            read_result.is_ok(),
+            "stale search interrupt aborted an unrelated PlantDb read: {read_result:?}"
         );
     }
 
