@@ -1,5 +1,6 @@
 {
   "contract_format_version": 1,
+  "species_search_normalization_version": 1,
   "artifact": {
     "generated_by": "canopi-web-catalog-v1",
     "version": 1,

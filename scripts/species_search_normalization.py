@@ -29,6 +29,7 @@ class SpeciesSearchNormalizationContract:
     fingerprint: str
     case_folds: tuple[tuple[str, str], ...]
     minimum_admitted_scalar_count: int
+    query_token_policy: str
 
 
 @dataclass(frozen=True)
@@ -38,15 +39,40 @@ class NormalizedSpeciesSearch:
     scalar_count: int
 
 
-def _load_contract() -> SpeciesSearchNormalizationContract:
+def load_contract(
+    *,
+    root: Path | None = None,
+) -> SpeciesSearchNormalizationContract:
+    authority_path = (
+        AUTHORITY_PATH
+        if root is None
+        else root / "common-types/species-search-normalization.json"
+    )
     try:
-        raw: Any = json.loads(AUTHORITY_PATH.read_text(encoding="utf-8"))
+        raw: Any = json.loads(authority_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise RuntimeError(
-            f"failed to read Species Search normalization authority {AUTHORITY_PATH}: {error}"
+            f"failed to read Species Search normalization authority {authority_path}: {error}"
         ) from error
     if not isinstance(raw, dict):
         raise RuntimeError("Species Search normalization authority root must be an object")
+
+    expected_root_keys = {
+        "contract_format_version",
+        "normalization_version",
+        "algorithm",
+        "corpus",
+    }
+    missing_root_keys = sorted(expected_root_keys - raw.keys())
+    unknown_root_keys = sorted(raw.keys() - expected_root_keys)
+    if missing_root_keys:
+        raise RuntimeError(
+            f"root: missing required property {missing_root_keys[0]!r}"
+        )
+    if unknown_root_keys:
+        raise RuntimeError(f"root: unknown property {unknown_root_keys[0]!r}")
+    if raw["contract_format_version"] != 1:
+        raise RuntimeError("contract_format_version must equal 1")
 
     version = raw.get("normalization_version")
     algorithm = raw.get("algorithm")
@@ -54,10 +80,29 @@ def _load_contract() -> SpeciesSearchNormalizationContract:
         raise RuntimeError("normalization_version must be a positive integer")
     if not isinstance(algorithm, dict):
         raise RuntimeError("algorithm must be an object")
+    expected_algorithm_keys = {
+        "compatibility_decomposition",
+        "stripped_general_categories",
+        "token_character_classes",
+        "case_folds",
+        "minimum_admitted_scalar_count",
+        "query_token_policy",
+    }
+    missing_algorithm_keys = sorted(expected_algorithm_keys - algorithm.keys())
+    unknown_algorithm_keys = sorted(algorithm.keys() - expected_algorithm_keys)
+    if missing_algorithm_keys:
+        raise RuntimeError(
+            f"algorithm: missing required property {missing_algorithm_keys[0]!r}"
+        )
+    if unknown_algorithm_keys:
+        raise RuntimeError(
+            f"algorithm: unknown property {unknown_algorithm_keys[0]!r}"
+        )
     expected_algorithm = {
         "compatibility_decomposition": "NFKD",
         "stripped_general_categories": ["Mn", "Mc", "Me"],
         "token_character_classes": ["Letter", "Number", "Underscore"],
+        "query_token_policy": "unique-admitted-or-all-when-active",
     }
     for key, expected in expected_algorithm.items():
         if algorithm.get(key) != expected:
@@ -90,6 +135,53 @@ def _load_contract() -> SpeciesSearchNormalizationContract:
             "algorithm.minimum_admitted_scalar_count must be a positive integer"
         )
 
+    corpus = raw.get("corpus")
+    if not isinstance(corpus, list) or not corpus:
+        raise RuntimeError("corpus must be a nonempty array")
+    expected_case_keys = {
+        "name",
+        "input",
+        "normalized_text",
+        "tokens",
+        "query_tokens",
+        "admission",
+    }
+    seen_case_names: set[str] = set()
+    for index, case in enumerate(corpus):
+        if not isinstance(case, dict):
+            raise RuntimeError(f"corpus[{index}] must be an object")
+        if set(case) != expected_case_keys:
+            missing = sorted(expected_case_keys - case.keys())
+            unknown = sorted(case.keys() - expected_case_keys)
+            detail = (
+                f"missing required property {missing[0]!r}"
+                if missing
+                else f"unknown property {unknown[0]!r}"
+            )
+            raise RuntimeError(f"corpus[{index}]: {detail}")
+        name = case["name"]
+        if not isinstance(name, str) or not name or name in seen_case_names:
+            raise RuntimeError(f"corpus[{index}].name must be nonempty and unique")
+        seen_case_names.add(name)
+        if not isinstance(case["input"], str):
+            raise RuntimeError(f"corpus[{index}].input must be text")
+        if not isinstance(case["normalized_text"], str):
+            raise RuntimeError(f"corpus[{index}].normalized_text must be text")
+        if not isinstance(case["tokens"], list) or not all(
+            isinstance(token, str) and token for token in case["tokens"]
+        ):
+            raise RuntimeError(
+                f"corpus[{index}].tokens must be an array of nonempty text"
+            )
+        if not isinstance(case["query_tokens"], list) or not all(
+            isinstance(token, str) and token for token in case["query_tokens"]
+        ):
+            raise RuntimeError(
+                f"corpus[{index}].query_tokens must be an array of nonempty text"
+            )
+        if case["admission"] not in {admission.value for admission in SpeciesSearchAdmission}:
+            raise RuntimeError(f"corpus[{index}].admission is unsupported")
+
     canonical = json.dumps(
         raw,
         ensure_ascii=False,
@@ -101,10 +193,11 @@ def _load_contract() -> SpeciesSearchNormalizationContract:
         fingerprint=hashlib.sha256(canonical).hexdigest(),
         case_folds=tuple(case_folds),
         minimum_admitted_scalar_count=minimum,
+        query_token_policy=algorithm["query_token_policy"],
     )
 
 
-CONTRACT = _load_contract()
+CONTRACT = load_contract()
 
 
 def normalize_species_search(raw: str) -> NormalizedSpeciesSearch:
@@ -157,3 +250,16 @@ def species_search_admission(raw: str) -> SpeciesSearchAdmission:
     if scalar_count < CONTRACT.minimum_admitted_scalar_count:
         return SpeciesSearchAdmission.TOO_SHORT
     return SpeciesSearchAdmission.ACTIVE_TEXT
+
+
+def species_search_query_tokens(raw: str) -> tuple[str, ...]:
+    normalized = normalize_species_search(raw)
+    if normalized.scalar_count < CONTRACT.minimum_admitted_scalar_count:
+        return ()
+    unique_tokens = tuple(dict.fromkeys(normalized.tokens))
+    admitted_tokens = tuple(
+        token
+        for token in unique_tokens
+        if len(token) >= CONTRACT.minimum_admitted_scalar_count
+    )
+    return admitted_tokens or unique_tokens

@@ -18,7 +18,7 @@ import type {
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../types/species'
-import { normalizeSpeciesSearch } from '../utils/species-search-normalization'
+import { speciesSearchQueryTokens } from '../utils/species-search-normalization'
 
 interface DuckDbQueryTable {
   toArray(): unknown[]
@@ -1168,8 +1168,7 @@ function speciesProjectionToDetail(
 }
 
 function normalizeSearchText(text: string): NormalizedSearchText {
-  const normalized = normalizeSpeciesSearch(text)
-  const tokens = [...new Set(normalized.tokens)]
+  const tokens = speciesSearchQueryTokens(text)
   return tokens.length === 0
     ? EMPTY_SEARCH_TEXT
     : {

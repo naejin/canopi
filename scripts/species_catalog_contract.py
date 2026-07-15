@@ -17,8 +17,13 @@ import sys
 import tempfile
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import species_search_normalization
+
+
 SUPPORTED_SQLITE_DECLARED_TYPES = frozenset(
     {"BLOB", "INTEGER", "NUMERIC", "REAL", "TEXT"}
 )
@@ -106,6 +111,8 @@ class GeneratedArtifactDriftError(SpeciesCatalogContractError):
 class ReleaseProjection:
     prepared_schema_version: int
     minimum_export_schema_version: int
+    species_search_normalization_version: int
+    species_search_normalization_fingerprint: str
     fingerprint: str
 
 
@@ -113,6 +120,8 @@ class ReleaseProjection:
 class PrepareDbProjection:
     prepared_schema_version: int
     minimum_export_schema_version: int
+    species_search_normalization_version: int
+    species_search_normalization_fingerprint: str
     species_columns: tuple[StorageColumn, ...]
     supporting_tables: tuple[StorageTable, ...]
     prepared_tables: tuple[StorageTable, ...]
@@ -124,6 +133,8 @@ class PrepareDbProjection:
 @dataclass(frozen=True)
 class WebCatalogProjection:
     minimum_export_schema_version: int
+    species_search_normalization_version: int
+    species_search_normalization_fingerprint: str
     species_columns: tuple[StorageColumn, ...]
     supporting_tables: tuple[StorageTable, ...]
     supported_filter_keys: tuple[str, ...]
@@ -195,6 +206,8 @@ class _StorageContract:
     contract_format_version: int
     prepared_schema_version: int
     minimum_export_schema_version: int
+    species_search_normalization_version: int
+    species_search_normalization_fingerprint: str
     species_columns: tuple[StorageColumn, ...]
     supporting_tables: tuple[StorageTable, ...]
     prepared_tables: tuple[StorageTable, ...]
@@ -217,12 +230,24 @@ def project(
         return ReleaseProjection(
             prepared_schema_version=source.prepared_schema_version,
             minimum_export_schema_version=source.minimum_export_schema_version,
+            species_search_normalization_version=(
+                source.species_search_normalization_version
+            ),
+            species_search_normalization_fingerprint=(
+                source.species_search_normalization_fingerprint
+            ),
             fingerprint=source.fingerprint,
         )
     if target is ProjectionTarget.PREPARE_DB:
         return PrepareDbProjection(
             prepared_schema_version=source.prepared_schema_version,
             minimum_export_schema_version=source.minimum_export_schema_version,
+            species_search_normalization_version=(
+                source.species_search_normalization_version
+            ),
+            species_search_normalization_fingerprint=(
+                source.species_search_normalization_fingerprint
+            ),
             species_columns=source.species_columns,
             supporting_tables=source.supporting_tables,
             prepared_tables=source.prepared_tables,
@@ -233,6 +258,12 @@ def project(
     if target is ProjectionTarget.WEB_CATALOG:
         return WebCatalogProjection(
             minimum_export_schema_version=source.minimum_export_schema_version,
+            species_search_normalization_version=(
+                source.species_search_normalization_version
+            ),
+            species_search_normalization_fingerprint=(
+                source.species_search_normalization_fingerprint
+            ),
             species_columns=source.web_species_columns,
             supporting_tables=source.web_supporting_tables,
             supported_filter_keys=source.web_filter_keys,
@@ -328,6 +359,7 @@ def _load_contract(root: Path) -> _StorageContract:
         "contract_format_version",
         "schema_version",
         "min_export_schema_version",
+        "species_search_normalization_version",
         "description",
         "columns",
         "supporting_tables",
@@ -357,6 +389,27 @@ def _load_contract(root: Path) -> _StorageContract:
         "min_export_schema_version",
         violations,
     )
+    declared_normalization_version = _read_positive_int(
+        raw,
+        "species_search_normalization_version",
+        violations,
+    )
+    try:
+        normalization_contract = species_search_normalization.load_contract(root=root)
+        normalization_version = normalization_contract.version
+        normalization_fingerprint = normalization_contract.fingerprint
+        if (
+            declared_normalization_version > 0
+            and declared_normalization_version != normalization_version
+        ):
+            violations.append(
+                "species_search_normalization_version: expected "
+                f"{normalization_version}, found {declared_normalization_version}"
+            )
+    except RuntimeError as error:
+        normalization_version = 0
+        normalization_fingerprint = ""
+        violations.append(f"species_search_normalization: {error}")
     if "description" in raw and not isinstance(raw["description"], str):
         violations.append("description: expected a string")
 
@@ -407,6 +460,8 @@ def _load_contract(root: Path) -> _StorageContract:
         contract_format_version=contract_format_version,
         prepared_schema_version=prepared_schema_version,
         minimum_export_schema_version=minimum_export_schema_version,
+        species_search_normalization_version=normalization_version,
+        species_search_normalization_fingerprint=normalization_fingerprint,
         species_columns=tuple(species_columns),
         supporting_tables=tuple(supporting_tables),
         prepared_tables=tuple(prepared_tables),
@@ -421,6 +476,12 @@ def _load_contract(root: Path) -> _StorageContract:
         contract_format_version=parsed.contract_format_version,
         prepared_schema_version=parsed.prepared_schema_version,
         minimum_export_schema_version=parsed.minimum_export_schema_version,
+        species_search_normalization_version=(
+            parsed.species_search_normalization_version
+        ),
+        species_search_normalization_fingerprint=(
+            parsed.species_search_normalization_fingerprint
+        ),
         species_columns=parsed.species_columns,
         supporting_tables=parsed.supporting_tables,
         prepared_tables=parsed.prepared_tables,
@@ -1186,6 +1247,10 @@ def _contract_fingerprint(contract: _StorageContract) -> str:
         "contract_format_version": contract.contract_format_version,
         "schema_version": contract.prepared_schema_version,
         "min_export_schema_version": contract.minimum_export_schema_version,
+        "species_search_normalization": {
+            "version": contract.species_search_normalization_version,
+            "fingerprint": contract.species_search_normalization_fingerprint,
+        },
         "columns": [
             {
                 "name": column.name,
@@ -1649,6 +1714,15 @@ def _render_rust(contract: _StorageContract) -> str:
             "pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = "
             f"{contract.prepared_schema_version};"
         ),
+        (
+            "pub(crate) const SPECIES_SEARCH_NORMALIZATION_VERSION: u32 = "
+            f"{contract.species_search_normalization_version};"
+        ),
+        "#[cfg(test)]",
+        (
+            "pub(crate) const SPECIES_SEARCH_NORMALIZATION_FINGERPRINT: &str ="
+        ),
+        f"    {_rust_string(contract.species_search_normalization_fingerprint)};",
         "#[cfg(test)]",
         (
             "pub(crate) const MINIMUM_EXPORT_SCHEMA_VERSION: i32 = "

@@ -1,7 +1,7 @@
 const FTS_META_CHARS: &str = r#""()*+-^:\"#;
 
 use crate::db::species_search_normalization::{
-    is_admitted_species_search_token, normalize_species_search, normalized_species_search_sql,
+    normalize_species_search, normalized_species_search_sql, species_search_query_tokens,
 };
 
 #[derive(Debug, Clone)]
@@ -57,7 +57,7 @@ pub(crate) fn sanitize_fts_text(text: &str) -> Option<String> {
 fn active_locale_common_name_query(text: Option<&str>) -> Option<CommonNameQuery> {
     let text = text?;
     let normalized = normalize_species_search(text);
-    let tokens = indexed_common_name_tokens(&normalized.tokens);
+    let tokens = species_search_query_tokens(&normalized);
     if normalized.tokens.is_empty() {
         None
     } else {
@@ -66,16 +66,6 @@ fn active_locale_common_name_query(text: Option<&str>) -> Option<CommonNameQuery
             tokens,
         })
     }
-}
-
-fn indexed_common_name_tokens(normalized_tokens: &[String]) -> Vec<String> {
-    let mut tokens = Vec::new();
-    for token in normalized_tokens {
-        if is_admitted_species_search_token(token) && !tokens.contains(token) {
-            tokens.push(token.clone());
-        }
-    }
-    tokens
 }
 
 pub(super) fn normalized_common_name_sql(expr: &str) -> String {

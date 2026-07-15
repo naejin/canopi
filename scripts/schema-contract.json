@@ -1,8 +1,9 @@
 {
   "contract_format_version": 1,
-  "schema_version": 11,
+  "schema_version": 12,
   "min_export_schema_version": 14,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v11: canopi-data export v14 minimum, provenance/audit columns removed, unused supporting tables omitted from the prepared DB, and generated species_search_name_entries uses display_order for Common Name ranking.",
+  "species_search_normalization_version": 1,
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v12: prepared search names and tokens use Species Search normalization v1. v11: canopi-data export v14 minimum, provenance/audit columns removed, unused supporting tables omitted from the prepared DB, and generated species_search_name_entries uses display_order for Common Name ranking.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},

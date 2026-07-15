@@ -1,6 +1,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import re
+import tempfile
 import unittest
 
 from scripts import species_search_normalization as normalization
@@ -67,12 +69,44 @@ class SpeciesSearchNormalizationTests(unittest.TestCase):
                     normalization.species_search_admission(case["input"]).value,
                     case["admission"],
                 )
+                self.assertEqual(
+                    normalization.species_search_query_tokens(case["input"]),
+                    tuple(case["query_tokens"]),
+                )
 
         self.assertEqual(
             normalization.CONTRACT.version,
             contract["normalization_version"],
         )
         self.assertRegex(normalization.CONTRACT.fingerprint, r"^[0-9a-f]{64}$")
+
+    def test_python_and_bindings_generator_fingerprint_the_same_canonical_json(self):
+        generated = (
+            SCRIPT_DIR.parent
+            / "desktop/web/src/generated/species-search-normalization.ts"
+        ).read_text(encoding="utf-8")
+        match = re.search(
+            r'SPECIES_SEARCH_NORMALIZATION_FINGERPRINT = "([0-9a-f]{64})"',
+            generated,
+        )
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), normalization.CONTRACT.fingerprint)
+
+    def test_authority_parser_rejects_unknown_semantic_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "common-types/species-search-normalization.json"
+            path.parent.mkdir(parents=True)
+            raw = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+            raw["algorithm"]["accidental_new_rule"] = True
+            path.write_text(json.dumps(raw), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"algorithm.*unknown property.*accidental_new_rule",
+            ):
+                normalization.load_contract(root=root)
 
 
 if __name__ == "__main__":

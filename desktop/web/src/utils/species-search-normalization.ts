@@ -39,3 +39,14 @@ export function speciesSearchAdmission(raw: string): SpeciesSearchAdmission {
   if (scalarCount < SPECIES_SEARCH_MINIMUM_ADMITTED_SCALAR_COUNT) return 'too-short'
   return 'active-text'
 }
+
+export function speciesSearchQueryTokens(raw: string): readonly string[] {
+  const normalized = normalizeSpeciesSearch(raw)
+  if (normalized.scalarCount < SPECIES_SEARCH_MINIMUM_ADMITTED_SCALAR_COUNT) return []
+
+  const uniqueTokens = [...new Set(normalized.tokens)]
+  const admittedTokens = uniqueTokens.filter(
+    (token) => Array.from(token).length >= SPECIES_SEARCH_MINIMUM_ADMITTED_SCALAR_COUNT,
+  )
+  return admittedTokens.length > 0 ? admittedTokens : uniqueTokens
+}

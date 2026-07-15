@@ -1,4 +1,8 @@
 import { WEB_CATALOG_ARTIFACT_CONTRACT_FINGERPRINT } from '../../generated/web-catalog-artifact.mjs'
+import {
+  SPECIES_SEARCH_NORMALIZATION_FINGERPRINT,
+  SPECIES_SEARCH_NORMALIZATION_VERSION,
+} from '../../generated/species-search-normalization'
 
 export const WEB_CATALOG_TEST_LOCALES = [
   'en',
@@ -23,6 +27,10 @@ export function validWebCatalogManifest(): Record<string, unknown> {
     generated_by: 'canopi-web-catalog-v1',
     version: 1,
     artifact_contract_fingerprint: WEB_CATALOG_ARTIFACT_CONTRACT_FINGERPRINT,
+    species_search_normalization: {
+      version: SPECIES_SEARCH_NORMALIZATION_VERSION,
+      fingerprint: SPECIES_SEARCH_NORMALIZATION_FINGERPRINT,
+    },
     asset_format: 'parquet',
     asset_formats: {
       species: 'parquet',

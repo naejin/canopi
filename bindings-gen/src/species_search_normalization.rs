@@ -21,6 +21,7 @@ struct NormalizationAlgorithm {
     token_character_classes: Vec<String>,
     case_folds: Vec<CaseFold>,
     minimum_admitted_scalar_count: u32,
+    query_token_policy: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -37,6 +38,7 @@ struct CorpusCase {
     input: String,
     normalized_text: String,
     tokens: Vec<String>,
+    query_tokens: Vec<String>,
     admission: String,
 }
 
@@ -78,6 +80,9 @@ fn validate(contract: &NormalizationContract) -> Result<(), Box<dyn std::error::
     }
     if algorithm.minimum_admitted_scalar_count == 0 {
         return Err("Species Search admission scalar count must be positive".into());
+    }
+    if algorithm.query_token_policy != "unique-admitted-or-all-when-active" {
+        return Err("Species Search query-token policy is unsupported".into());
     }
 
     let mut fold_sources = HashSet::new();
@@ -130,6 +135,7 @@ fn render_typescript(
         "  readonly input: string\n",
         "  readonly normalizedText: string\n",
         "  readonly tokens: readonly string[]\n",
+        "  readonly queryTokens: readonly string[]\n",
         "  readonly admission: SpeciesSearchAdmission\n",
         "}\n\n",
     ));
@@ -147,6 +153,11 @@ fn render_typescript(
         output,
         "export const SPECIES_SEARCH_MINIMUM_ADMITTED_SCALAR_COUNT = {} as const\n",
         contract.algorithm.minimum_admitted_scalar_count
+    )?;
+    writeln!(
+        output,
+        "export const SPECIES_SEARCH_QUERY_TOKEN_POLICY = {} as const\n",
+        json_string(&contract.algorithm.query_token_policy)
     )?;
 
     output.push_str("export const SPECIES_SEARCH_CASE_FOLDS = [\n");
@@ -171,6 +182,11 @@ fn render_typescript(
             json_string(&case.normalized_text)
         )?;
         writeln!(output, "    tokens: {},", render_string_array(&case.tokens))?;
+        writeln!(
+            output,
+            "    queryTokens: {},",
+            render_string_array(&case.query_tokens)
+        )?;
         writeln!(output, "    admission: {},", json_string(&case.admission))?;
         writeln!(output, "  }},")?;
     }

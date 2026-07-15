@@ -20,6 +20,10 @@ export interface WebCatalogSupportedFilter {
 }
 export interface AdmittedWebCatalog {
   readonly assetFormat: "parquet";
+  readonly speciesSearchNormalization: {
+    readonly version: 1;
+    readonly fingerprint: string;
+  };
   readonly source: {
     readonly exportFile: string;
     readonly exportSchemaVersion: number;

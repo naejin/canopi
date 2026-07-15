@@ -15,7 +15,7 @@ const CONTRACT = deepFreeze({
     "risk",
     "taxonomy"
   ],
-  "fingerprint": "20b210402c221b6dda66c38ef83cce9bf96cf57f7bd8b69e227abf2b6b9be7ee",
+  "fingerprint": "aac18f7082e2433c233919ec1bd37d194ba5cdd5e072bb2321e993e5ccdfd3d1",
   "generatedBy": "canopi-web-catalog-v1",
   "locales": [
     "en",
@@ -31,6 +31,10 @@ const CONTRACT = deepFreeze({
     "ru"
   ],
   "maximumAssetBytes": 26214400,
+  "speciesSearchNormalization": {
+    "fingerprint": "1ebea6f63b1adc608b2bf952367f416c7740eb1123d0202a3e6521b81f6cb60d",
+    "version": 1
+  },
   "supportedFilters": [
     {
       "key": "climate_zones",
@@ -191,7 +195,7 @@ export class WebCatalogManifestError extends Error {
 }
 
 export function admitWebCatalogManifest(value) {
-  if (!isRecord(value) || !isRecord(value.source) || !isRecord(value.cloudflare_pages) || !isRecord(value.assets)) {
+  if (!isRecord(value) || !isRecord(value.species_search_normalization) || !isRecord(value.source) || !isRecord(value.cloudflare_pages) || !isRecord(value.assets)) {
     throw new WebCatalogManifestError(['root: expected a complete manifest object']);
   }
   const violations = [];
@@ -199,6 +203,7 @@ export function admitWebCatalogManifest(value) {
     'generated_by',
     'version',
     'artifact_contract_fingerprint',
+    'species_search_normalization',
     'asset_format',
     'asset_formats',
     'source',
@@ -209,6 +214,10 @@ export function admitWebCatalogManifest(value) {
     'duckdb',
     'assets',
   ], 'root', violations);
+  validateExactKeys(value.species_search_normalization, [
+    'version',
+    'fingerprint',
+  ], 'species_search_normalization', violations);
   validateExactKeys(value.source, [
     'export_file',
     'export_schema_version',
@@ -246,6 +255,9 @@ export function admitWebCatalogManifest(value) {
   }
   if (value.artifact_contract_fingerprint !== CONTRACT.fingerprint) {
     violations.push('artifact_contract_fingerprint: expected the compiled contract fingerprint');
+  }
+  if (!deepEqual(value.species_search_normalization, CONTRACT.speciesSearchNormalization)) {
+    violations.push('species_search_normalization: expected the compiled normalization authority');
   }
   if (value.asset_format !== CONTRACT.assetFormat) {
     violations.push(`asset_format: expected ${JSON.stringify(CONTRACT.assetFormat)}`);
@@ -351,6 +363,10 @@ export function admitWebCatalogManifest(value) {
     : [];
   return deepFreeze({
     assetFormat: CONTRACT.assetFormat,
+    speciesSearchNormalization: {
+      version: value.species_search_normalization.version,
+      fingerprint: value.species_search_normalization.fingerprint,
+    },
     source: {
       exportFile: source.export_file,
       exportSchemaVersion: source.export_schema_version,

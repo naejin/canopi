@@ -14,6 +14,9 @@ SCRIPT_DIR = Path(__file__).parent
 CONTRACT_CLI = SCRIPT_DIR / "species_catalog_contract.py"
 CONTRACT_PATH = SCRIPT_DIR / "schema-contract.json"
 FILTER_PATH = SCRIPT_DIR.parent / "common-types/plant-filter-fields.json"
+NORMALIZATION_PATH = (
+    SCRIPT_DIR.parent / "common-types/species-search-normalization.json"
+)
 
 
 def copy_contract_sources(root: Path) -> None:
@@ -27,6 +30,10 @@ def copy_contract_sources(root: Path) -> None:
     )
     (filter_dir / "plant-filter-fields.json").write_text(
         FILTER_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (filter_dir / "species-search-normalization.json").write_text(
+        NORMALIZATION_PATH.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 
@@ -293,6 +300,23 @@ class GeneratedRustContractTests(unittest.TestCase):
 
 
 class ContractValidationTests(unittest.TestCase):
+    def test_project_rejects_a_storage_normalization_version_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            source["species_search_normalization_version"] = 999
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            self.assertIn(
+                "species_search_normalization_version: expected 1, found 999",
+                str(raised.exception),
+            )
+
     def test_project_aggregates_contract_invariant_violations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -471,6 +495,43 @@ class ContractProjectionTests(unittest.TestCase):
         self.assertEqual(projection.prepared_tables[2].virtual_module, "fts5")
         self.assertIsInstance(projection.translations[0], contract.TranslationEntry)
         self.assertFalse(any(isinstance(value, dict) for value in projection.__dict__.values()))
+
+    def test_storage_projection_carries_species_search_normalization_identity(self):
+        projection = contract.project(contract.ProjectionTarget.PREPARE_DB)
+        normalization = json.loads(NORMALIZATION_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            projection.species_search_normalization_version,
+            normalization["normalization_version"],
+        )
+        self.assertRegex(
+            projection.species_search_normalization_fingerprint,
+            r"^[0-9a-f]{64}$",
+        )
+
+    def test_storage_fingerprint_includes_the_normalization_authority(self):
+        baseline = contract.project(contract.ProjectionTarget.RELEASE).fingerprint
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            normalization_path = (
+                root / "common-types/species-search-normalization.json"
+            )
+            normalization = json.loads(
+                normalization_path.read_text(encoding="utf-8")
+            )
+            normalization["corpus"][0]["name"] = "changed-semantic-corpus"
+            normalization_path.write_text(
+                json.dumps(normalization),
+                encoding="utf-8",
+            )
+
+            changed = contract.project(
+                contract.ProjectionTarget.RELEASE,
+                root=root,
+            ).fingerprint
+
+        self.assertNotEqual(changed, baseline)
 
     def test_web_catalog_projection_is_reduced_to_physical_dependencies(self):
         projection = contract.project(contract.ProjectionTarget.WEB_CATALOG)

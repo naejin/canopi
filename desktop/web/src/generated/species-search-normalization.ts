@@ -8,12 +8,15 @@ export interface SpeciesSearchNormalizationCorpusCase {
   readonly input: string
   readonly normalizedText: string
   readonly tokens: readonly string[]
+  readonly queryTokens: readonly string[]
   readonly admission: SpeciesSearchAdmission
 }
 
 export const SPECIES_SEARCH_NORMALIZATION_VERSION = 1 as const
-export const SPECIES_SEARCH_NORMALIZATION_FINGERPRINT = "22e6f2ee93b519d2a7201a54fc86a96b753a6b32e81ba892a579ca7522bcb1d3" as const
+export const SPECIES_SEARCH_NORMALIZATION_FINGERPRINT = "1ebea6f63b1adc608b2bf952367f416c7740eb1123d0202a3e6521b81f6cb60d" as const
 export const SPECIES_SEARCH_MINIMUM_ADMITTED_SCALAR_COUNT = 2 as const
+
+export const SPECIES_SEARCH_QUERY_TOKEN_POLICY = "unique-admitted-or-all-when-active" as const
 
 export const SPECIES_SEARCH_CASE_FOLDS = [
   { from: "ß", to: "ss" },
@@ -26,6 +29,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "",
     normalizedText: "",
     tokens: [],
+    queryTokens: [],
     admission: "browse",
   },
   {
@@ -33,6 +37,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: " -- / () ",
     normalizedText: "",
     tokens: [],
+    queryTokens: [],
     admission: "browse",
   },
   {
@@ -40,6 +45,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "́",
     normalizedText: "",
     tokens: [],
+    queryTokens: [],
     admission: "browse",
   },
   {
@@ -47,6 +53,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: " É ",
     normalizedText: "e",
     tokens: ["e"],
+    queryTokens: [],
     admission: "too-short",
   },
   {
@@ -54,6 +61,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "Ér",
     normalizedText: "er",
     tokens: ["er"],
+    queryTokens: ["er"],
     admission: "active-text",
   },
   {
@@ -61,6 +69,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "Σίσυφος",
     normalizedText: "σισυφοσ",
     tokens: ["σισυφοσ"],
+    queryTokens: ["σισυφοσ"],
     admission: "active-text",
   },
   {
@@ -68,6 +77,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "Straße ẞ",
     normalizedText: "strasse ss",
     tokens: ["strasse", "ss"],
+    queryTokens: ["strasse", "ss"],
     admission: "active-text",
   },
   {
@@ -75,6 +85,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "oﬃce ﬆyle",
     normalizedText: "office style",
     tokens: ["office", "style"],
+    queryTokens: ["office", "style"],
     admission: "active-text",
   },
   {
@@ -82,6 +93,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "Café café áb",
     normalizedText: "cafe cafe ab",
     tokens: ["cafe", "cafe", "ab"],
+    queryTokens: ["cafe", "ab"],
     admission: "active-text",
   },
   {
@@ -89,6 +101,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "Carleton's soap/pod",
     normalizedText: "carleton s soap pod",
     tokens: ["carleton", "s", "soap", "pod"],
+    queryTokens: ["carleton", "soap", "pod"],
     admission: "active-text",
   },
   {
@@ -96,6 +109,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "snake_case __",
     normalizedText: "snake_case __",
     tokens: ["snake_case", "__"],
+    queryTokens: ["snake_case", "__"],
     admission: "active-text",
   },
   {
@@ -103,6 +117,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "РОЗА 東京",
     normalizedText: "роза 東京",
     tokens: ["роза", "東京"],
+    queryTokens: ["роза", "東京"],
     admission: "active-text",
   },
   {
@@ -110,6 +125,7 @@ export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [
     input: "A/B",
     normalizedText: "a b",
     tokens: ["a", "b"],
+    queryTokens: ["a", "b"],
     admission: "active-text",
   },
 ] as const satisfies readonly SpeciesSearchNormalizationCorpusCase[]

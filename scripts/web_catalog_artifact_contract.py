@@ -16,6 +16,12 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import species_search_normalization
+
+
 SUPPORTED_LOGICAL_TYPES = frozenset(
     {
         "required_text",
@@ -240,6 +246,8 @@ def _logical_value_violation(logical_type: str, value: Any) -> str | None:
 @dataclass(frozen=True)
 class WebCatalogArtifactPlan:
     fingerprint: str
+    species_search_normalization_version: int
+    species_search_normalization_fingerprint: str
     generated_by: str
     version: int
     asset_format: str
@@ -286,6 +294,10 @@ class WebCatalogArtifactPlan:
             "generated_by": self.generated_by,
             "version": self.version,
             "artifact_contract_fingerprint": self.fingerprint,
+            "species_search_normalization": {
+                "version": self.species_search_normalization_version,
+                "fingerprint": self.species_search_normalization_fingerprint,
+            },
             "asset_format": self.asset_format,
             "asset_formats": {
                 table.value: self.asset_format
@@ -490,11 +502,26 @@ def compile_web_catalog_artifact(
         ) from error
     if not isinstance(raw, dict):
         raise ContractInvariantError(["root: expected an object"])
-    violations = _validate_contract_source(raw)
+    try:
+        normalization_contract = species_search_normalization.load_contract(root=root)
+    except RuntimeError as error:
+        raise ContractInvariantError(
+            [f"species_search_normalization: {error}"]
+        ) from error
+    violations = _validate_contract_source(
+        raw,
+        normalization_version=normalization_contract.version,
+    )
     if violations:
         raise ContractInvariantError(violations)
+    semantic_source = {
+        **raw,
+        "species_search_normalization_fingerprint": (
+            normalization_contract.fingerprint
+        ),
+    }
     canonical = json.dumps(
-        raw,
+        semantic_source,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -531,6 +558,10 @@ def compile_web_catalog_artifact(
     )
     return WebCatalogArtifactPlan(
         fingerprint=hashlib.sha256(canonical).hexdigest(),
+        species_search_normalization_version=normalization_contract.version,
+        species_search_normalization_fingerprint=(
+            normalization_contract.fingerprint
+        ),
         generated_by=raw["artifact"]["generated_by"],
         version=raw["artifact"]["version"],
         asset_format=raw["artifact"]["asset_format"],
@@ -566,10 +597,15 @@ def _matches_indexed_asset_layout(table: ArtifactTablePlan, value: Any) -> bool:
     return re.fullmatch(pattern, value) is not None
 
 
-def _validate_contract_source(raw: dict[str, Any]) -> list[str]:
+def _validate_contract_source(
+    raw: dict[str, Any],
+    *,
+    normalization_version: int,
+) -> list[str]:
     violations: list[str] = []
     required_root_keys = {
         "contract_format_version",
+        "species_search_normalization_version",
         "artifact",
         "deployment",
         "locales",
@@ -581,6 +617,24 @@ def _validate_contract_source(raw: dict[str, Any]) -> list[str]:
         violations.append(f"{key}: required property is missing")
     for key in sorted(raw.keys() - required_root_keys):
         violations.append(f"{key}: unknown property")
+
+    declared_normalization_version = raw.get(
+        "species_search_normalization_version"
+    )
+    _require_positive_safe_integer(
+        declared_normalization_version,
+        "species_search_normalization_version",
+        violations,
+    )
+    if (
+        isinstance(declared_normalization_version, int)
+        and not isinstance(declared_normalization_version, bool)
+        and declared_normalization_version != normalization_version
+    ):
+        violations.append(
+            "species_search_normalization_version: expected "
+            f"{normalization_version}, found {declared_normalization_version}"
+        )
 
     contract_format_version = raw.get("contract_format_version")
     if (
@@ -1063,6 +1117,10 @@ def _render_generated_contents(*, root: Path) -> tuple[str, str]:
 def _render_shared_esm(plan: WebCatalogArtifactPlan) -> str:
     facts = {
         "fingerprint": plan.fingerprint,
+        "speciesSearchNormalization": {
+            "version": plan.species_search_normalization_version,
+            "fingerprint": plan.species_search_normalization_fingerprint,
+        },
         "generatedBy": plan.generated_by,
         "version": plan.version,
         "assetFormat": plan.asset_format,
@@ -1120,7 +1178,7 @@ export class WebCatalogManifestError extends Error {
 }
 
 export function admitWebCatalogManifest(value) {
-  if (!isRecord(value) || !isRecord(value.source) || !isRecord(value.cloudflare_pages) || !isRecord(value.assets)) {
+  if (!isRecord(value) || !isRecord(value.species_search_normalization) || !isRecord(value.source) || !isRecord(value.cloudflare_pages) || !isRecord(value.assets)) {
     throw new WebCatalogManifestError(['root: expected a complete manifest object']);
   }
   const violations = [];
@@ -1128,6 +1186,7 @@ export function admitWebCatalogManifest(value) {
     'generated_by',
     'version',
     'artifact_contract_fingerprint',
+    'species_search_normalization',
     'asset_format',
     'asset_formats',
     'source',
@@ -1138,6 +1197,10 @@ export function admitWebCatalogManifest(value) {
     'duckdb',
     'assets',
   ], 'root', violations);
+  validateExactKeys(value.species_search_normalization, [
+    'version',
+    'fingerprint',
+  ], 'species_search_normalization', violations);
   validateExactKeys(value.source, [
     'export_file',
     'export_schema_version',
@@ -1175,6 +1238,9 @@ export function admitWebCatalogManifest(value) {
   }
   if (value.artifact_contract_fingerprint !== CONTRACT.fingerprint) {
     violations.push('artifact_contract_fingerprint: expected the compiled contract fingerprint');
+  }
+  if (!deepEqual(value.species_search_normalization, CONTRACT.speciesSearchNormalization)) {
+    violations.push('species_search_normalization: expected the compiled normalization authority');
   }
   if (value.asset_format !== CONTRACT.assetFormat) {
     violations.push(`asset_format: expected ${JSON.stringify(CONTRACT.assetFormat)}`);
@@ -1280,6 +1346,10 @@ export function admitWebCatalogManifest(value) {
     : [];
   return deepFreeze({
     assetFormat: CONTRACT.assetFormat,
+    speciesSearchNormalization: {
+      version: value.species_search_normalization.version,
+      fingerprint: value.species_search_normalization.fingerprint,
+    },
     source: {
       exportFile: source.export_file,
       exportSchemaVersion: source.export_schema_version,
@@ -1414,6 +1484,10 @@ def _render_shared_declaration(plan: WebCatalogArtifactPlan) -> str:
         "}\n"
         "export interface AdmittedWebCatalog {\n"
         f"  readonly assetFormat: {json.dumps(plan.asset_format)};\n"
+        "  readonly speciesSearchNormalization: {\n"
+        f"    readonly version: {plan.species_search_normalization_version};\n"
+        "    readonly fingerprint: string;\n"
+        "  };\n"
         "  readonly source: {\n"
         "    readonly exportFile: string;\n"
         "    readonly exportSchemaVersion: number;\n"

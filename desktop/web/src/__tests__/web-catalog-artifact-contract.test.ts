@@ -51,6 +51,18 @@ describe('Web Species Catalog artifact contract', () => {
     )
   })
 
+  it('rejects Species Search assets built with stale normalization semantics', () => {
+    const manifest = validWebCatalogManifest()
+    manifest.species_search_normalization = {
+      version: 0,
+      fingerprint: '0'.repeat(64),
+    }
+
+    expect(() => admitWebCatalogManifest(manifest)).toThrow(
+      /species_search_normalization.*expected the compiled normalization authority/,
+    )
+  })
+
   it('rejects row-schema logical type drift', () => {
     const manifest = validWebCatalogManifest()
     const schema = manifest.schema as {

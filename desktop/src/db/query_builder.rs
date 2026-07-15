@@ -612,13 +612,13 @@ mod tests {
 
         for case in corpus["corpus"].as_array().unwrap() {
             let input = case["input"].as_str().unwrap();
-            let expected = case["tokens"]
+            let expected = case["query_tokens"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter_map(|token| {
+                .map(|token| {
                     let token = token.as_str().unwrap();
-                    (token.chars().count() >= 2).then(|| format!("{token}%"))
+                    format!("{token}%")
                 })
                 .collect::<Vec<_>>();
             let plan = SpeciesSearchPlan::build(request(

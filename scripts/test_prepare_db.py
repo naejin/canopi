@@ -220,6 +220,8 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                species_search_normalization_version=1,
+                species_search_normalization_fingerprint="normalization-test",
                 species_columns=(
                     contract.StorageColumn(
                         name="id",
@@ -268,6 +270,8 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                species_search_normalization_version=1,
+                species_search_normalization_fingerprint="normalization-test",
                 species_columns=(),
                 supporting_tables=(),
                 prepared_tables=(),
@@ -329,6 +333,8 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                species_search_normalization_version=1,
+                species_search_normalization_fingerprint="normalization-test",
                 species_columns=(),
                 supporting_tables=(),
                 prepared_tables=(),
@@ -383,6 +389,8 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                species_search_normalization_version=1,
+                species_search_normalization_fingerprint="normalization-test",
                 species_columns=(
                     contract.StorageColumn(
                         name="id",

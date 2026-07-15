@@ -9,6 +9,7 @@ from scripts import web_catalog_artifact_contract as contract
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+NORMALIZATION_PATH = REPO_ROOT / "common-types/species-search-normalization.json"
 
 
 class WebCatalogArtifactContractTests(unittest.TestCase):
@@ -65,6 +66,13 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
         self.assertEqual(manifest["version"], 1)
         self.assertEqual(manifest["artifact_contract_fingerprint"], plan.fingerprint)
         self.assertEqual(
+            manifest["species_search_normalization"],
+            {
+                "version": plan.species_search_normalization_version,
+                "fingerprint": plan.species_search_normalization_fingerprint,
+            },
+        )
+        self.assertEqual(
             manifest["schema"]["species_fields"],
             [
                 {"name": "id", "logical_type": "required_text"},
@@ -91,6 +99,62 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
             [item["key"] for item in manifest["supported_filters"]],
             ["climate_zones", "habit", "life_cycle"],
         )
+
+    def test_artifact_contract_pins_the_normalization_authority(self):
+        plan = contract.compile_web_catalog_artifact(root=REPO_ROOT)
+        normalization = json.loads(NORMALIZATION_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            plan.species_search_normalization_version,
+            normalization["normalization_version"],
+        )
+        self.assertRegex(
+            plan.species_search_normalization_fingerprint,
+            r"^[0-9a-f]{64}$",
+        )
+
+    def test_artifact_contract_rejects_a_normalization_version_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = json.loads(
+                (
+                    REPO_ROOT / "common-types/web-species-catalog-artifact.json"
+                ).read_text(encoding="utf-8")
+            )
+            raw["species_search_normalization_version"] = 999
+            write_contract(root, raw)
+
+            with self.assertRaisesRegex(
+                contract.ContractInvariantError,
+                r"species_search_normalization_version.*expected 1.*found 999",
+            ):
+                contract.compile_web_catalog_artifact(root=root)
+
+    def test_artifact_fingerprint_includes_the_normalization_authority(self):
+        baseline = contract.compile_web_catalog_artifact(root=REPO_ROOT).fingerprint
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = json.loads(
+                (
+                    REPO_ROOT / "common-types/web-species-catalog-artifact.json"
+                ).read_text(encoding="utf-8")
+            )
+            write_contract(root, raw)
+            normalization_path = (
+                root / "common-types/species-search-normalization.json"
+            )
+            normalization = json.loads(
+                normalization_path.read_text(encoding="utf-8")
+            )
+            normalization["corpus"][0]["name"] = "changed-semantic-corpus"
+            normalization_path.write_text(
+                json.dumps(normalization),
+                encoding="utf-8",
+            )
+
+            changed = contract.compile_web_catalog_artifact(root=root).fingerprint
+
+        self.assertNotEqual(changed, baseline)
 
     def test_table_plan_admits_exact_logically_typed_rows(self):
         plan = contract.compile_web_catalog_artifact(root=REPO_ROOT)
@@ -536,6 +600,10 @@ def write_contract(root: Path, raw: object) -> None:
     path = root / "common-types/web-species-catalog-artifact.json"
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps(raw), encoding="utf-8")
+    (root / "common-types/species-search-normalization.json").write_text(
+        NORMALIZATION_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
 
 def valid_source() -> contract.ArtifactSource:
