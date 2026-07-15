@@ -50,6 +50,25 @@ describe('Scene physical extent', () => {
     expect(computeScenePhysicalExtentMeters(scene)).toBe(100)
   })
 
+  it('uses both Linear Zone endpoints as physical geometry', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.zones.push({
+      kind: 'zone',
+      locked: false,
+      name: 'line-1',
+      zoneType: 'line',
+      points: [
+        { x: 3, y: 4 },
+        { x: 60, y: 80 },
+      ],
+      rotationDeg: 0,
+      fillColor: null,
+      notes: null,
+    })
+
+    expect(computeScenePhysicalExtentMeters(scene)).toBe(100)
+  })
+
   it('uses an Annotation anchor without treating readable text as physical geometry', () => {
     const scene = createDefaultScenePersistedState()
     scene.annotations.push({
@@ -141,6 +160,85 @@ describe('Scene physical extent', () => {
     })
 
     expect(computeScenePhysicalExtentMeters(scene)).toBeCloseTo(Math.sqrt(76.96), 10)
+  })
+
+  it('does not understate a near-hard Elliptical Zone below the precision threshold', () => {
+    const scene = createDefaultScenePersistedState()
+    const scale = 10_001 / Math.sqrt(31.25)
+    scene.zones.push({
+      kind: 'zone',
+      locked: false,
+      name: 'near-hard-ellipse',
+      zoneType: 'ellipse',
+      points: [
+        { x: 1e-12 * scale, y: 2 * scale },
+        { x: 5 * scale, y: 3 * scale },
+      ],
+      rotationDeg: 0,
+      fillColor: null,
+      notes: null,
+    })
+
+    // With a zero x-coordinate the feasible hard-case extremum is exactly
+    // 10,001 m. The tiny positive x-coordinate can only increase that extent.
+    expect(computeScenePhysicalExtentMeters(scene)).toBeGreaterThanOrEqual(10_001)
+  })
+
+  it('preserves the radial extent of an Elliptical Zone with huge finite radii', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.zones.push({
+      kind: 'zone',
+      locked: false,
+      name: 'huge-ellipse',
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 2e200, y: 1e200 },
+      ],
+      rotationDeg: 0,
+      fillColor: null,
+      notes: null,
+    })
+
+    expect(computeScenePhysicalExtentMeters(scene)).toBe(2e200)
+  })
+
+  it('reports an overflowed radial extent from a huge finite Elliptical Zone center', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.zones.push({
+      kind: 'zone',
+      locked: false,
+      name: 'overflowed-ellipse',
+      zoneType: 'ellipse',
+      points: [
+        { x: Number.MAX_VALUE, y: Number.MAX_VALUE },
+        { x: 1, y: 0.5 },
+      ],
+      rotationDeg: 45,
+      fillColor: null,
+      notes: null,
+    })
+
+    expect(computeScenePhysicalExtentMeters(scene)).toBe(Infinity)
+  })
+
+  it('preserves the radial extent of an Elliptical Zone with tiny finite radii', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.zones.push({
+      kind: 'zone',
+      locked: false,
+      name: 'tiny-ellipse',
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 2e-200, y: 1e-200 },
+      ],
+      rotationDeg: 0,
+      fillColor: null,
+      notes: null,
+    })
+
+    expect(computeScenePhysicalExtentMeters(scene)).toBe(2e-200)
   })
 
   it('uses center distance plus radius for a circular Elliptical Zone', () => {

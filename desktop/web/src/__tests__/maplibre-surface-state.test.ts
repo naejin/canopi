@@ -101,4 +101,32 @@ describe('maplibre surface state adapter', () => {
     })
     expect(beyondThreshold).not.toHaveProperty('projectionBackendId')
   })
+
+  it('publishes precision diagnostics from the canonical scalar policy', () => {
+    const frame = {
+      center: [2.3522, 48.8566],
+      zoom: 17,
+      bearing: 0,
+      diagnostics: {
+        projectionId: LOCAL_MERCATOR_PROJECTION_ID,
+        warningThresholdMeters: 1,
+        viewportCenterWorld: { x: 0, y: 0 },
+        viewportCornerGeo: [
+          { lng: 2.35, lat: 48.86 },
+          { lng: 2.36, lat: 48.86 },
+          { lng: 2.36, lat: 48.85 },
+          { lng: 2.35, lat: 48.85 },
+        ],
+      },
+    } as const
+
+    publishMapDiagnostics(frame, 2)
+
+    expect((globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__)
+      .toMatchObject({
+        precisionWarningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+        designExtentMeters: 2,
+        precisionWarning: false,
+      })
+  })
 })

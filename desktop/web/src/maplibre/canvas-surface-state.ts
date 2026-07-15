@@ -1,11 +1,7 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { computeScenePhysicalExtentMeters } from '../canvas/runtime/scene-physical-extent'
-import {
-  LOCAL_MERCATOR_PROJECTION_ID,
-  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-  createProjectionPrecisionSnapshot,
-} from '../canvas/projection'
+import { createProjectionPrecisionSnapshot } from '../canvas/projection'
 
 export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -73,21 +69,18 @@ export function publishMapDiagnostics(
   designExtentMeters: number | null,
 ): void {
   if (!import.meta.env.DEV) return
-  const warningThresholdMeters = frame?.diagnostics.warningThresholdMeters
-    ?? LOCAL_PROJECTION_WARNING_THRESHOLD_METERS
-  const projectionId = frame?.diagnostics.projectionId ?? LOCAL_MERCATOR_PROJECTION_ID
-  const precisionWarning = designExtentMeters != null && designExtentMeters > warningThresholdMeters
+  const precision = createProjectionPrecisionSnapshot(designExtentMeters)
   ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
     ? {
-      projectionId,
-      precisionWarningThresholdMeters: warningThresholdMeters,
+      projectionId: precision.projectionId,
+      precisionWarningThresholdMeters: precision.warningThresholdMeters,
       center: frame.center,
       zoom: frame.zoom,
       bearing: frame.bearing,
       viewportCenterWorld: frame.diagnostics.viewportCenterWorld,
       viewportCornerGeo: frame.diagnostics.viewportCornerGeo,
-      designExtentMeters,
-      precisionWarning,
+      designExtentMeters: precision.designExtentMeters,
+      precisionWarning: precision.precisionWarning,
     }
     : null
 }

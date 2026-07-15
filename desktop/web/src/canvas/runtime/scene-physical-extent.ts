@@ -1,8 +1,5 @@
 import type { ScenePersistedState } from './scene'
-import {
-  getEllipticalZoneRadialExtent,
-  getRectangularZoneCorners,
-} from './zone-geometry'
+import { getZoneRadialExtentMeters } from './zone-geometry'
 
 export function computeScenePhysicalExtentMeters(
   scene: ScenePersistedState,
@@ -20,13 +17,8 @@ export function computeScenePhysicalExtentMeters(
 
   for (const plant of scene.plants) includePoint(plant.position.x, plant.position.y)
   for (const zone of scene.zones) {
-    const ellipticalExtent = getEllipticalZoneRadialExtent(zone)
-    if (ellipticalExtent !== null) {
-      includeDistance(ellipticalExtent)
-      continue
-    }
-    const physicalPoints = getRectangularZoneCorners(zone) ?? zone.points
-    for (const point of physicalPoints) includePoint(point.x, point.y)
+    const zoneExtent = getZoneRadialExtentMeters(zone)
+    if (zoneExtent !== null) includeDistance(zoneExtent)
   }
   for (const annotation of scene.annotations) {
     includePoint(annotation.position.x, annotation.position.y)

@@ -78,7 +78,19 @@ export function getEllipticalZonePolygon(zone: SceneZoneEntity, segmentCount = 4
   return points
 }
 
-export function getEllipticalZoneRadialExtent(zone: SceneZoneEntity): number | null {
+export function getZoneRadialExtentMeters(zone: SceneZoneEntity): number | null {
+  const ellipticalExtent = getEllipticalZoneRadialExtent(zone)
+  if (ellipticalExtent !== null) return ellipticalExtent
+
+  const physicalPoints = getRectangularZoneCorners(zone) ?? zone.points
+  if (physicalPoints.length === 0) return null
+  return physicalPoints.reduce(
+    (extent, point) => Math.max(extent, Math.hypot(point.x, point.y)),
+    0,
+  )
+}
+
+function getEllipticalZoneRadialExtent(zone: SceneZoneEntity): number | null {
   if (zone.zoneType !== 'ellipse' || zone.points.length < 2) return null
   const center = zone.points[0]!
   const radii = zone.points[1]!
@@ -101,6 +113,29 @@ function axisAlignedEllipseRadialExtent(
   radiusX: number,
   radiusY: number,
 ): number {
+  const magnitudeScale = Math.max(
+    Math.abs(center.x),
+    Math.abs(center.y),
+    radiusX,
+    radiusY,
+  )
+  if (magnitudeScale === 0) return 0
+  if (!Number.isFinite(magnitudeScale)) return magnitudeScale
+  return magnitudeScale * axisAlignedEllipseRadialExtentNormalized(
+    {
+      x: center.x / magnitudeScale,
+      y: center.y / magnitudeScale,
+    },
+    radiusX / magnitudeScale,
+    radiusY / magnitudeScale,
+  )
+}
+
+function axisAlignedEllipseRadialExtentNormalized(
+  center: ScenePoint,
+  radiusX: number,
+  radiusY: number,
+): number {
   if (radiusX === radiusY) return Math.hypot(center.x, center.y) + radiusX
 
   const xIsMajor = radiusX > radiusY
@@ -112,7 +147,7 @@ function axisAlignedEllipseRadialExtent(
   const minorSquared = minorRadius ** 2
   const majorLinear = majorRadius * majorCenter
   const minorLinear = minorRadius * minorCenter
-  const scale = Math.max(
+  const computationScale = Math.max(
     1,
     majorSquared,
     Math.abs(majorLinear),
@@ -122,7 +157,7 @@ function axisAlignedEllipseRadialExtent(
   // The farthest-point problem is a two-dimensional trust-region problem.
   // When the center has no component on the major axis, its maximum can lie
   // between the ellipse's cardinal points (the trust-region "hard case").
-  if (Math.abs(majorLinear) <= Number.EPSILON * 32 * scale) {
+  if (Math.abs(majorLinear) <= Number.EPSILON * 32 * computationScale) {
     const minorCoordinate = minorLinear / (majorSquared - minorSquared)
     if (Math.abs(minorCoordinate) <= 1) {
       const majorCoordinate = (
@@ -139,28 +174,33 @@ function axisAlignedEllipseRadialExtent(
     )
   }
 
-  const constraint = (lambda: number): number => (
-    (majorLinear / (lambda - majorSquared)) ** 2
-    + (minorLinear / (lambda - minorSquared)) ** 2
+  const squaredRadiusDifference = majorSquared - minorSquared
+  const constraint = (delta: number): number => (
+    (majorLinear / delta) ** 2
+    + (minorLinear / (delta + squaredRadiusDifference)) ** 2
   )
-  // Above the major squared radius this constraint decreases monotonically,
-  // so bisection finds the unique farthest-point Lagrange multiplier.
-  let lower = majorSquared
-  let span = Math.max(Math.hypot(majorLinear, minorLinear), Number.EPSILON * scale * 64)
-  let upper = majorSquared + span
-  while (upper === majorSquared || constraint(upper) > 1) {
+  // Solving for the offset above the major squared radius avoids subtracting
+  // nearly equal values when the solution is close to the hard case.
+  let lower = 0
+  let span = Math.max(
+    Math.hypot(majorLinear, minorLinear),
+    Number.EPSILON * computationScale * 64,
+  )
+  let upper = span
+  while (constraint(upper) > 1) {
     span *= 2
-    upper = majorSquared + span
+    upper = span
   }
 
-  for (let iteration = 0; iteration < 64; iteration += 1) {
-    const lambda = lower + (upper - lower) / 2
-    if (constraint(lambda) > 1) lower = lambda
-    else upper = lambda
+  for (let iteration = 0; iteration < 128; iteration += 1) {
+    const delta = lower + (upper - lower) / 2
+    if (delta === lower || delta === upper) break
+    if (constraint(delta) > 1) lower = delta
+    else upper = delta
   }
 
-  const majorCoordinate = majorLinear / (upper - majorSquared)
-  const minorCoordinate = minorLinear / (upper - minorSquared)
+  const majorCoordinate = majorLinear / upper
+  const minorCoordinate = minorLinear / (upper + squaredRadiusDifference)
   return Math.hypot(
     majorCenter + majorRadius * majorCoordinate,
     minorCenter + minorRadius * minorCoordinate,

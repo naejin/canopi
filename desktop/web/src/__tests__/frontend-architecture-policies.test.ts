@@ -539,14 +539,12 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Scene physical extent stays inside canonical canvas geometry',
+    name: 'Scene physical extent depends only on canonical Zone geometry',
     from: ['src/canvas/runtime/scene-physical-extent.ts'],
-    targets: [
-      'src/app/**',
-      'src/components/**',
-      'src/maplibre/**',
-      'src/canvas/projection.ts',
-    ],
+    targets: ['**'],
+    exceptTargets: ['src/canvas/runtime/zone-geometry.ts'],
+    allowTypeOnlyTargets: ['src/canvas/runtime/scene/index.ts'],
+    edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -996,6 +994,14 @@ const REQUIRED_IMPORT_POLICIES = [
 ] satisfies readonly ArchitecturePolicy[]
 
 const NAMED_IMPORT_POLICIES = [
+  {
+    kind: 'named-imports',
+    name: 'Scene physical extent delegates every Zone shape to canonical geometry',
+    from: ['src/canvas/runtime/scene-physical-extent.ts'],
+    target: 'src/canvas/runtime/zone-geometry.ts',
+    requiredNames: ['getZoneRadialExtentMeters'],
+    allowedNames: ['getZoneRadialExtentMeters'],
+  },
   {
     kind: 'named-imports',
     name: 'Layer Presentation uses layer commands and Canvas queries only',
