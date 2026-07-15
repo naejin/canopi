@@ -17,11 +17,6 @@ on:
         required: true
         default: canopi-core-db
         type: string
-      db_asset_name:
-        description: Bundled DB asset filename
-        required: true
-        default: canopi-core.db
-        type: string
 
 permissions:
   contents: read
@@ -35,6 +30,7 @@ jobs:
     outputs:
       head_sha: ${{ steps.head.outputs.head_sha }}
       db_sha256: ${{ steps.db.outputs.db_sha256 }}
+      db_asset_name: ${{ steps.schema.outputs.db_asset_name }}
       expected_schema_version: ${{ steps.schema.outputs.expected_schema_version }}
     steps:
       - uses: actions/checkout@v4
@@ -131,8 +127,11 @@ jobs:
           set -euo pipefail
           python3 scripts/species_catalog_contract.py check
           expected_schema_version="$(python3 scripts/species_catalog_contract.py value prepared-schema-version)"
+          db_asset_name="$(python3 scripts/species_catalog_contract.py value prepared-db-asset-name)"
           echo "Expected bundled DB schema version: $expected_schema_version"
+          echo "Compiled bundled DB asset: $db_asset_name"
           echo "expected_schema_version=$expected_schema_version" >> "$GITHUB_OUTPUT"
+          echo "db_asset_name=$db_asset_name" >> "$GITHUB_OUTPUT"
 
       - name: Download bundled plant DB
         env:
@@ -141,12 +140,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p preflight
-          echo "Downloading bundled DB '${{ inputs.db_asset_name }}' from release tag '${{ inputs.db_release_tag }}'"
+          echo "Downloading bundled DB '${{ steps.schema.outputs.db_asset_name }}' from release tag '${{ inputs.db_release_tag }}'"
           gh release download "${{ inputs.db_release_tag }}" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "${{ inputs.db_asset_name }}" \
+            --pattern "${{ steps.schema.outputs.db_asset_name }}" \
             --dir preflight
-          db_path="preflight/${{ inputs.db_asset_name }}"
+          db_path="preflight/${{ steps.schema.outputs.db_asset_name }}"
           if [[ ! -s "$db_path" ]]; then
             echo "::error::Bundled DB asset '$db_path' was not downloaded or is empty."
             exit 1
@@ -158,7 +157,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          db_path="preflight/${{ inputs.db_asset_name }}"
+          db_path="preflight/${{ steps.schema.outputs.db_asset_name }}"
           expected_schema_version="${{ steps.schema.outputs.expected_schema_version }}"
           python3 scripts/species_catalog_contract.py verify-db --profile prepared "$db_path"
           echo "Bundled DB schema verified at version: $expected_schema_version"
@@ -176,7 +175,7 @@ jobs:
             echo "- Commit: \`${{ steps.head.outputs.head_sha }}\`"
             echo "- Release version: \`${{ inputs.release_version }}\`"
             echo "- DB tag: \`${{ inputs.db_release_tag }}\`"
-            echo "- DB asset: \`${{ inputs.db_asset_name }}\`"
+            echo "- DB asset: \`${{ steps.schema.outputs.db_asset_name }}\`"
             echo "- Expected DB schema: \`${{ steps.schema.outputs.expected_schema_version }}\`"
             echo "- DB sha256: \`${{ steps.db.outputs.db_sha256 }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -238,13 +237,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          asset_name="${{ needs.preflight.outputs.db_asset_name }}"
+          download_dir="$(mktemp -d)"
+          trap 'rm -rf "$download_dir"' EXIT
           mkdir -p desktop/resources
-          echo "Fetching bundled DB '${{ inputs.db_asset_name }}' for target '${{ matrix.target }}'"
+          echo "Fetching bundled DB '$asset_name' for target '${{ matrix.target }}'"
           gh release download "${{ inputs.db_release_tag }}" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "${{ inputs.db_asset_name }}" \
-            --dir desktop/resources
-          db_path="desktop/resources/${{ inputs.db_asset_name }}"
+            --pattern "$asset_name" \
+            --dir "$download_dir"
+          downloaded_db_path="$download_dir/$asset_name"
+          if [[ ! -s "$downloaded_db_path" ]]; then
+            echo "::error::Bundled DB asset '$downloaded_db_path' is missing or empty before packaging target '${{ matrix.target }}'."
+            exit 1
+          fi
+          db_path="desktop/resources/canopi-core.db"
+          mv "$downloaded_db_path" "$db_path"
           if [[ ! -s "$db_path" ]]; then
             echo "::error::Bundled DB asset '$db_path' is missing or empty before packaging target '${{ matrix.target }}'."
             exit 1
@@ -302,7 +310,7 @@ jobs:
         env:
           BUILD_REF: ${{ inputs.ref }}
           BUILD_VERSION: ${{ inputs.release_version }}
-          DB_ASSET_NAME: ${{ inputs.db_asset_name }}
+          DB_ASSET_NAME: ${{ needs.preflight.outputs.db_asset_name }}
           DB_RELEASE_TAG: ${{ inputs.db_release_tag }}
           DB_SHA256: ${{ needs.preflight.outputs.db_sha256 }}
           EXPECTED_SCHEMA_VERSION: ${{ needs.preflight.outputs.expected_schema_version }}

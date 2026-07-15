@@ -22,7 +22,6 @@ Options:
   --export-path PATH   Source canopi-data export database (required)
   --output-path PATH   Temporary output path for generated DB
   --tag TAG            GitHub release tag to upload to (default: canopi-core-db)
-  --asset-name NAME    Uploaded DB asset name (default: canopi-core.db)
   --repo OWNER/REPO    GitHub repository (default: detected from git remote)
 EOF
 }
@@ -56,7 +55,6 @@ detect_repo() {
 export_path=""
 output_path=""
 tag="canopi-core-db"
-asset_name="canopi-core.db"
 repo="$(detect_repo || true)"
 tmpdir=""
 
@@ -72,10 +70,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --tag)
       tag="$2"
-      shift 2
-      ;;
-    --asset-name)
-      asset_name="$2"
       shift 2
       ;;
     --repo)
@@ -105,6 +99,10 @@ if [[ -z "$repo" ]]; then
   exit 1
 fi
 
+python3 scripts/species_catalog_contract.py check
+expected_schema_version="$(python3 scripts/species_catalog_contract.py value prepared-schema-version)"
+asset_name="$(python3 scripts/species_catalog_contract.py value prepared-db-asset-name)"
+
 if [[ -z "$output_path" ]]; then
   tmpdir="$(mktemp -d)"
   trap '[[ -n "$tmpdir" ]] && rm -rf "$tmpdir"' EXIT
@@ -113,8 +111,6 @@ fi
 
 log "Building bundled DB from export: $export_path"
 log "Target release: $repo@$tag"
-python3 scripts/species_catalog_contract.py check
-expected_schema_version="$(python3 scripts/species_catalog_contract.py value prepared-schema-version)"
 python3 scripts/prepare-db.py --export-path "$export_path" --output-path "$output_path"
 
 if [[ ! -s "$output_path" ]]; then
@@ -135,8 +131,7 @@ log "Uploading DB asset and checksum"
 gh release upload "$tag" \
   "$output_path#$asset_name" \
   "$checksum_path#${asset_name}.sha256" \
-  --repo "$repo" \
-  --clobber
+  --repo "$repo"
 
 log "Published $asset_name to $repo@$tag"
 log "Schema version: $expected_schema_version"

@@ -1,4 +1,4 @@
-use super::sql::SqlBuilder;
+use super::sql::{SqlBuilder, escape_like_literal, like_predicate};
 use super::text::{CommonNameQuery, normalized_common_name_sql};
 
 pub(crate) fn species_list_select_sql(locale_placeholder: &str) -> String {
@@ -53,7 +53,9 @@ pub(crate) fn species_list_matched_common_name_sql(
     let normalized_display_name = normalized_common_name_sql(&common_name_sql);
     let query_text = query.tokens.join(" ");
     let exact_placeholder = sql_builder.bind_text(query_text.clone());
-    let prefix_placeholder = sql_builder.bind_text(format!("{query_text}%"));
+    let prefix_placeholder =
+        sql_builder.bind_text(format!("{}%", escape_like_literal(&query_text)));
+    let prefix_condition = like_predicate(&normalized_candidate, &prefix_placeholder);
     let token_conditions =
         common_name_token_prefix_conditions(&normalized_candidate, query, sql_builder);
     let display_token_conditions =
@@ -72,7 +74,7 @@ pub(crate) fn species_list_matched_common_name_sql(
             ORDER BY
               CASE
                 WHEN {normalized_candidate} = {exact_placeholder} THEN 0
-                WHEN {normalized_candidate} LIKE {prefix_placeholder} THEN 1
+                WHEN {prefix_condition} THEN 1
                 ELSE 2
               END,
               scn_match.is_primary DESC,
@@ -92,12 +94,13 @@ fn common_name_token_prefix_conditions(
         .tokens
         .iter()
         .map(|token| {
-            let starts_placeholder = sql_builder.bind_text(format!("{token}%"));
-            let word_starts_placeholder = sql_builder.bind_text(format!("% {token}%"));
-            format!(
-                "({normalized_name_sql} LIKE {starts_placeholder}
-                  OR {normalized_name_sql} LIKE {word_starts_placeholder})"
-            )
+            let escaped_token = escape_like_literal(token);
+            let starts_placeholder = sql_builder.bind_text(format!("{escaped_token}%"));
+            let word_starts_placeholder = sql_builder.bind_text(format!("% {escaped_token}%"));
+            let starts_condition = like_predicate(normalized_name_sql, &starts_placeholder);
+            let word_starts_condition =
+                like_predicate(normalized_name_sql, &word_starts_placeholder);
+            format!("({starts_condition} OR {word_starts_condition})")
         })
         .collect::<Vec<_>>()
         .join(" AND ")

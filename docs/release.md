@@ -23,9 +23,11 @@ Scripts are the source of truth. This section provides the operator sequence.
 scripts/publish-db-release.sh --export-path ~/projects/canopi-data/data/exports/<export>.db
 ```
 
-Optional flags: `--tag <tag>`, `--asset-name <name>`, `--repo <owner/repo>`.
+Optional flags: `--tag <tag>` and `--repo <owner/repo>`.
 
-This script fails if: the generated DB is empty, the prepared database does not satisfy the compiled storage contract in `scripts/schema-contract.json`, the target release tag does not exist, or `gh release upload` fails.
+The uploaded asset name is compiled from the exact prepared schema version and prepared-contract fingerprint, for example `canopi-core-v13-<fingerprint>.db`. Assets for older prepared identities remain on the stable `canopi-core-db` release tag. The publisher does not overwrite an existing identity asset, so rebuilding the same identity with different bytes fails instead of mutating release inputs.
+
+This script fails if: the generated DB is empty, the prepared database does not satisfy the compiled storage contract in `scripts/schema-contract.json`, the target release tag does not exist, the compiled identity asset already exists, or `gh release upload` fails.
 
 ## 2. Run The Release Candidate Workflow
 
@@ -33,9 +35,8 @@ From GitHub Actions, run `Release Candidate` with:
 - `ref`: the exact candidate ref to build
 - `release_version`: must match `desktop/tauri.conf.json`
 - `db_release_tag`: usually `canopi-core-db`
-- `db_asset_name`: usually `canopi-core.db`
 
-The workflow preflight validates: candidate ref resolves cleanly, requested release version matches app config, app version metadata is synchronized, bundled DB asset exists and is non-empty, the bundled DB satisfies the compiled prepared profile (version, table/column affinities, generated search/FTS structures, and indexes), and packaged artifacts exist before checksum manifest upload. Every platform packaging job checks out the resolved preflight commit and checks its downloaded DB against the preflight SHA-256 before building.
+The workflow derives the immutable DB asset name from the candidate ref's compiled prepared identity. Preflight validates: candidate ref resolves cleanly, requested release version matches app config, app version metadata is synchronized, the derived bundled DB asset exists and is non-empty, the bundled DB satisfies the compiled prepared profile (version, table/column affinities, generated search/FTS structures, and indexes), and packaged artifacts exist before checksum manifest upload. Every platform packaging job checks out the resolved preflight commit, downloads that same derived asset, installs it at the Tauri resource path `desktop/resources/canopi-core.db`, and checks it against the preflight SHA-256 before building.
 
 ## 3. Smoke-Test The Exact CI Artifacts
 
@@ -75,6 +76,6 @@ gh release edit v<version> --draft=false
 ## Failure Triage
 
 - **Preflight version mismatch**: Update `desktop/tauri.conf.json` or rerun the workflow with the correct `release_version`.
-- **Bundled DB asset missing**: Re-run `scripts/publish-db-release.sh` or confirm the target release tag/asset name.
+- **Bundled DB asset missing**: Re-run `scripts/publish-db-release.sh` from the candidate contract or confirm the target release tag.
 - **Bundled DB schema mismatch**: Rebuild and republish the DB from the matching contract version before packaging.
 - **Promotion checksum failure**: Do not publish. Re-download artifacts from the run and investigate.

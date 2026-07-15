@@ -1,4 +1,4 @@
-use super::sql::SqlBuilder;
+use super::sql::{SqlBuilder, escape_like_literal, like_predicate};
 use super::text::{CommonNameQuery, normalized_common_name_sql};
 
 pub(super) struct CommonNameRelevancePlan {
@@ -44,13 +44,14 @@ fn common_name_token_joins(
     let mut aliases = Vec::with_capacity(tokens.len());
     for (index, token) in tokens.iter().enumerate() {
         let alias = format!("{alias_prefix}{index}");
-        let token_placeholder = sql_builder.bind_text(format!("{token}%"));
+        let token_placeholder = sql_builder.bind_text(format!("{}%", escape_like_literal(token)));
+        let token_condition = like_predicate("token", &token_placeholder);
         joins.push(format!(
             "LEFT JOIN (
                 SELECT species_id, MIN(first_token_position) AS first_token_position
                 FROM species_search_common_name_tokens
                 WHERE language = {locale_placeholder}
-                  AND token LIKE {token_placeholder}
+                  AND {token_condition}
                 GROUP BY species_id
             ) {alias} ON {alias}.species_id = s.id",
             alias = alias
@@ -78,8 +79,9 @@ pub(super) fn relevance_order_by(
             format!("{display_name} = {exact_placeholder}")
         });
         let prefix_display_condition = display_query.as_ref().map(|query| {
-            let prefix_placeholder = sql_builder.bind_text(format!("{query}%"));
-            format!("{display_name} LIKE {prefix_placeholder}")
+            let prefix_placeholder =
+                sql_builder.bind_text(format!("{}%", escape_like_literal(query)));
+            like_predicate(&display_name, &prefix_placeholder)
         });
         let contains_display_condition = query.and_then(|query| {
             displayed_contains_all_tokens_condition(&display_name, query, sql_builder)
@@ -145,18 +147,22 @@ pub(super) fn relevance_order_by(
     };
 
     let exact_placeholder = sql_builder.bind_text(token.to_owned());
-    let starts_placeholder = sql_builder.bind_text(format!("{token} %"));
-    let contains_placeholder = sql_builder.bind_text(format!("% {token} %"));
-    let ends_placeholder = sql_builder.bind_text(format!("% {token}"));
+    let escaped_token = escape_like_literal(token);
+    let starts_placeholder = sql_builder.bind_text(format!("{escaped_token} %"));
+    let contains_placeholder = sql_builder.bind_text(format!("% {escaped_token} %"));
+    let ends_placeholder = sql_builder.bind_text(format!("% {escaped_token}"));
+    let starts_condition = like_predicate(&display_name, &starts_placeholder);
+    let contains_condition = like_predicate(&display_name, &contains_placeholder);
+    let ends_condition = like_predicate(&display_name, &ends_placeholder);
 
     format!(
         "ORDER BY CASE
              WHEN bcn_loc.common_name IS NOT NULL
               AND (
                 {display_name} = {exact_placeholder}
-                OR {display_name} LIKE {starts_placeholder}
-                OR {display_name} LIKE {contains_placeholder}
-                OR {display_name} LIKE {ends_placeholder}
+                OR {starts_condition}
+                OR {contains_condition}
+                OR {ends_condition}
               )
              THEN 0 ELSE 1
          END,
@@ -186,8 +192,9 @@ fn displayed_contains_all_tokens_condition(
             .tokens
             .iter()
             .map(|token| {
-                let token_placeholder = sql_builder.bind_text(format!("% {token}%"));
-                format!("{display_name} LIKE {token_placeholder}")
+                let token_placeholder =
+                    sql_builder.bind_text(format!("% {}%", escape_like_literal(token)));
+                like_predicate(display_name, &token_placeholder)
             })
             .collect::<Vec<_>>()
             .join(" AND "),

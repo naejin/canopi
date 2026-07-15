@@ -216,6 +216,7 @@ class _StorageContract:
     web_species_columns: tuple[StorageColumn, ...]
     web_supporting_tables: tuple[StorageTable, ...]
     web_filter_keys: tuple[str, ...]
+    prepared_fingerprint: str
     fingerprint: str
 
 
@@ -236,7 +237,7 @@ def project(
             species_search_normalization_fingerprint=(
                 source.species_search_normalization_fingerprint
             ),
-            fingerprint=source.fingerprint,
+            fingerprint=source.prepared_fingerprint,
         )
     if target is ProjectionTarget.PREPARE_DB:
         return PrepareDbProjection(
@@ -253,7 +254,7 @@ def project(
             prepared_tables=source.prepared_tables,
             indexes=source.indexes,
             translations=source.translations,
-            fingerprint=source.fingerprint,
+            fingerprint=source.prepared_fingerprint,
         )
     if target is ProjectionTarget.WEB_CATALOG:
         return WebCatalogProjection(
@@ -470,6 +471,7 @@ def _load_contract(root: Path) -> _StorageContract:
         web_species_columns=tuple(web_species_columns),
         web_supporting_tables=tuple(web_supporting_tables),
         web_filter_keys=tuple(web_filter_keys),
+        prepared_fingerprint="",
         fingerprint="",
     )
     return _StorageContract(
@@ -490,6 +492,7 @@ def _load_contract(root: Path) -> _StorageContract:
         web_species_columns=parsed.web_species_columns,
         web_supporting_tables=parsed.web_supporting_tables,
         web_filter_keys=parsed.web_filter_keys,
+        prepared_fingerprint=_prepared_contract_fingerprint(parsed),
         fingerprint=_contract_fingerprint(parsed),
     )
 
@@ -1249,8 +1252,8 @@ def _validate_filter_column_ref(
         )
 
 
-def _contract_fingerprint(contract: _StorageContract) -> str:
-    semantic_source = {
+def _prepared_contract_semantics(contract: _StorageContract) -> dict[str, Any]:
+    return {
         "contract_format_version": contract.contract_format_version,
         "schema_version": contract.prepared_schema_version,
         "min_export_schema_version": contract.minimum_export_schema_version,
@@ -1320,20 +1323,24 @@ def _contract_fingerprint(contract: _StorageContract) -> str:
                 key=lambda item: (item.field_name, item.value_en),
             )
         ],
-        "web_projection": {
-            "species_columns": [
-                column.name for column in contract.web_species_columns
-            ],
-            "supporting_tables": [
-                {
-                    "name": table.name,
-                    "columns": [column.name for column in table.columns],
-                }
-                for table in contract.web_supporting_tables
-            ],
-            "filter_keys": list(contract.web_filter_keys),
-        },
     }
+
+
+def _web_projection_semantics(contract: _StorageContract) -> dict[str, Any]:
+    return {
+        "species_columns": [column.name for column in contract.web_species_columns],
+        "supporting_tables": [
+            {
+                "name": table.name,
+                "columns": [column.name for column in table.columns],
+            }
+            for table in contract.web_supporting_tables
+        ],
+        "filter_keys": list(contract.web_filter_keys),
+    }
+
+
+def _semantic_fingerprint(semantic_source: dict[str, Any]) -> str:
     canonical = json.dumps(
         semantic_source,
         ensure_ascii=False,
@@ -1341,6 +1348,23 @@ def _contract_fingerprint(contract: _StorageContract) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
+
+
+def _prepared_contract_fingerprint(contract: _StorageContract) -> str:
+    return _semantic_fingerprint(_prepared_contract_semantics(contract))
+
+
+def _contract_fingerprint(contract: _StorageContract) -> str:
+    semantic_source = _prepared_contract_semantics(contract)
+    semantic_source["web_projection"] = _web_projection_semantics(contract)
+    return _semantic_fingerprint(semantic_source)
+
+
+def prepared_database_asset_name(release: ReleaseProjection) -> str:
+    return (
+        f"canopi-core-v{release.prepared_schema_version}-"
+        f"{release.fingerprint}.db"
+    )
 
 
 def verify_database(
@@ -1466,7 +1490,11 @@ def verify_database(
         profile=profile,
         database=database,
         observed_schema_version=observed_schema_version,
-        fingerprint=source.fingerprint,
+        fingerprint=(
+            source.prepared_fingerprint
+            if profile is DatabaseProfile.PREPARED
+            else source.fingerprint
+        ),
         warnings=tuple(warnings),
     )
 
@@ -1482,7 +1510,7 @@ def _verify_prepared_identity(
         return
     expected = {
         "schema_version": str(source.prepared_schema_version),
-        "storage_contract_fingerprint": source.fingerprint,
+        "storage_contract_fingerprint": source.prepared_fingerprint,
         "normalization_version": str(source.species_search_normalization_version),
         "normalization_fingerprint": (
             source.species_search_normalization_fingerprint
@@ -1780,7 +1808,7 @@ def _render_rust(contract: _StorageContract) -> str:
         (
             "pub(crate) const SPECIES_STORAGE_CONTRACT_FINGERPRINT: &str ="
         ),
-        f"    {_rust_string(contract.fingerprint)};",
+        f"    {_rust_string(contract.prepared_fingerprint)};",
         "",
         "#[cfg(test)]",
         "#[rustfmt::skip]",
@@ -1925,7 +1953,12 @@ def _build_parser() -> argparse.ArgumentParser:
     value = subparsers.add_parser("value", help="print one release metadata value")
     value.add_argument(
         "name",
-        choices=["prepared-schema-version", "minimum-export-schema-version"],
+        choices=[
+            "prepared-schema-version",
+            "minimum-export-schema-version",
+            "prepared-contract-fingerprint",
+            "prepared-db-asset-name",
+        ],
     )
     subparsers.add_parser("check", help="validate sources and generated facts")
     emit_rust = subparsers.add_parser(
@@ -1957,6 +1990,8 @@ def main(argv: list[str] | None = None) -> int:
             values = {
                 "prepared-schema-version": release.prepared_schema_version,
                 "minimum-export-schema-version": release.minimum_export_schema_version,
+                "prepared-contract-fingerprint": release.fingerprint,
+                "prepared-db-asset-name": prepared_database_asset_name(release),
             }
             print(values[args.name])
             return 0

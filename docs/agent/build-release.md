@@ -53,7 +53,7 @@ cargo build --release
 - `CANOPI_SKIP_BUNDLED_DB=1` is checked in `desktop/build.rs`.
 - When set, it overrides Tauri bundle resources to an empty list so the crate compiles without `desktop/resources/canopi-core.db`.
 - CI lint/test jobs set this flag.
-- CI release builds download `canopi-core.db` from the `canopi-core-db` GitHub release tag into `desktop/resources/` before `tauri build`.
+- CI release builds derive an immutable asset name from the exact prepared schema version and prepared-contract fingerprint, download it from the stable `canopi-core-db` GitHub release tag, and install it as `desktop/resources/canopi-core.db` before `tauri build`.
 - The normal Linux/macOS/Windows build matrix verifies that downloaded database against the prepared profile before packaging, so contract drift cannot hide outside the release-candidate workflow.
 - Release-candidate preflight runs the Species Catalog contract check and full prepared-database verification: exact `PRAGMA user_version`, the four exact embedded identity values, Species affinities, required copied and generated tables, the FTS5 virtual-table shape, and every contracted index. Packaging jobs check out the resolved preflight commit and require their downloaded DB checksum to match the preflight checksum, so mutable refs or release assets cannot change between verification and packaging. A matching `PRAGMA user_version` alone is insufficient.
 - The bundled DB is large; package size is expected to be hundreds of MB.
@@ -63,7 +63,7 @@ cargo build --release
 - Release candidate workflow: `.github/workflows/release-candidate.yml`.
 - Promotion script: `scripts/promote-release.sh`.
 - DB release upload script: `scripts/publish-db-release.sh`.
-- Publishing and release workflows obtain schema metadata through `scripts/species_catalog_contract.py value` and verify databases through `verify-db`; do not parse generated Rust or duplicate inline SQLite checks.
+- Publishing and release workflows obtain schema metadata and the immutable prepared DB asset name through `scripts/species_catalog_contract.py value` and verify databases through `verify-db`; do not parse generated Rust or duplicate inline SQLite checks. The DB publisher must not overwrite an existing identity asset.
 - Intentional storage changes must update `scripts/schema-contract.json`, including the pinned Species Search normalization version when normalized search storage changes, refresh `desktop/src/db/schema_contract_generated.rs` with `emit-rust --write`, and pass `check` before publishing.
 - `desktop/tauri.conf.json` is the app release-version authority. Keep `Cargo.toml`, `desktop/web/package.json`, and `desktop/web/package-lock.json` synchronized with it; the About dialog reads the Tauri config version, and release-candidate preflight validates drift.
 - Linux bundles are deb and AppImage, not RPM.

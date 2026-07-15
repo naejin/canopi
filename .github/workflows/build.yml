@@ -9,7 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CANOPI_CORE_DB_RELEASE_TAG: canopi-core-db
-  CANOPI_CORE_DB_ASSET_NAME: canopi-core.db
 
 jobs:
   lint:
@@ -184,19 +183,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          set -euo pipefail
+          asset_name="$(python3 scripts/species_catalog_contract.py value prepared-db-asset-name)"
+          download_dir="$(mktemp -d)"
+          trap 'rm -rf "$download_dir"' EXIT
           mkdir -p desktop/resources
           gh release download "$CANOPI_CORE_DB_RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "$CANOPI_CORE_DB_ASSET_NAME" \
-            --dir desktop/resources
-          test -s "desktop/resources/$CANOPI_CORE_DB_ASSET_NAME"
+            --pattern "$asset_name" \
+            --dir "$download_dir"
+          test -s "$download_dir/$asset_name"
+          mv "$download_dir/$asset_name" desktop/resources/canopi-core.db
 
       - name: Verify bundled plant DB contract
         shell: bash
         run: >-
           python scripts/species_catalog_contract.py verify-db
           --profile prepared
-          "desktop/resources/$CANOPI_CORE_DB_ASSET_NAME"
+          desktop/resources/canopi-core.db
 
       - name: Build Tauri app
         run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}

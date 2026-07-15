@@ -1,7 +1,7 @@
 use common_types::species::SpeciesFilter;
 
 use super::filters::append_structured_filters;
-use super::sql::SqlBuilder;
+use super::sql::{SqlBuilder, escape_like_literal, like_predicate};
 use super::text::CommonNameQuery;
 
 pub(super) struct PredicatePlan {
@@ -85,13 +85,15 @@ fn common_name_token_prefix_predicate(
         .enumerate()
         .map(|(index, token)| {
             let alias = format!("scnt_match{index}");
-            let token_placeholder = sql_builder.bind_text(format!("{token}%"));
+            let token_placeholder =
+                sql_builder.bind_text(format!("{}%", escape_like_literal(token)));
+            let token_condition = like_predicate(&format!("{alias}.token"), &token_placeholder);
             format!(
                 "EXISTS (
                     SELECT 1 FROM species_search_common_name_tokens {alias}
                     WHERE {alias}.species_id = s.id
                       AND {alias}.language = {locale_placeholder}
-                      AND {alias}.token LIKE {token_placeholder}
+                      AND {token_condition}
                 )"
             )
         })

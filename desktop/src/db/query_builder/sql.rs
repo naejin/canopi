@@ -1,5 +1,20 @@
 use rusqlite::types::Value;
 
+pub(super) fn escape_like_literal(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        if matches!(character, '\\' | '%' | '_') {
+            escaped.push('\\');
+        }
+        escaped.push(character);
+    }
+    escaped
+}
+
+pub(super) fn like_predicate(expression: &str, placeholder: &str) -> String {
+    format!("{expression} LIKE {placeholder} ESCAPE '\\'")
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct SqlBuilder {
     params: Vec<Value>,
@@ -51,7 +66,7 @@ impl SqlBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::SqlBuilder;
+    use super::{SqlBuilder, escape_like_literal, like_predicate};
     use rusqlite::types::Value;
 
     #[test]
@@ -69,6 +84,15 @@ mod tests {
                 Value::Integer(20),
                 Value::Real(1.5),
             ],
+        );
+    }
+
+    #[test]
+    fn like_helpers_escape_query_literals_and_declare_the_escape_character() {
+        assert_eq!(escape_like_literal(r"snake\path%_"), r"snake\\path\%\_");
+        assert_eq!(
+            like_predicate("normalized_name", "?1"),
+            r"normalized_name LIKE ?1 ESCAPE '\'",
         );
     }
 }

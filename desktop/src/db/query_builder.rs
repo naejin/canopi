@@ -638,7 +638,7 @@ mod tests {
                 .iter()
                 .map(|token| {
                     let token = token.as_str().unwrap();
-                    format!("{token}%")
+                    format!("{}%", sql::escape_like_literal(token))
                 })
                 .collect::<Vec<_>>();
             let plan = SpeciesSearchPlan::build(request(

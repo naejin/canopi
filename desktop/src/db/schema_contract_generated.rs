@@ -8,7 +8,7 @@ pub(crate) const SPECIES_SEARCH_NORMALIZATION_FINGERPRINT: &str =
 #[cfg(test)]
 pub(crate) const MINIMUM_EXPORT_SCHEMA_VERSION: i32 = 14;
 pub(crate) const SPECIES_STORAGE_CONTRACT_FINGERPRINT: &str =
-    "e92b9710ffcab4421442b290ba63ad9afd849dc671856a0c3f9c82b9a8da72b1";
+    "d14b562039907fc477cd6a1f26759bcdff6ea07350b15817ef93fd0ce6ca0fa6";
 
 #[cfg(test)]
 #[rustfmt::skip]
