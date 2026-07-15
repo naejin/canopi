@@ -104,12 +104,23 @@ fn decode_design_value(
 
     migrate_design_value(&mut value);
     migrate_legacy_object_groups(&mut value)?;
-    serde_json::from_value(value).map_err(|error| {
+    let mut file: CanopiFile = serde_json::from_value(value).map_err(|error| {
         CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidDocument,
             format!("$: {error}"),
         )
-    })
+    })?;
+    normalize_loaded_extra(&mut file);
+    Ok(file)
+}
+
+fn normalize_loaded_extra(file: &mut CanopiFile) {
+    let Some(serde_json::Value::Object(nested)) = file.extra.remove("extra") else {
+        return;
+    };
+    for (key, value) in nested {
+        file.extra.entry(key).or_insert(value);
+    }
 }
 
 fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIngestionError> {

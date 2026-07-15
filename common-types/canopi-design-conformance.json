@@ -329,6 +329,7 @@
       "created_at": "2026-07-15T00:00:00.000Z",
       "updated_at": "2026-07-15T00:00:00.000Z",
       "extra": {
+        "aaa_future": "root wins",
         "preserved": "yes",
         "future_top_level": {
           "enabled": true,
@@ -649,7 +650,11 @@
         ],
         "created_at": "2026-07-15T00:00:00.000Z",
         "updated_at": "2026-07-15T00:00:00.000Z",
-        "extra": { "preserved": "yes" },
+        "extra": {
+          "aaa_future": "nested loses",
+          "preserved": "yes"
+        },
+        "aaa_future": "root wins",
         "future_top_level": {
           "enabled": true,
           "values": [1, 2, 3]
