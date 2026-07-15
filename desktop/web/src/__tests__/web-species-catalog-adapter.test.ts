@@ -9,6 +9,32 @@ import {
 import type { FilterOptions, SpeciesSearchRequest } from '../types/species'
 
 describe('Web Edition reduced Species Catalog adapter', () => {
+  it('matches all search tokens when they are separated in a stored normalized name', async () => {
+    const data = catalogFixture()
+    const reader = createInMemoryReducedSpeciesCatalogReader({
+      ...data,
+      names: data.names.map((name) => name.common_name === 'Pomme commune'
+        ? {
+            ...name,
+            common_name: 'Pomme tres commune',
+            normalized_name: 'pomme tres commune',
+          }
+        : name),
+    })
+
+    const result = await reader.searchSpecies(searchRequest({
+      text: 'pomme commune',
+      locale: 'fr',
+    }), new Set())
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        canonical_name: 'Malus domestica',
+        matched_common_name: 'Pomme tres commune',
+      }),
+    ])
+  })
+
   it('browses pages and searches canonical or localized common names', async () => {
     const adapters = createReducedSpeciesCatalogAdapters({
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
