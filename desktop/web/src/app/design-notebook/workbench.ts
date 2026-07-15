@@ -104,7 +104,7 @@ export function createDesignNotebookWorkbench(
   let generation = 0
   let recentGeneration = 0
   let snapshotEpoch = 0
-  let mutationTail = Promise.resolve()
+  let mutationTail: Promise<void> | null = null
 
   const view = computed<DesignNotebookView>(() => {
     const currentPath = activePath.value
@@ -133,11 +133,13 @@ export function createDesignNotebookWorkbench(
     loadError.value = false
 
     try {
-      await mutationBarrier
-      if (
-        !isLifetimeCurrent(admittedLifetime)
-        || isLoadStale(requestGeneration, requestSnapshotEpoch)
-      ) return
+      if (mutationBarrier) {
+        await mutationBarrier
+        if (
+          !isLifetimeCurrent(admittedLifetime)
+          || isLoadStale(requestGeneration, requestSnapshotEpoch)
+        ) return
+      }
       const snapshot = await loadNotebook()
       if (
         !isLifetimeCurrent(admittedLifetime)
@@ -342,11 +344,19 @@ export function createDesignNotebookWorkbench(
     const run = () => isLifetimeCurrent(admittedLifetime)
       ? operation(admittedLifetime)
       : disposedResult
-    const result = mutationTail.then(run, run)
-    mutationTail = result.then(
-      () => undefined,
-      () => undefined,
+    const result = mutationTail
+      ? mutationTail.then(run, run)
+      : Promise.resolve(run())
+    let settledTail: Promise<void>
+    settledTail = result.then(
+      () => {
+        if (mutationTail === settledTail) mutationTail = null
+      },
+      () => {
+        if (mutationTail === settledTail) mutationTail = null
+      },
     )
+    mutationTail = settledTail
     return result
   }
 
