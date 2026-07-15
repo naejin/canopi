@@ -18,7 +18,11 @@ import type {
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../types/species'
-import { speciesSearchQueryTokens } from '../utils/species-search-normalization'
+import {
+  admittedSpeciesSearchText,
+  EMPTY_ADMITTED_SPECIES_SEARCH_TEXT,
+  type AdmittedSpeciesSearchText as NormalizedSearchText,
+} from '../utils/species-search-normalization'
 
 interface DuckDbQueryTable {
   toArray(): unknown[]
@@ -78,16 +82,6 @@ class DuckDbCatalogCleanupError extends Error {
 
 export interface DuckDbReducedSpeciesCatalogReader extends ReducedSpeciesCatalogReader {
   dispose(): Promise<void>
-}
-
-interface NormalizedSearchText {
-  readonly text: string
-  readonly tokens: readonly string[]
-}
-
-const EMPTY_SEARCH_TEXT: NormalizedSearchText = {
-  text: '',
-  tokens: [],
 }
 
 const DEFAULT_DISPOSE_TIMEOUT_MS = 250
@@ -290,7 +284,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     const limit = Math.max(0, request.limit)
     const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
     const namesTable = localeNamesSql(this.manifest, request.locale)
-    const searchText = normalizeSearchText(request.text)
+    const searchText = admittedSpeciesSearchText(request.text)
     const whereSql = speciesWhereSql({
       searchText,
       filters: request.filters,
@@ -336,7 +330,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
         speciesTable,
         namesTable,
         whereSql: `WHERE s.canonical_name IN (${canonicalNames.map(quoteSqlString).join(', ')})`,
-        searchText: EMPTY_SEARCH_TEXT,
+        searchText: EMPTY_ADMITTED_SPECIES_SEARCH_TEXT,
       })}
     `)
     const rowsByName = new Map(tableRows(rowsTable).map((row) => {
@@ -391,7 +385,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
         speciesTable,
         namesTable,
         whereSql: `WHERE s.canonical_name = ${quoteSqlString(canonicalName)}`,
-        searchText: EMPTY_SEARCH_TEXT,
+        searchText: EMPTY_ADMITTED_SPECIES_SEARCH_TEXT,
       })}
       LIMIT 1
     `)
@@ -1165,16 +1159,6 @@ function speciesProjectionToDetail(
           license: image.license,
         },
   }
-}
-
-function normalizeSearchText(text: string): NormalizedSearchText {
-  const tokens = speciesSearchQueryTokens(text)
-  return tokens.length === 0
-    ? EMPTY_SEARCH_TEXT
-    : {
-        text: tokens.join(' '),
-        tokens,
-      }
 }
 
 function sortedUnique(values: readonly string[]): string[] {

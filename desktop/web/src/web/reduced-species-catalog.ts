@@ -7,7 +7,13 @@ import type {
   SpeciesSearchRequest,
 } from '../types/species'
 import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
-import { speciesSearchQueryTokens } from '../utils/species-search-normalization'
+import {
+  admittedSpeciesSearchText,
+  EMPTY_ADMITTED_SPECIES_SEARCH_TEXT,
+  normalizedSpeciesSearchMatchTier,
+  type AdmittedSpeciesSearchText,
+  type SpeciesSearchMatchTier,
+} from '../utils/species-search-normalization'
 import type { BrowserAppDataStore } from './browser-app-data'
 
 export type WebSupportedFilterOptionsKey = keyof Pick<
@@ -171,12 +177,21 @@ export function createInMemoryReducedSpeciesCatalogReader(
 
   return {
     async searchSpecies(request, favoriteNames) {
-      const searchText = admittedSearchText(request.text)
+      const searchText = admittedSpeciesSearchText(request.text)
       const offset = cursorToOffset(request.cursor)
       const matched = species.filter((row) => (
         matchesSupportedFilters(row, request.filters) &&
         matchesSearchText(row, searchText, namesByLocaleAndSpecies.get(request.locale)?.get(row.id))
       ))
+      if (searchText.text) {
+        const localeNames = namesByLocaleAndSpecies.get(request.locale)
+        matched.sort((left, right) => compareSpeciesSearchRelevance(
+          left,
+          right,
+          searchText,
+          localeNames,
+        ))
+      }
       const page = matched.slice(offset, offset + Math.max(0, request.limit))
       const nextOffset = offset + page.length
       return {
@@ -201,7 +216,7 @@ export function createInMemoryReducedSpeciesCatalogReader(
               locale,
               favoriteNames,
               nameIndex: namesByLocaleAndSpecies,
-              searchText: EMPTY_ADMITTED_SEARCH_TEXT,
+              searchText: EMPTY_ADMITTED_SPECIES_SEARCH_TEXT,
             })]
           : []
       })
@@ -320,14 +335,16 @@ function detailImage(image: ReducedSpeciesImageRow | null): SpeciesCatalogDetail
 
 function matchesSearchText(
   row: ReducedSpeciesArtifactRow,
-  searchText: AdmittedSearchText,
+  searchText: AdmittedSpeciesSearchText,
   localeNames: SpeciesNameIndexEntry | undefined,
 ): boolean {
   if (!searchText.text) return true
-  if (matchesNormalizedSearchText(row.normalized_canonical_name, searchText)) return true
-  if (matchesNormalizedSearchText(row.normalized_common_name ?? '', searchText)) return true
+  if (normalizedSpeciesSearchMatchTier(row.normalized_canonical_name, searchText) !== null) return true
+  if (normalizedSpeciesSearchMatchTier(row.normalized_common_name ?? '', searchText) !== null) {
+    return true
+  }
   return localeNames?.names.some((name) => (
-    matchesNormalizedSearchText(name.normalized_name, searchText)
+    normalizedSpeciesSearchMatchTier(name.normalized_name, searchText) !== null
   )) ?? false
 }
 
@@ -354,13 +371,11 @@ function toSpeciesListItem({
   readonly locale: string
   readonly favoriteNames: ReadonlySet<string>
   readonly nameIndex: ReadonlyMap<string, ReadonlyMap<string, SpeciesNameIndexEntry>>
-  readonly searchText: AdmittedSearchText
+  readonly searchText: AdmittedSpeciesSearchText
 }): SpeciesListItem {
   const localeNames = nameIndex.get(locale)?.get(row.id)
   const matchedName = searchText.text
-    ? localeNames?.names.find((name) => (
-        matchesNormalizedSearchText(name.normalized_name, searchText)
-      )) ?? null
+    ? bestMatchingName(localeNames, searchText)?.name ?? null
     : null
   const localizedCommonName = localeNames?.primary?.common_name ?? row.common_name
 
@@ -387,29 +402,77 @@ function toSpeciesListItem({
   }
 }
 
-interface AdmittedSearchText {
-  readonly text: string
-  readonly tokens: readonly string[]
+interface RankedSpeciesName {
+  readonly name: ReducedSpeciesNameRow
+  readonly tier: SpeciesSearchMatchTier
 }
 
-const EMPTY_ADMITTED_SEARCH_TEXT: AdmittedSearchText = {
-  text: '',
-  tokens: [],
+function bestMatchingName(
+  localeNames: SpeciesNameIndexEntry | undefined,
+  searchText: AdmittedSpeciesSearchText,
+): RankedSpeciesName | null {
+  let best: RankedSpeciesName | null = null
+  for (const name of localeNames?.names ?? []) {
+    const tier = normalizedSpeciesSearchMatchTier(name.normalized_name, searchText)
+    if (tier === null) continue
+    if (!best || tier < best.tier || (tier === best.tier && compareNameRows(name, best.name) < 0)) {
+      best = { name, tier }
+    }
+  }
+  return best
 }
 
-function admittedSearchText(raw: string): AdmittedSearchText {
-  const tokens = speciesSearchQueryTokens(raw)
-  return tokens.length === 0
-    ? EMPTY_ADMITTED_SEARCH_TEXT
-    : { text: tokens.join(' '), tokens }
+function compareSpeciesSearchRelevance(
+  left: ReducedSpeciesArtifactRow,
+  right: ReducedSpeciesArtifactRow,
+  searchText: AdmittedSpeciesSearchText,
+  localeNames: ReadonlyMap<string, SpeciesNameIndexEntry> | undefined,
+): number {
+  const leftRank = speciesSearchRelevance(left, searchText, localeNames?.get(left.id))
+  const rightRank = speciesSearchRelevance(right, searchText, localeNames?.get(right.id))
+  return leftRank.group - rightRank.group ||
+    leftRank.matchedNameTier - rightRank.matchedNameTier ||
+    leftRank.primaryDisplayOrder - rightRank.primaryDisplayOrder ||
+    leftRank.primaryNameLength - rightRank.primaryNameLength ||
+    compareText(left.canonical_name, right.canonical_name) ||
+    compareText(left.id, right.id)
 }
 
-function matchesNormalizedSearchText(
-  candidate: string,
-  searchText: AdmittedSearchText,
-): boolean {
-  if (candidate.includes(searchText.text)) return true
-  return searchText.tokens.length > 1 && searchText.tokens.every((token) => candidate.includes(token))
+interface SpeciesSearchRelevance {
+  readonly group: number
+  readonly matchedNameTier: number
+  readonly primaryDisplayOrder: number
+  readonly primaryNameLength: number
+}
+
+function speciesSearchRelevance(
+  row: ReducedSpeciesArtifactRow,
+  searchText: AdmittedSpeciesSearchText,
+  localeNames: SpeciesNameIndexEntry | undefined,
+): SpeciesSearchRelevance {
+  const primary = localeNames?.primary ?? null
+  const primaryTier = primary
+    ? normalizedSpeciesSearchMatchTier(primary.normalized_name, searchText)
+    : null
+  const matchedName = bestMatchingName(localeNames, searchText)
+  const canonicalTier = normalizedSpeciesSearchMatchTier(row.normalized_canonical_name, searchText)
+  const group = primaryTier !== null
+    ? primaryTier
+    : matchedName
+      ? 3
+      : canonicalTier !== null
+        ? 4
+        : 5
+  return {
+    group,
+    matchedNameTier: matchedName?.tier ?? Number.MAX_SAFE_INTEGER,
+    primaryDisplayOrder: primary?.display_order ?? Number.MAX_SAFE_INTEGER,
+    primaryNameLength: primary?.common_name.length ?? Number.MAX_SAFE_INTEGER,
+  }
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function buildFilterOptions(species: readonly ReducedSpeciesRow[]): FilterOptions {

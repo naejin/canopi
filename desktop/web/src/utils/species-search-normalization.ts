@@ -16,6 +16,18 @@ export interface NormalizedSpeciesSearch {
   readonly scalarCount: number
 }
 
+export interface AdmittedSpeciesSearchText {
+  readonly text: string
+  readonly tokens: readonly string[]
+}
+
+export type SpeciesSearchMatchTier = 0 | 1 | 2
+
+export const EMPTY_ADMITTED_SPECIES_SEARCH_TEXT: AdmittedSpeciesSearchText = {
+  text: '',
+  tokens: [],
+}
+
 const LOWERCASE_BY_SCALAR = new Map<number, string>(SPECIES_SEARCH_LOWERCASE_MAPPINGS)
 const DECOMPOSITION_BY_SCALAR = new Map<number, string>(
   SPECIES_SEARCH_COMPATIBILITY_DECOMPOSITION_MAPPINGS,
@@ -113,4 +125,21 @@ export function speciesSearchQueryTokens(raw: string): readonly string[] {
     (token) => Array.from(token).length >= SPECIES_SEARCH_MINIMUM_ADMITTED_SCALAR_COUNT,
   )
   return admittedTokens.length > 0 ? admittedTokens : uniqueTokens
+}
+
+export function admittedSpeciesSearchText(raw: string): AdmittedSpeciesSearchText {
+  const tokens = speciesSearchQueryTokens(raw)
+  return tokens.length === 0
+    ? EMPTY_ADMITTED_SPECIES_SEARCH_TEXT
+    : { text: tokens.join(' '), tokens }
+}
+
+export function normalizedSpeciesSearchMatchTier(
+  candidate: string,
+  searchText: AdmittedSpeciesSearchText,
+): SpeciesSearchMatchTier | null {
+  if (!searchText.text) return null
+  if (candidate === searchText.text) return 0
+  if (candidate.startsWith(searchText.text)) return 1
+  return searchText.tokens.every((token) => candidate.includes(token)) ? 2 : null
 }
