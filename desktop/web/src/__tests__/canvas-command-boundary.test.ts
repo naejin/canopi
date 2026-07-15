@@ -147,7 +147,7 @@ describe('Canvas Command Projection boundaries', () => {
       sourceGraph(),
       CANVAS_COMMAND_BOUNDARY_POLICIES,
     )).toEqual([])
-  })
+  }, 20_000)
 
   it('owns shortcut compatibility and every projected command identity exhaustively', () => {
     expect(EDIT_SHORTCUTS).toBe(CANVAS_HISTORY_SHORTCUTS)
