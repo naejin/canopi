@@ -8,6 +8,7 @@ import {
   type DuckDBBundles,
 } from '@duckdb/duckdb-wasm/blocking'
 import { describe, expect, it } from 'vitest'
+import { createEmptySpeciesFilter } from '../app/plant-browser'
 import { createDuckDbReducedSpeciesCatalogReader } from '../web/duckdb-wasm-catalog'
 import { validWebCatalogManifest } from './fixtures/web-catalog-manifest'
 
@@ -33,6 +34,33 @@ describe('DuckDB-WASM Species Catalog executable SQL', () => {
           url: 'https://images.example.test/apple.jpg',
         },
       })
+
+      const request = {
+        text: 'ar',
+        filters: createEmptySpeciesFilter(),
+        cursor: null,
+        limit: 1,
+        sort: 'Relevance' as const,
+        locale: 'fr',
+        include_total: false,
+      }
+      const firstPage = await reader.searchSpecies(request, new Set())
+      const secondPage = await reader.searchSpecies({
+        ...request,
+        cursor: firstPage.next_cursor,
+      }, new Set())
+      const thirdPage = await reader.searchSpecies({
+        ...request,
+        cursor: secondPage.next_cursor,
+      }, new Set())
+
+      expect(firstPage.items.map((item) => item.canonical_name)).toEqual(['Prunus armeniaca'])
+      expect(firstPage.next_cursor).toBe('offset:1')
+      expect(secondPage.items.map((item) => item.canonical_name)).toEqual(['Ar alpha'])
+      expect(secondPage.next_cursor).toBe('offset:2')
+      expect(thirdPage.items.map((item) => item.canonical_name)).toEqual(['Ar beta'])
+      expect(thirdPage.next_cursor).toBeNull()
+      expect([firstPage, secondPage, thirdPage].map((page) => page.total_estimate)).toEqual([0, 0, 0])
     } finally {
       await reader.dispose()
     }
@@ -86,6 +114,42 @@ const SPECIES_VALUES = `(
       'Tree'::VARCHAR,
       'Tree'::VARCHAR,
       '["Perennial"]'::VARCHAR
+    ),
+    (
+      'species-apricot'::VARCHAR,
+      'prunus-armeniaca'::VARCHAR,
+      'Prunus armeniaca'::VARCHAR,
+      'Apricot'::VARCHAR,
+      'prunus armeniaca'::VARCHAR,
+      'apricot'::VARCHAR,
+      '["Temperate"]'::VARCHAR,
+      'Tree'::VARCHAR,
+      'Tree'::VARCHAR,
+      '["Perennial"]'::VARCHAR
+    ),
+    (
+      'species-ar-alpha'::VARCHAR,
+      'ar-alpha'::VARCHAR,
+      'Ar alpha'::VARCHAR,
+      NULL::VARCHAR,
+      'ar alpha'::VARCHAR,
+      NULL::VARCHAR,
+      '[]'::VARCHAR,
+      NULL::VARCHAR,
+      NULL::VARCHAR,
+      '[]'::VARCHAR
+    ),
+    (
+      'species-ar-beta'::VARCHAR,
+      'ar-beta'::VARCHAR,
+      'Ar beta'::VARCHAR,
+      NULL::VARCHAR,
+      'ar beta'::VARCHAR,
+      NULL::VARCHAR,
+      '[]'::VARCHAR,
+      NULL::VARCHAR,
+      NULL::VARCHAR,
+      '[]'::VARCHAR
     )
   ) AS fixture(
     id,
@@ -108,7 +172,8 @@ const FRENCH_NAME_VALUES = `(
     ('species-apple'::VARCHAR, 'fr'::VARCHAR, 'Á'::VARCHAR, 'a'::VARCHAR, 'false'::VARCHAR, '0'::VARCHAR),
     ('species-apple'::VARCHAR, 'fr'::VARCHAR, 'a'::VARCHAR, 'a'::VARCHAR, 'false'::VARCHAR, '0'::VARCHAR),
     ('species-apple'::VARCHAR, 'fr'::VARCHAR, 'A'::VARCHAR, 'a'::VARCHAR, 'false'::VARCHAR, '0'::VARCHAR),
-    ('species-apple'::VARCHAR, 'fr'::VARCHAR, 'A'::VARCHAR, 'a'::VARCHAR, 'true'::VARCHAR, '5'::VARCHAR)
+    ('species-apple'::VARCHAR, 'fr'::VARCHAR, 'A'::VARCHAR, 'a'::VARCHAR, 'true'::VARCHAR, '5'::VARCHAR),
+    ('species-apricot'::VARCHAR, 'fr'::VARCHAR, 'Arbre fruitier'::VARCHAR, 'arbre fruitier'::VARCHAR, 'true'::VARCHAR, '0'::VARCHAR)
   ) AS fixture(
     species_id,
     language,
