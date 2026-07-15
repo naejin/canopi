@@ -208,6 +208,7 @@ export function createPlantSearchSession({
   let debounceTimer: TimerHandle | null = null
   let disposeIntentEffect: (() => void) | null = null
   let lastText = text.peek()
+  let disposed = false
 
   function clearDebounceTimer(): void {
     if (debounceTimer === null) return
@@ -262,6 +263,7 @@ export function createPlantSearchSession({
   }
 
   function scheduleFirstPage(debounceMs: number): void {
+    if (disposed) return
     searchGeneration += 1
     const generation = searchGeneration
 
@@ -284,6 +286,7 @@ export function createPlantSearchSession({
   }
 
   function start(): () => void {
+    if (disposed) return () => {}
     if (disposeIntentEffect !== null) return stop
 
     lastText = text.peek()
@@ -313,6 +316,7 @@ export function createPlantSearchSession({
   }
 
   async function loadNextPage(): Promise<void> {
+    if (disposed) return
     const cursor = nextCursor.value
     if (cursor === null || isPlantSearchLoading(status.value)) return
 
@@ -342,6 +346,8 @@ export function createPlantSearchSession({
   }
 
   async function loadDynamicOptions(fields: string[]): Promise<void> {
+    if (disposed) return
+
     const currentLocale = locale.value
     const cacheForLocale = dynamicOptionsCache.value[currentLocale] ?? {}
     const pendingForLocale = dynamicOptionsPending.value[currentLocale] ?? {}
@@ -367,6 +373,8 @@ export function createPlantSearchSession({
 
     try {
       const options = await loadDynamicFilterOptions(uncached, currentLocale)
+      if (disposed) return
+
       const updatedLocale = { ...(dynamicOptionsCache.value[currentLocale] ?? {}) }
       const updatedErrors = { ...(dynamicOptionsErrors.value[currentLocale] ?? {}) }
       for (const option of options) {
@@ -391,6 +399,8 @@ export function createPlantSearchSession({
       dynamicOptionsCache.value = { ...dynamicOptionsCache.value, [currentLocale]: updatedLocale }
       dynamicOptionsErrors.value = { ...dynamicOptionsErrors.value, [currentLocale]: updatedErrors }
     } catch (caught) {
+      if (disposed) return
+
       const message = errorMessage(caught)
       console.error('Failed to load dynamic filter options', {
         locale: currentLocale,
@@ -405,15 +415,23 @@ export function createPlantSearchSession({
         },
       }
     } finally {
-      const localePending = { ...(dynamicOptionsPending.value[currentLocale] ?? {}) }
-      for (const field of uncached) {
-        delete localePending[field]
-      }
-      dynamicOptionsPending.value = {
-        ...dynamicOptionsPending.value,
-        [currentLocale]: localePending,
+      if (!disposed) {
+        const localePending = { ...(dynamicOptionsPending.value[currentLocale] ?? {}) }
+        for (const field of uncached) {
+          delete localePending[field]
+        }
+        dynamicOptionsPending.value = {
+          ...dynamicOptionsPending.value,
+          [currentLocale]: localePending,
+        }
       }
     }
+  }
+
+  function dispose(): void {
+    if (disposed) return
+    disposed = true
+    stop()
   }
 
   return {
@@ -435,34 +453,41 @@ export function createPlantSearchSession({
     },
     start,
     setText(nextText) {
+      if (disposed) return
       text.value = nextText
     },
     patchFilters(patch) {
+      if (disposed) return
       filters.value = { ...filters.value, ...patch }
     },
     addExtraFilter(field, op, values) {
+      if (disposed) return
       const without = extraFilters.value.filter((filter) => filter.field !== field)
       extraFilters.value = [...without, { field, op, values }]
     },
     removeExtraFilter(field) {
+      if (disposed) return
       extraFilters.value = extraFilters.value.filter((filter) => filter.field !== field)
     },
     clearFilters() {
+      if (disposed) return
       batch(() => {
         filters.value = createEmptySpeciesFilter()
         extraFilters.value = []
       })
     },
     retry() {
+      if (disposed) return
       scheduleFirstPage(0)
     },
     loadNextPage,
     loadDynamicOptions,
     updateResultItem(canonicalName, update) {
+      if (disposed) return
       items.value = items.value.map((item) =>
         item.canonical_name === canonicalName ? update(item) : item,
       )
     },
-    dispose: stop,
+    dispose,
   }
 }

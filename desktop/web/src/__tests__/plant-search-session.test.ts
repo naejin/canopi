@@ -4,7 +4,7 @@ import {
   createPlantSearchSession,
   type PlantSearchAdapter,
 } from '../app/plant-browser/search-session'
-import type { PaginatedResult, SpeciesListItem } from '../types/species'
+import type { DynamicFilterOptions, PaginatedResult, SpeciesListItem } from '../types/species'
 
 function makePlant(canonicalName: string): SpeciesListItem {
   return {
@@ -60,9 +60,80 @@ async function flushMicrotasks(): Promise<void> {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe('plant search session', () => {
+  it('does not restart or accept commands after terminal disposal', async () => {
+    const locale = signal('en')
+    const search = vi.fn(async () => page([], null, 0))
+    const session = createPlantSearchSession({ search, locale })
+
+    session.dispose()
+    session.start()
+    session.setText('apple')
+    session.patchFilters({ habit: ['Tree'] })
+    session.retry()
+    await flushMicrotasks()
+
+    expect(search).not.toHaveBeenCalled()
+    expect(session.intent.value.text).toBe('')
+    expect(session.intent.value.filters.habit).toBeNull()
+  })
+
+  it('does not publish dynamic options that resolve after terminal disposal', async () => {
+    const locale = signal('en')
+    const request = deferred<DynamicFilterOptions[]>()
+    const session = createPlantSearchSession({
+      search: async () => page([], null, 0),
+      loadDynamicFilterOptions: () => request.promise,
+      locale,
+    })
+
+    const loading = session.loadDynamicOptions(['habit'])
+    expect(session.signals.dynamicOptionsPending.value.en?.habit).toBe(true)
+
+    session.dispose()
+    const cacheAfterDisposal = session.signals.dynamicOptionsCache.value
+    const errorsAfterDisposal = session.signals.dynamicOptionsErrors.value
+    const pendingAfterDisposal = session.signals.dynamicOptionsPending.value
+
+    request.resolve([{
+      field: 'habit',
+      field_type: 'categorical',
+      values: [{ value: 'Shrub', label: 'Shrub' }],
+      range: null,
+    }])
+    await loading
+
+    expect(session.signals.dynamicOptionsCache.value).toBe(cacheAfterDisposal)
+    expect(session.signals.dynamicOptionsErrors.value).toBe(errorsAfterDisposal)
+    expect(session.signals.dynamicOptionsPending.value).toBe(pendingAfterDisposal)
+  })
+
+  it('does not publish or log dynamic-option failures after terminal disposal', async () => {
+    const locale = signal('en')
+    const request = deferred<DynamicFilterOptions[]>()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const session = createPlantSearchSession({
+      search: async () => page([], null, 0),
+      loadDynamicFilterOptions: () => request.promise,
+      locale,
+    })
+
+    const loading = session.loadDynamicOptions(['habit'])
+    session.dispose()
+    const errorsAfterDisposal = session.signals.dynamicOptionsErrors.value
+    const pendingAfterDisposal = session.signals.dynamicOptionsPending.value
+
+    request.reject(new Error('catalog unavailable'))
+    await loading
+
+    expect(session.signals.dynamicOptionsErrors.value).toBe(errorsAfterDisposal)
+    expect(session.signals.dynamicOptionsPending.value).toBe(pendingAfterDisposal)
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
   it('debounces text changes before issuing a first-page request', async () => {
     vi.useFakeTimers()
     const locale = signal('en')

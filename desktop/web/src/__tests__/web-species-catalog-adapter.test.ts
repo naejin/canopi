@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createEmptySpeciesFilter, createSpeciesCatalogWorkbench } from '../app/plant-browser'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import {
@@ -6,7 +6,7 @@ import {
   createReducedSpeciesCatalogAdapters,
   type ReducedSpeciesCatalogData,
 } from '../web/reduced-species-catalog'
-import type { SpeciesSearchRequest } from '../types/species'
+import type { FilterOptions, SpeciesSearchRequest } from '../types/species'
 
 describe('Web Edition reduced Species Catalog adapter', () => {
   it('browses pages and searches canonical or localized common names', async () => {
@@ -255,6 +255,437 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       error: null,
     })
   })
+
+  it('retries search and unresolved initial catalog projections together', async () => {
+    const search = vi.fn()
+      .mockRejectedValueOnce(new Error('catalog unavailable'))
+      .mockResolvedValue({ items: [], next_cursor: null, total_estimate: 0 })
+    const getFilterOptions = vi.fn()
+      .mockRejectedValueOnce(new Error('catalog unavailable'))
+      .mockResolvedValue({
+        families: [],
+        growth_rates: [],
+        climate_zones: ['Temperate'],
+        habits: [],
+        life_cycles: [],
+        sun_tolerances: [],
+        soil_tolerances: [],
+      })
+    const getFavorites = vi.fn()
+      .mockRejectedValueOnce(new Error('catalog unavailable'))
+      .mockResolvedValue([makeSpeciesListItem('Malus domestica')])
+    const getRecentlyViewed = vi.fn()
+      .mockRejectedValueOnce(new Error('catalog unavailable'))
+      .mockResolvedValue([makeSpeciesListItem('Melissa officinalis')])
+    const workbench = createSpeciesCatalogWorkbench({
+      search,
+      getFilterOptions,
+      getSupportedFilterFields: async () => ['climate_zones'],
+      getFavorites,
+      getRecentlyViewed,
+      textDebounceMs: 0,
+    })
+    const unmount = workbench.mount()
+    await workbench.loadFilterOptions()
+    await workbench.reloadSidebarLists()
+    await vi.waitFor(() => {
+      expect(workbench.results.value.error).toBe('catalog unavailable')
+    })
+
+    workbench.retrySearch()
+
+    await vi.waitFor(() => {
+      expect(workbench.results.value.error).toBeNull()
+      expect(workbench.filterStrip.value.options?.climate_zones).toEqual(['Temperate'])
+      expect(workbench.sidebar.value).toEqual({
+        favoriteNames: ['Malus domestica'],
+        recentlyViewed: [makeSpeciesListItem('Melissa officinalis')],
+      })
+    })
+    expect(search).toHaveBeenCalledTimes(2)
+    expect(getFilterOptions).toHaveBeenCalledTimes(2)
+    expect(getFavorites).toHaveBeenCalledTimes(2)
+    expect(getRecentlyViewed).toHaveBeenCalledTimes(2)
+    unmount()
+    workbench.dispose()
+  })
+
+  it('does not publish filter metadata that resolves after disposal', async () => {
+    const pendingOptions = deferred<FilterOptions | null>()
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getFilterOptions: () => pendingOptions.promise,
+      getSupportedFilterFields: async () => ['climate_zones'],
+    })
+
+    const loading = workbench.loadFilterOptions()
+    workbench.dispose()
+    pendingOptions.resolve({
+      families: [],
+      growth_rates: [],
+      climate_zones: ['Temperate'],
+      habits: [],
+      life_cycles: [],
+      sun_tolerances: [],
+      soil_tolerances: [],
+    })
+    await loading
+
+    expect(workbench.filterStrip.value.options).toBeNull()
+  })
+
+  it('reconciles concurrent favorite mutations for different Species independently', async () => {
+    const appleToggle = deferred<boolean>()
+    const peachToggle = deferred<boolean>()
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      toggleFavorite: (canonicalName) => (
+        canonicalName === 'Malus domestica' ? appleToggle.promise : peachToggle.promise
+      ),
+    })
+
+    const toggleApple = workbench.toggleFavorite('Malus domestica')
+    const togglePeach = workbench.toggleFavorite('Prunus persica')
+    peachToggle.resolve(true)
+    await togglePeach
+    appleToggle.resolve(true)
+    await toggleApple
+
+    expect(new Set(workbench.sidebar.value.favoriteNames)).toEqual(new Set([
+      'Malus domestica',
+      'Prunus persica',
+    ]))
+  })
+
+  it('preserves unrelated local favorites when no authoritative read adapter exists', async () => {
+    const persistedNames = new Set<string>()
+    const searchItems = [
+      makeSpeciesListItem('Malus domestica'),
+      makeSpeciesListItem('Prunus persica'),
+    ]
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: searchItems, next_cursor: null, total_estimate: 2 }),
+      toggleFavorite: async (canonicalName) => {
+        if (persistedNames.has(canonicalName)) {
+          persistedNames.delete(canonicalName)
+          return false
+        }
+        persistedNames.add(canonicalName)
+        return true
+      },
+      textDebounceMs: 0,
+    })
+    const unmount = workbench.mount()
+    await vi.waitFor(() => expect(workbench.results.value.items).toHaveLength(2))
+
+    await workbench.toggleFavorite('Malus domestica')
+    await workbench.toggleFavorite('Prunus persica')
+    await workbench.toggleFavorite('Malus domestica')
+    await workbench.loadFavorites()
+    workbench.retrySearch()
+    await waitForMicrotasks()
+
+    expect(workbench.sidebar.value.favoriteNames).toEqual(['Prunus persica'])
+    expect(workbench.favorites.value.items.map((item) => item.canonical_name)).toEqual([
+      'Prunus persica',
+    ])
+    unmount()
+    workbench.dispose()
+  })
+
+  it('projects successful mutations onto search responses that resolve later', async () => {
+    const searchResult = deferred<{
+      items: ReturnType<typeof makeSpeciesListItem>[]
+      next_cursor: null
+      total_estimate: number
+    }>()
+    const workbench = createSpeciesCatalogWorkbench({
+      search: () => searchResult.promise,
+      toggleFavorite: async () => true,
+      textDebounceMs: 0,
+    })
+    const unmount = workbench.mount()
+
+    await workbench.toggleFavorite('Malus domestica')
+    searchResult.resolve({
+      items: [makeSpeciesListItem('Malus domestica')],
+      next_cursor: null,
+      total_estimate: 1,
+    })
+    await vi.waitFor(() => expect(workbench.results.value.items).toHaveLength(1))
+
+    expect(workbench.results.value.items[0]?.is_favorite).toBe(true)
+    unmount()
+    workbench.dispose()
+  })
+
+  it('projects a committed mutation onto a stale next page that publishes afterward', async () => {
+    const nextPage = deferred<{
+      items: ReturnType<typeof makeSpeciesListItem>[]
+      next_cursor: null
+      total_estimate: number
+    }>()
+    const toggle = deferred<boolean>()
+    const toggleFavorite = vi.fn(() => toggle.promise)
+    const search = vi.fn((request: SpeciesSearchRequest) => request.cursor
+      ? nextPage.promise
+      : Promise.resolve({
+          items: [makeSpeciesListItem('Malus domestica')],
+          next_cursor: 'next',
+          total_estimate: 2,
+        }))
+    const workbench = createSpeciesCatalogWorkbench({
+      search,
+      toggleFavorite,
+      textDebounceMs: 0,
+    })
+    const unmount = workbench.mount()
+    await vi.waitFor(() => expect(workbench.results.value.items).toHaveLength(1))
+    const loading = workbench.loadNextPage()
+    await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(2))
+    const toggling = workbench.toggleFavorite('Prunus persica')
+    await vi.waitFor(() => expect(toggleFavorite).toHaveBeenCalledOnce())
+
+    toggle.resolve(true)
+    nextPage.resolve({
+      items: [makeSpeciesListItem('Prunus persica')],
+      next_cursor: null,
+      total_estimate: 2,
+    })
+    await Promise.all([loading, toggling])
+
+    expect(workbench.results.value.items).toHaveLength(2)
+    expect(workbench.results.value.items[1]?.is_favorite).toBe(true)
+    unmount()
+    workbench.dispose()
+  })
+
+  it('publishes persisted mutations without waiting for an in-flight authoritative refresh', async () => {
+    const reconciliation = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    let nowFavorite = false
+    const toggleFavorite = vi.fn(async () => {
+      nowFavorite = !nowFavorite
+      return nowFavorite
+    })
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({
+        items: [makeSpeciesListItem('Malus domestica')],
+        next_cursor: null,
+        total_estimate: 1,
+      }),
+      getFavorites: () => reconciliation.promise,
+      toggleFavorite,
+      textDebounceMs: 0,
+    })
+    const unmount = workbench.mount()
+    await vi.waitFor(() => expect(workbench.results.value.items).toHaveLength(1))
+    void workbench.loadFavorites()
+
+    await workbench.toggleFavorite('Malus domestica')
+
+    expect(workbench.results.value.items[0]?.is_favorite).toBe(true)
+    expect(workbench.sidebar.value.favoriteNames).toEqual(['Malus domestica'])
+    expect(workbench.favorites.value.items[0]?.is_favorite).toBe(true)
+
+    await workbench.toggleFavorite('Malus domestica')
+
+    expect(toggleFavorite).toHaveBeenCalledTimes(2)
+    expect(workbench.results.value.items[0]?.is_favorite).toBe(false)
+    expect(workbench.sidebar.value.favoriteNames).toEqual([])
+    expect(workbench.favorites.value.items).toEqual([])
+    unmount()
+    workbench.dispose()
+  })
+
+  it('replays favorite mutations into stale Recently Viewed projections', async () => {
+    const staleRecent = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const apple = makeSpeciesListItem('Malus domestica')
+    let nowFavorite = false
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [apple], next_cursor: null, total_estimate: 1 }),
+      getFavorites: async () => [],
+      getRecentlyViewed: () => staleRecent.promise,
+      toggleFavorite: async () => {
+        nowFavorite = !nowFavorite
+        return nowFavorite
+      },
+      textDebounceMs: 0,
+    })
+    const unmount = workbench.mount()
+    await vi.waitFor(() => expect(workbench.results.value.items).toHaveLength(1))
+
+    const staleReload = workbench.reloadSidebarLists()
+    await workbench.toggleFavorite('Malus domestica')
+    staleRecent.resolve([apple])
+    await staleReload
+
+    expect(workbench.sidebar.value.recentlyViewed[0]?.is_favorite).toBe(true)
+
+    await workbench.toggleFavorite('Malus domestica')
+
+    expect(workbench.sidebar.value.recentlyViewed[0]?.is_favorite).toBe(false)
+    unmount()
+    workbench.dispose()
+  })
+
+  it('does not let a favorite list load supersede an admitted favorite mutation', async () => {
+    const toggle = deferred<boolean>()
+    const favoriteList = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const toggleFavorite = vi.fn(() => toggle.promise)
+    const authoritativeFavorites = [
+      makeSpeciesListItem('Malus domestica'),
+      makeSpeciesListItem('Melissa officinalis'),
+      makeSpeciesListItem('Prunus persica'),
+    ].map((item) => ({ ...item, is_favorite: true }))
+    const getFavorites = vi.fn()
+      .mockImplementationOnce(() => favoriteList.promise)
+      .mockResolvedValue(authoritativeFavorites)
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getFavorites,
+      toggleFavorite,
+    })
+
+    const mutation = workbench.toggleFavorite('Prunus persica')
+    await vi.waitFor(() => expect(toggleFavorite).toHaveBeenCalledOnce())
+    const loading = workbench.loadFavorites()
+    expect(workbench.favorites.value.loading).toBe(true)
+    toggle.resolve(true)
+    await mutation
+    favoriteList.resolve(authoritativeFavorites)
+    await loading
+
+    expect(workbench.favorites.value.items).toEqual(authoritativeFavorites)
+    expect(workbench.sidebar.value.favoriteNames).toEqual([
+      'Malus domestica',
+      'Melissa officinalis',
+      'Prunus persica',
+    ])
+    expect(workbench.favorites.value.loading).toBe(false)
+  })
+
+  it('settles favorite loading when an admitted mutation fails during a list load', async () => {
+    const toggle = deferred<boolean>()
+    const favoriteList = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const toggleFavorite = vi.fn(() => toggle.promise)
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getFavorites: () => favoriteList.promise,
+      toggleFavorite,
+    })
+
+    const mutation = workbench.toggleFavorite('Malus domestica')
+    await vi.waitFor(() => expect(toggleFavorite).toHaveBeenCalledOnce())
+    const loading = workbench.loadFavorites()
+    toggle.reject(new Error('favorite persistence failed'))
+    await mutation
+    favoriteList.resolve([])
+    await loading
+
+    expect(workbench.favorites.value.loading).toBe(false)
+  })
+
+  it('does not let a sidebar reload supersede an admitted favorite mutation', async () => {
+    const toggle = deferred<boolean>()
+    const sidebarFavorites = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const toggleFavorite = vi.fn(() => toggle.promise)
+    const getFavorites = vi.fn()
+      .mockImplementationOnce(() => sidebarFavorites.promise)
+      .mockResolvedValue([makeSpeciesListItem('Malus domestica')])
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getFavorites,
+      getRecentlyViewed: async () => [],
+      toggleFavorite,
+    })
+
+    const mutation = workbench.toggleFavorite('Malus domestica')
+    await vi.waitFor(() => expect(toggleFavorite).toHaveBeenCalledOnce())
+    const reload = workbench.reloadSidebarLists()
+    toggle.resolve(true)
+    await mutation
+    sidebarFavorites.resolve([])
+    await reload
+
+    expect(workbench.sidebar.value.favoriteNames).toEqual(['Malus domestica'])
+  })
+
+  it('coalesces a burst of mutations behind one active and one trailing favorites refresh', async () => {
+    const activeSnapshot = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const trailingSnapshot = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const getFavorites = vi.fn()
+      .mockImplementationOnce(() => activeSnapshot.promise)
+      .mockImplementationOnce(() => trailingSnapshot.promise)
+    const searchItems = [
+      makeSpeciesListItem('Malus domestica'),
+      makeSpeciesListItem('Melissa officinalis'),
+      makeSpeciesListItem('Prunus persica'),
+    ]
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: searchItems, next_cursor: null, total_estimate: 3 }),
+      getFavorites,
+      toggleFavorite: async () => true,
+      textDebounceMs: 0,
+    })
+    const unmount = workbench.mount()
+    await vi.waitFor(() => expect(workbench.results.value.items).toHaveLength(3))
+    const refresh = workbench.loadFavorites()
+    await vi.waitFor(() => expect(getFavorites).toHaveBeenCalledOnce())
+
+    await Promise.all([
+      workbench.toggleFavorite('Malus domestica'),
+      workbench.toggleFavorite('Melissa officinalis'),
+      workbench.toggleFavorite('Prunus persica'),
+    ])
+
+    expect(getFavorites).toHaveBeenCalledOnce()
+    activeSnapshot.resolve([])
+    await refresh
+    await vi.waitFor(() => expect(getFavorites).toHaveBeenCalledTimes(2))
+    trailingSnapshot.reject(new Error('latest refresh failed'))
+    await vi.waitFor(() => expect(workbench.favorites.value.loading).toBe(false))
+
+    expect(new Set(workbench.sidebar.value.favoriteNames)).toEqual(new Set([
+      'Malus domestica',
+      'Melissa officinalis',
+      'Prunus persica',
+    ]))
+    expect(new Set(workbench.favorites.value.items.map((item) => item.canonical_name))).toEqual(new Set([
+      'Malus domestica',
+      'Melissa officinalis',
+      'Prunus persica',
+    ]))
+    expect(getFavorites).toHaveBeenCalledTimes(2)
+    expect(workbench.favorites.value.loading).toBe(false)
+    unmount()
+    workbench.dispose()
+  })
+
+  it('uses one freshness order for every favorite-name projection', async () => {
+    const favoritePanelItems = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const sidebarItems = deferred<ReturnType<typeof makeSpeciesListItem>[]>()
+    const getFavorites = vi.fn()
+      .mockImplementationOnce(() => favoritePanelItems.promise)
+      .mockImplementationOnce(() => sidebarItems.promise)
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getFavorites,
+      getRecentlyViewed: async () => [],
+    })
+
+    const olderPanelLoad = workbench.loadFavorites()
+    const newerSidebarLoad = workbench.reloadSidebarLists()
+    sidebarItems.resolve([makeSpeciesListItem('Prunus persica')])
+    await newerSidebarLoad
+    favoritePanelItems.resolve([makeSpeciesListItem('Malus domestica')])
+    await olderPanelLoad
+
+    expect(workbench.sidebar.value.favoriteNames).toEqual(['Prunus persica'])
+    expect(workbench.favorites.value.items).toEqual([
+      { ...makeSpeciesListItem('Malus domestica'), is_favorite: true },
+    ])
+    expect(workbench.favorites.value.loading).toBe(false)
+  })
 })
 
 function searchRequest(overrides: Partial<SpeciesSearchRequest> = {}): SpeciesSearchRequest {
@@ -362,6 +793,40 @@ function memoryStorage(): BrowserStorageAdapter {
       values.delete(key)
     },
   }
+}
+
+function makeSpeciesListItem(canonicalName: string) {
+  return {
+    canonical_name: canonicalName,
+    slug: canonicalName.toLowerCase().replace(/\s+/g, '-'),
+    common_name: canonicalName,
+    common_name_2: null,
+    matched_common_name: null,
+    is_name_fallback: false,
+    family: null,
+    genus: null,
+    height_max_m: null,
+    hardiness_zone_min: null,
+    hardiness_zone_max: null,
+    growth_rate: null,
+    stratum: null,
+    climate_zones: [],
+    life_cycles: [],
+    edibility_rating: null,
+    medicinal_rating: null,
+    width_max_m: null,
+    is_favorite: false,
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
 
 async function waitForMicrotasks(): Promise<void> {

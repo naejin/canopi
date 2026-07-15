@@ -1,32 +1,16 @@
-import { browserAppDataStore } from '../../web/browser-app-data'
-import { createDuckDbReducedSpeciesCatalogReader } from '../../web/duckdb-wasm-catalog'
-import { createReducedSpeciesCatalogAdapters } from '../../web/reduced-species-catalog'
-import {
-  createSpeciesCatalogWorkbench,
-  type SpeciesCatalogWorkbench,
-} from './workbench'
+import type { SpeciesCatalogWorkbench } from './workbench'
+import { createBrowserSpeciesCatalogRuntime } from './browser-runtime'
 
-const catalogAdapters = createReducedSpeciesCatalogAdapters({
-  appDataStore: browserAppDataStore,
-  reader: createDuckDbReducedSpeciesCatalogReader(),
-})
+const liveSpeciesCatalog = createBrowserSpeciesCatalogRuntime()
 
-const liveSpeciesCatalogWorkbench = createSpeciesCatalogWorkbench({
-  search: catalogAdapters.search,
-  loadDynamicFilterOptions: catalogAdapters.loadDynamicFilterOptions,
-  getFilterOptions: catalogAdapters.getFilterOptions,
-  getSupportedFilterFields: catalogAdapters.getSupportedFilterFields,
-  getFavorites: catalogAdapters.getFavorites,
-  getRecentlyViewed: catalogAdapters.getRecentlyViewed,
-  getSpeciesDetail: catalogAdapters.getSpeciesDetail,
-  toggleFavorite: catalogAdapters.toggleFavorite,
-  onSpeciesSelected: catalogAdapters.recordRecentlyViewed,
-})
-
-export const speciesCatalogWorkbench: SpeciesCatalogWorkbench = liveSpeciesCatalogWorkbench
+export const speciesCatalogWorkbench: SpeciesCatalogWorkbench = liveSpeciesCatalog.workbench
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    liveSpeciesCatalogWorkbench.dispose()
+  import.meta.hot.dispose(async () => {
+    try {
+      await liveSpeciesCatalog.dispose()
+    } catch (error) {
+      console.error('Failed to dispose Web Species Catalog:', error)
+    }
   })
 }

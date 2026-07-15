@@ -5,6 +5,668 @@ import type { SpeciesSearchRequest } from '../types/species'
 import { validWebCatalogManifest } from './fixtures/web-catalog-manifest'
 
 describe('DuckDB-WASM reduced Species Catalog reader', () => {
+  it('retries initialization after a transient manifest fetch failure', async () => {
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const fetchJson = vi.fn()
+      .mockRejectedValueOnce(new Error('catalog temporarily unavailable'))
+      .mockResolvedValue(validWebCatalogManifest())
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson,
+      createDatabase: async () => database,
+    })
+
+    await expect(reader.getSupportedFilterFields()).rejects.toThrow('temporarily unavailable')
+    await expect(reader.getSupportedFilterFields()).resolves.toContain('climate_zones')
+
+    expect(fetchJson).toHaveBeenCalledTimes(2)
+    expect(database.connect).toHaveBeenCalledOnce()
+  })
+
+  it('terminates a database when connection acquisition fails', async () => {
+    const database = {
+      connect: vi.fn(async () => {
+        throw new Error('connection failed')
+      }),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+
+    await expect(reader.getSupportedFilterFields()).rejects.toThrow('connection failed')
+
+    expect(database.terminate).toHaveBeenCalledOnce()
+    expect(database.registerFileURL).not.toHaveBeenCalled()
+  })
+
+  it('rolls back failed asset registration before reacquiring a fresh database', async () => {
+    const failedConnection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const failedDatabase = {
+      connect: vi.fn(async () => failedConnection),
+      registerFileURL: vi.fn(async () => {
+        throw new Error('asset registration failed')
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const readyConnection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const readyDatabase = {
+      connect: vi.fn(async () => readyConnection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const createDatabase = vi.fn()
+      .mockResolvedValueOnce(failedDatabase)
+      .mockResolvedValueOnce(readyDatabase)
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase,
+    })
+
+    await expect(reader.getSupportedFilterFields()).rejects.toThrow('asset registration failed')
+    await expect(reader.getSupportedFilterFields()).resolves.toContain('climate_zones')
+
+    expect(failedConnection.close).toHaveBeenCalledOnce()
+    expect(failedDatabase.terminate).toHaveBeenCalledOnce()
+    expect(createDatabase).toHaveBeenCalledTimes(2)
+  })
+
+  it('waits for every base shard registration before rolling back a failed opening', async () => {
+    const siblingRegistration = deferred<void>()
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async (name: string) => {
+        if (name === 'species/species-0000.parquet') {
+          throw new Error('first shard registration failed')
+        }
+        if (name === 'species/species-0001.parquet') {
+          await siblingRegistration.promise
+        }
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => manifestWithShards('species', [
+        'species/species-0000.parquet',
+        'species/species-0001.parquet',
+      ]),
+      createDatabase: async () => database,
+    })
+
+    const opening = reader.getSupportedFilterFields()
+    await vi.waitFor(() => expect(database.registerFileURL).toHaveBeenCalledTimes(2))
+    await Promise.resolve()
+    expect(connection.close).not.toHaveBeenCalled()
+    expect(database.terminate).not.toHaveBeenCalled()
+
+    siblingRegistration.resolve(undefined)
+    await expect(opening).rejects.toThrow('first shard registration failed')
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('preserves the opening error when rollback also fails', async () => {
+    const openingError = new Error('asset registration failed')
+    const closeError = new Error('connection close failed')
+    const terminationError = new Error('database termination failed')
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {
+        throw closeError
+      }),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {
+        throw openingError
+      }),
+      terminate: vi.fn(async () => {
+        throw terminationError
+      }),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+
+    const error = await reader.getSupportedFilterFields().catch((caught: unknown) => caught)
+
+    expect(error).toMatchObject({
+      message: expect.stringContaining('asset registration failed'),
+      cause: openingError,
+      cleanupErrors: [closeError, terminationError],
+    })
+    await expect(reader.getSupportedFilterFields()).rejects.toBe(error)
+    expect(database.connect).toHaveBeenCalledOnce()
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('disposes ready resources exactly once and rejects later operations', async () => {
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+    await reader.getSupportedFilterFields()
+
+    const firstDisposal = reader.dispose()
+    const secondDisposal = reader.dispose()
+
+    expect(secondDisposal).toBe(firstDisposal)
+    await firstDisposal
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(database.terminate).toHaveBeenCalledOnce()
+    await expect(reader.getSupportedFilterFields()).rejects.toThrow(/disposed/i)
+  })
+
+  it('attempts database termination when connection close fails during disposal', async () => {
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {
+        throw new Error('connection close failed')
+      }),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+    await reader.getSupportedFilterFields()
+
+    await expect(reader.dispose()).rejects.toThrow('connection close failed')
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('force-terminates a ready database when connection close stalls', async () => {
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(() => new Promise<void>(() => {})),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+      disposeTimeoutMs: 0,
+    })
+    await reader.getSupportedFilterFields()
+
+    await reader.dispose()
+
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('force-terminates opening rollback when connection close stalls', async () => {
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(() => new Promise<void>(() => {})),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {
+        throw new Error('asset registration failed')
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+      disposeTimeoutMs: 0,
+    })
+
+    await expect(reader.getSupportedFilterFields()).rejects.toThrow('asset registration failed')
+
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('joins and reports late connection cleanup during an aborted opening', async () => {
+    const closeError = new Error('late connection close failed')
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {
+        throw closeError
+      }),
+    }
+    const connectionAcquisition = deferred<typeof connection>()
+    const database = {
+      connect: vi.fn(() => connectionAcquisition.promise),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+      disposeTimeoutMs: 50,
+    })
+
+    const operation = reader.getSupportedFilterFields()
+    await vi.waitFor(() => expect(database.connect).toHaveBeenCalledOnce())
+    const operationRejection = expect(operation).rejects.toThrow(/disposed/i)
+    const disposal = reader.dispose()
+    connectionAcquisition.resolve(connection)
+
+    await operationRejection
+    const disposalError = await disposal.catch((error: unknown) => error)
+    expect(disposalError).toMatchObject({
+      cleanupErrors: [closeError],
+    })
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('waits for an admitted query before closing its resources', async () => {
+    const queryResult = deferred<ReturnType<typeof table>>()
+    const connection = {
+      query: vi.fn(() => queryResult.promise),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+
+    const search = reader.searchSpecies(searchRequest(), new Set())
+    await vi.waitFor(() => expect(connection.query).toHaveBeenCalledOnce())
+    const searchRejection = expect(search).rejects.toThrow(/disposed/i)
+    const disposal = reader.dispose()
+    await Promise.resolve()
+    expect(connection.close).not.toHaveBeenCalled()
+
+    queryResult.resolve(table([]))
+    await searchRejection
+    await disposal
+    expect(connection.close).toHaveBeenCalledOnce()
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('forces terminal cleanup when an admitted query never settles', async () => {
+    const queryResult = deferred<ReturnType<typeof table>>()
+    const connection = {
+      query: vi.fn(() => queryResult.promise),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+      disposeTimeoutMs: 0,
+    })
+
+    const search = reader.searchSpecies(searchRequest(), new Set())
+    await vi.waitFor(() => expect(connection.query).toHaveBeenCalledOnce())
+    const searchRejection = expect(search).rejects.toThrow(/disposed/i)
+    await reader.dispose()
+
+    await searchRejection
+    expect(connection.close).not.toHaveBeenCalled()
+    expect(database.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('retires resources acquired while disposal is waiting on initialization', async () => {
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const databaseCreation = deferred<typeof database>()
+    const createDatabase = vi.fn(() => databaseCreation.promise)
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase,
+    })
+
+    const operation = reader.getSupportedFilterFields()
+    await vi.waitFor(() => expect(createDatabase).toHaveBeenCalledOnce())
+    const operationRejection = expect(operation).rejects.toThrow(/disposed/i)
+    const disposal = reader.dispose()
+    databaseCreation.resolve(database)
+
+    await operationRejection
+    await disposal
+    await vi.waitFor(() => expect(database.terminate).toHaveBeenCalledOnce())
+    expect(connection.close).not.toHaveBeenCalled()
+  })
+
+  it('aborts an in-flight manifest fetch when disposed', async () => {
+    const fetchSignals: AbortSignal[] = []
+    const fetchJson = vi.fn((_url: URL, signal: AbortSignal) => {
+      fetchSignals.push(signal)
+      return new Promise<unknown>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('manifest fetch aborted')), { once: true })
+      })
+    })
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson,
+      createDatabase: vi.fn(),
+    })
+
+    const operation = reader.getSupportedFilterFields()
+    await vi.waitFor(() => expect(fetchJson).toHaveBeenCalledOnce())
+    const disposal = reader.dispose()
+
+    expect(fetchSignals[0]?.aborted).toBe(true)
+    await expect(operation).rejects.toThrow(/disposed/i)
+    await disposal
+  })
+
+  it('coalesces concurrent registration of one locale shard', async () => {
+    const localeRegistration = deferred<void>()
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async (name: string) => {
+        if (name === 'names/names-fr.parquet') await localeRegistration.promise
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+    await reader.getSupportedFilterFields()
+    database.registerFileURL.mockClear()
+
+    const firstSearch = reader.searchSpecies(searchRequest({ locale: 'fr' }), new Set())
+    const secondSearch = reader.searchSpecies(searchRequest({ locale: 'fr' }), new Set())
+    await vi.waitFor(() => {
+      expect(database.registerFileURL).toHaveBeenCalledTimes(1)
+    })
+
+    localeRegistration.resolve(undefined)
+    await Promise.all([firstSearch, secondSearch])
+    expect(database.registerFileURL).toHaveBeenCalledOnce()
+  })
+
+  it('retries a locale shard after registration rejects', async () => {
+    let localeAttempts = 0
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async (name: string) => {
+        if (name !== 'names/names-fr.parquet') return
+        localeAttempts += 1
+        if (localeAttempts === 1) throw new Error('locale registration failed')
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+
+    await expect(reader.searchSpecies(searchRequest({ locale: 'fr' }), new Set()))
+      .rejects.toThrow('locale registration failed')
+    await expect(reader.searchSpecies(searchRequest({ locale: 'fr' }), new Set()))
+      .resolves.toMatchObject({ items: [] })
+    expect(localeAttempts).toBe(2)
+  })
+
+  it('coalesces concurrent registration of image shards', async () => {
+    const imageRegistration = deferred<void>()
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('web_species_images')) return table([])
+        return table([{
+          id: 'species-apple',
+          slug: 'malus-domestica',
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          localized_common_name: null,
+          matched_common_name: null,
+          climate_zones: '[]',
+          habit: 'Tree',
+          growth_form: 'Tree',
+          life_cycles: '[]',
+        }])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async (name: string) => {
+        if (name.startsWith('images/')) await imageRegistration.promise
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+    await reader.getSupportedFilterFields()
+
+    const firstDetail = reader.getSpeciesDetail('Malus domestica', 'en')
+    const secondDetail = reader.getSpeciesDetail('Malus domestica', 'en')
+    await vi.waitFor(() => {
+      expect(imageRegistrationCallCount(database.registerFileURL.mock.calls)).toBe(1)
+    })
+
+    imageRegistration.resolve(undefined)
+    await Promise.all([firstDetail, secondDetail])
+    expect(imageRegistrationCallCount(database.registerFileURL.mock.calls)).toBe(1)
+  })
+
+  it('retries image shards after registration rejects', async () => {
+    let imageAttempts = 0
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('web_species_images')) return table([])
+        return table([{
+          id: 'species-apple',
+          slug: 'malus-domestica',
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          localized_common_name: null,
+          matched_common_name: null,
+          climate_zones: '[]',
+          habit: 'Tree',
+          growth_form: 'Tree',
+          life_cycles: '[]',
+        }])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async (name: string) => {
+        if (!name.startsWith('images/')) return
+        imageAttempts += 1
+        if (imageAttempts === 1) throw new Error('image registration failed')
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+
+    await expect(reader.getSpeciesDetail('Malus domestica', 'en'))
+      .rejects.toThrow('image registration failed')
+    await expect(reader.getSpeciesDetail('Malus domestica', 'en'))
+      .resolves.toMatchObject({ canonical_name: 'Malus domestica', image: null })
+    expect(imageAttempts).toBe(2)
+  })
+
+  it('waits for sibling image registrations and retries only failed shards', async () => {
+    const siblingRegistration = deferred<void>()
+    let failedShardAttempts = 0
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('web_species_images')) return table([])
+        return table([{
+          id: 'species-apple',
+          slug: 'malus-domestica',
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          localized_common_name: null,
+          matched_common_name: null,
+          climate_zones: '[]',
+          habit: 'Tree',
+          growth_form: 'Tree',
+          life_cycles: '[]',
+        }])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async (name: string) => {
+        if (name === 'images/images-0000.parquet') {
+          failedShardAttempts += 1
+          if (failedShardAttempts === 1) throw new Error('first image shard failed')
+        }
+        if (name === 'images/images-0001.parquet') {
+          await siblingRegistration.promise
+        }
+      }),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => manifestWithShards('images', [
+        'images/images-0000.parquet',
+        'images/images-0001.parquet',
+      ]),
+      createDatabase: async () => database,
+    })
+    await reader.getSupportedFilterFields()
+
+    let firstDetailSettled = false
+    const firstDetail = reader.getSpeciesDetail('Malus domestica', 'en').then(
+      () => null,
+      (error: unknown) => error,
+    ).finally(() => {
+      firstDetailSettled = true
+    })
+    await vi.waitFor(() => {
+      expect(imageRegistrationCallCount(database.registerFileURL.mock.calls)).toBe(2)
+    })
+    await Promise.resolve()
+    expect(firstDetailSettled).toBe(false)
+
+    siblingRegistration.resolve(undefined)
+    await expect(firstDetail).resolves.toMatchObject({ message: 'first image shard failed' })
+    await expect(reader.getSpeciesDetail('Malus domestica', 'en'))
+      .resolves.toMatchObject({ canonical_name: 'Malus domestica', image: null })
+
+    const imageCalls = database.registerFileURL.mock.calls
+      .map(([name]) => name)
+      .filter((name) => String(name).startsWith('images/'))
+    expect(imageCalls).toEqual([
+      'images/images-0000.parquet',
+      'images/images-0001.parquet',
+      'images/images-0000.parquet',
+    ])
+  })
+
+  it('retries filter option projection after a transient query failure', async () => {
+    let filterQueryAttempts = 0
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        if (!sql.includes('SELECT s.climate_zones')) return table([])
+        filterQueryAttempts += 1
+        if (filterQueryAttempts === 1) throw new Error('filter query failed')
+        return table([{
+          climate_zones: '["Temperate"]',
+          habit: 'Tree',
+          growth_form: 'Woody',
+          life_cycles: '["Perennial"]',
+        }])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => ({
+        connect: vi.fn(async () => connection),
+        registerFileURL: vi.fn(async () => {}),
+        terminate: vi.fn(async () => {}),
+      }),
+    })
+
+    await expect(reader.getFilterOptions()).rejects.toThrow('filter query failed')
+    await expect(reader.getFilterOptions()).resolves.toMatchObject({
+      climate_zones: ['Temperate'],
+      habits: ['Tree', 'Woody'],
+      life_cycles: ['Perennial'],
+    })
+    expect(filterQueryAttempts).toBe(2)
+  })
+
   it('browses Species from Parquet assets and keeps DuckDB alive for reuse', async () => {
     const queries: string[] = []
     const connection = {
@@ -511,4 +1173,61 @@ function table(rows: readonly Record<string, unknown>[]): { toArray(): unknown[]
   return {
     toArray: () => [...rows],
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function manifestWithShards(
+  kind: 'species' | 'images',
+  paths: readonly string[],
+): Record<string, unknown> {
+  const manifest = validWebCatalogManifest() as {
+    [key: string]: unknown
+    assets: {
+      species: Array<Record<string, unknown>>
+      names: Record<string, Record<string, unknown>>
+      images: Array<Record<string, unknown>>
+    }
+    duckdb: {
+      reader: string
+      tables: {
+        web_species: string[]
+        web_species_names: string[]
+        web_species_images: string[]
+      }
+    }
+  }
+  const tableName = kind === 'species' ? 'web_species' : 'web_species_images'
+  const assets = paths.map((path, index) => ({
+    path,
+    bytes: 10,
+    sha256: String(index + 1).repeat(64),
+  }))
+
+  return {
+    ...manifest,
+    assets: {
+      ...manifest.assets,
+      [kind]: assets,
+    },
+    duckdb: {
+      ...manifest.duckdb,
+      tables: {
+        ...manifest.duckdb.tables,
+        [tableName]: [...paths],
+      },
+    },
+  }
+}
+
+function imageRegistrationCallCount(calls: unknown[][]): number {
+  return calls.filter(([name]) => typeof name === 'string' && name.startsWith('images/')).length
 }

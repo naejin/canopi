@@ -155,7 +155,7 @@ export function createSpeciesCatalogWorkbench({
   loadDynamicFilterOptions = emptyDynamicFilterOptionsAdapter,
   getFilterOptions: getFilterOptionsAdapter = emptyFilterOptionsAdapter,
   getSupportedFilterFields: getSupportedFilterFieldsAdapter,
-  getFavorites: getFavoritesAdapter = emptyFavoriteItemsAdapter,
+  getFavorites: getFavoritesAdapterOption,
   getRecentlyViewed: getRecentlyViewedAdapter = emptyRecentlyViewedAdapter,
   toggleFavorite: toggleFavoriteAdapter = emptyToggleFavoriteAdapter,
   getSpeciesDetail: getSpeciesDetailAdapter = emptySpeciesDetailAdapter,
@@ -164,6 +164,34 @@ export function createSpeciesCatalogWorkbench({
   pageSize,
   textDebounceMs,
 }: SpeciesCatalogWorkbenchOptions = {}): SpeciesCatalogWorkbench {
+  const getFavoritesAdapter = getFavoritesAdapterOption ?? emptyFavoriteItemsAdapter
+  const hasAuthoritativeFavoritesAdapter = getFavoritesAdapterOption !== undefined
+  const favoriteStateOverrides = new Map<string, boolean>()
+  const favoriteMutationItems = new Map<string, SpeciesListItem>()
+  const favoriteOverridesRevision = signal(0)
+
+  function projectFavoriteState(item: SpeciesListItem): SpeciesListItem {
+    const override = favoriteStateOverrides.get(item.canonical_name)
+    return override === undefined || override === item.is_favorite
+      ? item
+      : { ...item, is_favorite: override }
+  }
+
+  function reconcileFavoriteSnapshot(items: readonly SpeciesListItem[]): SpeciesListItem[] {
+    const reconciled = items
+      .filter((item) => favoriteStateOverrides.get(item.canonical_name) !== false)
+      .map((item) => (item.is_favorite ? item : { ...item, is_favorite: true }))
+    const presentNames = new Set(reconciled.map((item) => item.canonical_name))
+    for (const [canonicalName, nowFavorite] of favoriteStateOverrides) {
+      if (!nowFavorite || presentNames.has(canonicalName)) continue
+      const mutationItem = favoriteMutationItems.get(canonicalName)
+      if (!mutationItem) continue
+      reconciled.push({ ...mutationItem, is_favorite: true })
+      presentNames.add(canonicalName)
+    }
+    return reconciled
+  }
+
   const plantSearchSession = createPlantSearchSession({
     search,
     loadDynamicFilterOptions,
@@ -188,6 +216,14 @@ export function createSpeciesCatalogWorkbench({
   const favoriteItemsLoading = signal(false)
   const favoriteItemsRevision = signal(0)
   const recentlyViewed = signal<SpeciesListItem[]>([])
+  const projectedResults = computed<PlantSearchResultState>(() => {
+    void favoriteOverridesRevision.value
+    const result = plantSearchSession.results.value
+    return {
+      ...result,
+      items: result.items.map(projectFavoriteState),
+    }
+  })
   const allStripControls = plantFilterCatalog.stripControls()
   const stripControls = computed(() => {
     const supported = supportedFilterFields.value
@@ -235,16 +271,22 @@ export function createSpeciesCatalogWorkbench({
   }))
 
   let favoriteItemsGeneration = 0
+  let favoriteNamesGeneration = 0
   let sidebarListsGeneration = 0
   let detailGeneration = 0
+  let filterMetadataGeneration = 0
   let filterOptionsLoaded = false
   let supportedFilterFieldsLoaded = getSupportedFilterFieldsAdapter === undefined
   let filterMetadataPromise: Promise<void> | null = null
+  let favoriteItemsActivePromise: Promise<void> | null = null
+  let favoriteItemsQueuedReload: { promise: Promise<void>; resolve: () => void } | null = null
+  const favoriteToggleTails = new Map<string, Promise<void>>()
   let controllerUsers = 0
   let disposeSearchSession: (() => void) | null = null
+  let disposed = false
 
   function startPlantDbController(): void {
-    if (disposeSearchSession) return
+    if (disposed || disposeSearchSession) return
     disposeSearchSession = plantSearchSession.start()
   }
 
@@ -254,11 +296,14 @@ export function createSpeciesCatalogWorkbench({
   }
 
   async function loadFilterOptions(): Promise<void> {
+    if (disposed) return
     if (filterOptionsLoaded && supportedFilterFieldsLoaded) return
+    const generation = filterMetadataGeneration
     filterMetadataPromise ??= Promise.all([
       loadFilterOptionsProjection(),
       loadSupportedFilterFieldProjection(),
     ]).then(([nextOptions, nextSupportedFields]) => {
+      if (disposed || generation !== filterMetadataGeneration) return
       batch(() => {
         filterOptions.value = nextOptions
         if (nextSupportedFields !== null) {
@@ -295,86 +340,151 @@ export function createSpeciesCatalogWorkbench({
   }
 
   async function toggleFavoriteAction(canonicalName: string): Promise<void> {
+    if (disposed) return
+    const previous = favoriteToggleTails.get(canonicalName) ?? Promise.resolve()
+    const current = previous.then(() => performFavoriteToggle(canonicalName))
+    favoriteToggleTails.set(canonicalName, current)
     try {
-      favoriteItemsGeneration += 1
-      favoriteItemsLoading.value = false
-      favoriteItemsRevision.value += 1
+      await current
+    } finally {
+      if (favoriteToggleTails.get(canonicalName) === current) {
+        favoriteToggleTails.delete(canonicalName)
+      }
+    }
+  }
+
+  async function performFavoriteToggle(canonicalName: string): Promise<void> {
+    if (disposed) return
+    try {
       const nowFavorite = await toggleFavoriteAdapter(canonicalName)
-      const currentItem = plantSearchSession.results.value.items.find((item) => (
+      if (disposed) return
+      favoriteStateOverrides.set(canonicalName, nowFavorite)
+      favoriteOverridesRevision.value += 1
+      favoriteItemsGeneration += 1
+      favoriteNamesGeneration += 1
+      const localMutationItem = plantSearchSession.results.value.items.find((item) => (
+        item.canonical_name === canonicalName
+      )) ?? favoriteItems.value.find((item) => (
+        item.canonical_name === canonicalName
+      )) ?? recentlyViewed.value.find((item) => (
         item.canonical_name === canonicalName
       ))
+      if (localMutationItem) favoriteMutationItems.set(canonicalName, localMutationItem)
 
-      if (nowFavorite) {
-        batch(() => {
-          if (!favoriteNames.value.includes(canonicalName)) {
-            favoriteNames.value = [...favoriteNames.value, canonicalName]
-          }
-          favoriteItems.value = currentItem
-            ? [
-                { ...currentItem, is_favorite: true },
-                ...favoriteItems.value.filter((item) => item.canonical_name !== canonicalName),
-              ]
-            : favoriteItems.value.map((item) =>
-                item.canonical_name === canonicalName
-                  ? { ...item, is_favorite: true }
-                  : item,
-              )
-        })
-      } else {
-        batch(() => {
-          favoriteNames.value = favoriteNames.value.filter((name) => name !== canonicalName)
-          favoriteItems.value = favoriteItems.value.filter((item) => item.canonical_name !== canonicalName)
-        })
-      }
+      batch(() => {
+        favoriteNames.value = reconcileFavoriteNames(
+          favoriteNames.value,
+          canonicalName,
+          nowFavorite,
+        )
+        favoriteItems.value = reconcileFavoriteItems(
+          favoriteItems.value,
+          localMutationItem,
+          canonicalName,
+          nowFavorite,
+        )
+        recentlyViewed.value = recentlyViewed.value.map(projectFavoriteState)
+      })
 
       plantSearchSession.updateResultItem(canonicalName, (item) => ({
         ...item,
         is_favorite: nowFavorite,
       }))
+      if (favoriteItemsActivePromise) void queueFavoriteItemsReload()
+      favoriteItemsRevision.value += 1
     } catch {
       // Non-fatal: UI state remains as it was before the attempted toggle.
     }
   }
 
   async function loadSidebarLists(): Promise<void> {
+    if (disposed) return
     const generation = ++sidebarListsGeneration
+    const favoriteGeneration = ++favoriteNamesGeneration
     const currentLocale = localeSignal.value
     try {
       const [favorites, recent] = await Promise.all([
-        getFavoritesAdapter(currentLocale),
+        hasAuthoritativeFavoritesAdapter
+          ? getFavoritesAdapter(currentLocale).then(reconcileFavoriteSnapshot)
+          : Promise.resolve(null),
         getRecentlyViewedAdapter(currentLocale, 50),
       ])
-      if (generation !== sidebarListsGeneration || currentLocale !== localeSignal.value) return
+      if (disposed || generation !== sidebarListsGeneration || currentLocale !== localeSignal.value) return
       batch(() => {
-        favoriteNames.value = favorites.map((item) => item.canonical_name)
-        recentlyViewed.value = recent
+        if (favorites && favoriteGeneration === favoriteNamesGeneration) {
+          favoriteNames.value = favorites.map((item) => item.canonical_name)
+        }
+        recentlyViewed.value = recent.map(projectFavoriteState)
       })
     } catch {
       // Non-fatal: sidebar affordances stay stale rather than blocking search.
     }
   }
 
-  async function loadFavoriteItems(): Promise<void> {
-    const generation = ++favoriteItemsGeneration
-    const requestedLocale = localeSignal.value
+  function loadFavoriteItems(): Promise<void> {
+    if (disposed || !hasAuthoritativeFavoritesAdapter) return Promise.resolve()
+    return favoriteItemsActivePromise ? queueFavoriteItemsReload() : startFavoriteItemsLoad()
+  }
+
+  function startFavoriteItemsLoad(): Promise<void> {
     favoriteItemsLoading.value = true
+    const attempt = runFavoriteItemsLoadAttempt()
+    let ownedPromise: Promise<void>
+    ownedPromise = attempt.finally(() => finishFavoriteItemsLoad(ownedPromise))
+    favoriteItemsActivePromise = ownedPromise
+    return ownedPromise
+  }
+
+  function queueFavoriteItemsReload(): Promise<void> {
+    if (disposed) return Promise.resolve()
+    if (!favoriteItemsQueuedReload) {
+      let resolve!: () => void
+      const promise = new Promise<void>((next) => {
+        resolve = next
+      })
+      favoriteItemsQueuedReload = { promise, resolve }
+    }
+    return favoriteItemsQueuedReload.promise
+  }
+
+  function finishFavoriteItemsLoad(ownedPromise: Promise<void>): void {
+    if (favoriteItemsActivePromise !== ownedPromise) return
+    favoriteItemsActivePromise = null
+    const queuedReload = favoriteItemsQueuedReload
+    favoriteItemsQueuedReload = null
+    if (disposed || !queuedReload) {
+      if (!disposed) favoriteItemsLoading.value = false
+      queuedReload?.resolve()
+      return
+    }
+    const trailing = startFavoriteItemsLoad()
+    void trailing.then(queuedReload.resolve, queuedReload.resolve)
+  }
+
+  async function runFavoriteItemsLoadAttempt(): Promise<void> {
+    const generation = ++favoriteItemsGeneration
+    const favoriteGeneration = ++favoriteNamesGeneration
+    const requestedLocale = localeSignal.value
     try {
-      const items = await getFavoritesAdapter(requestedLocale)
-      if (generation !== favoriteItemsGeneration || requestedLocale !== localeSignal.value) return
+      const items = reconcileFavoriteSnapshot(await getFavoritesAdapter(requestedLocale))
+      if (
+        disposed
+        || generation !== favoriteItemsGeneration
+        || requestedLocale !== localeSignal.value
+      ) return
       batch(() => {
         favoriteItems.value = items
-        favoriteNames.value = items.map((item) => item.canonical_name)
+        if (favoriteGeneration === favoriteNamesGeneration) {
+          favoriteNames.value = items.map((item) => item.canonical_name)
+        }
       })
     } catch {
       // Non-fatal: the favorites panel keeps its previous content.
-    } finally {
-      if (generation === favoriteItemsGeneration) {
-        favoriteItemsLoading.value = false
-      }
     }
   }
 
   async function loadSpeciesDetail(canonicalName: string): Promise<void> {
+    if (disposed) return
     const generation = ++detailGeneration
     const requestedLocale = localeSignal.value
     detail.value = {
@@ -386,7 +496,7 @@ export function createSpeciesCatalogWorkbench({
 
     try {
       const nextDetail = await getSpeciesDetailAdapter(canonicalName, requestedLocale)
-      if (generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
+      if (disposed || generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
       detail.value = {
         canonicalName,
         detail: nextDetail,
@@ -394,7 +504,7 @@ export function createSpeciesCatalogWorkbench({
         error: null,
       }
     } catch (error) {
-      if (generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
+      if (disposed || generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
       detail.value = {
         canonicalName,
         detail: null,
@@ -406,7 +516,7 @@ export function createSpeciesCatalogWorkbench({
 
   return {
     intent: plantSearchSession.intent,
-    results: plantSearchSession.results,
+    results: projectedResults,
     selectedCanonicalName: selectedCanonical,
     viewMode: currentViewMode,
     hasActiveFilters,
@@ -417,6 +527,7 @@ export function createSpeciesCatalogWorkbench({
     detail,
 
     mount() {
+      if (disposed) return () => {}
       controllerUsers += 1
       startPlantDbController()
 
@@ -429,11 +540,22 @@ export function createSpeciesCatalogWorkbench({
     },
 
     dispose() {
+      if (disposed) return
+      disposed = true
       controllerUsers = 0
       stopPlantDbController()
+      plantSearchSession.dispose()
+      favoriteItemsGeneration += 1
+      favoriteNamesGeneration += 1
+      sidebarListsGeneration += 1
+      detailGeneration += 1
+      filterMetadataGeneration += 1
+      favoriteItemsQueuedReload?.resolve()
+      favoriteItemsQueuedReload = null
     },
 
     ensureInitialSearch() {
+      if (disposed) return
       const results = plantSearchSession.results.value
       if (results.items.length === 0 && !isPlantSearchLoading(results.status)) {
         plantSearchSession.retry()
@@ -445,46 +567,59 @@ export function createSpeciesCatalogWorkbench({
     loadFilterOptions,
 
     setSearchText(text) {
+      if (disposed) return
       plantSearchSession.setText(text)
     },
 
     clearSearchText() {
+      if (disposed) return
       plantSearchSession.setText('')
     },
 
     retrySearch() {
+      if (disposed) return
       plantSearchSession.retry()
+      void loadFilterOptions()
+      void loadSidebarLists()
     },
 
     loadNextPage() {
+      if (disposed) return Promise.resolve()
       return plantSearchSession.loadNextPage()
     },
 
     setViewMode(mode) {
+      if (disposed) return
       viewMode.value = mode
     },
 
     patchFilters(patch) {
+      if (disposed) return
       plantSearchSession.patchFilters(patch)
     },
 
     clearFilters() {
+      if (disposed) return
       plantSearchSession.clearFilters()
     },
 
     addExtraFilter(field, op, values) {
+      if (disposed) return
       plantSearchSession.addExtraFilter(field, op, values)
     },
 
     removeExtraFilter(field) {
+      if (disposed) return
       plantSearchSession.removeExtraFilter(field)
     },
 
     loadDynamicOptions(fields) {
+      if (disposed) return Promise.resolve()
       return plantSearchSession.loadDynamicOptions(fields)
     },
 
     selectSpecies(canonicalName) {
+      if (disposed) return
       selectedCanonicalName.value = canonicalName
       void loadSpeciesDetail(canonicalName)
       try {
@@ -497,6 +632,7 @@ export function createSpeciesCatalogWorkbench({
     },
 
     closeSpeciesDetail() {
+      if (disposed) return
       detailGeneration += 1
       selectedCanonicalName.value = null
       detail.value = {
@@ -517,4 +653,31 @@ export function createSpeciesCatalogWorkbench({
 
     isActiveSearchText: isActiveSpeciesSearchText,
   }
+}
+
+function reconcileFavoriteNames(
+  names: readonly string[],
+  canonicalName: string,
+  nowFavorite: boolean,
+): string[] {
+  if (!nowFavorite) return names.filter((name) => name !== canonicalName)
+  return names.includes(canonicalName) ? [...names] : [...names, canonicalName]
+}
+
+function reconcileFavoriteItems(
+  items: readonly SpeciesListItem[],
+  mutationItem: SpeciesListItem | undefined,
+  canonicalName: string,
+  nowFavorite: boolean,
+): SpeciesListItem[] {
+  if (!nowFavorite) return items.filter((item) => item.canonical_name !== canonicalName)
+  const existing = items.find((item) => item.canonical_name === canonicalName)
+  if (existing) {
+    return items.map((item) => (
+      item.canonical_name === canonicalName ? { ...item, is_favorite: true } : item
+    ))
+  }
+  return mutationItem
+    ? [{ ...mutationItem, is_favorite: true }, ...items]
+    : [...items]
 }

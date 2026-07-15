@@ -41,8 +41,42 @@ interface DuckDbCatalogDatabase {
 
 interface DuckDbReducedSpeciesCatalogReaderOptions {
   readonly catalogBaseUrl?: URL
-  readonly fetchJson?: (url: URL) => Promise<unknown>
-  readonly createDatabase?: () => Promise<DuckDbCatalogDatabase>
+  readonly fetchJson?: (url: URL, signal: AbortSignal) => Promise<unknown>
+  readonly createDatabase?: (signal: AbortSignal) => Promise<DuckDbCatalogDatabase>
+  readonly disposeTimeoutMs?: number
+}
+
+class DuckDbCatalogDisposedError extends Error {
+  constructor() {
+    super('Web Species Catalog reader is disposed.')
+    this.name = 'DuckDbCatalogDisposedError'
+  }
+}
+
+class DuckDbCatalogOpeningError extends Error {
+  readonly cause: unknown
+  readonly cleanupErrors: readonly unknown[]
+
+  constructor(cause: unknown, cleanupErrors: readonly unknown[]) {
+    super(`Failed to open Web Species Catalog: ${describeError(cause)}`)
+    this.name = 'DuckDbCatalogOpeningError'
+    this.cause = cause
+    this.cleanupErrors = cleanupErrors
+  }
+}
+
+class DuckDbCatalogCleanupError extends Error {
+  readonly cleanupErrors: readonly unknown[]
+
+  constructor(cleanupErrors: readonly unknown[]) {
+    super(`Failed to dispose Web Species Catalog: ${cleanupErrors.map(describeError).join('; ')}`)
+    this.name = 'DuckDbCatalogCleanupError'
+    this.cleanupErrors = cleanupErrors
+  }
+}
+
+export interface DuckDbReducedSpeciesCatalogReader extends ReducedSpeciesCatalogReader {
+  dispose(): Promise<void>
 }
 
 interface NormalizedSearchText {
@@ -55,14 +89,76 @@ const EMPTY_SEARCH_TEXT: NormalizedSearchText = {
   tokens: [],
 }
 
+const DEFAULT_DISPOSE_TIMEOUT_MS = 250
+
 export function createDuckDbReducedSpeciesCatalogReader(
   options: DuckDbReducedSpeciesCatalogReaderOptions = {},
-): ReducedSpeciesCatalogReader {
-  let readerPromise: Promise<ReducedSpeciesCatalogReader> | null = null
+): DuckDbReducedSpeciesCatalogReader {
+  let readerPromise: Promise<DuckDbParquetReducedSpeciesCatalogReader> | null = null
+  let openingAbort: AbortController | null = null
+  const operationAbort = new AbortController()
+  let disposed = false
+  let disposePromise: Promise<void> | null = null
+  const activeOperations = new Set<Promise<unknown>>()
 
-  async function reader(): Promise<ReducedSpeciesCatalogReader> {
-    readerPromise ??= loadDuckDbCatalogReader(options)
-    return readerPromise
+  async function reader(): Promise<DuckDbParquetReducedSpeciesCatalogReader> {
+    let current = readerPromise
+    if (!current) {
+      openingAbort = new AbortController()
+      current = loadDuckDbCatalogReader(options, openingAbort.signal)
+      readerPromise = current
+    }
+    try {
+      const loaded = await current
+      if (readerPromise === current) openingAbort = null
+      return loaded
+    } catch (error) {
+      if (readerPromise === current) {
+        if (!(error instanceof DuckDbCatalogOpeningError)) {
+          readerPromise = null
+        }
+        openingAbort = null
+      }
+      throw error
+    }
+  }
+
+  function run<T>(
+    operation: (loaded: DuckDbParquetReducedSpeciesCatalogReader) => Promise<T>,
+  ): Promise<T> {
+    if (disposed) return Promise.reject(new DuckDbCatalogDisposedError())
+    const active = reader().then((loaded) => {
+      if (disposed) throw new DuckDbCatalogDisposedError()
+      return operation(loaded)
+    })
+    activeOperations.add(active)
+    active.then(
+      () => activeOperations.delete(active),
+      () => activeOperations.delete(active),
+    )
+    return rejectOnAbort(active, operationAbort.signal)
+  }
+
+  async function disposeReader(): Promise<void> {
+    const opening = readerPromise
+    let loaded: DuckDbParquetReducedSpeciesCatalogReader | null = null
+    if (opening) {
+      try {
+        loaded = await opening
+      } catch (error) {
+        if (error instanceof DuckDbCatalogOpeningError) throw error
+      }
+    }
+    const drained = await settleWithin(
+      [...activeOperations],
+      options.disposeTimeoutMs ?? DEFAULT_DISPOSE_TIMEOUT_MS,
+    )
+    if (!loaded) return
+    if (drained) {
+      await loaded.dispose()
+    } else {
+      await loaded.forceDispose()
+    }
   }
 
   return {
@@ -70,7 +166,7 @@ export function createDuckDbReducedSpeciesCatalogReader(
       request: SpeciesSearchRequest,
       favoriteNames: ReadonlySet<string>,
     ): Promise<PaginatedResult<SpeciesListItem>> {
-      return (await reader()).searchSpecies(request, favoriteNames)
+      return run((loaded) => loaded.searchSpecies(request, favoriteNames))
     },
 
     async listSpeciesByCanonicalNames(
@@ -78,64 +174,111 @@ export function createDuckDbReducedSpeciesCatalogReader(
       locale: string,
       favoriteNames: ReadonlySet<string>,
     ): Promise<SpeciesListItem[]> {
-      return (await reader()).listSpeciesByCanonicalNames(canonicalNames, locale, favoriteNames)
+      return run((loaded) => loaded.listSpeciesByCanonicalNames(canonicalNames, locale, favoriteNames))
     },
 
     async getFilterOptions(): Promise<FilterOptions> {
-      return (await reader()).getFilterOptions()
+      return run((loaded) => loaded.getFilterOptions())
     },
 
     async getSupportedFilterFields(): Promise<readonly string[]> {
-      return (await reader()).getSupportedFilterFields()
+      return run((loaded) => loaded.getSupportedFilterFields())
     },
 
     async getDynamicFilterOptions(
       fields: readonly string[],
       locale: string,
     ): Promise<DynamicFilterOptions[]> {
-      return (await reader()).getDynamicFilterOptions(fields, locale)
+      return run((loaded) => loaded.getDynamicFilterOptions(fields, locale))
     },
 
     async getSpeciesDetail(canonicalName: string, locale: string): Promise<SpeciesCatalogDetail | null> {
-      return (await reader()).getSpeciesDetail(canonicalName, locale)
+      return run((loaded) => loaded.getSpeciesDetail(canonicalName, locale))
+    },
+
+    dispose(): Promise<void> {
+      if (disposePromise) return disposePromise
+      disposed = true
+      const disposedError = new DuckDbCatalogDisposedError()
+      openingAbort?.abort(disposedError)
+      operationAbort.abort(disposedError)
+      disposePromise = disposeReader()
+      return disposePromise
     },
   }
 }
 
 async function loadDuckDbCatalogReader(
   options: DuckDbReducedSpeciesCatalogReaderOptions,
-): Promise<ReducedSpeciesCatalogReader> {
+  signal: AbortSignal,
+): Promise<DuckDbParquetReducedSpeciesCatalogReader> {
   const catalogBaseUrl = options.catalogBaseUrl ?? defaultCatalogBaseUrl()
+  const cleanupTimeoutMs = options.disposeTimeoutMs ?? DEFAULT_DISPOSE_TIMEOUT_MS
   const fetchJson = options.fetchJson ?? fetchCatalogJson
-  const manifest = admitWebCatalogManifest(await fetchJson(new URL('manifest.json', catalogBaseUrl)))
-  const database = await (options.createDatabase ?? instantiateDuckDb)()
-  const connection = await Promise.resolve(database.connect())
+  const manifest = admitWebCatalogManifest(await fetchJson(new URL('manifest.json', catalogBaseUrl), signal))
+  throwIfAborted(signal)
+  const database = options.createDatabase
+    ? await options.createDatabase(signal)
+    : await instantiateDuckDb(signal)
+  let connection: DuckDbCatalogConnection | null = null
+  let connectionAttempt: Promise<DuckDbCatalogConnection> | null = null
 
   try {
-    await registerCatalogAssets(database, catalogBaseUrl, manifest)
+    throwIfAborted(signal)
+    connectionAttempt = Promise.resolve().then(() => database.connect())
+    connection = await rejectOnAbort(connectionAttempt, signal)
+    throwIfAborted(signal)
+    await rejectOnAbort(registerCatalogAssets(database, catalogBaseUrl, manifest), signal)
+    throwIfAborted(signal)
     return new DuckDbParquetReducedSpeciesCatalogReader(
       database,
       connection,
       catalogBaseUrl,
       manifest,
+      cleanupTimeoutMs,
     )
   } catch (error) {
-    await closeDuckDb(database, connection)
+    const cleanupErrors = await cleanupDuckDb(database, connection, cleanupTimeoutMs)
+    if (signal.aborted && connection === null && connectionAttempt) {
+      cleanupErrors.push(...await cleanupLateConnectionAttempt(
+        connectionAttempt,
+        cleanupTimeoutMs,
+      ))
+    }
+    if (cleanupErrors.length > 0) {
+      throw new DuckDbCatalogOpeningError(error, cleanupErrors)
+    }
     throw error
   }
 }
 
 class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogReader {
-  private readonly registeredLocaleAssets = new Set<string>()
+  private readonly localeAssetRegistrations = new Map<string, Promise<void>>()
+  private readonly imageAssetRegistrations = new Map<string, Promise<void>>()
   private filterOptionsPromise: Promise<FilterOptions> | null = null
-  private imageAssetsRegistered = false
+  private disposePromise: Promise<void> | null = null
 
   constructor(
     private readonly database: DuckDbCatalogDatabase,
     private readonly connection: DuckDbCatalogConnection,
     private readonly catalogBaseUrl: URL,
     private readonly manifest: WebCatalogManifest,
+    private readonly cleanupTimeoutMs: number,
   ) {}
+
+  dispose(): Promise<void> {
+    this.disposePromise ??= closeDuckDb(
+      this.database,
+      this.connection,
+      this.cleanupTimeoutMs,
+    )
+    return this.disposePromise
+  }
+
+  forceDispose(): Promise<void> {
+    this.disposePromise ??= forceTerminateDuckDb(this.database)
+    return this.disposePromise
+  }
 
   async searchSpecies(
     request: SpeciesSearchRequest,
@@ -206,8 +349,14 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
   }
 
   async getFilterOptions(): Promise<FilterOptions> {
-    this.filterOptionsPromise ??= this.loadFilterOptions()
-    return this.filterOptionsPromise
+    const current = this.filterOptionsPromise ?? this.loadFilterOptions()
+    this.filterOptionsPromise = current
+    try {
+      return await current
+    } catch (error) {
+      if (this.filterOptionsPromise === current) this.filterOptionsPromise = null
+      throw error
+    }
   }
 
   async getSupportedFilterFields(): Promise<readonly string[]> {
@@ -290,30 +439,50 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
   }
 
   private async ensureLocaleNameAsset(locale: string): Promise<void> {
-    if (this.registeredLocaleAssets.has(locale)) return
+    const current = this.localeAssetRegistrations.get(locale)
+    if (current) return current
     const asset = this.manifest.assets.names[locale]
-    if (asset) {
-      await this.database.registerFileURL(
-        asset.path,
-        new URL(asset.path, this.catalogBaseUrl).toString(),
-        duckdb.DuckDBDataProtocol.HTTP,
-        false,
-      )
+    const registration = Promise.resolve().then(() => (asset
+      ? this.database.registerFileURL(
+          asset.path,
+          new URL(asset.path, this.catalogBaseUrl).toString(),
+          duckdb.DuckDBDataProtocol.HTTP,
+          false,
+        )
+      : undefined))
+    this.localeAssetRegistrations.set(locale, registration)
+    try {
+      await registration
+    } catch (error) {
+      if (this.localeAssetRegistrations.get(locale) === registration) {
+        this.localeAssetRegistrations.delete(locale)
+      }
+      throw error
     }
-    this.registeredLocaleAssets.add(locale)
   }
 
   private async ensureImageAssets(): Promise<void> {
-    if (this.imageAssetsRegistered) return
-    await Promise.all(this.manifest.assets.images.map((asset) => (
-      this.database.registerFileURL(
-        asset.path,
-        new URL(asset.path, this.catalogBaseUrl).toString(),
-        duckdb.DuckDBDataProtocol.HTTP,
-        false,
-      )
+    await allSettledOrThrow(this.manifest.assets.images.map((asset) => (
+      this.ensureImageAsset(asset.path)
     )))
-    this.imageAssetsRegistered = true
+  }
+
+  private ensureImageAsset(path: string): Promise<void> {
+    const current = this.imageAssetRegistrations.get(path)
+    if (current) return current
+    const registration = Promise.resolve().then(() => this.database.registerFileURL(
+      path,
+      new URL(path, this.catalogBaseUrl).toString(),
+      duckdb.DuckDBDataProtocol.HTTP,
+      false,
+    ))
+    this.imageAssetRegistrations.set(path, registration)
+    void registration.catch(() => {
+      if (this.imageAssetRegistrations.get(path) === registration) {
+        this.imageAssetRegistrations.delete(path)
+      }
+    })
+    return registration
   }
 
   private async loadHeroImage(speciesId: string): Promise<ReducedSpeciesImageRow | null> {
@@ -347,16 +516,75 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
 async function closeDuckDb(
   database: DuckDbCatalogDatabase,
   connection: DuckDbCatalogConnection,
+  timeoutMs: number,
 ): Promise<void> {
+  const cleanupErrors = await cleanupDuckDb(database, connection, timeoutMs)
+  if (cleanupErrors.length > 0) throw new DuckDbCatalogCleanupError(cleanupErrors)
+}
+
+async function cleanupDuckDb(
+  database: DuckDbCatalogDatabase,
+  connection: DuckDbCatalogConnection | null,
+  timeoutMs = DEFAULT_DISPOSE_TIMEOUT_MS,
+): Promise<unknown[]> {
+  const errors: unknown[] = []
+  if (connection) {
+    errors.push(...await closeDuckDbConnection(connection, timeoutMs))
+  }
+  errors.push(...await terminateDuckDb(database))
+  return errors
+}
+
+async function cleanupLateConnectionAttempt(
+  connectionAttempt: Promise<DuckDbCatalogConnection>,
+  timeoutMs: number,
+): Promise<unknown[]> {
+  const outcome = await settlePromiseWithin(connectionAttempt, timeoutMs)
+  if (outcome.status === 'rejected') return []
+  if (outcome.status === 'fulfilled') {
+    return closeDuckDbConnection(outcome.value, timeoutMs)
+  }
+  void connectionAttempt.then((connection) => {
+    void closeDuckDbConnection(connection, timeoutMs)
+  }, () => {})
+  return []
+}
+
+async function closeDuckDbConnection(
+  connection: DuckDbCatalogConnection,
+  timeoutMs: number,
+): Promise<unknown[]> {
+  const outcome = await settlePromiseWithin(
+    Promise.resolve().then(() => connection.close()),
+    timeoutMs,
+  )
+  return outcome.status === 'rejected' ? [outcome.reason] : []
+}
+
+async function terminateDuckDb(database: DuckDbCatalogDatabase): Promise<unknown[]> {
   try {
-    await connection.close()
-  } finally {
     await database.terminate()
+    return []
+  } catch (error) {
+    return [error]
   }
 }
 
-async function instantiateDuckDb(): Promise<DuckDbCatalogDatabase> {
-  const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles())
+async function forceTerminateDuckDb(database: DuckDbCatalogDatabase): Promise<void> {
+  const cleanupErrors = await terminateDuckDb(database)
+  if (cleanupErrors.length > 0) throw new DuckDbCatalogCleanupError(cleanupErrors)
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function instantiateDuckDb(signal: AbortSignal): Promise<DuckDbCatalogDatabase> {
+  const bundle = await rejectOnAbort(
+    duckdb.selectBundle(duckdb.getJsDelivrBundles()),
+    signal,
+  )
+  throwIfAborted(signal)
   if (bundle.mainWorker === null) {
     throw new Error('DuckDB-WASM did not provide a browser worker bundle.')
   }
@@ -367,9 +595,26 @@ async function instantiateDuckDb(): Promise<DuckDbCatalogDatabase> {
 
   try {
     const worker = new Worker(workerUrl)
-    const database = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker)
-    await database.instantiate(bundle.mainModule, bundle.pthreadWorker)
-    return database
+    let database: duckdb.AsyncDuckDB
+    try {
+      database = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker)
+    } catch (error) {
+      worker.terminate()
+      throw error
+    }
+    try {
+      await rejectOnAbort(
+        database.instantiate(bundle.mainModule, bundle.pthreadWorker),
+        signal,
+      )
+      return database
+    } catch (error) {
+      const cleanupErrors = await cleanupDuckDb(database, null)
+      if (cleanupErrors.length > 0) {
+        throw new DuckDbCatalogOpeningError(error, cleanupErrors)
+      }
+      throw error
+    }
   } finally {
     URL.revokeObjectURL(workerUrl)
   }
@@ -383,14 +628,88 @@ async function registerCatalogAssets(
   const assets = [
     ...manifest.assets.species,
   ]
-  await Promise.all(assets.map((asset) => (
+  await allSettledOrThrow(assets.map((asset) => Promise.resolve().then(() => (
     database.registerFileURL(
       asset.path,
       new URL(asset.path, catalogBaseUrl).toString(),
       duckdb.DuckDBDataProtocol.HTTP,
       false,
     )
-  )))
+  ))))
+}
+
+async function allSettledOrThrow(promises: readonly Promise<unknown>[]): Promise<void> {
+  const results = await Promise.allSettled(promises)
+  const failure = results.find((result): result is PromiseRejectedResult => (
+    result.status === 'rejected'
+  ))
+  if (failure) throw failure.reason
+}
+
+function rejectOnAbort<T>(promise: PromiseLike<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortReason(signal))
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort)
+      reject(abortReason(signal))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    void Promise.resolve(promise).then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      },
+    )
+  })
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw abortReason(signal)
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DuckDbCatalogDisposedError()
+}
+
+async function settleWithin(
+  promises: readonly Promise<unknown>[],
+  timeoutMs: number,
+): Promise<boolean> {
+  if (promises.length === 0) return true
+  const outcome = await settlePromiseWithin(Promise.allSettled(promises), timeoutMs)
+  return outcome.status === 'fulfilled'
+}
+
+type BoundedSettlement<T> =
+  | { readonly status: 'fulfilled'; readonly value: T }
+  | { readonly status: 'rejected'; readonly reason: unknown }
+  | { readonly status: 'timed-out' }
+
+function settlePromiseWithin<T>(
+  promise: PromiseLike<T>,
+  timeoutMs: number,
+): Promise<BoundedSettlement<T>> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (outcome: BoundedSettlement<T>) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolve(outcome)
+    }
+    const timeout = setTimeout(
+      () => finish({ status: 'timed-out' }),
+      Math.max(0, timeoutMs),
+    )
+    void Promise.resolve(promise).then(
+      (value) => finish({ status: 'fulfilled', value }),
+      (reason: unknown) => finish({ status: 'rejected', reason }),
+    )
+  })
 }
 
 function readParquetSql(paths: readonly string[]): string {
@@ -732,8 +1051,8 @@ function parseSpeciesProjection(row: Record<string, unknown>): SpeciesProjection
   }
 }
 
-async function fetchCatalogJson(url: URL): Promise<unknown> {
-  const response = await fetch(url)
+async function fetchCatalogJson(url: URL, signal: AbortSignal): Promise<unknown> {
+  const response = await fetch(url, { signal })
   if (!response.ok) {
     throw new Error(`Failed to fetch Web Edition Species Catalog asset ${url.pathname}: ${response.status}`)
   }
