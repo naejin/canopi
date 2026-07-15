@@ -8,7 +8,7 @@
   width: 16px;
   height: 16px;
   border: 2px solid var(--color-bg);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--color-primary);
   box-shadow: 0 0 0 1px var(--color-border);
   cursor: pointer;

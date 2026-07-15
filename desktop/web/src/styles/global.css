@@ -74,8 +74,12 @@
   --shadow-lg: 0 4px 12px rgba(44, 36, 24, 0.10);
   --color-scrim: rgba(0, 0, 0, 0.4);
 
-  /* Spacing — 4px base, used tight for density */
+  /* Spacing — 4px base, with quarter steps for dense controls */
+  --space-0-25: 1px;
+  --space-0-5: 2px;
+  --space-0-75: 3px;
   --space-1: 4px;
+  --space-1-5: 6px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
@@ -85,6 +89,7 @@
   --space-12: 48px;
 
   /* Radius — slightly sharper: technical, precise */
+  --radius-xs: 1px;
   --radius-sm: 3px;
   --radius-md: 5px;
   --radius-lg: 7px;
@@ -93,6 +98,7 @@
   /* Typography — Inter, but tighter */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --text-2xs: 10px;
   --text-xs: 11px;
   --text-sm: 12px;
   --text-base: 13px;

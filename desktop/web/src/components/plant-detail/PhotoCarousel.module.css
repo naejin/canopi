@@ -20,7 +20,7 @@
   height: 100%;
   object-fit: contain;
   opacity: 0;
-  transition: opacity 0.35s ease;
+  transition: opacity 350ms ease;
 }
 
 .imageLoaded {
@@ -93,7 +93,7 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 200ms ease;
   padding: 0;
   text-shadow: 0 1px 3px var(--color-text);
 }
@@ -120,7 +120,7 @@
 .dots {
   display: flex;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   margin-top: var(--space-2);
 }
 
@@ -132,7 +132,7 @@
   background: var(--color-border);
   cursor: pointer;
   padding: 0;
-  transition: background 0.15s, transform 0.15s;
+  transition: background var(--transition-normal), transform var(--transition-normal);
 }
 
 .dot:focus-visible {

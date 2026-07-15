@@ -22,7 +22,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-2) calc(var(--space-2) - 2px);
+  padding: var(--space-2) var(--space-2) var(--space-1-5);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -40,8 +40,8 @@
   font-weight: 600;
   color: var(--color-bg);
   background: var(--color-primary);
-  min-width: calc(var(--space-3) + 2px);
-  height: calc(var(--space-3) + 2px);
+  min-width: calc(var(--space-3) + var(--space-0-5));
+  height: calc(var(--space-3) + var(--space-0-5));
   padding: 0 var(--space-1);
   border-radius: var(--radius-full);
   display: inline-flex;
@@ -140,7 +140,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) calc(var(--space-2) - 2px);
+  padding: var(--space-2) var(--space-2) var(--space-1-5);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -179,7 +179,7 @@
 .savedStampsTitleGroup {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--space-1) / 2);
+  gap: var(--space-0-5);
   min-width: 0;
 }
 
@@ -320,7 +320,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: calc(var(--space-1) / 2);
+  gap: var(--space-0-5);
   min-width: 0;
   cursor: grab;
 }

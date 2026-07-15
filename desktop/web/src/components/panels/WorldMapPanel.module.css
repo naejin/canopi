@@ -61,7 +61,7 @@
 }
 
 .chip {
-  padding: 4px var(--space-2);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   background: var(--color-surface-muted);
@@ -158,14 +158,14 @@
 .templateCard {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
   text-align: left;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   cursor: pointer;
-  transition: border-color 80ms ease, background-color 80ms ease, transform 80ms ease;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
 }
 
 .templateCard:hover {

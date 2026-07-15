@@ -163,7 +163,7 @@
   background: var(--color-surface);
   display: flex;
   flex-direction: column;
-  gap: calc(var(--space-1) / 2);
+  gap: var(--space-0-5);
 }
 
 .locationCard[data-has-location="true"] {

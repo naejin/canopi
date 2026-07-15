@@ -41,7 +41,7 @@
 .secondaryBtn {
   display: inline-flex;
   align-items: center;
-  gap: calc(var(--space-2) + 2px);
+  gap: calc(var(--space-2) + var(--space-0-5));
   padding: var(--space-3) var(--space-7);
   border-radius: var(--radius-md);
   font-size: var(--text-md);
@@ -121,7 +121,7 @@
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  padding: calc(var(--space-2) + 2px) var(--space-3);
+  padding: calc(var(--space-2) + var(--space-0-5)) var(--space-3);
   border: none;
   background: transparent;
   border-radius: var(--radius-md);
@@ -151,7 +151,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: calc(var(--space-1) - 3px);
+  gap: var(--space-0-25);
 }
 
 .recentName {

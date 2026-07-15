@@ -59,7 +59,7 @@
 
 .meta div {
   display: grid;
-  gap: calc(var(--space-1) / 2);
+  gap: var(--space-0-5);
 }
 
 .meta dt {

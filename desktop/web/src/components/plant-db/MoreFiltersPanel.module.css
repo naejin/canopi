@@ -28,7 +28,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(var(--space-1) + 2px) calc(var(--space-2) + 2px);
+  padding: var(--space-1-5) calc(var(--space-2) + var(--space-0-5));
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -63,14 +63,14 @@
 
 /* Search — minimal */
 .searchRow {
-  padding: var(--space-1) calc(var(--space-2) + 2px);
+  padding: var(--space-1) calc(var(--space-2) + var(--space-0-5));
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
 .searchInput {
   width: 100%;
-  padding: calc(var(--space-1) - 1px) var(--space-2);
+  padding: var(--space-0-75) var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -106,13 +106,13 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: calc(var(--space-1) + 2px);
-  padding: calc(var(--space-1) + 1px) calc(var(--space-2) + 2px);
+  gap: var(--space-1-5);
+  padding: calc(var(--space-1) + var(--space-0-25)) calc(var(--space-2) + var(--space-0-5));
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
-  min-height: calc(var(--control-size-sm) + 2px);
+  min-height: calc(var(--control-size-sm) + var(--space-0-5));
   transition: background var(--transition-fast);
 }
 
@@ -132,9 +132,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: calc(var(--space-3) + 2px);
-  height: calc(var(--space-3) + 2px);
-  padding: 0 calc(var(--space-1) - 1px);
+  min-width: calc(var(--space-3) + var(--space-0-5));
+  height: calc(var(--space-3) + var(--space-0-5));
+  padding: 0 var(--space-0-75);
   border-radius: var(--radius-full);
   background: var(--cat-color, var(--color-primary));
   color: var(--color-bg);
@@ -155,7 +155,7 @@
 }
 
 .categoryContent {
-  padding: 1px 0 calc(var(--space-1) - 1px);
+  padding: var(--space-0-25) 0 var(--space-0-75);
 }
 
 /* Field rows */
@@ -167,10 +167,10 @@
 .fieldToggle {
   display: flex;
   align-items: center;
-  gap: calc(var(--space-1) + 2px);
-  padding: calc(var(--space-1) - 2px) calc(var(--space-2) + 2px) calc(var(--space-1) - 2px) calc(var(--space-3) + 2px);
+  gap: var(--space-1-5);
+  padding: var(--space-0-5) calc(var(--space-2) + var(--space-0-5)) var(--space-0-5) calc(var(--space-3) + var(--space-0-5));
   cursor: pointer;
-  min-height: calc(var(--space-4) + 6px);
+  min-height: calc(var(--space-4) + var(--space-1-5));
 }
 
 .fieldToggle input[type="checkbox"] {
@@ -184,14 +184,14 @@
 .fieldExpandBtn {
   display: flex;
   align-items: center;
-  gap: calc(var(--space-1) + 2px);
-  padding: calc(var(--space-1) - 2px) calc(var(--space-2) + 2px) calc(var(--space-1) - 2px) calc(var(--space-3) + 2px);
+  gap: var(--space-1-5);
+  padding: var(--space-0-5) calc(var(--space-2) + var(--space-0-5)) var(--space-0-5) calc(var(--space-3) + var(--space-0-5));
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  min-height: calc(var(--space-4) + 6px);
+  min-height: calc(var(--space-4) + var(--space-1-5));
   transition: background var(--transition-fast);
 }
 
@@ -215,13 +215,13 @@
 }
 
 .fieldPicker {
-  padding: calc(var(--space-1) - 1px) calc(var(--space-2) + 2px) calc(var(--space-1) + 1px) calc(var(--space-6) - 2px);
+  padding: var(--space-0-75) calc(var(--space-2) + var(--space-0-5)) calc(var(--space-1) + var(--space-0-25)) calc(var(--space-6) - var(--space-0-5));
 }
 
 .chipGrid {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(var(--space-1) - 1px);
+  gap: var(--space-0-75);
 }
 
 .loading {
@@ -262,7 +262,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: calc(var(--space-1) + 1px) calc(var(--space-2) + 2px);
+  padding: calc(var(--space-1) + var(--space-0-25)) calc(var(--space-2) + var(--space-0-5));
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }

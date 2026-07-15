@@ -3,7 +3,7 @@
 .slider {
   display: flex;
   align-items: center;
-  gap: calc(var(--space-1) + 2px);
+  gap: var(--space-1-5);
   width: 100%;
   height: var(--control-size-sm);
 }
@@ -13,7 +13,7 @@
   font-weight: 600;
   font-family: var(--font-sans);
   color: var(--color-primary);
-  min-width: calc(var(--space-4) + 2px);
+  min-width: calc(var(--space-4) + var(--space-0-5));
   text-align: center;
   flex-shrink: 0;
 }

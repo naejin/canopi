@@ -178,7 +178,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Use `Dropdown.tsx` and `utils/floating-position.ts` for viewport-aware dropdown behavior.
 - Do not use raw `white`, `black`, or raw `rgba()` in CSS Modules. Use tokens.
 - Use only font weights `400` and `600`.
-- Use spacing, font-size, radius, control-size, slider, and transition tokens. If a component needs a one-off size, define a scoped CSS custom property.
+- Use spacing, font-size, radius, control-size, slider, and transition tokens. Add a shared token when a visual value belongs to one of those design scales; do not hide a raw scale value behind arithmetic or a scoped custom property. Keep unavoidable structural geometry or deliberately off-scale component behavior as a narrow, reviewed policy exception.
 - Icon-only chrome buttons with hover/focus tooltips should use `components/shared/ButtonTooltip.tsx` instead of native `title`, especially in rail toolbars and panel bars where locale changes must update immediately.
 - Plant Symbol selection should use a separate toolbar button/popover next to Plant Color, with Plant Color first and Plant Symbol second. The symbol popover grid is icon-only with tooltips, grouped as a five-symbol Plant Habit row (`tree`, `shrub`, `herbaceous`, `climber`, `groundcover`) and a five-symbol abstract row (`round`, `square`, `triangle`, `cross`, `wave`); use explicit apply actions for selection vs species default, matching Plant Color intent.
 - Plant Symbol picker options should render in neutral UI ink, with a separate preview showing the chosen symbol in the effective plant color. The toolbar button may show the current shared symbol when selected editable plants agree; mixed selections use a generic symbol affordance and explain the mixed/inherited state in the popover.
@@ -208,6 +208,10 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 ## Testing
 
 - Vitest tests live in `desktop/web/src/__tests__/`.
+- `frontend-architecture-policies.test.ts` is the declarative dependency and ownership guard. Its TypeScript source graph discovers `.ts`, `.tsx`, `.mts`, and `.cts` files recursively, parses imports and re-exports through the compiler AST, follows named/default/namespace/star and transparent imported-alias export identity, and reports the named policy, importer, and resolved target. Add a compact policy there when introducing or changing a durable module boundary; retain a source-symbol policy on a protected public barrel when wrappers must not mention a private capability, and do not add implementation-shaped substring snapshots.
+- Use `source-tombstones` only for deliberately retired files and symbol policies only for durable capability ownership that imports alone cannot express. Behavior and layout belong in focused tests, not architecture policy tables.
+- `css-module-policies.test.ts` discovers every CSS Module recursively. New modules are covered automatically. Raw spacing, typography, radius, and transition values need shared tokens or an exact file/at-rule/rule/property/value exception with a durable reason; duplicate, repeated-use, unexplained, and unused exceptions fail the suite. Design-scale custom properties are declared globally and must not be shadowed in a CSS Module.
+- Parser behavior belongs in `architecture-harness.test.ts`. When a policy failure looks wrong, reproduce the syntax there before changing the parser or weakening a policy.
 - The i18n module loads real locale files in tests; do not mock it unless the test specifically needs to.
 - `i18n-completeness.test.ts` enforces exact key-tree parity with English; add and remove translation keys in all 11 locales together.
 - For Vitest partial mocks of modules exporting signals, use `importOriginal` spread and override only what the test owns.

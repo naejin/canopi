@@ -240,9 +240,9 @@
   position: absolute;
   left: 50%;
   top: 0;
-  width: calc(var(--space-4) + 2px);
-  height: calc(var(--space-4) + 2px);
-  margin-left: calc((var(--space-4) + 2px) / -2);
+  width: calc(var(--space-4) + var(--space-0-5));
+  height: calc(var(--space-4) + var(--space-0-5));
+  margin-left: calc((var(--space-4) + var(--space-0-5)) / -2);
   border-radius: var(--radius-full) var(--radius-full) var(--radius-full) 0;
   transform: rotate(-45deg);
   background: var(--color-primary);
@@ -254,9 +254,9 @@
   position: absolute;
   left: 50%;
   top: 5px;
-  width: calc(var(--space-1) + 2px);
-  height: calc(var(--space-1) + 2px);
-  margin-left: calc((var(--space-1) + 2px) / -2);
+  width: var(--space-1-5);
+  height: var(--space-1-5);
+  margin-left: calc(var(--space-1-5) / -2);
   border-radius: var(--radius-full);
   background: var(--color-surface);
 }

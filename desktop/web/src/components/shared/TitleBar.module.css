@@ -82,7 +82,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--color-danger);
-  margin-left: calc(var(--space-1) + 2px);
+  margin-left: var(--space-1-5);
   flex-shrink: 0;
   vertical-align: middle;
 }
@@ -136,7 +136,7 @@
   font-family: var(--font-sans);
   font-weight: 600;
   letter-spacing: 0.06em;
-  padding: calc(var(--space-1) + 1px) var(--space-1);
+  padding: calc(var(--space-1) + var(--space-0-25)) var(--space-1);
 }
 
 .themeBtn {
