@@ -41,36 +41,63 @@ struct SpeciesSearchRunningGuard {
 }
 
 impl SpeciesSearchCancellation {
+    pub fn begin_request(
+        &self,
+        request: &SpeciesSearchRequest,
+        interrupt: Option<Arc<InterruptHandle>>,
+    ) -> Option<SpeciesSearchCancellationToken> {
+        if is_active_species_search_request(request)
+            && let Some(interrupt) = interrupt
+        {
+            return Some(self.begin(interrupt));
+        }
+
+        self.supersede();
+        None
+    }
+
     pub fn begin(&self, interrupt: Arc<InterruptHandle>) -> SpeciesSearchCancellationToken {
-        let generation = self
-            .inner
-            .next_generation
-            .fetch_add(1, Ordering::Relaxed)
-            .wrapping_add(1);
-        let previous = {
+        let (generation, previous) = {
             let mut active = self.inner.active.lock().unwrap_or_else(|error| {
                 tracing::warn!(
                     "Recovered poisoned Species Search cancellation lock while starting search"
                 );
                 error.into_inner()
             });
-            active.replace(ActiveSpeciesSearch {
+            let generation = self
+                .inner
+                .next_generation
+                .fetch_add(1, Ordering::Relaxed)
+                .wrapping_add(1);
+            let previous = active.replace(ActiveSpeciesSearch {
                 generation,
                 interrupt,
                 is_running: false,
-            })
+            });
+            (generation, previous)
         };
 
-        if let Some(previous) = previous
-            && previous.is_running
-        {
-            previous.interrupt.interrupt();
-        }
+        interrupt_running_search(previous);
 
         SpeciesSearchCancellationToken {
             cancellation: self.clone(),
             generation,
         }
+    }
+
+    fn supersede(&self) {
+        let previous = {
+            let mut active = self.inner.active.lock().unwrap_or_else(|error| {
+                tracing::warn!(
+                    "Recovered poisoned Species Search cancellation lock while superseding search"
+                );
+                error.into_inner()
+            });
+            self.inner.next_generation.fetch_add(1, Ordering::Relaxed);
+            active.take()
+        };
+
+        interrupt_running_search(previous);
     }
 
     fn is_current(&self, generation: u64) -> bool {
@@ -132,6 +159,14 @@ impl SpeciesSearchCancellation {
         {
             *active = None;
         }
+    }
+}
+
+fn interrupt_running_search(search: Option<ActiveSpeciesSearch>) {
+    if let Some(search) = search
+        && search.is_running
+    {
+        search.interrupt.interrupt();
     }
 }
 
@@ -575,8 +610,9 @@ mod tests {
             let request = search_request(text, SpeciesFilter::default(), 10, false, "en");
             assert!(!is_active_species_search_request(&request));
 
-            cancellation.supersede();
+            let passive = cancellation.begin_request(&request, plant_db.interrupt_handle());
 
+            assert!(passive.is_none());
             assert_eq!(
                 active.ensure_current().unwrap_err(),
                 "Species search cancelled because a newer query superseded it",

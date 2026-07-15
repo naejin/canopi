@@ -41,14 +41,9 @@ pub async fn search_species(
     };
 
     let plant_db = plant_db.inner().clone();
-    let cancellation = if crate::services::plant_browser::is_active_species_search_request(&request)
-    {
-        plant_db
-            .interrupt_handle()
-            .map(|interrupt| search_cancellation.inner().begin(interrupt))
-    } else {
-        None
-    };
+    let cancellation = search_cancellation
+        .inner()
+        .begin_request(&request, plant_db.interrupt_handle());
 
     let user_db = user_db.inner().clone();
     if let Some(cancellation) = cancellation {
