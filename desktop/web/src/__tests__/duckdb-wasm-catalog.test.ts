@@ -1225,6 +1225,13 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     const connection = {
       query: vi.fn(async (sql: string) => {
         queries.push(sql)
+        if (sql.includes('web_species_detail_names')) {
+          return table([
+            { common_name: 'Pommier' },
+            { common_name: 'Pomme commune' },
+            { common_name: 'Pommier' },
+          ])
+        }
         if (sql.includes('web_species_images')) {
           return table([
             {
@@ -1277,7 +1284,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     expect(detail).toEqual({
       canonical_name: 'Malus domestica',
       common_name: 'Pommier',
-      common_names: ['Pommier'],
+      common_names: ['Pommier', 'Pomme commune'],
       climate_zones: ['Temperate'],
       habit: 'Tree',
       growth_form: 'Tree',
@@ -1299,6 +1306,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
   it('hydrates reduced Species detail when image metadata is absent', async () => {
     const connection = {
       query: vi.fn(async (sql: string) => {
+        if (sql.includes('web_species_detail_names')) return table([])
         if (sql.includes('web_species_images')) return table([])
         return table([
           {
