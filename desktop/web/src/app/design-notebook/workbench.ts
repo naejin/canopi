@@ -100,8 +100,11 @@ export function createDesignNotebookWorkbench(
   const loadError = signal(false)
 
   let disposed = false
+  let lifetimeGeneration = 0
   let generation = 0
   let recentGeneration = 0
+  let snapshotEpoch = 0
+  let mutationTail = Promise.resolve()
 
   const view = computed<DesignNotebookView>(() => {
     const currentPath = activePath.value
@@ -121,41 +124,65 @@ export function createDesignNotebookWorkbench(
   })
 
   async function load(): Promise<void> {
+    if (disposed) return
     const requestGeneration = ++generation
+    const requestSnapshotEpoch = snapshotEpoch
+    const admittedLifetime = lifetimeGeneration
+    const mutationBarrier = mutationTail
     loading.value = true
     loadError.value = false
 
     try {
+      await mutationBarrier
+      if (
+        !isLifetimeCurrent(admittedLifetime)
+        || isLoadStale(requestGeneration, requestSnapshotEpoch)
+      ) return
       const snapshot = await loadNotebook()
-      if (isStale(requestGeneration)) return
+      if (
+        !isLifetimeCurrent(admittedLifetime)
+        || isLoadStale(requestGeneration, requestSnapshotEpoch)
+      ) return
       writeSnapshot(snapshot)
       loadError.value = false
     } catch {
-      if (isStale(requestGeneration)) return
+      if (isLoadStale(requestGeneration, requestSnapshotEpoch)) return
       entries.value = []
       sections.value = []
       loadError.value = true
     } finally {
-      if (!isStale(requestGeneration)) {
+      if (isCurrentLoad(requestGeneration)) {
         loading.value = false
       }
     }
   }
 
   async function loadRecentDesigns(): Promise<void> {
+    if (disposed) return
     const requestGeneration = ++recentGeneration
+    const admittedLifetime = lifetimeGeneration
     try {
       const nextRecentEntries = (await loadRecentDesignsAdapter()).slice(0, MAX_RECENT_DESIGNS)
-      if (isRecentStale(requestGeneration)) return
+      if (
+        !isLifetimeCurrent(admittedLifetime)
+        || isRecentStale(requestGeneration)
+      ) return
       recentEntries.value = nextRecentEntries
     } catch {
-      if (isRecentStale(requestGeneration)) return
+      if (
+        !isLifetimeCurrent(admittedLifetime)
+        || isRecentStale(requestGeneration)
+      ) return
       recentEntries.value = []
     }
   }
 
-  function isStale(requestGeneration: number): boolean {
-    return disposed || requestGeneration !== generation
+  function isLoadStale(requestGeneration: number, requestSnapshotEpoch: number): boolean {
+    return !isCurrentLoad(requestGeneration) || requestSnapshotEpoch !== snapshotEpoch
+  }
+
+  function isCurrentLoad(requestGeneration: number): boolean {
+    return !disposed && requestGeneration === generation
   }
 
   function isRecentStale(requestGeneration: number): boolean {
@@ -168,101 +195,163 @@ export function createDesignNotebookWorkbench(
   }
 
   async function openEntry(path: string): Promise<void> {
+    if (disposed) return
+    const admittedLifetime = lifetimeGeneration
     await openDesign(path)
+    if (!isLifetimeCurrent(admittedLifetime)) return
   }
 
-  async function addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean> {
-    if (currentDesign.value === null) return false
+  function addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean> {
+    if (currentDesign.value === null) return Promise.resolve(false)
 
-    const pathBeforeSave = activePath.value
-    const settlement = pathBeforeSave
-      ? await saveCurrent()
-      : await saveAsCurrent()
-    if (settlement?.status !== 'applied' || !settlement.path) return false
-    const savedPath = settlement.path
-    const savedDesign = settlement.content
+    return enqueueMutation(false, async (admittedLifetime) => {
+      if (currentDesign.value === null) return false
+      const pathBeforeSave = activePath.value
+      const settlement = pathBeforeSave
+        ? await saveCurrent()
+        : await saveAsCurrent()
+      if (!isLifetimeCurrent(admittedLifetime)) return false
+      if (settlement?.status !== 'applied' || !settlement.path) return false
+      const savedPath = settlement.path
+      const savedDesign = settlement.content
 
-    await addDesignReferenceAdapter(savedPath, savedDesign)
-    await load()
-    const targetSectionId = validSectionId(sectionId, sections.value)
-    if (targetSectionId) {
-      await moveEntryToSection(savedPath, targetSectionId)
-    }
+      await addDesignReferenceAdapter(savedPath, savedDesign)
+      if (!isLifetimeCurrent(admittedLifetime)) return false
+      const snapshot = await loadNotebook()
+      if (!isLifetimeCurrent(admittedLifetime)) return false
+      writeSnapshot(snapshot)
 
-    return entries.value.some((entry) => entry.path === savedPath)
+      const targetSectionId = validSectionId(sectionId, sections.value)
+      if (targetSectionId) {
+        await moveEntryToSectionAdapter(savedPath, targetSectionId)
+        if (!isLifetimeCurrent(admittedLifetime)) return false
+        entries.value = entries.value.map((entry) =>
+          entry.path === savedPath
+            ? { ...entry, section_id: targetSectionId }
+            : entry
+        )
+      }
+
+      return entries.value.some((entry) => entry.path === savedPath)
+    })
   }
 
-  async function removeEntry(path: string): Promise<void> {
-    if (path.trim().length === 0) return
-    await removeEntryAdapter(path)
-    entries.value = entries.value.filter((entry) => entry.path !== path)
+  function removeEntry(path: string): Promise<void> {
+    if (path.trim().length === 0) return Promise.resolve()
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      await removeEntryAdapter(path)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      entries.value = entries.value.filter((entry) => entry.path !== path)
+    })
   }
 
-  async function createSection(name: string): Promise<void> {
+  function createSection(name: string): Promise<void> {
     const normalizedName = normalizeSectionName(name)
-    if (!normalizedName) return
-    const section = await createSectionAdapter(normalizedName)
-    sections.value = [...sections.value, section].sort(compareNotebookSections)
+    if (!normalizedName) return Promise.resolve()
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      const section = await createSectionAdapter(normalizedName)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      sections.value = [...sections.value, section].sort(compareNotebookSections)
+    })
   }
 
-  async function renameSection(sectionId: string, name: string): Promise<void> {
+  function renameSection(sectionId: string, name: string): Promise<void> {
     const normalizedName = normalizeSectionName(name)
-    if (!normalizedName) return
-    await renameSectionAdapter(sectionId, normalizedName)
-    sections.value = sections.value.map((section) =>
-      section.id === sectionId
-        ? { ...section, name: normalizedName }
-        : section
-    )
+    if (!normalizedName) return Promise.resolve()
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      await renameSectionAdapter(sectionId, normalizedName)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      sections.value = sections.value.map((section) =>
+        section.id === sectionId
+          ? { ...section, name: normalizedName }
+          : section
+      )
+    })
   }
 
-  async function deleteSection(sectionId: string): Promise<void> {
-    await deleteSectionAdapter(sectionId)
-    sections.value = sections.value.filter((section) => section.id !== sectionId)
-    entries.value = entries.value.map((entry) =>
-      entry.section_id === sectionId
-        ? { ...entry, section_id: null }
-        : entry
-    )
+  function deleteSection(sectionId: string): Promise<void> {
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      await deleteSectionAdapter(sectionId)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      sections.value = sections.value.filter((section) => section.id !== sectionId)
+      entries.value = entries.value.map((entry) =>
+        entry.section_id === sectionId
+          ? { ...entry, section_id: null }
+          : entry
+      )
+    })
   }
 
-  async function moveEntryToSection(path: string, sectionId: string | null): Promise<void> {
-    await moveEntryToSectionAdapter(path, sectionId)
-    entries.value = entries.value.map((entry) =>
-      entry.path === path
-        ? { ...entry, section_id: sectionId }
-        : entry
-    )
+  function moveEntryToSection(path: string, sectionId: string | null): Promise<void> {
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      await moveEntryToSectionAdapter(path, sectionId)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      entries.value = entries.value.map((entry) =>
+        entry.path === path
+          ? { ...entry, section_id: sectionId }
+          : entry
+      )
+    })
   }
 
-  async function reorderSections(sectionIds: readonly string[]): Promise<void> {
+  function reorderSections(sectionIds: readonly string[]): Promise<void> {
     const nextOrder = [...sectionIds]
-    await reorderSectionsAdapter(nextOrder)
-    sections.value = applyManualOrder(
-      sections.value,
-      nextOrder,
-      (section) => section.id,
-      (section, sortOrder) => ({ ...section, sort_order: sortOrder }),
-      compareNotebookSections,
-    )
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      await reorderSectionsAdapter(nextOrder)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      sections.value = applyManualOrder(
+        sections.value,
+        nextOrder,
+        (section) => section.id,
+        (section, sortOrder) => ({ ...section, sort_order: sortOrder }),
+        compareNotebookSections,
+      )
+    })
   }
 
-  async function reorderEntries(paths: readonly string[]): Promise<void> {
+  function reorderEntries(paths: readonly string[]): Promise<void> {
     const nextOrder = [...paths]
-    await reorderEntriesAdapter(nextOrder)
-    entries.value = applyManualOrder(
-      entries.value,
-      nextOrder,
-      (entry) => entry.path,
-      (entry, sortOrder) => ({ ...entry, sort_order: sortOrder }),
-      compareNotebookEntries,
-    )
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      await reorderEntriesAdapter(nextOrder)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      entries.value = applyManualOrder(
+        entries.value,
+        nextOrder,
+        (entry) => entry.path,
+        (entry, sortOrder) => ({ ...entry, sort_order: sortOrder }),
+        compareNotebookEntries,
+      )
+    })
   }
 
   function dispose(): void {
+    if (disposed) return
     disposed = true
+    lifetimeGeneration += 1
     generation += 1
     recentGeneration += 1
+  }
+
+  function enqueueMutation<T>(
+    disposedResult: T,
+    operation: (admittedLifetime: number) => Promise<T>,
+  ): Promise<T> {
+    if (disposed) return Promise.resolve(disposedResult)
+    snapshotEpoch += 1
+    const admittedLifetime = lifetimeGeneration
+    const run = () => isLifetimeCurrent(admittedLifetime)
+      ? operation(admittedLifetime)
+      : disposedResult
+    const result = mutationTail.then(run, run)
+    mutationTail = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+
+  function isLifetimeCurrent(admittedLifetime: number): boolean {
+    return !disposed && admittedLifetime === lifetimeGeneration
   }
 
   return {

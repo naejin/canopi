@@ -64,6 +64,7 @@ export interface SavedObjectStampWorkbench {
   placeStamp(stamp: SavedObjectStamp): boolean
   exportStamp(stamp: SavedObjectStamp): Promise<string | null>
   importStampFile(): Promise<SavedObjectStamp | null>
+  dispose(): void
 }
 
 interface SavedObjectStampWorkbenchOptions {
@@ -98,6 +99,11 @@ export function createSavedObjectStampWorkbench({
   const loading = signal(false)
   const revision = signal(0)
   const selectionRevision = signal(0)
+  let loadGeneration = 0
+  let snapshotEpoch = 0
+  let mutationTail = Promise.resolve()
+  let disposed = false
+  let lifetimeGeneration = 0
 
   const library = computed<SavedObjectStampLibraryView>(() => ({
     items: items.value,
@@ -118,104 +124,184 @@ export function createSavedObjectStampWorkbench({
   })
 
   async function loadLibrary(): Promise<void> {
+    if (disposed) return
+    const requestGeneration = ++loadGeneration
+    const requestSnapshotEpoch = snapshotEpoch
+    const admittedLifetime = lifetimeGeneration
+    const mutationBarrier = mutationTail
     loading.value = true
     try {
-      items.value = await getSavedObjectStamps()
+      await mutationBarrier
+      if (
+        !isLifetimeCurrent(admittedLifetime)
+        || isLibraryLoadStale(requestGeneration, requestSnapshotEpoch)
+      ) return
+      const loaded = await getSavedObjectStamps()
+      if (
+        !isLifetimeCurrent(admittedLifetime)
+        || isLibraryLoadStale(requestGeneration, requestSnapshotEpoch)
+      ) return
+      items.value = loaded
     } finally {
-      loading.value = false
+      if (isCurrentLibraryLoad(requestGeneration)) loading.value = false
     }
   }
 
-  async function saveSelection(
+  function saveSelection(
     capture: CanvasRuntimeSavedObjectStampCapture,
   ): Promise<SavedObjectStamp | null> {
+    if (disposed) return Promise.resolve(null)
     const normalized = normalizeSelection(capture)
     if (!normalized) {
       selectionRevision.value += 1
-      return null
+      return Promise.resolve(null)
     }
 
-    const saved = await createSavedObjectStamp(
-      normalized.name,
-      JSON.stringify(normalized.payload),
-    )
-    batch(() => {
-      items.value = [...items.value, saved].sort(compareSavedObjectStamps)
-      revision.value += 1
-      selectionRevision.value += 1
-    })
-    return saved
-  }
-
-  async function renameStamp(id: string, name: string): Promise<SavedObjectStamp | null> {
-    const nextName = name.trim()
-    if (nextName.length === 0) return null
-    const renamed = await renameSavedObjectStamp(id, nextName)
-    batch(() => {
-      items.value = items.value.map((stamp) => stamp.id === id ? renamed : stamp)
-      revision.value += 1
-    })
-    return renamed
-  }
-
-  async function deleteStamp(id: string): Promise<boolean> {
-    const deleted = await deleteSavedObjectStamp(id)
-    if (deleted) {
+    return enqueueMutation(null, async (admittedLifetime) => {
+      const saved = await createSavedObjectStamp(
+        normalized.name,
+        JSON.stringify(normalized.payload),
+      )
+      if (!isLifetimeCurrent(admittedLifetime)) return null
       batch(() => {
-        items.value = items.value.filter((stamp) => stamp.id !== id)
+        items.value = [...items.value, saved].sort(compareSavedObjectStamps)
+        revision.value += 1
+        selectionRevision.value += 1
+      })
+      return saved
+    })
+  }
+
+  function renameStamp(id: string, name: string): Promise<SavedObjectStamp | null> {
+    const nextName = name.trim()
+    if (nextName.length === 0) return Promise.resolve(null)
+    return enqueueMutation(null, async (admittedLifetime) => {
+      const renamed = await renameSavedObjectStamp(id, nextName)
+      if (!isLifetimeCurrent(admittedLifetime)) return null
+      batch(() => {
+        items.value = items.value.map((stamp) => stamp.id === id ? renamed : stamp)
         revision.value += 1
       })
-    }
-    return deleted
+      return renamed
+    })
   }
 
-  async function reorderStamps(ids: string[]): Promise<void> {
-    const reordered = await reorderSavedObjectStamps(ids)
-    batch(() => {
-      items.value = [...reordered].sort(compareSavedObjectStamps)
-      revision.value += 1
+  function deleteStamp(id: string): Promise<boolean> {
+    return enqueueMutation(false, async (admittedLifetime) => {
+      const deleted = await deleteSavedObjectStamp(id)
+      if (!isLifetimeCurrent(admittedLifetime)) return false
+      if (deleted) {
+        batch(() => {
+          items.value = items.value.filter((stamp) => stamp.id !== id)
+          revision.value += 1
+        })
+      }
+      return deleted
+    })
+  }
+
+  function reorderStamps(ids: string[]): Promise<void> {
+    const nextOrder = [...ids]
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      const reordered = await reorderSavedObjectStamps(nextOrder)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      batch(() => {
+        items.value = [...reordered].sort(compareSavedObjectStamps)
+        revision.value += 1
+      })
     })
   }
 
   function placeStamp(stamp: SavedObjectStamp): boolean {
-    return beginPlacement(stamp)
+    return !disposed && beginPlacement(stamp)
   }
 
   async function exportStamp(stamp: SavedObjectStamp): Promise<string | null> {
+    if (disposed) return null
     const payload = parseSavedObjectStampPayload(stamp.payload_json)
     if (!payload) return null
+    const admittedLifetime = lifetimeGeneration
     try {
-      return await exportSavedObjectStamp(
+      const exportedPath = await exportSavedObjectStamp(
         composeSavedObjectStampCanopiFile({ name: stamp.name, payload }),
         savedObjectStampFileName(stamp.name),
       )
+      return isLifetimeCurrent(admittedLifetime) ? exportedPath : null
     } catch (error) {
+      if (!isLifetimeCurrent(admittedLifetime)) return null
       if (isDialogCancelled(error)) return null
       throw error
     }
   }
 
-  async function importStampFile(): Promise<SavedObjectStamp | null> {
-    let file: CanopiFile
-    try {
-      file = await importSavedObjectStampFile()
-    } catch (error) {
-      if (isDialogCancelled(error)) return null
-      throw error
-    }
+  function importStampFile(): Promise<SavedObjectStamp | null> {
+    return enqueueMutation(null, async (admittedLifetime) => {
+      let file: CanopiFile
+      try {
+        file = await importSavedObjectStampFile()
+      } catch (error) {
+        if (!isLifetimeCurrent(admittedLifetime)) return null
+        if (isDialogCancelled(error)) return null
+        throw error
+      }
+      if (!isLifetimeCurrent(admittedLifetime)) return null
 
-    const payload = savedObjectStampPayloadFromCanopiFile(file)
-    if (!payload) return null
+      const payload = savedObjectStampPayloadFromCanopiFile(file)
+      if (!payload) return null
 
-    const saved = await createSavedObjectStamp(
-      importedSavedObjectStampName(file, payload),
-      JSON.stringify(payload),
-    )
-    batch(() => {
-      items.value = [...items.value, saved].sort(compareSavedObjectStamps)
-      revision.value += 1
+      const saved = await createSavedObjectStamp(
+        importedSavedObjectStampName(file, payload),
+        JSON.stringify(payload),
+      )
+      if (!isLifetimeCurrent(admittedLifetime)) return null
+      batch(() => {
+        items.value = [...items.value, saved].sort(compareSavedObjectStamps)
+        revision.value += 1
+      })
+      return saved
     })
-    return saved
+  }
+
+  function isLibraryLoadStale(
+    requestGeneration: number,
+    requestSnapshotEpoch: number,
+  ): boolean {
+    return !isCurrentLibraryLoad(requestGeneration)
+      || requestSnapshotEpoch !== snapshotEpoch
+  }
+
+  function isCurrentLibraryLoad(requestGeneration: number): boolean {
+    return !disposed && requestGeneration === loadGeneration
+  }
+
+  function dispose(): void {
+    if (disposed) return
+    disposed = true
+    lifetimeGeneration += 1
+    loadGeneration += 1
+    snapshotEpoch += 1
+  }
+
+  function enqueueMutation<T>(
+    disposedResult: T,
+    operation: (admittedLifetime: number) => Promise<T>,
+  ): Promise<T> {
+    if (disposed) return Promise.resolve(disposedResult)
+    snapshotEpoch += 1
+    const admittedLifetime = lifetimeGeneration
+    const run = () => isLifetimeCurrent(admittedLifetime)
+      ? operation(admittedLifetime)
+      : disposedResult
+    const result = mutationTail.then(run, run)
+    mutationTail = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+
+  function isLifetimeCurrent(admittedLifetime: number): boolean {
+    return !disposed && admittedLifetime === lifetimeGeneration
   }
 
   return {
@@ -229,6 +315,7 @@ export function createSavedObjectStampWorkbench({
     placeStamp,
     exportStamp,
     importStampFile,
+    dispose,
   }
 }
 
@@ -432,5 +519,3 @@ function defaultStampName(
 function compareSavedObjectStamps(left: SavedObjectStamp, right: SavedObjectStamp): number {
   return left.sort_order - right.sort_order || left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
 }
-
-export const savedObjectStampWorkbench = createSavedObjectStampWorkbench()

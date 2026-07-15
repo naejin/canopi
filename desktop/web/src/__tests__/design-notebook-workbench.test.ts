@@ -2,7 +2,7 @@ import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createDesignNotebookWorkbench } from '../app/design-notebook/workbench'
 import type { DesignSaveSettlement } from '../app/document-session/persistence'
-import type { CanopiFile, DesignSummary } from '../types/design'
+import type { CanopiFile, DesignNotebookSnapshot, DesignSummary } from '../types/design'
 
 describe('design notebook workbench', () => {
   function deferred<T>(): {
@@ -168,6 +168,70 @@ describe('design notebook workbench', () => {
     expect(workbench.view.value.entries[0]?.section_id).toBeNull()
   })
 
+  it('publishes overlapping Notebook mutations in admission order', async () => {
+    const firstRename = deferred<void>()
+    const renameSection = vi.fn((_: string, name: string) => (
+      name === 'First name' ? firstRename.promise : Promise.resolve()
+    ))
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [{
+          id: 'section-home',
+          name: 'Home',
+          sort_order: 0,
+          created_at: '2026-06-20T08:00:00.000Z',
+          updated_at: '2026-06-20T08:00:00.000Z',
+        }],
+        entries: [],
+      }),
+      openDesign: vi.fn(),
+      renameSection,
+    })
+    await workbench.load()
+
+    const first = workbench.renameSection('section-home', 'First name')
+    const second = workbench.renameSection('section-home', 'Second name')
+    await Promise.resolve()
+
+    expect(renameSection.mock.calls.map(([, name]) => name)).toEqual(['First name'])
+
+    firstRename.resolve()
+    await Promise.all([first, second])
+
+    expect(renameSection.mock.calls.map(([, name]) => name)).toEqual([
+      'First name',
+      'Second name',
+    ])
+    expect(workbench.view.value.sections[0]?.name).toBe('Second name')
+  })
+
+  it('does not publish a Notebook mutation continuation after disposal', async () => {
+    const pendingRename = deferred<void>()
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [{
+          id: 'section-home',
+          name: 'Home',
+          sort_order: 0,
+          created_at: '2026-06-20T08:00:00.000Z',
+          updated_at: '2026-06-20T08:00:00.000Z',
+        }],
+        entries: [],
+      }),
+      openDesign: vi.fn(),
+      renameSection: () => pendingRename.promise,
+    })
+    await workbench.load()
+
+    const rename = workbench.renameSection('section-home', 'Renamed')
+    await Promise.resolve()
+    workbench.dispose()
+    pendingRename.resolve()
+    await rename
+
+    expect(workbench.view.value.sections[0]?.name).toBe('Home')
+  })
+
   it('removes a saved Design reference without changing the active Design Session path', async () => {
     const activePath = signal<string | null>('/designs/forest-edge.canopi')
     const removeEntry = vi.fn().mockResolvedValue(undefined)
@@ -204,6 +268,85 @@ describe('design notebook workbench', () => {
     expect(removeEntry).toHaveBeenCalledWith('/designs/forest-edge.canopi')
     expect(workbench.view.value.entries.map((entry) => entry.path)).toEqual(['/designs/home.canopi'])
     expect(workbench.view.value.activePath).toBe('/designs/forest-edge.canopi')
+  })
+
+  it('does not publish a load snapshot older than an admitted removal', async () => {
+    const pendingLoad = deferred<DesignNotebookSnapshot>()
+    const pendingRemoval = deferred<void>()
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: () => pendingLoad.promise,
+      openDesign: vi.fn(),
+      removeEntry: () => pendingRemoval.promise,
+    })
+
+    const load = workbench.load()
+    const removal = workbench.removeEntry('/designs/forest-edge.canopi')
+    pendingLoad.resolve({
+      sections: [],
+      entries: [{
+        path: '/designs/forest-edge.canopi',
+        name: 'Forest Edge',
+        updated_at: '2026-06-22T08:00:00.000Z',
+        plant_count: 7,
+        section_id: null,
+        sort_order: 0,
+      }],
+    })
+    await load
+
+    expect(workbench.view.value.entries).toEqual([])
+    expect(workbench.view.value.loading).toBe(false)
+
+    pendingRemoval.resolve()
+    await removal
+  })
+
+  it('does not publish a load snapshot older than an admitted section move', async () => {
+    const pendingLoad = deferred<DesignNotebookSnapshot>()
+    const pendingMove = deferred<void>()
+    const initialSnapshot: DesignNotebookSnapshot = {
+      sections: [{
+        id: 'section-home',
+        name: 'Home',
+        sort_order: 0,
+        created_at: '2026-06-20T08:00:00.000Z',
+        updated_at: '2026-06-20T08:00:00.000Z',
+      }],
+      entries: [{
+        path: '/designs/forest-edge.canopi',
+        name: 'Forest Edge',
+        updated_at: '2026-06-22T08:00:00.000Z',
+        plant_count: 7,
+        section_id: null,
+        sort_order: 0,
+      }],
+    }
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn()
+        .mockResolvedValueOnce(initialSnapshot)
+        .mockReturnValueOnce(pendingLoad.promise),
+      openDesign: vi.fn(),
+      moveEntryToSection: () => pendingMove.promise,
+    })
+    await workbench.load()
+
+    const load = workbench.load()
+    const move = workbench.moveEntryToSection(
+      '/designs/forest-edge.canopi',
+      'section-home',
+    )
+    pendingLoad.resolve({
+      ...initialSnapshot,
+      entries: [{ ...initialSnapshot.entries[0]!, name: 'Stale name' }],
+    })
+    await load
+
+    expect(workbench.view.value.entries[0]?.name).toBe('Forest Edge')
+    expect(workbench.view.value.loading).toBe(false)
+
+    pendingMove.resolve()
+    await move
+    expect(workbench.view.value.entries[0]?.section_id).toBe('section-home')
   })
 
   it('loads Recent Designs as a capped menu projection', async () => {

@@ -709,6 +709,13 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
+    name: 'Saved Object Stamp live owner constructs its Workbench',
+    from: ['src/app/saved-object-stamps/index.ts'],
+    targets: ['src/app/saved-object-stamps/workbench.ts'],
+    edgeKinds: ['static'],
+  },
+  {
+    kind: 'require-imports',
     name: 'Command graph composes its catalog and projections',
     from: ['src/commands/graph/index.ts'],
     targets: [
@@ -1202,6 +1209,12 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'Plant Browser public barrel does not mention private state symbols',
     from: ['src/app/plant-browser/index.ts'],
     names: ['plantSearchSession', 'dynamicOptionsCache', 'dynamicOptionsErrors', 'dynamicOptionsPending'],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Saved Object Stamp factory does not own the live Workbench',
+    from: ['src/app/saved-object-stamps/workbench.ts'],
+    names: ['savedObjectStampWorkbench'],
   },
   {
     kind: 'forbid-source-symbols',

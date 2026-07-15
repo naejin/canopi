@@ -27,10 +27,92 @@ describe('Saved Object Stamp Workbench', () => {
     updated_at: `2026-06-19T09:00:0${sortOrder}Z`,
   })
 
+  function deferred<T>(): {
+    readonly promise: Promise<T>
+    readonly resolve: (value: T) => void
+  } {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((promiseResolve) => {
+      resolve = promiseResolve
+    })
+    return { promise, resolve }
+  }
+
+  const importableFile = (): CanopiFile => ({
+    version: 3,
+    name: 'Imported stamp',
+    description: null,
+    location: null,
+    north_bearing_deg: 0,
+    plant_species_colors: {},
+    plant_species_symbols: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [{
+      id: 'note-1',
+      annotation_type: 'text',
+      position: { x: 1, y: 2 },
+      text: 'Guild note',
+      font_size: 12,
+      rotation: null,
+      locked: false,
+    }],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-06-01T00:00:00.000Z',
+    updated_at: '2026-06-02T00:00:00.000Z',
+    extra: {},
+  })
+
   const captureFromQuery = (query: CanvasQuerySurface): CanvasRuntimeSavedObjectStampCapture => ({
     scene: query.getSceneSnapshot(),
     selection: query.getDesignObjectSelection(),
     localizedCommonNames: query.getLocalizedCommonNames(),
+  })
+
+  it('does not let an older library load overwrite a newly created stamp', async () => {
+    const pendingLoad = deferred<SavedObjectStamp[]>()
+    const scene = createDefaultScenePersistedState()
+    scene.annotations = [{
+      kind: 'annotation',
+      id: 'note-1',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 1, y: 2 },
+      text: 'Guild note',
+      fontSize: 12,
+      rotationDeg: null,
+    }]
+    const query = {
+      ...createTestCanvasQuerySurface({ scene }),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'annotation' as const, id: 'note-1' }],
+        lockedTargets: [],
+        blockedTargets: [],
+        bounds: { minX: 1, minY: 2, maxX: 1, maxY: 2 },
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    } satisfies CanvasQuerySurface
+    const created = makeStamp('stamp-new', 'New', 0)
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: () => pendingLoad.promise,
+      createSavedObjectStamp: async () => created,
+      getCanvasQuerySurface: () => query,
+    })
+
+    const load = workbench.loadLibrary()
+    await workbench.saveSelection(captureFromQuery(query))
+    pendingLoad.resolve([makeStamp('stamp-old', 'Old', 0)])
+    await load
+
+    expect(workbench.library.value.items.map((stamp) => stamp.id)).toEqual([
+      'stamp-new',
+    ])
+    expect(workbench.library.value.loading).toBe(false)
   })
 
   it('saves the admitted canvas capture when the mounted canvas has changed', async () => {
@@ -478,6 +560,57 @@ describe('Saved Object Stamp Workbench', () => {
     expect(workbench.library.value.items.map((stamp) => stamp.name)).toEqual(['Renamed'])
   })
 
+  it('publishes overlapping Saved Object Stamp mutations in admission order', async () => {
+    const initial = makeStamp('stamp-1', 'Initial', 0)
+    const firstRename = deferred<SavedObjectStamp>()
+    const renameStamp = vi.fn((_: string, name: string) => (
+      name === 'First name'
+        ? firstRename.promise
+        : Promise.resolve({ ...initial, name })
+    ))
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [initial],
+      renameSavedObjectStamp: renameStamp,
+      getCanvasQuerySurface: () => null,
+    })
+    await workbench.loadLibrary()
+
+    const first = workbench.renameStamp('stamp-1', 'First name')
+    const second = workbench.renameStamp('stamp-1', 'Second name')
+    await Promise.resolve()
+
+    expect(renameStamp.mock.calls.map(([, name]) => name)).toEqual(['First name'])
+
+    firstRename.resolve({ ...initial, name: 'First name' })
+    await Promise.all([first, second])
+
+    expect(renameStamp.mock.calls.map(([, name]) => name)).toEqual([
+      'First name',
+      'Second name',
+    ])
+    expect(workbench.library.value.items[0]?.name).toBe('Second name')
+  })
+
+  it('disposes idempotently without publishing an in-flight mutation', async () => {
+    const initial = makeStamp('stamp-1', 'Initial', 0)
+    const pendingRename = deferred<SavedObjectStamp>()
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [initial],
+      renameSavedObjectStamp: () => pendingRename.promise,
+      getCanvasQuerySurface: () => null,
+    })
+    await workbench.loadLibrary()
+
+    const rename = workbench.renameStamp('stamp-1', 'Renamed')
+    await Promise.resolve()
+    workbench.dispose()
+    workbench.dispose()
+    pendingRename.resolve({ ...initial, name: 'Renamed' })
+    await rename
+
+    expect(workbench.library.value.items[0]?.name).toBe('Initial')
+  })
+
   it('arms placement through the canvas placement adapter', () => {
     const stamp = makeStamp('stamp-1', 'Guild', 0)
     const beginPlacement = vi.fn(() => true)
@@ -633,6 +766,25 @@ describe('Saved Object Stamp Workbench', () => {
     expect(payload.plants[0]).not.toHaveProperty('plantedDate')
     expect(payload.plants[0]).not.toHaveProperty('quantity')
     expect(workbench.library.value.items).toEqual([saved])
+  })
+
+  it('does not continue an import after the Workbench is disposed', async () => {
+    const pendingImport = deferred<CanopiFile>()
+    const createStamp = vi.fn()
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      createSavedObjectStamp: createStamp,
+      importSavedObjectStampFile: () => pendingImport.promise,
+      getCanvasQuerySurface: () => null,
+    })
+
+    const importing = workbench.importStampFile()
+    workbench.dispose()
+    pendingImport.resolve(importableFile())
+
+    await expect(importing).resolves.toBeNull()
+    expect(createStamp).not.toHaveBeenCalled()
+    expect(workbench.library.value.items).toEqual([])
   })
 
   it('does not create a saved stamp from an empty Canopi import', async () => {

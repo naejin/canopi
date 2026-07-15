@@ -61,6 +61,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Scroll reset, virtualizer reset, and measurement reset should key off committed data revisions.
 - Pagination appends should update measurements in place without forcing full resets.
 - A single monotonic counter ref is enough for stale async guards in fire-and-forget effects.
+- Mutable Workbenches that combine snapshot loads with writes must admit writes through a local mutation tail, invalidate older load epochs when a write is admitted, and check their lifetime after every await before publishing. Keep that coordination inside the concrete Workbench; do not introduce a generic Workbench framework.
 
 ## Species Catalog Filters
 
@@ -129,6 +130,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 
 - Saved Object Stamps are personal reusable arrangements, not Design Templates and not Species favorites. Keep them in the existing Favorites side panel as a section below Species favorites; do not add a separate PanelBar route unless a later product decision changes the navigation model.
 - A Saved Object Stamp Workbench should own library state, manual ordering, inline rename/delete, import/export, current-selection save, default-name generation, and placement intent. Components should consume that workbench instead of calling IPC, Design Session actions, or canvas internals directly.
+- `app/saved-object-stamps/index.ts` owns the live Saved Object Stamp Workbench and disposes it during Vite HMR. `workbench.ts` owns only the factory, ordering, and lifetime behavior so focused tests can create isolated instances.
 - Web Edition v1 keeps Saved Object Stamps browser-local only. Do not expose Saved Object Stamp import/export in the web build.
 - Saving a selection as a Saved Object Stamp should be available from the Selection Action Toolbar, the Canvas Context Menu, and the Saved Stamps section. The panel action should be enabled only when the current canvas selection can produce a saved stamp, with unavailable states explained through panel copy or tooltips.
 - Default stamp names are generated once at save/import time and then become user-owned text. Use the three most frequent selected plant species names at most, displayed by localized Common Name with Canonical Name fallback; ties follow first appearance in the saved arrangement. If no plants are present, use Zone and Annotation counts.
