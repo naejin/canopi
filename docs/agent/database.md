@@ -4,7 +4,7 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 
 ## Schema Contract
 
-- `scripts/schema-contract.json` is the only authored source for the prepared schema version, minimum export version, pinned Species Search normalization version, Species columns/affinities, copied supporting-table shapes, prepared-only generated table/FTS shapes, required indexes, supplemental translations, and the reduced Web storage projection. Prepared databases bind their contents to the prepared-storage projection of that authority through `species_search_metadata`: schema version, prepared-contract fingerprint, normalization version, and normalization fingerprint must all match exactly in addition to `PRAGMA user_version`. Web-only projection choices participate in the broader Web storage fingerprint without invalidating prepared DB identity.
+- `scripts/schema-contract.json` is the only authored source for the prepared schema version, minimum export version, pinned Species Search normalization version, exact prepared-artifact source-export SHA-256, Species columns/affinities, copied supporting-table shapes, prepared-only generated table/FTS shapes, required indexes, supplemental translations, and the reduced Web storage projection. Prepared databases bind their storage semantics through `species_search_metadata`: schema version, prepared-contract fingerprint, normalization version, and normalization fingerprint must all match exactly in addition to `PRAGMA user_version`. Web-only projection choices participate in the broader Web storage fingerprint without invalidating prepared DB identity. `prepared_artifact.source_export_sha256` is deliberately separate from both fingerprints: it identifies catalog content for immutable release asset selection and must be bumped to the exact reviewed export whenever content refreshes without a storage change.
 - `common-types/species-search-normalization.json` is the human-reviewed cross-runtime Species Search normalization authority. It fixes NFKD compatibility decomposition, mark stripping, Unicode Letter/Number/underscore tokenization, exceptional case folds, admission length, query-token selection, and the shared Python/Rust/TypeScript corpus. `common-types/species-search-unicode-15.json` is its reproducibly generated executable Unicode data; runtimes must use those decomposition/property/case facts rather than host Unicode behavior. Check or refresh it with `python3 scripts/species_search_unicode_facts.py check|write`. The normalization fingerprint covers both files. Bump the authority version when semantics change, then update both storage and Web artifact pins.
 - `scripts/species_catalog_contract.py` strictly compiles that source into typed `prepare-db`, `web-catalog`, and `release` projections. It also cross-validates `common-types/plant-filter-fields.json`, verifies local SQLite profiles, and checks or writes generated Rust facts.
 - `desktop/src/db/schema_contract_generated.rs` is committed generated output included by `desktop/src/db/schema_contract.rs`. Never edit or copy its constants by hand.
@@ -27,8 +27,10 @@ python3 scripts/species_catalog_contract.py emit-rust --write
 # Inspect authored release metadata without scraping source code
 python3 scripts/species_catalog_contract.py value prepared-schema-version
 python3 scripts/species_catalog_contract.py value minimum-export-schema-version
+python3 scripts/species_catalog_contract.py value prepared-source-export-sha256
 python3 scripts/species_catalog_contract.py value prepared-contract-fingerprint
 python3 scripts/species_catalog_contract.py value prepared-db-asset-name
+python3 scripts/species_catalog_contract.py verify-source-export <export.db>
 
 # Verify local canopi-data or prepared bundle shapes
 python3 scripts/species_catalog_contract.py verify-db --profile export <export.db>
@@ -55,7 +57,7 @@ python3 scripts/species_catalog_contract.py verify-db --profile prepared <canopi
 
 When canopi-data removes or adds columns, update atomically:
 
-1. Update the relevant version, Species Search normalization pin, Species/copied-supporting facts, prepared-only generated table/FTS facts, indexes, and reduced Web dependencies in `scripts/schema-contract.json`.
+1. Update the relevant version, Species Search normalization pin, exact prepared-artifact source-export SHA-256, Species/copied-supporting facts, prepared-only generated table/FTS facts, indexes, and reduced Web dependencies in `scripts/schema-contract.json`.
 2. Run `python3 scripts/species_catalog_contract.py emit-rust --write`, then `python3 scripts/species_catalog_contract.py check`. Commit the generated Rust file with the authored source.
 3. Update `common-types/src/species.rs` when the caller-facing contract changes.
 4. Update `desktop/src/services/species_catalog_read/detail_projection.rs` and its row mapping when desktop read behavior changes; do not derive that caller model from physical storage automatically.

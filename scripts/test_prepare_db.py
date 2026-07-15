@@ -322,6 +322,7 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                source_export_sha256="0" * 64,
                 species_search_normalization_version=1,
                 species_search_normalization_fingerprint="normalization-test",
                 species_columns=(
@@ -372,6 +373,7 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                source_export_sha256="0" * 64,
                 species_search_normalization_version=1,
                 species_search_normalization_fingerprint="normalization-test",
                 species_columns=(),
@@ -396,6 +398,11 @@ class PrepareDbPublicationTests(unittest.TestCase):
                     prepare_db.storage_contract,
                     "verify_database",
                     return_value=receipt,
+                ),
+                mock.patch.object(
+                    prepare_db.storage_contract,
+                    "verify_source_export_identity",
+                    return_value="0" * 64,
                 ),
                 mock.patch.object(
                     prepare_db,
@@ -435,6 +442,7 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                source_export_sha256="0" * 64,
                 species_search_normalization_version=1,
                 species_search_normalization_fingerprint="normalization-test",
                 species_columns=(),
@@ -491,6 +499,7 @@ class PrepareDbPublicationTests(unittest.TestCase):
             projection = contract.PrepareDbProjection(
                 prepared_schema_version=14,
                 minimum_export_schema_version=14,
+                source_export_sha256="0" * 64,
                 species_search_normalization_version=1,
                 species_search_normalization_fingerprint="normalization-test",
                 species_columns=(
@@ -529,6 +538,11 @@ class PrepareDbPublicationTests(unittest.TestCase):
                     prepare_db.storage_contract,
                     "verify_database",
                     side_effect=verify_database,
+                ),
+                mock.patch.object(
+                    prepare_db.storage_contract,
+                    "verify_source_export_identity",
+                    return_value="0" * 64,
                 ),
                 mock.patch.object(prepare_db, "copy_supporting_tables"),
                 mock.patch.object(prepare_db, "build_search_index"),

@@ -5,13 +5,15 @@ Scripts are the source of truth. This section provides the operator sequence.
 ## Recommended Dev Flow
 
 1. Develop on a feature branch.
-2. Open a PR into `main`.
-3. Merge only after CI is green.
-4. Bump the app release version in `desktop/tauri.conf.json` and keep `Cargo.toml`, `desktop/web/package.json`, and `desktop/web/package-lock.json` in sync.
-5. Refresh the bundled DB release if the DB changed.
+2. When catalog content changes, update `prepared_artifact.source_export_sha256` to the exact reviewed export and publish that branch's immutable bundled DB asset.
+3. Open a PR into `main`. Same-repository PR packaging downloads the candidate-derived asset, so publish it before expecting that gate to pass.
+4. Merge only after CI is green.
+5. Bump the app release version in `desktop/tauri.conf.json` and keep `Cargo.toml`, `desktop/web/package.json`, and `desktop/web/package-lock.json` in sync.
 6. Run the `Release Candidate` workflow from `main` for the exact version to ship.
 7. Smoke the packaged CI artifacts for Linux, macOS Apple Silicon, macOS Intel, and Windows.
 8. Promote the exact verified run to a GitHub Release with `scripts/promote-release.sh`.
+
+Fork PRs cannot publish trusted release assets. Their lint, test, and platform jobs still run, while the bundled packaging job is skipped. A maintainer must reproduce or adopt a catalog-identity change on a trusted same-repository branch, verify the export pin, publish its candidate asset, and let the packaging gate run there before merge.
 
 ## Version Authority
 
@@ -25,9 +27,9 @@ scripts/publish-db-release.sh --export-path ~/projects/canopi-data/data/exports/
 
 Optional flags: `--tag <tag>` and `--repo <owner/repo>`.
 
-The uploaded asset name is compiled from the exact prepared schema version and prepared-contract fingerprint, for example `canopi-core-v13-<fingerprint>.db`. Assets for older prepared identities remain on the stable `canopi-core-db` release tag. The publisher does not overwrite an existing identity asset, so rebuilding the same identity with different bytes fails instead of mutating release inputs.
+The publisher first verifies that the input file bytes match `prepared_artifact.source_export_sha256`. The uploaded asset name is compiled from the exact prepared schema version, prepared-contract fingerprint, and full source-export SHA-256, for example `canopi-core-v13-<fingerprint>-<source-sha256>.db`. Assets for older storage or content identities remain on the stable `canopi-core-db` release tag. The publisher stages files under those exact basenames and does not overwrite an existing identity asset.
 
-This script fails if: the generated DB is empty, the prepared database does not satisfy the compiled storage contract in `scripts/schema-contract.json`, the target release tag does not exist, the compiled identity asset already exists, or `gh release upload` fails.
+This script fails if: the source export bytes do not match the authored pin, the generated DB is empty, the prepared database does not satisfy the compiled storage contract in `scripts/schema-contract.json`, the target release tag does not exist, the compiled identity asset already exists, or `gh release upload` fails.
 
 ## 2. Run The Release Candidate Workflow
 

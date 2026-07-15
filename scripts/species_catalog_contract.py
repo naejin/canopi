@@ -107,10 +107,15 @@ class GeneratedArtifactDriftError(SpeciesCatalogContractError):
     """Committed generated facts do not match the authored contract."""
 
 
+class SourceExportIdentityError(SpeciesCatalogContractError):
+    """A source export does not match the exact authored prepared artifact."""
+
+
 @dataclass(frozen=True)
 class ReleaseProjection:
     prepared_schema_version: int
     minimum_export_schema_version: int
+    source_export_sha256: str
     species_search_normalization_version: int
     species_search_normalization_fingerprint: str
     fingerprint: str
@@ -120,6 +125,7 @@ class ReleaseProjection:
 class PrepareDbProjection:
     prepared_schema_version: int
     minimum_export_schema_version: int
+    source_export_sha256: str
     species_search_normalization_version: int
     species_search_normalization_fingerprint: str
     species_columns: tuple[StorageColumn, ...]
@@ -206,6 +212,7 @@ class _StorageContract:
     contract_format_version: int
     prepared_schema_version: int
     minimum_export_schema_version: int
+    source_export_sha256: str
     species_search_normalization_version: int
     species_search_normalization_fingerprint: str
     species_columns: tuple[StorageColumn, ...]
@@ -231,6 +238,7 @@ def project(
         return ReleaseProjection(
             prepared_schema_version=source.prepared_schema_version,
             minimum_export_schema_version=source.minimum_export_schema_version,
+            source_export_sha256=source.source_export_sha256,
             species_search_normalization_version=(
                 source.species_search_normalization_version
             ),
@@ -243,6 +251,7 @@ def project(
         return PrepareDbProjection(
             prepared_schema_version=source.prepared_schema_version,
             minimum_export_schema_version=source.minimum_export_schema_version,
+            source_export_sha256=source.source_export_sha256,
             species_search_normalization_version=(
                 source.species_search_normalization_version
             ),
@@ -361,6 +370,7 @@ def _load_contract(root: Path) -> _StorageContract:
         "schema_version",
         "min_export_schema_version",
         "species_search_normalization_version",
+        "prepared_artifact",
         "description",
         "columns",
         "supporting_tables",
@@ -388,6 +398,10 @@ def _load_contract(root: Path) -> _StorageContract:
     minimum_export_schema_version = _read_positive_int(
         raw,
         "min_export_schema_version",
+        violations,
+    )
+    source_export_sha256 = _read_prepared_artifact(
+        raw.get("prepared_artifact"),
         violations,
     )
     declared_normalization_version = _read_positive_int(
@@ -461,6 +475,7 @@ def _load_contract(root: Path) -> _StorageContract:
         contract_format_version=contract_format_version,
         prepared_schema_version=prepared_schema_version,
         minimum_export_schema_version=minimum_export_schema_version,
+        source_export_sha256=source_export_sha256,
         species_search_normalization_version=normalization_version,
         species_search_normalization_fingerprint=normalization_fingerprint,
         species_columns=tuple(species_columns),
@@ -478,6 +493,7 @@ def _load_contract(root: Path) -> _StorageContract:
         contract_format_version=parsed.contract_format_version,
         prepared_schema_version=parsed.prepared_schema_version,
         minimum_export_schema_version=parsed.minimum_export_schema_version,
+        source_export_sha256=parsed.source_export_sha256,
         species_search_normalization_version=(
             parsed.species_search_normalization_version
         ),
@@ -507,6 +523,25 @@ def _read_positive_int(
         if key in source:
             violations.append(f"{key}: expected a positive integer")
         return 0
+    return value
+
+
+def _read_prepared_artifact(raw: Any, violations: list[str]) -> str:
+    path = "prepared_artifact"
+    if not isinstance(raw, dict):
+        violations.append(f"{path}: expected an object")
+        return ""
+    for key in sorted(raw.keys() - {"source_export_sha256"}):
+        violations.append(f"{path}.{key}: unknown property")
+    if "source_export_sha256" not in raw:
+        violations.append(f"{path}.source_export_sha256: required property is missing")
+        return ""
+    value = raw["source_export_sha256"]
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        violations.append(
+            f"{path}.source_export_sha256: expected 64 lowercase hexadecimal characters"
+        )
+        return ""
     return value
 
 
@@ -1363,8 +1398,38 @@ def _contract_fingerprint(contract: _StorageContract) -> str:
 def prepared_database_asset_name(release: ReleaseProjection) -> str:
     return (
         f"canopi-core-v{release.prepared_schema_version}-"
-        f"{release.fingerprint}.db"
+        f"{release.fingerprint}-{release.source_export_sha256}.db"
     )
+
+
+def verify_source_export_identity(
+    export_path: Path,
+    *,
+    root: Path = REPO_ROOT,
+) -> str:
+    source = _load_contract(root)
+    export_path = export_path.resolve()
+    if not export_path.is_file():
+        raise SourceExportIdentityError(
+            f"Prepared artifact source export does not exist: {export_path}"
+        )
+    digest = hashlib.sha256()
+    try:
+        with export_path.open("rb") as export:
+            for chunk in iter(lambda: export.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as error:
+        raise SourceExportIdentityError(
+            f"Failed to read prepared artifact source export {export_path}: {error}"
+        ) from error
+    observed = digest.hexdigest()
+    if observed != source.source_export_sha256:
+        raise SourceExportIdentityError(
+            "Prepared artifact source export SHA-256 "
+            f"{observed} does not equal authored {source.source_export_sha256}: "
+            f"{export_path}"
+        )
+    return observed
 
 
 def verify_database(
@@ -1956,6 +2021,7 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=[
             "prepared-schema-version",
             "minimum-export-schema-version",
+            "prepared-source-export-sha256",
             "prepared-contract-fingerprint",
             "prepared-db-asset-name",
         ],
@@ -1978,6 +2044,11 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=[profile.value for profile in DatabaseProfile],
     )
     verify.add_argument("database", type=Path)
+    verify_source = subparsers.add_parser(
+        "verify-source-export",
+        help="verify exact prepared artifact source export bytes",
+    )
+    verify_source.add_argument("database", type=Path)
     return parser
 
 
@@ -1990,10 +2061,15 @@ def main(argv: list[str] | None = None) -> int:
             values = {
                 "prepared-schema-version": release.prepared_schema_version,
                 "minimum-export-schema-version": release.minimum_export_schema_version,
+                "prepared-source-export-sha256": release.source_export_sha256,
                 "prepared-contract-fingerprint": release.fingerprint,
                 "prepared-db-asset-name": prepared_database_asset_name(release),
             }
             print(values[args.name])
+            return 0
+        if args.command == "verify-source-export":
+            observed = verify_source_export_identity(args.database, root=args.root)
+            print(f"Prepared artifact source export OK ({observed})")
             return 0
         if args.command == "emit-rust":
             mode = SyncMode.WRITE if args.write else SyncMode.CHECK

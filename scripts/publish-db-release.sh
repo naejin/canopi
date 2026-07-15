@@ -103,10 +103,14 @@ python3 scripts/species_catalog_contract.py check
 expected_schema_version="$(python3 scripts/species_catalog_contract.py value prepared-schema-version)"
 asset_name="$(python3 scripts/species_catalog_contract.py value prepared-db-asset-name)"
 
+tmpdir="$(mktemp -d)"
+trap '[[ -n "$tmpdir" ]] && rm -rf "$tmpdir"' EXIT
+upload_dir="$tmpdir/upload"
+mkdir -p "$upload_dir"
+upload_path="$upload_dir/$asset_name"
+checksum_path="$upload_dir/${asset_name}.sha256"
 if [[ -z "$output_path" ]]; then
-  tmpdir="$(mktemp -d)"
-  trap '[[ -n "$tmpdir" ]] && rm -rf "$tmpdir"' EXIT
-  output_path="$tmpdir/$asset_name"
+  output_path="$upload_path"
 fi
 
 log "Building bundled DB from export: $export_path"
@@ -120,8 +124,10 @@ fi
 
 python3 scripts/species_catalog_contract.py verify-db --profile prepared "$output_path"
 
-db_sha256="$(sha256sum "$output_path" | awk '{print $1}')"
-checksum_path="${output_path}.sha256"
+if [[ "$output_path" != "$upload_path" ]] && ! ln "$output_path" "$upload_path" 2>/dev/null; then
+  cp "$output_path" "$upload_path"
+fi
+db_sha256="$(sha256sum "$upload_path" | awk '{print $1}')"
 printf '%s  %s\n' "$db_sha256" "$asset_name" > "$checksum_path"
 
 log "Checking GitHub release tag exists: $tag"
@@ -129,8 +135,8 @@ gh release view "$tag" --repo "$repo" >/dev/null
 
 log "Uploading DB asset and checksum"
 gh release upload "$tag" \
-  "$output_path#$asset_name" \
-  "$checksum_path#${asset_name}.sha256" \
+  "$upload_path" \
+  "$checksum_path" \
   --repo "$repo"
 
 log "Published $asset_name to $repo@$tag"

@@ -243,7 +243,6 @@ class SpeciesCatalogContractCliTests(unittest.TestCase):
                 "species_catalog_contract.py value prepared-db-asset-name",
                 source,
             )
-        self.assertIn("species_catalog_contract.py verify-source-export", publish)
         self.assertNotIn("--clobber", publish)
         self.assertNotIn("CANOPI_CORE_DB_ASSET_NAME", build)
         self.assertNotIn("db_asset_name:", release_candidate.split("jobs:", 1)[0])
@@ -328,6 +327,7 @@ printf '%s\\0' "$@" >> "$GH_LOG"
 
     def test_source_export_identity_changes_asset_not_prepared_semantics(self):
         baseline = contract.project(contract.ProjectionTarget.RELEASE)
+        baseline_web = contract.project(contract.ProjectionTarget.WEB_CATALOG)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             copy_contract_sources(root)
@@ -337,8 +337,13 @@ printf '%s\\0' "$@" >> "$GH_LOG"
             contract_path.write_text(json.dumps(source), encoding="utf-8")
 
             changed = contract.project(contract.ProjectionTarget.RELEASE, root=root)
+            changed_web = contract.project(
+                contract.ProjectionTarget.WEB_CATALOG,
+                root=root,
+            )
 
         self.assertEqual(changed.fingerprint, baseline.fingerprint)
+        self.assertEqual(changed_web.fingerprint, baseline_web.fingerprint)
         self.assertNotEqual(
             changed.source_export_sha256,
             baseline.source_export_sha256,
@@ -528,6 +533,28 @@ class ContractValidationTests(unittest.TestCase):
             self.assertIn("supporting_tables[6]", message)
             self.assertIn("indexes.species[28].name", message)
             self.assertIn("indexes.species[28].columns", message)
+
+    def test_project_requires_closed_source_export_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            contract_path = root / "scripts/schema-contract.json"
+            source = json.loads(contract_path.read_text(encoding="utf-8"))
+            source["prepared_artifact"] = {
+                "source_export_sha256": "A" * 64,
+                "unexpected": True,
+            }
+            contract_path.write_text(json.dumps(source), encoding="utf-8")
+
+            with self.assertRaises(contract.ContractInvariantError) as raised:
+                contract.project(contract.ProjectionTarget.RELEASE, root=root)
+
+            message = str(raised.exception)
+            self.assertIn("prepared_artifact.unexpected: unknown property", message)
+            self.assertIn(
+                "prepared_artifact.source_export_sha256: expected 64 lowercase",
+                message,
+            )
 
     def test_project_rejects_index_columns_absent_from_contracted_table(self):
         with tempfile.TemporaryDirectory() as tmp:

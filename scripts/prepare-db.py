@@ -739,6 +739,7 @@ def main():
     if paths_refer_to_same_file(export_path, output_path):
         parser.error("--export-path and --output-path must refer to different files")
 
+    storage_contract.verify_source_export_identity(export_path)
     export_receipt = storage_contract.verify_database(
         storage_contract.DatabaseProfile.EXPORT,
         export_path,
