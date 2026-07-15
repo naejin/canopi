@@ -6,6 +6,7 @@ import type {
 } from './presentation-data'
 import type { ScenePersistedState } from './scene'
 import type { CanvasDesignObjectSelectionModel, CanvasRuntimeDocumentMetadata } from './runtime'
+import { resolvePersistedNorthBearingDeg } from './document-metadata'
 
 export interface CanvasRuntimeLayerProjectionSource {
   readonly name: string
@@ -147,7 +148,10 @@ function composeDetachedCanvasDocument({
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
     location: normalizeMetadataLocation(metadata.location, document.location),
-    north_bearing_deg: metadata.northBearingDeg ?? document.north_bearing_deg ?? 0,
+    north_bearing_deg: resolvePersistedNorthBearingDeg(
+      metadata.northBearingDeg,
+      document.north_bearing_deg,
+    ),
     consortiums: document.consortiums,
     timeline: document.timeline,
     budget: document.budget,

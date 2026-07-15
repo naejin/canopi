@@ -51,6 +51,7 @@ import type {
   CanvasRuntimeDocumentCompositionInput,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
+import { resolvePersistedNorthBearingDeg } from './document-metadata'
 import { getCommonNames } from '../../ipc/species'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
 
@@ -345,7 +346,10 @@ function composeTestDocumentForSave({
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
     location: normalizeTestMetadataLocation(metadata.location, document.location),
-    north_bearing_deg: metadata.northBearingDeg ?? document.north_bearing_deg ?? 0,
+    north_bearing_deg: resolvePersistedNorthBearingDeg(
+      metadata.northBearingDeg,
+      document.north_bearing_deg,
+    ),
     extra: {
       ...document.extra,
       ...canvas.extra,
@@ -1984,6 +1988,28 @@ describe('scene canvas runtime', () => {
     expect(serialized.created_at).toBe('2025-01-01T00:00:00.000Z')
     expect(serialized.extra).toEqual({ imported_from: 'legacy-plan' })
     expect(serialized.plants[0]?.color).toBe('#228833')
+  })
+
+  it('keeps explicit null north bearings distinct from omitted legacy values in detached composition', () => {
+    const runtime = new SceneCanvasRuntime()
+    const withoutBearing = { ...makeFile(), north_bearing_deg: null }
+    runtime.documentSurface.loadDocument(withoutBearing)
+
+    const explicitNull = runtime.documentSurface.captureForPersistence(
+      { name: 'No bearing' },
+      withoutBearing,
+    ).content
+
+    const legacyWithoutBearing = { ...makeFile() }
+    delete (legacyWithoutBearing as Partial<CanopiFile>).north_bearing_deg
+    runtime.documentSurface.loadDocument(legacyWithoutBearing as CanopiFile)
+    const omitted = runtime.documentSurface.captureForPersistence(
+      { name: 'Legacy bearing' },
+      legacyWithoutBearing as CanopiFile,
+    ).content
+
+    expect(explicitNull.north_bearing_deg).toBeNull()
+    expect(omitted.north_bearing_deg).toBe(0)
   })
 
   it('publishes canvas-origin species hover targets without mutating selection', async () => {

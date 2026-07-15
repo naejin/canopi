@@ -186,6 +186,36 @@ describe('document format contract', () => {
     })
   })
 
+  it('preserves explicit null north bearings while retaining omitted-field fallback', () => {
+    const explicitDocumentNull = composeDocumentForSave({
+      metadata: { name: 'No bearing' },
+      document: { ...BASE_DOCUMENT, north_bearing_deg: null },
+      canvas: BASE_DOCUMENT,
+    })
+    const explicitMetadataNull = composeDocumentForSave({
+      metadata: { name: 'Cleared bearing', northBearingDeg: null },
+      document: { ...BASE_DOCUMENT, north_bearing_deg: 18 },
+      canvas: BASE_DOCUMENT,
+    })
+    const omittedMetadata = composeDocumentForSave({
+      metadata: { name: 'Existing bearing' },
+      document: { ...BASE_DOCUMENT, north_bearing_deg: 18 },
+      canvas: BASE_DOCUMENT,
+    })
+    const legacyWithoutBearing = { ...BASE_DOCUMENT }
+    delete (legacyWithoutBearing as Partial<CanopiFile>).north_bearing_deg
+    const omittedEverywhere = composeDocumentForSave({
+      metadata: { name: 'Legacy bearing' },
+      document: legacyWithoutBearing as CanopiFile,
+      canvas: BASE_DOCUMENT,
+    })
+
+    expect(explicitDocumentNull.north_bearing_deg).toBeNull()
+    expect(explicitMetadataNull.north_bearing_deg).toBeNull()
+    expect(omittedMetadata.north_bearing_deg).toBe(18)
+    expect(omittedEverywhere.north_bearing_deg).toBe(0)
+  })
+
   it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {
     const normalized = normalizeLoadedDocument(RAW_DOCUMENT as unknown as CanopiFile)
 

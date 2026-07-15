@@ -8,6 +8,7 @@ import type {
   KnownCanopiKey,
 } from '../../generated/known-canopi-keys'
 import type { CanopiFile } from '../../types/design'
+import { resolvePersistedNorthBearingDeg } from '../../canvas/runtime/document-metadata'
 
 export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
 
@@ -94,7 +95,10 @@ export function composeDocumentForSave({
     name: metadata.name,
     description: metadata.description ?? composed.description ?? null,
     location: normalizeMetadataLocation(metadata.location, composed.location),
-    north_bearing_deg: metadata.northBearingDeg ?? composed.north_bearing_deg ?? 0,
+    north_bearing_deg: resolvePersistedNorthBearingDeg(
+      metadata.northBearingDeg,
+      document.north_bearing_deg,
+    ),
   }
 }
 
