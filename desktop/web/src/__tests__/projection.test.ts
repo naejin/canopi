@@ -17,7 +17,6 @@ import {
   viewportCenterGeo,
   viewportCornerGeoPoints,
 } from '../canvas/projection'
-import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 
 // ---------------------------------------------------------------------------
 // worldToGeo
@@ -175,39 +174,15 @@ describe('stageScaleToMapZoom', () => {
 })
 
 describe('canonical projection diagnostics', () => {
-  it('derives warning-only precision metrics with a stable local-Mercator identity', () => {
-    const scene = createDefaultScenePersistedState()
-    scene.plants.push({
-      kind: 'plant',
-      locked: false,
-      id: 'plant-warning',
-      canonicalName: 'Malus domestica',
-      commonName: null,
-      color: null,
-      stratum: null,
-      canopySpreadM: null,
-      position: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS, y: 0 },
-      rotationDeg: null,
-      scale: null,
-      notes: null,
-      plantedDate: null,
-      quantity: 1,
-    })
-
-    const atThreshold = createProjectionPrecisionSnapshot(scene)
+  it('derives warning-only precision metrics from a scalar physical extent', () => {
+    const atThreshold = createProjectionPrecisionSnapshot(
+      LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+    )
     expect(atThreshold.precisionWarning).toBe(false)
 
-    scene.annotations.push({
-      kind: 'annotation',
-      locked: false,
-      id: 'annotation-warning',
-      annotationType: 'text',
-      position: { x: 0, y: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 25 },
-      text: 'Projection extent',
-      fontSize: 16,
-      rotationDeg: null,
-    })
-    const precision = createProjectionPrecisionSnapshot(scene)
+    const precision = createProjectionPrecisionSnapshot(
+      LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 25,
+    )
 
     expect(LOCAL_MERCATOR_PROJECTION_ID).toBe('local-mercator')
     expect(precision.projectionId).toBe(LOCAL_MERCATOR_PROJECTION_ID)

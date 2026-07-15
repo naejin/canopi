@@ -78,6 +78,95 @@ export function getEllipticalZonePolygon(zone: SceneZoneEntity, segmentCount = 4
   return points
 }
 
+export function getEllipticalZoneRadialExtent(zone: SceneZoneEntity): number | null {
+  if (zone.zoneType !== 'ellipse' || zone.points.length < 2) return null
+  const center = zone.points[0]!
+  const radii = zone.points[1]!
+  const rotationRad = degreesToRadians(zone.rotationDeg)
+  const cos = Math.cos(rotationRad)
+  const sin = Math.sin(rotationRad)
+  const localCenter = {
+    x: center.x * cos + center.y * sin,
+    y: -center.x * sin + center.y * cos,
+  }
+  return axisAlignedEllipseRadialExtent(
+    localCenter,
+    Math.abs(radii.x),
+    Math.abs(radii.y),
+  )
+}
+
+function axisAlignedEllipseRadialExtent(
+  center: ScenePoint,
+  radiusX: number,
+  radiusY: number,
+): number {
+  if (radiusX === radiusY) return Math.hypot(center.x, center.y) + radiusX
+
+  const xIsMajor = radiusX > radiusY
+  const majorRadius = xIsMajor ? radiusX : radiusY
+  const minorRadius = xIsMajor ? radiusY : radiusX
+  const majorCenter = xIsMajor ? center.x : center.y
+  const minorCenter = xIsMajor ? center.y : center.x
+  const majorSquared = majorRadius ** 2
+  const minorSquared = minorRadius ** 2
+  const majorLinear = majorRadius * majorCenter
+  const minorLinear = minorRadius * minorCenter
+  const scale = Math.max(
+    1,
+    majorSquared,
+    Math.abs(majorLinear),
+    Math.abs(minorLinear),
+  )
+
+  // The farthest-point problem is a two-dimensional trust-region problem.
+  // When the center has no component on the major axis, its maximum can lie
+  // between the ellipse's cardinal points (the trust-region "hard case").
+  if (Math.abs(majorLinear) <= Number.EPSILON * 32 * scale) {
+    const minorCoordinate = minorLinear / (majorSquared - minorSquared)
+    if (Math.abs(minorCoordinate) <= 1) {
+      const majorCoordinate = (
+        Math.sign(majorLinear) || 1
+      ) * Math.sqrt(Math.max(0, 1 - minorCoordinate ** 2))
+      return Math.hypot(
+        majorCenter + majorRadius * majorCoordinate,
+        minorCenter + minorRadius * minorCoordinate,
+      )
+    }
+    return Math.hypot(
+      majorCenter,
+      minorCenter + minorRadius * Math.sign(minorLinear),
+    )
+  }
+
+  const constraint = (lambda: number): number => (
+    (majorLinear / (lambda - majorSquared)) ** 2
+    + (minorLinear / (lambda - minorSquared)) ** 2
+  )
+  // Above the major squared radius this constraint decreases monotonically,
+  // so bisection finds the unique farthest-point Lagrange multiplier.
+  let lower = majorSquared
+  let span = Math.max(Math.hypot(majorLinear, minorLinear), Number.EPSILON * scale * 64)
+  let upper = majorSquared + span
+  while (upper === majorSquared || constraint(upper) > 1) {
+    span *= 2
+    upper = majorSquared + span
+  }
+
+  for (let iteration = 0; iteration < 64; iteration += 1) {
+    const lambda = lower + (upper - lower) / 2
+    if (constraint(lambda) > 1) lower = lambda
+    else upper = lambda
+  }
+
+  const majorCoordinate = majorLinear / (upper - majorSquared)
+  const minorCoordinate = minorLinear / (upper - minorSquared)
+  return Math.hypot(
+    majorCenter + majorRadius * majorCoordinate,
+    minorCenter + minorRadius * minorCoordinate,
+  )
+}
+
 function rotatePointAround(point: ScenePoint, center: ScenePoint, radians: number): ScenePoint {
   const dx = point.x - center.x
   const dy = point.y - center.y

@@ -532,11 +532,21 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Canonical projection math has no runtime dependencies',
+    name: 'Canonical projection math and precision policy have no dependencies',
     from: ['src/canvas/projection.ts'],
     targets: ['**'],
     edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
-    allowTypeOnlyTargets: ['src/canvas/runtime/scene/index.ts'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Scene physical extent stays inside canonical canvas geometry',
+    from: ['src/canvas/runtime/scene-physical-extent.ts'],
+    targets: [
+      'src/app/**',
+      'src/components/**',
+      'src/maplibre/**',
+      'src/canvas/projection.ts',
+    ],
   },
 ] satisfies readonly ArchitecturePolicy[]
 

@@ -10,8 +10,6 @@
 // may warn when a design grows too large for the local model.
 // ---------------------------------------------------------------------------
 
-import type { ScenePersistedState } from './runtime/scene'
-
 const EARTH_RADIUS_METERS = 6371008.8
 const EARTH_CIRCUMFERENCE_METERS = 2 * Math.PI * EARTH_RADIUS_METERS
 const DEGREES_TO_RADIANS = Math.PI / 180
@@ -225,28 +223,9 @@ export function viewportCornerGeoPoints(
   ]
 }
 
-export function computeSceneExtentMeters(scene: ScenePersistedState): number | null {
-  let maxDistanceMeters = 0
-  let hasGeometry = false
-
-  const includePoint = (x: number, y: number) => {
-    hasGeometry = true
-    maxDistanceMeters = Math.max(maxDistanceMeters, Math.hypot(x, y))
-  }
-
-  for (const plant of scene.plants) includePoint(plant.position.x, plant.position.y)
-  for (const zone of scene.zones) {
-    for (const point of zone.points) includePoint(point.x, point.y)
-  }
-  for (const annotation of scene.annotations) includePoint(annotation.position.x, annotation.position.y)
-
-  return hasGeometry ? maxDistanceMeters : null
-}
-
 export function createProjectionPrecisionSnapshot(
-  scene: ScenePersistedState | null,
+  designExtentMeters: number | null,
 ): ProjectionPrecisionSnapshot {
-  const designExtentMeters = scene ? computeSceneExtentMeters(scene) : null
   return {
     projectionId: LOCAL_MERCATOR_PROJECTION_ID,
     warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,

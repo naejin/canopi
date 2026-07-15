@@ -1,5 +1,6 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
+import { computeScenePhysicalExtentMeters } from '../canvas/runtime/scene-physical-extent'
 import {
   LOCAL_MERCATOR_PROJECTION_ID,
   LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
@@ -35,7 +36,8 @@ export function precisionSnapshot(scene: ScenePersistedState | null): Pick<
   MapLibreCanvasSurfaceState,
   'precisionWarning' | 'designExtentMeters'
 > {
-  const precision = createProjectionPrecisionSnapshot(scene)
+  const designExtentMeters = scene ? computeScenePhysicalExtentMeters(scene) : null
+  const precision = createProjectionPrecisionSnapshot(designExtentMeters)
   return {
     precisionWarning: precision.precisionWarning,
     designExtentMeters: precision.designExtentMeters,

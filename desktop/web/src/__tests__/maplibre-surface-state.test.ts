@@ -8,7 +8,6 @@ import {
 import {
   LOCAL_MERCATOR_PROJECTION_ID,
   LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-  computeSceneExtentMeters,
 } from '../canvas/projection'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 
@@ -30,21 +29,12 @@ describe('maplibre surface state adapter', () => {
 
   it('merges precision warning data from the current scene extent', () => {
     const scene = createDefaultScenePersistedState()
-    scene.plants.push({
-      kind: 'plant',
+    scene.measurementGuides.push({
+      kind: 'measurement-guide',
       locked: false,
-      id: 'plant-1',
-      canonicalName: 'Malus domestica',
-      commonName: null,
-      color: null,
-      stratum: null,
-      canopySpreadM: null,
-      position: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 5, y: 0 },
-      rotationDeg: null,
-      scale: null,
-      notes: null,
-      plantedDate: null,
-      quantity: 1,
+      id: 'guide-1',
+      start: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS, y: 0 },
+      end: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 5, y: 0 },
     })
 
     const merged = mergeMapLibreCanvasSurfaceState({
@@ -72,53 +62,6 @@ describe('maplibre surface state adapter', () => {
 
     expect(mapLibreCanvasSurfaceStateEquals(left, right)).toBe(true)
     expect(mapLibreCanvasSurfaceStateEquals(left, different)).toBe(false)
-  })
-
-  it('computes scene extent from plants, zone points, and annotations', () => {
-    const scene = createDefaultScenePersistedState()
-    expect(computeSceneExtentMeters(scene)).toBeNull()
-
-    scene.plants.push({
-      kind: 'plant',
-      id: 'plant-1',
-      locked: false,
-      canonicalName: 'Malus domestica',
-      commonName: null,
-      color: null,
-      stratum: null,
-      canopySpreadM: null,
-      position: { x: 30, y: 40 },
-      rotationDeg: null,
-      scale: null,
-      notes: null,
-      plantedDate: null,
-      quantity: null,
-    })
-    expect(computeSceneExtentMeters(scene)).toBeCloseTo(50, 8)
-
-    scene.zones.push({
-      kind: 'zone',
-      locked: false,
-      name: 'zone-1',
-      zoneType: 'polygon',
-      points: [{ x: 60, y: 80 }],
-      rotationDeg: 0,
-      fillColor: null,
-      notes: null,
-    })
-    expect(computeSceneExtentMeters(scene)).toBeCloseTo(100, 8)
-
-    scene.annotations.push({
-      kind: 'annotation',
-      locked: false,
-      id: 'annotation-1',
-      annotationType: 'text',
-      position: { x: -120, y: 160 },
-      text: 'Extent',
-      fontSize: 16,
-      rotationDeg: null,
-    })
-    expect(computeSceneExtentMeters(scene)).toBeCloseTo(200, 8)
   })
 
   it('publishes the stable canonical projection diagnostics without backend selection', () => {
