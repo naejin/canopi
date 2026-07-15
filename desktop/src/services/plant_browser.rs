@@ -645,6 +645,27 @@ mod tests {
             true,
             "en",
         )));
+        assert!(!is_active_species_search_request(&search_request(
+            "--",
+            SpeciesFilter::default(),
+            10,
+            false,
+            "en",
+        )));
+        assert!(!is_active_species_search_request(&search_request(
+            "E\u{301}",
+            SpeciesFilter::default(),
+            10,
+            false,
+            "en",
+        )));
+        assert!(is_active_species_search_request(&search_request(
+            "ß",
+            SpeciesFilter::default(),
+            10,
+            false,
+            "en",
+        )));
     }
 
     #[test]

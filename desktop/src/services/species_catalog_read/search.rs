@@ -240,6 +240,25 @@ mod tests {
         conn
     }
 
+    #[test]
+    fn rejects_too_short_text_instead_of_broadening_to_a_browse() {
+        let error = search(
+            &test_db(),
+            search_request(
+                Some("e"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Name,
+                20,
+                false,
+                "en",
+            ),
+        )
+        .unwrap_err();
+
+        assert!(error.contains("too short"), "unexpected error: {error}");
+    }
+
     fn relevance_fixture_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
