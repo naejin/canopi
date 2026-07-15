@@ -2,8 +2,10 @@ import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPlantSearchSession,
+  isActiveSpeciesSearchText,
   type PlantSearchAdapter,
 } from '../app/plant-browser/search-session'
+import { SPECIES_SEARCH_NORMALIZATION_CORPUS } from '../generated/species-search-normalization'
 import type { DynamicFilterOptions, PaginatedResult, SpeciesListItem } from '../types/species'
 
 function makePlant(canonicalName: string): SpeciesListItem {
@@ -41,6 +43,15 @@ function page(
     total_estimate: totalEstimate,
   }
 }
+
+describe('Species Search admission', () => {
+  it('routes the authored corpus through the public UI admission boundary', () => {
+    for (const testCase of SPECIES_SEARCH_NORMALIZATION_CORPUS) {
+      expect(isActiveSpeciesSearchText(testCase.input), testCase.name)
+        .toBe(testCase.admission === 'active-text')
+    }
+  })
+})
 
 function deferred<T>() {
   let resolve!: (value: T) => void

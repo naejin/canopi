@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEmptySpeciesFilter } from '../app/plant-browser'
+import { SPECIES_SEARCH_NORMALIZATION_CORPUS } from '../generated/species-search-normalization'
 import { createDuckDbReducedSpeciesCatalogReader } from '../web/duckdb-wasm-catalog'
 import type { SpeciesSearchRequest } from '../types/species'
 import { validWebCatalogManifest } from './fixtures/web-catalog-manifest'
@@ -945,6 +946,44 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
       expect.anything(),
       false,
     )
+  })
+
+  it('keeps separated short tokens active through the Web query path', async () => {
+    const testCase = SPECIES_SEARCH_NORMALIZATION_CORPUS.find(
+      (candidate) => candidate.name === 'separated-short-tokens-are-admitted-together',
+    )
+    expect(testCase).toBeDefined()
+
+    const queries: string[] = []
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql)
+        return table([])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => database,
+    })
+
+    await reader.searchSpecies(searchRequest({
+      text: testCase!.input,
+      locale: 'en',
+      limit: 10,
+    }), new Set())
+
+    const searchSql = queries.at(-1) ?? ''
+    expect(searchSql).toContain('ORDER BY CASE')
+    for (const token of testCase!.queryTokens) {
+      expect(searchSql).toContain(`LIKE '%${token}%' ESCAPE '\\'`)
+    }
   })
 
   it('keeps canonical ordering for empty browse and filter-only searches', async () => {

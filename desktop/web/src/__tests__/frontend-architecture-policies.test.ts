@@ -598,9 +598,28 @@ const CONFINED_IMPORTER_POLICIES = [
       ...TEST_SOURCE_PATTERNS,
     ],
   },
+  {
+    kind: 'confine-importers',
+    name: 'Generated Species Search facts stay behind the shared normalizer',
+    targets: ['src/generated/species-search-normalization.ts'],
+    allowedFrom: [
+      'src/utils/species-search-normalization.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 const REQUIRED_IMPORT_POLICIES = [
+  {
+    kind: 'require-imports',
+    name: 'Species Search consumers delegate shared normalization',
+    from: [
+      'src/app/plant-browser/search-session.ts',
+      'src/web/reduced-species-catalog.ts',
+      'src/web/duckdb-wasm-catalog.ts',
+    ],
+    targets: ['src/utils/species-search-normalization.ts'],
+  },
   {
     kind: 'require-imports',
     name: 'Control Point adapters delegate shared lifecycle ownership',
