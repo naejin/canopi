@@ -2,7 +2,10 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { discoverTypeScriptSourceGraph } from './support/architecture/source-facts'
+import {
+  createTypeScriptSourceGraph,
+  discoverTypeScriptSourceGraph,
+} from './support/architecture/source-facts'
 import {
   collectArchitecturePolicyViolations,
   type ArchitecturePolicy,
@@ -20,6 +23,13 @@ const FORBIDDEN_IMPORT_POLICIES = [
     name: 'Production imports stay statically analyzable',
     from: ['src/**'],
     exceptFrom: [...TEST_SOURCE_PATTERNS],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Production code cannot import frontend test support',
+    from: ['src/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: [...TEST_SOURCE_PATTERNS],
   },
   {
     kind: 'forbid-imports',
@@ -1461,18 +1471,11 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     properties: ['mutateCurrentDesign', 'reconcileCurrentDesign', 'updateDesignArray'],
   },
   {
-    kind: 'forbid-calls',
+    kind: 'confine-symbols',
     name: 'Production code cannot acquire the Design Session test fixture',
-    from: [
-      'src/app/**',
-      'src/canvas/**',
-      'src/components/**',
-      'src/ipc/**',
-      'src/state/**',
-      'src/web/**',
-    ],
-    exceptFrom: ['src/app/document-session/store.ts', ...TEST_SOURCE_PATTERNS],
-    targets: ['createDesignSessionStoreTestFixture'],
+    from: ['src/**'],
+    names: ['createDesignSessionStoreTestFixture'],
+    allowedFrom: ['src/app/document-session/store.ts', ...TEST_SOURCE_PATTERNS],
   },
   {
     kind: 'forbid-calls',
@@ -1500,7 +1503,122 @@ const FRONTEND_ARCHITECTURE_POLICIES = [
   ...SYMBOL_OWNERSHIP_POLICIES,
 ] satisfies readonly ArchitecturePolicy[]
 
+const DESIGN_SESSION_TEST_BOUNDARY_POLICY_NAMES = new Set([
+  'Production code cannot acquire the Design Session test fixture',
+  'Production code cannot import frontend test support',
+])
+
+function designSessionTestBoundaryPolicies(): readonly ArchitecturePolicy[] {
+  return FRONTEND_ARCHITECTURE_POLICIES.filter(({ name }) =>
+    DESIGN_SESSION_TEST_BOUNDARY_POLICY_NAMES.has(name)
+  )
+}
+
+const DESIGN_SESSION_TEST_FIXTURE_OWNER_SOURCE = {
+  path: 'src/app/document-session/store.ts',
+  source: 'export function createDesignSessionStoreTestFixture() {}',
+} as const
+
+const DESIGN_SESSION_TEST_FIXTURE_ALLOWED_SOURCES =
+  'src/app/document-session/store.ts, src/__tests__/**, src/**/*.test.ts, src/**/*.test.tsx'
+
 describe('declarative frontend architecture policies', () => {
+  it.each([
+    {
+      caseName: 'root production entry',
+      path: 'src/main.tsx',
+      source: `
+          import { createDesignSessionStoreTestFixture } from './app/document-session/store'
+          createDesignSessionStoreTestFixture()
+        `,
+    },
+    {
+      caseName: 'aliased import',
+      path: 'src/app/fixture-consumer.ts',
+      source: `
+          import {
+            createDesignSessionStoreTestFixture as acquireFixture,
+          } from './document-session/store'
+          acquireFixture()
+        `,
+    },
+    {
+      caseName: 'namespace import',
+      path: 'src/commands/fixture-consumer.ts',
+      source: `
+          import * as designSession from '../app/document-session/store'
+          designSession.createDesignSessionStoreTestFixture()
+        `,
+    },
+  ])('rejects Design Session test fixture acquisition through a $caseName', ({ path, source }) => {
+    const graph = createTypeScriptSourceGraph([
+      DESIGN_SESSION_TEST_FIXTURE_OWNER_SOURCE,
+      { path, source },
+    ])
+
+    expect(collectArchitecturePolicyViolations(
+      graph,
+      designSessionTestBoundaryPolicies(),
+    )).toEqual([
+      `[Production code cannot acquire the Design Session test fixture] ${path} contains confined symbol createDesignSessionStoreTestFixture; allowed sources: ${DESIGN_SESSION_TEST_FIXTURE_ALLOWED_SOURCES}`,
+    ])
+  })
+
+  it('rejects production imports from frontend test support', () => {
+    const graph = createTypeScriptSourceGraph([
+      {
+        path: 'src/__tests__/support/design-session-state.ts',
+        source: 'export const designSessionFixture = {}',
+      },
+      {
+        path: 'src/platform/fixture-consumer.ts',
+        source: `
+          import { designSessionFixture } from '../__tests__/support/design-session-state'
+          void designSessionFixture
+        `,
+      },
+    ])
+
+    expect(collectArchitecturePolicyViolations(
+      graph,
+      designSessionTestBoundaryPolicies(),
+    )).toEqual([
+      '[Production code cannot import frontend test support] src/platform/fixture-consumer.ts:2:11 imports src/__tests__/support/design-session-state.ts via "../__tests__/support/design-session-state" (static)',
+    ])
+  })
+
+  it('allows the Design Session store and frontend tests to use test support', () => {
+    const graph = createTypeScriptSourceGraph([
+      DESIGN_SESSION_TEST_FIXTURE_OWNER_SOURCE,
+      {
+        path: 'src/__tests__/support/design-session-state.ts',
+        source: `
+          import { createDesignSessionStoreTestFixture } from '../../app/document-session/store'
+          export const designSessionFixture = createDesignSessionStoreTestFixture()
+        `,
+      },
+      {
+        path: 'src/__tests__/consumer.test.ts',
+        source: `
+          import { designSessionFixture } from './support/design-session-state'
+          void designSessionFixture
+        `,
+      },
+      {
+        path: 'src/canvas/runtime/consumer.test.ts',
+        source: `
+          import { designSessionFixture } from '../../__tests__/support/design-session-state'
+          void designSessionFixture
+        `,
+      },
+    ])
+
+    expect(collectArchitecturePolicyViolations(
+      graph,
+      designSessionTestBoundaryPolicies(),
+    )).toEqual([])
+  })
+
   it('keeps every discovered TypeScript source within its owned dependency seams', () => {
     const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
     const paths = graph.map(({ path }) => path)
