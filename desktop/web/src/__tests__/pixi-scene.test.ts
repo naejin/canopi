@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
+import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 vi.mock('pixi.js', () => {
   const state = {
@@ -328,7 +329,7 @@ describe('createPixiSceneRenderer', () => {
       },
     } as never)
 
-    const snapshot: SceneRendererSnapshot = {
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
         plants: [{
           kind: 'plant',
@@ -357,28 +358,9 @@ describe('createPixiSceneRenderer', () => {
           fontSize: 16,
           rotationDeg: null,
         }],
-        groups: [],
-        layers: [],
-        plantSpeciesColors: {},
-        plantSpeciesSymbols: {},
-        measurementGuides: [],
-        guides: [],
       },
-      viewport: { x: 0, y: 0, scale: 1 },
-      selectedEntityIds: new Set<string>(),
-      selectedPlantIds: new Set<string>(),
-      selectedZoneIds: new Set<string>(),
-      selectedAnnotationIds: new Set<string>(['annotation-1']),
-      selectedMeasurementGuideIds: new Set<string>(),
-      highlightedPlantIds: new Set<string>(),
-      highlightedZoneIds: new Set<string>(),
-      localizedCommonNames: new Map(),
-      hoveredCanonicalName: null,
-      hoverTarget: null,
-      pinnedPlantNameLabels: [],
-      selectionLabels: [],
-      speciesCache: new Map(),
-    }
+      selectedEntityIds: new Set(['annotation-1']),
+    })
 
     renderer.renderScene(snapshot)
 
@@ -434,10 +416,8 @@ describe('createPixiSceneRenderer', () => {
       },
     } as never)
 
-    const snapshot: SceneRendererSnapshot = {
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
-        plants: [],
-        zones: [],
         annotations: [{
           kind: 'annotation',
           locked: false,
@@ -448,28 +428,9 @@ describe('createPixiSceneRenderer', () => {
           fontSize: 16,
           rotationDeg: 90,
         }],
-        groups: [],
-        layers: [],
-        plantSpeciesColors: {},
-        plantSpeciesSymbols: {},
-        measurementGuides: [],
-        guides: [],
       },
       viewport: { x: 10, y: 20, scale: 2 },
-      selectedEntityIds: new Set<string>(),
-      selectedPlantIds: new Set<string>(),
-      selectedZoneIds: new Set<string>(),
-      selectedAnnotationIds: new Set<string>(),
-      selectedMeasurementGuideIds: new Set<string>(),
-      highlightedPlantIds: new Set<string>(),
-      highlightedZoneIds: new Set<string>(),
-      localizedCommonNames: new Map(),
-      hoveredCanonicalName: null,
-      hoverTarget: null,
-      pinnedPlantNameLabels: [],
-      selectionLabels: [],
-      speciesCache: new Map(),
-    }
+    })
 
     renderer.renderScene(snapshot)
 
@@ -509,9 +470,8 @@ describe('createPixiSceneRenderer', () => {
       },
     } as never)
 
-    const snapshot: SceneRendererSnapshot = {
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
-        plants: [],
         zones: [{
           kind: 'zone',
           locked: false,
@@ -525,29 +485,8 @@ describe('createPixiSceneRenderer', () => {
           fillColor: null,
           notes: null,
         }],
-        annotations: [],
-        groups: [],
-        layers: [],
-        plantSpeciesColors: {},
-        plantSpeciesSymbols: {},
-        measurementGuides: [],
-        guides: [],
       },
-      viewport: { x: 0, y: 0, scale: 1 },
-      selectedEntityIds: new Set<string>(),
-      selectedPlantIds: new Set<string>(),
-      selectedZoneIds: new Set<string>(),
-      selectedAnnotationIds: new Set<string>(),
-      selectedMeasurementGuideIds: new Set<string>(),
-      highlightedPlantIds: new Set<string>(),
-      highlightedZoneIds: new Set<string>(),
-      localizedCommonNames: new Map(),
-      hoveredCanonicalName: null,
-      hoverTarget: null,
-      pinnedPlantNameLabels: [],
-      selectionLabels: [],
-      speciesCache: new Map(),
-    }
+    })
 
     renderer.renderScene(snapshot)
 
@@ -590,9 +529,8 @@ describe('createPixiSceneRenderer', () => {
       },
     } as never)
 
-    const snapshot: SceneRendererSnapshot = {
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
-        plants: [],
         zones: [{
           kind: 'zone',
           locked: false,
@@ -608,29 +546,8 @@ describe('createPixiSceneRenderer', () => {
           fillColor: null,
           notes: null,
         }],
-        annotations: [],
-        groups: [],
-        layers: [],
-        plantSpeciesColors: {},
-        plantSpeciesSymbols: {},
-        measurementGuides: [],
-        guides: [],
       },
-      viewport: { x: 0, y: 0, scale: 1 },
-      selectedEntityIds: new Set<string>(),
-      selectedPlantIds: new Set<string>(),
-      selectedZoneIds: new Set<string>(),
-      selectedAnnotationIds: new Set<string>(),
-      selectedMeasurementGuideIds: new Set<string>(),
-      highlightedPlantIds: new Set<string>(),
-      highlightedZoneIds: new Set<string>(),
-      localizedCommonNames: new Map(),
-      hoveredCanonicalName: null,
-      hoverTarget: null,
-      pinnedPlantNameLabels: [],
-      selectionLabels: [],
-      speciesCache: new Map(),
-    }
+    })
 
     renderer.renderScene(snapshot)
 
@@ -679,9 +596,8 @@ describe('createPixiSceneRenderer', () => {
       },
     } as never)
 
-    const snapshot: SceneRendererSnapshot = {
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
-        plants: [],
         zones: [
           {
             kind: 'zone',
@@ -712,29 +628,9 @@ describe('createPixiSceneRenderer', () => {
             notes: null,
           },
         ],
-        annotations: [],
-        groups: [],
-        layers: [],
-        plantSpeciesColors: {},
-        plantSpeciesSymbols: {},
-        measurementGuides: [],
-        guides: [],
       },
-      viewport: { x: 0, y: 0, scale: 1 },
-      selectedEntityIds: new Set<string>(),
-      selectedPlantIds: new Set<string>(),
-      selectedZoneIds: new Set<string>(),
-      selectedAnnotationIds: new Set<string>(),
-      selectedMeasurementGuideIds: new Set<string>(),
-      highlightedPlantIds: new Set<string>(),
       highlightedZoneIds: new Set<string>(['rotated-rect', 'rotated-ellipse']),
-      localizedCommonNames: new Map(),
-      hoveredCanonicalName: null,
-      hoverTarget: null,
-      pinnedPlantNameLabels: [],
-      selectionLabels: [],
-      speciesCache: new Map(),
-    }
+    })
 
     renderer.renderScene(snapshot)
 
@@ -781,7 +677,7 @@ describe('createPixiSceneRenderer', () => {
       },
     } as never)
 
-    const snapshot: SceneRendererSnapshot = {
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
         plants: [{
           kind: 'plant',
@@ -814,29 +710,10 @@ describe('createPixiSceneRenderer', () => {
           fillColor: null,
           notes: null,
         }],
-        annotations: [],
-        groups: [],
-        layers: [],
-        plantSpeciesColors: {},
-        plantSpeciesSymbols: {},
-        measurementGuides: [],
-        guides: [],
       },
       viewport: { x: 0, y: 0, scale: 4 },
-      selectedEntityIds: new Set<string>(),
-      selectedPlantIds: new Set<string>(['plant-1']),
-      selectedZoneIds: new Set<string>(['zone-1']),
-      selectedAnnotationIds: new Set<string>(),
-      selectedMeasurementGuideIds: new Set<string>(),
-      highlightedPlantIds: new Set<string>(),
-      highlightedZoneIds: new Set<string>(),
-      localizedCommonNames: new Map(),
-      hoveredCanonicalName: null,
-      hoverTarget: null,
-      pinnedPlantNameLabels: [],
-      selectionLabels: [],
-      speciesCache: new Map(),
-    }
+      selectedEntityIds: new Set(['plant-1', 'zone-1']),
+    })
 
     renderer.renderScene(snapshot)
 
@@ -885,9 +762,8 @@ describe('createPixiSceneRenderer', () => {
       },
     } as never)
 
-    const snapshot: SceneRendererSnapshot = {
+    const snapshot = createTestSceneRendererSnapshot({
       scene: {
-        plants: [],
         zones: [
           {
             kind: 'zone',
@@ -920,29 +796,10 @@ describe('createPixiSceneRenderer', () => {
             notes: null,
           },
         ],
-        annotations: [],
-        groups: [],
-        layers: [],
-        plantSpeciesColors: {},
-        plantSpeciesSymbols: {},
-        measurementGuides: [],
-        guides: [],
       },
-      viewport: { x: 0, y: 0, scale: 1 },
-      selectedEntityIds: new Set<string>(),
-      selectedPlantIds: new Set<string>(),
-      selectedZoneIds: new Set<string>(['selected-zone']),
-      selectedAnnotationIds: new Set<string>(),
-      selectedMeasurementGuideIds: new Set<string>(),
-      highlightedPlantIds: new Set<string>(),
+      selectedEntityIds: new Set(['selected-zone']),
       highlightedZoneIds: new Set<string>(['hover-zone']),
-      localizedCommonNames: new Map(),
-      hoveredCanonicalName: null,
-      hoverTarget: null,
-      pinnedPlantNameLabels: [],
-      selectionLabels: [],
-      speciesCache: new Map(),
-    }
+    })
 
     renderer.renderScene(snapshot)
 
@@ -967,33 +824,15 @@ function createRendererSnapshot(overrides: {
   plantSpeciesSymbols?: Record<string, string>
   viewport?: SceneRendererSnapshot['viewport']
 } = {}): SceneRendererSnapshot {
-  return {
+  return createTestSceneRendererSnapshot({
     scene: {
       plants: overrides.plants ?? [],
-      zones: [],
-      annotations: [],
-      groups: [],
       layers: overrides.layers ?? [],
-      plantSpeciesColors: {},
       plantSpeciesSymbols: overrides.plantSpeciesSymbols ?? {},
       measurementGuides: overrides.measurementGuides ?? [],
-      guides: [],
     },
     viewport: overrides.viewport ?? { x: 0, y: 0, scale: 1 },
-    selectedEntityIds: new Set<string>(),
-    selectedPlantIds: new Set<string>(),
-    selectedZoneIds: new Set<string>(),
-    selectedAnnotationIds: new Set<string>(),
-    selectedMeasurementGuideIds: new Set<string>(),
-    highlightedPlantIds: new Set<string>(),
-    highlightedZoneIds: new Set<string>(),
-    localizedCommonNames: new Map(),
-    hoveredCanonicalName: null,
-    hoverTarget: null,
-    pinnedPlantNameLabels: [],
-    selectionLabels: [],
-    speciesCache: new Map(),
-  }
+  })
 }
 
 function createPlant(

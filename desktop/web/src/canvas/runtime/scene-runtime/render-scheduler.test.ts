@@ -3,11 +3,8 @@ import {
   RendererHost,
   RendererHostInitializationCancelledError,
 } from '../renderers'
-import type {
-  SceneRendererDefinition,
-  SceneRendererInstance,
-  SceneRendererSnapshot,
-} from '../renderers/scene-types'
+import type { SceneRendererDefinition, SceneRendererInstance } from '../renderers/scene-types'
+import { createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import {
   SceneRuntimeRenderScheduler,
   type SceneRuntimePreparedRender,
@@ -37,7 +34,7 @@ function createScheduler(
     getRendererHost: () => host,
     getViewport: () => ({ x: 0, y: 0, scale: 1 }),
     prepareSceneRender: async () => ({
-      publish: () => ({}) as SceneRendererSnapshot,
+      publish: () => createTestSceneRendererSnapshot(),
     }),
     renderChrome: vi.fn(),
   })
@@ -201,7 +198,7 @@ describe('SceneRuntimeRenderScheduler', () => {
       }, createBackend('canvas2d')],
     })
     const secondPreparation = deferred<SceneRuntimePreparedRender>()
-    const firstSnapshot = {} as SceneRendererSnapshot
+    const firstSnapshot = createTestSceneRendererSnapshot()
     const renderChrome = vi.fn()
     let scheduler!: SceneRuntimeRenderScheduler
     let preparationCount = 0
@@ -230,7 +227,7 @@ describe('SceneRuntimeRenderScheduler', () => {
     expect(renderChrome).not.toHaveBeenCalled()
     scheduler.dispose()
     secondPreparation.resolve({
-      publish: () => ({} as SceneRendererSnapshot),
+      publish: () => createTestSceneRendererSnapshot(),
     })
     await Promise.resolve()
     await Promise.resolve()

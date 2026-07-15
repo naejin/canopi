@@ -2764,7 +2764,8 @@ describe('scene canvas runtime', () => {
 
     await vi.waitFor(() => {
       const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
-      expect(snapshot?.pinnedPlantNameLabels?.map((label: PlantNameLabel) => label.text)).toEqual(['Apple', 'Apple'])
+      if (!snapshot) throw new Error('Expected a renderer snapshot')
+      expect(snapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Apple', 'Apple'])
     })
     const initialRenderCount = renderer.renderScene.mock.calls.length
 
@@ -2774,7 +2775,8 @@ describe('scene canvas runtime', () => {
     })
 
     const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
-    expect(localizedSnapshot?.pinnedPlantNameLabels?.map((label: PlantNameLabel) => label.text)).toEqual(['Pommier', 'Pommier'])
+    if (!localizedSnapshot) throw new Error('Expected a localized renderer snapshot')
+    expect(localizedSnapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Pommier', 'Pommier'])
     runtime.destroy()
   })
 

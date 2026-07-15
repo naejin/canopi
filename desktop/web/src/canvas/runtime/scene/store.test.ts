@@ -198,24 +198,18 @@ describe('scene store', () => {
     expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(5)
   })
 
-  it('normalizes a legacy Design without Measurement Guides into total runtime state', () => {
+  it('normalizes and round-trips a legacy Design without Measurement Guides', () => {
     const file = serializeScenePersistedState(createDefaultScenePersistedState())
     delete file.measurement_guides
 
     const store = SceneStore.fromCanopi(file)
     expect(store.persisted.measurementGuides).toEqual([])
 
-    store.updatePersisted((draft) => {
-      draft.measurementGuides.push({
-        kind: 'measurement-guide',
-        id: 'guide-1',
-        locked: false,
-        start: { x: 0, y: 0 },
-        end: { x: 10, y: 0 },
-      })
-    })
+    const normalizedFile = store.toCanopiFile()
+    expect(normalizedFile.measurement_guides).toEqual([])
 
-    expect(store.persisted.measurementGuides).toHaveLength(1)
+    const reloadedStore = SceneStore.fromCanopi(normalizedFile)
+    expect(reloadedStore.persisted.measurementGuides).toEqual([])
   })
 
   it('hydrates and serializes embedded Design Object lock state', () => {
