@@ -56,7 +56,7 @@ impl SpeciesSearchCancellation {
         None
     }
 
-    pub fn begin(&self, interrupt: Arc<InterruptHandle>) -> SpeciesSearchCancellationToken {
+    fn begin(&self, interrupt: Arc<InterruptHandle>) -> SpeciesSearchCancellationToken {
         let (generation, previous) = {
             let mut active = self.inner.active.lock().unwrap_or_else(|error| {
                 tracing::warn!(
