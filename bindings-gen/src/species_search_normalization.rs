@@ -139,9 +139,7 @@ fn validate(
         ("token", &unicode_facts.token_scalar_ranges),
     ] {
         for [start, end] in ranges {
-            if !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *start)
-                || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *end)
-            {
+            if !scalar_range_is_covered(&unicode_facts.known_scalar_ranges, *start, *end) {
                 return Err(format!(
                     "Species Search {label} ranges must contain only known scalars"
                 )
@@ -156,7 +154,12 @@ fn validate(
     let hangul_scalar_count = hangul
         .l_count
         .checked_mul(hangul.v_count)
-        .and_then(|count| count.checked_mul(hangul.t_count));
+        .and_then(|count| count.checked_mul(hangul.t_count))
+        .ok_or("Species Search Hangul decomposition scalar count overflowed")?;
+    let hangul_end = hangul
+        .s_base
+        .checked_add(hangul_scalar_count)
+        .ok_or("Species Search Hangul decomposition range overflowed")?;
     if [
         hangul.s_base,
         hangul.l_base,
@@ -167,13 +170,14 @@ fn validate(
         hangul.t_count,
     ]
     .contains(&0)
-        || hangul_scalar_count.is_none()
-        || hangul
-            .s_base
-            .checked_add(hangul_scalar_count.unwrap_or_default())
-            .is_none_or(|end| end > char::MAX as u32 + 1)
+        || hangul_end > char::MAX as u32 + 1
+        || !scalar_range_is_covered(
+            &unicode_facts.known_scalar_ranges,
+            hangul.s_base,
+            hangul_end - 1,
+        )
     {
-        return Err("Species Search Hangul decomposition facts are invalid".into());
+        return Err("Species Search Hangul syllable range must contain only known scalars".into());
     }
     validate_mappings(
         "compatibility decomposition",
@@ -296,6 +300,23 @@ fn scalar_in_ranges(ranges: &[[u32; 2]], scalar: u32) -> bool {
     ranges
         .get(insertion)
         .is_some_and(|[start, end]| *start <= scalar && scalar <= *end)
+}
+
+fn scalar_range_is_covered(ranges: &[[u32; 2]], start: u32, end: u32) -> bool {
+    let mut next_required = start;
+    for [range_start, range_end] in ranges {
+        if *range_end < next_required {
+            continue;
+        }
+        if *range_start > next_required {
+            return false;
+        }
+        if *range_end >= end {
+            return true;
+        }
+        next_required = *range_end + 1;
+    }
+    false
 }
 
 fn render_typescript(

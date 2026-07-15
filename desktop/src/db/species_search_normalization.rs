@@ -156,9 +156,7 @@ fn parse_contract(
         &unicode_facts.token_scalar_ranges,
     ] {
         for [start, end] in ranges {
-            if !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *start)
-                || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *end)
-            {
+            if !scalar_range_is_covered(&unicode_facts.known_scalar_ranges, *start, *end) {
                 return Err("Unicode property ranges must contain only known scalars".to_owned());
             }
         }
@@ -187,10 +185,13 @@ fn parse_contract(
     ]
     .contains(&0)
         || hangul_end > char::MAX as u32 + 1
-        || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, hangul.s_base)
-        || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, hangul_end - 1)
+        || !scalar_range_is_covered(
+            &unicode_facts.known_scalar_ranges,
+            hangul.s_base,
+            hangul_end - 1,
+        )
     {
-        return Err("Hangul decomposition facts are invalid".to_owned());
+        return Err("Hangul syllable range must contain only known scalars".to_owned());
     }
     let decomposition_by_scalar = validate_mappings(
         "compatibility decomposition",
@@ -298,6 +299,23 @@ fn scalar_in_ranges(ranges: &[[u32; 2]], scalar: u32) -> bool {
     ranges
         .get(insertion)
         .is_some_and(|[start, end]| *start <= scalar && scalar <= *end)
+}
+
+fn scalar_range_is_covered(ranges: &[[u32; 2]], start: u32, end: u32) -> bool {
+    let mut next_required = start;
+    for [range_start, range_end] in ranges {
+        if *range_end < next_required {
+            continue;
+        }
+        if *range_start > next_required {
+            return false;
+        }
+        if *range_end >= end {
+            return true;
+        }
+        next_required = *range_end + 1;
+    }
+    false
 }
 
 pub(crate) fn normalize_species_search(raw: &str) -> NormalizedSpeciesSearch {

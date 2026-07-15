@@ -203,14 +203,28 @@ def load_contract(
                 return True
         return False
 
+    def range_is_covered(
+        ranges: tuple[tuple[int, int], ...],
+        required_start: int,
+        required_end: int,
+    ) -> bool:
+        next_required = required_start
+        for start, end in ranges:
+            if end < next_required:
+                continue
+            if start > next_required:
+                return False
+            if end >= required_end:
+                return True
+            next_required = end + 1
+        return False
+
     for key, ranges in (
         ("mark_scalar_ranges", mark_scalar_ranges),
         ("token_scalar_ranges", token_scalar_ranges),
     ):
         for start, end in ranges:
-            if not range_contains(known_scalar_ranges, start) or not range_contains(
-                known_scalar_ranges, end
-            ):
+            if not range_is_covered(known_scalar_ranges, start, end):
                 raise RuntimeError(
                     f"unicode_data.{key} must be contained by known_scalar_ranges"
                 )
@@ -253,13 +267,13 @@ def load_contract(
     )
     if (
         hangul_decomposition.s_base + hangul_scalar_count > 0x110000
-        or not range_contains(known_scalar_ranges, hangul_decomposition.s_base)
-        or not range_contains(
+        or not range_is_covered(
             known_scalar_ranges,
+            hangul_decomposition.s_base,
             hangul_decomposition.s_base + hangul_scalar_count - 1,
         )
     ):
-        raise RuntimeError("unicode_data.hangul_decomposition must cover known scalars")
+        raise RuntimeError("Unicode Hangul syllables must be contained by known scalars")
 
     def admit_mappings(key: str) -> tuple[tuple[int, str], ...]:
         raw_mappings = facts[key]
