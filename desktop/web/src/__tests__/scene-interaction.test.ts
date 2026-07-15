@@ -68,7 +68,6 @@ function createInteractionDeps(
     | 'selectionCommands'
     | 'setTool'
     | 'setHoveredEntityId'
-    | 'setViewport'
     | 'getPlantPresentationContext'
     | 'readPlantSpacingIntervalMeters'
     | 'commitPlantSpacingIntervalMeters'
@@ -124,9 +123,6 @@ function createInteractionDeps(
     container,
     getSceneStore: () => store,
     camera,
-    setViewport: (overrides.setViewport ?? ((viewport) => {
-      store.setViewport(viewport)
-    })) as SceneInteractionSessionDeps['setViewport'],
     getSpeciesCache: () => new Map(),
     getPlantPresentationContext: overrides.getPlantPresentationContext ?? createPlantPresentationContext,
     getSelection: () => new Set(selection),
@@ -4265,7 +4261,6 @@ describe('SceneInteractionSession', () => {
   it('sizes Plant Spacing preview ghosts from the symbolic plant presentation', () => {
     plantSpacingIntervalM.value = 2
     camera.setViewport({ x: 0, y: 0, scale: 10 })
-    store.setViewport({ x: 0, y: 0, scale: 10 })
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -4380,7 +4375,6 @@ describe('SceneInteractionSession', () => {
     plantSpacingIntervalM.value = 2
     snapToGridEnabled.value = true
     camera.setViewport({ x: 0, y: 0, scale: 10 })
-    store.setViewport({ x: 0, y: 0, scale: 10 })
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -4419,7 +4413,6 @@ describe('SceneInteractionSession', () => {
     plantSpacingIntervalM.value = 1
     snapToGridEnabled.value = true
     camera.setViewport({ x: 0, y: 0, scale: 10 })
-    store.setViewport({ x: 0, y: 0, scale: 10 })
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -4455,7 +4448,6 @@ describe('SceneInteractionSession', () => {
   it('commits a Plant Spacing click-hold drag from the latest Shift-constrained preview endpoint', () => {
     plantSpacingIntervalM.value = 1
     camera.setViewport({ x: 0, y: 0, scale: 10 })
-    store.setViewport({ x: 0, y: 0, scale: 10 })
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -4833,18 +4825,16 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('routes wheel zoom through the viewport setter and viewport render path', () => {
+  it('publishes wheel zoom once through the camera and uses the viewport render path', () => {
     const render = vi.fn()
-    const setViewport = vi.fn((viewport) => {
-      store.setViewport(viewport)
-    })
-    const deps = createInteractionDeps(container, store, camera, { render, setViewport })
+    const deps = createInteractionDeps(container, store, camera, { render })
     const session = createTestSession(deps)
+    const beforeRevision = camera.snapshot.value.revision
 
     const wheel = events.wheel({ x: 200, y: 150 }, { deltaY: -120 })
 
     expect(wheel.defaultPrevented).toBe(true)
-    expect(setViewport).toHaveBeenCalledTimes(1)
+    expect(camera.snapshot.value.revision).toBe(beforeRevision + 1)
     expect(render).toHaveBeenCalledWith('viewport')
     session.dispose()
   })

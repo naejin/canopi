@@ -142,8 +142,9 @@ describe('Scene Interaction tool module boundaries', () => {
       storeSource.indexOf('\n\nexport {'),
     )
     expect(sessionWriterSource).toContain(
-      "'setSelection' | 'setViewport' | 'setHoveredEntityId'",
+      "'setSelection' | 'setHoveredEntityId'",
     )
+    expect(sessionWriterSource).not.toContain('setViewport')
     expect(sessionWriterSource).not.toContain('updateSession')
     expect(runtimeSource).toContain('this._sceneSession.setHoveredEntityId(id)')
     expect(runtimeSource).not.toContain('this._sceneSession.updateSession(')

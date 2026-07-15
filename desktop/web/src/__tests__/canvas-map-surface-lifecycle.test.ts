@@ -1,9 +1,10 @@
-import { signal } from '@preact/signals'
+import { signal, type Signal } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createCanvasMapSurfaceLifecycle,
   type CanvasMapSurfaceSnapshot,
 } from '../app/canvas-map-surface/lifecycle'
+import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState, type ScenePersistedState } from '../canvas/runtime/scene'
 import type {
@@ -21,6 +22,10 @@ import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-stat
 
 type MapEventType = 'load' | 'error' | 'sourcedata'
 type MapEventHandler = (event?: unknown) => void
+
+type TestCanvasQuerySurface = CanvasQuerySurface & {
+  readonly viewport: Signal<CameraViewportSnapshot>
+}
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void
@@ -123,14 +128,17 @@ function createRuntime(
   options: {
     viewport?: { x: number; y: number; scale: number }
   } = {},
-): CanvasQuerySurface {
+): TestCanvasQuerySurface {
   const viewport = options.viewport ?? { x: 0, y: 0, scale: 1 }
   return {
-    revision: { scene: signal(0), plantNames: signal(0), viewport: signal(0) },
+    revision: { scene: signal(0), plantNames: signal(0) },
+    viewport: signal<CameraViewportSnapshot>({
+      viewport,
+      screenSize: { width: 400, height: 300 },
+      referenceScale: 1,
+      revision: 0,
+    }),
     getSceneSnapshot: () => scene,
-    getViewport: () => viewport,
-    getViewportScreenSize: () => ({ width: 400, height: 300 }),
-    viewportRevision: signal(0),
     getSelection: () => new Set(),
     getDesignObjectSelection: () => ({
       editableTargets: [],
@@ -278,9 +286,8 @@ describe('Canvas map surface lifecycle', () => {
     expect(onStateChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'ready' }))
   })
 
-  it('applies every lifecycle update as a camera sync through the projection seam', async () => {
-    const viewport = { x: 0, y: 0, scale: 1 }
-    const runtime = createRuntime(createDefaultScenePersistedState(), { viewport })
+  it('applies each published viewport snapshot through the projection seam', async () => {
+    const runtime = createRuntime()
     const lifecycle = createLifecycle()
     lifecycle.attach(container)
     lifecycle.update(createSnapshot({ runtime }))
@@ -288,11 +295,16 @@ describe('Canvas map surface lifecycle', () => {
 
     const map = mapAt()
     const initialJumpCount = map.jumpTo.mock.calls.length
-    viewport.x += 0.0625
-    viewport.y -= 0.0625
+    const initialFrame = map.jumpTo.mock.calls.at(-1)?.[0]
+    runtime.viewport.value = {
+      ...runtime.viewport.value,
+      viewport: { x: 0.0625, y: -0.0625, scale: 1 },
+      revision: runtime.viewport.value.revision + 1,
+    }
     lifecycle.update(createSnapshot({ runtime }))
 
     expect(map.jumpTo.mock.calls.length).toBeGreaterThan(initialJumpCount)
+    expect(map.jumpTo.mock.calls.at(-1)?.[0]).not.toEqual(initialFrame)
   })
 
   it('waits for the basemap source before publishing ready', async () => {

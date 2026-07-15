@@ -34,7 +34,6 @@ function createTestDocumentSurface(
     rendering,
     getSceneSnapshot: createDefaultScenePersistedState,
     createPlantPresentationContext: vi.fn(),
-    setViewport: vi.fn(),
     invalidateViewport: vi.fn(),
     renderChrome: vi.fn(),
     addGuide: vi.fn(),
@@ -105,7 +104,6 @@ describe('Scene Canvas document surface lifecycle', () => {
       createPlantPresentationContext: () => {
         throw new Error('not used by destroy')
       },
-      setViewport: vi.fn(),
       invalidateViewport: vi.fn(),
       renderChrome: vi.fn(),
       addGuide: vi.fn(),

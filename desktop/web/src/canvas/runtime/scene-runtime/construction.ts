@@ -26,7 +26,6 @@ import {
   type ScenePersistedState,
   type SceneSessionWriter,
   type SceneStateReader,
-  type SceneViewportState,
 } from '../scene'
 import { SceneHistory } from '../scene-history'
 import { SceneRuntimeChromeCoordinator } from './chrome-coordinator'
@@ -69,11 +68,6 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly syncCanvasSignalsFromScene: () => void
   readonly invalidate: (kind: RuntimeInvalidationKind) => void
   readonly incrementSceneRevision: () => void
-  readonly incrementViewportRevision: () => void
-  readonly setViewport: (
-    viewport: SceneViewportState,
-    options?: { forceRevision?: boolean },
-  ) => void
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
   readonly setHoveredEntityId: (id: string | null, options?: { invalidate?: boolean }) => void
@@ -92,7 +86,6 @@ export interface SceneRuntimeConstruction {
   readonly camera: CameraController
   readonly sceneRevision: Signal<number>
   readonly plantNamesQueryRevision: Signal<number>
-  readonly viewportRevision: Signal<number>
   readonly transientHistoryRevision: Signal<number>
   readonly revision: CanvasQueryRevision
   readonly rendererHost: RendererHost<SceneRendererContext, SceneRendererInstance>
@@ -120,13 +113,11 @@ export function createSceneRuntimeConstruction(
   const camera = new CameraController()
   const sceneRevision = signal(0)
   const plantNamesQueryRevision = signal(0)
-  const viewportRevision = signal(0)
   const transientHistoryRevision = signal(0)
   let runtimeActive = true
   const revision: CanvasQueryRevision = {
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
-    viewport: viewportRevision,
   }
   let rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>({
     backends: [
@@ -143,7 +134,6 @@ export function createSceneRuntimeConstruction(
     history,
     setSelection: callbacks.setSelection,
     incrementSceneRevision: callbacks.incrementSceneRevision,
-    incrementViewportRevision: callbacks.incrementViewportRevision,
     syncCanvasSignalsFromScene: callbacks.syncCanvasSignalsFromScene,
     invalidate: callbacks.invalidate,
   })
@@ -195,7 +185,6 @@ export function createSceneRuntimeConstruction(
     getSceneSnapshot: () => sceneStore.persisted,
     createPlantPresentationContext: (viewportScale) =>
       presentation.createPlantPresentationContext(viewportScale),
-    setViewport: callbacks.setViewport,
     invalidateViewport: () => callbacks.invalidate('viewport'),
     renderChrome: callbacks.renderChrome,
     addGuide: callbacks.addGuide,
@@ -249,7 +238,6 @@ export function createSceneRuntimeConstruction(
     presentationMaintenance: sceneEdits,
     presentation,
     settings: appAdapter.settings,
-    setViewport: callbacks.setViewport,
     setInteractionTool: callbacks.setInteractionTool,
     invalidate: callbacks.invalidate,
     isRuntimeActive: () => runtimeActive,
@@ -258,7 +246,6 @@ export function createSceneRuntimeConstruction(
     revision,
     sceneStore,
     camera,
-    viewportRevision,
     settledReader,
     mutations,
     presentation,
@@ -270,7 +257,6 @@ export function createSceneRuntimeConstruction(
     camera,
     sceneRevision,
     plantNamesQueryRevision,
-    viewportRevision,
     transientHistoryRevision,
     revision,
     get rendererHost() {

@@ -20,7 +20,7 @@ export type CanvasMapSurfaceCoreSnapshot = Pick<
 export function readCanvasMapSurfaceCoreSnapshot(): CanvasMapSurfaceCoreSnapshot {
   const runtime = currentCanvasQuerySurface.value
   void runtime?.revision.scene.value
-  void runtime?.revision.viewport.value
+  void runtime?.viewport.value
 
   const savedLocation = readSavedLocationPresentation()
   const location = savedLocation.location

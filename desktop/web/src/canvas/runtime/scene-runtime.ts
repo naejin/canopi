@@ -43,8 +43,6 @@ export class SceneCanvasRuntime {
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidate: (kind) => this._invalidate(kind),
       incrementSceneRevision: () => this._incrementSceneRevision(),
-      incrementViewportRevision: () => this._incrementViewportRevision(),
-      setViewport: (viewport, options) => this._setViewport(viewport, options),
       renderChrome: () => this._renderChrome(),
       addGuide: (axis, worldPosition) => this._addGuide(axis, worldPosition),
       setHoveredEntityId: (id, options) => this._setHoveredEntityId(id, options),
@@ -87,10 +85,6 @@ export class SceneCanvasRuntime {
 
   private get _plantNamesQueryRevision(): SceneRuntimeConstruction['plantNamesQueryRevision'] {
     return this._construction.plantNamesQueryRevision
-  }
-
-  private get _viewportRevision(): SceneRuntimeConstruction['viewportRevision'] {
-    return this._construction.viewportRevision
   }
 
   private get _transientHistoryRevision(): SceneRuntimeConstruction['transientHistoryRevision'] {
@@ -145,16 +139,14 @@ export class SceneCanvasRuntime {
     try {
       refreshCanvasColorCache(container)
       await this._rendering.initialize(container)
-      const viewport = this._camera.initialize({
+      this._camera.initialize({
         width: Math.max(1, container.clientWidth),
         height: Math.max(1, container.clientHeight),
       })
-      this._setViewport(viewport, { forceRevision: true })
       this._interaction = createSceneInteractionSession({
         container,
         getSceneStore: () => this._sceneState,
         camera: this._camera,
-        setViewport: (viewport) => this._setViewport(viewport),
         getSpeciesCache: () => this._presentation.getSpeciesCache(),
         getPlantPresentationContext: (viewportScale) =>
           this._presentation.createPlantPresentationContext(viewportScale),
@@ -221,22 +213,6 @@ export class SceneCanvasRuntime {
 
   destroy(): void {
     this._documentSurface.destroy()
-  }
-
-  private _setViewport(
-    viewport: { x: number; y: number; scale: number },
-    options: { forceRevision?: boolean } = {},
-  ): void {
-    const previous = this._sceneState.session.viewport
-    this._sceneSession.setViewport(viewport)
-    if (
-      options.forceRevision
-      || previous.x !== viewport.x
-      || previous.y !== viewport.y
-      || previous.scale !== viewport.scale
-    ) {
-      this._incrementViewportRevision()
-    }
   }
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
@@ -319,10 +295,6 @@ export class SceneCanvasRuntime {
 
   private _incrementPlantNamesRevision(): void {
     this._plantNamesQueryRevision.value += 1
-  }
-
-  private _incrementViewportRevision(): void {
-    this._viewportRevision.value += 1
   }
 
   private _notifyTransientHistoryChanged(): void {

@@ -48,7 +48,6 @@ describe('plant presentation service', () => {
     for (const [scale, expectedRadiusPx] of expectedRadiiByScale) {
       const entry = buildPlantPresentationEntries([createPlant()], {
         viewport: createViewport({ scale }),
-        zoomReference: 8,
         speciesCache: new Map(),
       }, new Set())[0]!
 
@@ -66,7 +65,6 @@ describe('plant presentation service', () => {
 
     const presentation = buildPlantPresentationEntries([plant], {
       viewport: createViewport(),
-      zoomReference: 8,
       speciesCache,
     }, new Set())[0]!
 
@@ -81,7 +79,6 @@ describe('plant presentation service', () => {
       createPlant({ id: 'unknown', symbol: 'spiral' }),
     ], {
       viewport: createViewport(),
-      zoomReference: 8,
       speciesCache: new Map(),
       plantSpeciesSymbols: {
         'Pyrus communis': 'climber',
@@ -105,12 +102,10 @@ describe('plant presentation service', () => {
 
     const canopyPresentation = buildPlantPresentationEntries([canopyPlant], {
       viewport: createViewport({ scale: 16 }),
-      zoomReference: 8,
       speciesCache,
     }, new Set())[0]!
     const fallbackPresentation = buildPlantPresentationEntries([fallbackPlant], {
       viewport: createViewport({ scale: 16 }),
-      zoomReference: 8,
       speciesCache,
     }, new Set())[0]!
 
@@ -127,7 +122,6 @@ describe('plant presentation service', () => {
     const plant = createPlant()
     const context = {
       viewport: createViewport({ x: 5, y: 7, scale: 8 }),
-      zoomReference: 8,
       speciesCache: new Map(),
     } as const
     const entry = buildPlantPresentationEntries([plant], context, new Set())[0]!
@@ -149,7 +143,6 @@ describe('plant presentation service', () => {
       createPlant({ id: 'selected', position: { x: 0.75, y: 0 } }),
     ], {
       viewport: createViewport({ scale: 8 }),
-      zoomReference: 8,
       speciesCache: new Map(),
     }, new Set(['selected']))
 
@@ -170,7 +163,6 @@ describe('plant presentation service', () => {
       createPlant({ id: 'plant-b', position: { x: 0, y: 0 } }),
     ], {
       viewport: createViewport({ scale: 1 }),
-      zoomReference: 8,
       speciesCache: new Map(),
     }, new Set())
 
@@ -185,7 +177,6 @@ describe('plant presentation service', () => {
       createPlant({ id: 'plant-b', position: { x: 0.12, y: 0 } }),
     ], {
       viewport: createViewport({ scale: 50 }),
-      zoomReference: 8,
       speciesCache: new Map(),
     }, new Set())
 
@@ -195,7 +186,6 @@ describe('plant presentation service', () => {
   it('returns entries without label fields', () => {
     const entry = buildPlantPresentationEntries([createPlant()], {
       viewport: createViewport(),
-      zoomReference: 8,
       speciesCache: new Map(),
     }, new Set())[0]!
 
@@ -209,7 +199,6 @@ describe('plant presentation service', () => {
   it('returns layout with only lod and stackCounts', () => {
     const snapshot = buildPlantPresentationSnapshot([createPlant()], {
       viewport: createViewport(),
-      zoomReference: 8,
       speciesCache: new Map(),
     }, new Set())
 

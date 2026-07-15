@@ -24,7 +24,6 @@ export interface PlantPresentationContext {
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
   plantSpeciesSymbols?: Readonly<Record<string, string>>
   localizedCommonNames?: ReadonlyMap<string, string | null>
-  zoomReference?: number
 }
 
 export interface PlantPresentationEntry {

@@ -4,7 +4,6 @@ import type {
 import {
   type ScenePersistedState,
   type SceneSessionState,
-  type SceneViewportState,
 } from './types'
 import {
   cloneScenePersistedState,
@@ -82,17 +81,6 @@ export class SceneStore {
     return this
   }
 
-  setViewport(viewport: Partial<SceneViewportState>): this {
-    this._session = {
-      ...this._session,
-      viewport: {
-        ...this._session.viewport,
-        ...viewport,
-      },
-    }
-    return this
-  }
-
   setActiveLayerName(name: string | null): this {
     this._session = {
       ...this._session,
@@ -117,7 +105,7 @@ export type SceneStateReader = Pick<SceneStore, 'persisted' | 'session'>
 export type SceneDocumentReader = Pick<SceneStore, 'toCanopiFile'>
 export type SceneSessionWriter = Pick<
   SceneStore,
-  'setSelection' | 'setViewport' | 'setHoveredEntityId'
+  'setSelection' | 'setHoveredEntityId'
 >
 
 export {

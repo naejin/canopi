@@ -7,7 +7,6 @@ import type {
   SceneDocumentReader,
   ScenePersistedState,
   SceneStateReader,
-  SceneViewportState,
 } from './scene'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
@@ -17,8 +16,7 @@ import type { SettledSceneReader } from './scene-runtime/transactions'
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
   readonly sceneStore: SceneStateReader & SceneDocumentReader
-  readonly camera: Pick<CameraController, 'viewport' | 'screenSize'>
-  readonly viewportRevision: CanvasQueryRevision['viewport']
+  readonly camera: Pick<CameraController, 'viewport' | 'snapshot'>
   readonly settledReader: SettledSceneReader
   readonly mutations: Pick<
     SceneRuntimeMutationController,
@@ -40,10 +38,8 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {}
 
   get revision(): CanvasQueryRevision { return this.options.revision }
-  get viewportRevision(): CanvasQueryRevision['viewport'] { return this.options.viewportRevision }
+  get viewport(): CameraController['snapshot'] { return this.options.camera.snapshot }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
-  getViewport(): SceneViewportState { return this.options.camera.viewport }
-  getViewportScreenSize(): { width: number; height: number } { return this.options.camera.screenSize }
   getSelection(): Set<string> { return new Set(this.options.sceneStore.session.selectedEntityIds) }
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel {
     const viewportScale = this.options.camera.viewport.scale

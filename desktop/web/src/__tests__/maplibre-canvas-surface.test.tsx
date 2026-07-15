@@ -6,6 +6,7 @@ import { layerOpacity, layerVisibility, hillshadeVisible } from '../app/canvas-s
 import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
 import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
+import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
@@ -30,13 +31,15 @@ vi.mock('../app/canvas-map-surface/lifecycle', () => ({
 }))
 
 function createRuntime(): CanvasQuerySurface {
-  const viewportRevision = signal(0)
   return {
-    revision: { scene: signal(0), plantNames: signal(0), viewport: signal(0) },
+    revision: { scene: signal(0), plantNames: signal(0) },
+    viewport: signal<CameraViewportSnapshot>({
+      viewport: { x: 0, y: 0, scale: 1 },
+      screenSize: { width: 400, height: 300 },
+      referenceScale: 1,
+      revision: 0,
+    }),
     getSceneSnapshot: () => createDefaultScenePersistedState(),
-    getViewport: () => ({ x: 0, y: 0, scale: 1 }),
-    getViewportScreenSize: () => ({ width: 400, height: 300 }),
-    viewportRevision,
     getSelection: () => new Set(),
     getDesignObjectSelection: () => ({
       editableTargets: [],

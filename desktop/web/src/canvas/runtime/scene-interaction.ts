@@ -9,7 +9,6 @@ import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from 
 import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
-import type { SceneViewportState } from './scene'
 import { hitTestTopLevel, hitTestVisibleTopLevel, type TopLevelTarget } from './interaction/hit-testing'
 import { createHoverTooltip, type HoverTooltipController } from './interaction/hover-tooltip'
 import {
@@ -111,7 +110,6 @@ export interface SceneInteractionSessionDeps {
   container: HTMLElement
   getSceneStore: () => SceneStateReader
   camera: CameraController
-  setViewport: (viewport: SceneViewportState) => void
   getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   getSelection: () => ReadonlySet<string>
@@ -243,7 +241,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         setSelection: this._deps.setSelection,
         clearSelection: this._deps.clearSelection,
         sceneEdits: this._deps.sceneEdits,
-        setViewport: this._deps.setViewport,
         render: this._deps.render,
         getSpeciesCache: this._deps.getSpeciesCache,
         getPlantPresentationContext: this._deps.getPlantPresentationContext,
@@ -681,7 +678,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     event.preventDefault()
     const screen = this._screenPoint(event)
     const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1
-    this._deps.setViewport(this._deps.camera.zoomAroundScreenPoint(screen, factor))
+    this._deps.camera.zoomAroundScreenPoint(screen, factor)
     this._deps.render('viewport')
     this._refreshViewportDependentMeasurements()
   }

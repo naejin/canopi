@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals'
+import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
 import {
   createDefaultScenePersistedState,
   type ScenePersistedState,
@@ -19,7 +20,6 @@ interface TestCanvasQuerySurfaceOptions {
 export type TestCanvasQuerySurface = CanvasQuerySurface & {
   bumpSceneRevision(): void
   bumpPlantNamesRevision(): void
-  bumpViewportRevision(): void
   setSettled(settled: boolean): void
   setPlants(plants: readonly PlacedPlant[]): void
   setLocalizedNames(names: ReadonlyMap<string, string | null>): void
@@ -33,12 +33,16 @@ export function createTestCanvasQuerySurface({
 }: TestCanvasQuerySurfaceOptions = {}): TestCanvasQuerySurface {
   const sceneRevision = signal(0)
   const plantNamesRevision = signal(0)
-  const viewportRevision = signal(0)
+  const viewportSnapshot = signal<CameraViewportSnapshot>({
+    viewport,
+    screenSize: { width: 400, height: 300 },
+    referenceScale: 1,
+    revision: 0,
+  })
   const admissionRevision = signal(0)
   const revision = {
     scene: sceneRevision,
     plantNames: plantNamesRevision,
-    viewport: viewportRevision,
   }
   let currentPlants = [...plants]
   let currentLocalizedNames = localizedNames
@@ -46,10 +50,8 @@ export function createTestCanvasQuerySurface({
 
   return {
     revision,
-    viewportRevision,
+    viewport: viewportSnapshot,
     getSceneSnapshot: () => scene,
-    getViewport: () => viewport,
-    getViewportScreenSize: () => ({ width: 400, height: 300 }),
     getSelection: () => new Set(),
     getDesignObjectSelection: () => ({
       editableTargets: [],
@@ -91,9 +93,6 @@ export function createTestCanvasQuerySurface({
     },
     bumpPlantNamesRevision: () => {
       plantNamesRevision.value += 1
-    },
-    bumpViewportRevision: () => {
-      viewportRevision.value += 1
     },
     setSettled: (nextSettled) => {
       if (settled === nextSettled) return

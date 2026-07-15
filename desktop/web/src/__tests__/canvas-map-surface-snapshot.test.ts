@@ -17,6 +17,7 @@ import {
 } from '../app/panel-targets/state'
 import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
+import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import { currentDesign } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
@@ -70,14 +71,15 @@ describe('Canvas Map Surface snapshot seam', () => {
   })
 
   it('assembles core map inputs and tracks runtime viewport freshness', () => {
-    const viewportRevision = signal(0)
+    const viewport = signal<CameraViewportSnapshot>({
+      viewport: { x: 0, y: 0, scale: 1 },
+      screenSize: { width: 400, height: 300 },
+      referenceScale: 1,
+      revision: 0,
+    })
     const runtime = {
       ...createTestCanvasQuerySurface(),
-      revision: {
-        scene: signal(0),
-        plantNames: signal(0),
-        viewport: viewportRevision,
-      },
+      viewport,
     }
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: runtime }))
 
@@ -99,7 +101,12 @@ describe('Canvas Map Surface snapshot seam', () => {
         theme: 'dark',
       })
 
-      viewportRevision.value += 1
+      viewport.value = {
+        viewport: { x: 10, y: 20, scale: 2 },
+        screenSize: { width: 400, height: 300 },
+        referenceScale: 1,
+        revision: 1,
+      }
 
       expect(snapshots).toHaveLength(2)
       expect(snapshots[1]?.runtime).toBe(runtime)

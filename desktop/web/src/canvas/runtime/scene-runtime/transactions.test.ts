@@ -202,7 +202,6 @@ function createAdmissionHarness(options: {
   readonly history?: SceneHistory
   readonly setSelection?: (ids: Iterable<string>) => void
   readonly incrementSceneRevision?: () => void
-  readonly incrementViewportRevision?: () => void
   readonly syncCanvasSignalsFromScene?: () => void
   readonly invalidate?: (kind: SceneEditInvalidationKind) => void
 } = {}): {
@@ -217,7 +216,6 @@ function createAdmissionHarness(options: {
     history,
     setSelection: options.setSelection ?? ((ids) => store.setSelection(ids)),
     incrementSceneRevision: options.incrementSceneRevision ?? (() => {}),
-    incrementViewportRevision: options.incrementViewportRevision ?? (() => {}),
     syncCanvasSignalsFromScene: options.syncCanvasSignalsFromScene ?? (() => {}),
     invalidate: options.invalidate ?? vi.fn(),
   })
@@ -316,13 +314,12 @@ describe('Scene Edit single-writer admission', () => {
     next.abort()
   })
 
-  it('preserves viewport and hover session state when an edit aborts', () => {
+  it('preserves hover Session state when a Scene Edit aborts', () => {
     const { coordinator, store } = createAdmissionHarness()
     const active = coordinator.begin('interaction-drag')
     active.mutate((draft) => {
       draft.plants[0]!.position = { x: 99, y: 99 }
     })
-    store.setViewport({ x: 40, y: 50, scale: 2 })
     store.updateSession((session) => {
       session.hoveredEntityId = 'plant-2'
     })
@@ -330,7 +327,6 @@ describe('Scene Edit single-writer admission', () => {
     active.abort()
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
-    expect(store.session.viewport).toEqual({ x: 40, y: 50, scale: 2 })
     expect(store.session.hoveredEntityId).toBe('plant-2')
   })
 
@@ -1687,10 +1683,17 @@ describe('Settled Scene presentation maintenance', () => {
     })).toBe(true)
   })
 
+  it('hydrates Scene content without introducing camera state into the Scene Session', () => {
+    const { coordinator, store } = createAdmissionHarness()
+
+    coordinator.hydrate(makeFile())
+
+    expect(store.session).not.toHaveProperty('viewport')
+  })
+
   it('retries the retained replacement finalizer without accepting a duplicate callback', () => {
     const stageCalls = {
       history: 0,
-      viewportRevision: 0,
       documentSignals: 0,
       sceneSignals: 0,
       invalidation: 0,
@@ -1703,9 +1706,6 @@ describe('Settled Scene presentation maintenance', () => {
     })
     const { coordinator, store } = createAdmissionHarness({
       history,
-      incrementViewportRevision: () => {
-        stageCalls.viewportRevision += 1
-      },
       syncCanvasSignalsFromScene: () => {
         stageCalls.sceneSignals += 1
       },
@@ -1753,7 +1753,6 @@ describe('Settled Scene presentation maintenance', () => {
 
     expect(stageCalls).toEqual({
       history: 1,
-      viewportRevision: 1,
       documentSignals: 1,
       sceneSignals: 1,
       invalidation: 1,

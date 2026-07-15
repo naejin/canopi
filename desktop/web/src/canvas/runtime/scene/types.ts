@@ -124,7 +124,6 @@ export interface SceneSessionState {
   hoveredEntityId: string | null
   activeEntityId: string | null
   activeLayerName: string | null
-  viewport: SceneViewportState
   documentRevision: number
 }
 

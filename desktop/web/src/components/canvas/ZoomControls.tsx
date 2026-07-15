@@ -1,12 +1,17 @@
-import { zoomLevel, zoomReference } from '../../canvas/view-state'
 import { locale } from '../../app/settings/state'
-import { currentCanvasViewportCommandSurface } from '../../canvas/session'
+import {
+  currentCanvasQuerySurface,
+  currentCanvasViewportCommandSurface,
+} from '../../canvas/session'
 import { t } from '../../i18n'
 import styles from './ZoomControls.module.css'
 
 export function ZoomControls() {
   void locale.value
-  const zoom = zoomLevel.value
+  const viewport = currentCanvasQuerySurface.value?.viewport.value
+  const zoomPercent = viewport
+    ? Math.round((viewport.viewport.scale / viewport.referenceScale) * 100)
+    : 100
   const session = currentCanvasViewportCommandSurface.value
 
   return (
@@ -21,7 +26,7 @@ export function ZoomControls() {
           <path d="M3 7h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </button>
-      <span className={styles.level}>{Math.round((zoom / zoomReference.value) * 100)}%</span>
+      <span className={styles.level}>{zoomPercent}%</span>
       <button
         className={styles.btn}
         type="button"

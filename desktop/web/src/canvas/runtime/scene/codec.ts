@@ -89,7 +89,6 @@ export function cloneSceneSessionState(state: SceneSessionState): SceneSessionSt
   return {
     ...state,
     selectedEntityIds: new Set(state.selectedEntityIds),
-    viewport: { ...state.viewport },
   }
 }
 

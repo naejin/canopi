@@ -1,3 +1,4 @@
+import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 import { CameraController, computeSceneBounds } from '../canvas/runtime/camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
@@ -49,6 +50,104 @@ function createScene(): ScenePersistedState {
 }
 
 describe('CameraController', () => {
+  it('starts with one coherent unpublished viewport snapshot', () => {
+    const camera = new CameraController()
+
+    expect(camera.snapshot.value).toEqual({
+      viewport: { x: 0, y: 0, scale: 1 },
+      screenSize: { width: 0, height: 0 },
+      referenceScale: 1,
+      revision: 0,
+    })
+  })
+
+  it('publishes initialization state and revision atomically once', () => {
+    const camera = new CameraController()
+    const observed: unknown[] = []
+    const dispose = effect(() => {
+      observed.push(structuredClone(camera.snapshot.value))
+    })
+    observed.length = 0
+
+    camera.initialize({ width: 1000, height: 800 })
+    dispose()
+
+    expect(observed).toEqual([
+      {
+        viewport: { x: 100, y: 0, scale: 8 },
+        screenSize: { width: 1000, height: 800 },
+        referenceScale: 8,
+        revision: 1,
+      },
+    ])
+  })
+
+  it('increments once for each effective pan, zoom, resize, and reference update', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+
+    camera.panBy({ x: 10, y: -5 })
+    expect(camera.snapshot.value.revision).toBe(2)
+    expect(camera.snapshot.value.viewport).toEqual({ x: 110, y: -5, scale: 8 })
+
+    camera.zoomIn()
+    expect(camera.snapshot.value.revision).toBe(3)
+
+    camera.resize({ width: 1200, height: 900 })
+    expect(camera.snapshot.value.revision).toBe(4)
+    expect(camera.snapshot.value.screenSize).toEqual({ width: 1200, height: 900 })
+    expect(camera.snapshot.value.referenceScale).toBe(8)
+
+    camera.initialize({ width: 1200, height: 900 })
+    expect(camera.snapshot.value.revision).toBe(5)
+    expect(camera.snapshot.value.referenceScale).toBe(9)
+  })
+
+  it('does not publish no-op viewport mutations', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+    const initialRevision = camera.snapshot.value.revision
+
+    camera.setViewport(camera.viewport)
+    camera.panBy({ x: 0, y: 0 })
+    camera.resize({ width: 1000, height: 800 })
+    expect(camera.snapshot.value.revision).toBe(initialRevision)
+
+    camera.setViewport({ ...camera.viewport, scale: 1000 })
+    const maximumRevision = camera.snapshot.value.revision
+    camera.zoomIn()
+    expect(camera.snapshot.value.revision).toBe(maximumRevision)
+  })
+
+  it('owns immutable nested snapshot values', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+    const snapshot = camera.snapshot.value
+
+    expect(Object.isFrozen(snapshot)).toBe(true)
+    expect(Object.isFrozen(snapshot.viewport)).toBe(true)
+    expect(Object.isFrozen(snapshot.screenSize)).toBe(true)
+    expect(() => {
+      ;(snapshot.viewport as { x: number }).x = 999
+    }).toThrow()
+    expect(camera.viewport.x).toBe(100)
+  })
+
+  it('keeps imperative camera reads out of the caller reactive graph', () => {
+    const camera = new CameraController()
+    let effectRuns = 0
+    const dispose = effect(() => {
+      effectRuns += 1
+      void camera.viewport
+      void camera.screenSize
+    })
+
+    camera.initialize({ width: 1000, height: 800 })
+    dispose()
+
+    expect(effectRuns).toBe(1)
+  })
+
   it('zooms around the provided screen point', () => {
     const camera = new CameraController()
     camera.initialize({ width: 1000, height: 800 })

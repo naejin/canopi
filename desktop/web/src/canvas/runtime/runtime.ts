@@ -3,8 +3,8 @@ import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { PlantSymbolId, ScenePoint } from './scene'
-import type { SceneBounds } from './camera'
-import type { ScenePersistedState, SceneViewportState } from './scene'
+import type { CameraViewportSnapshot, SceneBounds } from './camera'
+import type { ScenePersistedState } from './scene'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -51,7 +51,6 @@ export interface CanvasDesignObjectSelectionModel {
 export interface CanvasQueryRevision {
   readonly scene: ReadonlySignal<number>
   readonly plantNames: ReadonlySignal<number>
-  readonly viewport: ReadonlySignal<number>
 }
 
 export interface CanvasToolCommandSurface {
@@ -124,10 +123,8 @@ export interface CanvasCommandSurface {
 
 export interface CanvasQuerySurface {
   readonly revision: CanvasQueryRevision
+  readonly viewport: ReadonlySignal<CameraViewportSnapshot>
   getSceneSnapshot(): ScenePersistedState
-  getViewport(): SceneViewportState
-  getViewportScreenSize(): { width: number; height: number }
-  readonly viewportRevision: ReadonlySignal<number>
   getSelection(): Set<string>
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel
   getSelectedPlantColorContext(): SelectedPlantColorContext

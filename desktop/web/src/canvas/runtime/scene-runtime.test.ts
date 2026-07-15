@@ -725,12 +725,12 @@ describe('scene canvas runtime', () => {
     expect(container.style.cursor).toBe('grab')
 
     selection.mockRestore()
-    const beforeFreshPan = runtime.querySurface.getViewport()
+    const beforeFreshPan = runtime.querySurface.viewport.value.viewport
     events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
     events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
     events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
 
-    expect(runtime.querySurface.getViewport()).toMatchObject({
+    expect(runtime.querySurface.viewport.value.viewport).toMatchObject({
       x: beforeFreshPan.x + 30,
       y: beforeFreshPan.y + 20,
     })
@@ -1129,14 +1129,27 @@ describe('scene canvas runtime', () => {
     expect(toggleRulersVisible).toHaveBeenCalledTimes(1)
   })
 
-  it('bumps query viewport revision on viewport-only camera changes', async () => {
+  it('publishes viewport-only camera changes through the canonical snapshot', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
+    expect(runtime.querySurface.viewport).toBe((runtime as any)._camera.snapshot)
 
-    const before = runtime.querySurface.revision.viewport.value
+    const before = runtime.querySurface.viewport.value.revision
     runtime.commandSurface.viewport.zoomIn()
 
-    expect(runtime.querySurface.revision.viewport.value).toBeGreaterThan(before)
+    expect(runtime.querySurface.viewport.value.revision).toBe(before + 1)
+    runtime.destroy()
+  })
+
+  it('does not publish a viewport change when document hydration leaves the camera unchanged', async () => {
+    const runtime = new SceneCanvasRuntime()
+    await initRuntimeWithStubbedRenderer(runtime)
+    const before = runtime.querySurface.viewport.value.revision
+
+    runtime.documentSurface.loadDocument(makeFile())
+
+    expect(runtime.querySurface.viewport.value.revision).toBe(before)
+    runtime.destroy()
   })
 
   it('publishes current cache changes while skipping stale persisted presentation backfills', async () => {
@@ -1970,16 +1983,19 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('bumps viewport revision for zoom and resize updates', async () => {
+  it('publishes zoom and effective resize updates exactly once', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    const initialRevision = runtime.querySurface.revision.viewport.value
+    const initialRevision = runtime.querySurface.viewport.value.revision
 
     runtime.commandSurface.viewport.zoomIn()
-    expect(runtime.querySurface.revision.viewport.value).toBe(initialRevision + 1)
+    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 1)
 
-    runtime.documentSurface.resize(400, 300)
-    expect(runtime.querySurface.revision.viewport.value).toBe(initialRevision + 2)
+    runtime.documentSurface.resize(600, 450)
+    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
+
+    runtime.documentSurface.resize(600, 450)
+    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
     runtime.destroy()
   })
 

@@ -1,12 +1,4 @@
-import { SCENE_LAYER_NAMES, type ScenePersistedState, type SceneSessionState, type SceneViewportState } from './types'
-
-export function createDefaultSceneViewportState(): SceneViewportState {
-  return {
-    x: 0,
-    y: 0,
-    scale: 1,
-  }
-}
+import { SCENE_LAYER_NAMES, type ScenePersistedState, type SceneSessionState } from './types'
 
 export function createDefaultSceneSessionState(overrides: Partial<SceneSessionState> = {}): SceneSessionState {
   return {
@@ -14,10 +6,6 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
     hoveredEntityId: overrides.hoveredEntityId ?? null,
     activeEntityId: overrides.activeEntityId ?? null,
     activeLayerName: overrides.activeLayerName ?? 'zones',
-    viewport: {
-      ...createDefaultSceneViewportState(),
-      ...(overrides.viewport ?? {}),
-    },
     documentRevision: overrides.documentRevision ?? 0,
   }
 }

@@ -10,7 +10,7 @@ import {
   type CanvasPersistenceCapture,
   type CanvasRuntimeDocumentMetadata,
 } from './runtime'
-import type { ScenePersistedState, SceneViewportState } from './scene'
+import type { ScenePersistedState } from './scene'
 import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
@@ -26,10 +26,6 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
   readonly getSceneSnapshot: () => ScenePersistedState
   readonly createPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
-  readonly setViewport: (
-    viewport: SceneViewportState,
-    options?: { forceRevision?: boolean },
-  ) => void
   readonly invalidateViewport: () => void
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
@@ -53,11 +49,10 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   initializeViewport(): void {
     const container = this.options.rendering.container
     if (!container) return
-    const viewport = this.options.camera.initialize({
+    this.options.camera.initialize({
       width: Math.max(1, container.clientWidth),
       height: Math.max(1, container.clientHeight),
     })
-    this.options.setViewport(viewport, { forceRevision: true })
     this.options.rendering.invalidate('scene')
   }
 
@@ -79,10 +74,9 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   zoomToFit(): void {
-    const viewport = this.options.camera.zoomToFit(this.options.getSceneSnapshot(), {
+    this.options.camera.zoomToFit(this.options.getSceneSnapshot(), {
       plantContext: this.options.createPlantPresentationContext(this.options.camera.viewport.scale),
     })
-    this.options.setViewport(viewport)
     this.options.invalidateViewport()
   }
 
@@ -126,7 +120,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   resize(width: number, height: number): void {
-    this.options.setViewport(this.options.camera.resize({ width, height }), { forceRevision: true })
+    this.options.camera.resize({ width, height })
     this.options.rendering.resize(width, height)
   }
 

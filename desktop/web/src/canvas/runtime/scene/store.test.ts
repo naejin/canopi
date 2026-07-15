@@ -9,6 +9,10 @@ import {
 } from './store'
 
 describe('scene store', () => {
+  it('keeps camera viewport state out of Scene Session state', () => {
+    expect(new SceneStore().session).not.toHaveProperty('viewport')
+  })
+
   it('owns committed persisted drafts after the mutator returns', () => {
     const store = new SceneStore()
     let mutateEscapedGuide = (): void => {}
@@ -30,21 +34,19 @@ describe('scene store', () => {
 
   it('owns committed session drafts after the mutator returns', () => {
     const store = new SceneStore()
-    let mutateEscapedViewport = (): void => {}
+    let mutateEscapedSelection = (): void => {}
 
     store.updateSession((draft) => {
-      draft.selectedEntityIds = new Set(['plant-1'])
-      draft.viewport.x = 10
-      const viewport = draft.viewport
-      mutateEscapedViewport = () => {
-        viewport.x = 99
+      const selectedEntityIds = new Set(['plant-1'])
+      draft.selectedEntityIds = selectedEntityIds
+      mutateEscapedSelection = () => {
+        selectedEntityIds.add('plant-2')
       }
     })
 
-    mutateEscapedViewport()
+    mutateEscapedSelection()
 
     expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
-    expect(store.session.viewport.x).toBe(10)
   })
 
   it('hydrates and serializes CanopiFile data without crossing the session boundary', () => {

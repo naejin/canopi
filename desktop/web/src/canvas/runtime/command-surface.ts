@@ -17,7 +17,7 @@ import type {
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime'
-import type { SceneLayerEntity, SceneStateReader, SceneViewportState } from './scene'
+import type { SceneLayerEntity, SceneStateReader } from './scene'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type {
   SceneCommandAdmission,
@@ -81,7 +81,6 @@ interface SceneCanvasCommandSurfaceOptions {
     CanvasRuntimeSettingsAdapter,
     'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible' | 'layerProjections'
   >
-  readonly setViewport: (viewport: SceneViewportState) => void
   readonly setInteractionTool: (name: string) => void
   readonly invalidate: (kind: CommandInvalidationKind) => void
   readonly isRuntimeActive: () => boolean
@@ -205,19 +204,19 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private zoomIn(): void {
-    this.options.setViewport(this.options.camera.zoomIn())
+    this.options.camera.zoomIn()
     this.options.invalidate('viewport')
   }
 
   private zoomOut(): void {
-    this.options.setViewport(this.options.camera.zoomOut())
+    this.options.camera.zoomOut()
     this.options.invalidate('viewport')
   }
 
   private zoomToFit(): void {
-    this.options.setViewport(this.options.camera.zoomToFit(this.options.sceneStore.persisted, {
+    this.options.camera.zoomToFit(this.options.sceneStore.persisted, {
       plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
-    }))
+    })
     this.options.invalidate('viewport')
   }
 

@@ -7,7 +7,7 @@ import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 
 export type MapLibreSurfaceCameraRuntime = Pick<
   CanvasQuerySurface,
-  'getViewport' | 'getViewportScreenSize'
+  'viewport'
 >
 
 export interface MapLibreSurfaceCameraMap {
@@ -20,10 +20,11 @@ export function resolveMapLibreSurfaceFrame(
   bearing: number | null,
 ): MapFrame | null {
   if (!runtime || !location) return null
+  const snapshot = runtime.viewport.value
 
   return createMapFrame(
-    runtime.getViewport(),
-    runtime.getViewportScreenSize(),
+    snapshot.viewport,
+    snapshot.screenSize,
     location,
     bearing,
   )

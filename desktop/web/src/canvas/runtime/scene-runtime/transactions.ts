@@ -135,7 +135,6 @@ interface SceneRuntimeEditCoordinatorOptions {
   history: SceneHistory
   setSelection(ids: Iterable<string>): void
   incrementSceneRevision(): void
-  incrementViewportRevision?(): void
   syncCanvasSignalsFromScene(): void
   invalidate(kind: SceneEditInvalidationKind): void
 }
@@ -175,7 +174,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   private readonly _history: SceneHistory
   private readonly _setSelection: SceneRuntimeEditCoordinatorOptions['setSelection']
   private readonly _incrementSceneRevision: SceneRuntimeEditCoordinatorOptions['incrementSceneRevision']
-  private readonly _incrementViewportRevision: () => void
   private readonly _syncCanvasSignalsFromScene: SceneRuntimeEditCoordinatorOptions['syncCanvasSignalsFromScene']
   private readonly _invalidate: SceneRuntimeEditCoordinatorOptions['invalidate']
   private readonly _admissionRevision = signal(0)
@@ -221,7 +219,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     this._history = options.history
     this._setSelection = options.setSelection
     this._incrementSceneRevision = options.incrementSceneRevision
-    this._incrementViewportRevision = options.incrementViewportRevision ?? (() => {})
     this._syncCanvasSignalsFromScene = options.syncCanvasSignalsFromScene
     this._invalidate = options.invalidate
   }
@@ -528,7 +525,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       sceneStore: this._sceneStore,
       history: this._history,
       noteStoreHydrated: () => this._noteStoreHydrated(),
-      incrementViewportRevision: this._incrementViewportRevision,
       syncDocumentSignals: () => syncDocumentSignals(cloneDocument(ownedFile)),
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       invalidate: this._invalidate,
@@ -580,7 +576,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       sceneStore: this._sceneStore,
       history: this._history,
       noteStoreHydrated: () => this._noteStoreHydrated(),
-      incrementViewportRevision: this._incrementViewportRevision,
       syncDocumentSignals: () => {
         stages.syncDocumentSignals?.(cloneDocument(ownedFile))
       },
@@ -1024,7 +1019,6 @@ interface SceneHydrationSettlementOptions {
   readonly sceneStore: SceneStore
   readonly history: SceneHistory
   readonly noteStoreHydrated: () => void
-  readonly incrementViewportRevision: () => void
   readonly syncDocumentSignals: () => void
   readonly syncCanvasSignalsFromScene: () => void
   readonly invalidate: (kind: SceneEditInvalidationKind) => void
@@ -1041,7 +1035,6 @@ class SceneHydrationSettlement implements SceneAuthorityOperation {
   private readonly _token: CanvasDocumentReplacementToken | undefined
   private _storeHydrated = false
   private _historyCleared = false
-  private _viewportRevisionIncremented = false
   private _documentSignalsSynced = false
   private _sceneSignalsSynced = false
   private _invalidated = false
@@ -1093,10 +1086,6 @@ class SceneHydrationSettlement implements SceneAuthorityOperation {
       if (!this._historyCleared) {
         this._options.history.clear()
         this._historyCleared = true
-      }
-      if (!this._viewportRevisionIncremented) {
-        this._viewportRevisionIncremented = true
-        this._options.incrementViewportRevision()
       }
       if (!this._documentSignalsSynced) {
         this._options.syncDocumentSignals()

@@ -351,6 +351,7 @@ describe('frontend boundary sources', () => {
       'currentCanvasSceneEditCommandSurface',
     ])
     expectNamedImportsFrom('../components/canvas/ZoomControls.tsx', '../../canvas/session', [
+      'currentCanvasQuerySurface',
       'currentCanvasViewportCommandSurface',
     ])
     expectNamedImportsFrom('../components/plant-db/PlantCard.tsx', '../../canvas/session', [
@@ -735,7 +736,7 @@ describe('frontend boundary sources', () => {
       /document-session\/state-machine$/,
       /document-session\/workflows$/,
     ])
-    expect(mapSurfaceSnapshotSource).toContain('revision.viewport.value')
+    expect(mapSurfaceSnapshotSource).toContain('runtime?.viewport.value')
   })
 
   it('keeps non-canvas Design writes behind the Design Edit seam', () => {

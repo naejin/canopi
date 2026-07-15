@@ -22,10 +22,10 @@ const SNAP_THRESHOLD_PX = 8
 export function snapToGuides(
   x: number,
   y: number,
-  stageScale: number,
+  viewportScale: number,
   guides: readonly Guide[],
 ): { x: number; y: number } {
-  const threshold = SNAP_THRESHOLD_PX / stageScale
+  const threshold = SNAP_THRESHOLD_PX / viewportScale
   let snappedX = x
   let snappedY = y
 

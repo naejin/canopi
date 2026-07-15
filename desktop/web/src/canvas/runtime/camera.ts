@@ -1,4 +1,4 @@
-import { zoomLevel, zoomReference } from '../view-state'
+import { signal, type ReadonlySignal } from '@preact/signals'
 import type { ScenePersistedState, ScenePoint, SceneViewportState } from './scene'
 import { getAnnotationWorldBounds } from './annotation-layout'
 import { getPlantWorldBounds, type PlantPresentationContext } from './plant-presentation'
@@ -17,6 +17,13 @@ export interface CameraScreenSize {
   height: number
 }
 
+export interface CameraViewportSnapshot {
+  readonly viewport: Readonly<SceneViewportState>
+  readonly screenSize: Readonly<CameraScreenSize>
+  readonly referenceScale: number
+  readonly revision: number
+}
+
 export interface SceneBounds {
   minX: number
   minY: number
@@ -30,62 +37,75 @@ export interface SceneBoundsOptions {
 }
 
 export class CameraController {
-  private _viewport: SceneViewportState = { x: 0, y: 0, scale: 1 }
-  private _screen: CameraScreenSize = { width: 0, height: 0 }
-  private _referenceScale = 1
+  private readonly _snapshot = signal<CameraViewportSnapshot>(createCameraViewportSnapshot({
+    viewport: { x: 0, y: 0, scale: 1 },
+    screenSize: { width: 0, height: 0 },
+    referenceScale: 1,
+    revision: 0,
+  }))
+
+  readonly snapshot: ReadonlySignal<CameraViewportSnapshot> = this._snapshot
 
   get viewport(): SceneViewportState {
-    return { ...this._viewport }
+    return { ...this._snapshot.peek().viewport }
   }
 
   get screenSize(): CameraScreenSize {
-    return { ...this._screen }
+    return { ...this._snapshot.peek().screenSize }
   }
 
   initialize(screen: CameraScreenSize): SceneViewportState {
-    this._screen = { ...screen }
     const scale = Math.min(screen.width, screen.height) / DEFAULT_VIEWPORT_METERS
-    this._referenceScale = scale > 0 ? scale : 1
-    zoomReference.value = this._referenceScale
-    return this.setViewport({
-      x: screen.width / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
-      y: screen.height / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
-      scale,
+    return this._publish({
+      viewport: {
+        x: screen.width / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
+        y: screen.height / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
+        scale,
+      },
+      screenSize: screen,
+      referenceScale: scale > 0 ? scale : 1,
     })
   }
 
   resize(screen: CameraScreenSize): SceneViewportState {
-    this._screen = { ...screen }
-    return this.setViewport(this._viewport)
+    const current = this._snapshot.peek()
+    return this._publish({
+      viewport: current.viewport,
+      screenSize: screen,
+      referenceScale: current.referenceScale,
+    })
   }
 
   setViewport(next: SceneViewportState): SceneViewportState {
-    this._viewport = {
-      x: next.x,
-      y: next.y,
-      scale: clampScale(next.scale),
-    }
-    zoomLevel.value = this._viewport.scale
-    return this.viewport
+    const current = this._snapshot.peek()
+    return this._publish({
+      viewport: next,
+      screenSize: current.screenSize,
+      referenceScale: current.referenceScale,
+    })
   }
 
   zoomIn(): SceneViewportState {
+    const screen = this._snapshot.peek().screenSize
     return this.zoomAroundScreenPoint(
-      { x: this._screen.width / 2, y: this._screen.height / 2 },
+      { x: screen.width / 2, y: screen.height / 2 },
       ZOOM_FACTOR,
     )
   }
 
   zoomOut(): SceneViewportState {
+    const screen = this._snapshot.peek().screenSize
     return this.zoomAroundScreenPoint(
-      { x: this._screen.width / 2, y: this._screen.height / 2 },
+      { x: screen.width / 2, y: screen.height / 2 },
       1 / ZOOM_FACTOR,
     )
   }
 
   zoomAroundScreenPoint(pointer: ScenePoint, factor: number): SceneViewportState {
-    const oldScale = this._viewport.scale
+    const currentViewport = this._snapshot.peek().viewport
+    const oldScale = currentViewport.scale
     const newScale = clampScale(oldScale * factor)
+    if (newScale === oldScale) return this.viewport
     const worldPoint = this.screenToWorld(pointer)
 
     return this.setViewport({
@@ -96,7 +116,9 @@ export class CameraController {
   }
 
   zoomToFit(scene: ScenePersistedState, options: SceneBoundsOptions = {}): SceneViewportState {
-    if (this._screen.width <= 0 || this._screen.height <= 0) {
+    const snapshot = this._snapshot.peek()
+    const screen = snapshot.screenSize
+    if (screen.width <= 0 || screen.height <= 0) {
       return this.viewport
     }
 
@@ -105,7 +127,7 @@ export class CameraController {
     // once with the current scale and deriving a new scale creates a circular
     // dependency - each call only moves partway toward the true fit. Iterate
     // until the scale converges (typically 2-3 rounds).
-    let currentScale = options.annotationViewportScale ?? this._viewport.scale
+    let currentScale = options.annotationViewportScale ?? snapshot.viewport.scale
     let bounds: SceneBounds | null = null
     let scale = currentScale
 
@@ -119,8 +141,8 @@ export class CameraController {
       const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
       const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
       scale = clampScale(Math.min(
-        (this._screen.width * (1 - DEFAULT_FIT_PADDING * 2)) / contentWidth,
-        (this._screen.height * (1 - DEFAULT_FIT_PADDING * 2)) / contentHeight,
+        (screen.width * (1 - DEFAULT_FIT_PADDING * 2)) / contentWidth,
+        (screen.height * (1 - DEFAULT_FIT_PADDING * 2)) / contentHeight,
       ))
 
       if (Math.abs(scale - currentScale) / Math.max(scale, currentScale) < FIT_CONVERGENCE_THRESHOLD) {
@@ -134,32 +156,70 @@ export class CameraController {
     const contentHeight = Math.max(finalBounds.maxY - finalBounds.minY, 1)
 
     return this.setViewport({
-      x: (this._screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
-      y: (this._screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
+      x: (screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
+      y: (screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
       scale,
     })
   }
 
   panBy(delta: ScenePoint): SceneViewportState {
+    const viewport = this._snapshot.peek().viewport
     return this.setViewport({
-      x: this._viewport.x + delta.x,
-      y: this._viewport.y + delta.y,
-      scale: this._viewport.scale,
+      x: viewport.x + delta.x,
+      y: viewport.y + delta.y,
+      scale: viewport.scale,
     })
   }
 
   worldToScreen(point: ScenePoint): ScenePoint {
+    const viewport = this._snapshot.peek().viewport
     return {
-      x: point.x * this._viewport.scale + this._viewport.x,
-      y: point.y * this._viewport.scale + this._viewport.y,
+      x: point.x * viewport.scale + viewport.x,
+      y: point.y * viewport.scale + viewport.y,
     }
   }
 
   screenToWorld(point: ScenePoint): ScenePoint {
+    const viewport = this._snapshot.peek().viewport
     return {
-      x: (point.x - this._viewport.x) / this._viewport.scale,
-      y: (point.y - this._viewport.y) / this._viewport.scale,
+      x: (point.x - viewport.x) / viewport.scale,
+      y: (point.y - viewport.y) / viewport.scale,
     }
+  }
+
+  private _publish(next: {
+    readonly viewport: Readonly<SceneViewportState>
+    readonly screenSize: Readonly<CameraScreenSize>
+    readonly referenceScale: number
+  }): SceneViewportState {
+    const current = this._snapshot.peek()
+    const viewport = {
+      x: next.viewport.x,
+      y: next.viewport.y,
+      scale: clampScale(next.viewport.scale),
+    }
+    const screenSize = {
+      width: next.screenSize.width,
+      height: next.screenSize.height,
+    }
+    if (
+      current.viewport.x === viewport.x
+      && current.viewport.y === viewport.y
+      && current.viewport.scale === viewport.scale
+      && current.screenSize.width === screenSize.width
+      && current.screenSize.height === screenSize.height
+      && current.referenceScale === next.referenceScale
+    ) {
+      return this.viewport
+    }
+
+    this._snapshot.value = createCameraViewportSnapshot({
+      viewport,
+      screenSize,
+      referenceScale: next.referenceScale,
+      revision: current.revision + 1,
+    })
+    return this.viewport
   }
 }
 
@@ -229,8 +289,18 @@ function plantBoundsContext(
   return {
     viewport: { x: 0, y: 0, scale: viewportScale },
     speciesCache: new Map(),
-    zoomReference: zoomReference.value > 0 ? zoomReference.value : 1,
   }
+}
+
+function createCameraViewportSnapshot(
+  snapshot: CameraViewportSnapshot,
+): CameraViewportSnapshot {
+  return Object.freeze({
+    viewport: Object.freeze({ ...snapshot.viewport }),
+    screenSize: Object.freeze({ ...snapshot.screenSize }),
+    referenceScale: snapshot.referenceScale,
+    revision: snapshot.revision,
+  })
 }
 
 function clampScale(scale: number): number {

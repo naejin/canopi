@@ -45,7 +45,6 @@ export interface SceneInteractionSharedGestureContext {
   readonly setSelection: (ids: Iterable<string>) => void
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
-  readonly setViewport: (viewport: ReturnType<CameraController['panBy']>) => void
   readonly render: (kind: 'scene' | 'viewport') => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly refreshViewportDependent: () => void
@@ -262,10 +261,10 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
 
   pointerMove({ screen, rawWorld }: SharedGesturePointerMoveContext): boolean {
     if (this.mode === 'panning' && this.startScreen) {
-      this.context.setViewport(this.context.camera.panBy({
+      this.context.camera.panBy({
         x: screen.x - this.startScreen.x,
         y: screen.y - this.startScreen.y,
-      }))
+      })
       this.startScreen = screen
       this.context.render('viewport')
       this.context.refreshViewportDependent()

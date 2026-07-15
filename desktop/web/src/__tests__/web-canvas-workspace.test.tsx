@@ -8,6 +8,7 @@ import {
 } from '../app/canvas-settings/signals'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { currentCanvasReady, currentCanvasSession } from '../canvas/session'
+import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -568,12 +569,14 @@ function fakeQuerySurface(): CanvasQuerySurface {
     revision: {
       scene: signal(0),
       plantNames: signal(0),
-      viewport: signal(0),
     },
+    viewport: signal<CameraViewportSnapshot>({
+      viewport: { x: 0, y: 0, scale: 1 },
+      screenSize: { width: 800, height: 600 },
+      referenceScale: 1,
+      revision: 0,
+    }),
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
-    getViewport: vi.fn(() => ({ x: 0, y: 0, scale: 1 })),
-    getViewportScreenSize: vi.fn(() => ({ width: 800, height: 600 })),
-    viewportRevision: signal(0),
     getSelection: vi.fn(() => new Set<string>()),
     getDesignObjectSelection: vi.fn(() => ({
       editableTargets: [],

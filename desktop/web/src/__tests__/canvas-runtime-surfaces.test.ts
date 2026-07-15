@@ -21,11 +21,14 @@ import { createCanvasDocumentReplacementToken } from '../canvas/runtime/runtime'
 
 function createQuerySurface() {
   return {
-    revision: { scene: signal(0), plantNames: signal(0), viewport: signal(0) },
+    revision: { scene: signal(0), plantNames: signal(0) },
+    viewport: signal({
+      viewport: { x: 0, y: 0, scale: 1 },
+      screenSize: { width: 400, height: 300 },
+      referenceScale: 1,
+      revision: 0,
+    }),
     getSceneSnapshot: () => createDefaultScenePersistedState(),
-    getViewport: () => ({ x: 0, y: 0, scale: 1 }),
-    getViewportScreenSize: () => ({ width: 400, height: 300 }),
-    viewportRevision: signal(0),
     getSelection: () => new Set<string>(),
     getDesignObjectSelection: () => ({
       editableTargets: [],
@@ -207,7 +210,8 @@ describe('canvas runtime surfaces', () => {
     expect(querySurfaceSource).not.toContain("from './scene-runtime'")
     expect(querySurfaceSource).not.toContain('this.runtime.')
     expect(querySurfaceSource).toContain('getSceneSnapshot()')
-    expect(querySurfaceSource).toContain('getViewport()')
+    expect(querySurfaceSource).toContain('get viewport()')
+    expect(querySurfaceSource).toContain('this.options.camera.snapshot')
     expect(querySurfaceSource).toContain('getSelection()')
     expect(querySurfaceSource).toContain('getPlacedPlants()')
     expect(querySurfaceSource).toContain('SettledSceneReader')
@@ -335,7 +339,7 @@ describe('canvas runtime surfaces', () => {
     const querySurface = createQuerySurface()
 
     expect(querySurface.getSceneSnapshot().plants).toEqual([])
-    expect(querySurface.getViewportScreenSize()).toEqual({ width: 400, height: 300 })
+    expect(querySurface.viewport.value.screenSize).toEqual({ width: 400, height: 300 })
     // @ts-expect-error query surfaces cannot issue tool commands.
     querySurface.setTool
     // @ts-expect-error query surfaces cannot replace documents.
