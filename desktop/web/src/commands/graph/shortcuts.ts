@@ -153,7 +153,8 @@ function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | 
 function shortcutInput(event: KeyboardEvent): CanvasCommandShortcutInput {
   return {
     key: event.key,
-    primaryModifier: event.ctrlKey || event.metaKey,
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
     shiftKey: event.shiftKey,
     altKey: event.altKey,
   }

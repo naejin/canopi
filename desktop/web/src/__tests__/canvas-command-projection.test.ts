@@ -21,40 +21,53 @@ describe('Canvas Command Projection', () => {
   it('matches projected tool and history shortcuts from the neutral catalog', () => {
     expect(canvasToolCommandIdForShortcut({
       key: 'e',
-      primaryModifier: false,
+      ctrlKey: false,
+      metaKey: false,
       shiftKey: false,
       altKey: false,
     })).toBe('canvas.tool.ellipse')
     expect(canvasToolCommandIdForShortcut({
       key: 'E',
-      primaryModifier: false,
+      ctrlKey: false,
+      metaKey: false,
       shiftKey: true,
       altKey: false,
-    })).toBe('canvas.tool.ellipse')
+    })).toBeNull()
     expect(canvasHistoryCommandIdForShortcut({
       key: 'z',
-      primaryModifier: true,
+      ctrlKey: true,
+      metaKey: false,
       shiftKey: false,
       altKey: false,
     })).toBe('edit.undo')
     expect(canvasHistoryCommandIdForShortcut({
       key: 'Z',
-      primaryModifier: true,
+      ctrlKey: false,
+      metaKey: true,
       shiftKey: true,
       altKey: false,
     })).toBe('edit.redo')
     expect(canvasHistoryCommandIdForShortcut({
       key: 'z',
-      primaryModifier: false,
+      ctrlKey: false,
+      metaKey: false,
       shiftKey: false,
       altKey: false,
     })).toBeNull()
     expect(canvasHistoryCommandIdForShortcut({
       key: 'z',
-      primaryModifier: true,
+      ctrlKey: true,
+      metaKey: false,
       shiftKey: false,
       altKey: true,
-    })).toBe('edit.undo')
+    })).toBeNull()
+    expect(canvasHistoryCommandIdForShortcut({
+      key: 'z',
+      ctrlKey: true,
+      metaKey: true,
+      shiftKey: false,
+      altKey: false,
+    })).toBeNull()
   })
 
   it('owns the exact navigation, creation, and reuse tool groups', () => {
@@ -100,6 +113,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.select',
         description: 'resolved:canvas.tools.selectDesc',
         shortcut: 'V',
+        ariaShortcut: 'V',
       },
       {
         tool: 'hand',
@@ -107,6 +121,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.hand',
         description: 'resolved:canvas.tools.handDesc',
         shortcut: 'H',
+        ariaShortcut: 'H',
       },
       {
         tool: 'line',
@@ -114,6 +129,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.line',
         description: 'resolved:canvas.tools.lineDesc',
         shortcut: 'L',
+        ariaShortcut: 'L',
       },
       {
         tool: 'rectangle',
@@ -121,6 +137,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.rectangle',
         description: 'resolved:canvas.tools.rectangleDesc',
         shortcut: 'R',
+        ariaShortcut: 'R',
       },
       {
         tool: 'ellipse',
@@ -128,6 +145,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.ellipse',
         description: 'resolved:canvas.tools.ellipseDesc',
         shortcut: 'E',
+        ariaShortcut: 'E',
       },
       {
         tool: 'polygon',
@@ -135,6 +153,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.polygon',
         description: 'resolved:canvas.tools.polygonDesc',
         shortcut: 'P',
+        ariaShortcut: 'P',
       },
       {
         tool: 'text',
@@ -142,6 +161,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.text',
         description: 'resolved:canvas.tools.textDesc',
         shortcut: 'T',
+        ariaShortcut: 'T',
       },
       {
         tool: 'measurement-guide',
@@ -149,6 +169,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.measurementGuide',
         description: 'resolved:canvas.tools.measurementGuideDesc',
         shortcut: undefined,
+        ariaShortcut: undefined,
       },
       {
         tool: 'object-stamp',
@@ -156,6 +177,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.objectStamp',
         description: 'resolved:canvas.tools.objectStampDesc',
         shortcut: undefined,
+        ariaShortcut: undefined,
       },
       {
         tool: 'plant-spacing',
@@ -163,6 +185,7 @@ describe('Canvas Command Projection', () => {
         label: 'resolved:canvas.tools.plantSpacing',
         description: 'resolved:canvas.tools.plantSpacingDesc',
         shortcut: 'S',
+        ariaShortcut: 'S',
       },
     ])
   })
@@ -222,6 +245,7 @@ describe('Canvas Command Projection', () => {
         commandId: 'edit.undo',
         label: 'resolved:menu.edit.undo',
         shortcut: 'Ctrl+Z',
+        ariaShortcut: 'Control+Z Meta+Z',
         disabled: false,
       },
       {
@@ -229,6 +253,7 @@ describe('Canvas Command Projection', () => {
         commandId: 'edit.redo',
         label: 'resolved:menu.edit.redo',
         shortcut: 'Ctrl+Shift+Z',
+        ariaShortcut: 'Control+Shift+Z Meta+Shift+Z',
         disabled: true,
       },
     ])

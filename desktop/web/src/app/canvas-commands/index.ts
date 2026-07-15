@@ -61,6 +61,7 @@ export interface CanvasToolbarToolCommand {
   readonly label: string
   readonly description: string
   readonly shortcut?: string
+  readonly ariaShortcut?: string
   readonly active: boolean
   readonly disabled: boolean
   readonly action: () => void
@@ -72,23 +73,25 @@ export interface CanvasToolbarActionCommand {
   readonly label: string
   readonly description?: string
   readonly shortcut?: string
+  readonly ariaShortcut?: string
   readonly disabled: boolean
   readonly pressed?: boolean
   readonly action: () => void
 }
 
 export interface CanvasCommandProjection {
-  readonly primaryTools: CanvasToolbarToolCommand[]
-  readonly creationTools: CanvasToolbarToolCommand[]
-  readonly reuseTools: CanvasToolbarToolCommand[]
-  readonly historyActions: CanvasToolbarActionCommand[]
-  readonly settingsToggles: CanvasToolbarActionCommand[]
+  readonly primaryTools: readonly CanvasToolbarToolCommand[]
+  readonly creationTools: readonly CanvasToolbarToolCommand[]
+  readonly reuseTools: readonly CanvasToolbarToolCommand[]
+  readonly historyActions: readonly CanvasToolbarActionCommand[]
+  readonly settingsToggles: readonly CanvasToolbarActionCommand[]
 }
 
 interface CanvasCommandDefinitionBase {
   readonly commandId: CanvasCommandId
   readonly labelKey: string
-  readonly shortcut?: string
+  readonly displayShortcut?: string
+  readonly ariaShortcut?: string
   readonly palette: boolean
   readonly intent: CanvasCommandIntent
 }
@@ -141,7 +144,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.select',
     labelKey: 'canvas.tools.select',
     descriptionKey: 'canvas.tools.selectDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.select,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.select,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.select,
     palette: true,
     intent: { type: 'select-tool', tool: 'select' },
   },
@@ -152,7 +156,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.hand',
     labelKey: 'canvas.tools.hand',
     descriptionKey: 'canvas.tools.handDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.hand,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.hand,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.hand,
     palette: true,
     intent: { type: 'select-tool', tool: 'hand' },
   },
@@ -163,7 +168,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.line',
     labelKey: 'canvas.tools.line',
     descriptionKey: 'canvas.tools.lineDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.line,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.line,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.line,
     palette: true,
     intent: { type: 'select-tool', tool: 'line' },
   },
@@ -174,7 +180,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.rectangle',
     labelKey: 'canvas.tools.rectangle',
     descriptionKey: 'canvas.tools.rectangleDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.rectangle,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.rectangle,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.rectangle,
     palette: true,
     intent: { type: 'select-tool', tool: 'rectangle' },
   },
@@ -185,7 +192,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.ellipse',
     labelKey: 'canvas.tools.ellipse',
     descriptionKey: 'canvas.tools.ellipseDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.ellipse,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.ellipse,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.ellipse,
     palette: true,
     intent: { type: 'select-tool', tool: 'ellipse' },
   },
@@ -196,7 +204,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.polygon',
     labelKey: 'canvas.tools.polygon',
     descriptionKey: 'canvas.tools.polygonDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.polygon,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.polygon,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.polygon,
     palette: true,
     intent: { type: 'select-tool', tool: 'polygon' },
   },
@@ -207,7 +216,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.text',
     labelKey: 'canvas.tools.text',
     descriptionKey: 'canvas.tools.textDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.text,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.text,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.text,
     palette: true,
     intent: { type: 'select-tool', tool: 'text' },
   },
@@ -238,7 +248,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.tool.plantSpacing',
     labelKey: 'canvas.tools.plantSpacing',
     descriptionKey: 'canvas.tools.plantSpacingDesc',
-    shortcut: CANVAS_TOOL_SHORTCUTS.plantSpacing,
+    displayShortcut: CANVAS_TOOL_SHORTCUTS.plantSpacing,
+    ariaShortcut: CANVAS_TOOL_SHORTCUTS.plantSpacing,
     palette: true,
     intent: { type: 'select-tool', tool: 'plant-spacing' },
   },
@@ -247,7 +258,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     id: 'undo',
     commandId: 'edit.undo',
     labelKey: 'menu.edit.undo',
-    shortcut: CANVAS_HISTORY_SHORTCUTS.undo,
+    displayShortcut: CANVAS_HISTORY_SHORTCUTS.undo,
+    ariaShortcut: 'Control+Z Meta+Z',
     palette: true,
     intent: { type: 'undo' },
   },
@@ -256,7 +268,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     id: 'redo',
     commandId: 'edit.redo',
     labelKey: 'menu.edit.redo',
-    shortcut: CANVAS_HISTORY_SHORTCUTS.redo,
+    displayShortcut: CANVAS_HISTORY_SHORTCUTS.redo,
+    ariaShortcut: 'Control+Shift+Z Meta+Shift+Z',
     palette: true,
     intent: { type: 'redo' },
   },
@@ -295,18 +308,19 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
 export const canvasToolShortcutKeys: Readonly<Record<string, CanvasToolId>> = Object.freeze(
   Object.fromEntries(
     canvasCommandDefinitions
-      .filter((definition): definition is CanvasToolCommandDefinition =>
-        definition.kind === 'tool' && definition.shortcut !== undefined)
+      .filter((definition): definition is CanvasToolCommandDefinition & { readonly displayShortcut: string } =>
+        definition.kind === 'tool' && definition.displayShortcut !== undefined)
       .flatMap((definition) => [
-        [definition.shortcut!.toLowerCase(), definition.tool],
-        [definition.shortcut!, definition.tool],
+        [definition.displayShortcut.toLowerCase(), definition.tool],
+        [definition.displayShortcut, definition.tool],
       ]),
   ),
 )
 
 export interface CanvasCommandShortcutInput {
   readonly key: string
-  readonly primaryModifier: boolean
+  readonly ctrlKey: boolean
+  readonly metaKey: boolean
   readonly shiftKey: boolean
   readonly altKey: boolean
 }
@@ -314,7 +328,7 @@ export interface CanvasCommandShortcutInput {
 export function canvasToolCommandIdForShortcut(
   input: CanvasCommandShortcutInput,
 ): CanvasCommandId | null {
-  if (input.primaryModifier || input.altKey) return null
+  if (input.ctrlKey || input.metaKey || input.shiftKey || input.altKey) return null
   const tool = canvasToolShortcutKeys[input.key]
   return tool ? canvasCommandIdForTool(tool) : null
 }
@@ -325,10 +339,21 @@ export function canvasHistoryCommandIdForShortcut(
   const definition = canvasCommandDefinitions.find(
     (candidate): candidate is CanvasHistoryCommandDefinition =>
       candidate.kind === 'history'
-      && candidate.shortcut !== undefined
-      && matchesCommandShortcut(input, candidate.shortcut),
+      && candidate.displayShortcut !== undefined
+      && matchesCommandShortcut(input, candidate.displayShortcut),
   )
   return definition?.commandId ?? null
+}
+
+export function canvasCommandIntentForShortcut(
+  input: CanvasCommandShortcutInput,
+): CanvasCommandIntent | null {
+  const commandId = canvasToolCommandIdForShortcut(input)
+    ?? canvasHistoryCommandIdForShortcut(input)
+  if (!commandId) return null
+  return canvasCommandDefinitions.find(
+    (definition) => definition.commandId === commandId,
+  )?.intent ?? null
 }
 
 function matchesCommandShortcut(
@@ -338,9 +363,13 @@ function matchesCommandShortcut(
   const parts = shortcut.split('+')
   const shortcutKey = parts.at(-1)
   if (!shortcutKey) return false
-  return input.primaryModifier === parts.includes('Ctrl')
+  const requiresPrimaryModifier = parts.includes('Ctrl')
+  const primaryModifierMatches = requiresPrimaryModifier
+    ? input.ctrlKey !== input.metaKey
+    : !input.ctrlKey && !input.metaKey
+  return primaryModifierMatches
     && input.shiftKey === parts.includes('Shift')
-    && (!parts.includes('Alt') || input.altKey)
+    && input.altKey === parts.includes('Alt')
     && input.key.toLowerCase() === shortcutKey.toLowerCase()
 }
 
@@ -419,7 +448,8 @@ export function createCanvasCommandProjection({
     commandId: definition.commandId,
     label: translate(definition.labelKey),
     description: translate(definition.descriptionKey),
-    shortcut: definition.shortcut,
+    shortcut: definition.displayShortcut,
+    ariaShortcut: definition.ariaShortcut,
     active: state.activeTool === definition.tool,
     disabled: isCanvasCommandDisabled(definition.intent, state),
     action: projectAction(definition),
@@ -441,7 +471,8 @@ export function createCanvasCommandProjection({
         id: definition.id,
         commandId: definition.commandId,
         label: translate(definition.labelKey),
-        shortcut: definition.shortcut,
+        shortcut: definition.displayShortcut,
+        ariaShortcut: definition.ariaShortcut,
         disabled: isCanvasCommandDisabled(definition.intent, state),
         action: projectAction(definition),
       })),

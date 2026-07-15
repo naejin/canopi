@@ -21,7 +21,7 @@ import {
 interface ToolButtonSnapshot {
   readonly tool: string | undefined
   readonly label: string | null
-  readonly shortcut: string | null
+  readonly ariaShortcut: string | null
   readonly active: string | null
   readonly disabled: boolean
 }
@@ -29,7 +29,7 @@ interface ToolButtonSnapshot {
 interface ActionButtonSnapshot {
   readonly commandId: string | undefined
   readonly label: string | null
-  readonly shortcut: string | null
+  readonly ariaShortcut: string | null
   readonly pressed: string | null
   readonly disabled: boolean
 }
@@ -102,6 +102,10 @@ describe('Canvas toolbar command parity', () => {
       'canvas.toggleSnapToGrid',
       'canvas.toggleRulers',
     ])
+    expect(desktopActions.slice(0, 2).map((command) => command.ariaShortcut)).toEqual([
+      'Control+Z Meta+Z',
+      'Control+Shift+Z Meta+Shift+Z',
+    ])
   })
 
   it('keeps both rendered surfaces in sync through dispatch and disabled transitions', async () => {
@@ -164,6 +168,64 @@ describe('Canvas toolbar command parity', () => {
     expect(commandButton(desktopContainer, 'canvas.toggleGrid').disabled).toBe(true)
     expect(commandButton(webContainer, 'canvas.toggleGrid').disabled).toBe(true)
   })
+
+  it('keeps both rendered tool groups reachable with the same roving keyboard behavior', async () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ tools: { setTool } }),
+    }))
+
+    await act(async () => {
+      render(<CanvasToolbar />, desktopContainer)
+      render(<WebCanvasToolbar />, webContainer)
+      await Promise.resolve()
+    })
+
+    for (const container of [desktopContainer, webContainer]) {
+      await act(async () => {
+        activeTool.value = 'select'
+        await Promise.resolve()
+      })
+
+      const toolbar = container.querySelector<HTMLDivElement>('[role="toolbar"]')
+      if (!toolbar) throw new Error('Missing Canvas toolbar')
+
+      await act(async () => {
+        toolbar.focus()
+        await Promise.resolve()
+      })
+      expect(document.activeElement).toBe(toolButton(container, 'select'))
+
+      await act(async () => {
+        toolButton(container, 'select').dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          bubbles: true,
+          cancelable: true,
+        }))
+        await Promise.resolve()
+      })
+      expect(activeTool.value).toBe('hand')
+      expect(document.activeElement).toBe(toolButton(container, 'hand'))
+
+      await act(async () => {
+        toolButton(container, 'hand').dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'ArrowUp',
+          bubbles: true,
+          cancelable: true,
+        }))
+        await Promise.resolve()
+      })
+      expect(activeTool.value).toBe('select')
+      expect(document.activeElement).toBe(toolButton(container, 'select'))
+    }
+
+    expect(setTool.mock.calls).toEqual([
+      ['hand'],
+      ['select'],
+      ['hand'],
+      ['select'],
+    ])
+  })
 })
 
 function toolButtons(container: HTMLElement): ToolButtonSnapshot[] {
@@ -171,7 +233,7 @@ function toolButtons(container: HTMLElement): ToolButtonSnapshot[] {
     .map((button) => ({
       tool: button.dataset.tool,
       label: button.getAttribute('aria-label'),
-      shortcut: button.getAttribute('aria-keyshortcuts'),
+      ariaShortcut: button.getAttribute('aria-keyshortcuts'),
       active: button.getAttribute('aria-checked'),
       disabled: button.disabled,
     }))
@@ -182,7 +244,7 @@ function actionButtons(container: HTMLElement): ActionButtonSnapshot[] {
     .map((button) => ({
       commandId: button.dataset.command,
       label: button.getAttribute('aria-label'),
-      shortcut: button.getAttribute('aria-keyshortcuts'),
+      ariaShortcut: button.getAttribute('aria-keyshortcuts'),
       pressed: button.getAttribute('aria-pressed'),
       disabled: button.disabled,
     }))

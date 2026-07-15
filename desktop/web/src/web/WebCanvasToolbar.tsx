@@ -3,24 +3,15 @@ import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
 import {
   createCanvasCommandProjection,
-  type CanvasCommandIntentAdapter,
   type CanvasToolbarActionCommand,
   type CanvasToolbarToolCommand,
 } from '../app/canvas-commands'
 import { locale } from '../app/settings/state'
-import {
-  gridVisible,
-  rulersVisible,
-  snapToGridEnabled,
-} from '../app/canvas-settings/signals'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../canvas/plant-symbol-menu-state'
 import {
-  currentCanvasCommandSurface,
   currentCanvasQuerySurface,
   currentCanvasSelection,
-  currentCanvasTool,
-  setCurrentCanvasTool,
 } from '../canvas/session'
 import { t } from '../i18n'
 import { ButtonTooltip } from '../components/shared/ButtonTooltip'
@@ -46,6 +37,10 @@ import {
   UndoIcon,
 } from '../components/canvas/toolbar-icons'
 import styles from '../components/canvas/CanvasToolbar.module.css'
+import {
+  readWebCanvasCommandProjectionState,
+  webCanvasCommandIntentAdapter,
+} from './canvas-command-adapter'
 
 type IconComponent = (props: { className?: string }) => ComponentChildren
 
@@ -82,46 +77,20 @@ function iconForAction(id: string): IconComponent {
   return Icon
 }
 
-const WEB_CANVAS_INTENTS: CanvasCommandIntentAdapter = {
-  selectTool: (tool) => {
-    if (!currentCanvasCommandSurface.value) return
-    setCurrentCanvasTool(tool)
-  },
-  undo: () => {
-    const surface = currentCanvasCommandSurface.value
-    if (!surface?.history.canUndo.value) return
-    surface.history.undo()
-  },
-  redo: () => {
-    const surface = currentCanvasCommandSurface.value
-    if (!surface?.history.canRedo.value) return
-    surface.history.redo()
-  },
-  toggleGrid: () => currentCanvasCommandSurface.value?.chrome.toggleGrid(),
-  toggleSnapToGrid: () => currentCanvasCommandSurface.value?.chrome.toggleSnapToGrid(),
-  toggleRulers: () => currentCanvasCommandSurface.value?.chrome.toggleRulers(),
-}
-
 export function WebCanvasToolbar() {
   void locale.value
   void currentCanvasSelection.value
-  const commandSurface = currentCanvasCommandSurface.value
   const querySurface = currentCanvasQuerySurface.value
-  const activeTool = currentCanvasTool.value
   const toolbarProjection = createCanvasCommandProjection({
-    state: {
-      activeTool,
-      toolSelectionAvailable: commandSurface !== null,
-      canUndo: commandSurface?.history.canUndo.value ?? false,
-      canRedo: commandSurface?.history.canRedo.value ?? false,
-      settingsAvailable: commandSurface !== null,
-      gridVisible: gridVisible.value,
-      snapToGridEnabled: snapToGridEnabled.value,
-      rulersVisible: rulersVisible.value,
-    },
-    intents: WEB_CANVAS_INTENTS,
+    state: readWebCanvasCommandProjectionState(),
+    intents: webCanvasCommandIntentAdapter,
     translate: t,
   })
+  const allTools = [
+    ...toolbarProjection.primaryTools,
+    ...toolbarProjection.creationTools,
+    ...toolbarProjection.reuseTools,
+  ]
   const toolbarRef = useRef<HTMLDivElement>(null)
   const plantColorButtonRef = useRef<HTMLButtonElement>(null)
   const plantSymbolButtonRef = useRef<HTMLButtonElement>(null)
@@ -153,6 +122,29 @@ export function WebCanvasToolbar() {
     }
   })
 
+  function handleKeyDown(event: KeyboardEvent) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    if (!(event.target instanceof HTMLButtonElement) || !event.target.dataset.tool) return
+
+    event.preventDefault()
+    const currentTool = event.target.dataset.tool
+    const currentIndex = allTools.findIndex(
+      (command) => command.tool === currentTool,
+    )
+    if (currentIndex === -1) return
+
+    const nextIndex = event.key === 'ArrowDown'
+      ? (currentIndex + 1) % allTools.length
+      : (currentIndex - 1 + allTools.length) % allTools.length
+    const nextTool = allTools[nextIndex]
+    if (!nextTool) return
+
+    nextTool.action()
+    toolbarRef.current?.querySelector<HTMLButtonElement>(
+      `[data-tool="${nextTool.tool}"]`,
+    )?.focus()
+  }
+
   useSignalEffect(() => {
     if (!plantSymbolMenuOpen.value) return
     currentCanvasSelection.value
@@ -172,7 +164,7 @@ export function WebCanvasToolbar() {
         role="radio"
         aria-checked={command.active}
         aria-label={command.shortcut ? `${command.label} ${shortcutLabel}` : command.label}
-        aria-keyshortcuts={command.shortcut}
+        aria-keyshortcuts={command.ariaShortcut}
         aria-disabled={command.disabled}
         disabled={command.disabled}
         tabIndex={command.active ? 0 : -1}
@@ -197,10 +189,12 @@ export function WebCanvasToolbar() {
       command.pressed,
       command.disabled,
       command.action,
-      undefined,
-      command.description,
-      command.commandId,
-      command.shortcut,
+      {
+        description: command.description,
+        commandId: command.commandId,
+        shortcut: command.shortcut,
+        ariaShortcut: command.ariaShortcut,
+      },
     )
   }
 
@@ -211,7 +205,15 @@ export function WebCanvasToolbar() {
       aria-label={t('canvas.toolbar')}
       aria-orientation="vertical"
       className={styles.toolbar}
+      onKeyDown={handleKeyDown}
       tabIndex={0}
+      onFocus={(event) => {
+        if (event.target === toolbarRef.current) {
+          toolbarRef.current?.querySelector<HTMLButtonElement>(
+            '[aria-checked="true"]',
+          )?.focus()
+        }
+      }}
     >
       {toolbarProjection.primaryTools.map(renderToolButton)}
 
@@ -241,7 +243,7 @@ export function WebCanvasToolbar() {
             plantSymbolMenuOpen.value = false
             plantColorMenuOpen.value = !plantColorMenuOpen.value
           },
-          plantColorButtonRef,
+          { ref: plantColorButtonRef },
         )}
         {plantColorMenuOpen.value && hasSelectedPlants && <PlantColorMenu buttonRef={plantColorButtonRef} />}
         {renderActionButton(
@@ -255,7 +257,7 @@ export function WebCanvasToolbar() {
             plantColorMenuOpen.value = false
             plantSymbolMenuOpen.value = !plantSymbolMenuOpen.value
           },
-          plantSymbolButtonRef,
+          { ref: plantSymbolButtonRef },
         )}
         {plantSymbolMenuOpen.value && hasSelectedSymbolPlants && <PlantSymbolMenu buttonRef={plantSymbolButtonRef} />}
       </div>
@@ -274,21 +276,24 @@ function renderActionButton(
   pressed: boolean | undefined,
   disabled: boolean,
   onClick: () => void,
-  ref?: { current: HTMLButtonElement | null },
-  description?: string,
-  commandId?: string,
-  shortcut?: string,
+  options: {
+    readonly ref?: { current: HTMLButtonElement | null }
+    readonly description?: string
+    readonly commandId?: string
+    readonly shortcut?: string
+    readonly ariaShortcut?: string
+  } = {},
 ) {
   const pressedProps = pressed === undefined ? {} : { 'aria-pressed': pressed }
   return (
     <button
-      ref={ref}
+      ref={options.ref}
       key={id}
-      data-command={commandId}
+      data-command={options.commandId}
       type="button"
       {...pressedProps}
       aria-label={label}
-      aria-keyshortcuts={shortcut}
+      aria-keyshortcuts={options.ariaShortcut}
       aria-disabled={disabled}
       disabled={disabled}
       tabIndex={0}
@@ -298,8 +303,8 @@ function renderActionButton(
       <Icon className={styles.toolIcon} />
       <ButtonTooltip
         label={label}
-        shortcut={shortcut ? `(${shortcut})` : undefined}
-        description={description}
+        shortcut={options.shortcut ? `(${options.shortcut})` : undefined}
+        description={options.description}
       />
     </button>
   )

@@ -360,8 +360,8 @@ describe('CanvasToolbar', () => {
     expect(redoButton?.disabled).toBe(true)
     expect(undoButton?.getAttribute('aria-label')).toBe('Undo')
     expect(redoButton?.getAttribute('aria-label')).toBe('Redo')
-    expect(undoButton?.getAttribute('aria-keyshortcuts')).toBe('Ctrl+Z')
-    expect(redoButton?.getAttribute('aria-keyshortcuts')).toBe('Ctrl+Shift+Z')
+    expect(undoButton?.getAttribute('aria-keyshortcuts')).toBe('Control+Z Meta+Z')
+    expect(redoButton?.getAttribute('aria-keyshortcuts')).toBe('Control+Shift+Z Meta+Shift+Z')
   })
 
   it('runs undo and redo through the toolbar command buttons when history is available', async () => {

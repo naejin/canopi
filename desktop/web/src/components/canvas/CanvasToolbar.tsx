@@ -167,7 +167,7 @@ export function CanvasToolbar() {
         role="radio"
         aria-checked={command.active}
         aria-label={command.shortcut ? `${command.label} ${shortcutLabel}` : command.label}
-        aria-keyshortcuts={command.shortcut}
+        aria-keyshortcuts={command.ariaShortcut}
         aria-disabled={command.disabled}
         disabled={command.disabled}
         // Only the active button is in the tab sequence; arrow keys move focus
@@ -192,6 +192,7 @@ export function CanvasToolbar() {
     options?: {
       commandId?: string
       shortcut?: string
+      ariaShortcut?: string
     },
   ) {
     const pressedProps = pressed === undefined ? {} : { 'aria-pressed': pressed }
@@ -204,7 +205,7 @@ export function CanvasToolbar() {
         type="button"
         {...pressedProps}
         aria-label={label}
-        aria-keyshortcuts={options?.shortcut}
+        aria-keyshortcuts={options?.ariaShortcut}
         aria-disabled={disabled}
         disabled={disabled}
         tabIndex={0}
@@ -231,7 +232,11 @@ export function CanvasToolbar() {
       command.pressed,
       command.disabled,
       command.action,
-      { commandId: command.commandId, shortcut: command.shortcut },
+      {
+        commandId: command.commandId,
+        shortcut: command.shortcut,
+        ariaShortcut: command.ariaShortcut,
+      },
     )
   }
 

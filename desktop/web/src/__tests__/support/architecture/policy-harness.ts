@@ -24,6 +24,14 @@ export interface ForbidImportsPolicy extends ImportPolicyBase {
   readonly importedNames?: readonly string[]
 }
 
+export interface ForbidTransitiveImportsPolicy extends ImportPolicyBase {
+  readonly kind: 'forbid-transitive-imports'
+  readonly from: readonly string[]
+  readonly targets: readonly string[]
+  readonly exceptFrom?: readonly string[]
+  readonly exceptTargets?: readonly string[]
+}
+
 export interface ForbidNonLiteralDynamicImportsPolicy {
   readonly kind: 'forbid-nonliteral-dynamic-imports'
   readonly name: string
@@ -106,6 +114,7 @@ export interface SourceTombstonesPolicy {
 
 export type ArchitecturePolicy =
   | ForbidImportsPolicy
+  | ForbidTransitiveImportsPolicy
   | ForbidNonLiteralDynamicImportsPolicy
   | ConfineImportersPolicy
   | RequireImportsPolicy
@@ -129,6 +138,9 @@ export function collectArchitecturePolicyViolations(
     switch (policy.kind) {
       case 'forbid-imports':
         collectForbiddenImportViolations(graph, policy, violations)
+        break
+      case 'forbid-transitive-imports':
+        collectForbiddenTransitiveImportViolations(graph, policy, violations)
         break
       case 'forbid-nonliteral-dynamic-imports':
         collectNonLiteralDynamicImportViolations(graph, policy, violations)
@@ -214,6 +226,50 @@ function collectForbiddenImportViolations(
         (binding) => policy.importedNames?.includes(binding.importedName),
       )) continue
       violations.push(formatImportViolation(policy.name, source.path, edge))
+    }
+  }
+}
+
+function collectForbiddenTransitiveImportViolations(
+  graph: readonly TypeScriptSourceFact[],
+  policy: ForbidTransitiveImportsPolicy,
+  violations: string[],
+): void {
+  const sourcesByPath = new Map(graph.map((source) => [source.path, source]))
+
+  for (const root of matchingSources(graph, policy.from)) {
+    if (matchesAny(root.path, policy.exceptFrom ?? [])) continue
+
+    const visited = new Set([root.path])
+    const reportedTargets = new Set<string>()
+    const queue: Array<{
+      readonly source: TypeScriptSourceFact
+      readonly path: readonly string[]
+    }> = [{ source: root, path: [root.path] }]
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const current = queue[index]!
+      for (const edge of current.source.imports) {
+        if (!matchesImportKind(edge, policy.edgeKinds)) continue
+
+        const dependencyPath = [...current.path, edge.target]
+        const crossesForbiddenBoundary = matchesAny(edge.target, policy.targets)
+          && !matchesAny(edge.target, policy.exceptTargets ?? [])
+        if (crossesForbiddenBoundary) {
+          if (!reportedTargets.has(edge.target)) {
+            reportedTargets.add(edge.target)
+            violations.push(
+              `[${policy.name}] ${root.path} transitively imports ${edge.target} via ${dependencyPath.join(' -> ')}`,
+            )
+          }
+          continue
+        }
+
+        const dependency = sourcesByPath.get(edge.target)
+        if (!dependency || visited.has(dependency.path)) continue
+        visited.add(dependency.path)
+        queue.push({ source: dependency, path: dependencyPath })
+      }
     }
   }
 }

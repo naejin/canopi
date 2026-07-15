@@ -184,7 +184,7 @@ function canvasAppCommandDefinition(
   return {
     id: definition.commandId,
     label: () => t(definition.labelKey),
-    shortcut: definition.shortcut,
+    shortcut: definition.displayShortcut,
     palette: definition.palette,
     run: (state) => dispatchCanvasCommandIntent(
       definition.intent,

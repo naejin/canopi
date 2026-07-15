@@ -259,6 +259,51 @@ describe('TypeScript architecture source facts', () => {
     ])
   })
 
+  it('rejects transitive static, re-export, dynamic, and external imports without looping on cycles', () => {
+    const graph = createTypeScriptSourceGraph([
+      {
+        path: 'src/neutral/index.ts',
+        source: `
+          import './static-hop'
+          export * from './reexport-hop'
+          void import('./dynamic-hop')
+        `,
+      },
+      { path: 'src/neutral/static-hop.ts', source: "import './cycle-a'" },
+      { path: 'src/neutral/cycle-a.ts', source: "import './cycle-b'" },
+      {
+        path: 'src/neutral/cycle-b.ts',
+        source: `
+          export * from './cycle-a'
+          import '@tauri-apps/api/core'
+          import '#platform'
+        `,
+      },
+      {
+        path: 'src/neutral/reexport-hop.ts',
+        source: "export * from '../platform/reexported'",
+      },
+      {
+        path: 'src/neutral/dynamic-hop.ts',
+        source: "void import('../ipc/lazy')",
+      },
+      { path: 'src/platform/reexported.ts', source: 'export const platformValue = true' },
+      { path: 'src/ipc/lazy.ts', source: 'export const lazyValue = true' },
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, [{
+      kind: 'forbid-transitive-imports',
+      name: 'Neutral graph stays platform-free',
+      from: ['src/neutral/index.ts'],
+      targets: ['src/platform/**', 'src/ipc/**', '@tauri-apps/**', '#platform'],
+    }])).toEqual([
+      '[Neutral graph stays platform-free] src/neutral/index.ts transitively imports src/platform/reexported.ts via src/neutral/index.ts -> src/neutral/reexport-hop.ts -> src/platform/reexported.ts',
+      '[Neutral graph stays platform-free] src/neutral/index.ts transitively imports src/ipc/lazy.ts via src/neutral/index.ts -> src/neutral/dynamic-hop.ts -> src/ipc/lazy.ts',
+      '[Neutral graph stays platform-free] src/neutral/index.ts transitively imports @tauri-apps/api/core via src/neutral/index.ts -> src/neutral/static-hop.ts -> src/neutral/cycle-a.ts -> src/neutral/cycle-b.ts -> @tauri-apps/api/core',
+      '[Neutral graph stays platform-free] src/neutral/index.ts transitively imports #platform via src/neutral/index.ts -> src/neutral/static-hop.ts -> src/neutral/cycle-a.ts -> src/neutral/cycle-b.ts -> #platform',
+    ])
+  })
+
   it('reports named declarative policy violations with importer and target context', () => {
     const graph = createTypeScriptSourceGraph([
       {
@@ -374,6 +419,12 @@ describe('TypeScript architecture source facts', () => {
         targets: ['src/dependency.ts'],
       },
       {
+        kind: 'forbid-transitive-imports',
+        name: 'Transitive negative owner',
+        from: ['src/missing-transitive-owner.ts'],
+        targets: ['src/dependency.ts'],
+      },
+      {
         kind: 'forbid-source-symbols',
         name: 'Symbol owner',
         from: ['src/missing-symbol-owner.ts'],
@@ -396,6 +447,7 @@ describe('TypeScript architecture source facts', () => {
       '[Named consumer] required policy source is missing: src/missing-consumer.ts',
       '[Public facade] required policy source is missing: src/missing-facade.ts',
       '[Negative owner] required policy source is missing: src/missing-negative-owner.ts',
+      '[Transitive negative owner] required policy source is missing: src/missing-transitive-owner.ts',
       '[Symbol owner] required policy source is missing: src/missing-symbol-owner.ts',
       '[Write owner] required policy source is missing: src/missing-write-owner.ts',
       '[Call owner] required policy source is missing: src/missing-call-owner.ts',
