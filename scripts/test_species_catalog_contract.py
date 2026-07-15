@@ -774,6 +774,61 @@ class DatabaseVerificationTests(unittest.TestCase):
             self.assertEqual(receipt.profile, contract.DatabaseProfile.PREPARED)
             self.assertEqual(receipt.warnings, ())
 
+    def test_prepared_profile_rejects_missing_search_normalization_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP TABLE IF EXISTS species_search_metadata")
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            self.assertIn("species_search_metadata", str(raised.exception))
+
+    def test_prepared_profile_rejects_wrong_search_normalization_fingerprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS species_search_metadata "
+                    "(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+                )
+                connection.execute("DELETE FROM species_search_metadata")
+                connection.executemany(
+                    "INSERT INTO species_search_metadata (key, value) VALUES (?, ?)",
+                    [
+                        ("normalization_version", "1"),
+                        ("normalization_fingerprint", "wrong"),
+                    ],
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            self.assertIn("normalization_fingerprint", str(raised.exception))
+
     def test_prepared_profile_rejects_missing_runtime_generated_tables(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

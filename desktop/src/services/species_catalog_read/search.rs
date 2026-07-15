@@ -264,6 +264,30 @@ mod tests {
         assert!(error.contains("too short"), "unexpected error: {error}");
     }
 
+    #[test]
+    fn search_rejects_connections_without_search_initialization() {
+        let connection = Connection::open_in_memory().unwrap();
+
+        let error = search(
+            &connection,
+            search_request(
+                Some("malus"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                20,
+                false,
+                "en",
+            ),
+        )
+        .unwrap_err();
+
+        assert!(
+            error.contains("not initialized"),
+            "unexpected error: {error}"
+        );
+    }
+
     fn relevance_fixture_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(

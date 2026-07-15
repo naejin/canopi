@@ -114,3 +114,73 @@ pub fn require_plant_db<'a>(plant_db: &'a PlantDb) -> Result<MutexGuard<'a, Conn
         PlantDb::Corrupt => Err(plant_db_unavailable_error(PlantDbStatus::Corrupt)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn connection_with_identity(schema_version: i32, fingerprint: &str) -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE species_search_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );",
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO species_search_metadata (key, value) VALUES (?1, ?2)",
+                ("normalization_version", "1"),
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO species_search_metadata (key, value) VALUES (?1, ?2)",
+                ("normalization_fingerprint", fingerprint),
+            )
+            .unwrap();
+        connection
+            .pragma_update(None, "user_version", schema_version)
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn plant_db_rejects_stale_v12_without_normalization_identity() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection.pragma_update(None, "user_version", 12).unwrap();
+
+        assert_eq!(
+            PlantDb::available(connection).status(),
+            PlantDbStatus::Corrupt
+        );
+    }
+
+    #[test]
+    fn plant_db_rejects_current_schema_with_wrong_normalization_fingerprint() {
+        let connection = connection_with_identity(
+            schema_contract::EXPECTED_PLANT_SCHEMA_VERSION,
+            "wrong-fingerprint",
+        );
+
+        assert_eq!(
+            PlantDb::available(connection).status(),
+            PlantDbStatus::Corrupt
+        );
+    }
+
+    #[test]
+    fn plant_db_accepts_exact_schema_and_normalization_identity() {
+        let connection = connection_with_identity(
+            schema_contract::EXPECTED_PLANT_SCHEMA_VERSION,
+            schema_contract::SPECIES_SEARCH_NORMALIZATION_FINGERPRINT,
+        );
+
+        assert_eq!(
+            PlantDb::available(connection).status(),
+            PlantDbStatus::Available
+        );
+    }
+}

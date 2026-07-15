@@ -79,6 +79,52 @@ class PrepareDbSearchTextTests(unittest.TestCase):
             1,
         )
 
+    def test_fts_keeps_underscore_tokens_distinct_from_spaced_tokens(self):
+        conn = sqlite3.connect(":memory:")
+        conn.executescript(
+            """
+            CREATE TABLE species (
+                id TEXT PRIMARY KEY,
+                canonical_name TEXT,
+                common_name TEXT,
+                family TEXT,
+                genus TEXT,
+                conservation_status TEXT
+            );
+            CREATE TABLE species_common_names (
+                species_id TEXT NOT NULL,
+                common_name TEXT NOT NULL
+            );
+            CREATE TABLE species_uses (
+                species_id TEXT NOT NULL,
+                use_category TEXT NOT NULL,
+                use_description TEXT
+            );
+            INSERT INTO species VALUES
+                ('underscore', 'snake_case __', NULL, NULL, NULL, NULL),
+                ('spaced', 'snake case', NULL, NULL, NULL, NULL);
+            """
+        )
+
+        prepare_db.build_search_index(conn)
+
+        self.assertEqual(
+            conn.execute(
+                "SELECT s.id FROM species_search_fts f "
+                "JOIN species s ON s.rowid = f.rowid "
+                "WHERE species_search_fts MATCH 'snake_case'"
+            ).fetchall(),
+            [("underscore",)],
+        )
+        self.assertEqual(
+            conn.execute(
+                "SELECT s.id FROM species_search_fts f "
+                "JOIN species s ON s.rowid = f.rowid "
+                "WHERE species_search_fts MATCH '__'"
+            ).fetchall(),
+            [("underscore",)],
+        )
+
 
 class PrepareDbSearchEntryIndexTests(unittest.TestCase):
     def test_search_name_entry_index_uses_selected_language_names_only(self):
