@@ -64,6 +64,16 @@
       "admission": "browse"
     },
     {
+      "name": "unicode-15-compatibility-decomposition",
+      "input": "𞀰",
+      "normalized_text": "а",
+      "tokens": [
+        "а"
+      ],
+      "query_tokens": [],
+      "admission": "too-short"
+    },
+    {
       "name": "one-normalized-scalar",
       "input": " É ",
       "normalized_text": "e",

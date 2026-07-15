@@ -39,6 +39,24 @@ class SpeciesSearchNormalizationTests(unittest.TestCase):
             authored,
             unicode_facts.compile_unicode_data(authored["unicode_data_version"]),
         )
+        decompositions = dict(authored["compatibility_decomposition_mappings"])
+        self.assertEqual(decompositions[0x1E030], "а")
+
+    def test_runtimes_do_not_delegate_compatibility_decomposition_to_the_host(self):
+        sources = {
+            "Python": Path(normalization.__file__).read_text(encoding="utf-8"),
+            "Rust": (
+                SCRIPT_DIR.parent / "desktop/src/db/species_search_normalization.rs"
+            ).read_text(encoding="utf-8"),
+            "TypeScript": (
+                SCRIPT_DIR.parent
+                / "desktop/web/src/utils/species-search-normalization.ts"
+            ).read_text(encoding="utf-8"),
+        }
+
+        self.assertNotIn("unicodedata.normalize", sources["Python"])
+        self.assertNotIn(".nfkd()", sources["Rust"])
+        self.assertNotIn(".normalize('NFKD')", sources["TypeScript"])
 
     def test_both_python_builders_match_the_authored_corpus(self):
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))

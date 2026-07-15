@@ -355,4 +355,26 @@ mod tests {
         assert!(rendered.contains("greek-final-sigma"));
         assert!(rendered.contains("σισυφοσ"));
     }
+
+    #[test]
+    fn bindings_validation_rejects_property_ranges_outside_known_scalars() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let authority: NormalizationContract = serde_json::from_str(
+            &std::fs::read_to_string(
+                root.join("common-types/species-search-normalization.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let mut facts: UnicodeFacts = serde_json::from_str(
+            &std::fs::read_to_string(root.join("common-types/species-search-unicode-15.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        facts.mark_scalar_ranges = vec![[0x10FFFF, 0x10FFFF]];
+
+        let error = validate(&authority, &facts).unwrap_err().to_string();
+
+        assert!(error.contains("known scalars"), "{error}");
+    }
 }
