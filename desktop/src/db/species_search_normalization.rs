@@ -107,7 +107,6 @@ pub(crate) struct NormalizedSpeciesSearch {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-#[cfg(test)]
 pub(crate) enum SpeciesSearchAdmission {
     Browse,
     TooShort,
@@ -401,7 +400,6 @@ pub(crate) fn species_search_query_tokens(normalized: &NormalizedSpeciesSearch) 
     }
 }
 
-#[cfg(test)]
 pub(crate) fn species_search_admission(raw: &str) -> SpeciesSearchAdmission {
     match normalize_species_search(raw).scalar_count {
         0 => SpeciesSearchAdmission::Browse,

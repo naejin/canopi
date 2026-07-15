@@ -2,6 +2,7 @@ use common_types::species::{PaginatedResult, SpeciesListItem, SpeciesSearchReque
 use rusqlite::{Connection, params_from_iter};
 
 use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
+use crate::db::species_search_normalization::{SpeciesSearchAdmission, species_search_admission};
 
 use super::list_projection::map_species_list_row;
 
@@ -13,6 +14,10 @@ pub fn search(
     conn: &Connection,
     request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
+    if species_search_admission(&request.text) == SpeciesSearchAdmission::TooShort {
+        return Err("Species search text is too short after normalization.".to_owned());
+    }
+
     let limit = request.limit;
     let plan = SpeciesSearchPlan::build(SpeciesSearchPlanRequest {
         search: request,

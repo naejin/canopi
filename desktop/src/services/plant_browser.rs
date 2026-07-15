@@ -161,14 +161,10 @@ impl Drop for SpeciesSearchRunningGuard {
 }
 
 pub fn is_active_species_search_request(request: &SpeciesSearchRequest) -> bool {
-    request
-        .text
-        .trim()
-        .chars()
-        .filter(|ch| !ch.is_whitespace())
-        .take(2)
-        .count()
-        >= 2
+    matches!(
+        crate::db::species_search_normalization::species_search_admission(&request.text),
+        crate::db::species_search_normalization::SpeciesSearchAdmission::ActiveText
+    )
 }
 
 pub fn search_species(
