@@ -220,7 +220,7 @@ def build_search_index(dst: sqlite3.Connection):
             other_text,
             content='species_search_text',
             content_rowid='species_rowid',
-            tokenize='unicode61 remove_diacritics 2'
+            tokenize="unicode61 remove_diacritics 2 tokenchars '_'"
         )
     """)
     dst.execute("INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild')")
@@ -230,6 +230,36 @@ def build_search_index(dst: sqlite3.Connection):
     ).fetchone()[0]
     print(f"  -> Weighted FTS5 built (5 columns), 'pommier' matches: {test}")
     dst.commit()
+
+
+def write_species_search_identity(
+    dst: sqlite3.Connection,
+    contract: storage_contract.PrepareDbProjection,
+) -> None:
+    """Bind prepared search storage to the exact authored storage semantics."""
+    dst.execute(
+        """
+        CREATE TABLE species_search_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+    dst.executemany(
+        "INSERT INTO species_search_metadata (key, value) VALUES (?, ?)",
+        (
+            ("schema_version", str(contract.prepared_schema_version)),
+            ("storage_contract_fingerprint", contract.fingerprint),
+            (
+                "normalization_version",
+                str(contract.species_search_normalization_version),
+            ),
+            (
+                "normalization_fingerprint",
+                contract.species_search_normalization_fingerprint,
+            ),
+        ),
+    )
 
 
 def build_best_common_names(dst: sqlite3.Connection):
@@ -642,6 +672,7 @@ def build_prepared_database(
         build_search_name_entry_index(dst)
 
         print("[7/10] Populating translations...")
+        write_species_search_identity(dst, contract)
         translated_values = next(
             (
                 table

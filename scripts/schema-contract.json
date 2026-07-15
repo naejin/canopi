@@ -1,9 +1,9 @@
 {
   "contract_format_version": 1,
-  "schema_version": 12,
+  "schema_version": 13,
   "min_export_schema_version": 14,
   "species_search_normalization_version": 1,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v12: prepared search names and tokens use Species Search normalization v1. v11: canopi-data export v14 minimum, provenance/audit columns removed, unused supporting tables omitted from the prepared DB, and generated species_search_name_entries uses display_order for Common Name ranking.",
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v13: prepared search storage records its exact normalization identity and FTS preserves underscore tokens. v12: prepared search names and tokens use Species Search normalization v1. v11: canopi-data export v14 minimum, provenance/audit columns removed, unused supporting tables omitted from the prepared DB, and generated species_search_name_entries uses display_order for Common Name ranking.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},
@@ -254,6 +254,14 @@
   ],
   "prepared_tables": [
     {
+      "name": "species_search_metadata",
+      "required": true,
+      "columns": [
+        {"name": "key", "type": "TEXT", "required": true},
+        {"name": "value", "type": "TEXT", "required": true}
+      ]
+    },
+    {
       "name": "best_common_names",
       "required": true,
       "columns": [
@@ -281,7 +289,7 @@
       "virtual_options": {
         "content": "species_search_text",
         "content_rowid": "species_rowid",
-        "tokenize": "unicode61 remove_diacritics 2"
+        "tokenize": "unicode61 remove_diacritics 2 tokenchars '_'"
       },
       "columns": [
         {"name": "canonical_name", "type": "BLOB", "required": true},

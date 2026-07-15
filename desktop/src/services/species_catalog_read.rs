@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
+use crate::db::PlantDbConnectionGuard;
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
     SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesListItem, SpeciesSearchRequest,
 };
-use rusqlite::Connection;
 
 mod common_names;
 mod detail;
@@ -20,12 +20,12 @@ mod search;
 #[cfg(test)]
 pub(crate) mod test_support;
 
-pub(crate) struct SpeciesCatalogRead<'conn> {
-    conn: &'conn Connection,
+pub(crate) struct SpeciesCatalogRead<'guard, 'connection> {
+    conn: &'guard PlantDbConnectionGuard<'connection>,
 }
 
-impl<'conn> SpeciesCatalogRead<'conn> {
-    pub(crate) fn new(conn: &'conn Connection) -> Self {
+impl<'guard, 'connection> SpeciesCatalogRead<'guard, 'connection> {
+    pub(crate) fn new(conn: &'guard PlantDbConnectionGuard<'connection>) -> Self {
         Self { conn }
     }
 
@@ -130,7 +130,8 @@ mod tests {
 
     #[test]
     fn search_projection_uses_structured_request_and_locale_names() {
-        let conn = test_support::test_conn();
+        let plant_db = test_support::test_plant_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         let catalog = SpeciesCatalogRead::new(&conn);
         let result = catalog.search(search_request()).unwrap();
 
@@ -142,7 +143,8 @@ mod tests {
 
     #[test]
     fn list_item_projection_hydrates_locale_names_without_user_favorite_state() {
-        let conn = test_support::test_conn();
+        let plant_db = test_support::test_plant_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         let catalog = SpeciesCatalogRead::new(&conn);
         let rows = catalog
             .list_items_for_canonical_names(
@@ -165,7 +167,8 @@ mod tests {
 
     #[test]
     fn list_item_projection_uses_english_common_names_for_english_locale_only() {
-        let conn = test_support::test_conn();
+        let plant_db = test_support::test_plant_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         conn.execute(
             "INSERT INTO species (
                 id, slug, canonical_name, common_name, family, genus, growth_rate, width_max_m,
@@ -203,7 +206,8 @@ mod tests {
 
     #[test]
     fn filter_projection_reads_fixed_and_dynamic_options() {
-        let conn = test_support::test_conn();
+        let plant_db = test_support::test_plant_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         let catalog = SpeciesCatalogRead::new(&conn);
 
         let fixed = catalog.filter_options().unwrap();
@@ -220,7 +224,8 @@ mod tests {
 
     #[test]
     fn media_and_common_name_projections_read_species_side_data() {
-        let conn = test_support::test_conn();
+        let plant_db = test_support::test_plant_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         let catalog = SpeciesCatalogRead::new(&conn);
 
         let images = catalog.images_for_canonical_name("Apple").unwrap();
@@ -239,7 +244,8 @@ mod tests {
 
     #[test]
     fn detail_projection_hydrates_side_tables_and_translated_text() {
-        let conn = detail_projection_test_conn();
+        let plant_db = detail_projection_test_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         let catalog = SpeciesCatalogRead::new(&conn);
 
         let detail = catalog.detail_for_canonical_name("Apple", "fr").unwrap();
@@ -258,7 +264,8 @@ mod tests {
 
     #[test]
     fn detail_projection_uses_english_common_names_for_english_locale_only() {
-        let conn = detail_projection_test_conn();
+        let plant_db = detail_projection_test_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         let catalog = SpeciesCatalogRead::new(&conn);
 
         let french_detail = catalog.detail_for_canonical_name("Plum", "fr").unwrap();
@@ -270,7 +277,8 @@ mod tests {
 
     #[test]
     fn flower_color_projection_reads_direct_species_colors() {
-        let conn = test_support::test_conn();
+        let plant_db = test_support::test_plant_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
         let catalog = SpeciesCatalogRead::new(&conn);
         let rows = catalog
             .flower_colors_for_canonical_names(&["Apple".to_owned(), "Pear".to_owned()])
@@ -293,7 +301,19 @@ mod tests {
         assert!(!species_catalog_source.contains("crate::db::plant_db::"));
     }
 
-    fn detail_projection_test_conn() -> Connection {
+    #[test]
+    fn production_catalog_reader_requires_an_admitted_connection_guard() {
+        let catalog_source = include_str!("species_catalog_read.rs");
+        let search_source = include_str!("species_catalog_read/search.rs");
+        let raw_constructor = ["pub(crate) fn new(conn: &'conn ", "Connection"].concat();
+
+        assert!(catalog_source.contains("PlantDbConnectionGuard"));
+        assert!(!catalog_source.contains(&raw_constructor));
+        assert!(!search_source.contains("pub fn search("));
+        assert!(search_source.contains("fn search_connection("));
+    }
+
+    fn detail_projection_test_db() -> crate::db::PlantDb {
         let conn = Connection::open_in_memory().unwrap();
         let mut species_columns = detail_projection::detail_projection_columns()
             .iter()
@@ -384,7 +404,8 @@ mod tests {
             .unwrap();
         }
 
-        conn
+        crate::db::plant_catalog_connection::stamp_expected_prepared_identity(&conn);
+        crate::db::PlantDb::available(conn)
     }
 
     #[test]

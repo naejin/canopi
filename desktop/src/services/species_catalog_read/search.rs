@@ -1,6 +1,7 @@
 use common_types::species::{PaginatedResult, SpeciesListItem, SpeciesSearchRequest};
 use rusqlite::{Connection, params_from_iter};
 
+use crate::db::PlantDbConnectionGuard;
 use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
 use crate::db::species_search_normalization::{SpeciesSearchAdmission, species_search_admission};
 
@@ -10,7 +11,7 @@ use super::list_projection::map_species_list_row;
 ///
 /// Returns a paginated result. Pass the `next_cursor` from a previous result
 /// to fetch the next page.
-pub fn search(
+fn search_connection(
     conn: &Connection,
     request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
@@ -63,10 +64,19 @@ pub fn search(
 }
 
 pub(super) fn read_projection(
+    conn: &PlantDbConnectionGuard<'_>,
+    request: SpeciesSearchRequest,
+) -> Result<PaginatedResult<SpeciesListItem>, String> {
+    search_connection(conn, request)
+}
+
+#[cfg(test)]
+fn search(
     conn: &Connection,
     request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    search(conn, request)
+    crate::db::plant_catalog_connection::ensure_search_initialized(conn)?;
+    search_connection(conn, request)
 }
 
 fn supports_common_name_token_index(conn: &Connection) -> bool {
@@ -171,7 +181,7 @@ mod tests {
                 other_text,
                 content='species_search_text',
                 content_rowid='species_rowid',
-                tokenize='unicode61 remove_diacritics 2'
+                tokenize=\"unicode61 remove_diacritics 2 tokenchars '_'\"
             );
             CREATE TABLE species_search_common_name_tokens (
                 species_id INTEGER NOT NULL,
@@ -242,6 +252,7 @@ mod tests {
             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
         )
         .unwrap();
+        crate::db::plant_catalog_connection::initialize_search_connection(&conn).unwrap();
         conn
     }
 
@@ -327,7 +338,7 @@ mod tests {
                 other_text,
                 content='species_search_text',
                 content_rowid='species_rowid',
-                tokenize='unicode61 remove_diacritics 2'
+                tokenize=\"unicode61 remove_diacritics 2 tokenchars '_'\"
             );
             CREATE TABLE species_search_common_name_tokens (
                 species_id TEXT NOT NULL,
@@ -505,6 +516,7 @@ mod tests {
                 ('moluccella-laevis', 'fr', 'moluques', 2);",
         )
         .unwrap();
+        crate::db::plant_catalog_connection::initialize_search_connection(&conn).unwrap();
         conn
     }
 
@@ -594,6 +606,7 @@ mod tests {
                 path.display()
             )
         })?;
+        crate::db::plant_catalog_connection::initialize_search_connection(&conn)?;
 
         eprintln!("species_search_latency db={}", path.display());
         for case in species_search_latency_cases() {
@@ -682,6 +695,7 @@ mod tests {
                 path.display()
             )
         })?;
+        crate::db::plant_catalog_connection::initialize_search_connection(&conn)?;
 
         eprintln!("species_search_relevance db={}", path.display());
         for case in [
@@ -1514,6 +1528,7 @@ mod tests {
             );",
         )
         .unwrap();
+        crate::db::plant_catalog_connection::initialize_search_connection(&conn).unwrap();
 
         let error = search(
             &conn,

@@ -83,6 +83,7 @@ def create_minimal_export_database(path: Path) -> None:
 
 def create_prepared_database(path: Path) -> None:
     source = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    projection = contract.project(contract.ProjectionTarget.PREPARE_DB)
     connection = sqlite3.connect(path)
     try:
         connection.execute(
@@ -107,7 +108,7 @@ def create_prepared_database(path: Path) -> None:
             )
             if table.get("virtual_module") == "fts5":
                 options = ", ".join(
-                    f"{key}='{value}'"
+                    f'{key}="{value}"' if "'" in value else f"{key}='{value}'"
                     for key, value in table["virtual_options"].items()
                 )
                 connection.execute(
@@ -117,6 +118,21 @@ def create_prepared_database(path: Path) -> None:
                 )
             else:
                 connection.execute(f"CREATE TABLE {table['name']} ({columns})")
+        connection.executemany(
+            "INSERT INTO species_search_metadata (key, value) VALUES (?, ?)",
+            [
+                ("schema_version", str(projection.prepared_schema_version)),
+                ("storage_contract_fingerprint", projection.fingerprint),
+                (
+                    "normalization_version",
+                    str(projection.species_search_normalization_version),
+                ),
+                (
+                    "normalization_fingerprint",
+                    projection.species_search_normalization_fingerprint,
+                ),
+            ],
+        )
         for table, indexes in source["indexes"].items():
             for index in indexes:
                 connection.execute(
@@ -496,8 +512,18 @@ class ContractProjectionTests(unittest.TestCase):
             contract.SQLiteAffinity.TEXT,
         )
         self.assertEqual(projection.supporting_tables[0].name, "species_common_names")
-        self.assertEqual(projection.prepared_tables[0].name, "best_common_names")
-        self.assertEqual(projection.prepared_tables[2].virtual_module, "fts5")
+        self.assertIn(
+            "best_common_names",
+            {table.name for table in projection.prepared_tables},
+        )
+        self.assertEqual(
+            next(
+                table
+                for table in projection.prepared_tables
+                if table.name == "species_search_fts"
+            ).virtual_module,
+            "fts5",
+        )
         self.assertIsInstance(projection.translations[0], contract.TranslationEntry)
         self.assertFalse(any(isinstance(value, dict) for value in projection.__dict__.values()))
 
@@ -802,6 +828,7 @@ class DatabaseVerificationTests(unittest.TestCase):
             copy_contract_sources(root)
             database_path = root / "prepared.db"
             create_prepared_database(database_path)
+            projection = contract.project(contract.ProjectionTarget.PREPARE_DB)
             connection = sqlite3.connect(database_path)
             try:
                 connection.execute(
@@ -812,7 +839,12 @@ class DatabaseVerificationTests(unittest.TestCase):
                 connection.executemany(
                     "INSERT INTO species_search_metadata (key, value) VALUES (?, ?)",
                     [
-                        ("normalization_version", "1"),
+                        ("schema_version", str(projection.prepared_schema_version)),
+                        ("storage_contract_fingerprint", projection.fingerprint),
+                        (
+                            "normalization_version",
+                            str(projection.species_search_normalization_version),
+                        ),
                         ("normalization_fingerprint", "wrong"),
                     ],
                 )
@@ -828,6 +860,51 @@ class DatabaseVerificationTests(unittest.TestCase):
                 )
 
             self.assertIn("normalization_fingerprint", str(raised.exception))
+
+    def test_prepared_profile_rejects_duplicate_and_extra_identity_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_contract_sources(root)
+            database_path = root / "prepared.db"
+            create_prepared_database(database_path)
+            projection = contract.project(contract.ProjectionTarget.PREPARE_DB)
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("DROP TABLE species_search_metadata")
+                connection.execute(
+                    "CREATE TABLE species_search_metadata "
+                    "(key TEXT NOT NULL, value TEXT NOT NULL)"
+                )
+                identity = [
+                    ("schema_version", str(projection.prepared_schema_version)),
+                    ("storage_contract_fingerprint", projection.fingerprint),
+                    (
+                        "normalization_version",
+                        str(projection.species_search_normalization_version),
+                    ),
+                    (
+                        "normalization_fingerprint",
+                        projection.species_search_normalization_fingerprint,
+                    ),
+                ]
+                connection.executemany(
+                    "INSERT INTO species_search_metadata (key, value) VALUES (?, ?)",
+                    [*identity, identity[-1], ("unexpected", "value")],
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with self.assertRaises(contract.DatabaseContractError) as raised:
+                contract.verify_database(
+                    contract.DatabaseProfile.PREPARED,
+                    database_path,
+                    root=root,
+                )
+
+            message = str(raised.exception)
+            self.assertIn("expected exactly one identity value", message)
+            self.assertIn("unexpected identity key", message)
 
     def test_prepared_profile_rejects_missing_runtime_generated_tables(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -921,7 +998,7 @@ class DatabaseVerificationTests(unittest.TestCase):
             )
             self.assertIn(
                 "species_search_fts: expected virtual option "
-                "tokenize='unicode61 remove_diacritics 2'",
+                "tokenize=\"unicode61 remove_diacritics 2 tokenchars '_'\"",
                 message,
             )
 
@@ -939,7 +1016,7 @@ class DatabaseVerificationTests(unittest.TestCase):
                     "common_names, canonical_name, family_genus, uses_text, "
                     "other_text, content='species_search_text', "
                     "content_rowid='species_rowid', "
-                    "tokenize='unicode61 remove_diacritics 2')"
+                    "tokenize=\"unicode61 remove_diacritics 2 tokenchars '_'\")"
                 )
                 connection.commit()
             finally:

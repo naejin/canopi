@@ -675,7 +675,14 @@ def _read_virtual_options(
         if not isinstance(value, str) or not value.strip():
             violations.append(f"{path}.{key}: expected a non-empty string")
             continue
-        if re.fullmatch(r"[A-Za-z0-9_ ]+", value) is None:
+        if key in {"content", "content_rowid"}:
+            value_is_closed = _is_identifier(value)
+        else:
+            value_is_closed = (
+                re.fullmatch(r"[A-Za-z0-9_ ]+(?:'[A-Za-z0-9_]+')?", value)
+                is not None
+            )
+        if not value_is_closed:
             violations.append(f"{path}.{key}: expected a closed SQLite option value")
             continue
         options.append((key, value))
@@ -1446,6 +1453,7 @@ def verify_database(
                     table,
                     violations,
                 )
+            _verify_prepared_identity(connection, tables, source, violations)
             _verify_indexes(connection, source.indexes, violations)
     except sqlite3.Error as error:
         violations.append(f"database: failed while inspecting SQLite schema: {error}")
@@ -1461,6 +1469,48 @@ def verify_database(
         fingerprint=source.fingerprint,
         warnings=tuple(warnings),
     )
+
+
+def _verify_prepared_identity(
+    connection: sqlite3.Connection,
+    tables: set[str],
+    source: _StorageContract,
+    violations: list[str],
+) -> None:
+    table = "species_search_metadata"
+    if table not in tables:
+        return
+    expected = {
+        "schema_version": str(source.prepared_schema_version),
+        "storage_contract_fingerprint": source.fingerprint,
+        "normalization_version": str(source.species_search_normalization_version),
+        "normalization_fingerprint": (
+            source.species_search_normalization_fingerprint
+        ),
+    }
+    values_by_key: dict[str, list[str]] = {}
+    for raw_key, raw_value in connection.execute(
+        f"SELECT key, value FROM {table}"
+    ):
+        key = str(raw_key)
+        values_by_key.setdefault(key, []).append(str(raw_value))
+
+    for key, expected_value in expected.items():
+        values = values_by_key.get(key, [])
+        if not values:
+            violations.append(f"{table}.{key}: required identity value is missing")
+        elif len(values) != 1:
+            violations.append(
+                f"{table}.{key}: expected exactly one identity value, found {len(values)}"
+            )
+        elif values[0] != expected_value:
+            violations.append(
+                f"{table}.{key}: value {values[0]!r} does not equal required "
+                f"{expected_value!r}"
+            )
+
+    for key in sorted(values_by_key.keys() - expected.keys()):
+        violations.append(f"{table}.{key}: unexpected identity key")
 
 
 def _verify_export_metadata(
@@ -1718,7 +1768,6 @@ def _render_rust(contract: _StorageContract) -> str:
             "pub(crate) const SPECIES_SEARCH_NORMALIZATION_VERSION: u32 = "
             f"{contract.species_search_normalization_version};"
         ),
-        "#[cfg(test)]",
         (
             "pub(crate) const SPECIES_SEARCH_NORMALIZATION_FINGERPRINT: &str ="
         ),
@@ -1728,7 +1777,6 @@ def _render_rust(contract: _StorageContract) -> str:
             "pub(crate) const MINIMUM_EXPORT_SCHEMA_VERSION: i32 = "
             f"{contract.minimum_export_schema_version};"
         ),
-        "#[cfg(test)]",
         (
             "pub(crate) const SPECIES_STORAGE_CONTRACT_FINGERPRINT: &str ="
         ),

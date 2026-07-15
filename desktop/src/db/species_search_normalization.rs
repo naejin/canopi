@@ -428,7 +428,7 @@ pub(crate) fn species_search_admission(raw: &str) -> SpeciesSearchAdmission {
     }
 }
 
-pub(crate) fn register_sqlite_function(connection: &Connection) -> rusqlite::Result<()> {
+pub(super) fn register_sqlite_function(connection: &Connection) -> rusqlite::Result<()> {
     connection.create_scalar_function(
         SQLITE_FUNCTION_NAME,
         1,

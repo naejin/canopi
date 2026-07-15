@@ -153,25 +153,11 @@ pub fn run() {
                             if let Err(e) = plant_conn.pragma_update(None, "cache_size", -64000_i64) {
                                 tracing::warn!("Failed to set plant DB cache_size: {e}");
                             }
-                            // Check schema version — warn if outdated or newer than expected
-                            let user_version: i32 = plant_conn
-                                .pragma_query_value(None, "user_version", |row| row.get(0))
-                                .unwrap_or(0);
-                            if user_version < db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION {
-                                tracing::warn!(
-                                    "Plant DB schema version {user_version} is outdated (expected >= {}). \
-                                     Run scripts/prepare-db.py to rebuild."
-                                    , db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION
-                                );
-                            } else if user_version > db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION {
-                                tracing::warn!(
-                                    "Plant DB schema version {user_version} is newer than expected ({}). \
-                                     Unknown columns will be ignored. Consider updating the app."
-                                    , db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION
-                                );
+                            let plant_db = db::PlantDb::available(plant_conn);
+                            if plant_db.status() == common_types::health::PlantDbStatus::Available {
+                                tracing::info!("Plant DB admitted at {}", path.display());
                             }
-                            tracing::info!("Plant DB opened at {} (schema v{user_version})", path.display());
-                            db::PlantDb::available(plant_conn)
+                            plant_db
                         }
                         Err(e) => {
                             tracing::error!("Failed to open plant DB at {}: {e}. Species search unavailable.", path.display());

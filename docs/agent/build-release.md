@@ -55,7 +55,7 @@ cargo build --release
 - CI lint/test jobs set this flag.
 - CI release builds download `canopi-core.db` from the `canopi-core-db` GitHub release tag into `desktop/resources/` before `tauri build`.
 - The normal Linux/macOS/Windows build matrix verifies that downloaded database against the prepared profile before packaging, so contract drift cannot hide outside the release-candidate workflow.
-- Release-candidate preflight runs the Species Catalog contract check and full prepared-database verification: exact version, Species affinities, required copied and generated tables, the FTS5 virtual-table shape, and every contracted index. Packaging jobs check out the resolved preflight commit and require their downloaded DB checksum to match the preflight checksum, so mutable refs or release assets cannot change between verification and packaging. A matching `PRAGMA user_version` alone is insufficient.
+- Release-candidate preflight runs the Species Catalog contract check and full prepared-database verification: exact `PRAGMA user_version`, the four exact embedded identity values, Species affinities, required copied and generated tables, the FTS5 virtual-table shape, and every contracted index. Packaging jobs check out the resolved preflight commit and require their downloaded DB checksum to match the preflight checksum, so mutable refs or release assets cannot change between verification and packaging. A matching `PRAGMA user_version` alone is insufficient.
 - The bundled DB is large; package size is expected to be hundreds of MB.
 
 ## Release Workflow

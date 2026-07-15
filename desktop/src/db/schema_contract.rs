@@ -48,7 +48,7 @@ mod tests {
         assert!(PREPARED_VIRTUAL_TABLE_OPTIONS.contains(&(
             "species_search_fts",
             "tokenize",
-            "unicode61 remove_diacritics 2",
+            "unicode61 remove_diacritics 2 tokenchars '_'",
         )));
         assert!(
             PREPARED_STORAGE_COLUMNS

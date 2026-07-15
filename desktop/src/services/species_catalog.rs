@@ -89,6 +89,7 @@ mod tests {
             );",
         )
         .unwrap();
+        crate::db::plant_catalog_connection::stamp_expected_prepared_identity(&conn);
         let plant_db = PlantDb::available(conn);
 
         let batch = get_species_batch(
@@ -112,6 +113,7 @@ mod tests {
             INSERT INTO species (id, canonical_name) VALUES ('sp-1', 'Broken species');",
         )
         .unwrap();
+        crate::db::plant_catalog_connection::stamp_expected_prepared_identity(&conn);
         let plant_db = PlantDb::available(conn);
 
         let error = get_species_batch(

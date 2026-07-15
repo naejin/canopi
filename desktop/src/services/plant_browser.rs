@@ -423,7 +423,7 @@ mod tests {
                 other_text,
                 content='species_search_text',
                 content_rowid='species_rowid',
-                tokenize='unicode61 remove_diacritics 2'
+                tokenize=\"unicode61 remove_diacritics 2 tokenchars '_'\"
             );
             CREATE TABLE best_common_names (
                 species_id TEXT NOT NULL,
@@ -477,6 +477,7 @@ mod tests {
             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
         )
         .unwrap();
+        crate::db::plant_catalog_connection::stamp_expected_prepared_identity(&conn);
         PlantDb::available(conn)
     }
 

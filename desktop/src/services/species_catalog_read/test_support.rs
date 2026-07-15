@@ -1,6 +1,8 @@
 use rusqlite::Connection;
 
-pub(crate) fn test_conn() -> Connection {
+use crate::db::{PlantDb, plant_catalog_connection};
+
+pub(crate) fn test_plant_db() -> PlantDb {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(
         "CREATE TABLE species (
@@ -174,5 +176,6 @@ pub(crate) fn test_conn() -> Connection {
     )
     .unwrap();
 
-    conn
+    plant_catalog_connection::stamp_expected_prepared_identity(&conn);
+    PlantDb::available(conn)
 }
