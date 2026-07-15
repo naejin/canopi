@@ -59,6 +59,13 @@ pub async fn search_species(
     }
 }
 
+#[tauri::command]
+pub fn supersede_species_search(
+    search_cancellation: State<'_, crate::services::plant_browser::SpeciesSearchCancellation>,
+) {
+    search_cancellation.inner().supersede_request();
+}
+
 /// Fetch the full detail record for a species and record it in recently viewed.
 ///
 /// Lock ordering: PlantDb first, then UserDb — never simultaneously.

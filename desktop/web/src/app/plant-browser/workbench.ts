@@ -18,6 +18,7 @@ import {
   type PlantSearchAdapter,
   type PlantSearchIntent,
   type PlantSearchResultState,
+  type PlantSearchSupersedeAdapter,
   type PlantSearchStatus,
 } from './search-session'
 import { plantFilterCatalog, plantFilterModel, type StripControlField } from './plant-filter-model'
@@ -122,6 +123,7 @@ export interface SpeciesCatalogWorkbench {
 
 export interface SpeciesCatalogWorkbenchOptions {
   readonly search?: PlantSearchAdapter
+  readonly supersedeSearch?: PlantSearchSupersedeAdapter
   readonly loadDynamicFilterOptions?: DynamicFilterOptionsAdapter
   readonly getFilterOptions?: FilterOptionsAdapter
   readonly getSupportedFilterFields?: SupportedFilterFieldsAdapter
@@ -152,6 +154,7 @@ const emptySpeciesDetailAdapter: SpeciesDetailAdapter = async () => null
 
 export function createSpeciesCatalogWorkbench({
   search = missingSearchAdapter,
+  supersedeSearch,
   loadDynamicFilterOptions = emptyDynamicFilterOptionsAdapter,
   getFilterOptions: getFilterOptionsAdapter = emptyFilterOptionsAdapter,
   getSupportedFilterFields: getSupportedFilterFieldsAdapter,
@@ -194,6 +197,7 @@ export function createSpeciesCatalogWorkbench({
 
   const plantSearchSession = createPlantSearchSession({
     search,
+    supersedeSearch,
     loadDynamicFilterOptions,
     locale: localeSignal,
     pageSize,

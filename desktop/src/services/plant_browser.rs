@@ -59,7 +59,7 @@ impl SpeciesSearchCancellation {
     }
 
     fn begin(&self, interrupt: Arc<InterruptHandle>) -> SpeciesSearchCancellationToken {
-        let (generation, previous) = {
+        let generation = {
             let mut active = self.inner.active.lock().unwrap_or_else(|error| {
                 tracing::warn!(
                     "Recovered poisoned Species Search cancellation lock while starting search"
@@ -76,10 +76,9 @@ impl SpeciesSearchCancellation {
                 interrupt,
                 is_running: false,
             });
-            (generation, previous)
+            self.interrupt_running_search(previous);
+            generation
         };
-
-        self.interrupt_running_search(previous);
 
         SpeciesSearchCancellationToken {
             cancellation: self.clone(),
@@ -88,18 +87,19 @@ impl SpeciesSearchCancellation {
     }
 
     fn supersede(&self) {
-        let previous = {
-            let mut active = self.inner.active.lock().unwrap_or_else(|error| {
-                tracing::warn!(
-                    "Recovered poisoned Species Search cancellation lock while superseding search"
-                );
-                error.into_inner()
-            });
-            self.inner.next_generation.fetch_add(1, Ordering::Relaxed);
-            active.take()
-        };
-
+        let mut active = self.inner.active.lock().unwrap_or_else(|error| {
+            tracing::warn!(
+                "Recovered poisoned Species Search cancellation lock while superseding search"
+            );
+            error.into_inner()
+        });
+        self.inner.next_generation.fetch_add(1, Ordering::Relaxed);
+        let previous = active.take();
         self.interrupt_running_search(previous);
+    }
+
+    pub fn supersede_request(&self) {
+        self.supersede();
     }
 
     fn is_current(&self, generation: u64) -> bool {

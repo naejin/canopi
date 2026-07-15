@@ -3,6 +3,7 @@ import {
   getDynamicFilterOptions,
   getFilterOptions,
   searchSpecies,
+  supersedeSpeciesSearch,
 } from '../../ipc/species'
 import {
   createSpeciesCatalogWorkbench,
@@ -11,6 +12,7 @@ import {
 
 const liveSpeciesCatalogWorkbench = createSpeciesCatalogWorkbench({
   search: searchSpecies,
+  supersedeSearch: supersedeSpeciesSearch,
   loadDynamicFilterOptions: getDynamicFilterOptions,
   getFilterOptions,
   getFavorites,

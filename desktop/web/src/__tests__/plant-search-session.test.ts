@@ -330,6 +330,7 @@ describe('plant search session', () => {
 
     secondSupersession.resolve(undefined)
     await flushMicrotasks()
+    await flushMicrotasks()
     expect(search).toHaveBeenCalledTimes(3)
     expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'pear' }))
     expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Newest row'])

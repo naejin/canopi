@@ -33,6 +33,10 @@ export async function searchSpecies(
   });
 }
 
+export async function supersedeSpeciesSearch(): Promise<void> {
+  return invoke('supersede_species_search');
+}
+
 export async function getSpeciesDetail(
   canonicalName: string,
   locale = 'en',

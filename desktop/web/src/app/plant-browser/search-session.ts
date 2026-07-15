@@ -46,6 +46,8 @@ export type PlantSearchAdapter = (
   request: SpeciesSearchRequest,
 ) => Promise<PaginatedResult<SpeciesListItem>>
 
+export type PlantSearchSupersedeAdapter = () => Promise<void>
+
 export type DynamicFilterOptionsAdapter = (
   fields: string[],
   locale: string,
@@ -88,6 +90,7 @@ interface PlantSearchTimers {
 
 interface PlantSearchSessionOptions {
   readonly search: PlantSearchAdapter
+  readonly supersedeSearch?: PlantSearchSupersedeAdapter
   readonly loadDynamicFilterOptions?: DynamicFilterOptionsAdapter
   readonly locale: ReadonlySignal<string>
   readonly pageSize?: number
@@ -142,6 +145,7 @@ export function isActiveSpeciesSearchText(rawText: string): boolean {
 
 export function createPlantSearchSession({
   search,
+  supersedeSearch = async () => {},
   loadDynamicFilterOptions = async () => [],
   locale,
   pageSize = DEFAULT_PAGE_SIZE,
@@ -191,6 +195,47 @@ export function createPlantSearchSession({
   let disposeIntentEffect: (() => void) | null = null
   let lastText = text.peek()
   let disposed = false
+  let activeBackendSearches = 0
+  let supersessionPending = false
+  let supersessionTail = Promise.resolve()
+
+  function invokeSupersession(): Promise<void> {
+    try {
+      return Promise.resolve(supersedeSearch())
+    } catch (caught) {
+      return Promise.reject(caught)
+    }
+  }
+
+  function enqueueSupersession(): Promise<void> {
+    const operation = supersessionPending
+      ? supersessionTail.then(invokeSupersession)
+      : invokeSupersession()
+    supersessionPending = true
+    const completion = operation.catch((caught) => {
+      console.error('Failed to supersede active Species Search', caught)
+    })
+    supersessionTail = completion
+    void completion.finally(() => {
+      if (supersessionTail === completion) supersessionPending = false
+    })
+    return completion
+  }
+
+  function supersedeActiveBackendSearch(): Promise<void> {
+    return activeBackendSearches > 0 ? enqueueSupersession() : supersessionTail
+  }
+
+  async function runBackendSearch(
+    request: SpeciesSearchRequest,
+  ): Promise<PaginatedResult<SpeciesListItem>> {
+    activeBackendSearches += 1
+    try {
+      return await search(request)
+    } finally {
+      activeBackendSearches -= 1
+    }
+  }
 
   function clearDebounceTimer(): void {
     if (debounceTimer === null) return
@@ -202,7 +247,13 @@ export function createPlantSearchSession({
     return intent.value
   }
 
-  async function executeFirstPage(generation: number): Promise<void> {
+  async function executeFirstPage(
+    generation: number,
+    dispatchBarrier: Promise<void>,
+  ): Promise<void> {
+    await dispatchBarrier
+    if (generation !== searchGeneration || disposed) return
+
     const requestIntent = currentIntent()
     const textPolicy = searchTextPolicy(requestIntent.text)
 
@@ -223,7 +274,9 @@ export function createPlantSearchSession({
     const includeTotal = textPolicy === 'browse'
 
     try {
-      const result = await search(buildSearchRequest(requestIntent, null, pageSize, includeTotal))
+      const result = await runBackendSearch(
+        buildSearchRequest(requestIntent, null, pageSize, includeTotal),
+      )
 
       if (generation !== searchGeneration) return
 
@@ -248,6 +301,7 @@ export function createPlantSearchSession({
     if (disposed) return
     searchGeneration += 1
     const generation = searchGeneration
+    const dispatchBarrier = supersedeActiveBackendSearch()
 
     batch(() => {
       nextCursor.value = null
@@ -257,13 +311,13 @@ export function createPlantSearchSession({
 
     clearDebounceTimer()
     if (debounceMs <= 0) {
-      void executeFirstPage(generation)
+      void executeFirstPage(generation, dispatchBarrier)
       return
     }
 
     debounceTimer = timers.setTimeout(() => {
       debounceTimer = null
-      void executeFirstPage(generation)
+      void executeFirstPage(generation, dispatchBarrier)
     }, debounceMs)
   }
 
@@ -288,10 +342,15 @@ export function createPlantSearchSession({
   }
 
   function stop(): void {
+    const wasActive = disposeIntentEffect !== null ||
+      debounceTimer !== null ||
+      isPlantSearchLoading(status.value)
+    if (!wasActive) return
     disposeIntentEffect?.()
     disposeIntentEffect = null
     clearDebounceTimer()
     searchGeneration += 1
+    void supersedeActiveBackendSearch()
     if (isPlantSearchLoading(status.value)) {
       status.value = 'idle'
     }
@@ -304,11 +363,16 @@ export function createPlantSearchSession({
 
     const generation = searchGeneration
     const requestIntent = currentIntent()
+    const dispatchBarrier = supersessionTail
     status.value = 'loading-next-page'
     error.value = null
 
     try {
-      const result = await search(buildSearchRequest(requestIntent, cursor, pageSize, false))
+      await dispatchBarrier
+      if (generation !== searchGeneration || disposed) return
+      const result = await runBackendSearch(
+        buildSearchRequest(requestIntent, cursor, pageSize, false),
+      )
 
       if (generation !== searchGeneration) return
 

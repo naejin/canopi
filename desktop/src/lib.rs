@@ -60,6 +60,7 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::set_settings,
             commands::species::search_species,
+            commands::species::supersede_species_search,
             commands::species::get_species_detail,
             commands::species::get_common_names,
             commands::species::get_species_batch,
