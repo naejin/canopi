@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import {
   clearDesignLocation,
   setDesignLocation,
 } from '../app/location/controller'
 
 beforeEach(() => {
-  nonCanvasRevision.value = 0
-  currentDesign.value = {
+  designSessionFixture.nonCanvasRevision = 0
+  designSessionFixture.file = {
     version: 1,
     name: 'test',
     description: null,

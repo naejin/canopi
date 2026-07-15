@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { currentDesign } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+} from './support/design-session-state'
 import { setBudgetCurrency, setPlantBudgetPrice } from '../app/design-edit'
 import type { CanopiFile } from '../types/design'
 import { speciesBudgetTarget } from '../target'
@@ -30,11 +33,11 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
 
 describe('setBudgetCurrency', () => {
   beforeEach(() => {
-    currentDesign.value = null
+    designSessionFixture.file = null
   })
 
   it('sets budget_currency and updates all item currencies', () => {
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       budget_currency: 'EUR',
       budget: [
         { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
@@ -52,7 +55,7 @@ describe('setBudgetCurrency', () => {
   })
 
   it('sets budget_currency on a design with no budget items', () => {
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
 
     setBudgetCurrency('GBP')
 
@@ -61,7 +64,7 @@ describe('setBudgetCurrency', () => {
   })
 
   it('does not convert unit costs', () => {
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       budget: [
         { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
       ],
@@ -73,7 +76,7 @@ describe('setBudgetCurrency', () => {
   })
 
   it('is a no-op when no design is loaded', () => {
-    currentDesign.value = null
+    designSessionFixture.file = null
     expect(() => setBudgetCurrency('USD')).not.toThrow()
     expect(currentDesign.value).toBeNull()
   })
@@ -81,11 +84,11 @@ describe('setBudgetCurrency', () => {
 
 describe('setPlantBudgetPrice', () => {
   beforeEach(() => {
-    currentDesign.value = null
+    designSessionFixture.file = null
   })
 
   it('upserts a plant budget item using document currency', () => {
-    currentDesign.value = makeDesign({ budget_currency: 'USD' })
+    designSessionFixture.file = makeDesign({ budget_currency: 'USD' })
 
     setPlantBudgetPrice('Malus domestica', 7.5)
 
@@ -98,7 +101,7 @@ describe('setPlantBudgetPrice', () => {
   })
 
   it('defaults to EUR and sets budget_currency when absent', () => {
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
 
     setPlantBudgetPrice('Malus domestica', 5)
 
@@ -107,7 +110,7 @@ describe('setPlantBudgetPrice', () => {
   })
 
   it('updates an existing item', () => {
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       budget: [
         { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
       ],
@@ -121,7 +124,7 @@ describe('setPlantBudgetPrice', () => {
   })
 
   it('does not overwrite non-plant species-targeted budget items', () => {
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       budget: [
         { target: speciesBudgetTarget('Malus domestica'), category: 'materials', description: 'Apple stakes', quantity: 2, unit_cost: 12, currency: 'EUR' },
       ],
@@ -136,7 +139,7 @@ describe('setPlantBudgetPrice', () => {
   })
 
   it('preserves existing quantity when updating price', () => {
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       budget: [
         { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 3, unit_cost: 5, currency: 'EUR' },
       ],
@@ -149,19 +152,19 @@ describe('setPlantBudgetPrice', () => {
   })
 
   it('clamps negative prices to zero', () => {
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     setPlantBudgetPrice('Malus domestica', -5)
     expect(currentDesign.value!.budget![0]!.unit_cost).toBe(0)
   })
 
   it('clamps NaN prices to zero', () => {
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     setPlantBudgetPrice('Malus domestica', NaN)
     expect(currentDesign.value!.budget![0]!.unit_cost).toBe(0)
   })
 
   it('clamps Infinity prices to zero', () => {
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     setPlantBudgetPrice('Malus domestica', Infinity)
     expect(currentDesign.value!.budget![0]!.unit_cost).toBe(0)
   })

@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hillshadeVisible, layerVisibility } from '../app/canvas-settings/signals'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import { northBearingAvailable, northBearingDeg } from '../canvas/scene-metadata-state'
 import { locale } from '../app/settings/state'
 import {
@@ -90,7 +90,7 @@ describe('CanvasPanel basemap feedback', () => {
     hillshadeVisible.value = false
     northBearingDeg.value = 0
     northBearingAvailable.value = false
-    currentDesign.value = null
+    designSessionFixture.file = null
     mockBasemapState = {
       status: 'idle',
       errorMessage: null,
@@ -107,7 +107,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('does not show a Location Notice when no design location is saved', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -137,7 +137,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('places loading feedback as a bottom-left Location Notice above the scale bar', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -181,7 +181,7 @@ describe('CanvasPanel basemap feedback', () => {
   it('shifts Location Notices to the right of the scale bar when canvas height is tight', async () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -228,7 +228,7 @@ describe('CanvasPanel basemap feedback', () => {
   it('keeps compact Location Notices visible under severe layout pressure', async () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -275,7 +275,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('shows a loading basemap notice until the map becomes active', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -315,7 +315,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('hides the clean ready Location Notice once the basemap becomes active', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -353,7 +353,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('keeps the canvas map surface active for terrain-only visibility', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -393,7 +393,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('shows a basemap error when the surface reports a load failure', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -432,7 +432,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('surfaces terrain degradation while keeping the basemap ready', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -472,7 +472,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('surfaces a precision warning for large designs', async () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,

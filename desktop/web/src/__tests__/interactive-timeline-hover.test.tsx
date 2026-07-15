@@ -11,7 +11,10 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 import { InteractiveTimeline } from '../components/canvas/InteractiveTimeline'
 import { TimelineTab } from '../components/canvas/TimelineTab'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
-import { currentDesign } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+} from './support/design-session-state'
 import { speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
@@ -68,7 +71,7 @@ describe('InteractiveTimeline hover cleanup', () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    currentDesign.value = makeDesign({ timeline: [makeAction()] })
+    designSessionFixture.file = makeDesign({ timeline: [makeAction()] })
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
@@ -77,7 +80,7 @@ describe('InteractiveTimeline hover cleanup', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    currentDesign.value = null
+    designSessionFixture.file = null
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
@@ -157,7 +160,7 @@ describe('InteractiveTimeline hover cleanup', () => {
   })
 
   it('clears timeline-owned selected panel targets when TimelineTab unmounts', async () => {
-    currentDesign.value = makeDesign({ timeline: [] })
+    designSessionFixture.file = makeDesign({ timeline: [] })
     selectedPanelTargetOrigin.value = 'timeline'
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
 
@@ -174,7 +177,7 @@ describe('InteractiveTimeline hover cleanup', () => {
   })
 
   it('does not clear budget-owned selected panel targets when TimelineTab unmounts', async () => {
-    currentDesign.value = makeDesign({ timeline: [] })
+    designSessionFixture.file = makeDesign({ timeline: [] })
     selectedPanelTargetOrigin.value = 'budget'
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
 
@@ -336,7 +339,7 @@ describe('InteractiveTimeline hover cleanup', () => {
   })
 
   it('closes the timeline popover when the scroll container moves', async () => {
-    currentDesign.value = makeDesign({ timeline: [] })
+    designSessionFixture.file = makeDesign({ timeline: [] })
 
     await act(async () => {
       render(<InteractiveTimeline />, container)

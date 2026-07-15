@@ -14,7 +14,11 @@ import {
 import { stratumToRow } from '../app/consortium/time-model'
 import { designSessionStore } from '../app/document-session/store'
 import { consortiumTarget } from '../target'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import type { CanopiFile, Consortium, PlacedPlant } from '../types/design'
 
 const CANVAS_WIDTH = 800
@@ -173,11 +177,11 @@ describe('Consortium interaction', () => {
   })
 
   it('does not treat vertical movement within a Stratum as manual Consortium Lane reordering', () => {
-    currentDesign.value = makeDesign([
+    designSessionFixture.file = makeDesign([
       makeConsortium('Malus domestica', { stratum: 'high', start_phase: 0, end_phase: 2 }),
       makeConsortium('Acer campestre', { stratum: 'high', start_phase: 0, end_phase: 2 }),
     ])
-    const originalOrder = currentDesign.value.consortiums
+    const originalOrder = currentDesign.value!.consortiums
     const snapshot = buildSnapshot()
     const bar = snapshot.bars.find((candidate) => candidate.canonicalName === 'Malus domestica')!
     const highRowIndex = stratumToRow('high')
@@ -200,7 +204,7 @@ describe('Consortium interaction', () => {
   })
 
   it('recomputes derived Consortium Lanes after a move preview changes phase overlap', () => {
-    currentDesign.value = makeDesign([
+    designSessionFixture.file = makeDesign([
       makeConsortium('Malus domestica', { stratum: 'high', start_phase: 0, end_phase: 0 }),
       makeConsortium('Acer campestre', { stratum: 'high', start_phase: 1, end_phase: 1 }),
     ])
@@ -231,7 +235,7 @@ describe('Consortium interaction', () => {
   })
 
   it('recomputes derived Consortium Lanes after a resize preview changes phase overlap', () => {
-    currentDesign.value = makeDesign([
+    designSessionFixture.file = makeDesign([
       makeConsortium('Malus domestica', { stratum: 'high', start_phase: 0, end_phase: 0 }),
       makeConsortium('Acer campestre', { stratum: 'high', start_phase: 1, end_phase: 1 }),
     ])

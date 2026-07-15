@@ -19,7 +19,11 @@ import {
   openTimelineActionPopover,
   type TimelineActionPopoverState,
 } from '../app/timeline/workbench'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import {
   hoveredPanelTargets,
   selectedPanelTargetOrigin,
@@ -292,7 +296,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('hides a visible tooltip during middle-button pan drags', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
@@ -321,7 +325,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('hides a visible tooltip during empty-space drag pans', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
@@ -350,7 +354,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('writes and clears Timeline hover Target Presentation from the frame', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
@@ -368,7 +372,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('previews and commits move drags while restoring a frozen planning origin', () => {
     const action = makeAction()
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
@@ -406,7 +410,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('previews and commits right-edge resize drags through the frame', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
@@ -442,7 +446,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('auto-scrolls edit drags near the chart edge', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
@@ -478,7 +482,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('opens edit pending clicks without dirtying no-op drags', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
@@ -507,7 +511,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('saves edit popovers through the frame command surface', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
@@ -540,7 +544,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('deletes edit popovers and clears Timeline target presentation through the frame', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
     selectedPanelTargetOrigin.value = 'timeline'
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
@@ -573,7 +577,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('cancels popovers through the frame without mutating Timeline Actions', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
     harness.setPopover(openTimelineActionPopover({
       pendingClick: {
@@ -598,7 +602,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('deletes the selected Timeline Action from keyboard input through the frame', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
@@ -631,7 +635,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('cleans up stale hover and selection when Timeline Actions disappear', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
@@ -673,7 +677,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('aborts active edit drags without committing previewed dates', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
@@ -705,7 +709,7 @@ describe('Timeline Action interaction frame', () => {
 
   it('cleans up active edit drags and scheduled autoscroll on unmount', () => {
     const action = makeAction({ end_date: '2026-04-16' })
-    currentDesign.value = makeDesign(action)
+    designSessionFixture.file = makeDesign(action)
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {

@@ -289,7 +289,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/canvas/runtime-mirror-state.ts',
       'src/canvas/session.ts',
       'src/app/document-session/store.ts',
-      'src/state/design.ts',
     ],
   },
   {
@@ -578,15 +577,6 @@ const CONFINED_IMPORTER_POLICIES = [
       'src/app/design-edit/index.ts',
       'src/app/document-session/store.ts',
       ...TEST_SOURCE_PATTERNS,
-    ],
-  },
-  {
-    kind: 'confine-importers',
-    name: 'Design Session state is exposed only through stores and test adapters',
-    targets: ['src/state/design.ts'],
-    allowedFrom: [
-      'src/app/document-session/store.ts',
-      'src/__tests__/support/design-session-state.ts',
     ],
   },
 ] satisfies readonly ArchitecturePolicy[]
@@ -930,9 +920,9 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Design Session tests use the test state adapter',
+    name: 'Design Session test state uses the real store authority',
     from: ['src/__tests__/support/design-session-state.ts'],
-    targets: ['src/state/design.ts'],
+    targets: ['src/app/document-session/store.ts'],
   },
   {
     kind: 'require-imports',
@@ -1124,6 +1114,7 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/app/plant-browser/state.ts',
       'src/app/plant-browser/controller.ts',
       'src/web/browser-theme.ts',
+      'src/state/design.ts',
     ],
   },
 ] satisfies readonly ArchitecturePolicy[]
@@ -1384,6 +1375,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
       'reconcileCurrentDesign',
       'markDocumentDirty',
       'updateDesignArray',
+      'syncExternallyInstalledDesign',
     ],
   },
   {
@@ -1467,6 +1459,20 @@ const SYMBOL_OWNERSHIP_POLICIES = [
       ...TEST_SOURCE_PATTERNS,
     ],
     properties: ['mutateCurrentDesign', 'reconcileCurrentDesign', 'updateDesignArray'],
+  },
+  {
+    kind: 'forbid-calls',
+    name: 'Production code cannot acquire the Design Session test fixture',
+    from: [
+      'src/app/**',
+      'src/canvas/**',
+      'src/components/**',
+      'src/ipc/**',
+      'src/state/**',
+      'src/web/**',
+    ],
+    exceptFrom: ['src/app/document-session/store.ts', ...TEST_SOURCE_PATTERNS],
+    targets: ['createDesignSessionStoreTestFixture'],
   },
   {
     kind: 'forbid-calls',

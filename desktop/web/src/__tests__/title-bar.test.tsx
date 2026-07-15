@@ -21,6 +21,7 @@ vi.mock('../components/shared/MenuBar', () => ({
 import { locale, theme } from '../app/settings/state'
 import { activePanel } from '../app/shell/state'
 import {
+  designSessionFixture,
   currentDesign,
   designDirty,
   designName,
@@ -81,8 +82,8 @@ describe('TitleBar', () => {
   })
 
   it('shows the app title on the Welcome Screen without exposing design rename', async () => {
-    currentDesign.value = null
-    designName.value = 'Untitled'
+    designSessionFixture.file = null
+    designSessionFixture.name = 'Untitled'
 
     await act(async () => {
       render(<TitleBar />, container)

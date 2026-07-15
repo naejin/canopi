@@ -17,7 +17,7 @@ vi.mock('../app/budget/export', async (importOriginal) => {
 import { BudgetTab } from '../components/canvas/BudgetTab'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
@@ -72,7 +72,7 @@ describe('BudgetTab export', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       budget_currency: 'EUR',
       budget: [
         {
@@ -98,7 +98,7 @@ describe('BudgetTab export', () => {
     consoleError.mockRestore()
     render(null, container)
     container.remove()
-    currentDesign.value = null
+    designSessionFixture.file = null
     setCurrentCanvasSession(null)
   })
 

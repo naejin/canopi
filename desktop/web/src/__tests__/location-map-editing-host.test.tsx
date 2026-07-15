@@ -10,7 +10,11 @@ import {
   type LocationMapEditingHost,
 } from '../app/location/map-editing'
 import { basemapStyle, locale } from '../app/settings/state'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 
 const maplibreMock = vi.hoisted(() => ({
@@ -144,8 +148,8 @@ describe('Location map editing host', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     basemapStyle.value = 'street'
-    currentDesign.value = makeDesign()
-    nonCanvasRevision.value = 0
+    designSessionFixture.file = makeDesign()
+    designSessionFixture.nonCanvasRevision = 0
     workbench = null
     host = null
     map = null
@@ -160,8 +164,8 @@ describe('Location map editing host', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    currentDesign.value = null
-    nonCanvasRevision.value = 0
+    designSessionFixture.file = null
+    designSessionFixture.nonCanvasRevision = 0
   })
 
   function renderProbe() {
@@ -262,7 +266,7 @@ describe('Location map editing host', () => {
     renderProbe()
 
     act(() => {
-      currentDesign.value = makeDesign({
+      designSessionFixture.file = makeDesign({
         location: { lat: 52.52, lon: 13.405, altitude_m: 45 },
       })
     })

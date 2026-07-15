@@ -9,7 +9,7 @@ import {
 } from '../app/canvas-settings/signals'
 import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import * as documentActions from '../app/document-session/actions'
 import { problemReportDialogOpen } from '../app/problem-report/state'
 import {
@@ -51,9 +51,9 @@ describe('command registry canvas tool switching', () => {
     activePanel.value = 'canvas'
     sidePanel.value = null
     setCurrentCanvasSession(null)
-    currentDesign.value = null
-    nonCanvasRevision.value = 0
-    nonCanvasSavedRevision.value = 0
+    designSessionFixture.file = null
+    designSessionFixture.nonCanvasRevision = 0
+    designSessionFixture.nonCanvasSavedRevision = 0
     gridVisible.value = true
     snapToGridEnabled.value = false
     rulersVisible.value = true
@@ -66,7 +66,7 @@ describe('command registry canvas tool switching', () => {
     vi.restoreAllMocks()
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
-    currentDesign.value = null
+    designSessionFixture.file = null
     theme.value = 'light'
     gridVisible.value = true
     snapToGridEnabled.value = false
@@ -201,7 +201,7 @@ describe('command registry canvas tool switching', () => {
   })
 
   it('routes file commands through document-session actions', () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'test',
       description: null,
@@ -221,8 +221,8 @@ describe('command registry canvas tool switching', () => {
       updated_at: '',
       extra: {},
     }
-    nonCanvasRevision.value = 1
-    nonCanvasSavedRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 1
+    designSessionFixture.nonCanvasSavedRevision = 0
     const newSpy = vi.spyOn(documentActions, 'newDesignAction').mockResolvedValue(undefined)
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
     const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(null)
@@ -253,7 +253,7 @@ describe('command registry canvas tool switching', () => {
     if (!saveCommand) throw new Error('Missing file.save command')
     expect(saveCommand.disabled()).toBe(true)
 
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'test',
       description: null,
@@ -273,8 +273,8 @@ describe('command registry canvas tool switching', () => {
       updated_at: '',
       extra: {},
     }
-    nonCanvasRevision.value = 1
-    nonCanvasSavedRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 1
+    designSessionFixture.nonCanvasSavedRevision = 0
 
     expect(saveCommand.disabled()).toBe(false)
 
@@ -311,7 +311,7 @@ describe('command registry canvas tool switching', () => {
     expect(undo()).toMatchObject({ disabled: true })
     expect(zoomIn().disabled()).toBe(true)
 
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'test',
       description: null,
@@ -331,8 +331,8 @@ describe('command registry canvas tool switching', () => {
       updated_at: '',
       extra: {},
     }
-    nonCanvasRevision.value = 1
-    nonCanvasSavedRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 1
+    designSessionFixture.nonCanvasSavedRevision = 0
     mountCanvasCommandSurface({ history: { canUndo: signal(true) } })
 
     expect(fileSave()).toMatchObject({ disabled: false })
@@ -387,7 +387,7 @@ describe('command registry canvas tool switching', () => {
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
 
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'test',
       description: null,

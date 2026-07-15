@@ -1,5 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { consortiumSyncWorkflow } from '../app/consortium/workflow'
 import { createDesignSessionWorkflowRunner } from '../app/document-session/workflow-runner'
@@ -60,8 +64,8 @@ describe('consortium-sync-workflow', () => {
   let workflowRunner: ReturnType<typeof createDesignSessionWorkflowRunner>
 
   beforeEach(() => {
-    nonCanvasRevision.value = 0
-    currentDesign.value = null
+    designSessionFixture.nonCanvasRevision = 0
+    designSessionFixture.file = null
     setCurrentCanvasSession(null)
     workflowRunner = createDesignSessionWorkflowRunner([consortiumSyncWorkflow])
   })
@@ -74,7 +78,7 @@ describe('consortium-sync-workflow', () => {
   it('adds consortium entries for new plant species', () => {
     const plants = [makePlant('Quercus robur'), makePlant('Acer campestre')]
     const session = mockSession(plants)
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     mountQuerySurface(session)
 
     workflowRunner.install()
@@ -87,7 +91,7 @@ describe('consortium-sync-workflow', () => {
   })
 
   it('preserves inactive consortium entries when species are deleted', () => {
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       consortiums: [
         { target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 },
         { target: consortiumTarget('Acer campestre'), stratum: 'medium', start_phase: 0, end_phase: 2 },
@@ -107,7 +111,7 @@ describe('consortium-sync-workflow', () => {
 
   it('does not record derived reconciliation as user intent', () => {
     const session = mockSession([makePlant('Quercus robur')])
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     mountQuerySurface(session)
 
     workflowRunner.install()
@@ -120,7 +124,7 @@ describe('consortium-sync-workflow', () => {
     const session = mockSession([makePlant('Quercus robur')])
     session.setSettled(false)
     const sceneRevision = session.revision.scene.value
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     mountQuerySurface(session)
 
     workflowRunner.install()
@@ -135,7 +139,7 @@ describe('consortium-sync-workflow', () => {
 
   it('is a no-op when plant set has not changed', () => {
     const plants = [makePlant('Quercus robur')]
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       consortiums: [{ target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 }],
     })
     const session = mockSession(plants)

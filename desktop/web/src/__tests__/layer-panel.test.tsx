@@ -15,7 +15,10 @@ import {
 } from '../app/canvas-settings/signals'
 import { basemapStyle } from '../app/settings/state'
 import type { Settings } from '../types/settings'
-import { currentDesign } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+} from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import {
@@ -68,7 +71,7 @@ describe('LayerPanel', () => {
     locale.value = 'en'
     saveSettings.mockReset().mockResolvedValue(undefined)
     resetSettingsProjectionForTests()
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,
@@ -149,7 +152,7 @@ describe('LayerPanel', () => {
   })
 
   it('shows Design Location buttons in map layer details when no Location is saved', async () => {
-    currentDesign.value = { ...currentDesign.value!, location: null }
+    designSessionFixture.file = { ...currentDesign.value!, location: null }
 
     await act(async () => {
       render(<LayerPanel />, container)

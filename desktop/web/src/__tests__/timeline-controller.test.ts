@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addTimelineAction, deleteTimelineAction, updateTimelineAction } from '../app/design-edit'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 
 beforeEach(() => {
-  nonCanvasRevision.value = 0
-  currentDesign.value = {
+  designSessionFixture.nonCanvasRevision = 0
+  designSessionFixture.file = {
     version: 2,
     name: 'test',
     description: null,
@@ -67,7 +71,7 @@ describe('Design Edit Timeline Actions', () => {
       targets: [],
       depends_on: null,
     })
-    nonCanvasRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 0
 
     updateTimelineAction('a', { description: 'first' })
 
@@ -86,7 +90,7 @@ describe('Design Edit Timeline Actions', () => {
       targets: [],
       depends_on: null,
     })
-    nonCanvasRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 0
 
     deleteTimelineAction('a')
 

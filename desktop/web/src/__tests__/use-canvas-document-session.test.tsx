@@ -97,11 +97,9 @@ import { createTestCanvasRuntimeSurfaces } from "./support/canvas-runtime-surfac
 import { createCanvasDocumentReplacementToken } from "../canvas/runtime/runtime";
 import { autoSaveIntervalMs } from "../app/settings/state";
 import {
+  designSessionFixture,
   autosaveFailed,
   currentDesign,
-  designName,
-  designPath,
-  detachedCanvasDirty,
   resetDirtyBaselines,
 } from "./support/design-session-state";
 
@@ -203,12 +201,12 @@ describe("useCanvasDocumentSession", () => {
     document.body.innerHTML = "";
     document.body.appendChild(container);
     setCurrentCanvasSession(null);
-    currentDesign.value = null;
-    designName.value = "Demo";
-    designPath.value = "/designs/demo.canopi";
+    designSessionFixture.file = null;
+    designSessionFixture.name = "Demo";
+    designSessionFixture.path = "/designs/demo.canopi";
     autoSaveIntervalMs.value = 100;
     resetDirtyBaselines();
-    autosaveFailed.value = false;
+    designSessionFixture.autosaveFailed = false;
   });
 
   afterEach(() => {
@@ -276,7 +274,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("loads the current design on mount and snapshots before teardown", async () => {
-    currentDesign.value = makeDesign();
+    designSessionFixture.file = makeDesign();
 
     await mountHarness(container);
 
@@ -310,7 +308,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("retains a failed handoff owner and retries it before the next mount", async () => {
-    currentDesign.value = makeDesign();
+    designSessionFixture.file = makeDesign();
     mocks.teardownAttachedDesignSession.mockImplementationOnce(() => {
       throw new Error("handoff capture failed");
     });
@@ -346,7 +344,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("does not clear a successor publication while retrying a stale teardown", async () => {
-    currentDesign.value = makeDesign();
+    designSessionFixture.file = makeDesign();
     const successorSurfaces = createTestCanvasRuntimeSurfaces();
     mocks.teardownAttachedDesignSession.mockImplementationOnce(() => {
       setCurrentCanvasSession(successorSurfaces);
@@ -366,7 +364,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("releases the lifecycle after reporting exhaustive post-handoff cleanup failures", async () => {
-    currentDesign.value = makeDesign();
+    designSessionFixture.file = makeDesign();
     const disconnectError = new Error("observer disconnect failed");
     const settingsError = new Error("settings flush failed");
     mocks.resizeDisconnect.mockImplementationOnce(() => {
@@ -410,7 +408,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("releases a failed runtime immediately and allows a later mount to retry", async () => {
-    currentDesign.value = makeDesign();
+    designSessionFixture.file = makeDesign();
     mocks.runtimeInitImpl.mockRejectedValueOnce(new Error("init failed"));
 
     await act(async () => {
@@ -445,7 +443,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("does not snapshot before the runtime has loaded a document", async () => {
-    currentDesign.value = makeDesign();
+    designSessionFixture.file = makeDesign();
     let resolveInit: (() => void) | null = null;
     mocks.runtimeInitImpl.mockImplementation(
       () => new Promise<undefined>((resolve) => {
@@ -479,7 +477,7 @@ describe("useCanvasDocumentSession", () => {
     const queuedDesign = makeDesign("Queued");
     mocks.consumeQueuedDocumentLoad.mockImplementation((session: any) => {
       session.replaceDocument(queuedDesign, createCanvasDocumentReplacementToken(), () => {});
-      currentDesign.value = queuedDesign;
+      designSessionFixture.file = queuedDesign;
       return mocks.cancelQueuedLoad;
     });
 
@@ -498,8 +496,8 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("recreates autosave on interval changes", async () => {
-    currentDesign.value = makeDesign();
-    detachedCanvasDirty.value = true;
+    designSessionFixture.file = makeDesign();
+    designSessionFixture.detachedCanvasDirty = true;
 
     await mountHarness(container);
 

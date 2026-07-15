@@ -27,7 +27,7 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 
 import { ConsortiumChart } from '../components/canvas/ConsortiumChart'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import { hoveredCanvasTargets, hoveredPanelTargets } from '../app/panel-targets/state'
 import { consortiumTarget, speciesTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
@@ -96,7 +96,7 @@ describe('ConsortiumChart canvas hover bridge', () => {
     renderConsortiumMock.mockClear()
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: createTestCanvasQuerySurface({
         plants: [
@@ -110,7 +110,7 @@ describe('ConsortiumChart canvas hover bridge', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    currentDesign.value = null
+    designSessionFixture.file = null
     setCurrentCanvasSession(null)
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
@@ -189,7 +189,7 @@ describe('ConsortiumChart canvas hover bridge', () => {
     expect(hoveredPanelTargets.value).toEqual([consortiumTarget('Malus domestica')])
 
     await act(async () => {
-      currentDesign.value = makeDesign({
+      designSessionFixture.file = makeDesign({
         consortiums: [
           { target: consortiumTarget('Acer campestre'), stratum: 'medium', start_phase: 0, end_phase: 2 },
         ],

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry, reorderConsortiumEntry } from '../app/design-edit'
 import { consortiumTarget, getConsortiumCanonicalName } from '../target'
 import type { Consortium } from '../types/design'
@@ -15,8 +19,8 @@ function consortium(canonicalName: string, overrides: Partial<Omit<Consortium, '
 }
 
 beforeEach(() => {
-  nonCanvasRevision.value = 0
-  currentDesign.value = {
+  designSessionFixture.nonCanvasRevision = 0
+  designSessionFixture.file = {
     version: 2,
     name: 'test',
     description: null,
@@ -95,7 +99,7 @@ describe('consortium actions', () => {
   it('upsertConsortiumEntry is a no-op when values unchanged', () => {
     const entry = consortium('Quercus robur')
     upsertConsortiumEntry(entry)
-    nonCanvasRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 0
 
     upsertConsortiumEntry(entry)
     expect(nonCanvasRevision.value).toBe(0)
@@ -103,7 +107,7 @@ describe('consortium actions', () => {
 
   it('moveConsortiumEntry is a no-op when canonical_name not found', () => {
     upsertConsortiumEntry(consortium('Quercus robur'))
-    nonCanvasRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 0
     moveConsortiumEntry('Nonexistent', { stratum: 'medium', startPhase: 1, endPhase: 4 })
 
     expect(nonCanvasRevision.value).toBe(0)
@@ -111,7 +115,7 @@ describe('consortium actions', () => {
 
   it('moveConsortiumEntry is a no-op when values unchanged', () => {
     upsertConsortiumEntry(consortium('Quercus robur'))
-    nonCanvasRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 0
     moveConsortiumEntry('Quercus robur', { stratum: 'high', startPhase: 0, endPhase: 3 })
 
     expect(nonCanvasRevision.value).toBe(0)
@@ -119,7 +123,7 @@ describe('consortium actions', () => {
 
   it('deleteConsortiumEntry is a no-op when canonical_name not found', () => {
     upsertConsortiumEntry(consortium('Quercus robur'))
-    nonCanvasRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 0
     deleteConsortiumEntry('Nonexistent')
 
     expect(nonCanvasRevision.value).toBe(0)
@@ -132,7 +136,7 @@ describe('reorderConsortiumEntry', () => {
     upsertConsortiumEntry(consortium('Acer campestre', { start_phase: 0, end_phase: 2 }))
     upsertConsortiumEntry(consortium('Betula pendula'))
     upsertConsortiumEntry(consortium('Corylus avellana', { stratum: 'medium', start_phase: 1, end_phase: 4 }))
-    nonCanvasRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 0
   })
 
   it('moves an entry from index 0 to index 2', () => {

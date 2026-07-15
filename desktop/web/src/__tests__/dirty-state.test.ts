@@ -14,6 +14,7 @@ import { SceneHistory } from '../canvas/runtime/scene-history'
 import type { SceneCommand } from '../canvas/runtime/scene-commands'
 import { canvasClean, canvasDirty, markCanvasDetachedDirty } from './support/design-session-state'
 import {
+  designSessionFixture,
   nonCanvasRevision,
   designDirty,
   resetDirtyBaselines,
@@ -183,19 +184,19 @@ describe('canvas edits', () => {
 
 describe('non-canvas edits (timeline/budget/consortium)', () => {
   it('non-canvas edit makes dirty', () => {
-    nonCanvasRevision.value++
+    designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
     expect(designDirty.value).toBe(true)
   })
 
   it('save clears non-canvas dirty', () => {
-    nonCanvasRevision.value++
+    designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
     markSaved()
     expect(designDirty.value).toBe(false)
   })
 
   it('canvas undo to clean does not clear non-canvas dirty', () => {
     // Non-canvas edit
-    nonCanvasRevision.value++
+    designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
 
     // Canvas edit + undo (returns to saved canvas state)
     history.record(noop())
@@ -209,7 +210,7 @@ describe('non-canvas edits (timeline/budget/consortium)', () => {
 describe('mixed edit sources', () => {
   it('save clears both canvas and non-canvas dirty', () => {
     history.record(noop())
-    nonCanvasRevision.value++
+    designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
     expect(designDirty.value).toBe(true)
     acknowledgeCurrentScene()
     markSaved()
@@ -218,7 +219,7 @@ describe('mixed edit sources', () => {
 
   it('resetDirtyBaselines clears everything', () => {
     history.record(noop())
-    nonCanvasRevision.value++
+    designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
     expect(designDirty.value).toBe(true)
     resetDirtyBaselines()
     history.clear()

@@ -1,7 +1,7 @@
 import { effect, signal } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { canvasClean } from '../../../__tests__/support/design-session-state'
+import { designSessionFixture } from '../../../__tests__/support/design-session-state'
 import type { CanopiFile } from '../../../types/design'
 import { selectedObjectIds } from '../../session-state'
 import {
@@ -105,7 +105,7 @@ function createHarness() {
 
 describe('scene edit transactions', () => {
   beforeEach(() => {
-    canvasClean.value = true
+    designSessionFixture.canvasClean = true
     selectedObjectIds.value = new Set()
   })
 

@@ -5,7 +5,7 @@ import { PanelBar } from '../components/panels/PanelBar'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 import { runAppCommand } from '../commands/registry'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 
 describe('PanelBar', () => {
   let container: HTMLDivElement
@@ -17,7 +17,7 @@ describe('PanelBar', () => {
     locale.value = 'en'
     activePanel.value = 'canvas'
     sidePanel.value = null
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 1,
       name: 'test',
       description: null,
@@ -96,7 +96,7 @@ describe('PanelBar', () => {
   })
 
   it('disables design-dependent panel entry points when no design is open', async () => {
-    currentDesign.value = null
+    designSessionFixture.file = null
 
     await act(async () => {
       render(<PanelBar />, container)
@@ -111,7 +111,7 @@ describe('PanelBar', () => {
   })
 
   it('keeps an active no-design Plant Database panel button enabled so it can close the panel', async () => {
-    currentDesign.value = null
+    designSessionFixture.file = null
     runAppCommand('nav.plantDb')
 
     await act(async () => {

@@ -1,6 +1,5 @@
 import { batch, computed, signal, type ReadonlySignal, type Signal } from '@preact/signals'
 import type { CanopiFile } from '../../types/design'
-import * as designState from '../../state/design'
 import {
   DesignEditBusyError,
   DesignEditUnavailableError,
@@ -84,9 +83,69 @@ interface DesignSessionStoreSignals {
   readonly designDirty: ReadonlySignal<boolean>
 }
 
+export interface DesignSessionStoreTestState extends Partial<DesignSessionIdentity> {
+  readonly nonCanvasRevision?: number
+  readonly nonCanvasSavedRevision?: number
+  readonly persistenceDiverged?: boolean
+  readonly autosaveFailed?: boolean
+  readonly canvasClean?: boolean
+  readonly detachedCanvasDirty?: boolean
+  readonly pendingDesignPath?: string | null
+  readonly pendingTemplateImport?: PendingTemplateImport | null
+}
+
+export interface DesignSessionStoreTestFixture {
+  readonly nonCanvasRevision: ReadonlySignal<number>
+  readonly nonCanvasSavedRevision: ReadonlySignal<number>
+  readonly persistenceDiverged: ReadonlySignal<boolean>
+  readonly canvasClean: ReadonlySignal<boolean>
+  readonly detachedCanvasDirty: ReadonlySignal<boolean>
+  readonly pendingDesignPath: ReadonlySignal<string | null>
+  readonly pendingTemplateImport: ReadonlySignal<PendingTemplateImport | null>
+  reset(initial?: DesignSessionStoreTestState): void
+  setState(state: DesignSessionStoreTestState): void
+  markSaved(): void
+}
+
+const testFixtures = new WeakMap<object, DesignSessionStoreTestFixture>()
+
 function createDesignSessionStore(
-  signals: DesignSessionStoreSignals,
+  initial: Partial<DesignSessionIdentity> = {},
 ): PersistenceCapableDesignSessionStore {
+  const currentDesign = signal<CanopiFile | null>(initial.file ?? null)
+  const designPath = signal<string | null>(initial.path ?? null)
+  const designName = signal<string>(initial.name ?? initial.file?.name ?? 'Untitled')
+  const nonCanvasRevision = signal(0)
+  const nonCanvasSavedRevision = signal(0)
+  const persistenceDiverged = signal(false)
+  const autosaveFailed = signal(false)
+  const canvasClean = signal(true)
+  const detachedCanvasDirty = signal(false)
+  const pendingDesignPath = signal<string | null>(null)
+  const pendingTemplateImport = signal<PendingTemplateImport | null>(null)
+  const canvasDirty = computed(() => detachedCanvasDirty.value || !canvasClean.value)
+  const designDirty = computed(() =>
+    canvasDirty.value
+    || nonCanvasRevision.value !== nonCanvasSavedRevision.value
+    || persistenceDiverged.value
+  )
+  const signals: DesignSessionStoreSignals = {
+    currentDesign,
+    designPath,
+    designName,
+    nonCanvasRevision,
+    nonCanvasSavedRevision,
+    persistenceDiverged,
+    autosaveFailed,
+    canvasClean,
+    detachedCanvasDirty,
+    pendingDesignPath,
+    pendingTemplateImport,
+    canvasDirty,
+    designDirty,
+  }
+
+  let lifetime = Object.freeze({})
   let sessionGeneration = 0
   let detachedCanvasRevision = 0
   let committedContentRevision = 0
@@ -101,15 +160,6 @@ function createDesignSessionStore(
     mutated: boolean
   } | null = null
 
-  function syncExternallyInstalledDesign(): CanopiFile | null {
-    if (!activePreview && committedDesign !== signals.currentDesign.value) {
-      committedDesign = signals.currentDesign.value
-      committedContentRevision += 1
-      committedDesignRevision.value += 1
-    }
-    return committedDesign
-  }
-
   function invalidateActivePreview(): void {
     if (activePreview) previewGeneration += 1
     activePreview = null
@@ -123,7 +173,7 @@ function createDesignSessionStore(
     updater: (design: CanopiFile) => CanopiFile,
     markDirty: boolean,
   ): CanopiFile | null {
-    const current = syncExternallyInstalledDesign()
+    const current = committedDesign
     if (!current) return null
 
     const next = updater(current)
@@ -144,7 +194,7 @@ function createDesignSessionStore(
   }
 
   function beginPreview(intent: string): DesignPreviewTransaction {
-    const current = syncExternallyInstalledDesign()
+    const current = committedDesign
     if (!current) throw new DesignEditUnavailableError()
     if (activePreview) throw new DesignEditBusyError(activePreview.intent)
 
@@ -292,7 +342,7 @@ function createDesignSessionStore(
     },
 
     renameCurrentDesign(name) {
-      const design = syncExternallyInstalledDesign()
+      const design = committedDesign
       if (!design || name === signals.designName.value) return false
       const next = { ...design, name }
       const visible = visibleProjectionFor(next)
@@ -362,7 +412,8 @@ function createDesignSessionStore(
   )
 
   registerDesignSessionPersistenceCapability(store, () => {
-    const file = syncExternallyInstalledDesign()
+    const capturedLifetime = lifetime
+    const file = committedDesign
     const generation = sessionGeneration
     const canvasRevision = detachedCanvasRevision
     const contentRevision = committedContentRevision
@@ -377,9 +428,11 @@ function createDesignSessionStore(
       file: file ? cloneDocument(file) : null,
       path: signals.designPath.value,
       name: signals.designName.value,
-      isCurrent: () => generation === sessionGeneration
+      isCurrent: () => capturedLifetime === lifetime
+        && generation === sessionGeneration
         && canvasRevision === detachedCanvasRevision,
-      isExactCurrent: () => generation === sessionGeneration
+      isExactCurrent: () => capturedLifetime === lifetime
+        && generation === sessionGeneration
         && canvasRevision === detachedCanvasRevision
         && contentRevision === committedContentRevision
         && capturedPreviewGeneration === previewGeneration
@@ -387,7 +440,8 @@ function createDesignSessionStore(
         && divergenceBaselineIsCurrent(),
       acknowledgeSaved(options = {}) {
         if (
-          generation !== sessionGeneration
+          capturedLifetime !== lifetime
+          || generation !== sessionGeneration
           || canvasRevision !== detachedCanvasRevision
         ) return 'stale'
         const acknowledgement = ++acknowledgementGeneration
@@ -402,6 +456,7 @@ function createDesignSessionStore(
         })
         if (
           acknowledgement === acknowledgementGeneration
+          && capturedLifetime === lifetime
           && generation === sessionGeneration
           && canvasRevision === detachedCanvasRevision
           && contentRevision !== committedContentRevision
@@ -412,7 +467,8 @@ function createDesignSessionStore(
       },
       updatePath(path) {
         if (
-          generation !== sessionGeneration
+          capturedLifetime !== lifetime
+          || generation !== sessionGeneration
           || canvasRevision !== detachedCanvasRevision
         ) return false
         signals.designPath.value = path
@@ -420,7 +476,8 @@ function createDesignSessionStore(
       },
       setAutosaveFailed(failed) {
         if (
-          generation !== sessionGeneration
+          capturedLifetime !== lifetime
+          || generation !== sessionGeneration
           || canvasRevision !== detachedCanvasRevision
         ) return false
         signals.autosaveFailed.value = failed
@@ -430,62 +487,110 @@ function createDesignSessionStore(
     return Object.freeze(capture)
   })
 
+  const fixture = Object.freeze({
+    nonCanvasRevision: signals.nonCanvasRevision,
+    nonCanvasSavedRevision: signals.nonCanvasSavedRevision,
+    persistenceDiverged: signals.persistenceDiverged,
+    canvasClean: signals.canvasClean,
+    detachedCanvasDirty: signals.detachedCanvasDirty,
+    pendingDesignPath: signals.pendingDesignPath,
+    pendingTemplateImport: signals.pendingTemplateImport,
+    reset(state: DesignSessionStoreTestState = {}) {
+      lifetime = Object.freeze({})
+      sessionGeneration = 0
+      detachedCanvasRevision = 0
+      committedContentRevision = 0
+      previewGeneration = 0
+      acknowledgementGeneration = 0
+      activePreview = null
+      committedDesign = state.file ?? null
+      batch(() => {
+        signals.currentDesign.value = committedDesign
+        signals.designPath.value = state.path ?? null
+        signals.designName.value = state.name ?? state.file?.name ?? 'Untitled'
+        signals.nonCanvasRevision.value = state.nonCanvasRevision ?? 0
+        signals.nonCanvasSavedRevision.value = state.nonCanvasSavedRevision ?? 0
+        signals.persistenceDiverged.value = state.persistenceDiverged ?? false
+        signals.autosaveFailed.value = state.autosaveFailed ?? false
+        signals.canvasClean.value = state.canvasClean ?? true
+        signals.detachedCanvasDirty.value = state.detachedCanvasDirty ?? false
+        signals.pendingDesignPath.value = state.pendingDesignPath ?? null
+        signals.pendingTemplateImport.value = state.pendingTemplateImport ?? null
+        committedDesignRevision.value = 0
+      })
+    },
+    setState(state: DesignSessionStoreTestState) {
+      const has = (property: keyof DesignSessionStoreTestState) =>
+        Object.prototype.hasOwnProperty.call(state, property)
+      if (has('file')) {
+        sessionGeneration += 1
+        detachedCanvasRevision = 0
+        committedContentRevision += 1
+        invalidateActivePreview()
+        committedDesign = state.file ?? null
+      }
+      batch(() => {
+        if (has('file')) {
+          signals.currentDesign.value = committedDesign
+          committedDesignRevision.value += 1
+        }
+        if (has('path')) signals.designPath.value = state.path ?? null
+        if (has('name')) signals.designName.value = state.name ?? 'Untitled'
+        if (has('nonCanvasRevision')) {
+          signals.nonCanvasRevision.value = state.nonCanvasRevision ?? 0
+        }
+        if (has('nonCanvasSavedRevision')) {
+          signals.nonCanvasSavedRevision.value = state.nonCanvasSavedRevision ?? 0
+        }
+        if (has('persistenceDiverged')) {
+          signals.persistenceDiverged.value = state.persistenceDiverged ?? false
+        }
+        if (has('autosaveFailed')) {
+          signals.autosaveFailed.value = state.autosaveFailed ?? false
+        }
+        if (has('canvasClean')) signals.canvasClean.value = state.canvasClean ?? true
+        if (has('detachedCanvasDirty')) {
+          signals.detachedCanvasDirty.value = state.detachedCanvasDirty ?? false
+        }
+        if (has('pendingDesignPath')) {
+          signals.pendingDesignPath.value = state.pendingDesignPath ?? null
+        }
+        if (has('pendingTemplateImport')) {
+          signals.pendingTemplateImport.value = state.pendingTemplateImport ?? null
+        }
+      })
+    },
+    markSaved() {
+      acknowledgementGeneration += 1
+      batch(() => {
+        signals.detachedCanvasDirty.value = false
+        signals.canvasClean.value = true
+        signals.nonCanvasSavedRevision.value = signals.nonCanvasRevision.value
+        signals.persistenceDiverged.value = false
+        signals.autosaveFailed.value = false
+      })
+    },
+  } satisfies DesignSessionStoreTestFixture)
+  testFixtures.set(store, fixture)
+
   return store
 }
 
 export function createMemoryDesignSessionStore(
   initial: Partial<DesignSessionIdentity> = {},
 ): PersistenceCapableDesignSessionStore {
-  const currentDesign = signal<CanopiFile | null>(initial.file ?? null)
-  const designPath = signal<string | null>(initial.path ?? null)
-  const designName = signal<string>(initial.name ?? initial.file?.name ?? 'Untitled')
-  const nonCanvasRevision = signal(0)
-  const nonCanvasSavedRevision = signal(0)
-  const persistenceDiverged = signal(false)
-  const autosaveFailed = signal(false)
-  const canvasClean = signal(true)
-  const detachedCanvasDirty = signal(false)
-  const pendingDesignPath = signal<string | null>(null)
-  const pendingTemplateImport = signal<PendingTemplateImport | null>(null)
-  const canvasDirty = computed(() => detachedCanvasDirty.value || !canvasClean.value)
-  const designDirty = computed(() =>
-    canvasDirty.value
-    || nonCanvasRevision.value !== nonCanvasSavedRevision.value
-    || persistenceDiverged.value
-  )
-
-  return createDesignSessionStore({
-    currentDesign,
-    designPath,
-    designName,
-    nonCanvasRevision,
-    nonCanvasSavedRevision,
-    persistenceDiverged,
-    autosaveFailed,
-    canvasClean,
-    detachedCanvasDirty,
-    pendingDesignPath,
-    pendingTemplateImport,
-    canvasDirty,
-    designDirty,
-  })
+  return createDesignSessionStore(initial)
 }
 
-export const designSessionStore: PersistenceCapableDesignSessionStore = createDesignSessionStore({
-  currentDesign: designState.currentDesign,
-  designPath: designState.designPath,
-  designName: designState.designName,
-  nonCanvasRevision: designState.nonCanvasRevision,
-  nonCanvasSavedRevision: designState.nonCanvasSavedRevision,
-  persistenceDiverged: designState.persistenceDiverged,
-  autosaveFailed: designState.autosaveFailed,
-  canvasClean: designState.canvasClean,
-  detachedCanvasDirty: designState.detachedCanvasDirty,
-  pendingDesignPath: designState.pendingDesignPath,
-  pendingTemplateImport: designState.pendingTemplateImport,
-  canvasDirty: designState.canvasDirty,
-  designDirty: designState.designDirty,
-})
+export function createDesignSessionStoreTestFixture(
+  store: PersistenceCapableDesignSessionStore,
+): DesignSessionStoreTestFixture {
+  const fixture = testFixtures.get(store)
+  if (!fixture) throw new Error('Design Session store has no test fixture capability')
+  return fixture
+}
+
+export const designSessionStore: PersistenceCapableDesignSessionStore = createDesignSessionStore()
 
 export const currentDesign = designSessionStore.currentDesign
 export const designPath = designSessionStore.designPath

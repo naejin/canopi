@@ -18,13 +18,13 @@ import {
 import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 describe('Canvas Map Surface snapshot seam', () => {
   beforeEach(() => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Map seam',
       description: null,
@@ -57,7 +57,7 @@ describe('Canvas Map Surface snapshot seam', () => {
   })
 
   afterEach(() => {
-    currentDesign.value = null
+    designSessionFixture.file = null
     basemapStyle.value = 'street'
     theme.value = 'light'
     layerVisibility.value = { base: true, contours: false }

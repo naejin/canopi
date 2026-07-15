@@ -10,12 +10,10 @@ import { designSessionStore } from '../app/document-session/store'
 import { prepareDesignWriteDestination } from '../app/document-session/write-admission'
 import { consortiumTarget } from '../target'
 import {
+  designSessionFixture,
   currentDesign,
   designDirty,
-  designName,
-  designPath,
   nonCanvasRevision,
-  nonCanvasSavedRevision,
 } from './support/design-session-state'
 import type { CanopiFile, Consortium, TimelineAction } from '../types/design'
 
@@ -70,11 +68,11 @@ function design(overrides: Partial<CanopiFile> = {}): CanopiFile {
 }
 
 beforeEach(() => {
-  nonCanvasRevision.value = 0
-  nonCanvasSavedRevision.value = 0
-  currentDesign.value = design()
-  designPath.value = '/designs/test.canopi'
-  designName.value = 'test'
+  designSessionFixture.nonCanvasRevision = 0
+  designSessionFixture.nonCanvasSavedRevision = 0
+  designSessionFixture.file = design()
+  designSessionFixture.path = '/designs/test.canopi'
+  designSessionFixture.name = 'test'
 })
 
 describe('Design Edit array transactions', () => {

@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
 import { LocationTab } from '../components/canvas/LocationTab'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 
 const maplibreMock = vi.hoisted(() => ({
@@ -106,7 +106,7 @@ describe('LocationTab map failures', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     maplibreMock.mapConstructor.mockReset()
     maplibreMock.navigationControlConstructor.mockReset()
@@ -115,7 +115,7 @@ describe('LocationTab map failures', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    currentDesign.value = null
+    designSessionFixture.file = null
     consoleError.mockRestore()
   })
 

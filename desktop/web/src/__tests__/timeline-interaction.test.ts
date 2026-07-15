@@ -9,7 +9,11 @@ import {
   updateTimelinePanScrollX,
 } from '../app/timeline/interaction'
 import { projectTimelineAction } from '../app/planning-projection'
-import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import { speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
@@ -68,9 +72,9 @@ function makeDesign(action: TimelineAction): CanopiFile {
 
 describe('Timeline interaction', () => {
   beforeEach(() => {
-    currentDesign.value = makeDesign(makeAction())
-    nonCanvasRevision.value = 0
-    nonCanvasSavedRevision.value = 0
+    designSessionFixture.file = makeDesign(makeAction())
+    designSessionFixture.nonCanvasRevision = 0
+    designSessionFixture.nonCanvasSavedRevision = 0
   })
 
   it('previews and commits Timeline Action move drags through one module interface', () => {

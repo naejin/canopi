@@ -6,12 +6,64 @@ import {
 } from '../app/design-edit/authority-capability'
 import { createDesignSessionPersistence } from '../app/document-session/persistence'
 import { captureDesignSessionPersistenceState } from '../app/document-session/persistence-capability'
-import { createMemoryDesignSessionStore } from '../app/document-session/store'
+import {
+  createDesignSessionStoreTestFixture,
+  createMemoryDesignSessionStore,
+} from '../app/document-session/store'
 import { prepareDesignWriteDestination } from '../app/document-session/write-admission'
 import type { CanopiFile } from '../types/design'
 import { reconcileDesignSessionForTest } from './support/design-session-edit'
 
 describe('Design Edit authority', () => {
+  it('resets one store lifetime without reviving predecessor previews or captures', () => {
+    const predecessor = design('Predecessor')
+    const successor = design('Successor')
+    const store = createMemoryDesignSessionStore({
+      file: predecessor,
+      path: '/predecessor.canopi',
+      name: predecessor.name,
+    })
+    const fixture = createDesignSessionStoreTestFixture(store)
+    const edit = designEditAuthorityCapability(store).beginPreview('Timeline move')
+    edit.preview((current) => ({ ...current, description: 'preview' }))
+    const capture = captureDesignSessionPersistenceState(store)
+    fixture.setState({
+      nonCanvasRevision: 2,
+      nonCanvasSavedRevision: 1,
+      persistenceDiverged: true,
+      canvasClean: false,
+      detachedCanvasDirty: true,
+      autosaveFailed: true,
+      pendingDesignPath: '/queued.canopi',
+      pendingTemplateImport: { path: '/template.canopi', name: 'Template' },
+    })
+
+    fixture.reset({
+      file: successor,
+      path: '/successor.canopi',
+      name: successor.name,
+    })
+
+    expect(edit.commit()).toEqual({ status: 'superseded' })
+    expect(capture.isCurrent()).toBe(false)
+    expect(capture.acknowledgeSaved()).toBe('stale')
+    expect(store.readIdentity()).toEqual({
+      file: successor,
+      path: '/successor.canopi',
+      name: 'Successor',
+    })
+    expect(store.isDesignDirty()).toBe(false)
+    expect(store.autosaveFailed.value).toBe(false)
+    expect(store.committedDesignRevision.value).toBe(0)
+    expect(store.readPendingDesignPath()).toBe(null)
+    expect(store.readPendingTemplateImport()).toBe(null)
+
+    const successorEdit = designEditAuthorityCapability(store).beginPreview('Successor edit')
+    successorEdit.preview((current) => ({ ...current, description: 'committed' }))
+    expect(successorEdit.commit()).toEqual({ status: 'committed', changed: true })
+    expect(store.readCurrentDesign()?.description).toBe('committed')
+  })
+
   it('records one superseded outcome after Design replacement', () => {
     const predecessor = design('Predecessor')
     const successor = design('Successor')

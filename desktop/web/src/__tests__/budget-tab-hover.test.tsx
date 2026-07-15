@@ -5,7 +5,7 @@ import { BudgetTab } from '../components/canvas/BudgetTab'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import styles from '../components/canvas/BudgetTab.module.css'
@@ -67,7 +67,7 @@ describe('BudgetTab hover bridge', () => {
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       budget_currency: 'EUR',
       budget: [
         {
@@ -89,7 +89,7 @@ describe('BudgetTab hover bridge', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    currentDesign.value = null
+    designSessionFixture.file = null
     setCurrentCanvasSession(null)
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null

@@ -20,7 +20,7 @@ import {
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
 import { locale } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import {
   createTestCanvasCommandSurface,
@@ -77,7 +77,7 @@ describe('Canvas Layer Presentation', () => {
       hillshade_opacity: 0.45,
       plant_spacing_interval_m: 0.5,
     })
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Layer presentation',
       description: null,
@@ -123,7 +123,7 @@ describe('Canvas Layer Presentation', () => {
     flushSettingsProjection()
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
-    currentDesign.value = null
+    designSessionFixture.file = null
     setCurrentCanvasSession(null)
   })
 

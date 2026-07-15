@@ -9,7 +9,11 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from '../app/panel-targets/state'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import { MANUAL_TARGET, speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
@@ -54,8 +58,8 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
 }
 
 beforeEach(() => {
-  currentDesign.value = makeDesign()
-  nonCanvasRevision.value = 0
+  designSessionFixture.file = makeDesign()
+  designSessionFixture.nonCanvasRevision = 0
   hoveredPanelTargets.value = []
   selectedPanelTargetOrigin.value = null
   selectedPanelTargets.value = []

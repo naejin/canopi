@@ -1,7 +1,10 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+} from './support/design-session-state'
 import {
   getSavedLocationPresentation,
   useLocationWorkbench,
@@ -48,8 +51,8 @@ describe('Location Workbench', () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    currentDesign.value = makeDesign()
-    nonCanvasRevision.value = 0
+    designSessionFixture.file = makeDesign()
+    designSessionFixture.nonCanvasRevision = 0
     workbench = null
   })
 
@@ -58,8 +61,8 @@ describe('Location Workbench', () => {
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
     container.remove()
-    currentDesign.value = null
-    nonCanvasRevision.value = 0
+    designSessionFixture.file = null
+    designSessionFixture.nonCanvasRevision = 0
   })
 
   function renderProbe() {
@@ -86,7 +89,7 @@ describe('Location Workbench', () => {
   })
 
   it('preserves saved altitude when committing a map result or map center', () => {
-    currentDesign.value = makeDesign({
+    designSessionFixture.file = makeDesign({
       location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
     })
     renderProbe()

@@ -14,7 +14,7 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../maplibre/canvas-surface-state'
-import { currentDesign } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 const attachMock = vi.hoisted(() => vi.fn())
@@ -87,7 +87,7 @@ describe('MapLibreCanvasSurface adapter', () => {
     updateMock.mockClear()
     destroyMock.mockClear()
     createLifecycleMock.mockClear()
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'Demo',
       description: null,

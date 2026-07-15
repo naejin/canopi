@@ -3,7 +3,10 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BudgetTab } from '../components/canvas/BudgetTab'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign } from './support/design-session-state'
+import {
+  designSessionFixture,
+  currentDesign,
+} from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import {
   budgetPriceDraftValue,
@@ -61,7 +64,7 @@ describe('Budget Item workbench', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    currentDesign.value = makeDesign()
+    designSessionFixture.file = makeDesign()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: createTestCanvasQuerySurface({
         plants: [makePlant('Malus domestica', 'Apple')],
@@ -72,7 +75,7 @@ describe('Budget Item workbench', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    currentDesign.value = null
+    designSessionFixture.file = null
     setCurrentCanvasSession(null)
   })
 

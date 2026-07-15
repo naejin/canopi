@@ -73,11 +73,10 @@ vi.mock('../i18n', () => ({
 
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import {
+  designSessionFixture,
   currentDesign,
   designName,
   designPath,
-  detachedCanvasDirty,
-  nonCanvasRevision,
   pendingDesignPath,
   pendingTemplateImport,
   resetDirtyBaselines,
@@ -194,14 +193,14 @@ beforeEach(() => {
   mocks.newDesign.mockReset()
   mocks.message.mockReset()
 
-  currentDesign.value = makeFile('Current')
-  designName.value = 'Current'
-  designPath.value = '/designs/current.canopi'
-  pendingDesignPath.value = null
-  pendingTemplateImport.value = null
+  designSessionFixture.file = makeFile('Current')
+  designSessionFixture.name = 'Current'
+  designSessionFixture.path = '/designs/current.canopi'
+  designSessionFixture.pendingDesignPath = null
+  designSessionFixture.pendingTemplateImport = null
   resetDirtyBaselines()
-  nonCanvasRevision.value = 0
-  detachedCanvasDirty.value = false
+  designSessionFixture.nonCanvasRevision = 0
+  designSessionFixture.detachedCanvasDirty = false
 
   activeTool.value = 'rectangle'
   selectedObjectIds.value = new Set(['selected-1'])
@@ -209,7 +208,7 @@ beforeEach(() => {
 
 describe('document replacement actions', () => {
   it('replaces the active document after discard', async () => {
-    nonCanvasRevision.value = 1
+    designSessionFixture.nonCanvasRevision = 1
     mocks.message.mockResolvedValue("Don't Save")
     mocks.loadDesign.mockResolvedValue(makeFile('Next'))
 
@@ -230,7 +229,7 @@ describe('document replacement actions', () => {
   })
 
   it('cancels replacement before loading when the user cancels', async () => {
-    nonCanvasRevision.value = 1
+    designSessionFixture.nonCanvasRevision = 1
     mocks.message.mockResolvedValue('Cancel')
 
     await openDesignFromPath('/designs/next.canopi')
@@ -242,7 +241,7 @@ describe('document replacement actions', () => {
 
   it('saves first when the user chooses save', async () => {
     mocks.canvasSession.loadDocument(makeFile('Current'))
-    nonCanvasRevision.value = 1
+    designSessionFixture.nonCanvasRevision = 1
     mocks.message.mockResolvedValue('Save')
     mocks.loadDesign.mockResolvedValue(makeFile('Next'))
 
@@ -258,8 +257,8 @@ describe('document replacement actions', () => {
   })
 
   it('treats save-dialog cancellation as a cancelled replacement', async () => {
-    nonCanvasRevision.value = 1
-    designPath.value = null
+    designSessionFixture.nonCanvasRevision = 1
+    designSessionFixture.path = null
     mocks.message.mockResolvedValue('Save')
     mocks.selectDesignSavePath.mockRejectedValue(new Error('Dialog cancelled'))
 
@@ -281,7 +280,7 @@ describe('document replacement actions', () => {
 
   it('cancels queued loads before they apply to a fresh engine', async () => {
     const queued = deferred<CanopiFile>()
-    pendingDesignPath.value = '/designs/queued.canopi'
+    designSessionFixture.pendingDesignPath = '/designs/queued.canopi'
     mocks.loadDesign.mockReturnValue(queued.promise)
 
     const cancel = consumeQueuedDocumentLoad(mocks.canvasSession)
@@ -295,7 +294,7 @@ describe('document replacement actions', () => {
 
   it('surfaces queued-load failures and keeps the pending path for retry', async () => {
     const queued = deferred<CanopiFile>()
-    pendingDesignPath.value = '/designs/broken.canopi'
+    designSessionFixture.pendingDesignPath = '/designs/broken.canopi'
     mocks.loadDesign.mockReturnValue(queued.promise)
 
     consumeQueuedDocumentLoad(mocks.canvasSession)
@@ -311,7 +310,7 @@ describe('document replacement actions', () => {
   })
 
   it('returns cancelled for template import when the user cancels replacement', async () => {
-    nonCanvasRevision.value = 1
+    designSessionFixture.nonCanvasRevision = 1
     mocks.message.mockResolvedValue('Cancel')
 
     await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('cancelled')
@@ -336,7 +335,7 @@ describe('document replacement actions', () => {
 
   it('saves before detached replacement when requested by the dirty guard', async () => {
     mocks.canvasSession = null
-    nonCanvasRevision.value = 1
+    designSessionFixture.nonCanvasRevision = 1
     mocks.message.mockResolvedValue('Save')
     mocks.loadDesign.mockResolvedValue(makeFile('Next'))
 
@@ -352,8 +351,8 @@ describe('document replacement actions', () => {
 
   it('queues a known path when neither document state nor canvas session is ready', async () => {
     mocks.canvasSession = null
-    currentDesign.value = null
-    designPath.value = null
+    designSessionFixture.file = null
+    designSessionFixture.path = null
 
     await openDesignFromPath('/designs/next.canopi')
 
@@ -363,10 +362,10 @@ describe('document replacement actions', () => {
   })
 
   it('does not prompt for unsaved changes when no document is open', async () => {
-    currentDesign.value = null
-    designPath.value = null
-    nonCanvasRevision.value = 1
-    detachedCanvasDirty.value = true
+    designSessionFixture.file = null
+    designSessionFixture.path = null
+    designSessionFixture.nonCanvasRevision = 1
+    designSessionFixture.detachedCanvasDirty = true
     mocks.loadDesign.mockResolvedValue(makeFile('Next'))
 
     await openDesignFromPath('/designs/next.canopi')
@@ -390,8 +389,8 @@ describe('document replacement actions', () => {
 
   it('queues template imports when neither document state nor canvas session is ready', async () => {
     mocks.canvasSession = null
-    currentDesign.value = null
-    designPath.value = null
+    designSessionFixture.file = null
+    designSessionFixture.path = null
     mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
 
     await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('queued')
@@ -443,7 +442,7 @@ describe('document replacement actions', () => {
 
   it('saves the canonical document snapshot when no canvas session is mounted', async () => {
     mocks.canvasSession = null
-    designName.value = 'Detached'
+    designSessionFixture.name = 'Detached'
 
     await saveCurrentDesign()
 

@@ -245,7 +245,7 @@ describe("registerCloseGuard", () => {
 
   it("contains and reports a dirty-close dialog failure", async () => {
     const design = await import("./support/design-session-state");
-    design.nonCanvasRevision.value = 1;
+    design.designSessionFixture.nonCanvasRevision = 1;
     const error = new Error("dialog unavailable");
     mocks.message.mockRejectedValue(error);
     const logError = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -279,11 +279,11 @@ describe("registerCloseGuard", () => {
 
   it("prompts on dirty close and destroys the window after a successful save", async () => {
     const design = await import("./support/design-session-state");
-    design.nonCanvasRevision.value = 1;
+    design.designSessionFixture.nonCanvasRevision = 1;
 
     mocks.message.mockResolvedValue("Save");
     mocks.saveCurrentDesign.mockImplementation(async () => {
-      design.nonCanvasSavedRevision.value = design.nonCanvasRevision.value;
+      design.designSessionFixture.nonCanvasSavedRevision = design.nonCanvasRevision.value;
       return { status: "applied" };
     });
 
@@ -303,7 +303,7 @@ describe("registerCloseGuard", () => {
 
   it("destroys without saving when the user discards changes", async () => {
     const design = await import("./support/design-session-state");
-    design.nonCanvasRevision.value = 1;
+    design.designSessionFixture.nonCanvasRevision = 1;
 
     mocks.message.mockResolvedValue("Don't Save");
 
@@ -322,7 +322,7 @@ describe("registerCloseGuard", () => {
 
   it("keeps the window open when the user cancels the dirty-close prompt", async () => {
     const design = await import("./support/design-session-state");
-    design.nonCanvasRevision.value = 1;
+    design.designSessionFixture.nonCanvasRevision = 1;
 
     mocks.message.mockResolvedValue("Cancel");
 
@@ -341,7 +341,7 @@ describe("registerCloseGuard", () => {
 
   it("keeps the window open when save fails", async () => {
     const design = await import("./support/design-session-state");
-    design.nonCanvasRevision.value = 1;
+    design.designSessionFixture.nonCanvasRevision = 1;
 
     mocks.message.mockResolvedValue("Save");
     mocks.saveCurrentDesign.mockRejectedValue(new Error("disk full"));
@@ -360,7 +360,7 @@ describe("registerCloseGuard", () => {
 
   it("keeps the window open when save settlement is stale", async () => {
     const design = await import("./support/design-session-state");
-    design.nonCanvasRevision.value = 1;
+    design.designSessionFixture.nonCanvasRevision = 1;
     mocks.message.mockResolvedValue("Save");
     mocks.saveCurrentDesign.mockResolvedValue({ status: "stale" });
 
@@ -378,7 +378,7 @@ describe("registerCloseGuard", () => {
 
   it("keeps the window open when edits made during save remain dirty", async () => {
     const design = await import("./support/design-session-state");
-    design.nonCanvasRevision.value = 1;
+    design.designSessionFixture.nonCanvasRevision = 1;
     mocks.message.mockResolvedValue("Save");
     mocks.saveCurrentDesign.mockResolvedValue({ status: "applied" });
 

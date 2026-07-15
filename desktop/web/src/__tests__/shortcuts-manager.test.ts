@@ -5,7 +5,7 @@ import { activePanel, sidePanel } from '../app/shell/state'
 import * as documentActions from '../app/document-session/actions'
 import { commandPaletteOpen, initShortcuts } from '../shortcuts/manager'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
+import { designSessionFixture } from './support/design-session-state'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -24,9 +24,9 @@ describe('shortcut manager canvas tool switching', () => {
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
     setCurrentCanvasSession(null)
-    currentDesign.value = null
-    nonCanvasRevision.value = 0
-    nonCanvasSavedRevision.value = 0
+    designSessionFixture.file = null
+    designSessionFixture.nonCanvasRevision = 0
+    designSessionFixture.nonCanvasSavedRevision = 0
     commandPaletteOpen.value = false
     initShortcuts()
   })
@@ -35,7 +35,7 @@ describe('shortcut manager canvas tool switching', () => {
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
-    currentDesign.value = null
+    designSessionFixture.file = null
     commandPaletteOpen.value = false
   })
 
@@ -134,7 +134,7 @@ describe('shortcut manager canvas tool switching', () => {
   })
 
   it('routes file shortcuts through document-session actions', () => {
-    currentDesign.value = {
+    designSessionFixture.file = {
       version: 2,
       name: 'test',
       description: null,
@@ -154,8 +154,8 @@ describe('shortcut manager canvas tool switching', () => {
       updated_at: '',
       extra: {},
     }
-    nonCanvasRevision.value = 1
-    nonCanvasSavedRevision.value = 0
+    designSessionFixture.nonCanvasRevision = 1
+    designSessionFixture.nonCanvasSavedRevision = 0
     const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(null)
     const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(null)
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
