@@ -434,6 +434,47 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
                 first[1],
             )
 
+    def test_generated_render_stages_both_files_without_mutating_repo_destinations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            output_directory = Path(tmp) / "staged"
+            raw = json.loads(
+                (REPO_ROOT / "common-types/web-species-catalog-artifact.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            write_contract(root, raw)
+            generated = root / "desktop/web/src/generated"
+            generated.mkdir(parents=True)
+            repository_paths = (
+                generated / "web-catalog-artifact.mjs",
+                generated / "web-catalog-artifact.d.mts",
+            )
+            for path in repository_paths:
+                path.write_text(f"sentinel:{path.name}", encoding="utf-8")
+
+            staged_paths = contract.render_generated(
+                output_directory=output_directory,
+                root=root,
+            )
+
+            self.assertEqual(
+                tuple(path.name for path in staged_paths),
+                ("web-catalog-artifact.mjs", "web-catalog-artifact.d.mts"),
+            )
+            self.assertIn(
+                "admitWebCatalogManifest",
+                staged_paths[0].read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "AdmittedWebCatalog",
+                staged_paths[1].read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                tuple(path.read_text(encoding="utf-8") for path in repository_paths),
+                tuple(f"sentinel:{path.name}" for path in repository_paths),
+            )
+
 
 def write_contract(root: Path, raw: object) -> None:
     path = root / "common-types/web-species-catalog-artifact.json"

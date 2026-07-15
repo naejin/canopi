@@ -708,9 +708,9 @@ mod tests {
 
     #[test]
     fn validates_known_columns_and_rejects_unknown_fields() {
-        assert_eq!(validated_column("height_max_m"), Some("s.height_max_m"));
+        assert_eq!(validated_column("stratum"), Some("s.stratum"));
         assert_eq!(validated_column("climate_zones"), None);
-        assert_eq!(validated_column("height_max_m; DROP TABLE species"), None);
+        assert_eq!(validated_column("__unknown; DROP TABLE species"), None);
     }
 
     #[test]
@@ -720,14 +720,14 @@ mod tests {
             Some(PlantFilterFieldKind::Boolean)
         );
         assert_eq!(
-            filter_field_kind("growth_form_type"),
+            filter_field_kind("stratum"),
             Some(PlantFilterFieldKind::Categorical)
         );
         assert_eq!(
-            filter_field_kind("height_max_m"),
+            filter_field_kind("hardiness_zone_min"),
             Some(PlantFilterFieldKind::Numeric)
         );
-        assert_eq!(filter_field_kind("not_a_field"), None);
+        assert_eq!(filter_field_kind("__unknown"), None);
     }
 
     #[test]
@@ -737,40 +737,41 @@ mod tests {
                 .iter()
                 .all(|field| field.column.starts_with("s."))
         );
-        assert!(PLANT_FILTER_FIELDS.iter().any(|field| field.key == "habit"));
+        assert_eq!(PLANT_FILTER_FIELDS.len(), 82);
     }
 
     #[test]
     fn exposes_fixed_species_filter_behavior_from_schema() {
-        let behavior = fixed_filter_behavior("life_cycle").unwrap();
-        assert_eq!(behavior.key, "life_cycle");
+        let behavior = fixed_filter_behavior("sun_tolerances").unwrap();
+        assert_eq!(behavior.key, "sun_tolerances");
         match behavior.predicate {
             FixedFilterPredicate::MappedBooleanList(clauses) => {
-                assert!(clauses.iter().any(|clause| clause.value == "Perennial"));
+                assert!(clauses.iter().any(|clause| clause.value == "full_sun"
+                    && clause.clause == "s.tolerates_full_sun = 1"));
             }
-            _ => panic!("expected mapped boolean predicate"),
+            _ => panic!("expected the schema-derived mapped predicate"),
         }
-        assert!(fixed_filter_behavior("not_a_field").is_none());
+        assert!(fixed_filter_behavior("__unknown").is_none());
     }
 
     #[test]
     fn generated_fixed_filters_read_species_filter_values() {
         let filters = common_types::species::SpeciesFilter {
-            life_cycle: Some(vec!["Perennial".to_owned()]),
-            nitrogen_fixer: Some(true),
+            sun_tolerances: Some(vec!["generated-value".to_owned()]),
+            edible: Some(true),
             edibility_min: Some(3),
-            family: Some("Rosaceae".to_owned()),
+            family: Some("generated-value".to_owned()),
             ..common_types::species::SpeciesFilter::default()
         };
 
-        match fixed_filter_value(&filters, "life_cycle").unwrap() {
+        match fixed_filter_value(&filters, "sun_tolerances").unwrap() {
             FixedFilterValue::StringList(Some(values)) => {
-                assert_eq!(values, ["Perennial".to_owned()].as_slice())
+                assert_eq!(values, ["generated-value".to_owned()].as_slice())
             }
-            other => panic!("expected life_cycle list, got {other:?}"),
+            other => panic!("expected generated list, got {other:?}"),
         }
         assert!(matches!(
-            fixed_filter_value(&filters, "nitrogen_fixer"),
+            fixed_filter_value(&filters, "edible"),
             Some(FixedFilterValue::Boolean(Some(true)))
         ));
         assert!(matches!(
@@ -778,8 +779,8 @@ mod tests {
             Some(FixedFilterValue::Integer(Some(3)))
         ));
         match fixed_filter_value(&filters, "family").unwrap() {
-            FixedFilterValue::Text(Some(value)) => assert_eq!(value, "Rosaceae"),
-            other => panic!("expected family text, got {other:?}"),
+            FixedFilterValue::Text(Some(value)) => assert_eq!(value, "generated-value"),
+            other => panic!("expected generated text, got {other:?}"),
         }
     }
 }

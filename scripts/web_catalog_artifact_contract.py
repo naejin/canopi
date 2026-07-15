@@ -1010,14 +1010,11 @@ def sync_generated(
     *,
     root: Path = REPO_ROOT,
 ) -> tuple[Path, Path]:
-    plan = compile_web_catalog_artifact(root=root)
     generated_dir = root / "desktop/web/src/generated"
     module_path = generated_dir / "web-catalog-artifact.mjs"
     declaration_path = generated_dir / "web-catalog-artifact.d.mts"
-    expected = {
-        module_path: _render_shared_esm(plan),
-        declaration_path: _render_shared_declaration(plan),
-    }
+    module, declaration = _render_generated_contents(root=root)
+    expected = {module_path: module, declaration_path: declaration}
     if mode is SyncMode.CHECK:
         stale = []
         for path, content in expected.items():
@@ -1073,6 +1070,34 @@ def sync_generated(
                     temporary_path.unlink()
         return module_path, declaration_path
     raise ArtifactContractError(f"unsupported generated sync mode: {mode}")
+
+
+def render_generated(
+    *,
+    output_directory: Path,
+    root: Path = REPO_ROOT,
+) -> tuple[Path, Path]:
+    """Render admission artifacts into a caller-owned staging directory."""
+    module, declaration = _render_generated_contents(root=root)
+    paths = (
+        output_directory / "web-catalog-artifact.mjs",
+        output_directory / "web-catalog-artifact.d.mts",
+    )
+    try:
+        output_directory.mkdir(parents=True, exist_ok=True)
+        paths[0].write_text(module, encoding="utf-8")
+        paths[1].write_text(declaration, encoding="utf-8")
+    except OSError as error:
+        raise ArtifactContractError(
+            f"failed to stage generated Web Catalog artifact files in "
+            f"{output_directory}: {error}"
+        ) from error
+    return paths
+
+
+def _render_generated_contents(*, root: Path) -> tuple[str, str]:
+    plan = compile_web_catalog_artifact(root=root)
+    return _render_shared_esm(plan), _render_shared_declaration(plan)
 
 
 def _render_shared_esm(plan: WebCatalogArtifactPlan) -> str:
@@ -1462,12 +1487,20 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("check", help="Validate source and generated drift.")
     emit_parser = subparsers.add_parser("emit", help="Refresh generated files.")
     emit_parser.add_argument("--write", action="store_true", required=True)
+    render_parser = subparsers.add_parser(
+        "render", help="Render generated files into a staging directory."
+    )
+    render_parser.add_argument(
+        "--output-directory", type=Path, required=True
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "check":
             sync_generated(SyncMode.CHECK)
-        else:
+        elif args.command == "emit":
             sync_generated(SyncMode.WRITE)
+        else:
+            render_generated(output_directory=args.output_directory)
     except ArtifactContractError as error:
         print(error, file=sys.stderr)
         return 1
