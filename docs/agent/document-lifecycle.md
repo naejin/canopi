@@ -148,19 +148,22 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 ## Settings Persistence
 
-- Rust `Settings` in the user DB is the durable source of truth for user preferences.
+- The active platform adapter is the durable settings authority: Desktop uses Rust `Settings` in the user DB, while Web Edition uses browser-local app data. Both editions project the same generated `Settings` contract into the same frontend signals.
+- Rust `Settings::default()` and the declared Locale, Theme, and Basemap Style catalogs generate `desktop/web/src/generated/settings.ts`; the browser adapter and settings-backed frontend signal initializers consume that runtime authority. Regenerate and check bindings when defaults or those enums change instead of hand-maintaining frontend default tables.
 - Keep the shared `Settings` contract limited to preferences with a live runtime or persistence owner. Serde ignores retired unknown keys so older settings JSON remains readable; a retired key must not be emitted by the current serializer or generated TypeScript contract.
 - Web Edition settings and personal app data are browser-local convenience state backed by browser storage, not cloud-synced durable state. Keep web adapters behind the same caller-shaped seams instead of importing browser storage directly from components. See `docs/adr/0014-web-edition-browser-local-app-data.md`.
 - Frontend signals are runtime projections.
-- `desktop/web/src/app/settings/projection.ts` owns hydration, snapshotting, mutation, queued persistence, and flush behavior.
-- Use `hydrateSettingsProjection()` after `get_settings`.
+- `desktop/web/src/app/settings/projection.ts` owns adapter installation, hydration, normalization, snapshotting, mutation, serialized/coalesced persistence, retry state, queued persistence, replacement fencing, and flush behavior. It must not import Tauri IPC or browser storage.
+- `platform/desktop.ts` and `platform/browser.ts` install their typed adapter at the compile-time platform composition root. Browser loading remains synchronous so locale, theme, snap, and Plant Spacing hydrate before the first render; Desktop loading may resolve asynchronously.
+- Hydration records the normalized snapshot as the durable baseline. Mutations issued during asynchronous bootstrap are replayed over the loaded value and persisted; a load failure establishes the current projection as a retryable fallback instead of permanently disabling persistence. An ordinary unchanged fallback is a no-write baseline so a transient read failure cannot overwrite stored preferences. Handed-off or user intent still requires a save even when its value equals that fallback.
+- Persistence advances its durable baseline only after a successful write, never overlaps writes (including synchronous adapter reentry), coalesces newer mutations, and retains a failed latest snapshot for a later mutation or flush to retry. Adapter replacement first admits queued work and fences the successor load behind predecessor settlement so an obsolete save cannot land after the new baseline. If the predecessor write fails, hand its desired snapshot to successor hydration beneath any newer successor mutations and retry it through the successor adapter; never let the successor load overwrite that intent.
 - Use `mutateSettingsProjection()` for settings-backed actions.
-- Use queued persistence for 60fps-adjacent paths and commit/flush on mouse-up or close as appropriate.
-- Use `flushSettingsProjection()` before shutdown paths that must not lose queued settings.
-- Canvas runtime settings-backed commands such as snap-to-grid toggling and Plant Spacing interval commits cross `app/canvas-runtime/app-adapter.ts`; runtime core should not import settings projection modules directly.
+- Use queued persistence for 60fps-adjacent paths and commit/flush on mouse-up or close as appropriate. Discrete toggles such as snap-to-grid persist immediately in both editions.
+- Await `flushSettingsProjection()` when durability gates a lifecycle transition. It joins asynchronous bootstrap without waiting on a retired bootstrap, follows adapter ownership changes, admits the latest queued snapshot, waits for the serialized persistence drain, and rejects on write failure. The Desktop close guard prevents close until that promise settles, coalesces concurrent close requests into one workflow, and keeps the window open on failure.
+- Canvas runtime settings-backed commands such as snap-to-grid toggling and Plant Spacing interval commits cross the edition-specific Canvas Runtime App Adapter (`app/canvas-runtime/app-adapter.ts` or `web/browser-canvas-runtime.ts`); runtime core should not import settings projection modules directly.
 - Bottom panel tab heights are nullable per-tab settings. `null` means the frontend should use the tab's first-use default; manual resize stores a concrete height for the active tab only.
 - Legacy `bottom_panel_height` values are migrated in the Rust settings service: `200` is treated as unset, and any other legacy height seeds Timeline, Budget, and Consortium heights.
-- `localStorage` is only a first-paint cache for theme; Rust settings overwrite it on bootstrap.
+- `localStorage` is only a best-effort first-paint cache for theme; a guarded inline script in both HTML entries applies it before module loading, then the active platform settings adapter overwrites it during bootstrap. Cache read/write failure must not prevent parsing, DOM theme application, or settings hydration.
 - Theme is light/dark only. Stale `"system"` values are migrated by settings deserialization.
 
 ## Tauri Lifecycle Gotchas

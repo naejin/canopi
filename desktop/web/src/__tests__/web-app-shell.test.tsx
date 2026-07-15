@@ -1,10 +1,14 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { effect } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { locale, theme } from '../app/settings/state'
+import {
+  installSettingsProjection,
+  resetSettingsProjectionForTests,
+} from '../app/settings/projection'
+import type { Settings } from '../types/settings'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { BrowserAppShell, type BrowserShellCommandHandlers } from '../web/BrowserAppShell'
@@ -32,6 +36,33 @@ function panelBarButton(container: HTMLElement, id: string): HTMLButtonElement {
   return button
 }
 
+function baseSettings(overrides: Partial<Settings> = {}): Settings {
+  return {
+    locale: 'en',
+    theme: 'light',
+    snap_to_grid: true,
+    snap_to_guides: true,
+    auto_save_interval_s: 60,
+    side_panel_width: null,
+    saved_stamps_frame_height: null,
+    bottom_panel_open: false,
+    bottom_panel_timeline_height: null,
+    bottom_panel_budget_height: null,
+    bottom_panel_consortium_height: null,
+    bottom_panel_tab: 'budget',
+    map_layer_visible: true,
+    map_style: 'street',
+    map_opacity: 1,
+    contour_visible: false,
+    contour_opacity: 1,
+    contour_interval: 0,
+    hillshade_visible: false,
+    hillshade_opacity: 0.55,
+    plant_spacing_interval_m: 0.5,
+    ...overrides,
+  }
+}
+
 describe('Web Edition Browser App Shell', () => {
   let container: HTMLDivElement
 
@@ -48,6 +79,7 @@ describe('Web Edition Browser App Shell', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    resetSettingsProjectionForTests()
   })
 
   it('renders the browser command set without desktop-only chrome or commands', async () => {
@@ -199,7 +231,6 @@ describe('Web Edition Browser App Shell', () => {
       render(
         <WebApp
           controller={controller}
-          appDataStore={appDataStore}
         />,
         container,
       )
@@ -250,10 +281,8 @@ describe('Web Edition Browser App Shell', () => {
       openCanopi: vi.fn(),
       downloadCanopi: vi.fn(),
     }
-    const onSettingsChange = vi.fn()
-
     await act(async () => {
-      render(<BrowserAppShell handlers={handlers} onSettingsChange={onSettingsChange} />, container)
+      render(<BrowserAppShell handlers={handlers} />, container)
     })
 
     await clickShellCommand(container, 'file.new')
@@ -270,19 +299,17 @@ describe('Web Edition Browser App Shell', () => {
     expect(handlers.newDesign).toHaveBeenCalledOnce()
     expect(handlers.openCanopi).toHaveBeenCalledOnce()
     expect(handlers.downloadCanopi).toHaveBeenCalledOnce()
-    expect(onSettingsChange).toHaveBeenLastCalledWith({ locale: 'fr', theme: 'dark' })
     expect(theme.value).toBe('dark')
     expect(locale.value).toBe('fr')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBeNull()
   })
 
-  it('publishes the updated browser theme only after the document theme attribute changes', async () => {
-    const observedAttributes: Array<string | null> = []
-    document.documentElement.setAttribute('data-theme', 'light')
-    const dispose = effect(() => {
-      void theme.value
-      observedAttributes.push(document.documentElement.getAttribute('data-theme'))
+  it('persists the browser theme command through the Settings Projection', async () => {
+    const persistSettings = vi.fn<(settings: Settings) => Promise<void>>().mockResolvedValue(undefined)
+    installSettingsProjection({
+      load: () => baseSettings(),
+      save: persistSettings,
     })
 
     await act(async () => {
@@ -290,30 +317,30 @@ describe('Web Edition Browser App Shell', () => {
     })
     await clickThemeControl(container)
 
-    dispose()
-    expect(theme.value).toBe('dark')
-    expect(observedAttributes.at(-1)).toBe('dark')
+    expect(persistSettings).toHaveBeenCalledOnce()
+    expect(persistSettings).toHaveBeenCalledWith(expect.objectContaining({
+      locale: 'en',
+      theme: 'dark',
+    }))
   })
 
-  it('loads and saves browser-local settings through WebApp', async () => {
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+  it('persists the browser locale command through the Settings Projection', async () => {
+    const persistSettings = vi.fn<(settings: Settings) => Promise<void>>().mockResolvedValue(undefined)
+    installSettingsProjection({
+      load: () => baseSettings(),
+      save: persistSettings,
+    })
 
     await act(async () => {
-      render(<WebApp appDataStore={appDataStore} workspace={<div data-testid="stub-workspace" />} />, container)
+      render(<BrowserAppShell />, container)
     })
-    await clickThemeControl(container)
     await selectLocale(container, 'fr')
 
-    render(null, container)
-    theme.value = 'light'
-    locale.value = 'en'
-
-    await act(async () => {
-      render(<WebApp appDataStore={appDataStore} workspace={<div data-testid="stub-workspace" />} />, container)
-    })
-
-    expect(theme.value).toBe('dark')
-    expect(locale.value).toBe('fr')
+    expect(persistSettings).toHaveBeenCalledOnce()
+    expect(persistSettings).toHaveBeenCalledWith(expect.objectContaining({
+      locale: 'fr',
+      theme: 'light',
+    }))
   })
 
   it('renames the active Browser Design from the top bar like desktop', async () => {
@@ -331,7 +358,6 @@ describe('Web Edition Browser App Shell', () => {
       render(
         <WebApp
           controller={controller}
-          appDataStore={appDataStore}
           workspace={<div data-testid="stub-workspace" />}
         />,
         container,
@@ -378,7 +404,6 @@ describe('Web Edition Browser App Shell', () => {
       render(
         <WebApp
           controller={controller}
-          appDataStore={appDataStore}
           workspace={<div data-testid="stub-workspace" />}
         />,
         container,
@@ -417,7 +442,6 @@ describe('Web Edition Browser App Shell', () => {
       render(
         <WebApp
           controller={controller}
-          appDataStore={appDataStore}
           workspace={<div data-testid="stub-workspace" />}
         />,
         container,

@@ -2,8 +2,6 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
-
 import { LayerPanel } from '../components/canvas/LayerPanel'
 import {
   activeLayerName,
@@ -16,11 +14,15 @@ import {
   layerVisibility,
 } from '../app/canvas-settings/signals'
 import { basemapStyle } from '../app/settings/state'
-import { setSettings } from '../ipc/settings'
+import type { Settings } from '../types/settings'
 import { currentDesign } from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import { activePanel, sidePanel } from '../app/shell/state'
-import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
+import {
+  flushSettingsProjection,
+  installSettingsProjection,
+  resetSettingsProjectionForTests,
+} from '../app/settings/projection'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import {
@@ -28,8 +30,35 @@ import {
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
 
+function baseSettings(): Settings {
+  return {
+    locale: 'en',
+    theme: 'light',
+    snap_to_grid: true,
+    snap_to_guides: true,
+    auto_save_interval_s: 60,
+    side_panel_width: null,
+    saved_stamps_frame_height: 220,
+    bottom_panel_open: false,
+    bottom_panel_timeline_height: null,
+    bottom_panel_budget_height: null,
+    bottom_panel_consortium_height: null,
+    bottom_panel_tab: 'budget',
+    map_layer_visible: true,
+    map_style: 'street',
+    map_opacity: 1,
+    contour_visible: false,
+    contour_opacity: 1,
+    contour_interval: 0,
+    hillshade_visible: false,
+    hillshade_opacity: 0.55,
+    plant_spacing_interval_m: 0.5,
+  }
+}
+
 describe('LayerPanel', () => {
   let container: HTMLDivElement
+  const saveSettings = vi.fn(async (_settings: Settings): Promise<void> => {})
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -37,7 +66,8 @@ describe('LayerPanel', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    vi.mocked(setSettings).mockClear()
+    saveSettings.mockReset().mockResolvedValue(undefined)
+    resetSettingsProjectionForTests()
     currentDesign.value = {
       version: 2,
       name: 'Demo',
@@ -69,28 +99,9 @@ describe('LayerPanel', () => {
     hillshadeOpacity.value = 0.55
     activePanel.value = 'canvas'
     sidePanel.value = 'favorites'
-    hydrateSettingsProjection({
-      locale: 'en',
-      theme: 'light',
-      snap_to_grid: true,
-      snap_to_guides: true,
-      auto_save_interval_s: 60,
-      side_panel_width: null,
-      saved_stamps_frame_height: 220,
-      bottom_panel_open: false,
-      bottom_panel_timeline_height: null,
-      bottom_panel_budget_height: null,
-      bottom_panel_consortium_height: null,
-      bottom_panel_tab: 'budget',
-      map_layer_visible: true,
-      map_style: 'street',
-      map_opacity: 1,
-      contour_visible: false,
-      contour_opacity: 1,
-      contour_interval: 0,
-      hillshade_visible: false,
-      hillshade_opacity: 0.55,
-      plant_spacing_interval_m: 0.5,
+    installSettingsProjection({
+      load: () => baseSettings(),
+      save: saveSettings,
     })
     setCurrentCanvasSession(null)
     activePanel.value = 'canvas'
@@ -104,6 +115,7 @@ describe('LayerPanel', () => {
     render(null, container)
     container.remove()
     setCurrentCanvasSession(null)
+    resetSettingsProjectionForTests()
   })
 
   it('treats the base row as basemap visibility', async () => {
@@ -261,7 +273,7 @@ describe('LayerPanel', () => {
     expect(contourIntervalMeters.value).toBe(25)
     vi.runAllTimers()
     await Promise.resolve()
-    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       contour_visible: true,
       contour_interval: 25,
     }))
@@ -293,7 +305,7 @@ describe('LayerPanel', () => {
     expect(hillshadeOpacity.value).toBe(0.3)
     vi.runAllTimers()
     await Promise.resolve()
-    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       hillshade_visible: true,
       hillshade_opacity: 0.3,
     }))

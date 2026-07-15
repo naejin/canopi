@@ -56,7 +56,7 @@ export function createAppCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
       toggleSnapToGrid: () => {
         mutateSettingsProjection((settings) => {
           settings.snapToGrid = !settings.snapToGrid
-        }, { persist: 'queued' })
+        }, { persist: 'immediate' })
       },
       toggleRulersVisible: () => {
         rulersVisible.value = !rulersVisible.value

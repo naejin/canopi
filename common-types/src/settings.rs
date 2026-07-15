@@ -1,6 +1,30 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+macro_rules! settings_enum {
+    (
+        $(#[$enum_attribute:meta])*
+        $visibility:vis enum $name:ident {
+            $(
+                $(#[$variant_attribute:meta])*
+                $variant:ident
+            ),+ $(,)?
+        }
+    ) => {
+        $(#[$enum_attribute])*
+        $visibility enum $name {
+            $(
+                $(#[$variant_attribute])*
+                $variant,
+            )+
+        }
+
+        impl $name {
+            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
+        }
+    };
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(default)]
 pub struct Settings {
@@ -61,12 +85,14 @@ fn default_plant_spacing_interval_m() -> f64 {
     0.5
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum BasemapStyle {
-    #[default]
-    Street,
-    Satellite,
+settings_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
+    #[serde(rename_all = "lowercase")]
+    pub enum BasemapStyle {
+        #[default]
+        Street,
+        Satellite,
+    }
 }
 
 fn deserialize_basemap_style<'de, D>(deserializer: D) -> Result<BasemapStyle, D::Error>
@@ -74,39 +100,53 @@ where
     D: serde::Deserializer<'de>,
 {
     match serde_json::Value::deserialize(deserializer) {
-        Ok(serde_json::Value::String(value)) if value == "satellite" => Ok(BasemapStyle::Satellite),
-        Ok(serde_json::Value::String(_)) => Ok(BasemapStyle::Street),
-        Ok(_) => Ok(BasemapStyle::Street),
-        Err(_) => Ok(BasemapStyle::Street),
+        Ok(value) => Ok(serde_json::from_value(value).unwrap_or_default()),
+        Err(_) => Ok(BasemapStyle::default()),
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "lowercase")]
-pub enum Locale {
-    En,
-    Fr,
-    Es,
-    Pt,
-    It,
-    Zh,
-    De,
-    Ja,
-    Ko,
-    Nl,
-    Ru,
+settings_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Locale {
+        En,
+        Fr,
+        Es,
+        Pt,
+        It,
+        Zh,
+        De,
+        Ja,
+        Ko,
+        Nl,
+        Ru,
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "lowercase")]
-pub enum Theme {
-    Light,
-    Dark,
+settings_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Theme {
+        Light,
+        Dark,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Locale, Settings, Theme};
+    use super::{BasemapStyle, Locale, Settings, Theme};
+
+    #[test]
+    fn every_declared_basemap_style_deserializes_through_settings() {
+        for style in BasemapStyle::ALL {
+            let settings: Settings = serde_json::from_value(serde_json::json!({
+                "map_style": style,
+            }))
+            .expect("declared basemap style should remain loadable");
+
+            assert_eq!(settings.map_style, *style);
+        }
+    }
 
     #[test]
     fn legacy_unconsumed_keys_are_accepted_but_not_serialized() {

@@ -160,7 +160,11 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
         () => this.clearAutosaveTimer(),
         () => this.disconnectResizeObserver(),
         () => this.cancelPendingDocumentLoad(),
-        () => flushSettingsProjection(),
+        () => {
+          void Promise.resolve(flushSettingsProjection()).catch((error) => {
+            this.deps.logError("Failed to flush settings during Design Session cleanup:", error);
+          });
+        },
         () => this.runtimeHost.destroy(),
         () => {
           if (getCurrentCanvasSession() === this.surfaces) {

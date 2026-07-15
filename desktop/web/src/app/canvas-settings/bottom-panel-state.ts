@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals'
+import { DEFAULT_SETTINGS } from '../../generated/settings'
 
 export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'
 export type BottomPanelHeightPreferences = Record<BottomPanelTab, number | null>
@@ -11,15 +12,17 @@ export const DEFAULT_BOTTOM_PANEL_HEIGHTS: Record<BottomPanelTab, number> = {
   consortium: 220,
 }
 
-export const bottomPanelOpen = signal<boolean>(false)
-export const bottomPanelTab = signal<BottomPanelTab>('budget')
+export const bottomPanelOpen = signal<boolean>(DEFAULT_SETTINGS.bottom_panel_open)
+export const bottomPanelTab = signal<BottomPanelTab>(
+  DEFAULT_SETTINGS.bottom_panel_tab as BottomPanelTab,
+)
 export const bottomPanelHeights = signal<BottomPanelHeightPreferences>(createDefaultBottomPanelHeights())
 
 export function createDefaultBottomPanelHeights(): BottomPanelHeightPreferences {
   return {
-    timeline: null,
-    budget: null,
-    consortium: null,
+    timeline: DEFAULT_SETTINGS.bottom_panel_timeline_height,
+    budget: DEFAULT_SETTINGS.bottom_panel_budget_height,
+    consortium: DEFAULT_SETTINGS.bottom_panel_consortium_height,
   }
 }
 

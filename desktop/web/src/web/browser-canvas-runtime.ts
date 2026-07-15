@@ -17,6 +17,7 @@ import {
   snapToGuidesEnabled,
 } from '../app/canvas-settings/signals'
 import { locale, plantSpacingIntervalM, theme } from '../app/settings/state'
+import { mutateSettingsProjection } from '../app/settings/projection'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { setCanvasClean } from '../app/document-session/store'
 import { createAppSceneRuntimePanelTargetAdapter } from '../app/canvas-runtime/panel-target-adapter'
@@ -33,7 +34,7 @@ export function createBrowserCanvasRuntimeHost(): CanvasRuntimeHost {
   return new BrowserSceneCanvasRuntimeHost(runtime, createCanvasRuntimeSurfaces(runtime))
 }
 
-function createBrowserCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
+export function createBrowserCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
   return {
     cleanState: { setCanvasClean },
     document: { composeDocumentForSave },
@@ -50,13 +51,17 @@ function createBrowserCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
       readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM.value,
       commitPlantSpacingIntervalMeters: (meters) => {
-        plantSpacingIntervalM.value = meters
+        mutateSettingsProjection((settings) => {
+          settings.plantSpacingIntervalM = meters
+        }, { persist: 'immediate' })
       },
       toggleGridVisible: () => {
         gridVisible.value = !gridVisible.value
       },
       toggleSnapToGrid: () => {
-        snapToGridEnabled.value = !snapToGridEnabled.value
+        mutateSettingsProjection((settings) => {
+          settings.snapToGrid = !settings.snapToGrid
+        }, { persist: 'immediate' })
       },
       toggleRulersVisible: () => {
         rulersVisible.value = !rulersVisible.value

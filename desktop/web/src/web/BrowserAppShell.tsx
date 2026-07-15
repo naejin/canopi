@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { activePanel, navigateTo, sidePanel } from "../app/shell/state";
+import { mutateSettingsProjection } from "../app/settings/projection";
 import { locale, theme } from "../app/settings/state";
 import type { Locale } from "../types/settings";
 import { t } from "../i18n";
 import { ButtonTooltip } from "../components/shared/ButtonTooltip";
 import { Dropdown, type DropdownItem } from "../components/shared/Dropdown";
-import { applyBrowserTheme } from "./browser-theme";
 import {
   createBrowserShellProjection,
   type BrowserShellCommandId,
@@ -56,11 +56,6 @@ export interface BrowserShellCommandHandlers {
   readonly downloadCanopi?: () => void | Promise<void>;
 }
 
-export interface BrowserShellSettings {
-  readonly locale: Locale;
-  readonly theme: "light" | "dark";
-}
-
 export interface BrowserShellDesignIdentity {
   readonly name: string;
   readonly dirty: boolean;
@@ -72,7 +67,6 @@ interface BrowserAppShellProps {
   readonly downloadCanopiEnabled?: boolean;
   readonly templatesEnabled?: boolean;
   readonly onRenameDesign?: (name: string) => void;
-  readonly onSettingsChange?: (settings: BrowserShellSettings) => void;
   readonly children?: ComponentChildren;
 }
 
@@ -82,7 +76,6 @@ export function BrowserAppShell({
   downloadCanopiEnabled = true,
   templatesEnabled = false,
   onRenameDesign,
-  onSettingsChange,
   children,
 }: BrowserAppShellProps) {
   const currentLocale = locale.value;
@@ -328,7 +321,6 @@ export function BrowserAppShell({
         break;
       case "settings.theme":
         toggleTheme();
-        onSettingsChange?.({ locale: locale.value, theme: theme.value });
         break;
       case "nav.canvas":
         navigateTo("canvas");
@@ -346,8 +338,9 @@ export function BrowserAppShell({
   }
 
   function changeLanguage(nextLocale: Locale): void {
-    locale.value = nextLocale;
-    onSettingsChange?.({ locale: locale.value, theme: theme.value });
+    mutateSettingsProjection((settings) => {
+      settings.locale = nextLocale;
+    }, { persist: "immediate" });
   }
 
   function beginDesignNameEdit(): void {
@@ -380,7 +373,9 @@ export function BrowserAppShell({
 }
 
 function toggleTheme(): void {
-  applyBrowserTheme(theme.value === "dark" ? "light" : "dark");
+  mutateSettingsProjection((settings) => {
+    settings.theme = settings.theme === "dark" ? "light" : "dark";
+  }, { persist: "immediate" });
 }
 
 function visibleDesignName(name: string): string {

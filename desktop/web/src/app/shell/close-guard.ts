@@ -5,8 +5,17 @@ import { designDirty } from "../document-session/store";
 import { t } from '../../i18n'
 import { flushSettingsProjection } from "../settings/projection";
 
-let unlistenClose: (() => void) | null = null;
-let closeGuardRegistration = 0;
+export interface CloseGuardLifetime {
+  dispose(): void;
+}
+
+interface ActiveCloseGuard {
+  disposed: boolean;
+  closePromise: Promise<void> | null;
+  unlisten: (() => void) | null;
+}
+
+let activeCloseGuard: ActiveCloseGuard | null = null;
 
 export type CloseDecision = 'save' | 'discard' | 'cancel'
 
@@ -30,51 +39,99 @@ export async function confirmCloseWithUnsavedChanges(): Promise<CloseDecision> {
   return 'cancel'
 }
 
-export function registerCloseGuard(): void {
-  closeGuardRegistration += 1;
-  const registration = closeGuardRegistration;
+async function runCloseWorkflow(
+  closeGuard: ActiveCloseGuard,
+  currentWindow: ReturnType<typeof getCurrentWindow>,
+): Promise<void> {
+  try {
+    await flushSettingsProjection();
+  } catch (error) {
+    console.error("Failed to flush settings before close:", error);
+    return;
+  }
+  if (closeGuard.disposed) return;
 
-  if (typeof unlistenClose === "function") {
-    unlistenClose();
-    unlistenClose = null;
+  if (!designDirty.value) {
+    await currentWindow.destroy();
+    return;
   }
 
-  void getCurrentWindow()
-    .onCloseRequested(async (event) => {
-      flushSettingsProjection();
+  const decision = await confirmCloseWithUnsavedChanges();
+  if (closeGuard.disposed) return;
+  if (decision === "cancel") return;
 
-      if (!designDirty.value) return;
+  if (decision === "save") {
+    try {
+      const settlement = await saveCurrentDesign();
+      if (settlement?.status !== 'applied' || designDirty.value) return;
+    } catch {
+      return;
+    }
+    if (closeGuard.disposed) return;
+  }
 
+  await currentWindow.destroy();
+}
+
+export function registerCloseGuard(): CloseGuardLifetime {
+  if (activeCloseGuard) disposeCloseGuard(activeCloseGuard);
+
+  const closeGuard: ActiveCloseGuard = {
+    disposed: false,
+    closePromise: null,
+    unlisten: null,
+  };
+  activeCloseGuard = closeGuard;
+  const currentWindow = getCurrentWindow();
+
+  void currentWindow
+    .onCloseRequested((event) => {
       event.preventDefault();
+      if (closeGuard.disposed) return;
+      if (closeGuard.closePromise) return closeGuard.closePromise;
 
-      const decision = await confirmCloseWithUnsavedChanges();
-      if (decision === "cancel") return;
-
-      if (decision === "save") {
-        try {
-          const settlement = await saveCurrentDesign();
-          if (settlement?.status !== 'applied' || designDirty.value) return;
-        } catch {
-          return;
-        }
-      }
-
-      await getCurrentWindow().destroy();
+      const closePromise = runCloseWorkflow(closeGuard, currentWindow).catch((error) => {
+        console.error("Failed to complete close workflow:", error);
+      });
+      closeGuard.closePromise = closePromise;
+      void closePromise.then(
+        () => {
+          if (closeGuard.closePromise === closePromise) closeGuard.closePromise = null;
+        },
+        () => {
+          if (closeGuard.closePromise === closePromise) closeGuard.closePromise = null;
+        },
+      );
+      return closePromise;
     })
     .then((nextUnlisten) => {
-      if (registration !== closeGuardRegistration) {
+      if (closeGuard.disposed || activeCloseGuard !== closeGuard) {
         nextUnlisten();
         return;
       }
-      unlistenClose = nextUnlisten;
+      closeGuard.unlisten = nextUnlisten;
+    })
+    .catch((error) => {
+      if (!closeGuard.disposed && activeCloseGuard === closeGuard) {
+        console.error("Failed to register close guard:", error);
+      }
     });
+
+  return {
+    dispose: () => disposeCloseGuard(closeGuard),
+  };
+}
+
+function disposeCloseGuard(closeGuard: ActiveCloseGuard): void {
+  if (closeGuard.disposed) return;
+  closeGuard.disposed = true;
+  closeGuard.unlisten?.();
+  closeGuard.unlisten = null;
+  if (activeCloseGuard === closeGuard) activeCloseGuard = null;
 }
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    if (typeof unlistenClose === "function") {
-      unlistenClose();
-      unlistenClose = null;
-    }
+    if (activeCloseGuard) disposeCloseGuard(activeCloseGuard);
   });
 }

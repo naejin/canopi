@@ -2,12 +2,8 @@ import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
 import { useEffect, useMemo } from "preact/hooks";
 import { activePanel, sidePanel } from "../app/shell/state";
-import { locale } from "../app/settings/state";
-import type { Locale, Theme } from "../types/settings";
 import styles from "./WebApp.module.css";
-import { BrowserAppShell, type BrowserShellCommandHandlers, type BrowserShellSettings } from "./BrowserAppShell";
-import { applyBrowserTheme } from "./browser-theme";
-import { browserAppDataStore, type BrowserAppDataStore } from "./browser-app-data";
+import { BrowserAppShell, type BrowserShellCommandHandlers } from "./BrowserAppShell";
 import {
   browserDesignSessionController,
   type BrowserDesignSessionController,
@@ -21,18 +17,14 @@ const WorldMapPanel = lazy(async () => {
   return { default: module.WorldMapPanel };
 });
 
-const LOCALES: readonly Locale[] = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"];
-
 interface WebAppProps {
   readonly controller?: BrowserDesignSessionController;
-  readonly appDataStore?: BrowserAppDataStore;
   readonly templatesEnabled?: boolean;
   readonly workspace?: ComponentChildren;
 }
 
 export function WebApp({
   controller = browserDesignSessionController,
-  appDataStore = browserAppDataStore,
   templatesEnabled = hasConfiguredStaticDesignTemplates(),
   workspace,
 }: WebAppProps) {
@@ -50,10 +42,6 @@ export function WebApp({
     },
   }), [controller]);
 
-  useEffect(() => {
-    applyStoredBrowserSettings(appDataStore.loadSettings());
-  }, [appDataStore]);
-
   useEffect(() => controller.installAutosave(), [controller]);
 
   return (
@@ -64,7 +52,6 @@ export function WebApp({
         downloadCanopiEnabled={hasDesign}
         templatesEnabled={templatesEnabled}
         onRenameDesign={(name) => controller.renameDesign(name)}
-        onSettingsChange={(settings) => persistBrowserSettings(appDataStore, settings)}
       >
         {workspace ?? <WebWorkspace controller={controller} templatesEnabled={templatesEnabled} />}
       </BrowserAppShell>
@@ -109,34 +96,6 @@ function WebWorkspace({
       )}
     </div>
   );
-}
-
-function applyStoredBrowserSettings(settings: Record<string, unknown> | null): void {
-  if (!settings) return;
-  if (isLocale(settings.locale)) {
-    locale.value = settings.locale;
-  }
-  if (isTheme(settings.theme)) {
-    applyBrowserTheme(settings.theme);
-  }
-}
-
-function persistBrowserSettings(
-  appDataStore: BrowserAppDataStore,
-  settings: BrowserShellSettings,
-): void {
-  appDataStore.saveSettings({
-    locale: settings.locale,
-    theme: settings.theme,
-  });
-}
-
-function isLocale(value: unknown): value is Locale {
-  return typeof value === "string" && LOCALES.includes(value as Locale);
-}
-
-function isTheme(value: unknown): value is Theme {
-  return value === "light" || value === "dark";
 }
 
 function logWebAppCommandError(error: unknown): void {

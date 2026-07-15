@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      try {
+        const cachedTheme = localStorage.getItem("canopi-theme");
+        if (cachedTheme === "light" || cachedTheme === "dark") {
+          document.documentElement.setAttribute("data-theme", cachedTheme);
+        }
+      } catch {
+        // The cache is optional; platform settings hydrate after module startup.
+      }
+    </script>
     <title>Canopi</title>
   </head>
   <body>

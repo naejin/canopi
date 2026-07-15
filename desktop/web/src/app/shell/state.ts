@@ -1,4 +1,5 @@
 import { signal, batch } from "@preact/signals";
+import { DEFAULT_SETTINGS } from "../../generated/settings";
 
 export type Panel = "plant-db" | "canvas" | "favorites" | "location" | "templates" | "design-notebook";
 
@@ -16,7 +17,7 @@ export const sidePanel = signal<SidePanel | null>(null);
 
 // Sidebar width in pixels. null = no explicit user resize, so the shell uses
 // the responsive first-use default.
-export const sidePanelWidth = signal<number | null>(null);
+export const sidePanelWidth = signal<number | null>(DEFAULT_SETTINGS.side_panel_width);
 
 /**
  * Navigate to a panel using the correct routing model:

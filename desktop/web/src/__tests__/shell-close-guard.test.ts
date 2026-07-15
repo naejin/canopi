@@ -55,7 +55,7 @@ describe("registerCloseGuard", () => {
   beforeEach(async () => {
     vi.resetModules();
     mocks.destroy.mockReset();
-    mocks.flushSettingsProjection.mockReset();
+    mocks.flushSettingsProjection.mockReset().mockResolvedValue(undefined);
     mocks.getCurrentWindow.mockReset();
     mocks.message.mockReset();
     mocks.onCloseRequested.mockReset();
@@ -97,7 +97,137 @@ describe("registerCloseGuard", () => {
     expect(mocks.unlistenA).toHaveBeenCalledTimes(1);
   });
 
-  it("flushes settings and allows clean closes without prompting", async () => {
+  it("disposes a listener that settles after its close-guard lifetime ends", async () => {
+    let resolveRegistration!: (unlisten: () => void) => void;
+    mocks.onCloseRequested.mockReset().mockReturnValue(new Promise<() => void>((resolve) => {
+      resolveRegistration = resolve;
+    }));
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+
+    const lifetime = registerCloseGuard();
+    lifetime.dispose();
+    resolveRegistration(mocks.unlistenA);
+    await flushMicrotasks();
+
+    expect(mocks.unlistenA).toHaveBeenCalledTimes(1);
+  });
+
+  it("disposes a settled close-guard listener at most once", async () => {
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+
+    const lifetime = registerCloseGuard();
+    await flushMicrotasks();
+    lifetime.dispose();
+    lifetime.dispose();
+
+    expect(mocks.unlistenA).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not report a listener registration failure after its lifetime ends", async () => {
+    let rejectRegistration!: (error: unknown) => void;
+    mocks.onCloseRequested.mockReset().mockReturnValue(new Promise<() => void>((_resolve, reject) => {
+      rejectRegistration = reject;
+    }));
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+
+    const lifetime = registerCloseGuard();
+    lifetime.dispose();
+    rejectRegistration(new Error("obsolete registration"));
+    await flushMicrotasks();
+
+    expect(logError).not.toHaveBeenCalled();
+    logError.mockRestore();
+  });
+
+  it("reports a listener registration failure for the active lifetime", async () => {
+    const error = new Error("listener unavailable");
+    mocks.onCloseRequested.mockReset().mockRejectedValue(error);
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+
+    registerCloseGuard();
+    await flushMicrotasks();
+
+    expect(logError).toHaveBeenCalledWith("Failed to register close guard:", error);
+    logError.mockRestore();
+  });
+
+  it("prevents a clean close until settings finish flushing, then destroys the window", async () => {
+    let resolveFlush!: () => void;
+    mocks.flushSettingsProjection.mockReturnValue(new Promise<void>((resolve) => {
+      resolveFlush = resolve;
+    }));
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    registerCloseGuard();
+    await flushMicrotasks();
+
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (event: { preventDefault: () => void }) => Promise<void>;
+    const event = { preventDefault: vi.fn() };
+    const close = handler(event);
+
+    expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mocks.message).not.toHaveBeenCalled();
+    expect(mocks.destroy).not.toHaveBeenCalled();
+
+    resolveFlush();
+    await close;
+
+    expect(mocks.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces close requests while the close workflow is in flight", async () => {
+    let resolveFlush!: () => void;
+    mocks.flushSettingsProjection.mockReturnValue(new Promise<void>((resolve) => {
+      resolveFlush = resolve;
+    }));
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    registerCloseGuard();
+    await flushMicrotasks();
+
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (event: { preventDefault: () => void }) => Promise<void>;
+    const firstEvent = { preventDefault: vi.fn() };
+    const secondEvent = { preventDefault: vi.fn() };
+    const firstClose = handler(firstEvent);
+    const secondClose = handler(secondEvent);
+
+    expect(firstEvent.preventDefault).toHaveBeenCalledTimes(1);
+    expect(secondEvent.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
+
+    resolveFlush();
+    await Promise.all([firstClose, secondClose]);
+
+    expect(mocks.message).not.toHaveBeenCalled();
+    expect(mocks.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not finish a close after its guard lifetime is disposed during flush", async () => {
+    let resolveFlush!: () => void;
+    mocks.flushSettingsProjection.mockReturnValue(new Promise<void>((resolve) => {
+      resolveFlush = resolve;
+    }));
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    const lifetime = registerCloseGuard();
+    await flushMicrotasks();
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (event: { preventDefault: () => void }) => Promise<void>;
+    const event = { preventDefault: vi.fn() };
+
+    const close = handler(event);
+    lifetime.dispose();
+    resolveFlush();
+    await close;
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mocks.message).not.toHaveBeenCalled();
+    expect(mocks.destroy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the window open when settings cannot be flushed", async () => {
+    const error = new Error("settings unavailable");
+    mocks.flushSettingsProjection.mockRejectedValue(error);
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
     const { registerCloseGuard } = await import("../app/shell/close-guard");
     registerCloseGuard();
     await flushMicrotasks();
@@ -106,10 +236,45 @@ describe("registerCloseGuard", () => {
     const event = { preventDefault: vi.fn() };
     await handler(event);
 
-    expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
-    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(mocks.message).not.toHaveBeenCalled();
     expect(mocks.destroy).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith("Failed to flush settings before close:", error);
+    logError.mockRestore();
+  });
+
+  it("contains and reports a dirty-close dialog failure", async () => {
+    const design = await import("./support/design-session-state");
+    design.nonCanvasRevision.value = 1;
+    const error = new Error("dialog unavailable");
+    mocks.message.mockRejectedValue(error);
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    registerCloseGuard();
+    await flushMicrotasks();
+
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (event: { preventDefault: () => void }) => Promise<void>;
+    await expect(handler({ preventDefault: vi.fn() })).resolves.toBeUndefined();
+
+    expect(mocks.destroy).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith("Failed to complete close workflow:", error);
+    logError.mockRestore();
+  });
+
+  it("contains and reports a window-destroy failure", async () => {
+    const error = new Error("window unavailable");
+    mocks.destroy.mockRejectedValue(error);
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    registerCloseGuard();
+    await flushMicrotasks();
+
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (event: { preventDefault: () => void }) => Promise<void>;
+    await expect(handler({ preventDefault: vi.fn() })).resolves.toBeUndefined();
+
+    expect(mocks.destroy).toHaveBeenCalledTimes(1);
+    expect(logError).toHaveBeenCalledWith("Failed to complete close workflow:", error);
+    logError.mockRestore();
   });
 
   it("prompts on dirty close and destroys the window after a successful save", async () => {

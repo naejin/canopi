@@ -179,7 +179,6 @@ describe('frontend boundary sources', () => {
       /app\/document-session\/transition$/,
       /app\/document-session\/state-machine$/,
       /app\/problem-report(\/|$)/,
-      /app\/settings\/projection$/,
       /app\/location$/,
       /app\/location\/index$/,
       /app\/location\/coordinate-workbench$/,
@@ -198,6 +197,38 @@ describe('frontend boundary sources', () => {
       expect(source, `${sourcePath} should not expose web geocoding`).not.toContain('geocode')
       expect(source, `${sourcePath} should not mount Web Location`).not.toContain('WebLocation')
     }
+  })
+
+  it('shares one platform-neutral Settings Projection across Desktop and Web', () => {
+    const webSources = sourceFilesUnder('../web').filter(isTypescriptSource)
+    const projectionImporters = webSources
+      .filter((sourcePath) => importSpecifiers(readSource(sourcePath)).some(
+        (specifier) => specifier.endsWith('/app/settings/projection'),
+      ))
+      .sort()
+    const projectionSource = readSource('../app/settings/projection.ts')
+    const webAppSource = readSource('../web/WebApp.tsx')
+    const browserShellSource = readSource('../web/BrowserAppShell.tsx')
+    const browserRuntimeSource = readSource('../web/browser-canvas-runtime.ts')
+    const browserPlatformSource = readSource('../platform/browser.ts')
+    const desktopPlatformSource = readSource('../platform/desktop.ts')
+
+    expect(projectionImporters).toEqual([
+      '../web/BrowserAppShell.tsx',
+      '../web/browser-canvas-runtime.ts',
+    ])
+    expect(projectionSource).not.toContain('../../ipc/settings')
+    expect(projectionSource).not.toContain('browser-app-data')
+    expect(webAppSource).not.toContain('loadSettings')
+    expect(webAppSource).not.toContain('saveSettings')
+    expect(webAppSource).not.toContain('onSettingsChange')
+    expect(webAppSource).not.toContain('browser-theme')
+    expect(browserShellSource).toContain('mutateSettingsProjection')
+    expect(browserShellSource).not.toMatch(/\b(?:locale|theme)\.value\s*=(?!=)/)
+    expect(browserRuntimeSource).toContain('mutateSettingsProjection')
+    expect(browserRuntimeSource).not.toMatch(/\b(?:plantSpacingIntervalM|snapToGridEnabled)\.value\s*=(?!=)/)
+    expect(browserPlatformSource).toContain('browserSettingsPlatformAdapter')
+    expect(desktopPlatformSource).toContain('desktopSettingsPlatformAdapter')
   })
 
   it('keeps Web Edition Species detail behind its reduced adapter', () => {

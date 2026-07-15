@@ -9,33 +9,57 @@ function applyTheme(resolved: "light" | "dark") {
 
 let disposeThemeEffect: (() => void) | null = null;
 
+function readCachedTheme(): "light" | "dark" | null {
+  try {
+    const cached = localStorage.getItem("canopi-theme");
+    return cached === "light" || cached === "dark" ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedTheme(resolved: "light" | "dark"): void {
+  try {
+    localStorage.setItem("canopi-theme", resolved);
+  } catch {
+    // Theme cache is optional; the active settings adapter remains authoritative.
+  }
+}
+
 /**
  * Initialize the theme reactive effect.
  *
- * Rust settings are the canonical persistence source of truth for theme.
+ * The active platform settings adapter is the persistence source of truth.
  * localStorage is used ONLY as a synchronous cache for first-paint — it
  * prevents theme flash by providing the last-known theme before the async
- * Rust bootstrap resolves. The effect writes to localStorage on every
- * change so the cache stays in sync with whatever Rust provides.
+ * settings bootstrap resolves. The effect writes to localStorage on every
+ * change so the cache stays in sync with the durable platform setting.
  */
-export function initTheme() {
+export function initTheme(): () => void {
   // Clean up previous init (HMR safety)
   disposeThemeEffect?.();
 
   // Read the sync cache for instant first-paint (avoids flash)
-  const cached = localStorage.getItem("canopi-theme");
-  if (cached === "light" || cached === "dark") {
+  const cached = readCachedTheme();
+  if (cached) {
     primeThemeProjectionFromFirstPaintCache(cached);
   }
 
   // Apply theme reactively whenever the signal changes, and sync the cache
-  disposeThemeEffect = effect(() => {
+  const installedEffect = effect(() => {
     applyTheme(theme.value);
     invalidateCssVarCache();
-    // Keep the sync cache up to date (Rust bootstrap overwrites the signal,
+    // Keep the sync cache up to date (settings bootstrap overwrites the signal,
     // which triggers this effect, which updates the cache for next startup)
-    localStorage.setItem("canopi-theme", theme.value);
+    writeCachedTheme(theme.value);
   });
+  disposeThemeEffect = installedEffect;
+
+  return () => {
+    if (disposeThemeEffect !== installedEffect) return;
+    disposeThemeEffect = null;
+    installedEffect();
+  };
 }
 
 if (import.meta.hot) {

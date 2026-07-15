@@ -1,6 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   VISIBLE_BOTTOM_PANEL_TABS,
   bottomPanelHeights,
