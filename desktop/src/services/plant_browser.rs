@@ -24,6 +24,10 @@ struct SpeciesSearchCancellationInner {
     active: Mutex<Option<ActiveSpeciesSearch>>,
     #[cfg(test)]
     before_interrupt: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    #[cfg(test)]
+    after_mark_running: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    #[cfg(test)]
+    after_search_success: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 struct ActiveSpeciesSearch {
@@ -191,6 +195,50 @@ impl SpeciesSearchCancellation {
             .lock()
             .unwrap_or_else(|error| error.into_inner()) = Some(Arc::new(hook));
     }
+
+    #[cfg(test)]
+    fn set_after_mark_running_hook(&self, hook: impl Fn() + Send + Sync + 'static) {
+        *self
+            .inner
+            .after_mark_running
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(Arc::new(hook));
+    }
+
+    #[cfg(test)]
+    fn run_after_mark_running_hook(&self) {
+        let hook = self
+            .inner
+            .after_mark_running
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
+        if let Some(hook) = hook {
+            hook();
+        }
+    }
+
+    #[cfg(test)]
+    fn set_after_search_success_hook(&self, hook: impl Fn() + Send + Sync + 'static) {
+        *self
+            .inner
+            .after_search_success
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(Arc::new(hook));
+    }
+
+    #[cfg(test)]
+    fn run_after_search_success_hook(&self) {
+        let hook = self
+            .inner
+            .after_search_success
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
+        if let Some(hook) = hook {
+            hook();
+        }
+    }
 }
 
 impl SpeciesSearchCancellationToken {
@@ -270,8 +318,18 @@ pub async fn search_species_async_cancellable(
                 .as_ref()
                 .map(|cancellation| cancellation.mark_running())
                 .transpose()?;
+            #[cfg(test)]
+            if let Some(cancellation) = &cancellation {
+                cancellation.cancellation.run_after_mark_running_hook();
+            }
             match SpeciesCatalogRead::new(&conn).search(request) {
-                Ok(result) => result,
+                Ok(result) => {
+                    #[cfg(test)]
+                    if let Some(cancellation) = &cancellation {
+                        cancellation.cancellation.run_after_search_success_hook();
+                    }
+                    result
+                }
                 Err(error) => {
                     if let Some(cancellation) = &cancellation {
                         cancellation.ensure_current()?;
@@ -620,6 +678,50 @@ mod tests {
         assert_eq!(
             error,
             "Species search cancelled because a newer query superseded it"
+        );
+    }
+
+    #[test]
+    fn superseding_after_mark_running_stops_the_catalog_query_before_completion() {
+        let plant_db = test_plant_db();
+        let user_db = test_user_db();
+        let cancellation = SpeciesSearchCancellation::default();
+        let token = cancellation.begin(plant_db.interrupt_handle().unwrap());
+        let reached_query_gap = Arc::new(Barrier::new(2));
+        let release_query = Arc::new(Barrier::new(2));
+        let hook_reached_query_gap = Arc::clone(&reached_query_gap);
+        let hook_release_query = Arc::clone(&release_query);
+        cancellation.set_after_mark_running_hook(move || {
+            hook_reached_query_gap.wait();
+            hook_release_query.wait();
+        });
+        let query_completed = Arc::new(AtomicBool::new(false));
+        let hook_query_completed = Arc::clone(&query_completed);
+        cancellation.set_after_search_success_hook(move || {
+            hook_query_completed.store(true, Ordering::SeqCst);
+        });
+
+        let search = std::thread::spawn(move || {
+            tauri::async_runtime::block_on(search_species_async_cancellable(
+                plant_db,
+                user_db,
+                search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
+                Some(token),
+            ))
+        });
+
+        reached_query_gap.wait();
+        cancellation.supersede_request();
+        release_query.wait();
+
+        let error = search.join().unwrap().unwrap_err();
+        assert_eq!(
+            error,
+            "Species search cancelled because a newer query superseded it"
+        );
+        assert!(
+            !query_completed.load(Ordering::SeqCst),
+            "the superseded search completed SQLite work after its interrupt was delivered too early"
         );
     }
 
