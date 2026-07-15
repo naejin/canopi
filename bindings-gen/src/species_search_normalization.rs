@@ -511,4 +511,52 @@ mod tests {
 
         assert!(error.contains("standard Hangul"), "{error}");
     }
+
+    #[test]
+    fn bindings_validation_rejects_property_range_spanning_unknown_gap() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let authority: NormalizationContract = serde_json::from_str(
+            &std::fs::read_to_string(root.join("common-types/species-search-normalization.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        let mut facts: UnicodeFacts = serde_json::from_str(
+            &std::fs::read_to_string(root.join("common-types/species-search-unicode-15.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        facts.mark_scalar_ranges = vec![[887, 890]];
+
+        let error = validate(&authority, &facts).unwrap_err().to_string();
+
+        assert!(error.contains("known scalars"), "{error}");
+    }
+
+    #[test]
+    fn bindings_validation_requires_known_hangul_syllable_range() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let authority: NormalizationContract = serde_json::from_str(
+            &std::fs::read_to_string(root.join("common-types/species-search-normalization.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        let mut facts: UnicodeFacts = serde_json::from_str(
+            &std::fs::read_to_string(root.join("common-types/species-search-unicode-15.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        facts
+            .known_scalar_ranges
+            .retain(|[start, end]| !(*start <= 0xAC00 && 0xAC00 <= *end));
+        facts
+            .token_scalar_ranges
+            .retain(|[start, end]| !(*start <= 0xAC00 && 0xAC00 <= *end));
+
+        let error = validate(&authority, &facts).unwrap_err().to_string();
+
+        assert!(
+            error.contains("Hangul") && error.contains("known"),
+            "{error}"
+        );
+    }
 }

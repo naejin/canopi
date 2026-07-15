@@ -198,6 +198,49 @@ class SpeciesSearchNormalizationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, r"contained by known_scalar_ranges"):
                 normalization.load_contract(root=root)
 
+    def test_authority_parser_rejects_property_range_spanning_unknown_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common_types = root / "common-types"
+            common_types.mkdir(parents=True)
+            (common_types / CONTRACT_PATH.name).write_text(
+                CONTRACT_PATH.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            facts = json.loads(UNICODE_FACTS_PATH.read_text(encoding="utf-8"))
+            facts["mark_scalar_ranges"] = [[887, 890]]
+            (common_types / UNICODE_FACTS_PATH.name).write_text(
+                json.dumps(facts),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(RuntimeError, r"contained by known_scalar_ranges"):
+                normalization.load_contract(root=root)
+
+    def test_authority_parser_requires_known_hangul_syllable_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common_types = root / "common-types"
+            common_types.mkdir(parents=True)
+            (common_types / CONTRACT_PATH.name).write_text(
+                CONTRACT_PATH.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            facts = json.loads(UNICODE_FACTS_PATH.read_text(encoding="utf-8"))
+            for key in ("known_scalar_ranges", "token_scalar_ranges"):
+                facts[key] = [
+                    scalar_range
+                    for scalar_range in facts[key]
+                    if not scalar_range[0] <= 0xAC00 <= scalar_range[1]
+                ]
+            (common_types / UNICODE_FACTS_PATH.name).write_text(
+                json.dumps(facts),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(RuntimeError, r"Hangul.*known scalars"):
+                normalization.load_contract(root=root)
+
 
 if __name__ == "__main__":
     unittest.main()

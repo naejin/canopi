@@ -533,6 +533,38 @@ mod tests {
     }
 
     #[test]
+    fn runtime_authority_parser_rejects_property_range_spanning_unknown_gap() {
+        let mut raw_facts: serde_json::Value = serde_json::from_str(UNICODE_FACTS_SOURCE).unwrap();
+        raw_facts["mark_scalar_ranges"] = serde_json::json!([[887, 890]]);
+
+        let error = parse_contract(CONTRACT_SOURCE, &raw_facts.to_string()).unwrap_err();
+
+        assert!(error.contains("known scalars"), "{error}");
+    }
+
+    #[test]
+    fn runtime_authority_parser_requires_known_hangul_syllable_range() {
+        let mut raw_facts: serde_json::Value = serde_json::from_str(UNICODE_FACTS_SOURCE).unwrap();
+        for key in ["known_scalar_ranges", "token_scalar_ranges"] {
+            raw_facts[key]
+                .as_array_mut()
+                .unwrap()
+                .retain(|scalar_range| {
+                    let start = scalar_range[0].as_u64().unwrap();
+                    let end = scalar_range[1].as_u64().unwrap();
+                    !(start <= 0xAC00 && 0xAC00 <= end)
+                });
+        }
+
+        let error = parse_contract(CONTRACT_SOURCE, &raw_facts.to_string()).unwrap_err();
+
+        assert!(
+            error.contains("Hangul") && error.contains("known"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn rust_and_python_compilers_fingerprint_the_same_canonical_json() {
         let authority: serde_json::Value = serde_json::from_str(CONTRACT_SOURCE).unwrap();
         let unicode_facts: serde_json::Value = serde_json::from_str(UNICODE_FACTS_SOURCE).unwrap();
