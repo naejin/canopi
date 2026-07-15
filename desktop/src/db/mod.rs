@@ -4,6 +4,7 @@ pub(crate) mod plant_filter_fields;
 pub mod query_builder;
 pub mod recent_files;
 pub(crate) mod schema_contract;
+pub(crate) mod species_search_normalization;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod user_db;
@@ -32,6 +33,10 @@ pub enum PlantDb {
 
 impl PlantDb {
     pub fn available(connection: Connection) -> Self {
+        if let Err(error) = species_search_normalization::register_sqlite_function(&connection) {
+            tracing::error!("Failed to register Species Search normalization function: {error}");
+            return Self::Corrupt;
+        }
         let interrupt = Arc::new(connection.get_interrupt_handle());
         Self::Available {
             connection: Arc::new(Mutex::new(connection)),
