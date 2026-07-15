@@ -391,6 +391,71 @@ printf '%s\\0' "$@" >> "$GH_LOG"
             if gh_log.exists():
                 self.assertNotIn(b"upload", gh_log.read_bytes().split(b"\0"))
 
+    def test_publisher_reverifies_source_snapshot_after_prepare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            temp = Path(tmp)
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            source_changed = temp / "source-changed"
+            gh_log = temp / "gh-args"
+            custom_output = temp / "operator-selected-name.db"
+            custom_output.write_bytes(b"prepared catalog")
+
+            self._write_executable(
+                fake_bin / "python3",
+                """#!/usr/bin/env bash
+if [[ "$*" == *"value prepared-schema-version"* ]]; then
+  printf '%s\\n' '13'
+elif [[ "$*" == *"value prepared-db-asset-name"* ]]; then
+  printf '%s\\n' 'canopi-core-v13-stable-identity.db'
+elif [[ "$*" == *"prepare-db.py"* ]]; then
+  touch "$SOURCE_CHANGED"
+elif [[ "$*" == *"verify-source-export"* && -e "$SOURCE_CHANGED" ]]; then
+  printf '%s\\n' 'source snapshot changed during preparation' >&2
+  exit 1
+fi
+""",
+            )
+            self._write_executable(
+                fake_bin / "sha256sum",
+                """#!/usr/bin/env bash
+printf '%064d  %s\\n' 0 "$1"
+""",
+            )
+            self._write_executable(
+                fake_bin / "gh",
+                """#!/usr/bin/env bash
+printf '%s\\0' "$@" >> "$GH_LOG"
+""",
+            )
+            environment = os.environ.copy()
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["SOURCE_CHANGED"] = str(source_changed)
+            environment["GH_LOG"] = str(gh_log)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(SCRIPT_DIR / "publish-db-release.sh"),
+                    "--export-path",
+                    str(temp / "export.db"),
+                    "--output-path",
+                    str(custom_output),
+                    "--repo",
+                    "example/canopi",
+                ],
+                cwd=SCRIPT_DIR.parent,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("source snapshot changed during preparation", result.stderr)
+            if gh_log.exists():
+                self.assertNotIn(b"upload", gh_log.read_bytes().split(b"\0"))
+
     def test_source_export_identity_changes_asset_not_prepared_semantics(self):
         baseline = contract.project(contract.ProjectionTarget.RELEASE)
         baseline_web = contract.project(contract.ProjectionTarget.WEB_CATALOG)

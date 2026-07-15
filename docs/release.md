@@ -27,7 +27,7 @@ scripts/publish-db-release.sh --export-path ~/projects/canopi-data/data/exports/
 
 Optional flags: `--tag <tag>` and `--repo <owner/repo>`.
 
-The publisher first verifies that the input file bytes match `prepared_artifact.source_export_sha256`. The uploaded asset name is compiled from the exact prepared schema version, prepared-contract fingerprint, and full source-export SHA-256, for example `canopi-core-v13-<fingerprint>-<source-sha256>.db`. Assets for older storage or content identities remain on the stable `canopi-core-db` release tag. The publisher stages files under those exact basenames and does not overwrite an existing identity asset.
+The publisher verifies that the input file bytes match `prepared_artifact.source_export_sha256` before preparation, then verifies the source again and requires the compiled release identity to be unchanged before staging. The uploaded asset name is compiled from the exact prepared schema version, prepared-contract fingerprint, and full source-export SHA-256, for example `canopi-core-v13-<fingerprint>-<source-sha256>.db`. Assets for older storage or content identities remain on the stable `canopi-core-db` release tag. The publisher stages files under those exact basenames only after the stable-identity check and does not overwrite an existing identity asset.
 
 This script fails if: the source export bytes do not match the authored pin, the generated DB is empty, the prepared database does not satisfy the compiled storage contract in `scripts/schema-contract.json`, the target release tag does not exist, the compiled identity asset already exists, or `gh release upload` fails.
 

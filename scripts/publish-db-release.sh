@@ -110,7 +110,7 @@ mkdir -p "$upload_dir"
 upload_path="$upload_dir/$asset_name"
 checksum_path="$upload_dir/${asset_name}.sha256"
 if [[ -z "$output_path" ]]; then
-  output_path="$upload_path"
+  output_path="$tmpdir/prepared.db"
 fi
 
 log "Building bundled DB from export: $export_path"
@@ -123,6 +123,13 @@ if [[ ! -s "$output_path" ]]; then
 fi
 
 python3 scripts/species_catalog_contract.py verify-db --profile prepared "$output_path"
+python3 scripts/species_catalog_contract.py verify-source-export "$export_path"
+python3 scripts/species_catalog_contract.py check
+publication_asset_name="$(python3 scripts/species_catalog_contract.py value prepared-db-asset-name)"
+if [[ "$publication_asset_name" != "$asset_name" ]]; then
+  echo "ERROR: Species Catalog release identity changed during preparation: expected $asset_name, observed $publication_asset_name" >&2
+  exit 1
+fi
 
 if [[ "$output_path" != "$upload_path" ]] && ! ln "$output_path" "$upload_path" 2>/dev/null; then
   cp "$output_path" "$upload_path"
