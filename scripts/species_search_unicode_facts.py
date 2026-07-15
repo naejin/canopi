@@ -16,6 +16,15 @@ AUTHORITY_PATH = REPO_ROOT / "common-types/species-search-normalization.json"
 FACTS_FILENAME = "species-search-unicode-15.json"
 FACTS_PATH = REPO_ROOT / "common-types" / FACTS_FILENAME
 MAX_UNICODE_SCALAR = 0x10FFFF
+HANGUL_DECOMPOSITION = {
+    "s_base": 0xAC00,
+    "l_base": 0x1100,
+    "v_base": 0x1161,
+    "t_base": 0x11A7,
+    "l_count": 19,
+    "v_count": 21,
+    "t_count": 28,
+}
 
 
 def scalar_ranges(predicate: Callable[[int], bool]) -> list[list[int]]:
@@ -52,20 +61,35 @@ def compile_unicode_data(version: str) -> dict[str, object]:
     token_ranges = scalar_ranges(
         lambda scalar: category(scalar).startswith(("L", "N"))
     )
+    hangul_end = (
+        HANGUL_DECOMPOSITION["s_base"]
+        + HANGUL_DECOMPOSITION["l_count"]
+        * HANGUL_DECOMPOSITION["v_count"]
+        * HANGUL_DECOMPOSITION["t_count"]
+    )
+    compatibility_decomposition_mappings = []
     lowercase_mappings = []
     for start, end in known_ranges:
         for scalar in range(start, end + 1):
             character = chr(scalar)
+            decomposition = unicodedata.normalize("NFKD", character)
+            if (
+                decomposition != character
+                and not HANGUL_DECOMPOSITION["s_base"] <= scalar < hangul_end
+            ):
+                compatibility_decomposition_mappings.append([scalar, decomposition])
             lowered = character.lower()
             if lowered != character:
                 lowercase_mappings.append([scalar, lowered])
 
     return {
-        "facts_format_version": 1,
+        "facts_format_version": 2,
         "unicode_data_version": version,
         "known_scalar_ranges": known_ranges,
         "mark_scalar_ranges": mark_ranges,
         "token_scalar_ranges": token_ranges,
+        "hangul_decomposition": HANGUL_DECOMPOSITION,
+        "compatibility_decomposition_mappings": compatibility_decomposition_mappings,
         "lowercase_mappings": lowercase_mappings,
     }
 

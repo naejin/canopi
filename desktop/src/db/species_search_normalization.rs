@@ -2,7 +2,6 @@ use rusqlite::{Connection, functions::FunctionFlags};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
-use unicode_normalization::UnicodeNormalization;
 
 const CONTRACT_SOURCE: &str =
     include_str!("../../../common-types/species-search-normalization.json");
@@ -36,13 +35,38 @@ struct UnicodeFacts {
     known_scalar_ranges: Vec<[u32; 2]>,
     mark_scalar_ranges: Vec<[u32; 2]>,
     token_scalar_ranges: Vec<[u32; 2]>,
+    hangul_decomposition: HangulDecomposition,
+    compatibility_decomposition_mappings: Vec<(u32, String)>,
     lowercase_mappings: Vec<(u32, String)>,
 }
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct HangulDecomposition {
+    s_base: u32,
+    l_base: u32,
+    v_base: u32,
+    t_base: u32,
+    l_count: u32,
+    v_count: u32,
+    t_count: u32,
+}
+
+const STANDARD_HANGUL_DECOMPOSITION: HangulDecomposition = HangulDecomposition {
+    s_base: 0xAC00,
+    l_base: 0x1100,
+    v_base: 0x1161,
+    t_base: 0x11A7,
+    l_count: 19,
+    v_count: 21,
+    t_count: 28,
+};
 
 #[derive(Debug)]
 struct LoadedNormalizationContract {
     authority: NormalizationContract,
     unicode_facts: UnicodeFacts,
+    decomposition_by_scalar: HashMap<u32, String>,
     lowercase_by_scalar: HashMap<u32, String>,
 }
 
@@ -120,7 +144,7 @@ fn parse_contract(
     }
     if authority.unicode_data.version.is_empty()
         || authority.unicode_data.facts_file != UNICODE_FACTS_FILENAME
-        || unicode_facts.facts_format_version != 1
+        || unicode_facts.facts_format_version != 2
         || unicode_facts.unicode_data_version != authority.unicode_data.version
     {
         return Err("Unicode facts do not match the normalization authority".to_owned());
@@ -140,26 +164,45 @@ fn parse_contract(
             }
         }
     }
-    let mut lowercase_by_scalar = HashMap::new();
-    let mut previous_scalar = None;
-    for (scalar, target) in &unicode_facts.lowercase_mappings {
-        if target.is_empty()
-            || previous_scalar.is_some_and(|previous| *scalar <= previous)
-            || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *scalar)
-            || target.chars().any(|character| {
-                !scalar_in_ranges(&unicode_facts.known_scalar_ranges, character as u32)
-            })
-            || lowercase_by_scalar
-                .insert(*scalar, target.clone())
-                .is_some()
-        {
-            return Err("Unicode lowercase mappings must be ordered known scalars".to_owned());
-        }
-        previous_scalar = Some(*scalar);
+    let hangul = &unicode_facts.hangul_decomposition;
+    if hangul != &STANDARD_HANGUL_DECOMPOSITION {
+        return Err("Unicode facts must contain the standard Hangul decomposition".to_owned());
     }
-    if lowercase_by_scalar.is_empty() {
-        return Err("Unicode lowercase mappings must not be empty".to_owned());
+    let hangul_scalar_count = hangul
+        .l_count
+        .checked_mul(hangul.v_count)
+        .and_then(|count| count.checked_mul(hangul.t_count))
+        .ok_or("Hangul decomposition scalar count overflowed")?;
+    let hangul_end = hangul
+        .s_base
+        .checked_add(hangul_scalar_count)
+        .ok_or("Hangul decomposition range overflowed")?;
+    if [
+        hangul.s_base,
+        hangul.l_base,
+        hangul.v_base,
+        hangul.t_base,
+        hangul.l_count,
+        hangul.v_count,
+        hangul.t_count,
+    ]
+    .contains(&0)
+        || hangul_end > char::MAX as u32 + 1
+        || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, hangul.s_base)
+        || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, hangul_end - 1)
+    {
+        return Err("Hangul decomposition facts are invalid".to_owned());
     }
+    let decomposition_by_scalar = validate_mappings(
+        "compatibility decomposition",
+        &unicode_facts.compatibility_decomposition_mappings,
+        &unicode_facts.known_scalar_ranges,
+    )?;
+    let lowercase_by_scalar = validate_mappings(
+        "lowercase",
+        &unicode_facts.lowercase_mappings,
+        &unicode_facts.known_scalar_ranges,
+    )?;
     if authority.algorithm.compatibility_decomposition != "NFKD"
         || authority.algorithm.stripped_general_categories != ["Mn", "Mc", "Me"]
         || authority.algorithm.token_character_classes != ["Letter", "Number", "Underscore"]
@@ -198,8 +241,37 @@ fn parse_contract(
     Ok(LoadedNormalizationContract {
         authority,
         unicode_facts,
+        decomposition_by_scalar,
         lowercase_by_scalar,
     })
+}
+
+fn validate_mappings(
+    label: &str,
+    mappings: &[(u32, String)],
+    known_ranges: &[[u32; 2]],
+) -> Result<HashMap<u32, String>, String> {
+    if mappings.is_empty() {
+        return Err(format!("Unicode {label} mappings must not be empty"));
+    }
+    let mut by_scalar = HashMap::new();
+    let mut previous_scalar = None;
+    for (scalar, target) in mappings {
+        if target.is_empty()
+            || previous_scalar.is_some_and(|previous| *scalar <= previous)
+            || !scalar_in_ranges(known_ranges, *scalar)
+            || target
+                .chars()
+                .any(|character| !scalar_in_ranges(known_ranges, character as u32))
+            || by_scalar.insert(*scalar, target.clone()).is_some()
+        {
+            return Err(format!(
+                "Unicode {label} mappings must be ordered known scalars"
+            ));
+        }
+        previous_scalar = Some(*scalar);
+    }
+    Ok(by_scalar)
 }
 
 fn validate_scalar_ranges(label: &str, ranges: &[[u32; 2]]) -> Result<(), String> {
@@ -232,14 +304,36 @@ fn scalar_in_ranges(ranges: &[[u32; 2]], scalar: u32) -> bool {
 pub(crate) fn normalize_species_search(raw: &str) -> NormalizedSpeciesSearch {
     let contract = contract();
     let mut decomposed = String::with_capacity(raw.len());
+    let hangul = &contract.unicode_facts.hangul_decomposition;
+    let hangul_scalar_count = hangul.l_count * hangul.v_count * hangul.t_count;
     for character in raw.chars() {
-        if scalar_in_ranges(
-            &contract.unicode_facts.known_scalar_ranges,
-            character as u32,
-        ) {
-            decomposed.extend(character.to_string().nfkd());
-        } else {
+        let scalar = character as u32;
+        if !scalar_in_ranges(&contract.unicode_facts.known_scalar_ranges, scalar) {
             decomposed.push(' ');
+        } else if let Some(replacement) = contract.decomposition_by_scalar.get(&scalar) {
+            decomposed.push_str(replacement);
+        } else if let Some(hangul_index) = scalar
+            .checked_sub(hangul.s_base)
+            .filter(|index| *index < hangul_scalar_count)
+        {
+            let trailing_index = hangul_index % hangul.t_count;
+            let vowel_index = (hangul_index / hangul.t_count) % hangul.v_count;
+            let leading_index = hangul_index / (hangul.v_count * hangul.t_count);
+            decomposed.push(
+                char::from_u32(hangul.l_base + leading_index)
+                    .expect("validated Hangul leading scalar"),
+            );
+            decomposed.push(
+                char::from_u32(hangul.v_base + vowel_index).expect("validated Hangul vowel scalar"),
+            );
+            if trailing_index != 0 {
+                decomposed.push(
+                    char::from_u32(hangul.t_base + trailing_index)
+                        .expect("validated Hangul trailing scalar"),
+                );
+            }
+        } else {
+            decomposed.push(character);
         }
     }
 
@@ -418,6 +512,26 @@ mod tests {
             error.contains("unknown field `accidental_new_rule`"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn runtime_authority_parser_rejects_nonstandard_hangul_facts() {
+        let mut raw_facts: serde_json::Value = serde_json::from_str(UNICODE_FACTS_SOURCE).unwrap();
+        raw_facts["hangul_decomposition"]["l_base"] = serde_json::json!(1);
+
+        let error = parse_contract(CONTRACT_SOURCE, &raw_facts.to_string()).unwrap_err();
+
+        assert!(error.contains("standard Hangul"), "{error}");
+    }
+
+    #[test]
+    fn runtime_authority_parser_rejects_property_ranges_outside_known_scalars() {
+        let mut raw_facts: serde_json::Value = serde_json::from_str(UNICODE_FACTS_SOURCE).unwrap();
+        raw_facts["mark_scalar_ranges"] = serde_json::json!([[0x10FFFF, 0x10FFFF]]);
+
+        let error = parse_contract(CONTRACT_SOURCE, &raw_facts.to_string()).unwrap_err();
+
+        assert!(error.contains("known scalars"), "{error}");
     }
 
     #[test]

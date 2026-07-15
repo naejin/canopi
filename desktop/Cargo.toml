@@ -22,7 +22,6 @@ sha2 = "0.10"
 ureq = "3"
 sys-locale = "0.3"
 tauri-plugin-mcp-bridge = "0.10"
-unicode-normalization = "0.1.25"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 lib-swift = { path = "../lib-swift" }

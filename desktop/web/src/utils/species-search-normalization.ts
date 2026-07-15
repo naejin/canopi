@@ -1,5 +1,7 @@
 import {
   SPECIES_SEARCH_CASE_FOLDS,
+  SPECIES_SEARCH_COMPATIBILITY_DECOMPOSITION_MAPPINGS,
+  SPECIES_SEARCH_HANGUL_DECOMPOSITION,
   SPECIES_SEARCH_KNOWN_SCALAR_RANGES,
   SPECIES_SEARCH_LOWERCASE_MAPPINGS,
   SPECIES_SEARCH_MARK_SCALAR_RANGES,
@@ -15,6 +17,9 @@ export interface NormalizedSpeciesSearch {
 }
 
 const LOWERCASE_BY_SCALAR = new Map<number, string>(SPECIES_SEARCH_LOWERCASE_MAPPINGS)
+const DECOMPOSITION_BY_SCALAR = new Map<number, string>(
+  SPECIES_SEARCH_COMPATIBILITY_DECOMPOSITION_MAPPINGS,
+)
 
 function scalarInRanges(
   ranges: readonly (readonly [number, number])[],
@@ -32,11 +37,30 @@ function scalarInRanges(
   return range !== undefined && range[0] <= scalar && scalar <= range[1]
 }
 
+function decomposeScalar(scalar: number, character: string): string {
+  const mapped = DECOMPOSITION_BY_SCALAR.get(scalar)
+  if (mapped !== undefined) return mapped
+
+  const hangul = SPECIES_SEARCH_HANGUL_DECOMPOSITION
+  const hangulScalarCount = hangul.lCount * hangul.vCount * hangul.tCount
+  const hangulIndex = scalar - hangul.sBase
+  if (hangulIndex < 0 || hangulIndex >= hangulScalarCount) return character
+
+  const trailingIndex = hangulIndex % hangul.tCount
+  const vowelIndex = Math.floor(hangulIndex / hangul.tCount) % hangul.vCount
+  const leadingIndex = Math.floor(hangulIndex / (hangul.vCount * hangul.tCount))
+  return String.fromCodePoint(
+    hangul.lBase + leadingIndex,
+    hangul.vBase + vowelIndex,
+    ...(trailingIndex === 0 ? [] : [hangul.tBase + trailingIndex]),
+  )
+}
+
 export function normalizeSpeciesSearch(raw: string): NormalizedSpeciesSearch {
   const decomposed = Array.from(raw, (character) => {
     const scalar = character.codePointAt(0)!
     return scalarInRanges(SPECIES_SEARCH_KNOWN_SCALAR_RANGES, scalar)
-      ? character.normalize('NFKD')
+      ? decomposeScalar(scalar, character)
       : ' '
   }).join('')
   let folded = Array.from(decomposed, (character) => {

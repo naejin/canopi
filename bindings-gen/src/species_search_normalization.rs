@@ -29,8 +29,32 @@ struct UnicodeFacts {
     known_scalar_ranges: Vec<[u32; 2]>,
     mark_scalar_ranges: Vec<[u32; 2]>,
     token_scalar_ranges: Vec<[u32; 2]>,
+    hangul_decomposition: HangulDecomposition,
+    compatibility_decomposition_mappings: Vec<(u32, String)>,
     lowercase_mappings: Vec<(u32, String)>,
 }
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct HangulDecomposition {
+    s_base: u32,
+    l_base: u32,
+    v_base: u32,
+    t_base: u32,
+    l_count: u32,
+    v_count: u32,
+    t_count: u32,
+}
+
+const STANDARD_HANGUL_DECOMPOSITION: HangulDecomposition = HangulDecomposition {
+    s_base: 0xAC00,
+    l_base: 0x1100,
+    v_base: 0x1161,
+    t_base: 0x11A7,
+    l_count: 19,
+    v_count: 21,
+    t_count: 28,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,7 +126,7 @@ fn validate(
         || contract.unicode_data.facts_file.is_empty()
         || Path::new(&contract.unicode_data.facts_file).file_name()
             != Some(contract.unicode_data.facts_file.as_ref())
-        || unicode_facts.facts_format_version != 1
+        || unicode_facts.facts_format_version != 2
         || unicode_facts.unicode_data_version != contract.unicode_data.version
     {
         return Err("Species Search Unicode facts do not match the authority".into());
@@ -110,22 +134,57 @@ fn validate(
     validate_scalar_ranges("known", &unicode_facts.known_scalar_ranges)?;
     validate_scalar_ranges("mark", &unicode_facts.mark_scalar_ranges)?;
     validate_scalar_ranges("token", &unicode_facts.token_scalar_ranges)?;
-    let mut previous_mapping = None;
-    for (scalar, target) in &unicode_facts.lowercase_mappings {
-        if target.is_empty()
-            || previous_mapping.is_some_and(|previous| *scalar <= previous)
-            || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *scalar)
-            || target.chars().any(|character| {
-                !scalar_in_ranges(&unicode_facts.known_scalar_ranges, character as u32)
-            })
-        {
-            return Err("Species Search lowercase mappings must be ordered known scalars".into());
+    for (label, ranges) in [
+        ("mark", &unicode_facts.mark_scalar_ranges),
+        ("token", &unicode_facts.token_scalar_ranges),
+    ] {
+        for [start, end] in ranges {
+            if !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *start)
+                || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *end)
+            {
+                return Err(format!(
+                    "Species Search {label} ranges must contain only known scalars"
+                )
+                .into());
+            }
         }
-        previous_mapping = Some(*scalar);
     }
-    if unicode_facts.lowercase_mappings.is_empty() {
-        return Err("Species Search lowercase mappings must not be empty".into());
+    let hangul = &unicode_facts.hangul_decomposition;
+    if hangul != &STANDARD_HANGUL_DECOMPOSITION {
+        return Err("Species Search facts must contain the standard Hangul decomposition".into());
     }
+    let hangul_scalar_count = hangul
+        .l_count
+        .checked_mul(hangul.v_count)
+        .and_then(|count| count.checked_mul(hangul.t_count));
+    if [
+        hangul.s_base,
+        hangul.l_base,
+        hangul.v_base,
+        hangul.t_base,
+        hangul.l_count,
+        hangul.v_count,
+        hangul.t_count,
+    ]
+    .contains(&0)
+        || hangul_scalar_count.is_none()
+        || hangul
+            .s_base
+            .checked_add(hangul_scalar_count.unwrap_or_default())
+            .is_none_or(|end| end > char::MAX as u32 + 1)
+    {
+        return Err("Species Search Hangul decomposition facts are invalid".into());
+    }
+    validate_mappings(
+        "compatibility decomposition",
+        &unicode_facts.compatibility_decomposition_mappings,
+        &unicode_facts.known_scalar_ranges,
+    )?;
+    validate_mappings(
+        "lowercase",
+        &unicode_facts.lowercase_mappings,
+        &unicode_facts.known_scalar_ranges,
+    )?;
     let algorithm = &contract.algorithm;
     if algorithm.compatibility_decomposition != "NFKD" {
         return Err("Species Search normalization decomposition must be NFKD".into());
@@ -178,6 +237,32 @@ fn validate(
             )
             .into());
         }
+    }
+    Ok(())
+}
+
+fn validate_mappings(
+    label: &str,
+    mappings: &[(u32, String)],
+    known_ranges: &[[u32; 2]],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if mappings.is_empty() {
+        return Err(format!("Species Search {label} mappings must not be empty").into());
+    }
+    let mut previous_mapping = None;
+    for (scalar, target) in mappings {
+        if target.is_empty()
+            || previous_mapping.is_some_and(|previous| *scalar <= previous)
+            || !scalar_in_ranges(known_ranges, *scalar)
+            || target
+                .chars()
+                .any(|character| !scalar_in_ranges(known_ranges, character as u32))
+        {
+            return Err(
+                format!("Species Search {label} mappings must be ordered known scalars").into(),
+            );
+        }
+        previous_mapping = Some(*scalar);
     }
     Ok(())
 }
@@ -283,11 +368,29 @@ fn render_typescript(
         "SPECIES_SEARCH_TOKEN_SCALAR_RANGES",
         &unicode_facts.token_scalar_ranges,
     )?;
-    output.push_str("export const SPECIES_SEARCH_LOWERCASE_MAPPINGS = [\n");
-    for (scalar, target) in &unicode_facts.lowercase_mappings {
-        writeln!(output, "  [{scalar}, {}],", json_string(target))?;
-    }
-    output.push_str("] as const satisfies readonly (readonly [number, string])[]\n\n");
+    let hangul = &unicode_facts.hangul_decomposition;
+    writeln!(
+        output,
+        "export const SPECIES_SEARCH_HANGUL_DECOMPOSITION = {{"
+    )?;
+    writeln!(output, "  sBase: {},", hangul.s_base)?;
+    writeln!(output, "  lBase: {},", hangul.l_base)?;
+    writeln!(output, "  vBase: {},", hangul.v_base)?;
+    writeln!(output, "  tBase: {},", hangul.t_base)?;
+    writeln!(output, "  lCount: {},", hangul.l_count)?;
+    writeln!(output, "  vCount: {},", hangul.v_count)?;
+    writeln!(output, "  tCount: {},", hangul.t_count)?;
+    output.push_str("} as const\n\n");
+    render_scalar_mappings(
+        &mut output,
+        "SPECIES_SEARCH_COMPATIBILITY_DECOMPOSITION_MAPPINGS",
+        &unicode_facts.compatibility_decomposition_mappings,
+    )?;
+    render_scalar_mappings(
+        &mut output,
+        "SPECIES_SEARCH_LOWERCASE_MAPPINGS",
+        &unicode_facts.lowercase_mappings,
+    )?;
 
     output.push_str("export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [\n");
     for case in &contract.corpus {
@@ -310,6 +413,19 @@ fn render_typescript(
     }
     output.push_str("] as const satisfies readonly SpeciesSearchNormalizationCorpusCase[]\n");
     Ok(output)
+}
+
+fn render_scalar_mappings(
+    output: &mut String,
+    name: &str,
+    mappings: &[(u32, String)],
+) -> Result<(), std::fmt::Error> {
+    writeln!(output, "export const {name} = [")?;
+    for (scalar, target) in mappings {
+        writeln!(output, "  [{scalar}, {}],", json_string(target))?;
+    }
+    output.push_str("] as const satisfies readonly (readonly [number, string])[]\n\n");
+    Ok(())
 }
 
 fn render_scalar_ranges(
@@ -360,10 +476,8 @@ mod tests {
     fn bindings_validation_rejects_property_ranges_outside_known_scalars() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let authority: NormalizationContract = serde_json::from_str(
-            &std::fs::read_to_string(
-                root.join("common-types/species-search-normalization.json"),
-            )
-            .unwrap(),
+            &std::fs::read_to_string(root.join("common-types/species-search-normalization.json"))
+                .unwrap(),
         )
         .unwrap();
         let mut facts: UnicodeFacts = serde_json::from_str(
@@ -376,5 +490,25 @@ mod tests {
         let error = validate(&authority, &facts).unwrap_err().to_string();
 
         assert!(error.contains("known scalars"), "{error}");
+    }
+
+    #[test]
+    fn bindings_validation_rejects_nonstandard_hangul_facts() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let authority: NormalizationContract = serde_json::from_str(
+            &std::fs::read_to_string(root.join("common-types/species-search-normalization.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        let mut facts: UnicodeFacts = serde_json::from_str(
+            &std::fs::read_to_string(root.join("common-types/species-search-unicode-15.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        facts.hangul_decomposition.l_base = 1;
+
+        let error = validate(&authority, &facts).unwrap_err().to_string();
+
+        assert!(error.contains("standard Hangul"), "{error}");
     }
 }

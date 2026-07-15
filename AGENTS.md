@@ -99,6 +99,9 @@ cargo test --workspace
 # Verify Species Catalog contract, Filter storage references, and generated Rust facts
 python3 scripts/species_catalog_contract.py check
 
+# Verify pinned Unicode facts used by every Species Search normalizer
+python3 scripts/species_search_unicode_facts.py check
+
 # Refresh committed Species Catalog Rust facts after an authored contract change
 python3 scripts/species_catalog_contract.py emit-rust --write
 

@@ -8,7 +8,6 @@ from bisect import bisect_right
 import hashlib
 import json
 from pathlib import Path
-import unicodedata
 from typing import Any
 
 
@@ -25,6 +24,17 @@ class SpeciesSearchAdmission(str, Enum):
 
 
 @dataclass(frozen=True)
+class HangulDecomposition:
+    s_base: int
+    l_base: int
+    v_base: int
+    t_base: int
+    l_count: int
+    v_count: int
+    t_count: int
+
+
+@dataclass(frozen=True)
 class SpeciesSearchNormalizationContract:
     version: int
     fingerprint: str
@@ -32,6 +42,8 @@ class SpeciesSearchNormalizationContract:
     known_scalar_ranges: tuple[tuple[int, int], ...]
     mark_scalar_ranges: tuple[tuple[int, int], ...]
     token_scalar_ranges: tuple[tuple[int, int], ...]
+    hangul_decomposition: HangulDecomposition
+    compatibility_decomposition_mappings: tuple[tuple[int, str], ...]
     lowercase_mappings: tuple[tuple[int, str], ...]
     case_folds: tuple[tuple[str, str], ...]
     minimum_admitted_scalar_count: int
@@ -127,6 +139,8 @@ def load_contract(
         "known_scalar_ranges",
         "mark_scalar_ranges",
         "token_scalar_ranges",
+        "hangul_decomposition",
+        "compatibility_decomposition_mappings",
         "lowercase_mappings",
     }
     missing_facts_keys = sorted(expected_facts_keys - facts.keys())
@@ -139,8 +153,8 @@ def load_contract(
         raise RuntimeError(
             f"unicode facts: unknown property {unknown_facts_keys[0]!r}"
         )
-    if facts["facts_format_version"] != 1:
-        raise RuntimeError("unicode facts format version must equal 1")
+    if facts["facts_format_version"] != 2:
+        raise RuntimeError("unicode facts format version must equal 2")
     if facts["unicode_data_version"] != unicode_data_version:
         raise RuntimeError(
             "unicode facts version must equal the authored Unicode data version"
@@ -201,37 +215,90 @@ def load_contract(
                     f"unicode_data.{key} must be contained by known_scalar_ranges"
                 )
 
-    raw_lowercase_mappings = facts["lowercase_mappings"]
-    if not isinstance(raw_lowercase_mappings, list) or not raw_lowercase_mappings:
-        raise RuntimeError("unicode_data.lowercase_mappings must be a nonempty array")
-    lowercase_mappings: list[tuple[int, str]] = []
-    previous_scalar = -1
-    for index, raw_mapping in enumerate(raw_lowercase_mappings):
-        if (
-            not isinstance(raw_mapping, list)
-            or len(raw_mapping) != 2
-            or isinstance(raw_mapping[0], bool)
-            or not isinstance(raw_mapping[0], int)
-            or not isinstance(raw_mapping[1], str)
-            or not raw_mapping[1]
-        ):
-            raise RuntimeError(
-                f"unicode_data.lowercase_mappings[{index}] must contain a scalar and nonempty text"
-            )
-        scalar, target = raw_mapping
-        if scalar <= previous_scalar or not range_contains(known_scalar_ranges, scalar):
-            raise RuntimeError(
-                "unicode_data.lowercase_mappings must have unique ordered known scalars"
-            )
-        if any(
-            not range_contains(known_scalar_ranges, ord(character))
-            for character in target
-        ):
-            raise RuntimeError(
-                f"unicode_data.lowercase_mappings[{index}] target must contain known scalars"
-            )
-        lowercase_mappings.append((scalar, target))
-        previous_scalar = scalar
+    raw_hangul = facts["hangul_decomposition"]
+    expected_hangul_keys = {
+        "s_base",
+        "l_base",
+        "v_base",
+        "t_base",
+        "l_count",
+        "v_count",
+        "t_count",
+    }
+    if not isinstance(raw_hangul, dict) or set(raw_hangul) != expected_hangul_keys:
+        raise RuntimeError("unicode_data.hangul_decomposition has an invalid shape")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 1
+        for value in raw_hangul.values()
+    ):
+        raise RuntimeError("unicode_data.hangul_decomposition values must be positive integers")
+    hangul_decomposition = HangulDecomposition(**raw_hangul)
+    standard_hangul_decomposition = HangulDecomposition(
+        s_base=0xAC00,
+        l_base=0x1100,
+        v_base=0x1161,
+        t_base=0x11A7,
+        l_count=19,
+        v_count=21,
+        t_count=28,
+    )
+    if hangul_decomposition != standard_hangul_decomposition:
+        raise RuntimeError(
+            "Unicode Hangul decomposition facts must equal the standard constants"
+        )
+    hangul_scalar_count = (
+        hangul_decomposition.l_count
+        * hangul_decomposition.v_count
+        * hangul_decomposition.t_count
+    )
+    if (
+        hangul_decomposition.s_base + hangul_scalar_count > 0x110000
+        or not range_contains(known_scalar_ranges, hangul_decomposition.s_base)
+        or not range_contains(
+            known_scalar_ranges,
+            hangul_decomposition.s_base + hangul_scalar_count - 1,
+        )
+    ):
+        raise RuntimeError("unicode_data.hangul_decomposition must cover known scalars")
+
+    def admit_mappings(key: str) -> tuple[tuple[int, str], ...]:
+        raw_mappings = facts[key]
+        if not isinstance(raw_mappings, list) or not raw_mappings:
+            raise RuntimeError(f"unicode_data.{key} must be a nonempty array")
+        mappings: list[tuple[int, str]] = []
+        previous_scalar = -1
+        for index, raw_mapping in enumerate(raw_mappings):
+            if (
+                not isinstance(raw_mapping, list)
+                or len(raw_mapping) != 2
+                or isinstance(raw_mapping[0], bool)
+                or not isinstance(raw_mapping[0], int)
+                or not isinstance(raw_mapping[1], str)
+                or not raw_mapping[1]
+            ):
+                raise RuntimeError(
+                    f"unicode_data.{key}[{index}] must contain a scalar and nonempty text"
+                )
+            scalar, target = raw_mapping
+            if scalar <= previous_scalar or not range_contains(known_scalar_ranges, scalar):
+                raise RuntimeError(
+                    f"unicode_data.{key} must have unique ordered known scalars"
+                )
+            if any(
+                not range_contains(known_scalar_ranges, ord(character))
+                for character in target
+            ):
+                raise RuntimeError(
+                    f"unicode_data.{key}[{index}] target must contain known scalars"
+                )
+            mappings.append((scalar, target))
+            previous_scalar = scalar
+        return tuple(mappings)
+
+    compatibility_decomposition_mappings = admit_mappings(
+        "compatibility_decomposition_mappings"
+    )
+    lowercase_mappings = admit_mappings("lowercase_mappings")
 
     if not isinstance(algorithm, dict):
         raise RuntimeError("algorithm must be an object")
@@ -350,7 +417,9 @@ def load_contract(
         known_scalar_ranges=known_scalar_ranges,
         mark_scalar_ranges=mark_scalar_ranges,
         token_scalar_ranges=token_scalar_ranges,
-        lowercase_mappings=tuple(lowercase_mappings),
+        hangul_decomposition=hangul_decomposition,
+        compatibility_decomposition_mappings=compatibility_decomposition_mappings,
+        lowercase_mappings=lowercase_mappings,
         case_folds=tuple(case_folds),
         minimum_admitted_scalar_count=minimum,
         query_token_policy=algorithm["query_token_policy"],
@@ -361,6 +430,7 @@ CONTRACT = load_contract()
 _KNOWN_RANGE_STARTS = tuple(start for start, _end in CONTRACT.known_scalar_ranges)
 _MARK_RANGE_STARTS = tuple(start for start, _end in CONTRACT.mark_scalar_ranges)
 _TOKEN_RANGE_STARTS = tuple(start for start, _end in CONTRACT.token_scalar_ranges)
+_DECOMPOSITION_BY_SCALAR = dict(CONTRACT.compatibility_decomposition_mappings)
 _LOWERCASE_BY_SCALAR = dict(CONTRACT.lowercase_mappings)
 
 
@@ -374,16 +444,40 @@ def _range_contains(
 
 
 def normalize_species_search(raw: str) -> NormalizedSpeciesSearch:
-    decomposed = "".join(
-        unicodedata.normalize("NFKD", character)
-        if _range_contains(
+    decomposed_parts: list[str] = []
+    hangul = CONTRACT.hangul_decomposition
+    hangul_scalar_count = hangul.l_count * hangul.v_count * hangul.t_count
+    for character in raw:
+        scalar = ord(character)
+        if not _range_contains(
             CONTRACT.known_scalar_ranges,
             _KNOWN_RANGE_STARTS,
-            ord(character),
-        )
-        else " "
-        for character in raw
-    )
+            scalar,
+        ):
+            decomposed_parts.append(" ")
+            continue
+        decomposition = _DECOMPOSITION_BY_SCALAR.get(scalar)
+        if decomposition is not None:
+            decomposed_parts.append(decomposition)
+            continue
+        hangul_index = scalar - hangul.s_base
+        if 0 <= hangul_index < hangul_scalar_count:
+            trailing_index = hangul_index % hangul.t_count
+            vowel_index = (hangul_index // hangul.t_count) % hangul.v_count
+            leading_index = hangul_index // (hangul.v_count * hangul.t_count)
+            decomposed_parts.append(
+                "".join(
+                    chr(part)
+                    for part in (
+                        hangul.l_base + leading_index,
+                        hangul.v_base + vowel_index,
+                        *((hangul.t_base + trailing_index,) if trailing_index else ()),
+                    )
+                )
+            )
+        else:
+            decomposed_parts.append(character)
+    decomposed = "".join(decomposed_parts)
     folded = "".join(
         _LOWERCASE_BY_SCALAR.get(ord(character), character)
         for character in decomposed

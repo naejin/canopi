@@ -15,7 +15,7 @@ const CONTRACT = deepFreeze({
     "risk",
     "taxonomy"
   ],
-  "fingerprint": "ecd8beaa361d081751b689fcf8c8e3dcf6fac05c466eeb3ed87512841bec9581",
+  "fingerprint": "848c8418456cec1eb05d256140f82edc995951ea45ea3a7c057f380faa4ac27d",
   "generatedBy": "canopi-web-catalog-v1",
   "locales": [
     "en",
@@ -32,7 +32,7 @@ const CONTRACT = deepFreeze({
   ],
   "maximumAssetBytes": 26214400,
   "speciesSearchNormalization": {
-    "fingerprint": "d77215639301b1cdf0884cf437534b14c067a35cfeecf5dab33d08e550db9337",
+    "fingerprint": "f56b75f5303e00c8a80d46e1ae63f13d966b206bac7ca6cc8372f48e5828caf6",
     "version": 1
   },
   "supportedFilters": [
