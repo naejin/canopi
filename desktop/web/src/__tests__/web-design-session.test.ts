@@ -33,7 +33,7 @@ import {
 const NOW = new Date('2026-07-04T12:00:00.000Z')
 
 describe('browser Design Session lifecycle', () => {
-  it('creates a browser-local Design with valid empty unsupported sections', async () => {
+  it('creates a browser-local Design with the canonical New Design defaults', async () => {
     const store = createMemoryDesignSessionStore()
     const controller = createBrowserDesignSessionController({
       store,
@@ -53,10 +53,19 @@ describe('browser Design Session lifecycle', () => {
       name: 'Untitled',
       description: null,
       location: null,
-      north_bearing_deg: 0,
+      north_bearing_deg: null,
       plant_species_colors: {},
       plant_species_symbols: {},
-      layers: [],
+      layers: [
+        { name: 'base', visible: true, locked: false, opacity: 1 },
+        { name: 'contours', visible: false, locked: false, opacity: 1 },
+        { name: 'climate', visible: false, locked: false, opacity: 1 },
+        { name: 'zones', visible: true, locked: false, opacity: 1 },
+        { name: 'water', visible: false, locked: false, opacity: 1 },
+        { name: 'plants', visible: true, locked: false, opacity: 1 },
+        { name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
+        { name: 'annotations', visible: true, locked: false, opacity: 1 },
+      ],
       plants: [],
       zones: [],
       annotations: [],
