@@ -12,9 +12,12 @@ pub(super) struct SearchText {
 
 impl SearchText {
     pub(super) fn from_raw(text: Option<&str>) -> Self {
+        let normalized = text.map(normalize_species_search);
         Self {
-            fts_term: text.and_then(sanitize_fts_text),
-            common_name_query: active_locale_common_name_query(text),
+            fts_term: normalized.as_ref().and_then(sanitize_normalized_fts_text),
+            common_name_query: normalized
+                .as_ref()
+                .and_then(active_locale_common_name_query),
         }
     }
 
@@ -37,12 +40,18 @@ pub(super) struct CommonNameQuery {
     pub(super) tokens: Vec<String>,
 }
 
-/// Sanitize text for FTS5 MATCH, returning `None` if nothing useful remains.
-pub(crate) fn sanitize_fts_text(text: &str) -> Option<String> {
-    let sanitized = text.replace(|c: char| FTS_META_CHARS.contains(c), "");
-    let terms = sanitized
-        .split_whitespace()
-        .map(|term| format!("{term}*"))
+fn sanitize_normalized_fts_text(
+    normalized: &crate::db::species_search_normalization::NormalizedSpeciesSearch,
+) -> Option<String> {
+    let terms = species_search_query_tokens(normalized)
+        .into_iter()
+        .map(|term| {
+            format!(
+                "{}*",
+                term.replace(|c: char| FTS_META_CHARS.contains(c), "")
+            )
+        })
+        .filter(|term| term != "*")
         .collect::<Vec<_>>();
     if terms.is_empty() {
         None
@@ -54,15 +63,15 @@ pub(crate) fn sanitize_fts_text(text: &str) -> Option<String> {
     }
 }
 
-fn active_locale_common_name_query(text: Option<&str>) -> Option<CommonNameQuery> {
-    let text = text?;
-    let normalized = normalize_species_search(text);
-    let tokens = species_search_query_tokens(&normalized);
-    if normalized.tokens.is_empty() {
+fn active_locale_common_name_query(
+    normalized: &crate::db::species_search_normalization::NormalizedSpeciesSearch,
+) -> Option<CommonNameQuery> {
+    let tokens = species_search_query_tokens(normalized);
+    if tokens.is_empty() {
         None
     } else {
         Some(CommonNameQuery {
-            phrase: (normalized.tokens.len() > 1).then_some(normalized.text),
+            phrase: (normalized.tokens.len() > 1).then_some(normalized.text.clone()),
             tokens,
         })
     }

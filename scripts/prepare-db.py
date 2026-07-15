@@ -151,6 +151,12 @@ def copy_supporting_tables(
 
 def build_search_index(dst: sqlite3.Connection):
     """Build weighted FTS5 search index with 5 columns for BM25 ranking."""
+    dst.create_function(
+        "canopi_normalize_species_search",
+        1,
+        normalize_search_name,
+        deterministic=True,
+    )
     # Step 1: Pre-aggregate common names per species
     dst.execute("""
         CREATE TEMP TABLE _cn_agg AS
@@ -184,11 +190,15 @@ def build_search_index(dst: sqlite3.Connection):
             species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
         )
         SELECT s.rowid,
-            COALESCE(s.canonical_name, ''),
-            TRIM(COALESCE(s.common_name, '') || ' ' || COALESCE(ca.all_names, '')),
-            TRIM(COALESCE(s.family, '') || ' ' || COALESCE(s.genus, '')),
-            COALESCE(ua.all_uses, ''),
-            COALESCE(s.conservation_status, '')
+            canopi_normalize_species_search(COALESCE(s.canonical_name, '')),
+            canopi_normalize_species_search(
+                TRIM(COALESCE(s.common_name, '') || ' ' || COALESCE(ca.all_names, ''))
+            ),
+            canopi_normalize_species_search(
+                TRIM(COALESCE(s.family, '') || ' ' || COALESCE(s.genus, ''))
+            ),
+            canopi_normalize_species_search(COALESCE(ua.all_uses, '')),
+            canopi_normalize_species_search(COALESCE(s.conservation_status, ''))
         FROM species s
         LEFT JOIN _cn_agg ca ON ca.species_id = s.id
         LEFT JOIN _uses_agg ua ON ua.species_id = s.id
