@@ -1,3 +1,9 @@
+import {
+  MISSING_CANOPI_FILE_VERSION,
+  MIN_SUPPORTED_CANOPI_FILE_VERSION,
+} from '../../generated/canopi-design-format'
+import { CanopiDesignIngestionError } from './canopi-design-errors'
+
 export function migrateCanopiDesignValue(
   value: unknown,
   currentVersion: number,
@@ -7,7 +13,8 @@ export function migrateCanopiDesignValue(
   const migrated = cloneJsonRecord(value, '$')
   const version = readInputVersion(migrated)
   if (version > currentVersion) {
-    throw new Error(
+    throw new CanopiDesignIngestionError(
+      'unsupported_version',
       `$.version: unsupported Canopi Design version ${version}; current version is ${currentVersion}`,
     )
   }
@@ -245,9 +252,18 @@ function arrayEntries(value: unknown): unknown[] {
 }
 
 function readInputVersion(value: Record<string, unknown>): number {
-  const version = Object.prototype.hasOwnProperty.call(value, 'version') ? value.version : 1
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) {
-    throw new Error('$.version: expected a positive integer')
+  const version = Object.prototype.hasOwnProperty.call(value, 'version')
+    ? value.version
+    : MISSING_CANOPI_FILE_VERSION
+  if (
+    typeof version !== 'number'
+    || !Number.isSafeInteger(version)
+    || version < MIN_SUPPORTED_CANOPI_FILE_VERSION
+  ) {
+    throw new CanopiDesignIngestionError(
+      'invalid_version',
+      '$.version: expected a positive integer',
+    )
   }
   return version
 }

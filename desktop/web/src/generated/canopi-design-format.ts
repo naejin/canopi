@@ -2,6 +2,17 @@
 
 export const CURRENT_CANOPI_FILE_VERSION = 5
 
+export const MISSING_CANOPI_FILE_VERSION = 1
+export const MIN_SUPPORTED_CANOPI_FILE_VERSION = 1
+export const FUTURE_CANOPI_FILE_VERSION_POLICY = "reject" as const
+
+export const CANOPI_DESIGN_INGESTION_ERROR_KINDS = [
+  "invalid_version",
+  "unsupported_version",
+  "invalid_document",
+] as const
+export type CanopiDesignIngestionErrorKind = (typeof CANOPI_DESIGN_INGESTION_ERROR_KINDS)[number]
+
 export const CANOPI_FILE_SCHEMA = {
   "$defs": {
     "Annotation": {

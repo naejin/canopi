@@ -1,0 +1,554 @@
+{
+  "contract_version": 1,
+  "facts": {
+    "current_version": 5,
+    "missing_version": 1,
+    "minimum_supported_version": 1,
+    "future_version_policy": "reject"
+  },
+  "accepted_documents": {
+    "empty-current": {
+      "version": 5,
+      "name": "Conformance Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [],
+      "plants": [],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {}
+    },
+    "empty-migrated": {
+      "version": 5,
+      "name": "Conformance Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [
+        {
+          "name": "measurement-guides",
+          "visible": true,
+          "locked": false,
+          "opacity": 1.0
+        }
+      ],
+      "plants": [],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {}
+    },
+    "version-one-all-transforms": {
+      "version": 5,
+      "name": "Version One Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [
+        {
+          "name": "measurement-guides",
+          "visible": true,
+          "locked": false,
+          "opacity": 1.0
+        },
+        {
+          "name": "annotations",
+          "visible": true,
+          "locked": false,
+          "opacity": 1.0
+        }
+      ],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": { "x": 1.0, "y": 2.0 },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-2",
+          "locked": false,
+          "canonical_name": "Pyrus communis",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": { "x": 3.0, "y": 4.0 },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [
+        {
+          "name": "Orchard",
+          "locked": false,
+          "zone_type": "rect",
+          "points": [],
+          "rotation": 0.0,
+          "fill_color": null,
+          "notes": null
+        }
+      ],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [
+        {
+          "target": { "kind": "species", "canonical_name": "Malus domestica" },
+          "stratum": "unassigned",
+          "start_phase": 0,
+          "end_phase": 2
+        },
+        {
+          "target": { "kind": "species", "canonical_name": "Pyrus communis" },
+          "stratum": "unassigned",
+          "start_phase": 0,
+          "end_phase": 2
+        },
+        {
+          "target": { "kind": "species", "canonical_name": "Rubus idaeus" },
+          "stratum": "unassigned",
+          "start_phase": 0,
+          "end_phase": 2
+        }
+      ],
+      "groups": [],
+      "timeline": [
+        {
+          "id": "action-1",
+          "action_type": "plant",
+          "description": "Plant the guild",
+          "start_date": null,
+          "end_date": null,
+          "recurrence": null,
+          "targets": [
+            { "kind": "placed_plant", "plant_id": "plant-1" },
+            { "kind": "species", "canonical_name": "Pyrus communis" },
+            { "kind": "zone", "zone_name": "Orchard" }
+          ],
+          "depends_on": null,
+          "completed": false,
+          "order": 0
+        }
+      ],
+      "budget": [
+        {
+          "target": { "kind": "species", "canonical_name": "Pyrus communis" },
+          "category": "plants",
+          "description": " Pyrus communis ",
+          "quantity": 2.0,
+          "unit_cost": 12.0,
+          "currency": "EUR"
+        },
+        {
+          "target": { "kind": "manual" },
+          "category": "tools",
+          "description": "Hoe",
+          "quantity": 1.0,
+          "unit_cost": 20.0,
+          "currency": "EUR"
+        }
+      ],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {}
+    },
+    "legacy-and-typed-groups": {
+      "version": 5,
+      "name": "Object Group Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": { "x": 1.0, "y": 2.0 },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "shared-id",
+          "locked": false,
+          "canonical_name": "Pyrus communis",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": { "x": 3.0, "y": 4.0 },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [
+        {
+          "name": "zone-1",
+          "locked": false,
+          "zone_type": "rect",
+          "points": [],
+          "rotation": 0.0,
+          "fill_color": null,
+          "notes": null
+        },
+        {
+          "name": "shared-id",
+          "locked": false,
+          "zone_type": "line",
+          "points": [],
+          "rotation": 0.0,
+          "fill_color": null,
+          "notes": null
+        }
+      ],
+      "annotations": [
+        {
+          "id": "annotation-1",
+          "locked": false,
+          "annotation_type": "text",
+          "position": { "x": 5.0, "y": 6.0 },
+          "text": "Note",
+          "font_size": 12.0,
+          "rotation": null
+        }
+      ],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [
+        {
+          "id": "legacy",
+          "locked": false,
+          "name": null,
+          "members": [
+            { "kind": "plant", "id": "plant-1" },
+            { "kind": "zone", "id": "zone-1" }
+          ]
+        },
+        {
+          "id": "explicit-empty",
+          "locked": false,
+          "name": null,
+          "members": []
+        },
+        {
+          "id": "explicit-deduped",
+          "locked": false,
+          "name": null,
+          "members": [
+            { "kind": "plant", "id": "plant-1" }
+          ]
+        }
+      ],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {}
+    }
+  },
+  "cases": [
+    {
+      "id": "missing-version-is-version-one",
+      "input": {
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "empty-migrated"
+    },
+    {
+      "id": "version-one",
+      "input": {
+        "version": 1,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "empty-migrated"
+    },
+    {
+      "id": "version-one-all-transforms",
+      "input": {
+        "version": 1,
+        "name": "Version One Garden",
+        "plant_species_colors": {},
+        "layers": [
+          {
+            "name": "annotations",
+            "visible": true,
+            "locked": false,
+            "opacity": 1
+          }
+        ],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": { "x": 1, "y": 2 }
+          },
+          {
+            "id": "plant-2",
+            "canonical_name": "Pyrus communis",
+            "position": { "x": 3, "y": 4 }
+          }
+        ],
+        "zones": [
+          {
+            "name": "Orchard",
+            "zone_type": "rect",
+            "points": []
+          }
+        ],
+        "consortiums": [
+          {
+            "plant_ids": [
+              "plant-1",
+              "Pyrus communis",
+              "plant-1",
+              " Rubus idaeus "
+            ]
+          }
+        ],
+        "timeline": [
+          {
+            "id": "action-1",
+            "action_type": "plant",
+            "description": "Plant the guild",
+            "plants": [" plant-1 ", "Pyrus communis", ""],
+            "zone": " Orchard ",
+            "completed": false,
+            "order": 0
+          }
+        ],
+        "budget": [
+          {
+            "category": "plants",
+            "description": " Pyrus communis ",
+            "quantity": 2,
+            "unit_cost": 12,
+            "currency": "EUR"
+          },
+          {
+            "category": "tools",
+            "description": "Hoe",
+            "quantity": 1,
+            "unit_cost": 20,
+            "currency": "EUR"
+          }
+        ],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "version-one-all-transforms"
+    },
+    {
+      "id": "version-two",
+      "input": {
+        "version": 2,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "empty-migrated"
+    },
+    {
+      "id": "version-three",
+      "input": {
+        "version": 3,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "empty-migrated"
+    },
+    {
+      "id": "version-four",
+      "input": {
+        "version": 4,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "empty-migrated"
+    },
+    {
+      "id": "version-five",
+      "input": {
+        "version": 5,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "empty-current"
+    },
+    {
+      "id": "legacy-group-ambiguity-and-typed-deduplication",
+      "input": {
+        "version": 5,
+        "name": "Object Group Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": { "x": 1, "y": 2 }
+          },
+          {
+            "id": "shared-id",
+            "canonical_name": "Pyrus communis",
+            "position": { "x": 3, "y": 4 }
+          }
+        ],
+        "zones": [
+          { "name": "zone-1", "zone_type": "rect", "points": [] },
+          { "name": "shared-id", "zone_type": "line", "points": [] }
+        ],
+        "annotations": [
+          {
+            "id": "annotation-1",
+            "annotation_type": "text",
+            "position": { "x": 5, "y": 6 },
+            "text": "Note",
+            "font_size": 12
+          }
+        ],
+        "groups": [
+          {
+            "id": "legacy",
+            "member_ids": ["plant-1", "zone-1", "plant-1", "missing-id"]
+          },
+          {
+            "id": "ambiguous",
+            "member_ids": ["shared-id", "annotation-1"]
+          },
+          {
+            "id": "explicit-empty",
+            "members": []
+          },
+          {
+            "id": "explicit-deduped",
+            "members": [
+              { "kind": "plant", "id": "plant-1" },
+              { "kind": "plant", "id": "plant-1", "ignored": true }
+            ]
+          }
+        ],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "legacy-and-typed-groups"
+    },
+    {
+      "id": "version-zero",
+      "input": {
+        "version": 0,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "error_kind": "invalid_version"
+    },
+    {
+      "id": "fractional-version",
+      "input": {
+        "version": 1.5,
+        "name": "Conformance Garden"
+      },
+      "error_kind": "invalid_version"
+    },
+    {
+      "id": "future-version",
+      "input": {
+        "version": 6,
+        "name": "Conformance Garden"
+      },
+      "error_kind": "unsupported_version"
+    },
+    {
+      "id": "malformed-root",
+      "input": [],
+      "error_kind": "invalid_document"
+    }
+  ]
+}

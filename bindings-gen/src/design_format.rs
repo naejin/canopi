@@ -49,6 +49,29 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
     )?;
     writeln!(
         file,
+        "export const MISSING_CANOPI_FILE_VERSION = {}",
+        common_types::design::MISSING_CANOPI_FILE_VERSION,
+    )?;
+    writeln!(
+        file,
+        "export const MIN_SUPPORTED_CANOPI_FILE_VERSION = {}",
+        common_types::design::MIN_SUPPORTED_CANOPI_FILE_VERSION,
+    )?;
+    writeln!(
+        file,
+        "export const FUTURE_CANOPI_FILE_VERSION_POLICY = {:?} as const\n",
+        common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
+    )?;
+    file.push_str("export const CANOPI_DESIGN_INGESTION_ERROR_KINDS = [\n");
+    for kind in common_types::design::CanopiDesignIngestionErrorKind::ALL {
+        writeln!(file, "  {:?},", kind.as_str())?;
+    }
+    file.push_str("] as const\n");
+    file.push_str(
+        "export type CanopiDesignIngestionErrorKind = (typeof CANOPI_DESIGN_INGESTION_ERROR_KINDS)[number]\n\n",
+    );
+    writeln!(
+        file,
         "export const CANOPI_FILE_SCHEMA = {schema_json} as const"
     )?;
     Ok(file)

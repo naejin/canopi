@@ -1,7 +1,30 @@
 use common_types::design::{
-    CURRENT_CANOPI_FILE_VERSION, CanopiFile, DEFAULT_BUDGET_CURRENCY, Layer,
+    CURRENT_CANOPI_FILE_VERSION, CanopiDesignIngestionErrorKind, CanopiFile,
+    DEFAULT_BUDGET_CURRENCY, Layer, MIN_SUPPORTED_CANOPI_FILE_VERSION, MISSING_CANOPI_FILE_VERSION,
 };
+use std::fmt;
 use std::path::Path;
+
+#[derive(Debug)]
+struct CanopiDesignIngestionError {
+    kind: CanopiDesignIngestionErrorKind,
+    message: String,
+}
+
+impl CanopiDesignIngestionError {
+    fn new(kind: CanopiDesignIngestionErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for CanopiDesignIngestionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}: {}", self.kind.as_str(), self.message)
+    }
+}
 
 /// Save a `CanopiFile` to disk atomically.
 ///
@@ -58,34 +81,68 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
         .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
 
     // Parse to Value so we can inspect the version before full deserialization.
-    let mut value: serde_json::Value = serde_json::from_str(&content)
+    let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("Invalid JSON in {}: {e}", path.display()))?;
 
-    // Log the version for diagnostics.
-    if let Some(v) = value.get("version").and_then(|v| v.as_u64())
-        && v > CURRENT_CANOPI_FILE_VERSION as u64
-    {
-        tracing::info!(
-            "Loading design version {} from {}; current app supports version {}",
-            v,
-            path.display(),
-            CURRENT_CANOPI_FILE_VERSION,
-        );
+    report_legacy_object_group_migration_issues(path, &value);
+    decode_design_value(value)
+        .map_err(|error| format!("Failed to parse design from {}: {error}", path.display()))
+}
+
+fn decode_design_value(
+    mut value: serde_json::Value,
+) -> Result<CanopiFile, CanopiDesignIngestionError> {
+    let version = read_design_version(&value)?;
+    if version > CURRENT_CANOPI_FILE_VERSION as u64 {
+        return Err(CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::UnsupportedVersion,
+            format!(
+                "$.version: unsupported Canopi Design version {version}; current version is {CURRENT_CANOPI_FILE_VERSION}",
+            ),
+        ));
     }
 
     migrate_design_value(&mut value);
-    report_legacy_object_group_migration_issues(path, &value);
+    migrate_legacy_object_groups(&mut value)?;
+    serde_json::from_value(value).map_err(|error| {
+        CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::InvalidDocument,
+            format!("$: {error}"),
+        )
+    })
+}
 
-    // Deserialize — unknown fields survive in `extra`.
-    let file: CanopiFile = serde_json::from_value(value)
-        .map_err(|e| format!("Failed to parse design from {}: {e}", path.display()))?;
-
-    Ok(file)
+fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIngestionError> {
+    let Some(object) = value.as_object() else {
+        return Err(CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::InvalidDocument,
+            "$: expected a Canopi Design object",
+        ));
+    };
+    let Some(raw_version) = object.get("version") else {
+        return Ok(MISSING_CANOPI_FILE_VERSION as u64);
+    };
+    let Some(version) = raw_version.as_u64() else {
+        return Err(CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::InvalidVersion,
+            "$.version: expected a positive integer",
+        ));
+    };
+    if version < MIN_SUPPORTED_CANOPI_FILE_VERSION as u64 {
+        return Err(CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::InvalidVersion,
+            "$.version: expected a positive integer",
+        ));
+    }
+    Ok(version)
 }
 
 fn migrate_design_value(value: &mut serde_json::Value) {
     loop {
-        let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+        let version = value
+            .get("version")
+            .and_then(|version| version.as_u64())
+            .unwrap_or(MISSING_CANOPI_FILE_VERSION as u64) as u32;
         if version >= CURRENT_CANOPI_FILE_VERSION {
             break;
         }
@@ -100,6 +157,119 @@ fn migrate_design_value(value: &mut serde_json::Value) {
             }
         }
     }
+}
+
+fn migrate_legacy_object_groups(
+    value: &mut serde_json::Value,
+) -> Result<(), CanopiDesignIngestionError> {
+    let plant_ids = collect_string_field_set(value, "plants", "id");
+    let zone_ids = collect_string_field_set(value, "zones", "name");
+    let annotation_ids = collect_string_field_set(value, "annotations", "id");
+    let Some(groups) = value.get_mut("groups") else {
+        return Ok(());
+    };
+    let Some(groups) = groups.as_array_mut() else {
+        return Ok(());
+    };
+
+    let mut migrated = Vec::with_capacity(groups.len());
+    for (group_index, mut group) in std::mem::take(groups).into_iter().enumerate() {
+        let Some(group_object) = group.as_object_mut() else {
+            migrated.push(group);
+            continue;
+        };
+
+        if let Some(members) = group_object.get_mut("members")
+            && !members.is_null()
+        {
+            let Some(members) = members.as_array_mut() else {
+                return Err(invalid_document(format!(
+                    "$.groups[{group_index}].members: expected an array",
+                )));
+            };
+            dedupe_typed_group_members(members);
+            migrated.push(group);
+            continue;
+        }
+
+        let member_ids = match group_object.get("member_ids") {
+            None | Some(serde_json::Value::Null) => Vec::new(),
+            Some(serde_json::Value::Array(member_ids)) => member_ids.clone(),
+            Some(_) => {
+                return Err(invalid_document(format!(
+                    "$.groups[{group_index}].member_ids: expected an array",
+                )));
+            }
+        };
+        let mut resolved = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for (member_index, member_id) in member_ids.iter().enumerate() {
+            let Some(member_id) = member_id.as_str() else {
+                return Err(invalid_document(format!(
+                    "$.groups[{group_index}].member_ids[{member_index}]: expected a string",
+                )));
+            };
+            let Some((kind, id)) =
+                resolve_legacy_group_member(member_id, &plant_ids, &zone_ids, &annotation_ids)
+            else {
+                continue;
+            };
+            if seen.insert((kind, id.to_owned())) {
+                resolved.push(serde_json::json!({ "kind": kind, "id": id }));
+            }
+        }
+        if resolved.len() < 2 {
+            continue;
+        }
+        group_object.insert("members".to_owned(), serde_json::Value::Array(resolved));
+        migrated.push(group);
+    }
+    *groups = migrated;
+    Ok(())
+}
+
+fn invalid_document(message: impl Into<String>) -> CanopiDesignIngestionError {
+    CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, message)
+}
+
+fn resolve_legacy_group_member<'a>(
+    id: &'a str,
+    plant_ids: &std::collections::HashSet<String>,
+    zone_ids: &std::collections::HashSet<String>,
+    annotation_ids: &std::collections::HashSet<String>,
+) -> Option<(&'static str, &'a str)> {
+    let matches = [
+        ("plant", plant_ids.contains(id)),
+        ("zone", zone_ids.contains(id)),
+        ("annotation", annotation_ids.contains(id)),
+    ]
+    .into_iter()
+    .filter(|(_, matched)| *matched)
+    .collect::<Vec<_>>();
+    if matches.len() == 1 {
+        Some((matches[0].0, id))
+    } else {
+        None
+    }
+}
+
+fn dedupe_typed_group_members(members: &mut Vec<serde_json::Value>) {
+    let mut seen = std::collections::HashSet::<(String, String)>::new();
+    members.retain(|member| {
+        let Some(object) = member.as_object() else {
+            return true;
+        };
+        let (Some(kind), Some(id)) = (
+            object.get("kind").and_then(|value| value.as_str()),
+            object.get("id").and_then(|value| value.as_str()),
+        ) else {
+            return true;
+        };
+        if !matches!(kind, "plant" | "zone" | "annotation") {
+            return true;
+        }
+        seen.insert((kind.to_owned(), id.to_owned()))
+    });
 }
 
 fn migrate_v1_to_v2(value: &mut serde_json::Value) {
@@ -552,6 +722,66 @@ mod tests {
     use super::*;
     use common_types::design::PanelTarget;
     use std::path::PathBuf;
+
+    #[test]
+    fn shared_canopi_conformance_corpus_matches_native_ingestion() {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../common-types/canopi-design-conformance.json"
+        ))
+        .expect("shared Canopi conformance corpus should be valid JSON");
+
+        for case in corpus["cases"]
+            .as_array()
+            .expect("conformance cases should be an array")
+        {
+            let id = case["id"].as_str().expect("case id should be a string");
+            let input = case["input"].clone();
+            if let Some(expected_name) = case.get("accepted").and_then(|value| value.as_str()) {
+                let expected = corpus["accepted_documents"][expected_name].clone();
+                let file = decode_design_value(input)
+                    .unwrap_or_else(|error| panic!("{id}: ingestion failed: {error}"));
+                assert_eq!(conformance_document_value(&file), expected, "{id}");
+                continue;
+            }
+            let expected_kind = case["error_kind"].as_str().expect("error case kind");
+
+            let error = match decode_design_value(input) {
+                Ok(_) => panic!("{id}: expected ingestion to fail"),
+                Err(error) => error,
+            };
+            assert_eq!(error.kind.as_str(), expected_kind, "{id}");
+        }
+    }
+
+    fn conformance_document_value(file: &CanopiFile) -> serde_json::Value {
+        let mut wire = serde_json::to_value(file).expect("normalized Design should serialize");
+        let object = wire
+            .as_object_mut()
+            .expect("normalized Design should serialize as an object");
+        let known = common_types::design::DESIGN_FILE_FIELDS
+            .iter()
+            .map(|field| field.key)
+            .filter(|key| *key != "extra")
+            .collect::<std::collections::HashSet<_>>();
+        let mut extra = serde_json::Map::new();
+        for key in object
+            .keys()
+            .filter(|key| !known.contains(key.as_str()))
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            let value = object.remove(&key).expect("collected key should exist");
+            if key == "extra" {
+                if let Some(entries) = value.as_object() {
+                    extra.extend(entries.clone());
+                }
+            } else {
+                extra.insert(key, value);
+            }
+        }
+        object.insert("extra".to_owned(), serde_json::Value::Object(extra));
+        wire
+    }
 
     fn owned_sidecars(dir: &Path, role: &str) -> Vec<PathBuf> {
         let suffix = format!(".{role}");

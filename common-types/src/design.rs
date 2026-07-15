@@ -5,6 +5,33 @@ pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
 pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
 /// Current `.canopi` format version shared by native loading and generated Web facts.
 pub const CURRENT_CANOPI_FILE_VERSION: u32 = 5;
+/// Missing versions are interpreted as the first public `.canopi` format.
+pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
+pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 1;
+pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanopiDesignIngestionErrorKind {
+    InvalidVersion,
+    UnsupportedVersion,
+    InvalidDocument,
+}
+
+impl CanopiDesignIngestionErrorKind {
+    pub const ALL: &[Self] = &[
+        Self::InvalidVersion,
+        Self::UnsupportedVersion,
+        Self::InvalidDocument,
+    ];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidVersion => "invalid_version",
+            Self::UnsupportedVersion => "unsupported_version",
+            Self::InvalidDocument => "invalid_document",
+        }
+    }
+}
 pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "round",
     "square",
@@ -125,7 +152,7 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
 ];
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CanopiFile {
     pub version: u32,
     pub name: String,
@@ -170,80 +197,6 @@ pub fn canopi_file_json_schema() -> serde_json::Value {
         .expect("CanopiFile JSON Schema should serialize")
 }
 
-#[derive(Deserialize)]
-struct CanopiFileInput {
-    version: u32,
-    name: String,
-    description: Option<String>,
-    location: Option<Location>,
-    north_bearing_deg: Option<f64>,
-    plant_species_colors: std::collections::HashMap<String, String>,
-    #[serde(default)]
-    plant_species_symbols: std::collections::HashMap<String, String>,
-    layers: Vec<Layer>,
-    plants: Vec<PlacedPlant>,
-    zones: Vec<Zone>,
-    #[serde(default)]
-    annotations: Vec<Annotation>,
-    #[serde(default)]
-    measurement_guides: Vec<MeasurementGuideInput>,
-    #[serde(default)]
-    consortiums: Vec<Consortium>,
-    #[serde(default)]
-    groups: Vec<ObjectGroupInput>,
-    #[serde(default)]
-    timeline: Vec<TimelineAction>,
-    #[serde(default)]
-    budget: Vec<BudgetItem>,
-    #[serde(default = "default_budget_currency")]
-    budget_currency: String,
-    created_at: String,
-    updated_at: String,
-    #[serde(flatten)]
-    extra: std::collections::HashMap<String, serde_json::Value>,
-}
-
-impl<'de> Deserialize<'de> for CanopiFile {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let input = CanopiFileInput::deserialize(deserializer)?;
-        let groups = migrate_object_groups(
-            input.groups,
-            &input.plants,
-            &input.zones,
-            &input.annotations,
-        );
-        Ok(Self {
-            version: input.version,
-            name: input.name,
-            description: input.description,
-            location: input.location,
-            north_bearing_deg: input.north_bearing_deg,
-            plant_species_colors: input.plant_species_colors,
-            plant_species_symbols: input.plant_species_symbols,
-            layers: input.layers,
-            plants: input.plants,
-            zones: input.zones,
-            annotations: input.annotations,
-            measurement_guides: input
-                .measurement_guides
-                .into_iter()
-                .map(MeasurementGuide::from)
-                .collect(),
-            consortiums: input.consortiums,
-            groups,
-            timeline: input.timeline,
-            budget: input.budget,
-            budget_currency: input.budget_currency,
-            created_at: input.created_at,
-            updated_at: input.updated_at,
-            extra: input.extra,
-        })
-    }
-}
-
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Location {
@@ -272,9 +225,9 @@ pub struct PlacedPlant {
     pub canonical_name: String,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub common_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub color: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub symbol: Option<String>,
     #[serde(default)]
     pub pinned_name: bool,
@@ -406,7 +359,7 @@ pub struct Annotation {
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct MeasurementGuide {
     #[serde(default)]
     pub id: String,
@@ -414,27 +367,6 @@ pub struct MeasurementGuide {
     pub locked: bool,
     pub start: Position,
     pub end: Position,
-}
-
-#[derive(Deserialize)]
-struct MeasurementGuideInput {
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    locked: bool,
-    start: Position,
-    end: Position,
-}
-
-impl From<MeasurementGuideInput> for MeasurementGuide {
-    fn from(input: MeasurementGuideInput) -> Self {
-        Self {
-            id: input.id,
-            locked: input.locked,
-            start: input.start,
-            end: input.end,
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -564,105 +496,15 @@ pub enum ObjectGroupMember {
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ObjectGroup {
     pub id: String,
     #[cfg_attr(feature = "design-schema", schemars(default))]
+    #[serde(default)]
     pub locked: bool,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub name: Option<String>,
     pub members: Vec<ObjectGroupMember>,
-}
-
-#[derive(Deserialize)]
-struct ObjectGroupInput {
-    id: String,
-    #[serde(default)]
-    locked: bool,
-    name: Option<String>,
-    #[serde(default)]
-    members: Option<Vec<ObjectGroupMember>>,
-    #[serde(default)]
-    member_ids: Option<Vec<String>>,
-}
-
-fn migrate_object_groups(
-    groups: Vec<ObjectGroupInput>,
-    plants: &[PlacedPlant],
-    zones: &[Zone],
-    annotations: &[Annotation],
-) -> Vec<ObjectGroup> {
-    groups
-        .into_iter()
-        .filter_map(|group| {
-            if let Some(members) = group.members {
-                return Some(ObjectGroup {
-                    id: group.id,
-                    locked: group.locked,
-                    name: group.name,
-                    members: dedupe_object_group_members(members),
-                });
-            }
-
-            let members = group
-                .member_ids
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|id| resolve_legacy_group_member(&id, plants, zones, annotations))
-                .fold(Vec::new(), |mut resolved, member| {
-                    push_unique_object_group_member(&mut resolved, member);
-                    resolved
-                });
-            if members.len() < 2 {
-                return None;
-            }
-            Some(ObjectGroup {
-                id: group.id,
-                locked: group.locked,
-                name: group.name,
-                members,
-            })
-        })
-        .collect()
-}
-
-fn resolve_legacy_group_member(
-    id: &str,
-    plants: &[PlacedPlant],
-    zones: &[Zone],
-    annotations: &[Annotation],
-) -> Option<ObjectGroupMember> {
-    let mut resolved = Vec::new();
-    if plants.iter().any(|plant| plant.id == id) {
-        resolved.push(ObjectGroupMember::Plant { id: id.to_owned() });
-    }
-    if zones.iter().any(|zone| zone.name == id) {
-        resolved.push(ObjectGroupMember::Zone { id: id.to_owned() });
-    }
-    if annotations.iter().any(|annotation| annotation.id == id) {
-        resolved.push(ObjectGroupMember::Annotation { id: id.to_owned() });
-    }
-    if resolved.len() == 1 {
-        resolved.pop()
-    } else {
-        None
-    }
-}
-
-fn dedupe_object_group_members(members: Vec<ObjectGroupMember>) -> Vec<ObjectGroupMember> {
-    members.into_iter().fold(Vec::new(), |mut deduped, member| {
-        push_unique_object_group_member(&mut deduped, member);
-        deduped
-    })
-}
-
-fn push_unique_object_group_member(
-    members: &mut Vec<ObjectGroupMember>,
-    member: ObjectGroupMember,
-) {
-    if !members.contains(&member) {
-        members.push(member);
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -763,10 +605,10 @@ mod tests {
                 {
                     "id": "group-1",
                     "name": null,
-                    "layer": "plants",
-                    "position": { "x": 0.0, "y": 0.0 },
-                    "rotation": null,
-                    "member_ids": ["plant-1", "zone-1"]
+                    "members": [
+                        { "kind": "plant", "id": "plant-1" },
+                        { "kind": "zone", "id": "zone-1" }
+                    ]
                 }
             ],
             "timeline": [],
@@ -792,125 +634,33 @@ mod tests {
     }
 
     #[test]
-    fn legacy_object_groups_migrate_to_typed_concrete_members() {
-        let file: CanopiFile = serde_json::from_value(json!({
-            "version": 3,
-            "name": "Legacy groups",
-            "description": null,
-            "location": null,
-            "north_bearing_deg": 0.0,
+    fn general_deserialization_does_not_hide_legacy_object_group_migration() {
+        let result = serde_json::from_value::<CanopiFile>(json!({
+            "version": 5,
+            "name": "Legacy groups require ingestion",
             "plant_species_colors": {},
-            "layers": [
-                { "name": "plants", "visible": true, "locked": false, "opacity": 1.0 },
-                { "name": "zones", "visible": true, "locked": false, "opacity": 1.0 },
-                { "name": "annotations", "visible": true, "locked": false, "opacity": 1.0 }
-            ],
-            "plants": [
-                {
-                    "id": "plant-1",
-                    "canonical_name": "Malus domestica",
-                    "common_name": "Apple",
-                    "position": { "x": 1.0, "y": 2.0 },
-                    "rotation": null,
-                    "scale": null,
-                    "notes": null,
-                    "planted_date": null,
-                    "quantity": 1
-                },
-                {
-                    "id": "shared-id",
-                    "canonical_name": "Pyrus communis",
-                    "common_name": "Pear",
-                    "position": { "x": 3.0, "y": 4.0 },
-                    "rotation": null,
-                    "scale": null,
-                    "notes": null,
-                    "planted_date": null,
-                    "quantity": 1
-                }
-            ],
-            "zones": [
-                {
-                    "name": "zone-1",
-                    "zone_type": "rect",
-                    "points": [
-                        { "x": 0.0, "y": 0.0 },
-                        { "x": 1.0, "y": 0.0 },
-                        { "x": 1.0, "y": 1.0 }
-                    ],
-                    "fill_color": null,
-                    "notes": null
-                },
-                {
-                    "name": "shared-id",
-                    "zone_type": "line",
-                    "points": [
-                        { "x": 0.0, "y": 0.0 },
-                        { "x": 2.0, "y": 0.0 }
-                    ],
-                    "fill_color": null,
-                    "notes": null
-                }
-            ],
-            "annotations": [
-                {
-                    "id": "annotation-1",
-                    "annotation_type": "text",
-                    "position": { "x": 2.0, "y": 3.0 },
-                    "text": "Note",
-                    "font_size": 16.0,
-                    "rotation": null
-                }
-            ],
-            "consortiums": [],
-            "groups": [
-                {
-                    "id": "group-1",
-                    "name": "Guild",
-                    "layer": "plants",
-                    "position": { "x": 0.0, "y": 0.0 },
-                    "rotation": null,
-                    "member_ids": ["plant-1", "zone-1", "annotation-1", "shared-id", "missing-id"]
-                },
-                {
-                    "id": "dropped-group",
-                    "name": null,
-                    "layer": "plants",
-                    "position": { "x": 0.0, "y": 0.0 },
-                    "rotation": null,
-                    "member_ids": ["shared-id", "missing-id"]
-                }
-            ],
-            "timeline": [],
-            "budget": [],
-            "budget_currency": "EUR",
-            "created_at": "2026-04-02T00:00:00.000Z",
-            "updated_at": "2026-04-02T00:00:00.000Z"
-        }))
-        .expect("legacy object groups should migrate");
+            "layers": [],
+            "plants": [{
+                "id": "plant-1",
+                "canonical_name": "Malus domestica",
+                "position": { "x": 1.0, "y": 2.0 }
+            }],
+            "zones": [{
+                "name": "zone-1",
+                "zone_type": "rect",
+                "points": []
+            }],
+            "groups": [{
+                "id": "legacy",
+                "member_ids": ["plant-1", "zone-1"]
+            }],
+            "created_at": "2026-07-15T00:00:00.000Z",
+            "updated_at": "2026-07-15T00:00:00.000Z"
+        }));
 
-        assert_eq!(file.groups.len(), 1);
-        assert_eq!(file.groups[0].id, "group-1");
-        assert_eq!(
-            file.groups[0].members,
-            vec![
-                ObjectGroupMember::Plant {
-                    id: "plant-1".to_string()
-                },
-                ObjectGroupMember::Zone {
-                    id: "zone-1".to_string()
-                },
-                ObjectGroupMember::Annotation {
-                    id: "annotation-1".to_string()
-                },
-            ],
+        assert!(
+            result.is_err(),
+            "legacy Object Groups must be admitted only through the Design ingestion boundary",
         );
-
-        let value = serde_json::to_value(&file).expect("canopi file should serialize");
-        assert!(value["groups"][0].get("members").is_some());
-        assert!(value["groups"][0].get("member_ids").is_none());
-        assert!(value["groups"][0].get("layer").is_none());
-        assert!(value["groups"][0].get("position").is_none());
-        assert!(value["groups"][0].get("rotation").is_none());
     }
 }
