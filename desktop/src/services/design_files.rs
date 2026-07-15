@@ -7,7 +7,15 @@ use crate::design::{autosave, format};
 const RECENT_DESIGNS_LIMIT: usize = 20;
 
 pub fn new_design() -> Result<CanopiFile, String> {
-    Ok(format::create_default())
+    Ok(format::create_new_design("Untitled", now_iso8601()))
+}
+
+fn now_iso8601() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    crate::design::unix_to_iso8601(seconds)
 }
 
 pub fn save_design(user_db: &UserDb, path: String, content: CanopiFile) -> Result<String, String> {
@@ -163,9 +171,7 @@ mod tests {
     }
 
     fn test_design(name: &str) -> CanopiFile {
-        let mut design = crate::design::format::create_default();
-        design.name = name.to_owned();
-        design
+        crate::design::format::create_new_design(name, "2026-07-02T00:00:00Z")
     }
 
     fn temp_design_path(name: &str) -> PathBuf {

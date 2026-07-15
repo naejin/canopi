@@ -81,6 +81,27 @@ describe('browser Design Session lifecycle', () => {
     })
   })
 
+  it('creates fresh layer records for each browser New Design', async () => {
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+
+    await controller.newDesign()
+    const first = store.readCurrentDesign()!
+    await controller.newDesign()
+    const second = store.readCurrentDesign()!
+    const firstLayer = first.layers[0]
+    const secondLayer = second.layers[0]
+    if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
+
+    expect(firstLayer).not.toBe(secondLayer)
+    firstLayer.visible = false
+    expect(secondLayer.visible).toBe(true)
+  })
+
   it('opens a .canopi file as a detached browser Design and preserves future fields', async () => {
     const openedFile = makeCanopiFile({
       name: 'Loaded Garden',

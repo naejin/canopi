@@ -5,6 +5,8 @@ use common_types::design::{
 use std::fmt;
 use std::path::Path;
 
+use super::new_design_defaults::{NEW_DESIGN_LAYER_DEFAULTS, NEW_DESIGN_NORTH_BEARING_DEG};
+
 #[derive(Debug)]
 struct CanopiDesignIngestionError {
     kind: CanopiDesignIngestionErrorKind,
@@ -667,77 +669,28 @@ fn migrate_legacy_consortiums(value: &mut serde_json::Value) {
     *consortiums = migrated;
 }
 
-/// ISO 8601 timestamp for the current UTC moment using only `std`.
-fn now_iso8601() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    crate::design::unix_to_iso8601(secs)
-}
-
-/// Create a new empty design with eight default layers and sensible defaults.
-pub fn create_default() -> CanopiFile {
-    let now = now_iso8601();
-
-    let layers = vec![
-        Layer {
-            name: "base".into(),
-            visible: true,
-            locked: false,
-            opacity: 1.0,
-        },
-        Layer {
-            name: "contours".into(),
-            visible: false,
-            locked: false,
-            opacity: 1.0,
-        },
-        Layer {
-            name: "climate".into(),
-            visible: false,
-            locked: false,
-            opacity: 1.0,
-        },
-        Layer {
-            name: "zones".into(),
-            visible: true,
-            locked: false,
-            opacity: 1.0,
-        },
-        Layer {
-            name: "water".into(),
-            visible: false,
-            locked: false,
-            opacity: 1.0,
-        },
-        Layer {
-            name: "plants".into(),
-            visible: true,
-            locked: false,
-            opacity: 1.0,
-        },
-        Layer {
-            name: "measurement-guides".into(),
-            visible: true,
-            locked: false,
-            opacity: 1.0,
-        },
-        Layer {
-            name: "annotations".into(),
-            visible: true,
-            locked: false,
-            opacity: 1.0,
-        },
-    ];
+/// Compose a new Design from caller-owned identity and generated static defaults.
+pub(crate) fn create_new_design(
+    name: impl Into<String>,
+    timestamp: impl Into<String>,
+) -> CanopiFile {
+    let timestamp = timestamp.into();
+    let layers = NEW_DESIGN_LAYER_DEFAULTS
+        .iter()
+        .map(|layer| Layer {
+            name: layer.name.to_owned(),
+            visible: layer.visible,
+            locked: layer.locked,
+            opacity: layer.opacity,
+        })
+        .collect();
 
     CanopiFile {
         version: CURRENT_CANOPI_FILE_VERSION,
-        name: "Untitled".into(),
+        name: name.into(),
         description: None,
         location: None,
-        north_bearing_deg: None,
+        north_bearing_deg: NEW_DESIGN_NORTH_BEARING_DEG,
         plant_species_colors: std::collections::HashMap::new(),
         plant_species_symbols: std::collections::HashMap::new(),
         layers,
@@ -750,8 +703,8 @@ pub fn create_default() -> CanopiFile {
         timeline: Vec::new(),
         budget: Vec::new(),
         budget_currency: DEFAULT_BUDGET_CURRENCY.to_owned(),
-        created_at: now.clone(),
-        updated_at: now,
+        created_at: timestamp.clone(),
+        updated_at: timestamp,
         extra: std::collections::HashMap::new(),
     }
 }
@@ -761,6 +714,10 @@ mod tests {
     use super::*;
     use common_types::design::PanelTarget;
     use std::path::PathBuf;
+
+    fn create_default() -> CanopiFile {
+        create_new_design("Untitled", "2026-07-02T00:00:00Z")
+    }
 
     #[test]
     fn shared_canopi_conformance_corpus_matches_native_ingestion() {
@@ -868,6 +825,20 @@ mod tests {
         assert_eq!(design.name, "Untitled");
         assert_eq!(design.layers.len(), 8);
         assert!(design.measurement_guides.is_empty());
+    }
+
+    #[test]
+    fn new_design_uses_caller_identity_and_fresh_layer_records() {
+        let mut first = create_new_design("First Design", "2026-07-02T00:00:00Z");
+        let second = create_new_design("Second Design", "2026-07-03T00:00:00Z");
+
+        assert_eq!(first.name, "First Design");
+        assert_eq!(first.created_at, "2026-07-02T00:00:00Z");
+        assert_eq!(first.updated_at, "2026-07-02T00:00:00Z");
+        assert_eq!(second.name, "Second Design");
+        assert_eq!(second.created_at, "2026-07-03T00:00:00Z");
+        first.layers[0].name = "changed".to_owned();
+        assert_eq!(second.layers[0].name, "base");
     }
 
     #[test]

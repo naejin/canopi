@@ -1,6 +1,7 @@
 // .canopi file format: serialize, deserialize, migrate, autosave
 pub mod autosave;
 pub mod format;
+mod new_design_defaults;
 
 use std::{
     collections::HashMap,

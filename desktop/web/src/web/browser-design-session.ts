@@ -32,6 +32,10 @@ import {
 import type { CanopiFile } from "../types/design";
 import { CURRENT_CANOPI_FILE_VERSION } from "../generated/canopi-design-format";
 import {
+  NEW_DESIGN_LAYER_DEFAULTS,
+  NEW_DESIGN_NORTH_BEARING_DEG,
+} from "../generated/new-design-defaults";
+import {
   browserAppDataStore,
   type BrowserAppDataStore,
   type BrowserAppDataWriteResult,
@@ -198,7 +202,7 @@ export function createBrowserDesignSessionController({
 
   async function newDesign(): Promise<void> {
     replacementIntent += 1;
-    const file = createEmptyWebCanopiFile(now());
+    const file = createNewWebCanopiFile("Untitled", now().toISOString());
     const draftId = createDraftId();
     applyDesignReplacement({
       file,
@@ -560,17 +564,16 @@ class BrowserDraftStorageError extends Error {
 
 export const browserDesignSessionController = createBrowserDesignSessionController();
 
-function createEmptyWebCanopiFile(now: Date): CanopiFile {
-  const timestamp = now.toISOString();
+function createNewWebCanopiFile(name: string, timestamp: string): CanopiFile {
   return {
     version: CURRENT_CANOPI_FILE_VERSION,
-    name: "Untitled",
+    name,
     description: null,
     location: null,
-    north_bearing_deg: 0,
+    north_bearing_deg: NEW_DESIGN_NORTH_BEARING_DEG,
     plant_species_colors: {},
     plant_species_symbols: {},
-    layers: [],
+    layers: NEW_DESIGN_LAYER_DEFAULTS.map((layer) => ({ ...layer })),
     plants: [],
     zones: [],
     annotations: [],

@@ -199,9 +199,14 @@ describe('scene store', () => {
 
   it('creates a usable default scene state', () => {
     const persisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
+    const secondPersisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
     const session = createDefaultSceneSessionState()
+    const firstLayer = persisted.layers[0]
+    const secondLayer = secondPersisted.layers[0]
+    if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
     expect(persisted.layers).toHaveLength(8)
+    expect(firstLayer).not.toBe(secondLayer)
     expect(persisted.plantSpeciesSymbols).toEqual({})
     expect(persisted.layers.map((layer: { name: string; visible: boolean }) => [layer.name, layer.visible])).toEqual([
       ['base', true],
@@ -213,6 +218,8 @@ describe('scene store', () => {
       ['measurement-guides', true],
       ['annotations', true],
     ])
+    firstLayer.visible = false
+    expect(secondLayer.visible).toBe(true)
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])

@@ -8,7 +8,7 @@ use crate::db::UserDb;
 // to avoid GTK deadlock on Linux. Rust only handles file I/O.
 // ---------------------------------------------------------------------------
 
-/// Create a new empty design with 7 default layers.
+/// Create a new Design from the canonical shared defaults.
 #[tauri::command]
 pub fn new_design() -> Result<CanopiFile, String> {
     crate::services::design_files::new_design()

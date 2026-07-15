@@ -1,6 +1,7 @@
 mod contracts;
 mod design_format;
 mod external_contracts;
+mod new_design_defaults;
 mod plant_filter;
 mod publication;
 mod settings;
@@ -15,6 +16,8 @@ const CONTRACTS_TS: &str = "desktop/web/src/generated/contracts.ts";
 const KNOWN_KEYS_TS: &str = "desktop/web/src/generated/known-canopi-keys.ts";
 const DESIGN_FORMAT_TS: &str = "desktop/web/src/generated/canopi-design-format.ts";
 const SETTINGS_TS: &str = "desktop/web/src/generated/settings.ts";
+const NEW_DESIGN_DEFAULTS_TS: &str = "desktop/web/src/generated/new-design-defaults.ts";
+const NEW_DESIGN_DEFAULTS_RUST: &str = "desktop/src/design/new_design_defaults.rs";
 const PLANT_FILTER_TS: &str = "desktop/web/src/generated/plant-filter-fields.ts";
 const PLANT_FILTER_RUST: &str = "desktop/src/db/plant_filter_fields.rs";
 const WEB_CATALOG_MODULE: &str = "desktop/web/src/generated/web-catalog-artifact.mjs";
@@ -87,6 +90,10 @@ fn compile_native_plan(
     design_format::validate_canopi_design_conformance(
         &source_root.join("common-types/canopi-design-conformance.json"),
     )?;
+    let new_design_defaults = new_design_defaults::render_new_design_defaults(
+        &source_root.join("common-types/canopi-new-design-defaults.json"),
+    )?;
+    let new_design_defaults_rust = format_rust_source(&new_design_defaults.rust, source_root)?;
     let (plant_filter_ts, plant_filter_rust) = plant_filter::render_plant_filter_adapters(
         &source_root.join("common-types/plant-filter-fields.json"),
     )?;
@@ -107,6 +114,14 @@ fn compile_native_plan(
     plan.add(
         destination_root.join(SETTINGS_TS),
         settings::render_settings_runtime()?,
+    )?;
+    plan.add(
+        destination_root.join(NEW_DESIGN_DEFAULTS_TS),
+        new_design_defaults.typescript,
+    )?;
+    plan.add(
+        destination_root.join(NEW_DESIGN_DEFAULTS_RUST),
+        new_design_defaults_rust,
     )?;
     plan.add(destination_root.join(PLANT_FILTER_TS), plant_filter_ts)?;
     plan.add(destination_root.join(PLANT_FILTER_RUST), plant_filter_rust)?;
@@ -148,8 +163,9 @@ fn format_rust_source(
 mod tests {
     use super::{
         AdmissionMode, CONTRACTS_TS, DESIGN_FORMAT_TS, ExternalContractRenderer, GenerationMode,
-        KNOWN_KEYS_TS, PLANT_FILTER_RUST, PLANT_FILTER_TS, SETTINGS_TS, WEB_CATALOG_DECLARATION,
-        WEB_CATALOG_MODULE, acquire_generation_admission, execute_generation,
+        KNOWN_KEYS_TS, NEW_DESIGN_DEFAULTS_RUST, NEW_DESIGN_DEFAULTS_TS, PLANT_FILTER_RUST,
+        PLANT_FILTER_TS, SETTINGS_TS, WEB_CATALOG_DECLARATION, WEB_CATALOG_MODULE,
+        acquire_generation_admission, execute_generation,
     };
     use crate::external_contracts::WebCatalogArtifacts;
     use std::fs;
@@ -242,6 +258,8 @@ mod tests {
             KNOWN_KEYS_TS,
             DESIGN_FORMAT_TS,
             SETTINGS_TS,
+            NEW_DESIGN_DEFAULTS_TS,
+            NEW_DESIGN_DEFAULTS_RUST,
             PLANT_FILTER_TS,
             PLANT_FILTER_RUST,
             WEB_CATALOG_MODULE,

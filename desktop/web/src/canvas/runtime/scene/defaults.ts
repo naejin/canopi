@@ -1,4 +1,5 @@
-import { SCENE_LAYER_NAMES, type ScenePersistedState, type SceneSessionState } from './types'
+import { NEW_DESIGN_LAYER_DEFAULTS } from '../../../generated/new-design-defaults'
+import type { ScenePersistedState, SceneSessionState } from './types'
 import {
   cloneSceneDesignObjectTarget,
   normalizeSceneDesignObjectTargets,
@@ -18,16 +19,9 @@ export function createDefaultScenePersistedState(_now: Date = new Date()): Scene
   return {
     plantSpeciesColors: {},
     plantSpeciesSymbols: {},
-    layers: SCENE_LAYER_NAMES.map((name) => ({
+    layers: NEW_DESIGN_LAYER_DEFAULTS.map((layer) => ({
       kind: 'layer',
-      name,
-      visible: name === 'base'
-        || name === 'zones'
-        || name === 'plants'
-        || name === 'measurement-guides'
-        || name === 'annotations',
-      locked: false,
-      opacity: 1,
+      ...layer,
     })),
     plants: [],
     zones: [],

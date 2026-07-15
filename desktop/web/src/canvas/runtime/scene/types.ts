@@ -4,19 +4,6 @@ import type {
   SceneDesignObjectTarget,
 } from './design-object-targets'
 
-export const SCENE_LAYER_NAMES = [
-  'base',
-  'contours',
-  'climate',
-  'zones',
-  'water',
-  'plants',
-  'measurement-guides',
-  'annotations',
-] as const
-
-export type SceneLayerName = (typeof SCENE_LAYER_NAMES)[number]
-
 export interface ScenePoint {
   x: number
   y: number

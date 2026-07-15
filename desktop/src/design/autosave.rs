@@ -236,9 +236,7 @@ mod tests {
     }
 
     fn test_design(name: &str) -> CanopiFile {
-        let mut design = crate::design::format::create_default();
-        design.name = name.to_owned();
-        design
+        crate::design::format::create_new_design(name, "2026-07-02T00:00:00Z")
     }
 
     fn owned_sidecars(dir: &std::path::Path, role: &str) -> Vec<PathBuf> {

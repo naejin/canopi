@@ -1,0 +1,54 @@
+{
+  "contract_version": 1,
+  "north_bearing_deg": null,
+  "layers": [
+    {
+      "name": "base",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "contours",
+      "visible": false,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "climate",
+      "visible": false,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "zones",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "water",
+      "visible": false,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "plants",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "measurement-guides",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "annotations",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    }
+  ]
+}
