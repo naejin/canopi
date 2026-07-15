@@ -604,6 +604,26 @@ mod tests {
     }
 
     #[test]
+    fn test_fts_query_uses_shared_normalized_tokens() {
+        let plan = SpeciesSearchPlan::build(request(
+            Some("Straße"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        ));
+
+        assert!(plan.list().params().iter().any(|param| {
+            matches!(
+                param,
+                Value::Text(value)
+                    if value == "{canonical_name family_genus uses_text other_text}: strasse*"
+            )
+        }));
+    }
+
+    #[test]
     fn test_species_search_normalization_corpus_matches_query_tokens() {
         let corpus: serde_json::Value = serde_json::from_str(include_str!(
             "../../../common-types/species-search-normalization.json"
@@ -669,7 +689,7 @@ mod tests {
 
     #[test]
     fn test_empty_or_unsafe_fts_falls_back_to_keyset_plan() {
-        for text in ["", "   ", "\" () + -"] {
+        for text in ["", "   ", "\" () + -", " -- / () ", "́", "É"] {
             let plan = SpeciesSearchPlan::build(request(
                 Some(text),
                 default_filter(),

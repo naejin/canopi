@@ -24,6 +24,62 @@ def load_prepare_db_module():
 prepare_db = load_prepare_db_module()
 
 
+class PrepareDbSearchTextTests(unittest.TestCase):
+    def test_fts_storage_uses_shared_species_search_normalization(self):
+        conn = sqlite3.connect(":memory:")
+        conn.executescript(
+            """
+            CREATE TABLE species (
+                id TEXT PRIMARY KEY,
+                canonical_name TEXT,
+                common_name TEXT,
+                family TEXT,
+                genus TEXT,
+                conservation_status TEXT
+            );
+            CREATE TABLE species_common_names (
+                species_id TEXT NOT NULL,
+                common_name TEXT NOT NULL
+            );
+            CREATE TABLE species_uses (
+                species_id TEXT NOT NULL,
+                use_category TEXT NOT NULL,
+                use_description TEXT
+            );
+            INSERT INTO species VALUES (
+                'one', 'Straße café', 'Crème', 'Rosáceae', 'Straße', 'Menacé'
+            );
+            INSERT INTO species_common_names VALUES ('one', 'Œillet');
+            INSERT INTO species_uses VALUES ('one', 'Médicinal', 'ﬁber');
+            """
+        )
+
+        prepare_db.build_search_index(conn)
+
+        self.assertEqual(
+            conn.execute(
+                """
+                SELECT canonical_name, common_names, family_genus, uses_text, other_text
+                FROM species_search_text
+                """
+            ).fetchone(),
+            (
+                "strasse cafe",
+                "creme œillet",
+                "rosaceae strasse",
+                "medicinal fiber",
+                "menace",
+            ),
+        )
+        self.assertEqual(
+            conn.execute(
+                "SELECT COUNT(*) FROM species_search_fts "
+                "WHERE species_search_fts MATCH 'strasse'"
+            ).fetchone()[0],
+            1,
+        )
+
+
 class PrepareDbSearchEntryIndexTests(unittest.TestCase):
     def test_search_name_entry_index_uses_selected_language_names_only(self):
         conn = sqlite3.connect(":memory:")
