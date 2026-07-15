@@ -106,10 +106,6 @@
   flex-shrink: 0;
 }
 
-.spacer {
-  flex: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .toolButton { transition: none; }
 }

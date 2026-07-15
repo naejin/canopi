@@ -74,11 +74,6 @@ export function setStyleFilter(value: string): void {
   styleFilter.value = value
 }
 
-export function clearCommunityFilters(): void {
-  climateFilter.value = ''
-  styleFilter.value = ''
-}
-
 export async function importTemplateIntoCurrentSession(template: TemplateMeta): Promise<void> {
   templateImporting.value = true
   templateImportError.value = null

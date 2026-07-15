@@ -135,8 +135,7 @@
   background: var(--color-bg);
 }
 
-.frameHeader,
-.savedStampsHeader {
+.frameHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -390,7 +389,6 @@
   gap: var(--space-1);
 }
 
-.savedStampPrimaryButton,
 .savedStampSecondaryButton,
 .savedStampDangerButton,
 .savedStampIconButton {
@@ -459,17 +457,6 @@
 .savedStampActionIcon {
   width: var(--icon-size-sm);
   height: var(--icon-size-sm);
-}
-
-.savedStampPrimaryButton {
-  color: var(--color-primary-contrast);
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.savedStampPrimaryButton:hover {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
 }
 
 .savedStampSecondaryButton {

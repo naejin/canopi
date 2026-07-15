@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import {
   clearDesignLocation,
-  saveLocationDraft,
-  selectSearchResultLocation,
   setDesignLocation,
 } from '../app/location/controller'
 
@@ -46,29 +44,5 @@ describe('location actions', () => {
 
     expect(currentDesign.value?.location).toBe(null)
     expect(nonCanvasRevision.value).toBe(2)
-  })
-
-  it('saves a validated location draft through the action boundary', () => {
-    const saved = saveLocationDraft({ lat: '48.8566', lon: '2.3522', altitude: '35' })
-
-    expect(saved).toBe(true)
-    expect(currentDesign.value?.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
-    expect(nonCanvasRevision.value).toBe(1)
-  })
-
-  it('ignores invalid location drafts without mutating the design', () => {
-    const saved = saveLocationDraft({ lat: '91', lon: '2.3522', altitude: '' })
-
-    expect(saved).toBe(false)
-    expect(currentDesign.value?.location).toBe(null)
-    expect(nonCanvasRevision.value).toBe(0)
-  })
-
-  it('commits a selected geocode result while preserving empty altitude as null', () => {
-    const saved = selectSearchResultLocation({ lat: 48.8566, lon: 2.3522 }, '')
-
-    expect(saved).toBe(true)
-    expect(currentDesign.value?.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: null })
-    expect(nonCanvasRevision.value).toBe(1)
   })
 })

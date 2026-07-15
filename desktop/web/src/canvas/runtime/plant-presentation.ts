@@ -361,19 +361,3 @@ class ScreenBucketIndex {
     return `${Math.floor(x / this._cellSize)}:${Math.floor(y / this._cellSize)}`
   }
 }
-
-export class PlantPresentationService {
-  buildEntries = buildPlantPresentationEntries
-  buildSnapshot = buildPlantPresentationSnapshot
-  layout = layoutPlantPresentation
-  getWorldBounds = getPlantWorldBounds
-  getScreenHitBounds = getPlantScreenHitBounds
-  hitTest = hitTestPlant
-  resolveBaseColor = resolvePlantBaseColor
-  resolveDisplayColor = resolvePlantDisplayColor
-  resolveStratum = resolvePlantStratum
-  resolveCanopySpreadM = resolvePlantCanopySpreadM
-  resolveStackBadges = resolveStackBadgeDecisions
-}
-
-export const plantPresentationService = new PlantPresentationService()

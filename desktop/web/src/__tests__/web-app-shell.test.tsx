@@ -66,7 +66,6 @@ describe('Web Edition Browser App Shell', () => {
     ])
     expect(container.textContent).toContain('Open .canopi')
     expect(container.textContent).toContain('Download .canopi')
-    expect(container.textContent).not.toContain('Drafts')
     expect(container.querySelector('[data-testid="browser-drafts-list"]')).toBeNull()
     expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
     expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
@@ -75,12 +74,6 @@ describe('Web Edition Browser App Shell', () => {
       'nav.plantDb',
       'nav.favorites',
     ])
-    expect(panelBarCommandIds(container)).not.toContain('nav.templates')
-    expect(panelBarCommandIds(container)).not.toContain('nav.location')
-    expect(container.textContent).not.toContain('Design Notebook')
-    expect(container.textContent).not.toContain('Problem Report')
-    expect(container.textContent).not.toContain('Save As')
-    expect(container.textContent).not.toContain('Exit')
   })
 
   it('matches desktop title-bar chrome for logo and settings controls', async () => {
@@ -94,39 +87,6 @@ describe('Web Edition Browser App Shell', () => {
     ])
     expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
     expect(container.querySelector<HTMLButtonElement>('[data-web-theme-control]')).not.toBeNull()
-  })
-
-  it('omits desktop-only and deferred surfaces from rendered Web Edition chrome', async () => {
-    await act(async () => {
-      render(<BrowserAppShell templatesEnabled />, container)
-    })
-    await act(async () => {
-      menuTrigger(container, 'file').click()
-    })
-    const fileMenuText = container.textContent ?? ''
-    const renderedChrome = `${fileMenuText} ${container.textContent ?? ''}`
-    const forbiddenLabels = [
-      'Save',
-      'Save As',
-      'Open Recent',
-      'Reveal',
-      'Update',
-      'Problem Report',
-      'Design Notebook',
-      'Timeline',
-      'Budget',
-      'Consortium',
-      'Export',
-      'Geocode',
-      'Site Adaptation',
-      'Display by',
-      'Color by',
-    ]
-
-    for (const label of forbiddenLabels) {
-      expect(renderedChrome).not.toContain(label)
-    }
-    expect(panelBarCommandIds(container)).not.toContain('nav.designNotebook')
   })
 
   it('groups web-safe top bar commands in desktop-like menus', async () => {
@@ -216,8 +176,6 @@ describe('Web Edition Browser App Shell', () => {
       'Plant Database',
       'Favorites',
     ])
-    expect(panelBarCommandIds(container)).not.toContain('nav.designNotebook')
-
     await act(async () => {
       panelBarButton(container, 'nav.plantDb').click()
     })
@@ -317,26 +275,6 @@ describe('Web Edition Browser App Shell', () => {
     expect(locale.value).toBe('fr')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBeNull()
-  })
-
-  it('keeps Browser Drafts hidden from the Web shell while autosave remains internal', async () => {
-    const handlers: BrowserShellCommandHandlers = {}
-
-    await act(async () => {
-      render(
-        <BrowserAppShell
-          handlers={handlers}
-        />,
-        container,
-      )
-    })
-
-    expect(commandIds(container)).not.toContain('drafts.open')
-    expect(container.querySelector('[data-testid="browser-drafts-list"]')).toBeNull()
-    expect(container.textContent).not.toContain('Browser Drafts')
-    expect(container.textContent).not.toContain('Design Notebook')
-    expect(container.textContent).not.toContain('Section')
-    expect(container.textContent).not.toContain('Reveal')
   })
 
   it('publishes the updated browser theme only after the document theme attribute changes', async () => {

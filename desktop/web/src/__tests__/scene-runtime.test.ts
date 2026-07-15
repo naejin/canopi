@@ -406,7 +406,7 @@ describe('Canvas runtime surfaces', () => {
     },
   )
 
-  it('groups and ungroups selected scene entities without Konva nodes', () => {
+  it('groups and ungroups selected scene entities through runtime state', () => {
     const host = createRuntimeHost()
     const { commands, documents, queries } = host.surfaces
 

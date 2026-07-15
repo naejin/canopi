@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  computeMapLibreCamera,
   createMapFrame,
   maplibreBearingFromNorthBearing,
 } from '../canvas/maplibre-camera'
@@ -123,9 +122,9 @@ function createScene(): ScenePersistedState {
   }
 }
 
-describe('computeMapLibreCamera', () => {
+describe('createMapFrame', () => {
   it('returns null when location is missing', () => {
-    const result = computeMapLibreCamera(
+    const result = createMapFrame(
       { x: 0, y: 0, scale: 1 },
       { width: 1000, height: 800 },
       null,
@@ -136,7 +135,7 @@ describe('computeMapLibreCamera', () => {
   })
 
   it('returns null when screen size is invalid', () => {
-    const result = computeMapLibreCamera(
+    const result = createMapFrame(
       { x: 0, y: 0, scale: 1 },
       { width: 0, height: 800 },
       { lat: 45.52, lon: -122.68 },
@@ -148,7 +147,7 @@ describe('computeMapLibreCamera', () => {
 
   it('projects viewport center into a MapLibre camera', () => {
     const northBearingDeg = 14
-    const result = computeMapLibreCamera(
+    const result = createMapFrame(
       { x: -200, y: -100, scale: 2 },
       { width: 1000, height: 800 },
       { lat: 45.52, lon: -122.68 },
@@ -164,7 +163,7 @@ describe('computeMapLibreCamera', () => {
   })
 
   it('keeps extreme zoom values aligned with the canvas camera until the map ceiling', () => {
-    const result = computeMapLibreCamera(
+    const result = createMapFrame(
       { x: 0, y: 0, scale: 5000 },
       { width: 1000, height: 800 },
       { lat: 0, lon: 0 },
@@ -184,13 +183,13 @@ describe('computeMapLibreCamera', () => {
   })
 
   it('changes the projected center when north bearing rotates the canvas axes', () => {
-    const northUp = computeMapLibreCamera(
+    const northUp = createMapFrame(
       { x: -200, y: -100, scale: 2 },
       { width: 1000, height: 800 },
       { lat: 45.52, lon: -122.68 },
       0,
     )
-    const rotated = computeMapLibreCamera(
+    const rotated = createMapFrame(
       { x: -200, y: -100, scale: 2 },
       { width: 1000, height: 800 },
       { lat: 45.52, lon: -122.68 },

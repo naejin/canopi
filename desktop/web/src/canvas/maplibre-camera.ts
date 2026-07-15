@@ -97,18 +97,3 @@ export function createMapFrame(
     },
   }
 }
-
-export function computeMapLibreCamera(
-  viewport: SceneViewportState,
-  screenSize: MapLibreCameraScreenSize,
-  location: MapLibreCameraLocation | null,
-  northBearingDeg: number | null,
-): MapLibreCameraOptions | null {
-  const frame = createMapFrame(viewport, screenSize, location, northBearingDeg)
-  if (!frame) return null
-  return {
-    center: frame.center,
-    zoom: frame.zoom,
-    bearing: frame.bearing,
-  }
-}

@@ -3,7 +3,6 @@ import { readSavedLocationPresentation } from '../location'
 import { mutateSettingsProjection } from '../settings/projection'
 import { locale } from '../settings/state'
 import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '../../canvas/session'
-import type { BasemapStyle } from '../../generated/contracts'
 import { t } from '../../i18n'
 
 const SCENE_LAYER_ROW_IDS = ['annotations', 'plants', 'measurement-guides', 'zones'] as const
@@ -143,10 +142,6 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
   }
 }
 
-export function setCanvasLayerPresentationPanelOpen(open: boolean): void {
-  layerPanelOpen.value = open
-}
-
 export function toggleCanvasLayerPresentationPanel(): void {
   layerPanelOpen.value = !layerPanelOpen.value
 }
@@ -176,12 +171,6 @@ export function setCanvasLayerPresentationVisibility(id: string, visible: boolea
   }
 
   return getCurrentCanvasLayerCommandSurface()?.setSceneLayerVisibility(id, visible) ?? false
-}
-
-export function toggleCanvasLayerPresentationVisibility(id: string): boolean {
-  const row = readCanvasLayerPresentation().rows.find((entry) => entry.id === id)
-  if (!row) return false
-  return setCanvasLayerPresentationVisibility(id, !row.visible)
 }
 
 export function setCanvasLayerPresentationOpacity(id: string, opacity: number): boolean {
@@ -220,12 +209,6 @@ export function setCanvasLayerPresentationContourIntervalMeters(interval: number
     settings.mapLayers.contourIntervalMeters = interval
   }, { persist: 'queued' })
   return true
-}
-
-export function setCanvasLayerPresentationBasemapStyle(style: BasemapStyle): void {
-  mutateSettingsProjection((settings) => {
-    settings.basemapStyle = style
-  }, { persist: 'queued' })
 }
 
 function clampUnitInterval(value: number): number {

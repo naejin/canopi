@@ -1765,7 +1765,7 @@ describe("document session transition", () => {
     await expect(transitioning).resolves.toMatchObject({ status: "failed" });
   });
 
-  it("opens an obsolete replacement gate when the session machine resets", async () => {
+  it("cancels a predecessor replacement after the session machine resets", async () => {
     const predecessor = makeSession();
     const pendingLoad = deferred<DocumentTransitionLoadResult>();
     const transitioning = machine.transitionDocument({

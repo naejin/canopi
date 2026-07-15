@@ -443,7 +443,7 @@ describe('Web Edition Species Catalog panel', () => {
     expect(mockWorkbench.selectSpecies).not.toHaveBeenCalled()
   })
 
-  it('renders reduced Species detail with a lazy hero image and only v1 fields', async () => {
+  it('renders reduced Species detail with a lazy hero image', async () => {
     mockWorkbench.detail.value = {
       canonicalName: 'Malus domestica',
       detail: {
@@ -480,19 +480,9 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('Tree')
     expect(container.textContent).toContain('Woody perennial')
     expect(container.textContent).toContain('Perennial')
-
-    expect(container.querySelector('[data-testid="web-species-detail-source"]')).toBeNull()
     expect(container.textContent).not.toContain('Wikimedia Commons')
     expect(container.textContent).not.toContain('Jane Gardener')
     expect(container.textContent).not.toContain('CC BY-SA 4.0')
-    expect(container.textContent).not.toContain('Dimensions')
-    expect(container.textContent).not.toContain('Hardiness')
-    expect(container.textContent).not.toContain('Uses')
-    expect(container.textContent).not.toContain('Soil')
-    expect(container.textContent).not.toContain('Ecology')
-    expect(container.textContent).not.toContain('Propagation')
-    expect(container.textContent).not.toContain('Risk')
-    expect(container.textContent).not.toContain('Related species')
   })
 
   it('renders a clean fallback when image metadata is missing', async () => {

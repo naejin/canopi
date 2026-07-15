@@ -2,7 +2,6 @@ import type {
   CanopiFile,
 } from '../../../types/design'
 import {
-  SCENE_LAYER_NAMES,
   type ScenePersistedState,
   type SceneSessionState,
   type SceneViewportState,
@@ -18,21 +17,6 @@ import {
   createDefaultScenePersistedState,
   createDefaultSceneSessionState,
 } from './defaults'
-
-export function isSceneLayerName(name: string): name is (typeof SCENE_LAYER_NAMES)[number] {
-  return (SCENE_LAYER_NAMES as readonly string[]).includes(name)
-}
-
-export function hydrateSceneStore(file: CanopiFile): SceneStore {
-  return new SceneStore(file)
-}
-
-export function serializeSceneStore(
-  store: SceneStore,
-  options: SceneSerializeOptions = {},
-): CanopiFile {
-  return store.toCanopiFile(options)
-}
 
 export class SceneStore {
   private _persisted: ScenePersistedState

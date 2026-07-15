@@ -139,8 +139,7 @@
   font-weight: 600;
 }
 
-.designTitle,
-.designTitleText {
+.designTitle {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -134,38 +134,6 @@ describe('CanvasPanel basemap feedback', () => {
 
     expect(container.querySelector('[role="status"]')).toBeNull()
     expect(container.querySelector('[data-map-active="true"]')).toBeNull()
-    expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
-  })
-
-  it('does not render the obsolete compass even when a saved Location has north bearing metadata', async () => {
-    currentDesign.value = {
-      version: 2,
-      name: 'Demo',
-      description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 32,
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
-    northBearingDeg.value = 32
-    northBearingAvailable.value = true
-
-    await act(async () => {
-      render(<CanvasPanel />, container)
-    })
-
-    expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
   })
 
   it('places loading feedback as a bottom-left Location Notice above the scale bar', async () => {

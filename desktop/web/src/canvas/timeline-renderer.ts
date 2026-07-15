@@ -9,7 +9,7 @@ import {
 } from '../app/timeline/canvas/geometry'
 
 // ---------------------------------------------------------------------------
-// Timeline renderer — Canvas 2D drawing (not Konva)
+// Timeline renderer — Canvas 2D drawing
 // Theme-aware: reads CSS variables from a container element at render time.
 // ---------------------------------------------------------------------------
 

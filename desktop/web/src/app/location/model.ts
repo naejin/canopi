@@ -1,7 +1,6 @@
 import type { Location } from '../../types/design'
 import { formatLocationSummary } from '../../utils/location'
 import { currentDesign } from '../document-session/store'
-import type { LocationDraft } from './controller'
 
 const PIN_EDGE_MARGIN = 24
 
@@ -34,14 +33,6 @@ export function getSavedLocationPresentation(
     hasLocation: location !== null,
     summary: location ? formatLocationSummary(location) : null,
     key: location ? `${location.lat}:${location.lon}:${location.altitude_m ?? ''}` : null,
-  }
-}
-
-export function locationDraftFromSaved(location: Location | null): LocationDraft {
-  return {
-    lat: location?.lat?.toString() ?? '',
-    lon: location?.lon?.toString() ?? '',
-    altitude: location?.altitude_m?.toString() ?? '',
   }
 }
 

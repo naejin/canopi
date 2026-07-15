@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "Base de plantes",
     "canvas": "Zone de dessin",
-    "worldMap": "Carte du monde",
-    "savedDesigns": "Designs sauvegardés",
     "designNotebook": "Carnet de designs",
     "favorites": "Favoris"
   },
@@ -12,14 +10,7 @@
     "panels": "Panneaux de l'édition web",
     "workspace": "Espace de travail web",
     "openCanopi": "Ouvrir .canopi",
-    "downloadCanopi": "Télécharger .canopi",
-    "drafts": "Brouillons",
-    "settings": "Paramètres",
-    "browserDrafts": "Brouillons du navigateur",
-    "browserDraftsHint": "Stockés dans ce navigateur. Téléchargez .canopi pour conserver un fichier.",
-    "noDrafts": "Aucun brouillon du navigateur.",
-    "emptyDesign": "Aucun design chargé",
-    "emptyDesignHint": "Utilisez Nouveau ou Ouvrir .canopi dans la barre d'outils pour commencer."
+    "downloadCanopi": "Télécharger .canopi"
   },
   "designNotebook": {
     "title": "Carnet de designs",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "Base de données végétale corrompue. Réinstallez ou régénérez avec prepare-db.py. La recherche de plantes est indisponible."
   },
   "canvas": {
-    "emptyTitle": "Zone de dessin",
-    "emptyText": "Définissez un emplacement pour activer les couches de carte, ou commencez à dessiner",
     "emptyWelcome": "Commencez votre design",
     "emptyNewDesign": "Nouveau design",
     "emptyOpenDesign": "Ouvrir un design",
     "emptyRecentFiles": "Fichiers récents",
-    "emptyHint": "Faites glisser des plantes depuis le panneau de base de données, ou utilisez les outils de dessin pour créer des zones",
     "toolbar": "Outils",
     "tools": {
       "select": "Sélection",
@@ -138,14 +126,10 @@
       "ellipseDesc": "Dessiner des zones elliptiques",
       "polygon": "Polygone",
       "polygonDesc": "Dessiner des zones polygonales",
-      "freeform": "Forme libre",
-      "freeformDesc": "Dessiner des formes à main levée",
       "line": "Ligne",
       "lineDesc": "Dessiner des zones linéaires",
       "text": "Texte",
       "textDesc": "Ajouter des étiquettes texte",
-      "measure": "Mesure",
-      "measureDesc": "Mesurer des distances",
       "plantStamp": "Tampon plante",
       "plantStampDesc": "Placer des plantes depuis la base de données",
       "objectStamp": "Tampon objet",
@@ -153,17 +137,7 @@
       "plantSpacing": "Espacement des plantes",
       "plantSpacingDesc": "Répéter une plante placée le long d'un guide d'espacement",
       "measurementGuide": "Guide de mesure",
-      "measurementGuideDesc": "Placer un guide de distance permanent",
-      "dimension": "Cote",
-      "dimensionDesc": "Mesurer la distance entre points ou formes",
-      "patternFill": "Remplissage motif",
-      "patternFillDesc": "Remplir une zone avec des plantes",
-      "spacing": "Espacement",
-      "spacingDesc": "Distribuer des plantes le long d'une ligne",
-      "arrow": "Flèche",
-      "arrowDesc": "Dessiner une annotation fléchée",
-      "callout": "Bulle",
-      "calloutDesc": "Ajouter une bulle de texte"
+      "measurementGuideDesc": "Placer un guide de distance permanent"
     },
     "plantSpacing": {
       "title": "Espacement des plantes",
@@ -218,14 +192,7 @@
       "rulersDesc": "Afficher/masquer les règles",
       "scaleBar": "Échelle",
       "gridSize": "Taille de la grille",
-      "zoom": "Zoom",
-      "minimap": "Mini-carte",
-      "minimapDesc": "Afficher/masquer la mini-carte"
-    },
-    "plantTooltip": {
-      "stratum": "Strate",
-      "height": "Hauteur",
-      "family": "Famille"
+      "zoom": "Zoom"
     },
     "plantColor": {
       "label": "Couleur de plante",
@@ -242,9 +209,6 @@
       "customHex": "Hex personnalisé",
       "setColor": "Définir la couleur",
       "setColorForSpecies": "Définir pour tous les {{species}}",
-      "speciesDefaultHint": "Les futures plantations de cette espèce utiliseront cette couleur.",
-      "clearColor": "Effacer la couleur",
-      "clearSpeciesColor": "Effacer la couleur par défaut de l'espèce",
       "names": {
         "red": "Rouge",
         "orange": "Orange",
@@ -266,9 +230,6 @@
       "preview": "Aperçu",
       "setSymbol": "Définir le symbole",
       "setSymbolForSpecies": "Définir pour tous les {{species}}",
-      "speciesDefaultHint": "Les prochains placements de cette espèce utiliseront ce symbole.",
-      "clearSymbol": "Effacer le symbole",
-      "clearSpeciesSymbol": "Effacer la valeur par défaut de l’espèce",
       "mixed": "Symboles mixtes",
       "current": "Actuel : {{symbol}}",
       "inherited": "Hérité : {{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "Aperçu",
     "openTemplate": "Ouvrir comme nouveau design"
   },
-  "saved": {
-    "title": "Designs sauvegardés",
-    "emptyText": "Vos designs apparaîtront ici",
-    "startDesign": "Commencer un nouveau design",
-    "newDesign": "Nouveau design",
-    "loading": "Chargement des fichiers récents...",
-    "loadError": "Impossible de charger les fichiers récents",
-    "listLabel": "Fichiers de design récents",
-    "openFile": "Ouvrir {{name}}",
-    "plantCount": "{{count}} plantes",
-    "justNow": "À l'instant",
-    "minutesAgo": "Il y a {{count}} min",
-    "hoursAgo": "Il y a {{count}} h",
-    "daysAgo": "Il y a {{count}} j"
-  },
   "status": {
     "language": "Langue",
     "theme": "Thème"
@@ -506,12 +452,10 @@
   "commands": {
     "plantDb": "Aller à la base de plantes",
     "canvas": "Aller à la zone de dessin",
-    "worldMap": "Aller à la carte du monde",
     "toggleTheme": "Changer le thème",
     "commandPalette": "Palette de commandes",
     "searchPlaceholder": "Entrez une commande...",
-    "noResults": "Aucune commande trouvée",
-    "reportProblem": "Signaler un problème"
+    "noResults": "Aucune commande trouvée"
   },
   "plantDetail": {
     "back": "Retour",
@@ -682,10 +626,7 @@
     "introducedDistribution": "Répartition introduite"
   },
   "webSpeciesDetail": {
-    "commonNames": "Noms communs",
-    "source": "Source",
-    "credit": "Crédit",
-    "license": "Licence"
+    "commonNames": "Noms communs"
   },
   "chips": {
     "fruitTrees": "Arbres fruitiers",

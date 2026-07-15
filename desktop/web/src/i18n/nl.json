@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "Plantendatabase",
     "canvas": "Ontwerpcanvas",
-    "worldMap": "Wereldkaart",
-    "savedDesigns": "Opgeslagen ontwerpen",
     "designNotebook": "Ontwerpnotitieboek",
     "favorites": "Favorieten"
   },
@@ -12,14 +10,7 @@
     "panels": "Webeditie-panelen",
     "workspace": "Webeditie-werkruimte",
     "openCanopi": ".canopi openen",
-    "downloadCanopi": ".canopi downloaden",
-    "drafts": "Concepten",
-    "settings": "Instellingen",
-    "browserDrafts": "Browserconcepten",
-    "browserDraftsHint": "Opgeslagen in deze browser. Download .canopi voor een bestandsback-up.",
-    "noDrafts": "Nog geen browserconcepten.",
-    "emptyDesign": "Geen ontwerp geladen",
-    "emptyDesignHint": "Gebruik Nieuw of .canopi openen in de werkbalk om te beginnen."
+    "downloadCanopi": ".canopi downloaden"
   },
   "designNotebook": {
     "title": "Ontwerpnotitieboek",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "Plantendatabase is beschadigd. Herinstalleer of genereer opnieuw met prepare-db.py. Planten zoeken is niet beschikbaar."
   },
   "canvas": {
-    "emptyTitle": "Ontwerpcanvas",
-    "emptyText": "Stel een locatie in om kaartlagen in te schakelen, of begin met tekenen",
     "emptyWelcome": "Begin je ontwerp",
     "emptyNewDesign": "Nieuw ontwerp",
     "emptyOpenDesign": "Ontwerp openen",
     "emptyRecentFiles": "Recente bestanden",
-    "emptyHint": "Sleep planten vanuit het databasepaneel, of gebruik tekengereedschap om zones te maken",
     "toolbar": "Gereedschap",
     "tools": {
       "select": "Selecteren",
@@ -138,14 +126,10 @@
       "ellipseDesc": "Elliptische zones tekenen",
       "polygon": "Veelhoek",
       "polygonDesc": "Veelhoekige zones tekenen",
-      "freeform": "Vrije vorm",
-      "freeformDesc": "Uit de vrije hand tekenen",
       "line": "Lijn",
       "lineDesc": "Lineaire zones tekenen",
       "text": "Tekst",
       "textDesc": "Tekstlabels toevoegen",
-      "measure": "Meten",
-      "measureDesc": "Afstanden meten",
       "plantStamp": "Plantstempel",
       "plantStampDesc": "Planten uit database plaatsen",
       "objectStamp": "Objectstempel",
@@ -153,17 +137,7 @@
       "plantSpacing": "Plantafstand",
       "plantSpacingDesc": "Een geplaatste plant langs een afstandslijn herhalen",
       "measurementGuide": "Meethulp",
-      "measurementGuideDesc": "Plaats een permanente afstandsgids",
-      "dimension": "Maatvoering",
-      "dimensionDesc": "Afstand meten tussen punten of vormen",
-      "patternFill": "Patroonvulling",
-      "patternFillDesc": "Een zone vullen met planten in een patroon",
-      "spacing": "Afstand",
-      "spacingDesc": "Planten verdelen langs een lijn",
-      "arrow": "Pijl",
-      "arrowDesc": "Een pijlannotatie tekenen",
-      "callout": "Tekstballon",
-      "calloutDesc": "Een tekstballonvak toevoegen"
+      "measurementGuideDesc": "Plaats een permanente afstandsgids"
     },
     "plantSpacing": {
       "title": "Plantafstand",
@@ -218,14 +192,7 @@
       "rulersDesc": "Horizontale en verticale linialen in-/uitschakelen",
       "scaleBar": "Schaalbalk",
       "gridSize": "Rastergrootte",
-      "zoom": "Zoom",
-      "minimap": "Minikaart",
-      "minimapDesc": "Overzichtsminikaart in-/uitschakelen"
-    },
-    "plantTooltip": {
-      "stratum": "Stratum",
-      "height": "Hoogte",
-      "family": "Familie"
+      "zoom": "Zoom"
     },
     "plantColor": {
       "label": "Plantkleur",
@@ -242,9 +209,6 @@
       "customHex": "Aangepaste hex",
       "setColor": "Kleur instellen",
       "setColorForSpecies": "Instellen voor alle {{species}}",
-      "speciesDefaultHint": "Toekomstige plaatsingen van deze soort gebruiken deze kleur.",
-      "clearColor": "Kleur wissen",
-      "clearSpeciesColor": "Standaardkleur van soort wissen",
       "names": {
         "red": "Rood",
         "orange": "Oranje",
@@ -266,9 +230,6 @@
       "preview": "Voorbeeld",
       "setSymbol": "Symbool instellen",
       "setSymbolForSpecies": "Instellen voor alle {{species}}",
-      "speciesDefaultHint": "Nieuwe plaatsingen van deze soort gebruiken dit symbool.",
-      "clearSymbol": "Symbool wissen",
-      "clearSpeciesSymbol": "Soortstandaard wissen",
       "mixed": "Gemengde symbolen",
       "current": "Huidig: {{symbol}}",
       "inherited": "Overgenomen: {{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "Voorbeeld",
     "openTemplate": "Openen als nieuw ontwerp"
   },
-  "saved": {
-    "title": "Opgeslagen ontwerpen",
-    "emptyText": "Je ontwerpen verschijnen hier",
-    "startDesign": "Begin een nieuw ontwerp",
-    "newDesign": "Nieuw ontwerp",
-    "loading": "Recente bestanden laden...",
-    "loadError": "Kon recente bestanden niet laden",
-    "listLabel": "Recente ontwerpbestanden",
-    "openFile": "{{name}} openen",
-    "plantCount": "{{count}} planten",
-    "justNow": "Zojuist",
-    "minutesAgo": "{{count}} min geleden",
-    "hoursAgo": "{{count}} u geleden",
-    "daysAgo": "{{count}} d geleden"
-  },
   "status": {
     "language": "Taal",
     "theme": "Thema"
@@ -506,12 +452,10 @@
   "commands": {
     "plantDb": "Ga naar Plantendatabase",
     "canvas": "Ga naar Ontwerpcanvas",
-    "worldMap": "Ga naar Wereldkaart",
     "toggleTheme": "Thema wisselen",
     "commandPalette": "Opdrachtenpalet",
     "searchPlaceholder": "Typ een opdracht...",
-    "noResults": "Geen opdrachten gevonden",
-    "reportProblem": "Probleem melden"
+    "noResults": "Geen opdrachten gevonden"
   },
   "plantDetail": {
     "back": "Terug",
@@ -682,10 +626,7 @@
     "introducedDistribution": "Geïntroduceerde verspreiding"
   },
   "webSpeciesDetail": {
-    "commonNames": "Algemene namen",
-    "source": "Bron",
-    "credit": "Naamsvermelding",
-    "license": "Licentie"
+    "commonNames": "Algemene namen"
   },
   "chips": {
     "fruitTrees": "Fruitbomen",

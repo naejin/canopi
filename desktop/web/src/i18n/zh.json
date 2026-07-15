@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "植物数据库",
     "canvas": "设计画布",
-    "worldMap": "世界地图",
-    "savedDesigns": "已保存的设计",
     "designNotebook": "设计笔记本",
     "favorites": "收藏夹"
   },
@@ -12,14 +10,7 @@
     "panels": "网页版面板",
     "workspace": "网页版工作区",
     "openCanopi": "打开 .canopi",
-    "downloadCanopi": "下载 .canopi",
-    "drafts": "草稿",
-    "settings": "设置",
-    "browserDrafts": "浏览器草稿",
-    "browserDraftsHint": "保存在此浏览器中。下载 .canopi 以保留文件备份。",
-    "noDrafts": "还没有浏览器草稿。",
-    "emptyDesign": "未加载设计",
-    "emptyDesignHint": "使用工具栏中的新建或打开 .canopi 开始。"
+    "downloadCanopi": "下载 .canopi"
   },
   "designNotebook": {
     "title": "设计笔记本",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "植物数据库已损坏。请重新安装或使用 prepare-db.py 重新生成。植物搜索不可用。"
   },
   "canvas": {
-    "emptyTitle": "设计画布",
-    "emptyText": "设置位置以启用地图图层，或开始绘制",
     "emptyWelcome": "开始您的设计",
     "emptyNewDesign": "新建设计",
     "emptyOpenDesign": "打开设计",
     "emptyRecentFiles": "最近文件",
-    "emptyHint": "从数据库面板拖拽植物，或使用绘图工具创建区域",
     "toolbar": "工具",
     "tools": {
       "select": "选择",
@@ -138,14 +126,10 @@
       "ellipseDesc": "绘制椭圆区域",
       "polygon": "多边形",
       "polygonDesc": "绘制多边形区域",
-      "freeform": "自由形状",
-      "freeformDesc": "手绘自由形状",
       "line": "线条",
       "lineDesc": "绘制线性区域",
       "text": "文本",
       "textDesc": "添加文字标签",
-      "measure": "测量",
-      "measureDesc": "测量距离",
       "plantStamp": "植物图章",
       "plantStampDesc": "从数据库放置植物",
       "objectStamp": "对象图章",
@@ -153,17 +137,7 @@
       "plantSpacing": "植物间距",
       "plantSpacingDesc": "沿间距参考线重复已放置的植物",
       "measurementGuide": "测量参考线",
-      "measurementGuideDesc": "放置常显的距离参考线",
-      "dimension": "标注尺寸",
-      "dimensionDesc": "测量点或形状之间的距离",
-      "patternFill": "图案填充",
-      "patternFillDesc": "用植物填充区域",
-      "spacing": "间距",
-      "spacingDesc": "沿直线均匀分布植物",
-      "arrow": "箭头",
-      "arrowDesc": "绘制箭头注释",
-      "callout": "标注",
-      "calloutDesc": "添加文字标注框"
+      "measurementGuideDesc": "放置常显的距离参考线"
     },
     "plantSpacing": {
       "title": "植物间距",
@@ -218,14 +192,7 @@
       "rulersDesc": "显示/隐藏标尺",
       "scaleBar": "比例尺",
       "gridSize": "网格大小",
-      "zoom": "缩放",
-      "minimap": "小地图",
-      "minimapDesc": "显示/隐藏小地图"
-    },
-    "plantTooltip": {
-      "stratum": "层级",
-      "height": "高度",
-      "family": "科"
+      "zoom": "缩放"
     },
     "plantColor": {
       "label": "植物颜色",
@@ -242,9 +209,6 @@
       "customHex": "自定义 Hex",
       "setColor": "设置颜色",
       "setColorForSpecies": "为所有 {{species}} 设置",
-      "speciesDefaultHint": "该物种后续放置的植物将使用此颜色。",
-      "clearColor": "清除颜色",
-      "clearSpeciesColor": "清除物种默认颜色",
       "names": {
         "red": "红色",
         "orange": "橙色",
@@ -266,9 +230,6 @@
       "preview": "预览",
       "setSymbol": "设置符号",
       "setSymbolForSpecies": "为所有 {{species}} 设置",
-      "speciesDefaultHint": "以后放置此物种时将使用此符号。",
-      "clearSymbol": "清除符号",
-      "clearSpeciesSymbol": "清除物种默认值",
       "mixed": "混合符号",
       "current": "当前：{{symbol}}",
       "inherited": "继承：{{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "预览",
     "openTemplate": "作为新设计打开"
   },
-  "saved": {
-    "title": "已保存的设计",
-    "emptyText": "您的设计将显示在这里",
-    "startDesign": "开始新设计",
-    "newDesign": "新建设计",
-    "loading": "正在加载最近文件...",
-    "loadError": "无法加载最近文件",
-    "listLabel": "最近的设计文件",
-    "openFile": "打开 {{name}}",
-    "plantCount": "{{count}} 种植物",
-    "justNow": "刚刚",
-    "minutesAgo": "{{count}} 分钟前",
-    "hoursAgo": "{{count}} 小时前",
-    "daysAgo": "{{count}} 天前"
-  },
   "status": {
     "language": "语言",
     "theme": "主题"
@@ -506,12 +452,10 @@
   "commands": {
     "plantDb": "前往植物数据库",
     "canvas": "前往设计画布",
-    "worldMap": "前往世界地图",
     "toggleTheme": "切换主题",
     "commandPalette": "命令面板",
     "searchPlaceholder": "输入命令...",
-    "noResults": "未找到命令",
-    "reportProblem": "报告问题"
+    "noResults": "未找到命令"
   },
   "plantDetail": {
     "back": "返回",
@@ -682,10 +626,7 @@
     "introducedDistribution": "引入分布"
   },
   "webSpeciesDetail": {
-    "commonNames": "常用名",
-    "source": "来源",
-    "credit": "署名",
-    "license": "许可证"
+    "commonNames": "常用名"
   },
   "chips": {
     "fruitTrees": "果树",

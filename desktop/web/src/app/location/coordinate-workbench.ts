@@ -1,30 +1,18 @@
 import { useRef } from 'preact/hooks'
-import { useSignal, useSignalEffect } from '@preact/signals'
-import type { LocationDraft } from './controller'
+import { useSignal } from '@preact/signals'
 import {
   clearDesignLocation,
-  saveLocationDraft,
   setDesignLocation,
 } from './controller'
 import {
   buildLocationCommit,
-  locationDraftFromSaved,
   useSavedLocationPresentation,
   type SavedLocationPresentation,
 } from './model'
-import { currentDesign } from '../document-session/store'
 
 export interface LocationCoordinateWorkbench {
   readonly saved: SavedLocationPresentation
-  readonly latDraft: string
-  readonly lonDraft: string
-  readonly altitudeDraft: string
   readonly pendingMapResult: { lat: number; lon: number } | null
-  readonly setLatDraft: (value: string) => void
-  readonly setLonDraft: (value: string) => void
-  readonly setAltitudeDraft: (value: string) => void
-  readonly readDraft: () => LocationDraft
-  readonly saveDraft: () => boolean
   readonly clearLocation: () => boolean
   readonly previewMapLocation: (coords: { lat: number; lon: number }) => { lat: number; lon: number }
   readonly clearPendingMapResult: () => void
@@ -36,38 +24,11 @@ export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
   const savedLocationRef = useRef(saved.location)
   savedLocationRef.current = saved.location
 
-  const initialDraft = locationDraftFromSaved(saved.location)
-  const latDraft = useSignal(initialDraft.lat)
-  const lonDraft = useSignal(initialDraft.lon)
-  const altitudeDraft = useSignal(initialDraft.altitude)
   const pendingMapResult = useSignal<{ lat: number; lon: number } | null>(null)
-
-  useSignalEffect(() => {
-    const next = locationDraftFromSaved(currentDesign.value?.location ?? null)
-    latDraft.value = next.lat
-    lonDraft.value = next.lon
-    altitudeDraft.value = next.altitude
-  })
-
-  function readDraftFromSignals(): LocationDraft {
-    return {
-      lat: latDraft.value,
-      lon: lonDraft.value,
-      altitude: altitudeDraft.value,
-    }
-  }
-
-  function saveDraftFromSignals(): boolean {
-    return saveLocationDraft(readDraftFromSignals())
-  }
 
   function clearLocationFromWorkbench(): boolean {
     pendingMapResult.value = null
-    const cleared = clearDesignLocation()
-    latDraft.value = ''
-    lonDraft.value = ''
-    altitudeDraft.value = ''
-    return cleared
+    return clearDesignLocation()
   }
 
   function previewMapLocation(coords: { lat: number; lon: number }): { lat: number; lon: number } {
@@ -89,15 +50,7 @@ export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
 
   return {
     saved,
-    latDraft: latDraft.value,
-    lonDraft: lonDraft.value,
-    altitudeDraft: altitudeDraft.value,
     pendingMapResult: pendingMapResult.value,
-    setLatDraft: (value) => { latDraft.value = value },
-    setLonDraft: (value) => { lonDraft.value = value },
-    setAltitudeDraft: (value) => { altitudeDraft.value = value },
-    readDraft: readDraftFromSignals,
-    saveDraft: saveDraftFromSignals,
     clearLocation: clearLocationFromWorkbench,
     previewMapLocation,
     clearPendingMapResult,

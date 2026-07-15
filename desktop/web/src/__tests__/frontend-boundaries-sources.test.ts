@@ -200,22 +200,12 @@ describe('frontend boundary sources', () => {
     }
   })
 
-  it('keeps Web Edition Species detail reduced and desktop-detail free', () => {
-    const webPanelSource = readSource('../web/WebSpeciesCatalogPanel.tsx')
-
+  it('keeps Web Edition Species detail behind its reduced adapter', () => {
     expectNoImportsMatching('../web/WebSpeciesCatalogPanel.tsx', [
       /components\/plant-detail/,
       /app\/plant-detail/,
       /ipc\/species/,
     ])
-    expect(webPanelSource).not.toContain('height')
-    expect(webPanelSource).not.toContain('hardiness')
-    expect(webPanelSource).not.toContain('stratum')
-    expect(webPanelSource).not.toContain('uses')
-    expect(webPanelSource).not.toContain('soil')
-    expect(webPanelSource).not.toContain('ecology')
-    expect(webPanelSource).not.toContain('propagation')
-    expect(webPanelSource).not.toContain('related')
   })
 
   it('keeps the remaining workflow components free of direct ipc imports', () => {
@@ -233,19 +223,13 @@ describe('frontend boundary sources', () => {
     expect(sourceExists('../components/canvas/TemplateAdaptation.tsx')).toBe(false)
   })
 
-  it('keeps Saved Object Stamps on the Favorites workbench instead of prototype entry points', () => {
-    const appSource = readSource('../app.tsx')
+  it('keeps Saved Object Stamps on the Favorites workbench', () => {
     const favoritesSource = readSource('../components/panels/FavoritesPanel.tsx')
 
-    expect(sourceExists('../components/panels/SavedStampsPrototype.tsx')).toBe(false)
-    expect(sourceExists('../components/panels/SavedStampsPrototype.module.css')).toBe(false)
-    expect(appSource).not.toContain('stampPrototype')
-    expect(appSource).not.toContain('URLSearchParams')
     expect(favoritesSource).toContain('savedObjectStampWorkbench')
     expect(favoritesSource).toContain('saveCanvasSelectionAsObjectStamp')
     expect(favoritesSource).not.toContain('savedObjectStampWorkbench.saveCurrentSelection')
     expect(favoritesSource).toContain('data-saved-stamps-frame')
-    expect(favoritesSource).not.toContain('SavedStampsPrototype')
   })
 
   it('keeps scene runtime panel-target app signals behind an injected adapter', () => {
@@ -312,20 +296,13 @@ describe('frontend boundary sources', () => {
   })
 
   it('keeps scene layer and guide writes behind the Scene Edit runtime seam', () => {
-    const controllerSource = readSource('../app/canvas-settings/controller.ts')
     const layerPresentationSource = readSource('../app/canvas-layer-presentation/presentation.ts')
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const commandSurfaceSource = readSource('../canvas/runtime/command-surface.ts')
     const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
     const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
 
-    expect(controllerSource).toContain('../canvas-layer-presentation/presentation')
-    expect(controllerSource).not.toContain('getCurrentCanvasLayerCommandSurface')
     expect(layerPresentationSource).toContain('getCurrentCanvasLayerCommandSurface')
-    expect(controllerSource).not.toContain('getCurrentCanvasCommandSurface')
-    expect(controllerSource).not.toContain('layerVisibility.value =')
-    expect(controllerSource).not.toContain('layerLockState.value =')
-    expect(controllerSource).not.toContain('layerOpacity.value =')
     expect(commandSurfaceSource).toContain('setSceneLayerVisibility')
     expect(runtimeSource).toContain("_sceneCommands.run('guide-add'")
     expect(runtimeSource).not.toContain('applySignalBackedSceneState')

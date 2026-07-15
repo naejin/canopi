@@ -10,7 +10,6 @@ export interface HslColor {
 }
 
 export const DEFAULT_PLANT_COLOR = '#4CAF50'
-export const UNKNOWN_FLOWER_COLOR = '#9E9E9E'
 
 export const PLANT_COLOR_PALETTE: readonly PlantPaletteColor[] = [
   { name: 'Clover', hex: '#3E8E4E' },
@@ -40,20 +39,6 @@ const FLOWER_COLOR_HEX: Record<string, string> = {
   Brown: '#7A5C30',
   Black: '#4A4A46',
 }
-
-export const FLOWER_COLOR_ORDER: readonly string[] = [
-  'Red',
-  'Orange',
-  'Yellow',
-  'Green',
-  'Blue',
-  'Purple',
-  'Violet',
-  'Pink',
-  'White',
-  'Brown',
-  'Black',
-] as const
 
 export function normalizeHexColor(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null

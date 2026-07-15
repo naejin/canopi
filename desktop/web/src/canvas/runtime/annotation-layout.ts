@@ -13,13 +13,6 @@ export interface AnnotationWorldBounds {
   height: number
 }
 
-export interface AnnotationScreenBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
 export interface AnnotationScreenFrame {
   origin: ScenePoint
   widthPx: number
@@ -50,13 +43,6 @@ export function getAnnotationWorldBounds(
   return boundsForPoints(getAnnotationWorldCorners(annotation, viewportScale))
 }
 
-export function getAnnotationScreenBounds(
-  annotation: SceneAnnotationEntity,
-  viewport: SceneViewportState,
-): AnnotationScreenBounds {
-  return boundsForPoints(getAnnotationScreenCorners(annotation, viewport))
-}
-
 export function getAnnotationScreenFrame(
   annotation: SceneAnnotationEntity,
   viewport: SceneViewportState,
@@ -84,22 +70,6 @@ export function getAnnotationWorldCorners(
     height: metrics.heightPx / safeScale,
     paddingX: paddingPx.x / safeScale,
     paddingY: paddingPx.y / safeScale,
-    rotationDeg: annotation.rotationDeg ?? 0,
-  })
-}
-
-export function getAnnotationScreenCorners(
-  annotation: SceneAnnotationEntity,
-  viewport: SceneViewportState,
-  paddingPx: { x: number; y: number } = { x: 0, y: 0 },
-): ScenePoint[] {
-  const metrics = getAnnotationTextMetrics(annotation)
-  return rotatedRectCorners({
-    origin: worldToScreen(annotation.position, viewport),
-    width: metrics.widthPx,
-    height: metrics.heightPx,
-    paddingX: paddingPx.x,
-    paddingY: paddingPx.y,
     rotationDeg: annotation.rotationDeg ?? 0,
   })
 }

@@ -145,7 +145,6 @@ const DEFAULT_DEPS: Omit<DesignSessionStateMachineDeps, "persistence"> = {
 
 export class DesignSessionStateMachine {
   private state: DesignSessionState = INITIAL_STATE;
-  private stateEpoch = 0;
   private operationIntent = 0;
   private readonly activeOperationStates = new Map<number, DesignSessionState | null>();
   private activeTransitionOperationIntent: number | null = null;
@@ -194,7 +193,7 @@ export class DesignSessionStateMachine {
     try {
       canvasLease = this.deps.persistence.attachCanvas(session);
     } catch (error) {
-      this.finishTransitionOperationState(operationIntent, null, null);
+      this.finishTransitionOperationState(operationIntent, null);
       throw error;
     }
     if (!this.deps.store.hasCurrentDesign()) {
@@ -203,7 +202,7 @@ export class DesignSessionStateMachine {
     }
 
     this.activateTransitionOperation(operationIntent, this.steadyStateFor(session));
-    const stateEpoch = this.publishOperationState(
+    this.publishOperationState(
       operationIntent,
       this.operationState("loading", "mount-existing", session),
     );
@@ -213,7 +212,6 @@ export class DesignSessionStateMachine {
       canvasLease.assertCurrent();
       this.finishTransitionOperationState(
         operationIntent,
-        stateEpoch,
         this.steadyStateFor(session),
       );
       return {
@@ -221,7 +219,7 @@ export class DesignSessionStateMachine {
         documentLoaded: session.hasLoadedDocument(),
       };
     } catch (error) {
-      this.finishTransitionOperationState(operationIntent, stateEpoch, {
+      this.finishTransitionOperationState(operationIntent, {
         ...this.operationState("failed", "mount-existing", session),
         error,
       });
@@ -265,11 +263,10 @@ export class DesignSessionStateMachine {
     finishIntent: boolean,
   ): Promise<DesignSaveSettlement | null> {
     const session = this.sessionForOption(options.session);
-    let stateEpoch: number | null = null;
     let stateStarted = false;
     try {
       if (session) this.deps.persistence.attachCanvas(session);
-      stateEpoch = this.publishOperationState(
+      this.publishOperationState(
         operationIntent,
         this.operationState("saving", "save", session),
       );
@@ -285,7 +282,6 @@ export class DesignSessionStateMachine {
       if (finishIntent) {
         this.finishOperationState(
           operationIntent,
-          stateEpoch,
           stateStarted ? this.steadyStateFor(session) : null,
         );
       } else if (stateStarted) {
@@ -299,11 +295,10 @@ export class DesignSessionStateMachine {
   ): Promise<DesignSaveSettlement | null> {
     const operationIntent = this.claimOperationIntent();
     const session = this.sessionForOption(options.session);
-    let stateEpoch: number | null = null;
     let stateStarted = false;
     try {
       if (session) this.deps.persistence.attachCanvas(session);
-      stateEpoch = this.publishOperationState(
+      this.publishOperationState(
         operationIntent,
         this.operationState("saving", "save-as", session),
       );
@@ -320,7 +315,6 @@ export class DesignSessionStateMachine {
     } finally {
       this.finishOperationState(
         operationIntent,
-        stateEpoch,
         stateStarted ? this.steadyStateFor(session) : null,
       );
     }
@@ -339,7 +333,6 @@ export class DesignSessionStateMachine {
     let retainedReplacementIdentity: DesignSessionPendingCanvasReplacementIdentity | null = null;
     let designBaselineIsCurrent = () => false;
     let intent: number | null = null;
-    let transitionStateEpoch: number | null = null;
     const transitionIsCurrent = () => intent !== null
       && intent === this.transitionIntent
       && canvasLease?.isCurrent() === true;
@@ -360,7 +353,6 @@ export class DesignSessionStateMachine {
     const publishCompletionIfOwned = (state: DesignSessionState) => {
       this.finishTransitionOperationState(
         operationIntent,
-        transitionStateEpoch,
         intent === null ? null : state,
       );
     };
@@ -450,7 +442,7 @@ export class DesignSessionStateMachine {
 
       return await this.deps.persistence.withReplacementWriteFence(async (writeFence) => {
         assertReplacementAttemptCurrent();
-        transitionStateEpoch = this.publishOperationState(
+        this.publishOperationState(
           operationIntent,
           this.operationState("loading", request.source, session),
         );
@@ -631,11 +623,10 @@ export class DesignSessionStateMachine {
     if (!runtimeInitialized) return false;
 
     const operationIntent = this.claimOperationIntent();
-    let stateEpoch: number | null = null;
     let stateStarted = false;
     try {
       this.deps.persistence.attachCanvas(session);
-      stateEpoch = this.publishOperationState(
+      this.publishOperationState(
         operationIntent,
         this.operationState("autosaving", "autosave", session),
       );
@@ -657,7 +648,6 @@ export class DesignSessionStateMachine {
     } finally {
       this.finishOperationState(
         operationIntent,
-        stateEpoch,
         stateStarted ? this.steadyStateFor(session) : null,
       );
     }
@@ -674,11 +664,11 @@ export class DesignSessionStateMachine {
     try {
       canvasLease = this.deps.persistence.attachCanvas(session);
     } catch (error) {
-      this.finishTransitionOperationState(operationIntent, null, null);
+      this.finishTransitionOperationState(operationIntent, null);
       throw error;
     }
     this.activateTransitionOperation(operationIntent, this.steadyStateFor(session));
-    const stateEpoch = this.publishOperationState(
+    this.publishOperationState(
       operationIntent,
       this.operationState("tearing-down", "teardown", session),
     );
@@ -696,7 +686,6 @@ export class DesignSessionStateMachine {
         logError("Failed to snapshot canvas before teardown:", error);
         this.finishTransitionOperationState(
           operationIntent,
-          stateEpoch,
           this.steadyStateFor(session),
         );
         throw error;
@@ -714,7 +703,6 @@ export class DesignSessionStateMachine {
     } finally {
       this.finishTransitionOperationState(
         operationIntent,
-        stateEpoch,
         this.steadyStateFor(canvasDetached ? null : session),
       );
     }
@@ -853,10 +841,8 @@ export class DesignSessionStateMachine {
     };
   }
 
-  private publishState(state: DesignSessionState): number {
+  private publishState(state: DesignSessionState): void {
     this.state = state;
-    this.stateEpoch += 1;
-    return this.stateEpoch;
   }
 
   private claimOperationIntent(): number {
@@ -872,7 +858,7 @@ export class DesignSessionStateMachine {
     const predecessor = this.activeTransitionOperationIntent;
     this.activeTransitionOperationIntent = intent;
     if (predecessor !== null) {
-      this.finishOperationState(predecessor, null, fallbackState);
+      this.finishOperationState(predecessor, fallbackState);
     }
     this.transitionIntent += 1;
     return this.transitionIntent;
@@ -881,17 +867,16 @@ export class DesignSessionStateMachine {
   private publishOperationState(
     intent: number,
     state: DesignSessionState,
-  ): number | null {
-    if (!this.activeOperationStates.has(intent)) return null;
+  ): void {
+    if (!this.activeOperationStates.has(intent)) return;
     this.activeOperationStates.set(intent, state);
-    if (intent !== this.latestActiveOperationIntent()) return null;
+    if (intent !== this.latestActiveOperationIntent()) return;
     this.presentedOperationIntent = intent;
-    return this.publishState(state);
+    this.publishState(state);
   }
 
   private finishOperationState(
     intent: number,
-    _epoch: number | null,
     state: DesignSessionState | null,
   ): void {
     if (!this.activeOperationStates.has(intent)) return;
@@ -906,13 +891,12 @@ export class DesignSessionStateMachine {
 
   private finishTransitionOperationState(
     intent: number,
-    epoch: number | null,
     state: DesignSessionState | null,
   ): void {
     if (this.activeTransitionOperationIntent === intent) {
       this.activeTransitionOperationIntent = null;
     }
-    this.finishOperationState(intent, epoch, state);
+    this.finishOperationState(intent, state);
   }
 
   private latestActiveOperationIntent(): number | null {

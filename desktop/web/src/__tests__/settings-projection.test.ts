@@ -150,6 +150,7 @@ describe('settings projection', () => {
     })
     expect(resolveBottomPanelHeight('budget')).toBe(224)
     expect(bottomPanelTab.value).toBe('timeline')
+    expect(basemapStyle.value).toBe('street')
     expect(layerVisibility.value.base).toBe(false)
     expect(layerOpacity.value.base).toBe(0.35)
     expect(layerVisibility.value.contours).toBe(true)

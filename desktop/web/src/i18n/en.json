@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "Plant Database",
     "canvas": "Design Canvas",
-    "worldMap": "World Map",
-    "savedDesigns": "Saved Designs",
     "designNotebook": "Design Notebook",
     "favorites": "Favorites"
   },
@@ -12,14 +10,7 @@
     "panels": "Web Edition panels",
     "workspace": "Web Edition workspace",
     "openCanopi": "Open .canopi",
-    "downloadCanopi": "Download .canopi",
-    "drafts": "Drafts",
-    "settings": "Settings",
-    "browserDrafts": "Browser Drafts",
-    "browserDraftsHint": "Stored in this browser. Download .canopi for a file backup.",
-    "noDrafts": "No Browser Drafts yet.",
-    "emptyDesign": "No Design loaded",
-    "emptyDesignHint": "Use New or Open .canopi in the toolbar to start."
+    "downloadCanopi": "Download .canopi"
   },
   "designNotebook": {
     "title": "Design Notebook",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "Plant database is corrupt. Reinstall or regenerate with prepare-db.py. Plant search is unavailable."
   },
   "canvas": {
-    "emptyTitle": "Design Canvas",
-    "emptyText": "Set a location to enable map layers, or start drawing",
     "emptyWelcome": "Start your design",
     "emptyNewDesign": "New Design",
     "emptyOpenDesign": "Open Design",
     "emptyRecentFiles": "Recent Files",
-    "emptyHint": "Drag plants from the database panel, or use drawing tools to create zones",
     "toolbar": "Tools",
     "tools": {
       "select": "Select",
@@ -138,14 +126,10 @@
       "ellipseDesc": "Draw elliptical zones",
       "polygon": "Polygon",
       "polygonDesc": "Draw polygon zones",
-      "freeform": "Freeform",
-      "freeformDesc": "Draw freehand shapes",
       "line": "Line",
       "lineDesc": "Draw linear zones",
       "text": "Text",
       "textDesc": "Add text labels",
-      "measure": "Measure",
-      "measureDesc": "Measure distances",
       "plantStamp": "Plant Stamp",
       "plantStampDesc": "Place plants from database",
       "objectStamp": "Object Stamp",
@@ -153,17 +137,7 @@
       "plantSpacing": "Plant Spacing",
       "plantSpacingDesc": "Repeat a placed plant along a spacing guide",
       "measurementGuide": "Measurement Guide",
-      "measurementGuideDesc": "Place a persistent distance guide",
-      "dimension": "Dimension",
-      "dimensionDesc": "Measure distance between points or shapes",
-      "patternFill": "Pattern Fill",
-      "patternFillDesc": "Fill a zone with plants in a pattern",
-      "spacing": "Spacing",
-      "spacingDesc": "Distribute plants along a line",
-      "arrow": "Arrow",
-      "arrowDesc": "Draw an arrow annotation",
-      "callout": "Callout",
-      "calloutDesc": "Add a text callout box"
+      "measurementGuideDesc": "Place a persistent distance guide"
     },
     "plantSpacing": {
       "title": "Plant Spacing",
@@ -218,14 +192,7 @@
       "rulersDesc": "Toggle horizontal and vertical rulers",
       "scaleBar": "Scale Bar",
       "gridSize": "Grid Size",
-      "zoom": "Zoom",
-      "minimap": "Minimap",
-      "minimapDesc": "Toggle overview minimap"
-    },
-    "plantTooltip": {
-      "stratum": "Stratum",
-      "height": "Height",
-      "family": "Family"
+      "zoom": "Zoom"
     },
     "plantColor": {
       "label": "Plant color",
@@ -242,9 +209,6 @@
       "customHex": "Custom hex",
       "setColor": "Set color",
       "setColorForSpecies": "Set for all {{species}}",
-      "speciesDefaultHint": "Future placements of this species will use this color.",
-      "clearColor": "Clear color",
-      "clearSpeciesColor": "Clear species default",
       "names": {
         "red": "Red",
         "orange": "Orange",
@@ -266,9 +230,6 @@
       "preview": "Preview",
       "setSymbol": "Set symbol",
       "setSymbolForSpecies": "Set for all {{species}}",
-      "speciesDefaultHint": "Future placements of this species will use this symbol.",
-      "clearSymbol": "Clear symbol",
-      "clearSpeciesSymbol": "Clear species default",
       "mixed": "Mixed symbols",
       "current": "Current: {{symbol}}",
       "inherited": "Inherited: {{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "Preview",
     "openTemplate": "Open as new design"
   },
-  "saved": {
-    "title": "Saved Designs",
-    "emptyText": "Your designs will appear here",
-    "startDesign": "Start a new design",
-    "newDesign": "New Design",
-    "loading": "Loading recent files...",
-    "loadError": "Could not load recent files",
-    "listLabel": "Recent design files",
-    "openFile": "Open {{name}}",
-    "plantCount": "{{count}} plants",
-    "justNow": "Just now",
-    "minutesAgo": "{{count}} min ago",
-    "hoursAgo": "{{count}} h ago",
-    "daysAgo": "{{count}} d ago"
-  },
   "status": {
     "language": "Language",
     "theme": "Theme"
@@ -506,9 +452,7 @@
   "commands": {
     "plantDb": "Go to Plant Database",
     "canvas": "Go to Design Canvas",
-    "worldMap": "Go to World Map",
     "toggleTheme": "Toggle Theme",
-    "reportProblem": "Report a Problem",
     "commandPalette": "Command Palette",
     "searchPlaceholder": "Type a command...",
     "noResults": "No commands found"
@@ -682,10 +626,7 @@
     "introducedDistribution": "Introduced distribution"
   },
   "webSpeciesDetail": {
-    "commonNames": "Common names",
-    "source": "Source",
-    "credit": "Credit",
-    "license": "License"
+    "commonNames": "Common names"
   },
   "chips": {
     "fruitTrees": "Fruit trees",

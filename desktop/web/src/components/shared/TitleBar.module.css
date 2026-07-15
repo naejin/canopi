@@ -23,12 +23,6 @@
   pointer-events: none;
 }
 
-.appName {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  font-weight: 400;
-}
-
 .fileName,
 .fileNameButton,
 .fileNameInput {

@@ -15,13 +15,4 @@ describe('plant detail boundary', () => {
     expect(detailSource).toContain("from '../../app/plant-detail'")
     expect(mediaSource).toContain("from '../../app/plant-detail'")
   })
-
-  it('keeps obsolete related-species UI out of plant detail', () => {
-    const detailSource = readSource('../components/plant-detail/PlantDetailCard.tsx')
-
-    expect(detailSource).toContain('›')
-    expect(detailSource).not.toContain('‹')
-    expect(detailSource).not.toContain('RelationshipList')
-    expect(detailSource).not.toContain('plantDetail.relatedSpecies')
-  })
 })

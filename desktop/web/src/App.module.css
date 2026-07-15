@@ -49,8 +49,7 @@
   inset: 0 -4px;
 }
 
-.dragHandle:hover,
-.dragHandle--active {
+.dragHandle:hover {
   background: var(--color-accent);
   width: 2px;
 }

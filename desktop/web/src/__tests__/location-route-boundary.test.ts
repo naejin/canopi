@@ -52,8 +52,6 @@ describe('location route boundary', () => {
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
 
-    expect(canvasPanelSource).not.toContain('CompassOverlay')
-
     for (const source of [
       canvasPanelSource,
       locationPanelSource,
@@ -80,13 +78,4 @@ describe('location route boundary', () => {
     expect(mapSurfaceControllerSource).not.toContain('createLocationSearchController')
   })
 
-  it('does not keep the obsolete standalone Location input surface', () => {
-    const appSource = readSource('../app.tsx')
-    const panelSource = readSource('../components/panels/LocationPanel.tsx')
-    const tabSource = readSource('../components/canvas/LocationTab.tsx')
-
-    expect(appSource).not.toContain('LocationInput')
-    expect(panelSource).not.toContain('LocationInput')
-    expect(tabSource).not.toContain('LocationInput')
-  })
 })

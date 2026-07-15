@@ -139,14 +139,6 @@ export function getContourLayerConfigs(isDark: boolean) {
   }
 }
 
-/**
- * Given a contour interval, return [minor, major] intervals.
- * Major lines appear every 5th minor interval.
- */
-export function getMajorMinorInterval(interval: number): [number, number] {
-  return [interval, interval * 5]
-}
-
 // ── Hillshade paint config ──────────────────────────────────────────────────
 
 /**

@@ -14,14 +14,13 @@ import {
 import {
   readCanvasLayerPresentation,
   setCanvasLayerPresentationActiveLayer,
-  setCanvasLayerPresentationBasemapStyle,
   setCanvasLayerPresentationContourIntervalMeters,
   setCanvasLayerPresentationLocked,
   setCanvasLayerPresentationOpacity,
   setCanvasLayerPresentationVisibility,
 } from '../app/canvas-layer-presentation/presentation'
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
-import { basemapStyle, locale } from '../app/settings/state'
+import { locale } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
@@ -35,7 +34,6 @@ describe('Canvas Layer Presentation', () => {
     vi.useFakeTimers()
     locale.value = 'en'
     activeLayerName.value = 'base'
-    basemapStyle.value = 'street'
     layerVisibility.value = {
       base: false,
       contours: true,
@@ -256,7 +254,6 @@ describe('Canvas Layer Presentation', () => {
       expect(setCanvasLayerPresentationVisibility('hillshading', false)).toBe(true)
       expect(setCanvasLayerPresentationOpacity('hillshading', 0.2)).toBe(true)
       expect(setCanvasLayerPresentationContourIntervalMeters(18)).toBe(true)
-      setCanvasLayerPresentationBasemapStyle('satellite')
       setCanvasLayerPresentationActiveLayer('plants')
 
       expect(layerVisibility.value.base).toBe(true)
@@ -264,7 +261,6 @@ describe('Canvas Layer Presentation', () => {
       expect(hillshadeVisible.value).toBe(false)
       expect(hillshadeOpacity.value).toBe(0.2)
       expect(contourIntervalMeters.value).toBe(18)
-      expect(basemapStyle.value).toBe('satellite')
       expect(activeLayerName.value).toBe('plants')
 
       expect(setCanvasLayerPresentationVisibility('plants', false)).toBe(true)

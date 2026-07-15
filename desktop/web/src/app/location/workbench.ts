@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef } from 'preact/hooks'
-import { saveLocationDraft } from './controller'
 import {
   createLocationSearchController,
   type LocationSearchController,
@@ -13,7 +12,6 @@ export {
   buildLocationCommit,
   computeSavedPinState,
   getSavedLocationPresentation,
-  locationDraftFromSaved,
   readSavedLocationPresentation,
   useSavedLocationPresentation,
   type PinOverlayState,
@@ -22,7 +20,6 @@ export {
 
 export interface LocationWorkbench extends LocationCoordinateWorkbench {
   readonly search: LocationWorkbenchSearch
-  readonly commitSearchResult: (result: LocationSearchResult) => boolean
   readonly previewSearchResultOnMap: (result: LocationSearchResult) => { lat: number; lon: number }
 }
 
@@ -56,17 +53,6 @@ export function useLocationWorkbench(): LocationWorkbench {
     }
   }, [search])
 
-  function commitSearchResult(result: LocationSearchResult): boolean {
-    coordinates.setLatDraft(result.lat.toString())
-    coordinates.setLonDraft(result.lon.toString())
-    search.consumeResult()
-    return saveLocationDraft({
-      ...coordinates.readDraft(),
-      lat: result.lat.toString(),
-      lon: result.lon.toString(),
-    })
-  }
-
   function previewSearchResultOnMap(result: LocationSearchResult): { lat: number; lon: number } {
     search.consumeResult()
     return coordinates.previewMapLocation(result)
@@ -75,7 +61,6 @@ export function useLocationWorkbench(): LocationWorkbench {
   return {
     ...coordinates,
     search: workbenchSearch,
-    commitSearchResult,
     previewSearchResultOnMap,
   }
 }

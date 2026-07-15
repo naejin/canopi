@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "Base de plantas",
     "canvas": "Lienzo de diseño",
-    "worldMap": "Mapa mundial",
-    "savedDesigns": "Diseños guardados",
     "designNotebook": "Cuaderno de diseños",
     "favorites": "Favoritos"
   },
@@ -12,14 +10,7 @@
     "panels": "Paneles de la edición web",
     "workspace": "Espacio de trabajo web",
     "openCanopi": "Abrir .canopi",
-    "downloadCanopi": "Descargar .canopi",
-    "drafts": "Borradores",
-    "settings": "Configuración",
-    "browserDrafts": "Borradores del navegador",
-    "browserDraftsHint": "Guardados en este navegador. Descarga .canopi para tener un archivo de respaldo.",
-    "noDrafts": "Aún no hay borradores del navegador.",
-    "emptyDesign": "No hay ningún diseño cargado",
-    "emptyDesignHint": "Usa Nuevo o Abrir .canopi en la barra de herramientas para empezar."
+    "downloadCanopi": "Descargar .canopi"
   },
   "designNotebook": {
     "title": "Cuaderno de diseños",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "Base de datos de plantas corrupta. Reinstale o regenere con prepare-db.py. La búsqueda de plantas no está disponible."
   },
   "canvas": {
-    "emptyTitle": "Lienzo de diseño",
-    "emptyText": "Establece una ubicación para activar capas del mapa, o empieza a dibujar",
     "emptyWelcome": "Comienza tu diseño",
     "emptyNewDesign": "Nuevo diseño",
     "emptyOpenDesign": "Abrir diseño",
     "emptyRecentFiles": "Archivos recientes",
-    "emptyHint": "Arrastra plantas desde el panel de base de datos, o usa las herramientas de dibujo para crear zonas",
     "toolbar": "Herramientas",
     "tools": {
       "select": "Selección",
@@ -138,14 +126,10 @@
       "ellipseDesc": "Dibujar zonas elípticas",
       "polygon": "Polígono",
       "polygonDesc": "Dibujar zonas poligonales",
-      "freeform": "Forma libre",
-      "freeformDesc": "Dibujar formas a mano alzada",
       "line": "Línea",
       "lineDesc": "Dibujar zonas lineales",
       "text": "Texto",
       "textDesc": "Añadir etiquetas de texto",
-      "measure": "Medida",
-      "measureDesc": "Medir distancias",
       "plantStamp": "Sello de planta",
       "plantStampDesc": "Colocar plantas desde la base de datos",
       "objectStamp": "Sello de objeto",
@@ -153,17 +137,7 @@
       "plantSpacing": "Espaciado de plantas",
       "plantSpacingDesc": "Repetir una planta colocada a lo largo de una guía de espaciado",
       "measurementGuide": "Guía de medida",
-      "measurementGuideDesc": "Colocar una guía de distancia permanente",
-      "dimension": "Cota",
-      "dimensionDesc": "Medir distancia entre puntos o formas",
-      "patternFill": "Relleno de patrón",
-      "patternFillDesc": "Rellenar una zona con plantas",
-      "spacing": "Espaciado",
-      "spacingDesc": "Distribuir plantas a lo largo de una línea",
-      "arrow": "Flecha",
-      "arrowDesc": "Dibujar una anotación con flecha",
-      "callout": "Globo de texto",
-      "calloutDesc": "Agregar un cuadro de texto"
+      "measurementGuideDesc": "Colocar una guía de distancia permanente"
     },
     "plantSpacing": {
       "title": "Espaciado de plantas",
@@ -218,14 +192,7 @@
       "rulersDesc": "Mostrar/ocultar reglas",
       "scaleBar": "Escala",
       "gridSize": "Tamaño de cuadrícula",
-      "zoom": "Zoom",
-      "minimap": "Minimapa",
-      "minimapDesc": "Mostrar/ocultar el minimapa"
-    },
-    "plantTooltip": {
-      "stratum": "Estrato",
-      "height": "Altura",
-      "family": "Familia"
+      "zoom": "Zoom"
     },
     "plantColor": {
       "label": "Color de planta",
@@ -242,9 +209,6 @@
       "customHex": "Hex personalizado",
       "setColor": "Asignar color",
       "setColorForSpecies": "Asignar a todos los {{species}}",
-      "speciesDefaultHint": "Las futuras plantas de esta especie usarán este color.",
-      "clearColor": "Quitar color",
-      "clearSpeciesColor": "Borrar color predeterminado de la especie",
       "names": {
         "red": "Rojo",
         "orange": "Naranja",
@@ -266,9 +230,6 @@
       "preview": "Vista previa",
       "setSymbol": "Establecer símbolo",
       "setSymbolForSpecies": "Establecer para todas las {{species}}",
-      "speciesDefaultHint": "Las ubicaciones futuras de esta especie usarán este símbolo.",
-      "clearSymbol": "Borrar símbolo",
-      "clearSpeciesSymbol": "Borrar valor predeterminado de especie",
       "mixed": "Símbolos mixtos",
       "current": "Actual: {{symbol}}",
       "inherited": "Heredado: {{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "Vista previa",
     "openTemplate": "Abrir como nuevo diseño"
   },
-  "saved": {
-    "title": "Diseños guardados",
-    "emptyText": "Tus diseños aparecerán aquí",
-    "startDesign": "Iniciar un nuevo diseño",
-    "newDesign": "Nuevo diseño",
-    "loading": "Cargando archivos recientes...",
-    "loadError": "No se pudieron cargar los archivos recientes",
-    "listLabel": "Archivos de diseño recientes",
-    "openFile": "Abrir {{name}}",
-    "plantCount": "{{count}} plantas",
-    "justNow": "Ahora mismo",
-    "minutesAgo": "Hace {{count}} min",
-    "hoursAgo": "Hace {{count}} h",
-    "daysAgo": "Hace {{count}} d"
-  },
   "status": {
     "language": "Idioma",
     "theme": "Tema"
@@ -506,12 +452,10 @@
   "commands": {
     "plantDb": "Ir a base de plantas",
     "canvas": "Ir al lienzo",
-    "worldMap": "Ir al mapa mundial",
     "toggleTheme": "Cambiar tema",
     "commandPalette": "Paleta de comandos",
     "searchPlaceholder": "Escriba un comando...",
-    "noResults": "No se encontraron comandos",
-    "reportProblem": "Informar de un problema"
+    "noResults": "No se encontraron comandos"
   },
   "plantDetail": {
     "back": "Volver",
@@ -682,10 +626,7 @@
     "introducedDistribution": "Distribución introducida"
   },
   "webSpeciesDetail": {
-    "commonNames": "Nombres comunes",
-    "source": "Fuente",
-    "credit": "Crédito",
-    "license": "Licencia"
+    "commonNames": "Nombres comunes"
   },
   "chips": {
     "fruitTrees": "Árboles frutales",

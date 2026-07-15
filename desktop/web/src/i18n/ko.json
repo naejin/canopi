@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "식물 데이터베이스",
     "canvas": "설계 캔버스",
-    "worldMap": "세계 지도",
-    "savedDesigns": "저장된 설계",
     "designNotebook": "디자인 노트북",
     "favorites": "즐겨찾기"
   },
@@ -12,14 +10,7 @@
     "panels": "웹 에디션 패널",
     "workspace": "웹 에디션 작업 공간",
     "openCanopi": ".canopi 열기",
-    "downloadCanopi": ".canopi 다운로드",
-    "drafts": "초안",
-    "settings": "설정",
-    "browserDrafts": "브라우저 초안",
-    "browserDraftsHint": "이 브라우저에 저장됩니다. 파일 백업은 .canopi로 다운로드하세요.",
-    "noDrafts": "아직 브라우저 초안이 없습니다.",
-    "emptyDesign": "로드된 디자인 없음",
-    "emptyDesignHint": "도구 모음에서 새로 만들기 또는 .canopi 열기를 사용해 시작하세요."
+    "downloadCanopi": ".canopi 다운로드"
   },
   "designNotebook": {
     "title": "디자인 노트북",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "식물 데이터베이스가 손상되었습니다. prepare-db.py로 재설치하거나 재생성하세요. 식물 검색을 사용할 수 없습니다."
   },
   "canvas": {
-    "emptyTitle": "설계 캔버스",
-    "emptyText": "지도 레이어를 활성화하려면 위치를 설정하거나 그리기를 시작하세요",
     "emptyWelcome": "설계를 시작하세요",
     "emptyNewDesign": "새 설계",
     "emptyOpenDesign": "설계 열기",
     "emptyRecentFiles": "최근 파일",
-    "emptyHint": "데이터베이스 패널에서 식물을 끌어오거나 그리기 도구로 구역을 만드세요",
     "toolbar": "도구",
     "tools": {
       "select": "선택",
@@ -138,14 +126,10 @@
       "ellipseDesc": "타원형 구역 그리기",
       "polygon": "다각형",
       "polygonDesc": "다각형 구역 그리기",
-      "freeform": "자유 형태",
-      "freeformDesc": "자유롭게 도형 그리기",
       "line": "선",
       "lineDesc": "선형 구역 그리기",
       "text": "텍스트",
       "textDesc": "텍스트 라벨 추가",
-      "measure": "측정",
-      "measureDesc": "거리 측정",
       "plantStamp": "식물 스탬프",
       "plantStampDesc": "데이터베이스에서 식물 배치",
       "objectStamp": "개체 스탬프",
@@ -153,17 +137,7 @@
       "plantSpacing": "식물 간격",
       "plantSpacingDesc": "배치된 식물을 간격 안내선을 따라 반복",
       "measurementGuide": "측정 가이드",
-      "measurementGuideDesc": "항상 표시되는 거리 가이드를 배치",
-      "dimension": "치수",
-      "dimensionDesc": "점 또는 도형 간 거리 측정",
-      "patternFill": "패턴 채우기",
-      "patternFillDesc": "구역에 식물을 패턴으로 채우기",
-      "spacing": "간격",
-      "spacingDesc": "선을 따라 식물 배치",
-      "arrow": "화살표",
-      "arrowDesc": "화살표 주석 그리기",
-      "callout": "말풍선",
-      "calloutDesc": "텍스트 말풍선 상자 추가"
+      "measurementGuideDesc": "항상 표시되는 거리 가이드를 배치"
     },
     "plantSpacing": {
       "title": "식물 간격",
@@ -218,14 +192,7 @@
       "rulersDesc": "가로 및 세로 눈금자 전환",
       "scaleBar": "축척 막대",
       "gridSize": "격자 크기",
-      "zoom": "확대/축소",
-      "minimap": "미니맵",
-      "minimapDesc": "개요 미니맵 전환"
-    },
-    "plantTooltip": {
-      "stratum": "층위",
-      "height": "높이",
-      "family": "과"
+      "zoom": "확대/축소"
     },
     "plantColor": {
       "label": "식물 색상",
@@ -242,9 +209,6 @@
       "customHex": "사용자 Hex",
       "setColor": "색상 설정",
       "setColorForSpecies": "모든 {{species}}에 적용",
-      "speciesDefaultHint": "이 종의 앞으로의 배치는 이 색을 사용합니다.",
-      "clearColor": "색상 지우기",
-      "clearSpeciesColor": "종 기본 색 지우기",
       "names": {
         "red": "빨강",
         "orange": "주황",
@@ -266,9 +230,6 @@
       "preview": "미리보기",
       "setSymbol": "심볼 설정",
       "setSymbolForSpecies": "모든 {{species}}에 설정",
-      "speciesDefaultHint": "앞으로 이 종을 배치하면 이 심볼을 사용합니다.",
-      "clearSymbol": "심볼 지우기",
-      "clearSpeciesSymbol": "종 기본값 지우기",
       "mixed": "여러 심볼",
       "current": "현재: {{symbol}}",
       "inherited": "상속됨: {{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "미리보기",
     "openTemplate": "새 설계로 열기"
   },
-  "saved": {
-    "title": "저장된 설계",
-    "emptyText": "설계가 여기에 표시됩니다",
-    "startDesign": "새 설계 시작",
-    "newDesign": "새 설계",
-    "loading": "최근 파일 불러오는 중...",
-    "loadError": "최근 파일을 불러올 수 없습니다",
-    "listLabel": "최근 설계 파일",
-    "openFile": "{{name}} 열기",
-    "plantCount": "{{count}}개 식물",
-    "justNow": "방금 전",
-    "minutesAgo": "{{count}}분 전",
-    "hoursAgo": "{{count}}시간 전",
-    "daysAgo": "{{count}}일 전"
-  },
   "status": {
     "language": "언어",
     "theme": "테마"
@@ -506,12 +452,10 @@
   "commands": {
     "plantDb": "식물 데이터베이스로 이동",
     "canvas": "설계 캔버스로 이동",
-    "worldMap": "세계 지도로 이동",
     "toggleTheme": "테마 전환",
     "commandPalette": "명령 팔레트",
     "searchPlaceholder": "명령을 입력하세요...",
-    "noResults": "명령을 찾을 수 없습니다",
-    "reportProblem": "문제 신고"
+    "noResults": "명령을 찾을 수 없습니다"
   },
   "plantDetail": {
     "back": "뒤로",
@@ -682,10 +626,7 @@
     "introducedDistribution": "도입 분포"
   },
   "webSpeciesDetail": {
-    "commonNames": "일반 이름",
-    "source": "출처",
-    "credit": "크레딧",
-    "license": "라이선스"
+    "commonNames": "일반 이름"
   },
   "chips": {
     "fruitTrees": "과일 나무",

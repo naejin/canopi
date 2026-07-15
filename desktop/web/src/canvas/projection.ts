@@ -449,25 +449,3 @@ export function viewportCornerGeoPoints(
     northBearingDeg,
   )
 }
-
-/**
- * Convert a stage-like viewport center to geographic coordinates.
- */
-export function stageViewportCenter(
-  stage: { width(): number; height(): number; position(): { x: number; y: number }; scaleX(): number },
-  originLat: number,
-  originLon: number,
-  northBearingDeg: number | null = 0,
-): { lng: number; lat: number } {
-  const pos = stage.position()
-  const scale = stage.scaleX()
-  const centerWorldX = (-pos.x + stage.width() / 2) / scale
-  const centerWorldY = (-pos.y + stage.height() / 2) / scale
-  return getActiveProjectionBackend().worldToGeo(
-    centerWorldX,
-    centerWorldY,
-    originLat,
-    originLon,
-    northBearingDeg,
-  )
-}

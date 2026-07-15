@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "植物データベース",
     "canvas": "デザインキャンバス",
-    "worldMap": "世界地図",
-    "savedDesigns": "保存済みデザイン",
     "designNotebook": "デザインノート",
     "favorites": "お気に入り"
   },
@@ -12,14 +10,7 @@
     "panels": "Web 版パネル",
     "workspace": "Web 版ワークスペース",
     "openCanopi": ".canopi を開く",
-    "downloadCanopi": ".canopi をダウンロード",
-    "drafts": "下書き",
-    "settings": "設定",
-    "browserDrafts": "ブラウザー下書き",
-    "browserDraftsHint": "このブラウザーに保存されます。.canopi をダウンロードしてファイルのバックアップを残してください。",
-    "noDrafts": "ブラウザー下書きはまだありません。",
-    "emptyDesign": "デザインが読み込まれていません",
-    "emptyDesignHint": "ツールバーの新規または .canopi を開くから開始してください。"
+    "downloadCanopi": ".canopi をダウンロード"
   },
   "designNotebook": {
     "title": "デザインノート",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "植物データベースが破損しています。再インストールするか、prepare-db.py で再生成してください。植物検索は利用できません。"
   },
   "canvas": {
-    "emptyTitle": "デザインキャンバス",
-    "emptyText": "地図レイヤーを有効にするには位置を設定するか、描画を開始してください",
     "emptyWelcome": "デザインを始めましょう",
     "emptyNewDesign": "新規デザイン",
     "emptyOpenDesign": "デザインを開く",
     "emptyRecentFiles": "最近のファイル",
-    "emptyHint": "データベースパネルから植物をドラッグするか、描画ツールでゾーンを作成してください",
     "toolbar": "ツール",
     "tools": {
       "select": "選択",
@@ -138,14 +126,10 @@
       "ellipseDesc": "楕円のゾーンを描画",
       "polygon": "多角形",
       "polygonDesc": "多角形のゾーンを描画",
-      "freeform": "フリーフォーム",
-      "freeformDesc": "フリーハンドで図形を描画",
       "line": "直線",
       "lineDesc": "線形ゾーンを描画",
       "text": "テキスト",
       "textDesc": "テキストラベルを追加",
-      "measure": "計測",
-      "measureDesc": "距離を計測",
       "plantStamp": "植物スタンプ",
       "plantStampDesc": "データベースから植物を配置",
       "objectStamp": "オブジェクトスタンプ",
@@ -153,17 +137,7 @@
       "plantSpacing": "植物間隔",
       "plantSpacingDesc": "配置済みの植物を間隔ガイドに沿って繰り返す",
       "measurementGuide": "測定ガイド",
-      "measurementGuideDesc": "常時表示される距離ガイドを配置",
-      "dimension": "寸法",
-      "dimensionDesc": "点や図形間の距離を計測",
-      "patternFill": "パターン塗りつぶし",
-      "patternFillDesc": "ゾーンにパターンで植物を配置",
-      "spacing": "間隔",
-      "spacingDesc": "ライン上に植物を均等配置",
-      "arrow": "矢印",
-      "arrowDesc": "矢印の注釈を描画",
-      "callout": "吹き出し",
-      "calloutDesc": "テキスト吹き出しボックスを追加"
+      "measurementGuideDesc": "常時表示される距離ガイドを配置"
     },
     "plantSpacing": {
       "title": "植物間隔",
@@ -218,14 +192,7 @@
       "rulersDesc": "水平・垂直定規の表示/非表示",
       "scaleBar": "スケールバー",
       "gridSize": "グリッドサイズ",
-      "zoom": "ズーム",
-      "minimap": "ミニマップ",
-      "minimapDesc": "ミニマップの表示/非表示"
-    },
-    "plantTooltip": {
-      "stratum": "階層",
-      "height": "高さ",
-      "family": "科"
+      "zoom": "ズーム"
     },
     "plantColor": {
       "label": "植物の色",
@@ -242,9 +209,6 @@
       "customHex": "カスタム Hex",
       "setColor": "色を設定",
       "setColorForSpecies": "すべての {{species}} に設定",
-      "speciesDefaultHint": "この種を今後配置すると、この色が使われます。",
-      "clearColor": "色をクリア",
-      "clearSpeciesColor": "種の既定色をクリア",
       "names": {
         "red": "赤",
         "orange": "オレンジ",
@@ -266,9 +230,6 @@
       "preview": "プレビュー",
       "setSymbol": "シンボルを設定",
       "setSymbolForSpecies": "{{species}} すべてに設定",
-      "speciesDefaultHint": "今後この種を配置すると、このシンボルが使われます。",
-      "clearSymbol": "シンボルをクリア",
-      "clearSpeciesSymbol": "種のデフォルトをクリア",
       "mixed": "シンボルが混在",
       "current": "現在: {{symbol}}",
       "inherited": "継承: {{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "プレビュー",
     "openTemplate": "新しいデザインとして開く"
   },
-  "saved": {
-    "title": "保存済みデザイン",
-    "emptyText": "あなたのデザインがここに表示されます",
-    "startDesign": "新しいデザインを始める",
-    "newDesign": "新規デザイン",
-    "loading": "最近のファイルを読み込み中...",
-    "loadError": "最近のファイルを読み込めませんでした",
-    "listLabel": "最近のデザインファイル",
-    "openFile": "{{name}} を開く",
-    "plantCount": "{{count}} 本の植物",
-    "justNow": "たった今",
-    "minutesAgo": "{{count}} 分前",
-    "hoursAgo": "{{count}} 時間前",
-    "daysAgo": "{{count}} 日前"
-  },
   "status": {
     "language": "言語",
     "theme": "テーマ"
@@ -506,12 +452,10 @@
   "commands": {
     "plantDb": "植物データベースへ移動",
     "canvas": "デザインキャンバスへ移動",
-    "worldMap": "世界地図へ移動",
     "toggleTheme": "テーマを切替",
     "commandPalette": "コマンドパレット",
     "searchPlaceholder": "コマンドを入力...",
-    "noResults": "コマンドが見つかりません",
-    "reportProblem": "問題を報告"
+    "noResults": "コマンドが見つかりません"
   },
   "plantDetail": {
     "back": "戻る",
@@ -682,10 +626,7 @@
     "introducedDistribution": "導入分布"
   },
   "webSpeciesDetail": {
-    "commonNames": "一般名",
-    "source": "出典",
-    "credit": "クレジット",
-    "license": "ライセンス"
+    "commonNames": "一般名"
   },
   "chips": {
     "fruitTrees": "果樹",

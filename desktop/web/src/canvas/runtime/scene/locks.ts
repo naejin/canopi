@@ -72,11 +72,3 @@ export function setSceneDesignObjectLocks(
     if (idSet.has(group.id)) group.locked = locked
   }
 }
-
-export function clearSceneDesignObjectLocks(state: ScenePersistedState): void {
-  for (const plant of state.plants) plant.locked = false
-  for (const zone of state.zones) zone.locked = false
-  for (const annotation of state.annotations) annotation.locked = false
-  for (const guide of state.measurementGuides ?? []) guide.locked = false
-  for (const group of state.groups) group.locked = false
-}

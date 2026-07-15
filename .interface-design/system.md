@@ -208,16 +208,16 @@ All canvas tools must follow these behaviors. They are not optional — they are
 - **Mouseup outside canvas**: commits shape at the edge-clamped position (does not cancel)
 - **Escape during draw**: cancels, removes preview
 - **Shift during draw**: constrains proportions (square, circle, 45° angles)
-- Cannot select or move existing objects — only the select tool allows dragging. Shapes are created with `draggable: false`
+- Cannot select or move existing objects — only the select tool admits object-move gestures
 - After committing a shape: tool stays active for the next draw (does not auto-switch to select)
-- `onMouseDown` must cancel any in-progress operation before starting a new one (self-healing guard)
+- Additional pointer-downs are ignored while the admitted pointer and Scene edit own the active gesture
 
 ### Select tool
 - Click empty canvas: deselects all, clears highlights
 - Click object: selects it, highlights it
 - Shift+click: toggles selection membership
-- Click+drag on empty canvas: rubber-band selection with real-time highlight preview
-- Click+drag on selected object: moves it (only works because select tool enables `draggable`)
+- Click+drag on empty canvas: shows a rubber-band preview and commits intersecting objects on release
+- Click+drag on selected object: moves it through a Scene edit transaction owned by the shared gesture controller
 - Mouse leaving canvas during rubber-band or move: sticks to edge (same as drawing tools)
 - Escape during rubber-band: cancels band
 - Delete key: removes selected objects
@@ -225,7 +225,7 @@ All canvas tools must follow these behaviors. They are not optional — they are
 - Click+drag on a selected Design Object hides the Selection Action Toolbar and Rotation Handle while the drag is active, then restores them after release or cancel using the final selection geometry. Passive hover presentation, including the plant Hover Tooltip, clears when a drag starts and does not reappear until the next passive hover movement.
 
 ### Hand/Pan tool
-- Click+drag: pans canvas via Konva `stage.draggable(true)`
+- Click+drag: the shared gesture controller pans the viewport through `CameraController.panBy`
 - Space+drag from any tool: temporary pan, returns to previous tool on key release
 
 ### Text tool
@@ -242,40 +242,39 @@ All canvas tools must follow these behaviors. They are not optional — they are
 - Escape clears the selected species (does not force-switch to another tool)
 
 ### Event routing rules
-- **Tool affinity**: `external-input.ts` locks the tool reference on mousedown. All subsequent mousemove/mouseup events route to that same tool, even if `activeTool` changes mid-drag
-- **Window-level drag tracking**: on mousedown, window `pointermove`/`pointerup` listeners activate. When the cursor leaves the canvas, these clamp the position to the canvas edge and fire synthetic Konva events so the tool keeps updating
-- **No pointer capture**: we use window-level listeners, not `setPointerCapture`
-- **Draggable authority**: `_applyTool()` in `engine.ts` is the sole authority for `node.draggable()` state. All shapes are born with `draggable: false`. Only the select tool enables dragging
+- **Gesture ownership**: `SceneInteractionSession` records the active pointer and routes the gesture to the tool adapter, shared gesture controller, or active overlay control that admitted it
+- **Window-level drag tracking**: capture-phase window `pointermove`/`pointerup`/`pointercancel` listeners keep the admitted gesture alive outside the canvas and clamp tool coordinates to the canvas edge where required
+- **Move authority**: `interaction/shared-gestures.ts` owns pan, selection-band, and selected-object move state. Object moves mutate a Scene edit transaction and commit or abort it as one interaction
+- **Cancellation**: Escape, pointer cancellation, window blur, and disposal converge on the Scene Interaction cancellation path so transient edits and runtime-owned overlays are released together
 
 ## Selection Highlights
 
-Visual feedback for hover, rubber-band preview, and committed selection. Uses the `highlight-glow` canvas color — solid ochre (`--color-primary`) in both themes.
+Visual feedback is renderer-neutral. `runtime/scene-visuals.ts` defines screen-pixel stroke styles and both Pixi and Canvas2D renderers apply them to plants, zones, annotations, and Measurement Guides.
 
-| State | Shadow blur | Shadow opacity | When |
-|-------|------------|----------------|------|
-| Hover | 10px | 0.7 | Mouse over a shape in select mode, no click |
-| Preview | 14px | 0.85 | Shape touches or is inside the rubber-band rectangle during drag |
-| Selected | 14px | 0.85 | Shape is in `selectedObjectIds` after selection committed |
+| State | Visual | When |
+|-------|--------|------|
+| Hover | 2.5px hover stroke at 0.72 alpha | Pointer is over an interactive object |
+| Selected | 4.5px selection stroke | Object belongs to committed Scene selection |
+| Locked object | 2.75px locked-object stroke | Direct object lock blocks editing |
+| Locked layer | 2.75px locked-layer stroke | Owning Scene layer blocks editing |
 
-### Plant group handling
-Plant groups are counter-scaled (`scaleX/scaleY = 1/stageScale`). Shadow effects applied to the group render at sub-pixel sizes. The highlight system uses `_highlightTarget()` to apply shadows to the **first child** (the plant circle in screen-pixel space) instead of the group.
+The rubber-band itself is a runtime-owned DOM preview. Selection is resolved and committed when the gesture finishes.
 
 ### Theme coherence
-- `highlight-glow` reads from `--color-primary` on theme switch via `refreshCanvasTheme()`
-- Active highlights (nodes with `data-highlight` attr) get their `shadowColor` updated during theme refresh
-- Ephemeral attrs (`shadowColor`, `shadowBlur`, `shadowOpacity`, `shadowForStrokeEnabled`, `data-highlight`) are stripped in both serialization paths (node-serialization.ts and operations.ts)
+- Interaction colors resolve through `getCanvasColor()` from the current canvas theme tokens
+- Renderer snapshots contain semantic hover/selection/lock state; persisted Scene entities never contain presentation-only highlight attributes
 
 ## Layout
 
 ```
 [toolbar 38px] [───── canvas ─────] [panel?] [bar 36px]
    left              center          slides in   right
-   tools            workspace        plant DB    leaf + book
+   tools            workspace       side panel   navigation
 ```
 
-- **Left toolbar**: 38px, drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles). Active: 2px ochre left bar.
-- **Right panel bar**: 36px, always visible. Icons toggle sliding panels. Active: 2px ochre right bar.
-- **Right panels**: Species Catalog Workbench, favorites, learning (future). Slide in between canvas and panel bar. First-use width is `clamp(320px, 35vw, 90vw)` so the default remains proportional instead of stopping at a fixed pixel cap; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
+- **Left toolbar**: 38px, grouped command-graph tools, history actions, selected-Plant presentation actions, and Grid/Snap/Ruler toggles. Active: 2px ochre left bar.
+- **Right panel bar**: 36px, always visible for Canvas and Location workspaces. Primary commands switch workspace; side commands toggle sliding panels. Active: 2px ochre right bar.
+- **Right side panels**: Design Notebook, Species Catalog, and Favorites. They slide in between the workspace and panel bar. First-use width is `clamp(320px, 35vw, 90vw)` so the default remains proportional instead of stopping at a fixed pixel cap; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
 - **Title bar**: 36px. Logo left, file name center-left, lang/theme controls + window buttons right.
 - **No activity bar** — merged into panel bar.
 - **No status bar** — lang/theme moved to title bar.
@@ -307,10 +306,9 @@ Earthy, not neon:
 - Buttons have warm shadow, subtle lift on hover
 
 ### Canvas Workspace
-- Toolbar left (38px): 4 tools + separator + 3 view toggles
-- Zoom controls floating bottom-right: semi-transparent, fades in on hover
+- Toolbar left (38px): command-graph tool and action groups separated by dividers
+- Bottom canvas bar: bottom-panel launcher on the left and Zoom Controls on the right
 - Scale bar bottom-left: uses `--color-text-muted` for subtlety
-- No compass for MVP (disabled, code on disk)
 - Zoom displays relative to initial view (100% = fit 100m in viewport)
 - Rulers: background `--canvas-ruler-bg` (close to canvas bg, no harsh L-frame)
 
@@ -331,9 +329,9 @@ Earthy, not neon:
 
 ### Panel Bar (right edge)
 - 36px wide, always visible when canvas is active
-- Two icons: leaf (plant DB), book (learning/knowledge)
+- Commands come from the application command graph: Canvas/Location primary navigation plus Design Notebook, Species Catalog, and Favorites side panels
 - Active state: ochre right border + ochre icon color
-- Clicking toggles the corresponding panel
+- Primary commands switch workspace; side commands toggle the corresponding panel
 
 ### Species Catalog Workbench
 - Search-first: full-width search input at top
@@ -345,14 +343,14 @@ Earthy, not neon:
 - Terms: use `filter row` for always-visible controls, `filter choice` for an individual chip/option inside a row, and `filter category` only for More Filters drawer groups such as Climate & Soil or Growth.
 - "More Filters" panel: slides in as overlay over results. Header + search + 8 collapsible categories with 2px colored left borders matching detail card sections. Boolean fields: inline checkbox. Categorical: expandable chip picker (lazy-loaded). Numeric: expandable range slider. "Done ›" text link in footer
 - Plant rows: compact, two lines:
-  - Line 1: **common name** (12px, 500, `--color-text`) + *botanical name* (12px, 400, italic, `--color-text-muted`). Common name leads as the scan target. When no common name, botanical renders alone
+  - Line 1: **common name** (12px, 600, `--color-text`) + *botanical name* (12px, 400, italic, `--color-text-muted`). Common name leads as the scan target. When no common name, botanical renders alone
   - Line 2: colored tags separated by `·` (family=brown, hardiness=blue, height=stone, stratum=ochre, edible=moss). Heights rounded to 1 decimal max. Stratum values mapped via i18n keys
 - Row actions (+, star) appear on hover only
 - Whole row is draggable to canvas
 - Background: `--color-bg` (parchment, matches canvas area)
 
 ### FilterChip
-- Pill shape (`--radius-full`), 20px height, 11px text, 500 weight
+- Pill shape (`--radius-full`), 20px height, 11px text, 600 weight
 - Inactive: `--color-surface` background, transparent border, `--color-text-muted` text
 - Active: category color 12% opacity background (via `color-mix`), category color border + text
 - Clickable: cursor pointer, hover shows active-style background
@@ -371,7 +369,7 @@ Earthy, not neon:
 - Header: botanical name (italic), common name, secondary names (10px, muted, 0.75 opacity, max 2 shown + "+N more"), family · genus, back button, favorite star
 - Photo carousel at top of scrollable body (see Photo Carousel pattern below)
 - Dimensions section always open (h3 title, no toggle)
-- 14 collapsible sections below, ordered by designer decision flow: Life Cycle → Uses → Light → Soil → Ecology → Growth Form → Propagation → Fruit & Seed → Risk → Leaf → Reproduction → Notes → Related Species → Identity
+- 12 collapsible sections below, ordered by designer decision flow: Life Cycle → Uses → Light & Climate → Soil → Ecology → Growth Form → Propagation → Fruit & Seed → Risk & Distribution → Leaf → Reproduction → Identity
 - Each section: 3px left accent border (semantic color), section header pattern with icon + chevron, `--color-bg` header, content in `--color-surface` body
 - Accent color zones: taxonomy=bark brown, physical form=teal, cultivation=moss green, harvest=amber, biology=lavender, caution=terracotta, reference=graphite
 - Null fields hidden — empty sections don't render
@@ -395,10 +393,6 @@ Earthy, not neon:
 - Animation: chevron `transition: transform 0.15s ease`
 - Used in: detail card sections, filter drawer sections
 
-### Learning Panel
-- Placeholder: centered book icon + "Coming soon" + description
-- Background: `--color-bg`
-
 ### Favorites Panel
 - Header: section header pattern + ochre count badge (`--color-primary` bg, `--color-bg` text, `--radius-full`)
 - List: reuses `PlantRow` component. Clicking opens detail card inline (same `detailHidden`/`detailVisible` pattern as PlantDbPanel)
@@ -410,30 +404,22 @@ Earthy, not neon:
 - Shimmer loading state: gradient between `--color-surface` and `--color-bg`
 - Nav arrows: transparent 32×48px hit targets, chevron character via `text-shadow`, visible on container hover (0.8 → 1.0 opacity)
 - Dot indicators: 8px, 6px gap, `--color-border` inactive, `--color-primary` active with `scale(1.15)`. Minimum size for interactive elements
-- Source badge: bottom-right, 9px uppercase, `--color-text` with 0.55 opacity, `pointer-events: none`
 - Placeholder: subtle icon (`--color-border`, 0.6 opacity), same 3:2 aspect ratio
 - Images served as base64 data URLs from Rust image cache (asset protocol not scoped)
 
-### Display Mode Controls
-- Floating toolbar at bottom-left, matches ZoomControls surface treatment: `--canvas-ruler-bg` bg, `1px solid --color-border`, `--radius-md`, `opacity: 0.85` → `1` on hover, `100ms ease` transition
-- Two custom dropdowns (DISPLAY + COLOR BY) separated by 1px divider, `z-index: 20`
-- Dropdown menu opens upward (above controls), `menuIn` keyframe animation (120ms), Escape closes + returns focus
-- Options: bare noun labels (not "By Stratum", just "Stratum")
-
-### Display Legend
-- Floating card above display controls (`bottom: 44px`), `z-index: 19` (below controls)
-- Only visible when `plantDisplayMode === 'color-by'`
-- `legendIn` keyframe animation (150ms), `prefers-reduced-motion` respected
-- Entries: 10px color dots + `--text-xs` labels, `--space-1` gap, scrollable at 200px max-height
-- All labels use `t()` i18n calls — translates when locale changes
+### Pinned Plant Name Legend
+- Floating reference card above the scale-bar reservation, past the ruler gutter, at `z-index: 19`
+- Visible only when one or more pinned Plant-name entries exist
+- Entries show the effective Plant symbol and color, localized name, and a count when multiple Plants share an entry
+- Height is bounded by the canvas and scrolls when necessary; the entrance animation respects `prefers-reduced-motion`
 
 ### Plant Tooltip
-- HTML `<div>` overlay on Konva stage container (not a Konva node), `pointer-events: none`
-- `--color-surface` bg, `--color-border` border, `--radius-sm`, `--shadow-md`, `z-index: 50`
-- Content: common name (`--text-sm`/600), botanical name (`--text-xs`/italic/muted), stratum attribute (`--text-xs`/muted)
-- Positioned via `stage.getAbsoluteTransform()` — world-to-screen coordinate conversion
+- Runtime-owned HTML `<div>` overlay in the canvas container, `pointer-events: none`, `z-index: 20`
+- `--color-surface` bg, `--color-border` border, `--radius-md`
+- Content: localized common name when available (`--text-sm`/600) and scientific name (`--text-xs`/italic/muted)
+- Positioned from pointer coordinates relative to the container, then clamped to the visible container bounds
 - Built with safe DOM methods (`createElement`, `textContent`) — no `innerHTML`
-- Appears immediately on `mouseover`, hides on `mouseout` with `e.target === stage` early return guard
+- Appears on passive Plant hover and hides on pointer leave, non-Plant hover, drag, cancellation, or disposal
 
 ### Drag Handle (panel resize)
 - 1px wide, uses `--color-border` — IS the border between canvas and panel

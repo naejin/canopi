@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import {
   getSavedLocationPresentation,
-  locationDraftFromSaved,
   useLocationWorkbench,
   type LocationWorkbench,
 } from '../app/location'
@@ -84,23 +83,6 @@ describe('Location Workbench', () => {
       summary: '48.8566, 2.3522 (35 m)',
       key: '48.8566:2.3522:35',
     })
-    expect(locationDraftFromSaved(location)).toEqual({
-      lat: '48.8566',
-      lon: '2.3522',
-      altitude: '35',
-    })
-  })
-
-  it('commits a search result with the current altitude draft', () => {
-    renderProbe()
-
-    act(() => {
-      currentWorkbench().setAltitudeDraft('42')
-      currentWorkbench().commitSearchResult({ displayName: 'Paris', lat: 48.8566, lon: 2.3522 })
-    })
-
-    expect(currentDesign.value?.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 42 })
-    expect(nonCanvasRevision.value).toBe(1)
   })
 
   it('preserves saved altitude when committing a map result or map center', () => {

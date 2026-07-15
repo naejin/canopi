@@ -2,8 +2,6 @@
   "nav": {
     "plantDb": "Pflanzendatenbank",
     "canvas": "Entwurfsfläche",
-    "worldMap": "Weltkarte",
-    "savedDesigns": "Gespeicherte Entwürfe",
     "designNotebook": "Design-Notizbuch",
     "favorites": "Favoriten"
   },
@@ -12,14 +10,7 @@
     "panels": "Panels der Web Edition",
     "workspace": "Arbeitsbereich der Web Edition",
     "openCanopi": ".canopi öffnen",
-    "downloadCanopi": ".canopi herunterladen",
-    "drafts": "Entwürfe",
-    "settings": "Einstellungen",
-    "browserDrafts": "Browser-Entwürfe",
-    "browserDraftsHint": "In diesem Browser gespeichert. Lade .canopi als Dateisicherung herunter.",
-    "noDrafts": "Noch keine Browser-Entwürfe.",
-    "emptyDesign": "Kein Design geladen",
-    "emptyDesignHint": "Nutze Neu oder .canopi öffnen in der Werkzeugleiste, um zu beginnen."
+    "downloadCanopi": ".canopi herunterladen"
   },
   "designNotebook": {
     "title": "Design-Notizbuch",
@@ -119,13 +110,10 @@
     "plantDbCorrupt": "Pflanzendatenbank ist beschädigt. Installieren Sie neu oder erzeugen Sie sie mit prepare-db.py neu. Pflanzensuche ist nicht verfügbar."
   },
   "canvas": {
-    "emptyTitle": "Entwurfsfläche",
-    "emptyText": "Legen Sie einen Standort fest, um Kartenebenen zu aktivieren, oder beginnen Sie zu zeichnen",
     "emptyWelcome": "Starten Sie Ihren Entwurf",
     "emptyNewDesign": "Neuer Entwurf",
     "emptyOpenDesign": "Entwurf öffnen",
     "emptyRecentFiles": "Zuletzt verwendete Dateien",
-    "emptyHint": "Ziehen Sie Pflanzen aus dem Datenbankpanel oder verwenden Sie Zeichenwerkzeuge, um Zonen zu erstellen",
     "toolbar": "Werkzeuge",
     "tools": {
       "select": "Auswählen",
@@ -138,14 +126,10 @@
       "ellipseDesc": "Elliptische Zonen zeichnen",
       "polygon": "Polygon",
       "polygonDesc": "Polygonzonen zeichnen",
-      "freeform": "Freihand",
-      "freeformDesc": "Freihandformen zeichnen",
       "line": "Linie",
       "lineDesc": "Lineare Zonen zeichnen",
       "text": "Text",
       "textDesc": "Textbeschriftungen hinzufügen",
-      "measure": "Messen",
-      "measureDesc": "Abstände messen",
       "plantStamp": "Pflanzenstempel",
       "plantStampDesc": "Pflanzen aus der Datenbank platzieren",
       "objectStamp": "Objektstempel",
@@ -153,17 +137,7 @@
       "plantSpacing": "Pflanzenabstand",
       "plantSpacingDesc": "Eine platzierte Pflanze entlang einer Abstandshilfe wiederholen",
       "measurementGuide": "Messhilfe",
-      "measurementGuideDesc": "Dauerhafte Abstandshilfe platzieren",
-      "dimension": "Bemaßung",
-      "dimensionDesc": "Abstand zwischen Punkten oder Formen messen",
-      "patternFill": "Musterfüllung",
-      "patternFillDesc": "Eine Zone mit Pflanzen in einem Muster füllen",
-      "spacing": "Abstand",
-      "spacingDesc": "Pflanzen entlang einer Linie verteilen",
-      "arrow": "Pfeil",
-      "arrowDesc": "Pfeilanmerkung zeichnen",
-      "callout": "Legende",
-      "calloutDesc": "Textlegende hinzufügen"
+      "measurementGuideDesc": "Dauerhafte Abstandshilfe platzieren"
     },
     "plantSpacing": {
       "title": "Pflanzenabstand",
@@ -218,14 +192,7 @@
       "rulersDesc": "Horizontale und vertikale Lineale umschalten",
       "scaleBar": "Maßstabsleiste",
       "gridSize": "Rastergröße",
-      "zoom": "Zoom",
-      "minimap": "Minikarte",
-      "minimapDesc": "Übersichts-Minikarte umschalten"
-    },
-    "plantTooltip": {
-      "stratum": "Schicht",
-      "height": "Höhe",
-      "family": "Familie"
+      "zoom": "Zoom"
     },
     "plantColor": {
       "label": "Pflanzenfarbe",
@@ -242,9 +209,6 @@
       "customHex": "Benutzerdefiniertes Hex",
       "setColor": "Farbe setzen",
       "setColorForSpecies": "Für alle {{species}} setzen",
-      "speciesDefaultHint": "Künftige Platzierungen dieser Art verwenden diese Farbe.",
-      "clearColor": "Farbe löschen",
-      "clearSpeciesColor": "Artstandardfarbe löschen",
       "names": {
         "red": "Rot",
         "orange": "Orange",
@@ -266,9 +230,6 @@
       "preview": "Vorschau",
       "setSymbol": "Symbol setzen",
       "setSymbolForSpecies": "Für alle {{species}} setzen",
-      "speciesDefaultHint": "Zukünftige Platzierungen dieser Art verwenden dieses Symbol.",
-      "clearSymbol": "Symbol löschen",
-      "clearSpeciesSymbol": "Artstandard löschen",
       "mixed": "Gemischte Symbole",
       "current": "Aktuell: {{symbol}}",
       "inherited": "Geerbt: {{symbol}}",
@@ -480,21 +441,6 @@
     "preview": "Vorschau",
     "openTemplate": "Als neues Design öffnen"
   },
-  "saved": {
-    "title": "Gespeicherte Entwürfe",
-    "emptyText": "Ihre Entwürfe werden hier angezeigt",
-    "startDesign": "Neuen Entwurf starten",
-    "newDesign": "Neuer Entwurf",
-    "loading": "Aktuelle Dateien werden geladen...",
-    "loadError": "Aktuelle Dateien konnten nicht geladen werden",
-    "listLabel": "Zuletzt verwendete Entwurfsdateien",
-    "openFile": "{{name}} öffnen",
-    "plantCount": "{{count}} Pflanzen",
-    "justNow": "Gerade eben",
-    "minutesAgo": "Vor {{count}} Min.",
-    "hoursAgo": "Vor {{count}} Std.",
-    "daysAgo": "Vor {{count}} T."
-  },
   "status": {
     "language": "Sprache",
     "theme": "Erscheinungsbild"
@@ -506,12 +452,10 @@
   "commands": {
     "plantDb": "Zur Pflanzendatenbank",
     "canvas": "Zur Entwurfsfläche",
-    "worldMap": "Zur Weltkarte",
     "toggleTheme": "Erscheinungsbild wechseln",
     "commandPalette": "Befehlspalette",
     "searchPlaceholder": "Befehl eingeben...",
-    "noResults": "Keine Befehle gefunden",
-    "reportProblem": "Problem melden"
+    "noResults": "Keine Befehle gefunden"
   },
   "plantDetail": {
     "back": "Zurück",
@@ -682,10 +626,7 @@
     "introducedDistribution": "Eingeführte Verbreitung"
   },
   "webSpeciesDetail": {
-    "commonNames": "Trivialnamen",
-    "source": "Quelle",
-    "credit": "Bildnachweis",
-    "license": "Lizenz"
+    "commonNames": "Trivialnamen"
   },
   "chips": {
     "fruitTrees": "Obstbäume",
