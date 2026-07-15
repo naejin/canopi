@@ -59,10 +59,6 @@ pub fn get_design_notebook_entries(
 
 pub fn remove_design_reference(conn: &Connection, path: &str) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "DELETE FROM design_notebook_section_memberships WHERE path = ?1",
-        rusqlite::params![path],
-    )?;
-    conn.execute(
         "DELETE FROM design_notebook_entries WHERE path = ?1",
         rusqlite::params![path],
     )?;
@@ -123,10 +119,6 @@ pub fn rename_notebook_section(
 }
 
 pub fn delete_notebook_section(conn: &Connection, section_id: &str) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "DELETE FROM design_notebook_section_memberships WHERE section_id = ?1",
-        rusqlite::params![section_id],
-    )?;
     conn.execute(
         "DELETE FROM design_notebook_sections WHERE id = ?1",
         rusqlite::params![section_id],
@@ -239,33 +231,7 @@ mod tests {
 
     fn test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "CREATE TABLE design_notebook_entries (
-                path TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                plant_count INTEGER NOT NULL DEFAULT 0,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL,
-                last_opened TEXT NOT NULL
-            );
-
-            CREATE TABLE design_notebook_sections (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE design_notebook_section_memberships (
-                path TEXT PRIMARY KEY,
-                section_id TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );",
-        )
-        .unwrap();
+        crate::db::user_db::initialize_connection(&conn).unwrap();
         conn
     }
 
@@ -286,6 +252,9 @@ mod tests {
     fn removes_saved_design_references() {
         let conn = test_db();
         super::record_design_reference(&conn, "/designs/forest.canopi", "Forest Edge", 7).unwrap();
+        let section = super::create_notebook_section(&conn, "Clients").unwrap();
+        super::assign_design_reference_to_section(&conn, "/designs/forest.canopi", &section.id)
+            .unwrap();
 
         super::remove_design_reference(&conn, "/designs/forest.canopi").unwrap();
 
@@ -294,6 +263,14 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+        let membership_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM design_notebook_section_memberships",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(membership_count, 0);
     }
 
     #[test]
@@ -301,6 +278,9 @@ mod tests {
         let conn = test_db();
 
         let section = super::create_notebook_section(&conn, "Client work").unwrap();
+        super::record_design_reference(&conn, "/designs/forest.canopi", "Forest Edge", 7).unwrap();
+        super::assign_design_reference_to_section(&conn, "/designs/forest.canopi", &section.id)
+            .unwrap();
 
         assert!(section.id.starts_with("section-"));
         assert_eq!(section.name, "Client work");
@@ -314,6 +294,10 @@ mod tests {
 
         super::delete_notebook_section(&conn, &section.id).unwrap();
         assert!(super::get_notebook_sections(&conn).unwrap().is_empty());
+        assert_eq!(
+            super::get_design_notebook_entries_with_sections(&conn).unwrap()[0].section_id,
+            None
+        );
     }
 
     #[test]

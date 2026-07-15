@@ -3,7 +3,7 @@ use common_types::design::{
 };
 use std::path::Path;
 
-use crate::db::{self, UserDb};
+use crate::db::UserDb;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NotebookPathStatus {
@@ -26,7 +26,7 @@ struct NotebookSectionedFilterResult {
 
 pub fn get_design_notebook_entries(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> {
     let entries = {
-        let conn = db::acquire(&user_db.0, "UserDb");
+        let conn = user_db.acquire();
         crate::db::design_notebook::get_design_notebook_entries(&conn)
             .map_err(|e| format!("Failed to get Design Notebook entries: {e}"))?
     };
@@ -38,7 +38,7 @@ pub fn get_design_notebook_entries(user_db: &UserDb) -> Result<Vec<DesignSummary
 
 pub fn get_design_notebook(user_db: &UserDb) -> Result<DesignNotebookSnapshot, String> {
     let (entries, sections) = {
-        let conn = db::acquire(&user_db.0, "UserDb");
+        let conn = user_db.acquire();
         let entries = crate::db::design_notebook::get_design_notebook_entries_with_sections(&conn)
             .map_err(|e| format!("Failed to get Design Notebook entries: {e}"))?;
         let sections = crate::db::design_notebook::get_notebook_sections(&conn)
@@ -59,7 +59,7 @@ pub fn create_notebook_section(
     name: &str,
 ) -> Result<DesignNotebookSection, String> {
     let name = normalize_section_name(name)?;
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::design_notebook::create_notebook_section(&conn, name)
         .map_err(|e| format!("Failed to create Notebook Section: {e}"))
 }
@@ -73,7 +73,7 @@ pub fn add_design_reference(
         return Err("Design path is required".to_owned());
     }
 
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::design_notebook::record_design_reference(
         &conn,
         path,
@@ -89,13 +89,13 @@ pub fn rename_notebook_section(
     name: &str,
 ) -> Result<(), String> {
     let name = normalize_section_name(name)?;
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::design_notebook::rename_notebook_section(&conn, section_id, name)
         .map_err(|e| format!("Failed to rename Notebook Section: {e}"))
 }
 
 pub fn delete_notebook_section(user_db: &UserDb, section_id: &str) -> Result<(), String> {
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::design_notebook::delete_notebook_section(&conn, section_id)
         .map_err(|e| format!("Failed to delete Notebook Section: {e}"))
 }
@@ -109,7 +109,7 @@ pub fn move_design_reference_to_section(
         return Err("Design path is required".to_owned());
     }
 
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     match section_id
         .as_deref()
         .map(str::trim)
@@ -133,21 +133,21 @@ pub fn remove_design_reference(user_db: &UserDb, path: &str) -> Result<(), Strin
         return Err("Design path is required".to_owned());
     }
 
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::design_notebook::remove_design_reference(&conn, path)
         .map_err(|e| format!("Failed to remove Design from Notebook: {e}"))
 }
 
 pub fn reorder_notebook_sections(user_db: &UserDb, section_ids: Vec<String>) -> Result<(), String> {
     validate_order_values(&section_ids, "Notebook Section id")?;
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::design_notebook::reorder_notebook_sections(&conn, &section_ids)
         .map_err(|e| format!("Failed to reorder Notebook Sections: {e}"))
 }
 
 pub fn reorder_design_references(user_db: &UserDb, paths: Vec<String>) -> Result<(), String> {
     validate_order_values(&paths, "Design path")?;
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::design_notebook::reorder_design_references(&conn, &paths)
         .map_err(|e| format!("Failed to reorder Design Notebook entries: {e}"))
 }
@@ -231,7 +231,7 @@ fn prune_stale_design_notebook_entries(user_db: &UserDb, paths: &[String]) {
         return;
     }
 
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     for path in paths {
         if let Err(error) = crate::db::design_notebook::remove_design_reference(&conn, path) {
             tracing::warn!(
@@ -245,21 +245,18 @@ fn prune_stale_design_notebook_entries(user_db: &UserDb, paths: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::{NotebookPathStatus, filter_design_notebook_entries};
-    use crate::db::{self, UserDb};
+    use crate::db::UserDb;
     use common_types::design::DesignSummary;
     use rusqlite::Connection;
     use std::path::PathBuf;
 
     fn test_user_db() -> UserDb {
         let conn = Connection::open_in_memory().unwrap();
-        crate::db::user_db::init(&conn).unwrap();
-        UserDb::new(conn)
+        UserDb::initialize(conn).unwrap()
     }
 
     fn test_user_db_at(path: &std::path::Path) -> UserDb {
-        let conn = Connection::open(path).unwrap();
-        crate::db::user_db::init(&conn).unwrap();
-        UserDb::new(conn)
+        UserDb::open(path).unwrap()
     }
 
     fn temp_design_path(name: &str) -> PathBuf {
@@ -291,7 +288,7 @@ mod tests {
         let missing_path = temp_design_path("missing");
         std::fs::write(&existing_path, "{}").unwrap();
         {
-            let conn = db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::design_notebook::record_design_reference(
                 &conn,
                 &existing_path.to_string_lossy(),
@@ -310,7 +307,7 @@ mod tests {
 
         let entries = super::get_design_notebook_entries(&user_db).unwrap();
         let stored = {
-            let conn = db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::design_notebook::get_design_notebook_entries(&conn).unwrap()
         };
 
@@ -353,7 +350,7 @@ mod tests {
         let design_path = temp_design_path("sectioned");
         std::fs::write(&design_path, "{}").unwrap();
         {
-            let conn = db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::design_notebook::record_design_reference(
                 &conn,
                 &design_path.to_string_lossy(),
@@ -386,7 +383,7 @@ mod tests {
         let design_path = temp_design_path("deleted_section");
         std::fs::write(&design_path, "{}").unwrap();
         {
-            let conn = db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::design_notebook::record_design_reference(
                 &conn,
                 &design_path.to_string_lossy(),
@@ -419,7 +416,7 @@ mod tests {
         let design_path = temp_design_path("remove_reference");
         std::fs::write(&design_path, "{}").unwrap();
         {
-            let conn = db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::design_notebook::record_design_reference(
                 &conn,
                 &design_path.to_string_lossy(),
@@ -452,7 +449,7 @@ mod tests {
         let (first_section_id, second_section_id) = {
             let user_db = test_user_db_at(&db_path);
             {
-                let conn = db::acquire(&user_db.0, "UserDb");
+                let conn = user_db.acquire();
                 crate::db::design_notebook::record_design_reference(
                     &conn,
                     &first_design_path.to_string_lossy(),

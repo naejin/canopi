@@ -1,4 +1,135 @@
 use rusqlite::Connection;
+use std::fmt;
+
+const CURRENT_USER_DB_VERSION: i32 = 8;
+
+struct Migration {
+    version: i32,
+    sql: &'static str,
+}
+
+const MIGRATIONS: [Migration; CURRENT_USER_DB_VERSION as usize] = [
+    Migration {
+        version: 1,
+        sql: include_str!("../../migrations/init.sql"),
+    },
+    Migration {
+        version: 2,
+        sql: include_str!("../../migrations/v2_recently_viewed.sql"),
+    },
+    Migration {
+        version: 3,
+        sql: include_str!("../../migrations/v3_saved_object_stamps.sql"),
+    },
+    Migration {
+        version: 4,
+        sql: include_str!("../../migrations/v4_design_notebook.sql"),
+    },
+    Migration {
+        version: 5,
+        sql: include_str!("../../migrations/v5_design_notebook_sections.sql"),
+    },
+    Migration {
+        version: 6,
+        // v6 added a short-lived pinned column; keeping the slot prevents version reuse.
+        sql: "",
+    },
+    Migration {
+        version: 7,
+        sql: include_str!("../../migrations/v7_design_notebook_order.sql"),
+    },
+    Migration {
+        version: 8,
+        sql: include_str!("../../migrations/v8_design_notebook_drop_pinned.sql"),
+    },
+];
+
+#[derive(Debug)]
+pub enum UserDbInitError {
+    Open(rusqlite::Error),
+    ReadSchemaVersion(rusqlite::Error),
+    UnsupportedSchemaVersion {
+        found: i32,
+        supported: i32,
+    },
+    ConfigureForeignKeys(rusqlite::Error),
+    Migration {
+        version: i32,
+        source: rusqlite::Error,
+    },
+    RepairIntegrity(rusqlite::Error),
+    VerifyIntegrity(rusqlite::Error),
+    ForeignKeysDisabled,
+    ForeignKeyViolation {
+        table: String,
+        row_id: Option<i64>,
+        parent: String,
+        constraint_index: i32,
+    },
+}
+
+impl fmt::Display for UserDbInitError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Open(error) => write!(formatter, "failed to open user database: {error}"),
+            Self::ReadSchemaVersion(error) => write!(
+                formatter,
+                "failed to read user database schema version: {error}"
+            ),
+            Self::UnsupportedSchemaVersion { found, supported } => write!(
+                formatter,
+                "user database schema version {found} is newer than supported version {supported}"
+            ),
+            Self::ConfigureForeignKeys(error) => write!(
+                formatter,
+                "failed to enable user database foreign-key enforcement: {error}"
+            ),
+            Self::Migration { version, source } => write!(
+                formatter,
+                "failed to migrate user database to schema version {version}: {source}"
+            ),
+            Self::RepairIntegrity(error) => write!(
+                formatter,
+                "failed to repair legacy user database relationships: {error}"
+            ),
+            Self::VerifyIntegrity(error) => {
+                write!(
+                    formatter,
+                    "failed to verify user database integrity: {error}"
+                )
+            }
+            Self::ForeignKeysDisabled => write!(
+                formatter,
+                "user database foreign-key enforcement could not be enabled"
+            ),
+            Self::ForeignKeyViolation {
+                table,
+                row_id,
+                parent,
+                constraint_index,
+            } => write!(
+                formatter,
+                "user database foreign-key violation in {table} row {row_id:?} referencing {parent} (constraint {constraint_index})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for UserDbInitError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Open(error)
+            | Self::ReadSchemaVersion(error)
+            | Self::ConfigureForeignKeys(error)
+            | Self::RepairIntegrity(error)
+            | Self::VerifyIntegrity(error) => Some(error),
+            Self::Migration { source, .. } => Some(source),
+            Self::UnsupportedSchemaVersion { .. }
+            | Self::ForeignKeysDisabled
+            | Self::ForeignKeyViolation { .. } => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedObjectStampRow {
@@ -11,48 +142,88 @@ pub struct SavedObjectStampRow {
 }
 
 /// Initialize user database schema using incremental PRAGMA user_version migration.
-pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
-    let version: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+pub(super) fn initialize_connection(conn: &Connection) -> Result<(), UserDbInitError> {
+    let version: i32 = conn
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(UserDbInitError::ReadSchemaVersion)?;
+    if version > CURRENT_USER_DB_VERSION {
+        return Err(UserDbInitError::UnsupportedSchemaVersion {
+            found: version,
+            supported: CURRENT_USER_DB_VERSION,
+        });
+    }
+    conn.pragma_update(None, "foreign_keys", true)
+        .map_err(UserDbInitError::ConfigureForeignKeys)?;
 
-    if version < 1 {
-        conn.execute_batch(include_str!("../../migrations/init.sql"))?;
-        conn.pragma_update(None, "user_version", 1)?;
+    for migration in MIGRATIONS
+        .iter()
+        .filter(|migration| migration.version > version)
+    {
+        apply_migration(conn, migration)?;
     }
-    if version < 2 {
-        conn.execute_batch(include_str!("../../migrations/v2_recently_viewed.sql"))?;
-        conn.pragma_update(None, "user_version", 2)?;
-    }
-    if version < 3 {
-        conn.execute_batch(include_str!("../../migrations/v3_saved_object_stamps.sql"))?;
-        conn.pragma_update(None, "user_version", 3)?;
-    }
-    if version < 4 {
-        conn.execute_batch(include_str!("../../migrations/v4_design_notebook.sql"))?;
-        conn.pragma_update(None, "user_version", 4)?;
-    }
-    if version < 5 {
-        conn.execute_batch(include_str!(
-            "../../migrations/v5_design_notebook_sections.sql"
-        ))?;
-        conn.pragma_update(None, "user_version", 5)?;
-    }
-    if version < 6 {
-        conn.pragma_update(None, "user_version", 6)?;
-    }
-    if version < 7 {
-        conn.execute_batch(include_str!(
-            "../../migrations/v7_design_notebook_order.sql"
-        ))?;
-        conn.pragma_update(None, "user_version", 7)?;
-    }
-    if version < 8 {
-        conn.execute_batch(include_str!(
-            "../../migrations/v8_design_notebook_drop_pinned.sql"
-        ))?;
-        conn.pragma_update(None, "user_version", 8)?;
-    }
+    repair_legacy_integrity(conn).map_err(UserDbInitError::RepairIntegrity)?;
+    verify_integrity(conn)?;
 
     Ok(())
+}
+
+fn apply_migration(conn: &Connection, migration: &Migration) -> Result<(), UserDbInitError> {
+    let migrate = || -> Result<(), rusqlite::Error> {
+        let transaction = conn.unchecked_transaction()?;
+        transaction.execute_batch(migration.sql)?;
+        transaction.pragma_update(None, "user_version", migration.version)?;
+        transaction.commit()
+    };
+
+    migrate().map_err(|source| UserDbInitError::Migration {
+        version: migration.version,
+        source,
+    })
+}
+
+fn repair_legacy_integrity(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let transaction = conn.unchecked_transaction()?;
+    transaction.execute(
+        "DELETE FROM design_notebook_section_memberships
+         WHERE NOT EXISTS (
+            SELECT 1
+            FROM design_notebook_entries
+            WHERE design_notebook_entries.path = design_notebook_section_memberships.path
+         )
+         OR NOT EXISTS (
+            SELECT 1
+            FROM design_notebook_sections
+            WHERE design_notebook_sections.id = design_notebook_section_memberships.section_id
+         )",
+        [],
+    )?;
+    transaction.commit()
+}
+
+fn verify_integrity(conn: &Connection) -> Result<(), UserDbInitError> {
+    let foreign_keys_enabled: i32 = conn
+        .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+        .map_err(UserDbInitError::VerifyIntegrity)?;
+    if foreign_keys_enabled != 1 {
+        return Err(UserDbInitError::ForeignKeysDisabled);
+    }
+
+    let mut statement = conn
+        .prepare("PRAGMA foreign_key_check")
+        .map_err(UserDbInitError::VerifyIntegrity)?;
+    let mut rows = statement
+        .query([])
+        .map_err(UserDbInitError::VerifyIntegrity)?;
+    let Some(row) = rows.next().map_err(UserDbInitError::VerifyIntegrity)? else {
+        return Ok(());
+    };
+
+    Err(UserDbInitError::ForeignKeyViolation {
+        table: row.get(0).map_err(UserDbInitError::VerifyIntegrity)?,
+        row_id: row.get(1).map_err(UserDbInitError::VerifyIntegrity)?,
+        parent: row.get(2).map_err(UserDbInitError::VerifyIntegrity)?,
+        constraint_index: row.get(3).map_err(UserDbInitError::VerifyIntegrity)?,
+    })
 }
 
 pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, rusqlite::Error> {
@@ -288,6 +459,27 @@ mod tests {
         conn
     }
 
+    fn column_names(conn: &Connection, table: &str) -> Vec<String> {
+        conn.prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap()
+            .query_map([], |row| row.get(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+    }
+
+    fn temp_user_db_path(name: &str) -> std::path::PathBuf {
+        let unique = format!(
+            "canopi_user_db_{name}_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        std::env::temp_dir().join(unique)
+    }
+
     #[test]
     fn test_toggle_favorite_adds_then_removes() {
         let conn = test_db();
@@ -402,7 +594,7 @@ mod tests {
     #[test]
     fn init_creates_design_notebook_tables() {
         let conn = Connection::open_in_memory().unwrap();
-        init(&conn).unwrap();
+        initialize_connection(&conn).unwrap();
 
         conn.query_row("SELECT COUNT(*) FROM design_notebook_entries", [], |_| {
             Ok(())
@@ -411,9 +603,292 @@ mod tests {
     }
 
     #[test]
+    fn failed_multi_statement_migration_rolls_back_and_can_be_retried() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../../migrations/init.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/v2_recently_viewed.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/v3_saved_object_stamps.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/v4_design_notebook.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!(
+            "../../migrations/v5_design_notebook_sections.sql"
+        ))
+        .unwrap();
+        conn.execute_batch(
+            "ALTER TABLE design_notebook_entries
+             ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+             PRAGMA user_version = 6;",
+        )
+        .unwrap();
+
+        let error = initialize_connection(&conn).unwrap_err();
+        assert!(matches!(
+            error,
+            UserDbInitError::Migration { version: 7, .. }
+        ));
+        assert_eq!(
+            conn.pragma_query_value::<i32, _>(None, "user_version", |row| row.get(0))
+                .unwrap(),
+            6
+        );
+        assert!(
+            !column_names(&conn, "design_notebook_sections")
+                .iter()
+                .any(|column| column == "sort_order")
+        );
+
+        conn.execute_batch("ALTER TABLE design_notebook_entries DROP COLUMN sort_order;")
+            .unwrap();
+        initialize_connection(&conn).unwrap();
+
+        assert_eq!(
+            conn.pragma_query_value::<i32, _>(None, "user_version", |row| row.get(0))
+                .unwrap(),
+            8
+        );
+    }
+
+    #[test]
+    fn initialization_rejects_a_future_schema_version() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "user_version", 9).unwrap();
+
+        let error = match crate::db::UserDb::initialize(conn) {
+            Ok(_) => panic!("future user database schema should be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(
+            error,
+            UserDbInitError::UnsupportedSchemaVersion {
+                found: 9,
+                supported: 8
+            }
+        ));
+    }
+
+    #[test]
+    fn initialization_enables_foreign_keys_on_a_new_database() {
+        let user_db = crate::db::UserDb::initialize(Connection::open_in_memory().unwrap()).unwrap();
+        let conn = user_db.acquire();
+
+        let enabled: i32 = conn
+            .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(enabled, 1);
+    }
+
+    #[test]
+    fn reopening_a_current_database_enables_foreign_keys() {
+        let path = temp_user_db_path("reopen_foreign_keys");
+        drop(crate::db::UserDb::open(&path).unwrap());
+
+        let user_db = crate::db::UserDb::open(&path).unwrap();
+        let conn = user_db.acquire();
+        let enabled: i32 = conn
+            .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(enabled, 1);
+        drop(conn);
+        drop(user_db);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn initialized_database_rejects_orphan_notebook_memberships() {
+        let user_db = crate::db::UserDb::initialize(Connection::open_in_memory().unwrap()).unwrap();
+        let conn = user_db.acquire();
+
+        let result = conn.execute(
+            "INSERT INTO design_notebook_section_memberships (
+                path, section_id, created_at, updated_at
+             ) VALUES ('/missing.canopi', 'missing-section', datetime('now'), datetime('now'))",
+            [],
+        );
+
+        assert!(matches!(
+            result,
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if error.code == rusqlite::ErrorCode::ConstraintViolation
+        ));
+    }
+
+    #[test]
+    fn deleting_notebook_parents_cascades_memberships() {
+        let user_db = crate::db::UserDb::initialize(Connection::open_in_memory().unwrap()).unwrap();
+        let conn = user_db.acquire();
+        conn.execute_batch(
+            "INSERT INTO design_notebook_entries (
+                path, name, updated_at, plant_count, sort_order, created_at, last_opened
+             ) VALUES
+                ('/first.canopi', 'First', datetime('now'), 0, 0, datetime('now'), datetime('now')),
+                ('/second.canopi', 'Second', datetime('now'), 0, 1, datetime('now'), datetime('now'));
+             INSERT INTO design_notebook_sections (
+                id, name, sort_order, created_at, updated_at
+             ) VALUES
+                ('first-section', 'First', 0, datetime('now'), datetime('now')),
+                ('second-section', 'Second', 1, datetime('now'), datetime('now'));
+             INSERT INTO design_notebook_section_memberships (
+                path, section_id, created_at, updated_at
+             ) VALUES
+                ('/first.canopi', 'first-section', datetime('now'), datetime('now')),
+                ('/second.canopi', 'second-section', datetime('now'), datetime('now'));",
+        )
+        .unwrap();
+
+        conn.execute(
+            "DELETE FROM design_notebook_entries WHERE path = '/first.canopi'",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "DELETE FROM design_notebook_sections WHERE id = 'second-section'",
+            [],
+        )
+        .unwrap();
+
+        let membership_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM design_notebook_section_memberships",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(membership_count, 0);
+    }
+
+    #[test]
+    fn initialization_repairs_legacy_orphan_notebook_memberships() {
+        let conn = Connection::open_in_memory().unwrap();
+        initialize_connection(&conn).unwrap();
+        conn.pragma_update(None, "foreign_keys", false).unwrap();
+        conn.execute(
+            "INSERT INTO design_notebook_section_memberships (
+                path, section_id, created_at, updated_at
+             ) VALUES ('/missing.canopi', 'missing-section', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let user_db = crate::db::UserDb::initialize(conn).unwrap();
+        let conn = user_db.acquire();
+        let membership_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM design_notebook_section_memberships",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(membership_count, 0);
+    }
+
+    #[test]
+    fn initialization_rejects_unrepaired_foreign_key_violations() {
+        let conn = Connection::open_in_memory().unwrap();
+        initialize_connection(&conn).unwrap();
+        conn.pragma_update(None, "foreign_keys", false).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE integrity_parent (id INTEGER PRIMARY KEY);
+             CREATE TABLE integrity_child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER NOT NULL REFERENCES integrity_parent(id)
+             );
+             INSERT INTO integrity_child (id, parent_id) VALUES (1, 99);",
+        )
+        .unwrap();
+
+        let error = match crate::db::UserDb::initialize(conn) {
+            Ok(_) => panic!("unrepaired foreign-key violation should be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(
+            error,
+            UserDbInitError::ForeignKeyViolation {
+                ref table,
+                row_id: Some(1),
+                ref parent,
+                constraint_index: 0,
+            } if table == "integrity_child" && parent == "integrity_parent"
+        ));
+    }
+
+    #[test]
+    fn v7_notebook_data_and_membership_survive_migration() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../../migrations/init.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/v2_recently_viewed.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/v3_saved_object_stamps.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/v4_design_notebook.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!(
+            "../../migrations/v5_design_notebook_sections.sql"
+        ))
+        .unwrap();
+        conn.execute_batch(
+            "ALTER TABLE design_notebook_entries
+             ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;",
+        )
+        .unwrap();
+        conn.execute_batch(include_str!(
+            "../../migrations/v7_design_notebook_order.sql"
+        ))
+        .unwrap();
+        conn.execute_batch(
+            "INSERT INTO design_notebook_sections (
+                id, name, sort_order, created_at, updated_at
+             ) VALUES ('section-1', 'Orchard', 3, datetime('now'), datetime('now'));
+             INSERT INTO design_notebook_entries (
+                path, name, updated_at, plant_count, sort_order, created_at, last_opened, pinned
+             ) VALUES (
+                '/orchard.canopi', 'Orchard', datetime('now'), 12, 4,
+                datetime('now'), datetime('now'), 1
+             );
+             INSERT INTO design_notebook_section_memberships (
+                path, section_id, created_at, updated_at
+             ) VALUES ('/orchard.canopi', 'section-1', datetime('now'), datetime('now'));
+             PRAGMA user_version = 7;",
+        )
+        .unwrap();
+
+        let user_db = crate::db::UserDb::initialize(conn).unwrap();
+        let conn = user_db.acquire();
+        let entry: (String, i64, i32) = conn
+            .query_row(
+                "SELECT name, plant_count, sort_order
+                 FROM design_notebook_entries
+                 WHERE path = '/orchard.canopi'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        let membership: String = conn
+            .query_row(
+                "SELECT section_id
+                 FROM design_notebook_section_memberships
+                 WHERE path = '/orchard.canopi'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(entry, ("Orchard".to_owned(), 12, 4));
+        assert_eq!(membership, "section-1");
+    }
+
+    #[test]
     fn init_creates_design_notebook_section_tables() {
         let conn = Connection::open_in_memory().unwrap();
-        init(&conn).unwrap();
+        initialize_connection(&conn).unwrap();
 
         conn.query_row("SELECT COUNT(*) FROM design_notebook_sections", [], |_| {
             Ok(())
@@ -430,7 +905,7 @@ mod tests {
     #[test]
     fn init_does_not_create_design_notebook_pinned_column() {
         let conn = Connection::open_in_memory().unwrap();
-        init(&conn).unwrap();
+        initialize_connection(&conn).unwrap();
 
         let columns = conn
             .prepare("PRAGMA table_info(design_notebook_entries)")
@@ -457,6 +932,21 @@ mod tests {
                 last_opened TEXT NOT NULL,
                 pinned INTEGER NOT NULL DEFAULT 0
              );
+             CREATE TABLE design_notebook_sections (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+             );
+             CREATE TABLE design_notebook_section_memberships (
+                path TEXT PRIMARY KEY,
+                section_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(path) REFERENCES design_notebook_entries(path) ON DELETE CASCADE,
+                FOREIGN KEY(section_id) REFERENCES design_notebook_sections(id) ON DELETE CASCADE
+             );
              INSERT INTO design_notebook_entries (
                 path,
                 name,
@@ -472,7 +962,7 @@ mod tests {
         )
         .unwrap();
 
-        init(&conn).unwrap();
+        initialize_connection(&conn).unwrap();
 
         let columns = conn
             .prepare("PRAGMA table_info(design_notebook_entries)")
@@ -494,7 +984,7 @@ mod tests {
     #[test]
     fn init_creates_design_notebook_order_columns() {
         let conn = Connection::open_in_memory().unwrap();
-        init(&conn).unwrap();
+        initialize_connection(&conn).unwrap();
 
         conn.execute(
             "INSERT INTO design_notebook_sections (

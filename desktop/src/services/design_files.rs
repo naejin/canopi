@@ -1,7 +1,7 @@
 use common_types::design::{AutosaveEntry, CanopiFile, DesignSummary};
 use std::path::Path;
 
-use crate::db::{self, UserDb};
+use crate::db::UserDb;
 use crate::design::{autosave, format};
 
 const RECENT_DESIGNS_LIMIT: usize = 20;
@@ -42,7 +42,7 @@ pub fn load_design_file(path: String) -> Result<CanopiFile, String> {
 
 pub fn get_recent_files(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> {
     let recent = {
-        let conn = db::acquire(&user_db.0, "UserDb");
+        let conn = user_db.acquire();
         crate::db::recent_files::get_recent_files(&conn, u32::MAX)
             .map_err(|e| format!("Failed to get recent files: {e}"))?
     };
@@ -72,7 +72,7 @@ pub fn recover_autosave(
 }
 
 fn try_record_recent(user_db: &UserDb, path: &str, name: &str) {
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     if let Err(error) = crate::db::recent_files::record_recent_file(&conn, path, name) {
         tracing::warn!("Failed to record recent file '{}': {error}", path);
     }
@@ -138,7 +138,7 @@ fn prune_stale_recent_designs(user_db: &UserDb, paths: &[String]) {
         return;
     }
 
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     for path in paths {
         if let Err(error) = crate::db::recent_files::remove_recent_file(&conn, path) {
             tracing::warn!("Failed to prune stale Recent Design '{}': {error}", path);
@@ -159,8 +159,7 @@ mod tests {
 
     fn test_user_db() -> UserDb {
         let conn = Connection::open_in_memory().unwrap();
-        crate::db::user_db::init(&conn).unwrap();
-        UserDb::new(conn)
+        UserDb::initialize(conn).unwrap()
     }
 
     fn test_design(name: &str) -> CanopiFile {
@@ -228,7 +227,7 @@ mod tests {
         .unwrap();
         let _ = load_design(&user_db, saved_path.clone()).unwrap();
         let notebook_entries = {
-            let conn = crate::db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::design_notebook::get_design_notebook_entries(&conn).unwrap()
         };
 
@@ -297,7 +296,7 @@ mod tests {
         )
         .unwrap();
         {
-            let conn = crate::db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::recent_files::record_recent_file(
                 &conn,
                 &missing_path.to_string_lossy(),
@@ -308,7 +307,7 @@ mod tests {
 
         let recent = get_recent_files(&user_db).unwrap();
         let stored = {
-            let conn = crate::db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::recent_files::get_recent_files(&conn, 20).unwrap()
         };
 

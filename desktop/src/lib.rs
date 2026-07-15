@@ -119,11 +119,9 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let user_db_path = data_dir.join("user.db");
-            let user_conn = Connection::open(&user_db_path)
-                .map_err(|e| format!("Failed to open user DB: {e}"))?;
-            db::user_db::init(&user_conn)
-                .map_err(|e| format!("Failed to init user DB: {e}"))?;
-            app.manage(db::UserDb::new(user_conn));
+            let user_db = db::UserDb::open(&user_db_path)
+                .map_err(|e| format!("Failed to initialize user DB: {e}"))?;
+            app.manage(user_db);
 
             tracing::info!("User DB initialized at {}", user_db_path.display());
 

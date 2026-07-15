@@ -14,7 +14,7 @@ pub fn get_settings(user_db: &UserDb) -> Result<Settings, String> {
 }
 
 pub fn set_settings(user_db: &UserDb, settings: Settings) -> Result<(), String> {
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     let json = serde_json::to_string(&settings)
         .map_err(|e| format!("Failed to serialize settings: {e}"))?;
     db::user_db::set_setting(&conn, "settings", &json)
@@ -25,7 +25,7 @@ fn get_settings_with_locale(
     user_db: &UserDb,
     detected_os_locale: Option<&str>,
 ) -> Result<Settings, String> {
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     let json = db::user_db::get_setting(&conn, "settings")
         .map_err(|e| format!("Failed to read settings: {e}"))?;
     match json {
@@ -108,15 +108,14 @@ mod tests {
 
     fn test_user_db() -> UserDb {
         let conn = Connection::open_in_memory().unwrap();
-        crate::db::user_db::init(&conn).unwrap();
-        UserDb::new(conn)
+        UserDb::initialize(conn).unwrap()
     }
 
     #[test]
     fn migrates_removed_system_theme_before_deserializing() {
         let user_db = test_user_db();
         {
-            let conn = crate::db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::user_db::set_setting(
                 &conn,
                 "settings",

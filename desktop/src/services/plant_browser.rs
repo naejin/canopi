@@ -243,7 +243,7 @@ pub async fn search_species_async_cancellable(
 }
 
 fn hydrate_search_favorites(user_db: &UserDb, items: &mut [SpeciesListItem]) {
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     for item in items {
         item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name);
     }
@@ -261,7 +261,7 @@ pub fn get_species_detail(
     };
 
     {
-        let conn = db::acquire(&user_db.0, "UserDb");
+        let conn = user_db.acquire();
         if let Err(error) = crate::db::user_db::record_recently_viewed(&conn, &canonical_name) {
             tracing::warn!(
                 "Failed to record recently viewed for '{}': {error}",
@@ -274,7 +274,7 @@ pub fn get_species_detail(
 }
 
 pub fn toggle_favorite(user_db: &UserDb, canonical_name: String) -> Result<bool, String> {
-    let conn = db::acquire(&user_db.0, "UserDb");
+    let conn = user_db.acquire();
     crate::db::user_db::toggle_favorite(&conn, &canonical_name)
         .map_err(|e| format!("Failed to toggle favorite for '{canonical_name}': {e}"))
 }
@@ -285,7 +285,7 @@ pub fn get_favorites(
     locale: String,
 ) -> Result<Vec<SpeciesListItem>, String> {
     let names = {
-        let conn = db::acquire(&user_db.0, "UserDb");
+        let conn = user_db.acquire();
         crate::db::user_db::get_favorite_names(&conn)
             .map_err(|e| format!("Failed to read favorites: {e}"))?
     };
@@ -310,7 +310,7 @@ pub fn get_recently_viewed(
     limit: u32,
 ) -> Result<Vec<SpeciesListItem>, String> {
     let names = {
-        let conn = db::acquire(&user_db.0, "UserDb");
+        let conn = user_db.acquire();
         crate::db::user_db::get_recently_viewed_names(&conn, limit)
             .map_err(|e| format!("Failed to read recently viewed: {e}"))?
     };
@@ -325,7 +325,7 @@ pub fn get_recently_viewed(
     };
 
     {
-        let user_conn = db::acquire(&user_db.0, "UserDb");
+        let user_conn = user_db.acquire();
         for item in &mut items {
             item.is_favorite = crate::db::user_db::is_favorite(&user_conn, &item.canonical_name);
         }
@@ -469,7 +469,7 @@ mod tests {
              END;",
         )
         .unwrap();
-        UserDb::new(conn)
+        UserDb::initialize(conn).unwrap()
     }
 
     fn search_request(
@@ -686,7 +686,7 @@ mod tests {
         let user_db = test_user_db();
 
         {
-            let conn = db::acquire(&user_db.0, "UserDb");
+            let conn = user_db.acquire();
             crate::db::user_db::record_recently_viewed(&conn, "Malus domestica").unwrap();
             crate::db::user_db::record_recently_viewed(&conn, "Lavandula angustifolia").unwrap();
         }

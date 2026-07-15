@@ -10,7 +10,10 @@ pub mod user_db;
 
 use common_types::health::PlantDbStatus;
 use rusqlite::{Connection, InterruptHandle};
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
+
+pub use user_db::UserDbInitError;
 
 /// Plant database availability boundary.
 ///
@@ -62,11 +65,21 @@ impl PlantDb {
 
 /// User database — writable, serialized access via Mutex.
 #[derive(Clone)]
-pub struct UserDb(pub Arc<Mutex<Connection>>);
+pub struct UserDb(Arc<Mutex<Connection>>);
 
 impl UserDb {
-    pub fn new(connection: Connection) -> Self {
-        Self(Arc::new(Mutex::new(connection)))
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, UserDbInitError> {
+        let connection = Connection::open(path).map_err(UserDbInitError::Open)?;
+        Self::initialize(connection)
+    }
+
+    pub fn initialize(connection: Connection) -> Result<Self, UserDbInitError> {
+        user_db::initialize_connection(&connection)?;
+        Ok(Self(Arc::new(Mutex::new(connection))))
+    }
+
+    pub(crate) fn acquire(&self) -> MutexGuard<'_, Connection> {
+        acquire(&self.0, "UserDb")
     }
 }
 
