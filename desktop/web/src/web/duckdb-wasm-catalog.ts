@@ -403,9 +403,10 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     const projection = tableRows(rowsTable).map(parseSpeciesProjection)[0]
     if (!projection) return null
 
+    const commonNames = await this.loadDetailCommonNames(projection.row.id, namesTable)
     await this.ensureImageAssets()
     const image = await this.loadHeroImage(projection.row.id)
-    return speciesProjectionToDetail(projection, image)
+    return speciesProjectionToDetail(projection, commonNames, image)
   }
 
   private async countSpecies(
@@ -516,6 +517,31 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
       LIMIT 1
     `)
     return tableRows(imageTable).map(parseImageRow)[0] ?? null
+  }
+
+  private async loadDetailCommonNames(
+    speciesId: string,
+    namesTable: string,
+  ): Promise<string[]> {
+    const names = await this.connection.query(`
+      WITH web_species_detail_names AS (
+        SELECT common_name,
+               TRY_CAST(display_order AS INTEGER) AS numeric_display_order,
+               CASE WHEN CAST(is_primary AS VARCHAR) IN ('true', '1') THEN 0 ELSE 1 END
+                 AS primary_order
+        FROM ${namesTable}
+        WHERE species_id = ${quoteSqlString(speciesId)}
+      )
+      SELECT common_name
+      FROM web_species_detail_names
+      ORDER BY numeric_display_order,
+               primary_order,
+               LENGTH(common_name),
+               common_name
+    `)
+    return [...new Set(tableRows(names).flatMap((row) => compact([
+      nullableString(row.common_name),
+    ])))]
   }
 }
 
@@ -1148,14 +1174,18 @@ function speciesProjectionToListItem(
 
 function speciesProjectionToDetail(
   projection: SpeciesProjection,
+  localizedCommonNames: readonly string[],
   image: ReducedSpeciesImageRow | null,
 ): SpeciesCatalogDetail {
   const row = projection.row
-  const commonName = projection.localizedCommonName ?? row.common_name
+  const commonNames = localizedCommonNames.length > 0
+    ? [...localizedCommonNames]
+    : compact([projection.localizedCommonName ?? row.common_name])
+  const commonName = commonNames[0] ?? row.common_name
   return {
     canonical_name: row.canonical_name,
     common_name: commonName,
-    common_names: [...new Set([commonName].filter((name): name is string => name !== null))],
+    common_names: commonNames,
     climate_zones: [...row.climate_zones],
     habit: row.habit,
     growth_form: row.growth_form,
