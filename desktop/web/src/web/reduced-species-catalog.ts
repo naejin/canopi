@@ -7,7 +7,7 @@ import type {
   SpeciesSearchRequest,
 } from '../types/species'
 import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
-import { normalizeSpeciesSearch } from '../utils/species-search-normalization'
+import { speciesSearchQueryTokens } from '../utils/species-search-normalization'
 import type { BrowserAppDataStore } from './browser-app-data'
 
 export type WebSupportedFilterOptionsKey = keyof Pick<
@@ -24,6 +24,11 @@ export interface ReducedSpeciesRow {
   readonly habit: string | null
   readonly growth_form: string | null
   readonly life_cycles: readonly string[]
+}
+
+export interface ReducedSpeciesArtifactRow extends ReducedSpeciesRow {
+  readonly normalized_canonical_name: string
+  readonly normalized_common_name: string | null
 }
 
 export interface ReducedSpeciesNameRow {
@@ -45,7 +50,7 @@ export interface ReducedSpeciesImageRow {
 }
 
 export interface ReducedSpeciesCatalogData {
-  readonly species: readonly ReducedSpeciesRow[]
+  readonly species: readonly ReducedSpeciesArtifactRow[]
   readonly names: readonly ReducedSpeciesNameRow[]
   readonly images: readonly ReducedSpeciesImageRow[]
 }
@@ -166,11 +171,11 @@ export function createInMemoryReducedSpeciesCatalogReader(
 
   return {
     async searchSpecies(request, favoriteNames) {
-      const text = normalizeSpeciesSearch(request.text).text
+      const searchText = admittedSearchText(request.text)
       const offset = cursorToOffset(request.cursor)
       const matched = species.filter((row) => (
         matchesSupportedFilters(row, request.filters) &&
-        matchesSearchText(row, text, namesByLocaleAndSpecies.get(request.locale)?.get(row.id))
+        matchesSearchText(row, searchText, namesByLocaleAndSpecies.get(request.locale)?.get(row.id))
       ))
       const page = matched.slice(offset, offset + Math.max(0, request.limit))
       const nextOffset = offset + page.length
@@ -180,7 +185,7 @@ export function createInMemoryReducedSpeciesCatalogReader(
           locale: request.locale,
           favoriteNames,
           nameIndex: namesByLocaleAndSpecies,
-          normalizedSearchText: text,
+          searchText,
         })),
         next_cursor: nextOffset < matched.length ? `offset:${nextOffset}` : null,
         total_estimate: request.include_total ? matched.length : 0,
@@ -196,7 +201,7 @@ export function createInMemoryReducedSpeciesCatalogReader(
               locale,
               favoriteNames,
               nameIndex: namesByLocaleAndSpecies,
-              normalizedSearchText: '',
+              searchText: EMPTY_ADMITTED_SEARCH_TEXT,
             })]
           : []
       })
@@ -314,16 +319,15 @@ function detailImage(image: ReducedSpeciesImageRow | null): SpeciesCatalogDetail
 }
 
 function matchesSearchText(
-  row: ReducedSpeciesRow,
-  normalizedSearchText: string,
+  row: ReducedSpeciesArtifactRow,
+  searchText: AdmittedSearchText,
   localeNames: SpeciesNameIndexEntry | undefined,
 ): boolean {
-  if (!normalizedSearchText) return true
-  if (normalizeSpeciesSearch(row.canonical_name).text.includes(normalizedSearchText)) return true
-  if (normalizeSpeciesSearch(row.common_name ?? '').text.includes(normalizedSearchText)) return true
+  if (!searchText.text) return true
+  if (matchesNormalizedSearchText(row.normalized_canonical_name, searchText)) return true
+  if (matchesNormalizedSearchText(row.normalized_common_name ?? '', searchText)) return true
   return localeNames?.names.some((name) => (
-    name.normalized_name.includes(normalizedSearchText) ||
-    normalizeSpeciesSearch(name.common_name).text.includes(normalizedSearchText)
+    matchesNormalizedSearchText(name.normalized_name, searchText)
   )) ?? false
 }
 
@@ -344,19 +348,18 @@ function toSpeciesListItem({
   locale,
   favoriteNames,
   nameIndex,
-  normalizedSearchText,
+  searchText,
 }: {
-  readonly row: ReducedSpeciesRow
+  readonly row: ReducedSpeciesArtifactRow
   readonly locale: string
   readonly favoriteNames: ReadonlySet<string>
   readonly nameIndex: ReadonlyMap<string, ReadonlyMap<string, SpeciesNameIndexEntry>>
-  readonly normalizedSearchText: string
+  readonly searchText: AdmittedSearchText
 }): SpeciesListItem {
   const localeNames = nameIndex.get(locale)?.get(row.id)
-  const matchedName = normalizedSearchText
+  const matchedName = searchText.text
     ? localeNames?.names.find((name) => (
-        name.normalized_name.includes(normalizedSearchText) ||
-        normalizeSpeciesSearch(name.common_name).text.includes(normalizedSearchText)
+        matchesNormalizedSearchText(name.normalized_name, searchText)
       )) ?? null
     : null
   const localizedCommonName = localeNames?.primary?.common_name ?? row.common_name
@@ -382,6 +385,31 @@ function toSpeciesListItem({
     width_max_m: null,
     is_favorite: favoriteNames.has(row.canonical_name),
   }
+}
+
+interface AdmittedSearchText {
+  readonly text: string
+  readonly tokens: readonly string[]
+}
+
+const EMPTY_ADMITTED_SEARCH_TEXT: AdmittedSearchText = {
+  text: '',
+  tokens: [],
+}
+
+function admittedSearchText(raw: string): AdmittedSearchText {
+  const tokens = speciesSearchQueryTokens(raw)
+  return tokens.length === 0
+    ? EMPTY_ADMITTED_SEARCH_TEXT
+    : { text: tokens.join(' '), tokens }
+}
+
+function matchesNormalizedSearchText(
+  candidate: string,
+  searchText: AdmittedSearchText,
+): boolean {
+  if (candidate.includes(searchText.text)) return true
+  return searchText.tokens.length > 1 && searchText.tokens.every((token) => candidate.includes(token))
 }
 
 function buildFilterOptions(species: readonly ReducedSpeciesRow[]): FilterOptions {
