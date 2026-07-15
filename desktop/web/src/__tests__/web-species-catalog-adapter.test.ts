@@ -35,6 +35,67 @@ describe('Web Edition reduced Species Catalog adapter', () => {
     ])
   })
 
+  it('projects the exact alternate name ahead of a primary all-token match', async () => {
+    const data = catalogFixture()
+    const reader = createInMemoryReducedSpeciesCatalogReader({
+      ...data,
+      names: data.names.map((name) => name.common_name === 'Pommier'
+        ? {
+            ...name,
+            common_name: 'Pomme tres commune',
+            normalized_name: 'pomme tres commune',
+          }
+        : name),
+    })
+
+    const result = await reader.searchSpecies(searchRequest({
+      text: 'pomme commune',
+      locale: 'fr',
+    }), new Set())
+
+    expect(result.items[0]).toMatchObject({
+      canonical_name: 'Malus domestica',
+      common_name: 'Pomme tres commune',
+      matched_common_name: 'Pomme commune',
+    })
+  })
+
+  it('orders and paginates active searches by locale-name relevance', async () => {
+    const data = catalogFixture()
+    const reader = createInMemoryReducedSpeciesCatalogReader({
+      ...data,
+      names: [
+        ...data.names,
+        {
+          species_id: 'species-balm',
+          language: 'fr',
+          common_name: 'Malus',
+          normalized_name: 'malus',
+          is_primary: false,
+          display_order: 1,
+        },
+      ],
+    })
+
+    const firstPage = await reader.searchSpecies(searchRequest({
+      text: 'malus',
+      locale: 'fr',
+      limit: 1,
+      include_total: true,
+    }), new Set())
+    const secondPage = await reader.searchSpecies(searchRequest({
+      text: 'malus',
+      locale: 'fr',
+      cursor: firstPage.next_cursor,
+      limit: 1,
+    }), new Set())
+
+    expect(firstPage.items.map((item) => item.canonical_name)).toEqual(['Melissa officinalis'])
+    expect(firstPage.next_cursor).toBe('offset:1')
+    expect(firstPage.total_estimate).toBe(2)
+    expect(secondPage.items.map((item) => item.canonical_name)).toEqual(['Malus domestica'])
+  })
+
   it('browses pages and searches canonical or localized common names', async () => {
     const adapters = createReducedSpeciesCatalogAdapters({
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
