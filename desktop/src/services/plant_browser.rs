@@ -1,7 +1,7 @@
 use common_types::species::{
     PaginatedResult, SpeciesDetail, SpeciesListItem, SpeciesSearchRequest,
 };
-use rusqlite::InterruptHandle;
+use rusqlite::{Connection, InterruptHandle};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU64, Ordering},
@@ -12,6 +12,7 @@ use crate::services::species_catalog_read::SpeciesCatalogRead;
 
 const SPECIES_SEARCH_CANCELLED: &str =
     "Species search cancelled because a newer query superseded it";
+const SPECIES_SEARCH_PROGRESS_INTERVAL: i32 = 100;
 
 #[derive(Clone, Default)]
 pub struct SpeciesSearchCancellation {
@@ -46,6 +47,10 @@ struct SpeciesSearchRunningGuard {
     generation: u64,
 }
 
+struct SpeciesSearchProgressGuard<'connection> {
+    connection: &'connection Connection,
+}
+
 impl SpeciesSearchCancellation {
     pub fn begin_request(
         &self,
@@ -73,7 +78,7 @@ impl SpeciesSearchCancellation {
             let generation = self
                 .inner
                 .next_generation
-                .fetch_add(1, Ordering::Relaxed)
+                .fetch_add(1, Ordering::AcqRel)
                 .wrapping_add(1);
             let previous = active.replace(ActiveSpeciesSearch {
                 generation,
@@ -97,7 +102,7 @@ impl SpeciesSearchCancellation {
             );
             error.into_inner()
         });
-        self.inner.next_generation.fetch_add(1, Ordering::Relaxed);
+        self.inner.next_generation.fetch_add(1, Ordering::AcqRel);
         let previous = active.take();
         self.interrupt_running_search(previous);
     }
@@ -252,6 +257,19 @@ impl SpeciesSearchCancellationToken {
     fn mark_running(&self) -> Result<SpeciesSearchRunningGuard, String> {
         self.cancellation.mark_running(self.generation)
     }
+
+    fn install_progress_handler<'connection>(
+        &self,
+        connection: &'connection Connection,
+    ) -> SpeciesSearchProgressGuard<'connection> {
+        let inner = Arc::clone(&self.cancellation.inner);
+        let generation = self.generation;
+        connection.progress_handler(
+            SPECIES_SEARCH_PROGRESS_INTERVAL,
+            Some(move || inner.next_generation.load(Ordering::Acquire) != generation),
+        );
+        SpeciesSearchProgressGuard { connection }
+    }
 }
 
 impl Drop for SpeciesSearchCancellationToken {
@@ -263,6 +281,12 @@ impl Drop for SpeciesSearchCancellationToken {
 impl Drop for SpeciesSearchRunningGuard {
     fn drop(&mut self) {
         self.cancellation.finish_running(self.generation);
+    }
+}
+
+impl Drop for SpeciesSearchProgressGuard<'_> {
+    fn drop(&mut self) {
+        self.connection.progress_handler(0, None::<fn() -> bool>);
     }
 }
 
@@ -314,6 +338,9 @@ pub async fn search_species_async_cancellable(
 
         let mut result = {
             let conn = db::require_plant_db(&plant_db)?;
+            let _progress = cancellation
+                .as_ref()
+                .map(|cancellation| cancellation.install_progress_handler(&conn));
             let _running = cancellation
                 .as_ref()
                 .map(|cancellation| cancellation.mark_running())
@@ -321,6 +348,9 @@ pub async fn search_species_async_cancellable(
             #[cfg(test)]
             if let Some(cancellation) = &cancellation {
                 cancellation.cancellation.run_after_mark_running_hook();
+            }
+            if let Some(cancellation) = &cancellation {
+                cancellation.ensure_current()?;
             }
             match SpeciesCatalogRead::new(&conn).search(request) {
                 Ok(result) => {
@@ -723,6 +753,50 @@ mod tests {
             !query_completed.load(Ordering::SeqCst),
             "the superseded search completed SQLite work after its interrupt was delivered too early"
         );
+    }
+
+    #[test]
+    fn generation_progress_handler_aborts_an_interrupt_delivered_before_sqlite_starts() {
+        let connection = Connection::open_in_memory().unwrap();
+        let cancellation = SpeciesSearchCancellation::default();
+        let token = cancellation.begin(Arc::new(connection.get_interrupt_handle()));
+        let progress = token.install_progress_handler(&connection);
+        let running = token.mark_running().unwrap();
+
+        cancellation.supersede_request();
+
+        let error = connection
+            .query_row(
+                "WITH RECURSIVE cnt(x) AS (
+                     VALUES(0)
+                     UNION ALL
+                     SELECT x + 1 FROM cnt WHERE x < 100000
+                 )
+                 SELECT sum(x) FROM cnt",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_err();
+        assert_eq!(
+            error.sqlite_error_code(),
+            Some(rusqlite::ffi::ErrorCode::OperationInterrupted)
+        );
+
+        drop(running);
+        drop(progress);
+        let sum = connection
+            .query_row(
+                "WITH RECURSIVE cnt(x) AS (
+                     VALUES(0)
+                     UNION ALL
+                     SELECT x + 1 FROM cnt WHERE x < 1000
+                 )
+                 SELECT sum(x) FROM cnt",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap();
+        assert_eq!(sum, 500_500);
     }
 
     #[test]
