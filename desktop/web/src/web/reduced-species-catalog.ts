@@ -192,7 +192,8 @@ export function createInMemoryReducedSpeciesCatalogReader(
           localeNames,
         ))
       }
-      const page = matched.slice(offset, offset + Math.max(0, request.limit))
+      const limit = Math.max(0, request.limit)
+      const page = matched.slice(offset, offset + limit)
       const nextOffset = offset + page.length
       return {
         items: page.map((row) => toSpeciesListItem({
@@ -202,7 +203,7 @@ export function createInMemoryReducedSpeciesCatalogReader(
           nameIndex: namesByLocaleAndSpecies,
           searchText,
         })),
-        next_cursor: nextOffset < matched.length ? `offset:${nextOffset}` : null,
+        next_cursor: limit > 0 && nextOffset < matched.length ? `offset:${nextOffset}` : null,
         total_estimate: request.include_total ? matched.length : 0,
       }
     },
@@ -302,16 +303,19 @@ function buildNameIndex(
 }
 
 function compareSpeciesRows(left: ReducedSpeciesRow, right: ReducedSpeciesRow): number {
-  return left.canonical_name.localeCompare(right.canonical_name, 'en', { sensitivity: 'base' })
+  return compareBinaryText(left.canonical_name, right.canonical_name) ||
+    compareBinaryText(left.id, right.id)
 }
 
 function compareNameRows(left: ReducedSpeciesNameRow, right: ReducedSpeciesNameRow): number {
   if (left.display_order !== right.display_order) return left.display_order - right.display_order
   if (left.is_primary !== right.is_primary) return left.is_primary ? -1 : 1
-  if (left.common_name.length !== right.common_name.length) {
-    return left.common_name.length - right.common_name.length
+  const leftLength = unicodeScalarLength(left.common_name)
+  const rightLength = unicodeScalarLength(right.common_name)
+  if (leftLength !== rightLength) {
+    return leftLength - rightLength
   }
-  return left.common_name.localeCompare(right.common_name, left.language, { sensitivity: 'base' })
+  return compareBinaryText(left.common_name, right.common_name)
 }
 
 function detailCommonNames(
@@ -434,8 +438,8 @@ function compareSpeciesSearchRelevance(
     leftRank.matchedNameTier - rightRank.matchedNameTier ||
     leftRank.primaryDisplayOrder - rightRank.primaryDisplayOrder ||
     leftRank.primaryNameLength - rightRank.primaryNameLength ||
-    compareText(left.canonical_name, right.canonical_name) ||
-    compareText(left.id, right.id)
+    compareBinaryText(left.canonical_name, right.canonical_name) ||
+    compareBinaryText(left.id, right.id)
 }
 
 interface SpeciesSearchRelevance {
@@ -467,12 +471,28 @@ function speciesSearchRelevance(
     group,
     matchedNameTier: matchedName?.tier ?? Number.MAX_SAFE_INTEGER,
     primaryDisplayOrder: primary?.display_order ?? Number.MAX_SAFE_INTEGER,
-    primaryNameLength: primary?.common_name.length ?? Number.MAX_SAFE_INTEGER,
+    primaryNameLength: primary ? unicodeScalarLength(primary.common_name) : Number.MAX_SAFE_INTEGER,
   }
 }
 
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0
+function unicodeScalarLength(value: string): number {
+  let length = 0
+  for (const _scalar of value) length += 1
+  return length
+}
+
+function compareBinaryText(left: string, right: string): number {
+  // DuckDB's binary UTF-8 order is scalar order for well-formed catalog text.
+  let leftOffset = 0
+  let rightOffset = 0
+  while (leftOffset < left.length && rightOffset < right.length) {
+    const leftScalar = left.codePointAt(leftOffset)!
+    const rightScalar = right.codePointAt(rightOffset)!
+    if (leftScalar !== rightScalar) return leftScalar < rightScalar ? -1 : 1
+    leftOffset += leftScalar > 0xffff ? 2 : 1
+    rightOffset += rightScalar > 0xffff ? 2 : 1
+  }
+  return leftOffset < left.length ? 1 : rightOffset < right.length ? -1 : 0
 }
 
 function buildFilterOptions(species: readonly ReducedSpeciesRow[]): FilterOptions {

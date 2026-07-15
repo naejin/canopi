@@ -290,6 +290,16 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
       filters: request.filters,
       supportedFilters: this.manifest.supportedFilters,
     })
+    if (limit === 0) {
+      return {
+        items: [],
+        next_cursor: null,
+        total_estimate: request.include_total
+          ? await this.countSpecies(speciesTable, namesTable, whereSql)
+          : 0,
+      }
+    }
+    const queryLimit = request.include_total ? limit : limit + 1
     const rowsTable = await this.connection.query(`
       ${speciesProjectionSql({
         speciesTable,
@@ -297,17 +307,18 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
         whereSql,
         searchText,
       })}
-      LIMIT ${limit}
+      LIMIT ${queryLimit}
       OFFSET ${offset}
     `)
-    const rows = tableRows(rowsTable).map(parseSpeciesProjection)
+    const queriedRows = tableRows(rowsTable).map(parseSpeciesProjection)
+    const rows = queriedRows.slice(0, limit)
     const totalEstimate = request.include_total
       ? await this.countSpecies(speciesTable, namesTable, whereSql)
       : 0
     const nextOffset = offset + rows.length
     const hasNextPage = request.include_total
       ? nextOffset < totalEstimate
-      : rows.length === limit && limit > 0
+      : queriedRows.length > limit
 
     return {
       items: rows.map((row) => speciesProjectionToListItem(row, favoriteNames)),

@@ -190,8 +190,11 @@ describe('Web Edition reduced Species Catalog adapter', () => {
     })
 
     const detail = await reader.getSpeciesDetail(template.canonical_name, 'fr')
+    const page = await reader.searchSpecies(searchRequest({ locale: 'fr' }), new Set())
 
+    expect(detail?.common_name).toBe('A')
     expect(detail?.common_names).toEqual(['A', 'a', 'Á', '𐀀', 'zz'])
+    expect(page.items[0]?.common_name).toBe('A')
   })
 
   it('never returns a continuation cursor for a zero-sized or exactly exhausted page', async () => {

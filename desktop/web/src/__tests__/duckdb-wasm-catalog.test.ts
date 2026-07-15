@@ -807,7 +807,10 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
 
   it('returns an empty terminal page without querying DuckDB when the limit is zero', async () => {
     const connection = {
-      query: vi.fn(async () => table([])),
+      query: vi.fn(async (sql: string) => {
+        if (!/COUNT/i.test(sql)) throw new Error('zero-sized page executed a projection query')
+        return table([{ total_count: 3 }])
+      }),
       close: vi.fn(async () => {}),
     }
     const reader = createDuckDbReducedSpeciesCatalogReader({
@@ -826,6 +829,17 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
       total_estimate: 0,
     })
     expect(connection.query).not.toHaveBeenCalled()
+
+    await expect(reader.searchSpecies(searchRequest({
+      limit: 0,
+      include_total: true,
+    }), new Set())).resolves.toEqual({
+      items: [],
+      next_cursor: null,
+      total_estimate: 3,
+    })
+    expect(connection.query).toHaveBeenCalledOnce()
+    expect(connection.query.mock.calls[0]?.[0]).toMatch(/COUNT/i)
   })
 
   it('rejects legacy NDJSON catalog manifests in the production Web reader', async () => {
