@@ -84,6 +84,7 @@ function decodeSchemaValue(
 
   if (types.includes('number') || types.includes('integer')) {
     validateNumber(value, schema, path, types.includes('integer'))
+    if (schema.format === 'float' && typeof value === 'number') return Math.fround(value)
   }
   if (types.includes('array') && Array.isArray(value)) {
     const itemSchema = schema.items

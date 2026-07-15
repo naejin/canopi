@@ -8,6 +8,7 @@ import type {
   DesignSummary,
 } from '../types/design'
 import { designPath } from '../app/document-session/store'
+import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
 import {
   prepareDesignWriteDestination,
   type PreparedDesignWriteDestination,
@@ -80,7 +81,7 @@ export async function openDesignDialog(): Promise<{ file: CanopiFile; path: stri
 
 /** Save design to an existing path (Ctrl+S after first save). */
 async function saveDesign(path: string, content: CanopiFile): Promise<string> {
-  return invoke('save_design', { path, content })
+  return invoke('save_design', { path, content: encodeCanopiDesign(content) })
 }
 
 /** Load a design from a known path (e.g. recent files). */
@@ -148,7 +149,7 @@ export async function reorderDesignReferences(paths: string[]): Promise<void> {
 
 /** Silent autosave to app data dir. */
 async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
-  return invoke('autosave_design', { content, path })
+  return invoke('autosave_design', { content: encodeCanopiDesign(content), path })
 }
 
 /** List available autosave files for crash recovery. */

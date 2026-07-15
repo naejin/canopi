@@ -1,5 +1,6 @@
 import { effect } from "@preact/signals";
 import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
+import { encodeCanopiDesign } from "../app/contracts/canopi-design-wire";
 import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
 import {
   createDesignSessionReplacement,
@@ -289,7 +290,7 @@ export function createBrowserDesignSessionController({
       async write(content) {
         await fileAdapter.downloadCanopiFile({
           fileName: `${safeFileStem(content.name || name || "Untitled")}.canopi`,
-          text: `${JSON.stringify(content, null, 2)}\n`,
+          text: `${JSON.stringify(encodeCanopiDesign(content), null, 2)}\n`,
         });
       },
     }));

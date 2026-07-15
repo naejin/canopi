@@ -39,7 +39,9 @@ function makeDesign(): CanopiFile {
     budget_currency: 'EUR',
     created_at: '2026-04-13T00:00:00.000Z',
     updated_at: '2026-04-13T00:00:00.000Z',
-    extra: {},
+    extra: {
+      future_top_level: { keep: true },
+    },
   }
 }
 
@@ -152,6 +154,9 @@ describe('ProblemReportDialog', () => {
     const request = mocks.createProblemReport.mock.calls[0]![0]
     expect(request.sensitive_attachments.current_design).toContain('"name": "Secret Orchard"')
     expect(request.sensitive_attachments.current_design).toContain('"location"')
+    const attached = JSON.parse(request.sensitive_attachments.current_design) as Record<string, unknown>
+    expect(attached.future_top_level).toEqual({ keep: true })
+    expect(attached).not.toHaveProperty('extra')
   })
 
   it('shows the generated Problem Report folder and keeps the path visible when opening fails', async () => {

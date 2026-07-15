@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
+import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
 import type { CanopiFile } from '../types/design'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 
@@ -38,7 +39,10 @@ export async function exportSavedObjectStampCanopiFile(
     filters: [{ name: 'Canopi Design', extensions: ['canopi'] }],
   })
   if (!filePath) throw new Error('Dialog cancelled')
-  return invoke('export_saved_object_stamp_canopi_file', { path: filePath, content })
+  return invoke('export_saved_object_stamp_canopi_file', {
+    path: filePath,
+    content: encodeCanopiDesign(content),
+  })
 }
 
 export async function importSavedObjectStampCanopiFile(): Promise<CanopiFile> {

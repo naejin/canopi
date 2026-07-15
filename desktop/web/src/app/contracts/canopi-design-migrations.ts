@@ -257,7 +257,7 @@ function readInputVersion(value: Record<string, unknown>): number {
     : MISSING_CANOPI_FILE_VERSION
   if (
     typeof version !== 'number'
-    || !Number.isSafeInteger(version)
+    || !Number.isInteger(version)
     || version < MIN_SUPPORTED_CANOPI_FILE_VERSION
   ) {
     throw new CanopiDesignIngestionError(

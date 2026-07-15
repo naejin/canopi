@@ -34,6 +34,35 @@
       "updated_at": "2026-07-15T00:00:00.000Z",
       "extra": {}
     },
+    "float32-fields": {
+      "version": 5,
+      "name": "Float32 Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [
+        {
+          "name": "plants",
+          "visible": true,
+          "locked": false,
+          "opacity": 0.12345679104328156
+        }
+      ],
+      "plants": [],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {}
+    },
     "empty-migrated": {
       "version": 5,
       "name": "Conformance Garden",
@@ -187,6 +216,64 @@
           "currency": "EUR"
         }
       ],
+      "budget_currency": "EUR",
+      "created_at": "2026-07-15T00:00:00.000Z",
+      "updated_at": "2026-07-15T00:00:00.000Z",
+      "extra": {}
+    },
+    "integral-number-fields": {
+      "version": 5,
+      "name": "Integral Number Garden",
+      "description": null,
+      "location": null,
+      "north_bearing_deg": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "layers": [],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": { "x": 1.0, "y": 2.0 },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": 4
+        }
+      ],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [],
+      "consortiums": [
+        {
+          "target": { "kind": "species", "canonical_name": "Malus domestica" },
+          "stratum": "high",
+          "start_phase": 1,
+          "end_phase": 3
+        }
+      ],
+      "groups": [],
+      "timeline": [
+        {
+          "id": "action-1",
+          "action_type": "plant",
+          "description": "Plant the tree",
+          "start_date": null,
+          "end_date": null,
+          "recurrence": null,
+          "targets": [{ "kind": "manual" }],
+          "depends_on": null,
+          "completed": false,
+          "order": 2
+        }
+      ],
+      "budget": [],
       "budget_currency": "EUR",
       "created_at": "2026-07-15T00:00:00.000Z",
       "updated_at": "2026-07-15T00:00:00.000Z",
@@ -573,6 +660,103 @@
       "accepted": "empty-current"
     },
     {
+      "id": "current-version-written-as-integral-json-number",
+      "input": {
+        "version": 5.0,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "empty-current"
+    },
+    {
+      "id": "nested-extra-cannot-shadow-known-root-fields",
+      "input": {
+        "version": 5,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z",
+        "extra": {
+          "version": 6,
+          "name": "Nested Name",
+          "layers": [{ "name": "nested", "visible": false, "locked": true, "opacity": 0 }]
+        }
+      },
+      "accepted": "empty-current"
+    },
+    {
+      "id": "integral-json-number-fields",
+      "input": {
+        "version": 5,
+        "name": "Integral Number Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": { "x": 1, "y": 2 },
+            "quantity": 4.0
+          }
+        ],
+        "zones": [],
+        "consortiums": [
+          {
+            "target": { "kind": "species", "canonical_name": "Malus domestica" },
+            "stratum": "high",
+            "start_phase": 1.0,
+            "end_phase": 3.0
+          }
+        ],
+        "timeline": [
+          {
+            "id": "action-1",
+            "action_type": "plant",
+            "description": "Plant the tree",
+            "targets": [{ "kind": "manual" }],
+            "completed": false,
+            "order": 2.0
+          }
+        ],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "integral-number-fields"
+    },
+    {
+      "id": "float32-fields-normalize-to-native-precision",
+      "input": {
+        "version": 5,
+        "name": "Float32 Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [
+          {
+            "name": "plants",
+            "visible": true,
+            "locked": false,
+            "opacity": 0.123456789
+          }
+        ],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "accepted": "float32-fields"
+    },
+    {
       "id": "legacy-group-ambiguity-and-typed-deduplication",
       "input": {
         "version": 5,
@@ -693,8 +877,61 @@
       "error_kind": "unsupported_version"
     },
     {
+      "id": "future-version-beyond-javascript-safe-integer",
+      "input": {
+        "version": 9007199254740993,
+        "name": "Conformance Garden"
+      },
+      "error_kind": "unsupported_version"
+    },
+    {
       "id": "malformed-root",
       "input": [],
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "malformed-legacy-timeline-scalar",
+      "input": {
+        "version": 1,
+        "name": "Malformed Timeline Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "timeline": [42],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "malformed-legacy-budget-scalar",
+      "input": {
+        "version": 1,
+        "name": "Malformed Budget Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "budget": [42],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "malformed-version-three-plant-scalar",
+      "input": {
+        "version": 3,
+        "name": "Malformed Plant Garden",
+        "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "layers": [],
+        "plants": [42],
+        "zones": [],
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z"
+      },
       "error_kind": "invalid_document"
     },
     {

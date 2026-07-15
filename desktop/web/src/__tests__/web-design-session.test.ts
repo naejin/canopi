@@ -349,18 +349,23 @@ describe('browser Design Session lifecycle', () => {
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: 'Small browser edit',
+      extra: {
+        future_top_level: { keep: true },
+      },
     }))
     await controller.downloadCanopi()
 
     expect(adapter.downloadCanopiFile).toHaveBeenCalledOnce()
     const [download] = vi.mocked(adapter.downloadCanopiFile).mock.calls[0]!
-    const parsed = JSON.parse(download.text) as CanopiFile
+    const parsed = JSON.parse(download.text) as Record<string, unknown>
     expect(download.fileName).toBe('Balcony Guild.canopi')
     expect(parsed.name).toBe('Balcony Guild')
     expect(parsed.description).toBe('Small browser edit')
     expect(parsed.timeline).toEqual([])
     expect(parsed.budget).toEqual([])
     expect(parsed.consortiums).toEqual([])
+    expect(parsed.future_top_level).toEqual({ keep: true })
+    expect(parsed).not.toHaveProperty('extra')
     expect(store.isDesignDirty()).toBe(false)
     expect(store.readDesignPath()).toBeNull()
   })

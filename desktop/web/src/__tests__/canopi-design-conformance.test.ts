@@ -4,6 +4,7 @@ import {
   CanopiDesignIngestionError,
   decodeCanopiDesign,
 } from '../app/contracts/design-ingestion'
+import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
 import {
   CANOPI_DESIGN_INGESTION_ERROR_KINDS,
   CURRENT_CANOPI_FILE_VERSION,
@@ -54,7 +55,7 @@ describe('shared Canopi Design conformance corpus', () => {
       const expected = corpus.accepted_documents[accepted]
       const decoded = decodeCanopiDesign(input)
       expect(decoded).toEqual(expected)
-      expect(decodeCanopiDesign(decoded)).toEqual(expected)
+      expect(decodeCanopiDesign(encodeCanopiDesign(decoded))).toEqual(expected)
       return
     }
 

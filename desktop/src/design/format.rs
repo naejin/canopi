@@ -102,6 +102,7 @@ fn decode_design_value(
         ));
     }
 
+    value["version"] = serde_json::json!(version);
     migrate_design_value(&mut value);
     migrate_legacy_object_groups(&mut value)?;
     let mut file: CanopiFile = serde_json::from_value(value).map_err(|error| {
@@ -119,8 +120,17 @@ fn normalize_loaded_extra(file: &mut CanopiFile) {
         return;
     };
     for (key, value) in nested {
+        if is_known_canopi_key(&key) {
+            continue;
+        }
         file.extra.entry(key).or_insert(value);
     }
+}
+
+fn is_known_canopi_key(key: &str) -> bool {
+    common_types::design::DESIGN_FILE_FIELDS
+        .iter()
+        .any(|field| field.key == key)
 }
 
 fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIngestionError> {
@@ -133,7 +143,15 @@ fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIng
     let Some(raw_version) = object.get("version") else {
         return Ok(MISSING_CANOPI_FILE_VERSION as u64);
     };
-    let Some(version) = raw_version.as_u64() else {
+    let version = raw_version.as_u64().or_else(|| {
+        raw_version.as_f64().and_then(|version| {
+            (version.is_finite()
+                && version.fract() == 0.0
+                && version >= MIN_SUPPORTED_CANOPI_FILE_VERSION as f64)
+                .then_some(version as u64)
+        })
+    });
+    let Some(version) = version else {
         return Err(CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidVersion,
             "$.version: expected a positive integer",
@@ -303,8 +321,11 @@ fn migrate_v3_to_v4(value: &mut serde_json::Value) {
         .and_then(|plants| plants.as_array_mut())
     {
         for plant in plants {
+            let Some(plant) = plant.as_object_mut() else {
+                continue;
+            };
             if plant.get("pinned_name").is_none() {
-                plant["pinned_name"] = serde_json::json!(false);
+                plant.insert("pinned_name".to_owned(), serde_json::json!(false));
             }
         }
     }
@@ -480,6 +501,9 @@ fn migrate_legacy_timeline_targets(value: &mut serde_json::Value) {
     };
 
     for action in timeline {
+        let Some(action) = action.as_object_mut() else {
+            continue;
+        };
         if action
             .get("targets")
             .and_then(|targets| targets.as_array())
@@ -519,7 +543,7 @@ fn migrate_legacy_timeline_targets(value: &mut serde_json::Value) {
         if targets.is_empty() {
             targets.push(manual_target());
         }
-        action["targets"] = serde_json::Value::Array(targets);
+        action.insert("targets".to_owned(), serde_json::Value::Array(targets));
     }
 }
 
@@ -532,6 +556,9 @@ fn migrate_legacy_budget_targets(value: &mut serde_json::Value) {
     };
 
     for item in budget {
+        let Some(item) = item.as_object_mut() else {
+            continue;
+        };
         if item.get("target").is_some() {
             continue;
         }
@@ -541,11 +568,12 @@ fn migrate_legacy_budget_targets(value: &mut serde_json::Value) {
             .and_then(|description| description.as_str())
             .map(str::trim)
             .unwrap_or_default();
-        item["target"] = if category == Some("plants") && !description.is_empty() {
+        let target = if category == Some("plants") && !description.is_empty() {
             species_target(description)
         } else {
             manual_target()
         };
+        item.insert("target".to_owned(), target);
     }
 }
 

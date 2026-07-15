@@ -10,6 +10,66 @@ pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 1;
 pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
 
+fn deserialize_json_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    json_u32(&value).ok_or_else(|| serde::de::Error::custom("expected an unsigned 32-bit integer"))
+}
+
+fn deserialize_optional_json_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    value
+        .as_ref()
+        .map(|value| {
+            json_u32(value)
+                .ok_or_else(|| serde::de::Error::custom("expected an unsigned 32-bit integer"))
+        })
+        .transpose()
+}
+
+fn deserialize_json_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    json_i32(&value).ok_or_else(|| serde::de::Error::custom("expected a signed 32-bit integer"))
+}
+
+fn json_u32(value: &serde_json::Value) -> Option<u32> {
+    value
+        .as_u64()
+        .and_then(|value| value.try_into().ok())
+        .or_else(|| {
+            value.as_f64().and_then(|value| {
+                (value.is_finite()
+                    && value.fract() == 0.0
+                    && value >= u32::MIN as f64
+                    && value <= u32::MAX as f64)
+                    .then_some(value as u32)
+            })
+        })
+}
+
+fn json_i32(value: &serde_json::Value) -> Option<i32> {
+    value
+        .as_i64()
+        .and_then(|value| value.try_into().ok())
+        .or_else(|| {
+            value.as_f64().and_then(|value| {
+                (value.is_finite()
+                    && value.fract() == 0.0
+                    && value >= i32::MIN as f64
+                    && value <= i32::MAX as f64)
+                    .then_some(value as i32)
+            })
+        })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CanopiDesignIngestionErrorKind {
     InvalidVersion,
@@ -154,6 +214,7 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CanopiFile {
+    #[serde(deserialize_with = "deserialize_json_u32")]
     pub version: u32,
     pub name: String,
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -263,6 +324,7 @@ struct PlacedPlantInput {
     scale: Option<f64>,
     notes: Option<String>,
     planted_date: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_json_u32")]
     quantity: Option<u32>,
 }
 
@@ -404,7 +466,9 @@ impl<'de> Deserialize<'de> for Annotation {
 pub struct Consortium {
     pub target: SpeciesPanelTarget,
     pub stratum: String,
+    #[serde(deserialize_with = "deserialize_json_u32")]
     pub start_phase: u32,
+    #[serde(deserialize_with = "deserialize_json_u32")]
     pub end_phase: u32,
 }
 
@@ -456,6 +520,7 @@ pub struct TimelineAction {
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub depends_on: Option<Vec<String>>,
     pub completed: bool,
+    #[serde(deserialize_with = "deserialize_json_i32")]
     pub order: i32,
 }
 

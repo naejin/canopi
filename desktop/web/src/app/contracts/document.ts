@@ -35,7 +35,17 @@ const SHARED_EXTRA_FIELD_OWNERS = {
 
 function normalizePersistedExtra(extra: CanopiFile['extra']): Record<string, unknown> {
   if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {}
-  return { ...extra }
+  const normalized: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(extra)) {
+    if (KNOWN_CANOPI_KEY_SET.has(key)) continue
+    Object.defineProperty(normalized, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    })
+  }
+  return normalized
 }
 
 export function extractDocumentExtra(raw: Record<string, unknown>): Record<string, unknown> {
