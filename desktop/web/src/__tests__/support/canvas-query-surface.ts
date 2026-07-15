@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
 import {
   createDefaultScenePersistedState,
+  type SceneDesignObjectSelection,
   type ScenePersistedState,
   type SceneViewportState,
 } from '../../canvas/runtime/scene'
@@ -15,6 +16,7 @@ interface TestCanvasQuerySurfaceOptions {
   readonly viewport?: SceneViewportState
   readonly plants?: readonly PlacedPlant[]
   readonly localizedNames?: ReadonlyMap<string, string | null>
+  readonly selection?: SceneDesignObjectSelection
 }
 
 export type TestCanvasQuerySurface = CanvasQuerySurface & {
@@ -23,6 +25,7 @@ export type TestCanvasQuerySurface = CanvasQuerySurface & {
   setSettled(settled: boolean): void
   setPlants(plants: readonly PlacedPlant[]): void
   setLocalizedNames(names: ReadonlyMap<string, string | null>): void
+  setSelection(selection: SceneDesignObjectSelection): void
 }
 
 export function createTestCanvasQuerySurface({
@@ -30,6 +33,7 @@ export function createTestCanvasQuerySurface({
   viewport = { x: 0, y: 0, scale: 1 },
   plants = [],
   localizedNames = new Map(),
+  selection = [],
 }: TestCanvasQuerySurfaceOptions = {}): TestCanvasQuerySurface {
   const sceneRevision = signal(0)
   const plantNamesRevision = signal(0)
@@ -46,13 +50,14 @@ export function createTestCanvasQuerySurface({
   }
   let currentPlants = [...plants]
   let currentLocalizedNames = localizedNames
+  let currentSelection = selection.map((target) => ({ ...target }))
   let settled = true
 
   return {
     revision,
     viewport: viewportSnapshot,
     getSceneSnapshot: () => scene,
-    getSelection: () => new Set(),
+    getSelection: () => currentSelection.map((target) => ({ ...target })),
     getDesignObjectSelection: () => ({
       editableTargets: [],
       lockedTargets: [],
@@ -104,6 +109,9 @@ export function createTestCanvasQuerySurface({
     },
     setLocalizedNames: (names) => {
       currentLocalizedNames = names
+    },
+    setSelection: (nextSelection) => {
+      currentSelection = nextSelection.map((target) => ({ ...target }))
     },
   }
 }

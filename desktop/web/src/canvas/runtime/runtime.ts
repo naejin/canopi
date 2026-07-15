@@ -2,7 +2,7 @@ import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
-import type { PlantSymbolId, ScenePoint } from './scene'
+import type { PlantSymbolId, SceneDesignObjectTarget, ScenePoint } from './scene'
 import type { CameraViewportSnapshot, SceneBounds } from './camera'
 import type { ScenePersistedState } from './scene'
 
@@ -13,14 +13,7 @@ export interface CanvasRuntimeDocumentMetadata {
   northBearingDeg?: number | null
 }
 
-export type CanvasDesignObjectSelectionTarget =
-  | { kind: 'plant'; id: string }
-  | { kind: 'zone'; id: string }
-  | { kind: 'annotation'; id: string }
-  | { kind: 'measurement-guide'; id: string }
-  | { kind: 'group'; id: string }
-
-export type CanvasDesignObjectSelectionMissingTarget = { kind: 'missing'; id: string }
+export type CanvasDesignObjectSelectionTarget = SceneDesignObjectTarget
 
 export type CanvasDesignObjectSelectionBlockReason =
   | 'grouped-member'
@@ -30,7 +23,7 @@ export type CanvasDesignObjectSelectionBlockReason =
   | 'missing-design-object'
 
 export interface CanvasDesignObjectSelectionBlockedTarget {
-  readonly target: CanvasDesignObjectSelectionTarget | CanvasDesignObjectSelectionMissingTarget
+  readonly target: CanvasDesignObjectSelectionTarget
   readonly reason: CanvasDesignObjectSelectionBlockReason
   readonly layerName: string | null
   readonly groupId?: string
@@ -125,7 +118,7 @@ export interface CanvasQuerySurface {
   readonly revision: CanvasQueryRevision
   readonly viewport: ReadonlySignal<CameraViewportSnapshot>
   getSceneSnapshot(): ScenePersistedState
-  getSelection(): Set<string>
+  getSelection(): SceneDesignObjectTarget[]
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel
   getSelectedPlantColorContext(): SelectedPlantColorContext
   getSelectedPlantSymbolContext(): SelectedPlantSymbolContext

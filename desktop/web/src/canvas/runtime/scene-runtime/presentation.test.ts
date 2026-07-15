@@ -161,9 +161,9 @@ describe('scene runtime presentation controller', () => {
       'Malus domestica': 'Pommier',
     })
     const { controller, sceneStore } = createController()
-    sceneStore.setSelection(['plant-1'])
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }])
     sceneStore.updateSession((session) => {
-      session.hoveredEntityId = 'plant-1'
+      session.hoveredTarget = { kind: 'plant', id: 'plant-1' }
     })
 
     await controller.refreshSpeciesCacheEntries(['Malus domestica'], 'fr')
@@ -179,10 +179,37 @@ describe('scene runtime presentation controller', () => {
     expect(snapshot).not.toHaveProperty('colorByAttr')
   })
 
+  it('does not show a transient Plant label for a mixed Design Object selection', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.setSelection([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'zone', id: 'zone-1' },
+    ])
+
+    const snapshot = controller.buildRendererSnapshot()
+
+    expect(snapshot.selectionLabelPlantIds).toEqual(new Set())
+    expect(snapshot.selectionLabels).toEqual([])
+  })
+
+  it('preserves hover kind when a Plant and Zone share the same raw id', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.updatePersisted((draft) => {
+      draft.plants[0] = { ...draft.plants[0]!, id: 'shared-id' }
+      draft.zones[0] = { ...draft.zones[0]!, name: 'shared-id' }
+    })
+    sceneStore.setHoveredTarget({ kind: 'zone', id: 'shared-id' })
+
+    const snapshot = controller.buildRendererSnapshot()
+
+    expect(snapshot.hoveredCanonicalName).toBeNull()
+    expect(snapshot.hoverTarget).toEqual({ kind: 'zone', id: 'shared-id', state: 'hover' })
+  })
+
   it('marks hovered targets with locked hover reasons for renderer cues', () => {
     const { controller, sceneStore } = createController()
     sceneStore.updateSession((session) => {
-      session.hoveredEntityId = 'zone-1'
+      session.hoveredTarget = { kind: 'zone', id: 'zone-1' }
     })
     sceneStore.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => (

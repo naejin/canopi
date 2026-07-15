@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createDefaultScenePersistedState,
   isSceneDesignObjectLocked,
+  setSceneDesignObjectLocks,
   type ScenePersistedState,
 } from './index'
 
@@ -74,10 +75,43 @@ function sceneWithGroup(): ScenePersistedState {
 }
 
 describe('scene design object locks', () => {
+  it('locks only the selected kind when Design Object identifiers collide', () => {
+    const scene = sceneWithGroup()
+    scene.plants[0]!.id = 'shared'
+    scene.zones[0]!.name = 'shared'
+    scene.annotations[0]!.id = 'shared'
+    scene.measurementGuides = [{
+      kind: 'measurement-guide',
+      id: 'shared',
+      locked: false,
+      start: { x: 0, y: 0 },
+      end: { x: 10, y: 0 },
+    }]
+    scene.groups = [{
+      kind: 'group',
+      id: 'shared',
+      locked: false,
+      name: null,
+      members: [],
+    }]
+
+    setSceneDesignObjectLocks(
+      scene,
+      [{ kind: 'zone', id: 'shared' }],
+      true,
+    )
+
+    expect(scene.plants[0]!.locked).toBe(false)
+    expect(scene.zones[0]!.locked).toBe(true)
+    expect(scene.annotations[0]!.locked).toBe(false)
+    expect(scene.measurementGuides[0]!.locked).toBe(false)
+    expect(scene.groups[0]!.locked).toBe(false)
+  })
+
   it('treats a group as unlocked when all existing members are unlocked or missing', () => {
     const scene = sceneWithGroup()
 
-    expect(isSceneDesignObjectLocked(scene, 'group-1')).toBe(false)
+    expect(isSceneDesignObjectLocked(scene, { kind: 'group', id: 'group-1' })).toBe(false)
   })
 
   it.each([
@@ -88,7 +122,7 @@ describe('scene design object locks', () => {
     const scene = sceneWithGroup()
     lockMember(scene, id)
 
-    expect(isSceneDesignObjectLocked(scene, 'group-1')).toBe(true)
+    expect(isSceneDesignObjectLocked(scene, { kind: 'group', id: 'group-1' })).toBe(true)
   })
 
   it('treats a directly locked group as locked when members are unlocked', () => {
@@ -97,7 +131,7 @@ describe('scene design object locks', () => {
       group.id === 'group-1' ? { ...group, locked: true } : group,
     )
 
-    expect(isSceneDesignObjectLocked(scene, 'group-1')).toBe(true)
+    expect(isSceneDesignObjectLocked(scene, { kind: 'group', id: 'group-1' })).toBe(true)
   })
 })
 

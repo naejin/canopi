@@ -161,7 +161,7 @@ describe('Settled Scene persistence authority', () => {
       edit.mutate((draft) => {
         draft.plantSpeciesColors['Malus domestica'] = '#aa0000'
       })
-      edit.setSelection(['plant-1'])
+      edit.setSelection([{ kind: 'plant', id: 'plant-1' }])
     })
 
     selectionFailures = 1

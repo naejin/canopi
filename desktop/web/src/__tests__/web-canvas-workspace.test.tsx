@@ -577,7 +577,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       revision: 0,
     }),
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
-    getSelection: vi.fn(() => new Set<string>()),
+    getSelection: vi.fn(() => []),
     getDesignObjectSelection: vi.fn(() => ({
       editableTargets: [],
       lockedTargets: [],

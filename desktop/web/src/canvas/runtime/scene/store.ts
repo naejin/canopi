@@ -16,6 +16,11 @@ import {
   createDefaultScenePersistedState,
   createDefaultSceneSessionState,
 } from './defaults'
+import {
+  cloneSceneDesignObjectTarget,
+  normalizeSceneDesignObjectTargets,
+  type SceneDesignObjectTarget,
+} from './design-object-targets'
 
 export class SceneStore {
   private _persisted: ScenePersistedState
@@ -65,18 +70,18 @@ export class SceneStore {
     return this
   }
 
-  setSelection(entityIds: Iterable<string>): this {
+  setSelection(targets: Iterable<SceneDesignObjectTarget>): this {
     this._session = {
       ...this._session,
-      selectedEntityIds: new Set(entityIds),
+      selectedTargets: normalizeSceneDesignObjectTargets(targets),
     }
     return this
   }
 
-  setHoveredEntityId(id: string | null): this {
+  setHoveredTarget(target: SceneDesignObjectTarget | null): this {
     this._session = {
       ...this._session,
-      hoveredEntityId: id,
+      hoveredTarget: target ? cloneSceneDesignObjectTarget(target) : null,
     }
     return this
   }
@@ -97,7 +102,7 @@ export type SceneStateReader = Pick<SceneStore, 'persisted' | 'session'>
 export type SceneDocumentReader = Pick<SceneStore, 'toCanopiFile'>
 export type SceneSessionWriter = Pick<
   SceneStore,
-  'setSelection' | 'setHoveredEntityId'
+  'setSelection' | 'setHoveredTarget'
 >
 
 export {

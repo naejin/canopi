@@ -1,6 +1,7 @@
 import { createUuid } from '../../../utils/ids'
 import type {
   SceneAnnotationEntity,
+  SceneDesignObjectTarget,
   SceneMeasurementGuideEntity,
   SceneObjectGroupEntity,
   SceneObjectGroupMember,
@@ -38,7 +39,7 @@ export interface SceneArrangementPlacementInput {
 export interface SceneArrangementPlacementReceipt {
   readonly committed: boolean
   readonly createdCount: number
-  readonly selectedTopLevelIds: ReadonlySet<string>
+  readonly selectedTopLevelTargets: readonly SceneDesignObjectTarget[]
 }
 
 export interface SceneArrangementPlacement {
@@ -57,18 +58,18 @@ export function createSceneArrangementPlacement({
   return {
     place({ template, translateBy, historyType, onCommitted }): SceneArrangementPlacementReceipt {
       let createdCount = 0
-      let selectedTopLevelIds = new Set<string>()
+      let selectedTopLevelTargets: SceneDesignObjectTarget[] = []
       const committed = sceneEdits.run(historyType, (tx) => {
         tx.mutate((draft) => {
           const placement = materializeSceneArrangement(draft, template, translateBy, createId)
           appendPlacement(draft, placement)
           createdCount = placement.createdCount
-          selectedTopLevelIds = placement.selectedTopLevelIds
+          selectedTopLevelTargets = placement.selectedTopLevelTargets
         })
-        if (selectedTopLevelIds.size > 0) tx.setSelection(selectedTopLevelIds)
+        if (selectedTopLevelTargets.length > 0) tx.setSelection(selectedTopLevelTargets)
       }, { onCommitted })
 
-      return { committed, createdCount, selectedTopLevelIds }
+      return { committed, createdCount, selectedTopLevelTargets }
     },
   }
 }
@@ -79,7 +80,7 @@ interface MaterializedSceneArrangement {
   readonly annotations: SceneAnnotationEntity[]
   readonly measurementGuides: SceneMeasurementGuideEntity[]
   readonly groups: SceneObjectGroupEntity[]
-  readonly selectedTopLevelIds: Set<string>
+  readonly selectedTopLevelTargets: SceneDesignObjectTarget[]
   readonly createdCount: number
 }
 
@@ -156,9 +157,14 @@ function materializeSceneArrangement(
     })
     .filter((group): group is SceneObjectGroupEntity => group !== null)
 
-  const selectedTopLevelIds = new Set(groups.map((group) => group.id))
-  addUngroupedSelection(selectedTopLevelIds, groupedMemberKeys, plants, zones, annotations)
-  for (const guide of measurementGuides) selectedTopLevelIds.add(guide.id)
+  const selectedTopLevelTargets: SceneDesignObjectTarget[] = groups.map((group) => ({
+    kind: 'group',
+    id: group.id,
+  }))
+  addUngroupedSelection(selectedTopLevelTargets, groupedMemberKeys, plants, zones, annotations)
+  for (const guide of measurementGuides) {
+    selectedTopLevelTargets.push({ kind: 'measurement-guide', id: guide.id })
+  }
 
   return {
     plants,
@@ -166,7 +172,7 @@ function materializeSceneArrangement(
     annotations,
     measurementGuides,
     groups,
-    selectedTopLevelIds,
+    selectedTopLevelTargets,
     createdCount: plants.length + zones.length + annotations.length + measurementGuides.length + groups.length,
   }
 }
@@ -180,7 +186,7 @@ function appendPlacement(draft: ScenePersistedState, placement: MaterializedScen
 }
 
 function addUngroupedSelection(
-  selection: Set<string>,
+  selection: SceneDesignObjectTarget[],
   groupedMemberKeys: ReadonlySet<string>,
   plants: readonly ScenePlantEntity[],
   zones: readonly SceneZoneEntity[],
@@ -188,17 +194,17 @@ function addUngroupedSelection(
 ): void {
   for (const plant of plants) {
     if (!groupedMemberKeys.has(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }))) {
-      selection.add(plant.id)
+      selection.push({ kind: 'plant', id: plant.id })
     }
   }
   for (const zone of zones) {
     if (!groupedMemberKeys.has(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }))) {
-      selection.add(zone.name)
+      selection.push({ kind: 'zone', id: zone.name })
     }
   }
   for (const annotation of annotations) {
     if (!groupedMemberKeys.has(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }))) {
-      selection.add(annotation.id)
+      selection.push({ kind: 'annotation', id: annotation.id })
     }
   }
 }

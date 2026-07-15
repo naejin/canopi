@@ -1,4 +1,9 @@
-import type { ScenePersistedState } from './scene'
+import {
+  normalizeSceneDesignObjectTargets,
+  sceneDesignObjectTargetsEqual,
+  type SceneDesignObjectTarget,
+  type ScenePersistedState,
+} from './scene'
 
 export type SceneDiffKind =
   | 'layers'
@@ -25,12 +30,12 @@ type PersistedPatchKey =
 
 export interface SceneCommandSnapshot {
   persisted: ScenePersistedState
-  selectedEntityIds: ReadonlySet<string>
+  selectedTargets: readonly SceneDesignObjectTarget[]
 }
 
 export interface SceneCommandPatch {
   readonly persisted?: Partial<ScenePersistedState>
-  readonly selection?: readonly string[]
+  readonly selection?: readonly SceneDesignObjectTarget[]
 }
 
 export interface SceneCommand {
@@ -84,9 +89,9 @@ export function createScenePatchCommand(
     diffs.add(DIFF_BY_KEY[key])
   }
 
-  const beforeSelection = [...before.selectedEntityIds].sort()
-  const afterSelection = [...after.selectedEntityIds].sort()
-  if (stableStringify(beforeSelection) !== stableStringify(afterSelection)) {
+  const beforeSelection = normalizeSceneDesignObjectTargets(before.selectedTargets)
+  const afterSelection = normalizeSceneDesignObjectTargets(after.selectedTargets)
+  if (!sceneDesignObjectTargetsEqual(beforeSelection, afterSelection)) {
     beforePatch.selection = beforeSelection
     afterPatch.selection = afterSelection
     diffs.add('selection')
@@ -104,7 +109,7 @@ export function createScenePatchCommand(
 
 interface MutableSceneCommandPatch {
   persisted?: Partial<ScenePersistedState>
-  selection?: string[]
+  selection?: SceneDesignObjectTarget[]
 }
 
 export function applySceneCommandPersistedPatch(

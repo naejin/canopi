@@ -142,12 +142,36 @@ describe('Scene Interaction tool module boundaries', () => {
       storeSource.indexOf('\n\nexport {'),
     )
     expect(sessionWriterSource).toContain(
-      "'setSelection' | 'setHoveredEntityId'",
+      "'setSelection' | 'setHoveredTarget'",
     )
     expect(sessionWriterSource).not.toContain('setViewport')
     expect(sessionWriterSource).not.toContain('updateSession')
-    expect(runtimeSource).toContain('this._sceneSession.setHoveredEntityId(id)')
+    expect(runtimeSource).toContain('this._sceneSession.setHoveredTarget(target)')
     expect(runtimeSource).not.toContain('this._sceneSession.updateSession(')
+  })
+
+  it('keeps typed Scene identity across production session and interaction boundaries', () => {
+    const forbiddenRawIdentityNames = [
+      'selectedEntityIds',
+      'hoveredEntityId',
+      'setHoveredEntityId',
+      'getLockedSceneDesignObjectIds',
+      'selectedTopLevelIds',
+    ]
+
+    const typedIdentitySources = [
+      ...runtimeModuleSources(),
+      {
+        name: '../canvas/runtime/scene-interaction.ts',
+        source: readSource('../canvas/runtime/scene-interaction.ts'),
+      },
+    ]
+
+    for (const { name, source } of typedIdentitySources) {
+      for (const forbidden of forbiddenRawIdentityNames) {
+        expect(source, name).not.toContain(forbidden)
+      }
+    }
   })
 
   it('separates Scene history commands from persistence authority', () => {

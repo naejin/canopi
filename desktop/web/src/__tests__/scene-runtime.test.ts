@@ -211,7 +211,7 @@ describe('Canvas runtime surfaces', () => {
         { x: 11, y: 20 },
         { x: 3, y: 2 },
       ])
-      expect(queries.getSelection()).toEqual(new Set([scene.zones[1]!.name]))
+      expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[1]!.name }])
 
       commands.sceneEdits.duplicateSelected()
 
@@ -229,7 +229,7 @@ describe('Canvas runtime surfaces', () => {
         { x: 100, y: 50 },
         { x: 3, y: 2 },
       ])
-      expect(queries.getSelection()).toEqual(new Set([scene.zones[3]!.name]))
+      expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[3]!.name }])
 
       commands.history.undo()
       expect(queries.getSceneSnapshot().zones).toHaveLength(3)
@@ -382,7 +382,10 @@ describe('Canvas runtime surfaces', () => {
         })
 
         commands.sceneEdits.selectAll()
-        expect(queries.getSelection()).toEqual(new Set(['plant-3', 'group-1']))
+        expect(queries.getSelection()).toEqual([
+          { kind: 'plant', id: 'plant-3' },
+          { kind: 'group', id: 'group-1' },
+        ])
         if (placementCommand === 'duplicateSelected') {
           commands.sceneEdits.duplicateSelected()
         } else {
@@ -399,7 +402,10 @@ describe('Canvas runtime surfaces', () => {
           && !clonedMemberIds.has(plant.id)
         ))!
 
-        expect(queries.getSelection()).toEqual(new Set([clonedGroup.id, clonedUngroupedPlant.id]))
+        expect(queries.getSelection()).toEqual([
+          { kind: 'group', id: clonedGroup.id },
+          { kind: 'plant', id: clonedUngroupedPlant.id },
+        ])
       } finally {
         host.destroy()
       }
@@ -640,11 +646,14 @@ describe('Canvas runtime surfaces', () => {
       selectedObjectIds.value = new Set(['mirror-only'])
 
       commands.sceneEdits.selectAll()
-      expect(queries.getSelection()).toEqual(new Set(['plant-1', 'plant-2']))
+      expect(queries.getSelection()).toEqual([
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'plant', id: 'plant-2' },
+      ])
       expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
 
       commands.sceneEdits.deleteSelected()
-      expect(queries.getSelection().size).toBe(0)
+      expect(queries.getSelection()).toEqual([])
       expect(selectedObjectIds.value.size).toBe(0)
     } finally {
       host.destroy()

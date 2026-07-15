@@ -11,15 +11,15 @@ import {
   type CanvasSpeciesPresentationCache,
 } from '../presentation-data'
 import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
-import type { ScenePersistedState, SceneStateReader, SceneViewportState } from '../scene'
+import type {
+  SceneDesignObjectTarget,
+  ScenePersistedState,
+  SceneStateReader,
+  SceneViewportState,
+} from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
 import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene'
-import {
-  getSelectedAnnotationIds,
-  getSelectedMeasurementGuideIds,
-  getSelectedPlantIds,
-  getSelectedZoneIds,
-} from './selection'
+import { projectSceneSelectionEntityIds } from './selection'
 
 interface SceneRuntimePresentationControllerOptions {
   sceneStore: SceneStateReader
@@ -97,8 +97,8 @@ export class SceneRuntimePresentationController {
   buildRendererSnapshot(): SceneRendererSnapshot {
     const scene = this._sceneStore.persisted
     const session = this._sceneStore.session
-    const hoveredPlant = session.hoveredEntityId
-      ? scene.plants.find((plant) => plant.id === session.hoveredEntityId)
+    const hoveredPlant = session.hoveredTarget?.kind === 'plant'
+      ? scene.plants.find((plant) => plant.id === session.hoveredTarget?.id)
       : null
     const highlightedTargets = this._resolveHighlightedTargets(scene)
     const localizedCommonNames = this.getLocalizedCommonNames()
@@ -109,21 +109,23 @@ export class SceneRuntimePresentationController {
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames,
     }
+    const selectionLabelPlantIds = session.selectedTargets.length === 1
+      && session.selectedTargets[0]?.kind === 'plant'
+      ? new Set([session.selectedTargets[0].id])
+      : new Set<string>()
+    const selectionProjection = projectSceneSelectionEntityIds(scene, session.selectedTargets)
 
     return {
       scene,
       viewport,
-      selectedEntityIds: session.selectedEntityIds,
-      selectedPlantIds: getSelectedPlantIds(scene, session.selectedEntityIds),
-      selectedZoneIds: getSelectedZoneIds(scene, session.selectedEntityIds),
-      selectedAnnotationIds: getSelectedAnnotationIds(scene, session.selectedEntityIds),
-      selectedMeasurementGuideIds: getSelectedMeasurementGuideIds(scene, session.selectedEntityIds),
+      selectionLabelPlantIds,
+      ...selectionProjection,
       highlightedPlantIds: new Set(highlightedTargets.plantIds),
       highlightedZoneIds: new Set(highlightedTargets.zoneIds),
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
-      hoverTarget: getRendererHoverTarget(scene, session.hoveredEntityId),
+      hoverTarget: getRendererHoverTarget(scene, session.hoveredTarget),
       pinnedPlantNameLabels: computePinnedPlantNameLabels(
         scene.plants,
         viewport,
@@ -132,7 +134,7 @@ export class SceneRuntimePresentationController {
       ),
       selectionLabels: computeSelectionLabels(
         scene.plants,
-        session.selectedEntityIds,
+        selectionLabelPlantIds,
         viewport,
         localizedCommonNames,
         { plantContext },
@@ -249,31 +251,29 @@ export class SceneRuntimePresentationController {
 
 function getRendererHoverTarget(
   scene: ScenePersistedState,
-  hoveredId: string | null,
+  target: SceneDesignObjectTarget | null,
 ): SceneRendererHoverTarget | null {
-  if (!hoveredId) return null
-
-  const target = resolveHoverTarget(scene, hoveredId)
-  if (!target) return null
+  if (!target || !containsHoverTarget(scene, target)) return null
   const layerLocked = isHoverTargetLayerLocked(scene, target)
   const state = layerLocked
     ? 'locked-layer'
-    : isSceneDesignObjectLocked(scene, target.id)
+    : isSceneDesignObjectLocked(scene, target)
       ? 'locked-design-object'
       : 'hover'
   return { ...target, state }
 }
 
-function resolveHoverTarget(
+function containsHoverTarget(
   scene: ScenePersistedState,
-  id: string,
-): Omit<SceneRendererHoverTarget, 'state'> | null {
-  if (scene.groups.some((group) => group.id === id)) return { kind: 'group', id }
-  if (scene.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
-  if (scene.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
-  if (scene.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
-  if (scene.measurementGuides.some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
-  return null
+  target: SceneDesignObjectTarget,
+): boolean {
+  if (target.kind === 'group') return scene.groups.some((group) => group.id === target.id)
+  if (target.kind === 'plant') return scene.plants.some((plant) => plant.id === target.id)
+  if (target.kind === 'zone') return scene.zones.some((zone) => zone.name === target.id)
+  if (target.kind === 'annotation') {
+    return scene.annotations.some((annotation) => annotation.id === target.id)
+  }
+  return scene.measurementGuides.some((guide) => guide.id === target.id)
 }
 
 function isHoverTargetLayerLocked(

@@ -139,7 +139,7 @@ function createRuntime(
       revision: 0,
     }),
     getSceneSnapshot: () => scene,
-    getSelection: () => new Set(),
+    getSelection: () => [],
     getDesignObjectSelection: () => ({
       editableTargets: [],
       lockedTargets: [],

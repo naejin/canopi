@@ -1,6 +1,6 @@
 import { computeSelectionRect } from '../../operations'
 import type { CameraController } from '../camera'
-import type { ScenePoint, SceneStateReader } from '../scene'
+import type { SceneDesignObjectSelection, ScenePoint, SceneStateReader } from '../scene'
 import { isSceneObjectGroupMemberTarget } from '../scene'
 import type {
   SceneEditCoordinator,
@@ -46,7 +46,7 @@ export interface ZoneDrawingToolContext {
   readonly preview: HTMLDivElement
   readonly camera: CameraController
   readonly getSceneStore: () => SceneStateReader
-  readonly getSelection: () => ReadonlySet<string>
+  readonly getSelection: () => SceneDesignObjectSelection
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void
@@ -141,7 +141,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       drag.transaction.mutate((draft) => {
         zoneName = appendLineZoneToDraft(draft, drag.startWorld, endWorld)
       })
-      if (zoneName) drag.transaction.setSelection([zoneName])
+      if (zoneName) drag.transaction.setSelection([{ kind: 'zone', id: zoneName }])
       drag.transaction.commit()
       activeDrag = null
       return
@@ -159,7 +159,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
         ? appendRectangleZoneToDraft(draft, rect)
         : appendEllipseZoneToDraft(draft, rect)
     })
-    if (zoneName) drag.transaction.setSelection([zoneName])
+    if (zoneName) drag.transaction.setSelection([{ kind: 'zone', id: zoneName }])
     drag.transaction.commit()
     activeDrag = null
   }
@@ -186,7 +186,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       return
     }
 
-    if (polygonDraftVertices.length === 0 && context.getSelection().size > 0) {
+    if (polygonDraftVertices.length === 0 && context.getSelection().length > 0) {
       context.clearSelection()
       context.render('scene')
     }
@@ -245,7 +245,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       tx.mutate((draft) => {
         zoneName = appendPolygonZoneToDraft(draft, polygonDraftVertices)
       })
-      if (zoneName) tx.setSelection([zoneName])
+      if (zoneName) tx.setSelection([{ kind: 'zone', id: zoneName }])
     }, {
       onCommitted: () => {
         cancelPolygonDraft()
@@ -365,7 +365,12 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       return
     }
 
-    const selectedId = selection[0]!
+    const selectedTarget = selection[0]!
+    if (selectedTarget.kind !== 'zone') {
+      zoneMeasurements.hide()
+      return
+    }
+    const selectedId = selectedTarget.id
     const scene = context.getSceneStore().persisted
     const zonesLayer = scene.layers.find((entry) => entry.name === 'zones')
     if (zonesLayer?.visible === false) {
@@ -373,8 +378,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       return
     }
     if (scene.groups.some((group) =>
-      group.id === selectedId
-      || group.members.some((member) =>
+      group.members.some((member) =>
         isSceneObjectGroupMemberTarget(member, { kind: 'zone', id: selectedId }),
       ),
     )) {

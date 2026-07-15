@@ -1,12 +1,13 @@
 import { t } from '../../../i18n'
+import type { SceneDesignObjectTarget } from '../scene'
 
 interface LockedObjectAffordanceOptions {
   readonly container: HTMLElement
-  readonly onUnlock: (id: string) => void
+  readonly onUnlock: (target: SceneDesignObjectTarget) => void
 }
 
 interface LockedObjectAffordanceView {
-  readonly id: string
+  readonly target: SceneDesignObjectTarget
   readonly screenX: number
   readonly screenY: number
 }
@@ -24,6 +25,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 export function createLockedObjectAffordance(
   options: LockedObjectAffordanceOptions,
 ): LockedObjectAffordanceController {
+  let activeTarget: SceneDesignObjectTarget | null = null
   const root = document.createElement('div')
   root.dataset.lockedObjectAffordance = 'true'
   root.style.cssText = [
@@ -95,15 +97,13 @@ export function createLockedObjectAffordance(
   })
   unlockButton.addEventListener('click', (event) => {
     event.stopPropagation()
-    const id = root.dataset.lockedObjectId
-    if (id) options.onUnlock(id)
+    if (activeTarget) options.onUnlock(activeTarget)
   })
   unlockButton.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
     event.stopPropagation()
-    const id = root.dataset.lockedObjectId
-    if (id) options.onUnlock(id)
+    if (activeTarget) options.onUnlock(activeTarget)
   })
 
   root.replaceChildren(status, unlockButton)
@@ -124,7 +124,9 @@ export function createLockedObjectAffordance(
   return {
     show(view) {
       refreshLabels()
-      root.dataset.lockedObjectId = view.id
+      activeTarget = { ...view.target }
+      root.dataset.lockedObjectId = view.target.id
+      root.dataset.lockedObjectKind = view.target.kind
       root.style.display = 'inline-flex'
       const x = clamp(view.screenX + OFFSET_PX, 0, Math.max(0, options.container.clientWidth - root.offsetWidth))
       const y = clamp(view.screenY + OFFSET_PX, 0, Math.max(0, options.container.clientHeight - root.offsetHeight))
@@ -132,8 +134,10 @@ export function createLockedObjectAffordance(
       root.style.top = `${y}px`
     },
     hide() {
+      activeTarget = null
       root.style.display = 'none'
       delete root.dataset.lockedObjectId
+      delete root.dataset.lockedObjectKind
     },
     contains(target) {
       return target instanceof Node && root.contains(target)

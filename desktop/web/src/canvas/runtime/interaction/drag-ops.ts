@@ -1,5 +1,7 @@
 import {
   resolveSceneObjectGroupMembers,
+  sceneTargetKey,
+  type SceneDesignObjectSelection,
   type SceneMeasurementGuideEntity,
   type ScenePersistedState,
   type ScenePoint,
@@ -33,30 +35,31 @@ export function resetSceneDragState(state: SceneDragState): void {
 export function captureSceneDragState(
   state: SceneDragState,
   scene: ScenePersistedState,
-  selection: ReadonlySet<string>,
+  selection: SceneDesignObjectSelection,
 ): void {
   resetSceneDragState(state)
+  const selectionKeys = new Set(selection.map(sceneTargetKey))
 
   for (const plant of scene.plants) {
-    if (selection.has(plant.id)) {
+    if (selectionKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) {
       state.plantStarts.set(plant.id, { ...plant.position })
     }
   }
 
   for (const zone of scene.zones) {
-    if (selection.has(zone.name)) {
+    if (selectionKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))) {
       state.zoneStarts.set(zone.name, zone.points.map((point) => ({ ...point })))
     }
   }
 
   for (const annotation of scene.annotations) {
-    if (selection.has(annotation.id)) {
+    if (selectionKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) {
       state.annotationStarts.set(annotation.id, { ...annotation.position })
     }
   }
 
   for (const guide of scene.measurementGuides) {
-    if (selection.has(guide.id)) {
+    if (selectionKeys.has(sceneTargetKey({ kind: 'measurement-guide', id: guide.id }))) {
       state.measurementGuideStarts.set(guide.id, {
         start: { ...guide.start },
         end: { ...guide.end },
@@ -65,7 +68,7 @@ export function captureSceneDragState(
   }
 
   for (const group of scene.groups) {
-    if (!selection.has(group.id)) continue
+    if (!selectionKeys.has(sceneTargetKey({ kind: 'group', id: group.id }))) continue
     for (const member of resolveSceneObjectGroupMembers(scene, group)) {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant) state.plantStarts.set(plant.id, { ...plant.position })

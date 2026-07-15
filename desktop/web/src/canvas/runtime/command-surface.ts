@@ -189,7 +189,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       const viewportScale = this.options.camera.viewport.scale
       const selection = getDesignObjectSelectionModel(
         scene,
-        this.options.sceneStore.session.selectedEntityIds,
+        this.options.sceneStore.session.selectedTargets,
         {
           annotationViewportScale: viewportScale,
           plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),

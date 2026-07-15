@@ -40,7 +40,7 @@ function createRuntime(): CanvasQuerySurface {
       revision: 0,
     }),
     getSceneSnapshot: () => createDefaultScenePersistedState(),
-    getSelection: () => new Set(),
+    getSelection: () => [],
     getDesignObjectSelection: () => ({
       editableTargets: [],
       lockedTargets: [],

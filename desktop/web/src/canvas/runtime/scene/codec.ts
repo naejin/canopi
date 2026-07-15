@@ -20,6 +20,10 @@ import type {
   SceneSessionState,
   SceneZoneEntity,
 } from './types'
+import {
+  cloneSceneDesignObjectTarget,
+  normalizeSceneDesignObjectTargets,
+} from './design-object-targets'
 import { cloneSceneObjectGroupMembers } from './group-members'
 
 export interface SceneSerializeOptions {
@@ -88,7 +92,10 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
 export function cloneSceneSessionState(state: SceneSessionState): SceneSessionState {
   return {
     ...state,
-    selectedEntityIds: new Set(state.selectedEntityIds),
+    selectedTargets: normalizeSceneDesignObjectTargets(state.selectedTargets),
+    hoveredTarget: state.hoveredTarget
+      ? cloneSceneDesignObjectTarget(state.hoveredTarget)
+      : null,
   }
 }
 

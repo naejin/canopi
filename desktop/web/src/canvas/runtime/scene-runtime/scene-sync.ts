@@ -50,6 +50,6 @@ export function syncCanvasSignalsFromScene(
 ): void {
   syncCanvasSignalsFromPersistedScene(sceneStore, layerProjections)
   batch(() => {
-    setCanvasSelection(sceneStore.session.selectedEntityIds)
+    setCanvasSelection(sceneStore.session.selectedTargets.map((target) => target.id))
   })
 }

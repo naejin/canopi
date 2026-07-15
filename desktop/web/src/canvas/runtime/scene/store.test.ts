@@ -37,16 +37,39 @@ describe('scene store', () => {
     let mutateEscapedSelection = (): void => {}
 
     store.updateSession((draft) => {
-      const selectedEntityIds = new Set(['plant-1'])
-      draft.selectedEntityIds = selectedEntityIds
+      const selectedTargets = [{ kind: 'plant' as const, id: 'plant-1' }]
+      draft.selectedTargets = selectedTargets
       mutateEscapedSelection = () => {
-        selectedEntityIds.add('plant-2')
+        selectedTargets.push({ kind: 'plant', id: 'plant-2' })
       }
     })
 
     mutateEscapedSelection()
 
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
+  })
+
+  it('owns typed selection targets and preserves first-seen typed order', () => {
+    const store = new SceneStore()
+    const plantTarget = { kind: 'plant' as const, id: 'shared-id' }
+    const zoneTarget = { kind: 'zone' as const, id: 'shared-id' }
+
+    store.setSelection([
+      plantTarget,
+      zoneTarget,
+      { kind: 'plant', id: 'shared-id' },
+    ])
+    plantTarget.id = 'mutated-input'
+    zoneTarget.id = 'mutated-input'
+
+    const escapedSnapshot = store.session.selectedTargets
+    ;(escapedSnapshot[0] as { id: string }).id = 'mutated-snapshot'
+    ;(escapedSnapshot[1] as { id: string }).id = 'mutated-snapshot'
+
+    expect(store.session.selectedTargets).toEqual([
+      { kind: 'plant', id: 'shared-id' },
+      { kind: 'zone', id: 'shared-id' },
+    ])
   })
 
   it('hydrates and serializes CanopiFile data without crossing the session boundary', () => {
@@ -129,10 +152,10 @@ describe('scene store', () => {
     }
 
     const store = SceneStore.fromCanopi(file, {
-      selectedEntityIds: new Set(['plant-1']),
+      selectedTargets: [{ kind: 'plant', id: 'plant-1' }],
     })
 
-    expect(store.session.selectedEntityIds.has('plant-1')).toBe(true)
+    expect(store.session.selectedTargets).toContainEqual({ kind: 'plant', id: 'plant-1' })
     expect(store.session).not.toHaveProperty('activeEntityId')
     expect(store.session).not.toHaveProperty('activeLayerName')
     expect(store.persisted.plants[0]).toMatchObject({
@@ -142,11 +165,11 @@ describe('scene store', () => {
     })
 
     store.updateSession((draft) => {
-      draft.hoveredEntityId = 'zone-a'
+      draft.hoveredTarget = { kind: 'zone', id: 'zone-a' }
       draft.documentRevision = 3
     })
 
-    expect(store.session.hoveredEntityId).toBe('zone-a')
+    expect(store.session.hoveredTarget).toEqual({ kind: 'zone', id: 'zone-a' })
     expect(store.session.documentRevision).toBe(3)
 
     // toCanopiFile serializes canvas-entity fields; non-canvas sections
@@ -192,7 +215,7 @@ describe('scene store', () => {
     ])
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
-    expect(session.selectedEntityIds.size).toBe(0)
+    expect(session.selectedTargets).toEqual([])
     expect(session).not.toHaveProperty('activeEntityId')
     expect(session).not.toHaveProperty('activeLayerName')
     expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(5)

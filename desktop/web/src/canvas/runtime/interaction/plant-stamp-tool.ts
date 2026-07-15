@@ -27,7 +27,7 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
       tx.mutate((draft) => {
         placedPlantId = appendPlantStampSourceToDraft(draft, source, context.applySnapping(world))
       })
-      if (placedPlantId) tx.setSelection([placedPlantId])
+      if (placedPlantId) tx.setSelection([{ kind: 'plant', id: placedPlantId }])
     })
   }
 

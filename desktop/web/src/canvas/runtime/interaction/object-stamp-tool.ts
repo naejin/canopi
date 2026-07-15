@@ -111,7 +111,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
       context.getSpeciesCache(),
       context.getPlantPresentationContext,
     )
-    if (!hit || isSceneDesignObjectLocked(scene, hit.id)) return
+    if (!hit || isSceneDesignObjectLocked(scene, hit)) return
 
     if (hit.kind === 'plant') {
       const plant = scene.plants.find((entry) => entry.id === hit.id)
@@ -187,7 +187,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
 
   function canUseObjectStampSource(source: ObjectStampSource): boolean {
     const scene = context.getSceneStore().persisted
-    if (isSceneDesignObjectLocked(scene, source.sourceId)) return false
+    if (isSceneDesignObjectLocked(scene, { kind: source.kind, id: source.sourceId })) return false
     if (source.kind === 'plant') {
       const layer = scene.layers.find((entry) => entry.name === 'plants')
       return layer?.visible !== false && layer?.locked !== true

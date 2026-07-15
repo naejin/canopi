@@ -1,3 +1,9 @@
+import type {
+  SceneConcreteDesignObjectTarget,
+  SceneDesignObjectSelection,
+  SceneDesignObjectTarget,
+} from './design-object-targets'
+
 export const SCENE_LAYER_NAMES = [
   'base',
   'contours',
@@ -74,10 +80,7 @@ export interface SceneMeasurementGuideEntity {
   end: ScenePoint
 }
 
-export type SceneObjectGroupMember =
-  | { kind: 'plant'; id: string }
-  | { kind: 'zone'; id: string }
-  | { kind: 'annotation'; id: string }
+export type SceneObjectGroupMember = SceneConcreteDesignObjectTarget
 
 export interface SceneObjectGroupEntity {
   kind: 'group'
@@ -112,7 +115,7 @@ export interface SceneViewportState {
 }
 
 export interface SceneSessionState {
-  selectedEntityIds: ReadonlySet<string>
-  hoveredEntityId: string | null
+  selectedTargets: SceneDesignObjectSelection
+  hoveredTarget: SceneDesignObjectTarget | null
   documentRevision: number
 }

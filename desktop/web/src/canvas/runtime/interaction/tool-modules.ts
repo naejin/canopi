@@ -3,6 +3,7 @@ import type {
   PlantPresentationContext,
 } from '../plant-presentation'
 import type {
+  SceneDesignObjectSelection,
   ScenePoint,
   SceneStateReader,
 } from '../scene'
@@ -50,7 +51,7 @@ export interface SceneToolRegistryContext {
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   readonly readPlantSpacingIntervalMeters: () => number
   readonly commitPlantSpacingIntervalMeters: (meters: number) => void
-  readonly getSelection: () => ReadonlySet<string>
+  readonly getSelection: () => SceneDesignObjectSelection
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void

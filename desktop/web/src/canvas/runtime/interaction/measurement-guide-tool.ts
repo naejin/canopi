@@ -90,7 +90,7 @@ export function createMeasurementGuideTool(
     draft.transaction.mutate((sceneDraft) => {
       guideId = appendMeasurementGuideToDraft(sceneDraft, draft.startWorld, endWorld)
     })
-    if (guideId) draft.transaction.setSelection([guideId])
+    if (guideId) draft.transaction.setSelection([{ kind: 'measurement-guide', id: guideId }])
     draft.transaction.commit()
     activeDraft = null
     measurements.hide()

@@ -1,6 +1,7 @@
 export * from './types'
 export * from './defaults'
 export * from './codec'
+export * from './design-object-targets'
 export * from './group-members'
 export * from './plant-symbols'
 export * from './locks'

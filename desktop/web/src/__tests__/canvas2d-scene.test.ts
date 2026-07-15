@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
 import { createCanvas2DSceneRenderer, renderCanvas2DSceneSnapshot } from '../canvas/runtime/renderers/canvas2d-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
+import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
+import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 describe('createCanvas2DSceneRenderer', () => {
   afterEach(() => {
@@ -193,9 +195,10 @@ describe('createCanvas2DSceneRenderer', () => {
         fillColor: null,
         notes: null,
       }],
-      selectedEntityIds: new Set(['plant-1', 'zone-1']),
-      selectedPlantIds: new Set(['plant-1']),
-      selectedZoneIds: new Set(['zone-1']),
+      selectedTargets: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'zone', id: 'zone-1' },
+      ],
       selectionLabels: [{
         canonicalName: 'Malus domestica',
         text: 'Apple',
@@ -267,7 +270,7 @@ describe('createCanvas2DSceneRenderer', () => {
         guides: [],
       },
       viewport: { x: 10, y: 20, scale: 2 },
-      selectedEntityIds: new Set<string>(),
+      selectionLabelPlantIds: new Set<string>(),
       selectedPlantIds: new Set<string>(),
       selectedZoneIds: new Set<string>(),
       selectedAnnotationIds: new Set<string>(),
@@ -371,12 +374,10 @@ function createRendererSnapshot(overrides: {
   layers?: SceneRendererSnapshot['scene']['layers']
   plantSpeciesSymbols?: Record<string, string>
   viewport?: SceneRendererSnapshot['viewport']
-  selectedEntityIds?: SceneRendererSnapshot['selectedEntityIds']
-  selectedPlantIds?: SceneRendererSnapshot['selectedPlantIds']
-  selectedZoneIds?: SceneRendererSnapshot['selectedZoneIds']
+  selectedTargets?: SceneDesignObjectSelection
   selectionLabels?: SceneRendererSnapshot['selectionLabels']
 } = {}): SceneRendererSnapshot {
-  return {
+  return createTestSceneRendererSnapshot({
     scene: {
       plants: overrides.plants ?? [],
       zones: overrides.zones ?? [],
@@ -389,20 +390,9 @@ function createRendererSnapshot(overrides: {
       guides: [],
     },
     viewport: overrides.viewport ?? { x: 10, y: 20, scale: 2 },
-    selectedEntityIds: overrides.selectedEntityIds ?? new Set<string>(),
-    selectedPlantIds: overrides.selectedPlantIds ?? new Set<string>(),
-    selectedZoneIds: overrides.selectedZoneIds ?? new Set<string>(),
-    selectedAnnotationIds: new Set<string>(),
-    selectedMeasurementGuideIds: new Set<string>(),
-    highlightedPlantIds: new Set<string>(),
-    highlightedZoneIds: new Set<string>(),
-    localizedCommonNames: new Map(),
-    hoveredCanonicalName: null,
-    hoverTarget: null,
-    pinnedPlantNameLabels: [],
+    selectedTargets: overrides.selectedTargets,
     selectionLabels: overrides.selectionLabels ?? [],
-    speciesCache: new Map(),
-  }
+  })
 }
 
 function createPlant(

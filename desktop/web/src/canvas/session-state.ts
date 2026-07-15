@@ -21,10 +21,14 @@ export function getCanvasSelection(): Set<string> {
   return new Set(selectedObjectIds.value)
 }
 
-export function setCanvasSelection(ids: Iterable<string>): void {
+export function setCanvasSelection(
+  ids: Iterable<string>,
+  options: { readonly publishIfUnchanged?: boolean } = {},
+): void {
   const next = new Set(ids)
   const current = selectedObjectIds.value
-  if (next.size === current.size && [...next].every((id) => current.has(id))) return
+  const unchanged = next.size === current.size && [...next].every((id) => current.has(id))
+  if (unchanged && !options.publishIfUnchanged) return
   selectedObjectIds.value = next
 }
 

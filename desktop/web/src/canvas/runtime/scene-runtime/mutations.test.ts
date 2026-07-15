@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { CanopiFile } from '../../../types/design'
-import { resolvePlantSymbolForPlant, SceneStore } from '../scene'
+import {
+  resolvePlantSymbolForPlant,
+  SceneStore,
+  type SceneDesignObjectTarget,
+} from '../scene'
 import { SceneHistory } from '../scene-history'
 import { SceneRuntimeMutationController } from './mutations'
 import { SceneRuntimeEditCoordinator } from './transactions'
@@ -92,8 +96,8 @@ function createController(file = makeFile()) {
     dirtyTypes: [] as string[],
     plantSpeciesColorSyncs: 0,
   }
-  const setSelection = (ids: Iterable<string>) => {
-    sceneStore.setSelection(ids)
+  const setSelection = (targets: Iterable<SceneDesignObjectTarget>) => {
+    sceneStore.setSelection(targets)
   }
   const history = new SceneHistory()
   const record = history.record.bind(history)
@@ -140,6 +144,55 @@ function createController(file = makeFile()) {
 }
 
 describe('scene runtime mutation controller', () => {
+  it('locks only the typed selected Design Object when raw ids collide', () => {
+    const file = makeFile()
+    file.plants = file.plants.map((plant, index) =>
+      index === 0 ? { ...plant, id: 'shared-id' } : plant,
+    )
+    file.zones = file.zones.map((zone, index) =>
+      index === 0 ? { ...zone, name: 'shared-id' } : zone,
+    )
+    const { controller, sceneStore } = createController(file)
+    sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
+
+    controller.lockSelected()
+
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'shared-id')?.locked).toBe(false)
+    expect(sceneStore.persisted.zones.find((zone) => zone.name === 'shared-id')?.locked).toBe(true)
+    expect(sceneStore.session.selectedTargets).toEqual([])
+  })
+
+  it('deletes only the typed selected Design Object when raw ids collide', () => {
+    const file = makeFile()
+    file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    const { controller, sceneStore } = createController(file)
+    sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
+
+    controller.deleteSelected()
+
+    expect(sceneStore.persisted.plants.some((plant) => plant.id === 'shared-id')).toBe(true)
+    expect(sceneStore.persisted.zones.some((zone) => zone.name === 'shared-id')).toBe(false)
+    expect(sceneStore.session.selectedTargets).toEqual([])
+  })
+
+  it('duplicates only the typed selected Design Object when raw ids collide', () => {
+    const file = makeFile()
+    file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    const { controller, sceneStore } = createController(file)
+    sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
+
+    controller.duplicateSelected()
+
+    expect(sceneStore.persisted.plants).toHaveLength(file.plants.length)
+    expect(sceneStore.persisted.zones).toHaveLength(file.zones.length + 1)
+    expect(sceneStore.session.selectedTargets).toEqual([
+      expect.objectContaining({ kind: 'zone' }),
+    ])
+    expect(sceneStore.session.selectedTargets[0]?.id).not.toBe('shared-id')
+  })
+
   it('does not delete selected groups that contain locked members', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant) =>
@@ -157,13 +210,13 @@ describe('scene runtime mutation controller', () => {
       },
     ]
     const { controller, sceneStore, state } = createController(file)
-    sceneStore.setSelection(['group-1'])
+    sceneStore.setSelection([{ kind: 'group', id: 'group-1' }])
 
     controller.deleteSelected()
 
     expect(sceneStore.persisted.groups).toHaveLength(1)
     expect(sceneStore.persisted.plants).toHaveLength(2)
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'group', id: 'group-1' }])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(0)
   })
@@ -191,7 +244,7 @@ describe('scene runtime mutation controller', () => {
       },
     ]
     const { controller, sceneStore, state } = createController(file)
-    sceneStore.setSelection(['group-1'])
+    sceneStore.setSelection([{ kind: 'group', id: 'group-1' }])
 
     controller.ungroupSelected()
     controller.bringToFront()
@@ -199,7 +252,7 @@ describe('scene runtime mutation controller', () => {
 
     expect(sceneStore.persisted.groups.map((group) => group.id)).toEqual(['group-1', 'group-2'])
     expect(sceneStore.persisted.plants).toHaveLength(2)
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'group', id: 'group-1' }])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(0)
   })
@@ -221,13 +274,13 @@ describe('scene runtime mutation controller', () => {
       },
     ]
     const { controller, sceneStore, state } = createController(file)
-    sceneStore.setSelection(['group-1'])
+    sceneStore.setSelection([{ kind: 'group', id: 'group-1' }])
 
     controller.duplicateSelected()
 
     expect(sceneStore.persisted.groups).toHaveLength(1)
     expect(sceneStore.persisted.plants).toHaveLength(2)
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'group', id: 'group-1' }])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(0)
   })
@@ -238,12 +291,12 @@ describe('scene runtime mutation controller', () => {
       layer.name === 'zones' ? { ...layer, locked: true } : layer,
     )
     const { controller, sceneStore, state } = createController(file)
-    sceneStore.setSelection(['zone-1'])
+    sceneStore.setSelection([{ kind: 'zone', id: 'zone-1' }])
 
     controller.deleteSelected()
 
     expect(sceneStore.persisted.zones.map((zone) => zone.name)).toEqual(['zone-1'])
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'zone', id: 'zone-1' }])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(0)
   })
@@ -268,7 +321,10 @@ describe('scene runtime mutation controller', () => {
 
     controller.selectAll()
 
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1', 'annotation-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'annotation', id: 'annotation-1' },
+      { kind: 'group', id: 'group-1' },
+    ])
     expect(state.invalidations).toBe(1)
   })
 
@@ -292,7 +348,10 @@ describe('scene runtime mutation controller', () => {
 
     controller.selectAll()
 
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1', 'annotation-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'zone', id: 'zone-1' },
+      { kind: 'annotation', id: 'annotation-1' },
+    ])
     expect(state.invalidations).toBe(1)
   })
 
@@ -305,7 +364,11 @@ describe('scene runtime mutation controller', () => {
 
     controller.selectAll()
 
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['plant-1', 'plant-2', 'zone-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+      { kind: 'zone', id: 'zone-1' },
+    ])
   })
 
   it('selectAll skips Design Objects on locked Layers', () => {
@@ -317,12 +380,19 @@ describe('scene runtime mutation controller', () => {
 
     controller.selectAll()
 
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1', 'annotation-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'zone', id: 'zone-1' },
+      { kind: 'annotation', id: 'annotation-1' },
+    ])
   })
 
   it('groups mixed concrete Design Objects into typed Object Group members', () => {
     const { controller, sceneStore, state } = createController()
-    sceneStore.setSelection(['plant-1', 'zone-1', 'annotation-1'])
+    sceneStore.setSelection([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'zone', id: 'zone-1' },
+      { kind: 'annotation', id: 'annotation-1' },
+    ])
 
     controller.groupSelected()
 
@@ -333,7 +403,7 @@ describe('scene runtime mutation controller', () => {
       { kind: 'zone', id: 'zone-1' },
       { kind: 'annotation', id: 'annotation-1' },
     ])
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set([group.id]))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'group', id: group.id }])
     expect(state.dirtyTypes).toEqual(['group-selected'])
   })
 
@@ -349,7 +419,10 @@ describe('scene runtime mutation controller', () => {
       ],
     }]
     const { controller, sceneStore } = createController(file)
-    sceneStore.setSelection(['group-1', 'annotation-1'])
+    sceneStore.setSelection([
+      { kind: 'group', id: 'group-1' },
+      { kind: 'annotation', id: 'annotation-1' },
+    ])
 
     controller.groupSelected()
 
@@ -364,7 +437,7 @@ describe('scene runtime mutation controller', () => {
         { kind: 'annotation', id: 'annotation-1' },
       ],
     }])
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'group', id: 'group-1' }])
   })
 
   it('merges multiple selected Object Groups into the topmost selected group', () => {
@@ -390,7 +463,10 @@ describe('scene runtime mutation controller', () => {
       },
     ]
     const { controller, sceneStore } = createController(file)
-    sceneStore.setSelection(['group-low', 'group-top'])
+    sceneStore.setSelection([
+      { kind: 'group', id: 'group-low' },
+      { kind: 'group', id: 'group-top' },
+    ])
 
     controller.groupSelected()
 
@@ -406,7 +482,7 @@ describe('scene runtime mutation controller', () => {
         { kind: 'annotation', id: 'annotation-1' },
       ],
     }])
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-top']))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'group', id: 'group-top' }])
   })
 
   it('selectSameSpecies selects eligible same-Species plants without dirtying the document', () => {
@@ -460,11 +536,14 @@ describe('scene runtime mutation controller', () => {
       members: [{ kind: 'plant', id: 'plant-5' }],
     }]
     const { controller, sceneStore, state } = createController(file)
-    sceneStore.setSelection(['plant-1'])
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }])
 
     controller.selectSameSpecies()
 
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+    ])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(1)
   })
@@ -485,7 +564,10 @@ describe('scene runtime mutation controller', () => {
 
   it('updates selected plant symbols through the presentation seam', () => {
     const { controller, sceneStore, state } = createController()
-    sceneStore.setSelection(['plant-1', 'plant-2'])
+    sceneStore.setSelection([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+    ])
 
     const changed = controller.setSelectedPlantSymbol('triangle')
 
@@ -506,7 +588,10 @@ describe('scene runtime mutation controller', () => {
     file.plant_species_symbols = { 'Malus domestica': 'tree' }
     file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle' }))
     const { controller, sceneStore, state } = createController(file)
-    sceneStore.setSelection(['plant-1', 'plant-2'])
+    sceneStore.setSelection([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+    ])
 
     const changed = controller.setSelectedPlantSymbol(null)
 
@@ -523,7 +608,10 @@ describe('scene runtime mutation controller', () => {
 
   it('updates species symbols through the presentation seam and treats round as an explicit default', () => {
     const { controller, sceneStore, state } = createController()
-    sceneStore.setSelection(['plant-1', 'plant-2'])
+    sceneStore.setSelection([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+    ])
 
     const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'round')
 

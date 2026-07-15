@@ -23,6 +23,7 @@ import type {
 } from '../runtime'
 import {
   SceneStore,
+  type SceneDesignObjectTarget,
   type ScenePersistedState,
   type SceneSessionWriter,
   type SceneStateReader,
@@ -62,15 +63,18 @@ export interface SceneRuntimeConstructionCallbacks {
     scene: ScenePersistedState,
   ) => { plantIds: readonly string[]; zoneIds: readonly string[] }
   readonly incrementPlantNamesRevision: () => void
-  readonly setSelection: (ids: Iterable<string>) => void
+  readonly setSelection: (targets: Iterable<SceneDesignObjectTarget>) => void
   readonly prepareForDocumentReplacement: () => void
-  readonly syncHoveredCanvasTargets: (id: string | null) => void
+  readonly syncHoveredCanvasTargets: (target: SceneDesignObjectTarget | null) => void
   readonly syncCanvasSignalsFromScene: () => void
   readonly invalidate: (kind: RuntimeInvalidationKind) => void
   readonly incrementSceneRevision: () => void
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
-  readonly setHoveredEntityId: (id: string | null, options?: { invalidate?: boolean }) => void
+  readonly setHoveredTarget: (
+    target: SceneDesignObjectTarget | null,
+    options?: { invalidate?: boolean },
+  ) => void
   readonly notifyTransientHistoryChanged: () => void
   readonly canUndoTransientHistory: () => boolean
   readonly canRedoTransientHistory: () => boolean
@@ -188,7 +192,7 @@ export function createSceneRuntimeConstruction(
     invalidateViewport: () => callbacks.invalidate('viewport'),
     renderChrome: callbacks.renderChrome,
     addGuide: callbacks.addGuide,
-    clearHoveredEntity: () => callbacks.setHoveredEntityId(null, { invalidate: false }),
+    clearHoveredEntity: () => callbacks.setHoveredTarget(null, { invalidate: false }),
     disposeRuntime: () => {
       runtimeActive = false
       sceneEdits.disposePersistence()

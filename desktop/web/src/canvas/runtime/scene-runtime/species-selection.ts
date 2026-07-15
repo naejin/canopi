@@ -1,4 +1,11 @@
-import { getSceneGroupedMemberKeys, sceneTargetKey, type ScenePersistedState } from '../scene'
+import {
+  getSceneGroupedMemberKeys,
+  normalizeSceneDesignObjectTargets,
+  sceneTargetKey,
+  type SceneDesignObjectSelection,
+  type SceneDesignObjectTarget,
+  type ScenePersistedState,
+} from '../scene'
 import type { SceneSelectionTarget } from './selection'
 
 export function getSelectablePlantIdsForSpecies(
@@ -18,20 +25,22 @@ export function getSelectablePlantIdsForSpecies(
 }
 
 export function applySpeciesSelection(
-  currentSelection: ReadonlySet<string>,
+  currentSelection: SceneDesignObjectSelection,
   speciesPlantIds: readonly string[],
   additive: boolean,
-): Set<string> {
-  if (!additive) return new Set(speciesPlantIds)
+): SceneDesignObjectTarget[] {
+  const speciesTargets = speciesPlantIds.map((id): SceneDesignObjectTarget => ({ kind: 'plant', id }))
+  if (!additive) return speciesTargets
 
-  const next = new Set(currentSelection)
+  const next = new Map(currentSelection.map((target) => [sceneTargetKey(target), target]))
   const allSelected = speciesPlantIds.length > 0
-    && speciesPlantIds.every((id) => next.has(id))
-  for (const id of speciesPlantIds) {
-    if (allSelected) next.delete(id)
-    else next.add(id)
+    && speciesTargets.every((target) => next.has(sceneTargetKey(target)))
+  for (const target of speciesTargets) {
+    const key = sceneTargetKey(target)
+    if (allSelected) next.delete(key)
+    else next.set(key, target)
   }
-  return next
+  return normalizeSceneDesignObjectTargets(next.values())
 }
 
 export function getSameSpeciesReferenceCanonicalName(

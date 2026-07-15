@@ -11,7 +11,13 @@ import {
 } from './scene-runtime/scene-sync'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import type { SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
-import type { ScenePersistedState } from './scene'
+import {
+  normalizeSceneDesignObjectTargets,
+  sceneDesignObjectTargetsEqual,
+  sceneTargetKey,
+  type SceneDesignObjectTarget,
+  type ScenePersistedState,
+} from './scene'
 import {
   createSceneRuntimeConstruction,
   type SceneRuntimeConstruction,
@@ -37,15 +43,15 @@ export class SceneCanvasRuntime {
     this._construction = createSceneRuntimeConstruction(options, {
       resolveHighlightedTargets: (scene) => this._resolveHighlightedTargets(scene),
       incrementPlantNamesRevision: () => this._incrementPlantNamesRevision(),
-      setSelection: (ids) => this._setSelection(ids),
+      setSelection: (targets) => this._setSelection(targets),
       prepareForDocumentReplacement: () => this._prepareForDocumentReplacement(),
-      syncHoveredCanvasTargets: (id) => this._syncHoveredCanvasTargets(id),
+      syncHoveredCanvasTargets: (target) => this._syncHoveredCanvasTargets(target),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidate: (kind) => this._invalidate(kind),
       incrementSceneRevision: () => this._incrementSceneRevision(),
       renderChrome: () => this._renderChrome(),
       addGuide: (axis, worldPosition) => this._addGuide(axis, worldPosition),
-      setHoveredEntityId: (id, options) => this._setHoveredEntityId(id, options),
+      setHoveredTarget: (target, options) => this._setHoveredTarget(target, options),
       disposeInteraction: () => {
         const interaction = this._interaction
         this._interaction = null
@@ -150,10 +156,10 @@ export class SceneCanvasRuntime {
         getSpeciesCache: () => this._presentation.getSpeciesCache(),
         getPlantPresentationContext: (viewportScale) =>
           this._presentation.createPlantPresentationContext(viewportScale),
-        getSelection: () => this._sceneState.session.selectedEntityIds,
-        setSelection: (ids) => {
+        getSelection: () => this._sceneState.session.selectedTargets,
+        setSelection: (targets) => {
           this._sceneCommands.runWhenSettled(
-            () => this._setSelection(ids),
+            () => this._setSelection(targets),
             undefined,
             { resumePending: true },
           )
@@ -183,8 +189,8 @@ export class SceneCanvasRuntime {
           this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
         getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
         notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
-        setHoveredEntityId: (id) => {
-          this._setHoveredEntityId(id)
+        setHoveredTarget: (target) => {
+          this._setHoveredTarget(target)
         },
       })
       await this._rendering.renderScene()
@@ -222,10 +228,17 @@ export class SceneCanvasRuntime {
     }
   }
 
-  private _setSelection(ids: Iterable<string>): void {
-    const nextIds = new Set(ids)
-    this._sceneSession.setSelection(nextIds)
-    setCanvasSelection(nextIds)
+  private _setSelection(targets: Iterable<SceneDesignObjectTarget>): void {
+    const nextTargets = normalizeSceneDesignObjectTargets(targets)
+    const typedIdentityChanged = !sceneDesignObjectTargetsEqual(
+      this._sceneState.session.selectedTargets,
+      nextTargets,
+    )
+    this._sceneSession.setSelection(nextTargets)
+    setCanvasSelection(
+      nextTargets.map((target) => target.id),
+      { publishIfUnchanged: typedIdentityChanged },
+    )
   }
 
   private _resetTransientRuntimeState(): void {
@@ -241,22 +254,26 @@ export class SceneCanvasRuntime {
     ], 'Scene Canvas document replacement preparation failed')
   }
 
-  private _syncHoveredCanvasTargets(id: string | null): void {
-    const plant = id
-      ? this._sceneState.persisted.plants.find((entry) => entry.id === id)
+  private _syncHoveredCanvasTargets(target: SceneDesignObjectTarget | null): void {
+    const plant = target?.kind === 'plant'
+      ? this._sceneState.persisted.plants.find((entry) => entry.id === target.id)
       : null
     const targets = plant ? [speciesTarget(plant.canonicalName)] : []
     this._panelTargetAdapter.setCanvasHoverTargets(targets)
   }
 
-  private _setHoveredEntityId(id: string | null, options: { invalidate?: boolean } = {}): void {
+  private _setHoveredTarget(
+    target: SceneDesignObjectTarget | null,
+    options: { invalidate?: boolean } = {},
+  ): void {
     const invalidate = options.invalidate ?? true
-    if (this._sceneState.session.hoveredEntityId === id) {
-      this._syncHoveredCanvasTargets(id)
+    const current = this._sceneState.session.hoveredTarget
+    if (current === null ? target === null : target !== null && sceneTargetKey(current) === sceneTargetKey(target)) {
+      this._syncHoveredCanvasTargets(target)
       return
     }
-    this._sceneSession.setHoveredEntityId(id)
-    this._syncHoveredCanvasTargets(id)
+    this._sceneSession.setHoveredTarget(target)
+    this._syncHoveredCanvasTargets(target)
     if (invalidate) this._invalidate('scene')
   }
 

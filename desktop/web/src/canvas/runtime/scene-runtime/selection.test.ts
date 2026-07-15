@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createDefaultScenePersistedState,
+  type SceneDesignObjectTarget,
   type ScenePersistedState,
 } from '../scene'
-import { getDesignObjectSelectionModel } from './selection'
+import { getDesignObjectSelectionModel, projectSceneSelectionEntityIds } from './selection'
 
 function makeScene(): ScenePersistedState {
   return {
@@ -87,8 +88,8 @@ function makeScene(): ScenePersistedState {
   }
 }
 
-function readModel(scene: ScenePersistedState, selectedIds: readonly string[]) {
-  return getDesignObjectSelectionModel(scene, new Set(selectedIds), {
+function readModel(scene: ScenePersistedState, selectedTargets: readonly SceneDesignObjectTarget[]) {
+  return getDesignObjectSelectionModel(scene, selectedTargets, {
     annotationViewportScale: 1,
     plantContext: {
       viewport: { x: 0, y: 0, scale: 1 },
@@ -99,8 +100,65 @@ function readModel(scene: ScenePersistedState, selectedIds: readonly string[]) {
 }
 
 describe('scene design object selection model', () => {
+  it('projects large typed selections with a linear entity scan', () => {
+    const scene = makeScene()
+    const plantCount = 100
+    let idReads = 0
+    scene.groups = []
+    scene.plants = Array.from({ length: plantCount }, (_, index) => {
+      const id = `plant-${index}`
+      const plant = {
+        ...scene.plants[0]!,
+        id,
+      }
+      Object.defineProperty(plant, 'id', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          idReads += 1
+          return id
+        },
+      })
+      return plant
+    })
+
+    const projected = projectSceneSelectionEntityIds(
+      scene,
+      Array.from({ length: plantCount }, (_, index) => ({
+        kind: 'plant' as const,
+        id: `plant-${index}`,
+      })),
+    )
+
+    expect(projected.selectedPlantIds.size).toBe(plantCount)
+    expect(idReads).toBeLessThanOrEqual(plantCount * 3)
+  })
+
+  it('preserves intended kinds for missing selected targets with colliding raw ids', () => {
+    const model = readModel(makeScene(), [
+      { kind: 'annotation', id: 'missing-shared' },
+      { kind: 'zone', id: 'missing-shared' },
+    ])
+
+    expect(model.blockedTargets).toEqual([
+      {
+        target: { kind: 'annotation', id: 'missing-shared' },
+        reason: 'missing-design-object',
+        layerName: null,
+      },
+      {
+        target: { kind: 'zone', id: 'missing-shared' },
+        reason: 'missing-design-object',
+        layerName: null,
+      },
+    ])
+  })
+
   it('keeps grouped members out of editable top-level selection', () => {
-    const model = readModel(makeScene(), ['group-1', 'plant-1'])
+    const model = readModel(makeScene(), [
+      { kind: 'group', id: 'group-1' },
+      { kind: 'plant', id: 'plant-1' },
+    ])
 
     expect(model.editableTargets).toEqual([{ kind: 'group', id: 'group-1' }])
     expect(model.blockedTargets).toContainEqual({
@@ -112,7 +170,7 @@ describe('scene design object selection model', () => {
   })
 
   it('reports directly locked Design Objects as selected locked targets with bounds', () => {
-    const model = readModel(makeScene(), ['plant-2'])
+    const model = readModel(makeScene(), [{ kind: 'plant', id: 'plant-2' }])
 
     expect(model.editableTargets).toEqual([])
     expect(model.lockedTargets).toEqual([{ kind: 'plant', id: 'plant-2' }])
@@ -132,7 +190,7 @@ describe('scene design object selection model', () => {
     scene.groups = []
     scene.plants = scene.plants.filter((plant) => plant.id === 'plant-1')
 
-    const model = readModel(scene, ['plant-1'])
+    const model = readModel(scene, [{ kind: 'plant', id: 'plant-1' }])
 
     expect(model.editableTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     expect(model.bounds?.minX).toBeLessThan(10)
@@ -149,7 +207,7 @@ describe('scene design object selection model', () => {
       rotationDeg: 90,
     }
 
-    const model = readModel(scene, ['zone-1'])
+    const model = readModel(scene, [{ kind: 'zone', id: 'zone-1' }])
 
     expect(model.bounds?.minX).toBeCloseTo(1)
     expect(model.bounds?.minY).toBeCloseTo(-1)
@@ -168,7 +226,7 @@ describe('scene design object selection model', () => {
       rotationDeg: 90,
     }
 
-    const model = readModel(scene, ['annotation-1'])
+    const model = readModel(scene, [{ kind: 'annotation', id: 'annotation-1' }])
 
     expect(model.bounds?.minX).toBeCloseTo(-2.5)
     expect(model.bounds?.minY).toBeCloseTo(20)
@@ -183,7 +241,7 @@ describe('scene design object selection model', () => {
       layer.name === 'zones' ? { ...layer, visible: false } : layer,
     )
 
-    const model = readModel(scene, ['zone-1'])
+    const model = readModel(scene, [{ kind: 'zone', id: 'zone-1' }])
 
     expect(model.editableTargets).toEqual([])
     expect(model.blockedTargets).toEqual([{
@@ -198,21 +256,30 @@ describe('scene design object selection model', () => {
     const scene = makeScene()
     scene.groups = []
 
-    expect(readModel(scene, ['plant-1']).sameSpeciesReferenceCanonicalName)
+    expect(readModel(scene, [{ kind: 'plant', id: 'plant-1' }]).sameSpeciesReferenceCanonicalName)
       .toBe('Malus domestica')
 
     scene.plants[1] = {
       ...scene.plants[1]!,
       locked: false,
     }
-    expect(readModel(scene, ['plant-1', 'plant-2']).sameSpeciesReferenceCanonicalName)
+    expect(readModel(scene, [
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+    ]).sameSpeciesReferenceCanonicalName)
       .toBeNull()
-    expect(readModel(scene, ['plant-1', 'zone-1']).sameSpeciesReferenceCanonicalName)
+    expect(readModel(scene, [
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'zone', id: 'zone-1' },
+    ]).sameSpeciesReferenceCanonicalName)
       .toBeNull()
   })
 
   it('combines Object Group member geometry and annotation readable bounds', () => {
-    const model = readModel(makeScene(), ['group-1', 'annotation-1'])
+    const model = readModel(makeScene(), [
+      { kind: 'group', id: 'group-1' },
+      { kind: 'annotation', id: 'annotation-1' },
+    ])
 
     expect(model.editableTargets).toEqual([
       { kind: 'group', id: 'group-1' },
@@ -232,7 +299,7 @@ describe('scene design object selection model', () => {
       layer.name === 'zones' ? { ...layer, visible: false } : layer,
     )
 
-    const groupModel = readModel(scene, ['group-1'])
+    const groupModel = readModel(scene, [{ kind: 'group', id: 'group-1' }])
     expect(groupModel.editableTargets).toEqual([])
     expect(groupModel.blockedTargets).toEqual([{
       target: { kind: 'group', id: 'group-1' },
@@ -241,7 +308,7 @@ describe('scene design object selection model', () => {
     }])
     expect(groupModel.bounds).toBeNull()
 
-    const visibleMemberModel = readModel(scene, ['plant-1'])
+    const visibleMemberModel = readModel(scene, [{ kind: 'plant', id: 'plant-1' }])
     expect(visibleMemberModel.editableTargets).toEqual([])
     expect(visibleMemberModel.blockedTargets).toEqual([{
       target: { kind: 'plant', id: 'plant-1' },
@@ -257,7 +324,7 @@ describe('scene design object selection model', () => {
       layer.name === 'zones' ? { ...layer, locked: true } : layer,
     )
 
-    const model = readModel(scene, ['group-1'])
+    const model = readModel(scene, [{ kind: 'group', id: 'group-1' }])
 
     expect(model.editableTargets).toEqual([])
     expect(model.lockedTargets).toEqual([])

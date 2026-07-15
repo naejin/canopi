@@ -20,6 +20,7 @@ import {
   sceneObjectGroupMemberLayerName,
   sceneTargetKey,
   type SceneConcreteDesignObjectTarget,
+  type SceneDesignObjectTarget,
 } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import {
@@ -27,12 +28,7 @@ import {
   getRectangularZoneCorners,
 } from '../zone-geometry'
 
-export type TopLevelTarget =
-  | { kind: 'plant'; id: string }
-  | { kind: 'zone'; id: string }
-  | { kind: 'annotation'; id: string }
-  | { kind: 'measurement-guide'; id: string }
-  | { kind: 'group'; id: string }
+export type TopLevelTarget = SceneDesignObjectTarget
 
 export function hitTestTopLevel(
   scene: ScenePersistedState,

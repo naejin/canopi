@@ -8,6 +8,7 @@ import {
   createDefaultScenePersistedState,
   type ScenePersistedState,
   type ScenePlantEntity,
+  type SceneDesignObjectTarget,
   type SceneZoneEntity,
 } from '../canvas/runtime/scene'
 import type {
@@ -38,12 +39,12 @@ describe('Scene Arrangement Placement', () => {
     expect(receipt).toEqual({
       committed: true,
       createdCount: 6,
-      selectedTopLevelIds: new Set([
-        'group-clone',
-        'Bed copy 2',
-        'annotation-clone',
-        'measurement-guide-guide-clone',
-      ]),
+      selectedTopLevelTargets: [
+        { kind: 'group', id: 'group-clone' },
+        { kind: 'zone', id: 'Bed copy 2' },
+        { kind: 'annotation', id: 'annotation-clone' },
+        { kind: 'measurement-guide', id: 'measurement-guide-guide-clone' },
+      ],
     })
     expect(harness.runTypes).toEqual(['test-arrangement'])
     expect(scene.zones.map((entry) => entry.name)).toEqual(['Bed', 'Bed copy', 'Bed copy 2'])
@@ -93,7 +94,7 @@ describe('Scene Arrangement Placement', () => {
     })
 
     expect(harness.readScene().groups).toEqual([])
-    expect(receipt.selectedTopLevelIds).toEqual(new Set(['plant-clone']))
+    expect(receipt.selectedTopLevelTargets).toEqual([{ kind: 'plant', id: 'plant-clone' }])
   })
 
   it('does not count duplicate member references as a valid Group', () => {
@@ -127,7 +128,7 @@ describe('Scene Arrangement Placement', () => {
     })
 
     expect(harness.readScene().groups).toEqual([])
-    expect(receipt.selectedTopLevelIds).toEqual(new Set(['plant-clone']))
+    expect(receipt.selectedTopLevelTargets).toEqual([{ kind: 'plant', id: 'plant-clone' }])
   })
 
   it('reuses an immutable template with fresh identities and Zone names', () => {
@@ -174,7 +175,7 @@ describe('Scene Arrangement Placement', () => {
     })
 
     expect(harness.readScene().zones[0]?.name).toBe('Guild copy')
-    expect(receipt.selectedTopLevelIds).toEqual(new Set(['Guild copy']))
+    expect(receipt.selectedTopLevelTargets).toEqual([{ kind: 'zone', id: 'Guild copy' }])
   })
 
   it('returns a non-committed receipt for an empty template', () => {
@@ -190,7 +191,7 @@ describe('Scene Arrangement Placement', () => {
     expect(receipt).toEqual({
       committed: false,
       createdCount: 0,
-      selectedTopLevelIds: new Set(),
+      selectedTopLevelTargets: [],
     })
   })
 
@@ -224,18 +225,18 @@ function createPlacementHarness(initial = createDefaultScenePersistedState()): {
   readonly readScene: () => ScenePersistedState
 } {
   let scene = cloneScenePersistedState(initial)
-  let selection = new Set<string>()
+  let selection: SceneDesignObjectTarget[] = []
   const runTypes: string[] = []
 
   const sceneEdits: SceneEditCoordinator = {
     run(type, edit) {
       runTypes.push(type)
       const before = cloneScenePersistedState(scene)
-      const beforeSelection = new Set(selection)
+      const beforeSelection = selection.map((target) => ({ ...target }))
       const tx = transaction(
         () => scene,
         (next) => { scene = next },
-        (ids) => { selection = new Set(ids) },
+        (targets) => { selection = [...targets].map((target) => ({ ...target })) },
       )
       try {
         edit(tx)
@@ -261,7 +262,7 @@ function createPlacementHarness(initial = createDefaultScenePersistedState()): {
 function transaction(
   readScene: () => ScenePersistedState,
   writeScene: (scene: ScenePersistedState) => void,
-  writeSelection: (ids: Iterable<string>) => void,
+  writeSelection: (targets: Iterable<SceneDesignObjectTarget>) => void,
 ): SceneEditTransaction {
   return {
     mutate(edit) {

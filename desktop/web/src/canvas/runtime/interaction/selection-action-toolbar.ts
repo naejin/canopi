@@ -626,7 +626,6 @@ function hasStructuralSelectionBlocker(selection: CanvasDesignObjectSelectionMod
   const lockedKeys = new Set(lockedTargets(selection).map(targetKey))
   return selection.blockedTargets.some((blocked) =>
     blocked.reason !== 'locked-design-object'
-    || blocked.target.kind === 'missing'
     || !lockedKeys.has(targetKey(blocked.target)),
   )
 }

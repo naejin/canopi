@@ -54,6 +54,9 @@ import type {
 import { getCommonNames } from '../../ipc/species'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
 
+const plantTarget = (id: string) => ({ kind: 'plant' as const, id })
+const zoneTarget = (id: string) => ({ kind: 'zone' as const, id })
+
 function makeFile(): CanopiFile {
   return {
     version: 1,
@@ -497,7 +500,7 @@ describe('scene canvas runtime', () => {
       if (type !== 'interaction-drag') return transaction
       return {
         mutate: (edit) => transaction.mutate(edit),
-        setSelection: (ids: Iterable<string>) => transaction.setSelection(ids),
+        setSelection: (targets) => transaction.setSelection(targets),
         commit: (options) => transaction.commit(options),
         get changed() {
           return transaction.changed
@@ -545,7 +548,7 @@ describe('scene canvas runtime', () => {
       if (type !== 'interaction-drag') return transaction
       return {
         mutate: (edit) => transaction.mutate(edit),
-        setSelection: (ids: Iterable<string>) => transaction.setSelection(ids),
+        setSelection: (targets) => transaction.setSelection(targets),
         commit: (options) => transaction.commit(options),
         get changed() {
           return transaction.changed
@@ -830,7 +833,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(file)
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
     sceneEdits.run('seed-selection', (tx) => {
-      tx.setSelection(['plant-1'])
+      tx.setSelection([plantTarget('plant-1')])
     })
     runtime.commandSurface.sceneEdits.copy()
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(true)
@@ -838,13 +841,13 @@ describe('scene canvas runtime', () => {
     active.mutate((draft) => {
       draft.plants[1]!.canonicalName = 'Pyrus communis'
     })
-    active.setSelection(['plant-2'])
+    active.setSelection([plantTarget('plant-2')])
 
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.copy()
     runtime.commandSurface.sceneEdits.paste()
 
-    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-2']))
+    expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-2')])
     expect(runtime.querySurface.getSettledPlacedPlants()).toBeNull()
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
@@ -855,7 +858,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plantSpeciesColors['Malus domestica'])
       .toBe('#335577')
     active.abort()
-    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-1')])
     expect(runtime.querySurface.getSettledPlacedPlants()).toHaveLength(2)
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(true)
     runtime.commandSurface.sceneEdits.paste()
@@ -1203,7 +1206,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.selectAll()
     selectedObjectIds.value = new Set(['zone-1'])
 
-    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-1')])
 
     runtime.documentSurface.replaceDocument(
       fileWithOnlyPlants('plant-2'),
@@ -1211,7 +1214,7 @@ describe('scene canvas runtime', () => {
       () => {},
     )
     runtime.commandSurface.sceneEdits.selectAll()
-    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-2']))
+    expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-2')])
     expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
 
     runtime.documentSurface.replaceDocument(
@@ -1219,8 +1222,62 @@ describe('scene canvas runtime', () => {
       createCanvasDocumentReplacementToken(),
       () => {},
     )
-    expect(runtime.querySurface.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection()).toEqual([])
     expect(selectedObjectIds.value.size).toBe(0)
+  })
+
+  it('publishes the UI selection mirror when only the selected target kind changes', () => {
+    const file = makeFile()
+    file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(file)
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    const publications: string[][] = []
+    const dispose = effect(() => {
+      publications.push([...selectedObjectIds.value])
+    })
+
+    sceneEdits.run('select-colliding-plant', (tx) => {
+      tx.setSelection([plantTarget('shared-id')])
+    })
+    const publicationsAfterPlant = publications.length
+    sceneEdits.run('select-colliding-zone', (tx) => {
+      tx.setSelection([zoneTarget('shared-id')])
+    })
+
+    expect(runtime.querySurface.getSelection()).toEqual([zoneTarget('shared-id')])
+    expect(selectedObjectIds.value).toEqual(new Set(['shared-id']))
+    expect(publications).toHaveLength(publicationsAfterPlant + 1)
+    dispose()
+    runtime.destroy()
+  })
+
+  it('returns an owned typed selection snapshot with stable collision order', () => {
+    const file = makeFile()
+    file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(file)
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    const plant = plantTarget('shared-id')
+    const zone = zoneTarget('shared-id')
+
+    sceneEdits.run('select-owned-colliding-targets', (tx) => {
+      tx.setSelection([plant, zone, plantTarget('shared-id')])
+    })
+    plant.id = 'mutated-input'
+    zone.id = 'mutated-input'
+
+    const snapshot = runtime.querySurface.getSelection()
+    ;(snapshot[0] as { id: string }).id = 'mutated-snapshot'
+    snapshot.reverse()
+
+    expect(runtime.querySurface.getSelection()).toEqual([
+      plantTarget('shared-id'),
+      zoneTarget('shared-id'),
+    ])
+    runtime.destroy()
   })
 
   it('keeps document replacement behind settled Scene admission', () => {
@@ -1274,7 +1331,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({ targetPresentation })
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     runtime.commandSurface.sceneEdits.selectAll()
-    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-1')])
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     failPanelTargetCleanup = true
     const replacementToken = createCanvasDocumentReplacementToken()
@@ -1287,7 +1344,7 @@ describe('scene canvas runtime', () => {
       .toThrow('panel target cleanup failed')
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
       .toEqual(['plant-1'])
-    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getSelection()).toEqual([plantTarget('plant-1')])
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
 
     failPanelTargetCleanup = false
@@ -1298,7 +1355,7 @@ describe('scene canvas runtime', () => {
     )
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
       .toEqual(['plant-2'])
-    expect(runtime.querySurface.getSelection()).toEqual(new Set())
+    expect(runtime.querySurface.getSelection()).toEqual([])
     expect(selectedObjectIds.value).toEqual(new Set())
     runtime.destroy()
   })
@@ -1680,7 +1737,7 @@ describe('scene canvas runtime', () => {
     const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
-    expect(runtime.querySurface.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection().length).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     runtime.destroy()
   })
@@ -1705,7 +1762,7 @@ describe('scene canvas runtime', () => {
     const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
-    expect(runtime.querySurface.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection().length).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
@@ -1760,7 +1817,7 @@ describe('scene canvas runtime', () => {
       expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     })
 
-    expect(runtime.querySurface.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection().length).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     runtime.destroy()
   })
@@ -1781,7 +1838,7 @@ describe('scene canvas runtime', () => {
     const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
 
-    ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
+    ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
     expect(panelTargetProbe.canvasHoverTargets).toEqual([speciesTarget('Malus domestica')])
 
     panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_name: 'zone-1' }])
@@ -1936,17 +1993,17 @@ describe('scene canvas runtime', () => {
     cleanState.setCanvasClean.mockClear()
     await initRuntimeWithStubbedRenderer(runtime)
 
-    ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
+    ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
 
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
-    expect(runtime.querySurface.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection().length).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
 
-    ;(runtime as any)._interaction._deps.setHoveredEntityId(null)
+    ;(runtime as any)._interaction._deps.setHoveredTarget(null)
 
     expect(hoveredCanvasTargets.value).toEqual([])
-    expect(runtime.querySurface.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection().length).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
@@ -1957,7 +2014,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
+    ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
 
     renderer.renderScene.mockClear()
@@ -2619,7 +2676,7 @@ describe('scene canvas runtime', () => {
 
     expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(true)
-    expect(runtime.querySurface.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection().length).toBe(0)
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 

@@ -116,7 +116,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
       context.getPlantPresentationContext,
     )
 
-    if (!hit || hit.kind !== 'plant' || isSceneDesignObjectLocked(scene, hit.id)) {
+    if (!hit || hit.kind !== 'plant' || isSceneDesignObjectLocked(scene, hit)) {
       overlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
       return { clearPointerGesture: true }
     }
@@ -283,13 +283,13 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
         })
         draft.plants = [...draft.plants, ...generated]
       })
-      tx.setSelection([activeSource.sourceId, ...generatedIds])
+      tx.setSelection([activeSource.sourceId, ...generatedIds].map((id) => ({ kind: 'plant', id })))
     }, { onCommitted: clear })
   }
 
   function canUseSource(candidate: PlantSpacingSource): boolean {
     const scene = context.getSceneStore().persisted
-    if (isSceneDesignObjectLocked(scene, candidate.sourceId)) return false
+    if (isSceneDesignObjectLocked(scene, { kind: 'plant', id: candidate.sourceId })) return false
     const layer = scene.layers.find((entry) => entry.name === 'plants')
     if (layer?.visible === false || layer?.locked === true) return false
     if (!scene.plants.some((plant) => plant.id === candidate.sourceId)) return false

@@ -6,7 +6,6 @@ import {
 } from '../plant-presentation'
 import type {
   CanvasDesignObjectSelectionBlockedTarget,
-  CanvasDesignObjectSelectionMissingTarget,
   CanvasDesignObjectSelectionModel,
   CanvasDesignObjectSelectionTarget,
 } from '../runtime'
@@ -19,6 +18,7 @@ import {
   sceneObjectGroupMemberLayerName,
   sceneObjectGroupMemberKey,
   sceneTargetKey,
+  type SceneDesignObjectSelection,
 } from '../scene'
 import { getZoneWorldBounds } from '../zone-geometry'
 import { getSameSpeciesReferenceCanonicalName } from './species-selection'
@@ -30,87 +30,72 @@ export interface SceneSelectionReadModelOptions {
   readonly plantContext: PlantPresentationContext
 }
 
-export function getSelectedZoneIds(
-  persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
-): Set<string> {
-  const resolved = new Set<string>()
-  for (const zone of persisted.zones) {
-    if (selectedIds.has(zone.name)) resolved.add(zone.name)
-  }
-  for (const group of persisted.groups) {
-    if (!selectedIds.has(group.id)) continue
-    for (const member of group.members) {
-      if (member.kind === 'zone' && persisted.zones.some((zone) => zone.name === member.id)) {
-        resolved.add(member.id)
-      }
-    }
-  }
-  return resolved
+export interface SceneSelectionEntityIds {
+  readonly selectedPlantIds: Set<string>
+  readonly selectedZoneIds: Set<string>
+  readonly selectedAnnotationIds: Set<string>
+  readonly selectedMeasurementGuideIds: Set<string>
 }
 
-export function getSelectedAnnotationIds(
+export function projectSceneSelectionEntityIds(
   persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
-): Set<string> {
-  const resolved = new Set<string>()
-  for (const annotation of persisted.annotations) {
-    if (selectedIds.has(annotation.id)) resolved.add(annotation.id)
-  }
+  selectedTargets: SceneDesignObjectSelection,
+): SceneSelectionEntityIds {
+  const selectedKeys = new Set(selectedTargets.map(sceneTargetKey))
+  const selectedGroupMemberKeys = new Set<string>()
+
   for (const group of persisted.groups) {
-    if (!selectedIds.has(group.id)) continue
+    if (!selectedKeys.has(sceneTargetKey({ kind: 'group', id: group.id }))) continue
     for (const member of group.members) {
-      if (
-        member.kind === 'annotation'
-        && persisted.annotations.some((annotation) => annotation.id === member.id)
-      ) {
-        resolved.add(member.id)
-      }
+      selectedGroupMemberKeys.add(sceneObjectGroupMemberKey(member))
     }
   }
-  return resolved
-}
 
-export function getSelectedPlantIds(
-  persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
-): Set<string> {
-  const resolved = new Set<string>()
+  const isSelected = (target: SceneSelectionTarget): boolean => {
+    const key = sceneTargetKey(target)
+    return selectedKeys.has(key) || selectedGroupMemberKeys.has(key)
+  }
+  const selectedPlantIds = new Set<string>()
+  const selectedZoneIds = new Set<string>()
+  const selectedAnnotationIds = new Set<string>()
+  const selectedMeasurementGuideIds = new Set<string>()
+
   for (const plant of persisted.plants) {
-    if (selectedIds.has(plant.id)) resolved.add(plant.id)
+    if (isSelected({ kind: 'plant', id: plant.id })) selectedPlantIds.add(plant.id)
   }
-  for (const group of persisted.groups) {
-    if (!selectedIds.has(group.id)) continue
-    for (const member of group.members) {
-      if (member.kind === 'plant' && persisted.plants.some((plant) => plant.id === member.id)) {
-        resolved.add(member.id)
-      }
+  for (const zone of persisted.zones) {
+    if (isSelected({ kind: 'zone', id: zone.name })) selectedZoneIds.add(zone.name)
+  }
+  for (const annotation of persisted.annotations) {
+    if (isSelected({ kind: 'annotation', id: annotation.id })) {
+      selectedAnnotationIds.add(annotation.id)
     }
   }
-  return resolved
-}
-
-export function getSelectedMeasurementGuideIds(
-  persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
-): Set<string> {
-  const resolved = new Set<string>()
   for (const guide of persisted.measurementGuides) {
-    if (selectedIds.has(guide.id)) resolved.add(guide.id)
+    if (selectedKeys.has(sceneTargetKey({ kind: 'measurement-guide', id: guide.id }))) {
+      selectedMeasurementGuideIds.add(guide.id)
+    }
   }
-  return resolved
+
+  return {
+    selectedPlantIds,
+    selectedZoneIds,
+    selectedAnnotationIds,
+    selectedMeasurementGuideIds,
+  }
 }
 
 export function getSelectedTopLevelTargets(
   persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
+  selectedTargets: SceneDesignObjectSelection,
 ): SceneSelectionTarget[] {
   const groupedMemberKeys = getSceneGroupedMemberKeys(persisted)
+  const selectedKeys = new Set(selectedTargets.map(sceneTargetKey))
   const seen = new Set<string>()
   const targets: SceneSelectionTarget[] = []
 
   for (const group of persisted.groups) {
-    if (!selectedIds.has(group.id)) continue
+    if (!selectedKeys.has(sceneTargetKey({ kind: 'group', id: group.id }))) continue
     const key = `group:${group.id}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -119,7 +104,7 @@ export function getSelectedTopLevelTargets(
 
   for (const plant of persisted.plants) {
     if (
-      !selectedIds.has(plant.id)
+      !selectedKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))
       || groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))
     ) continue
     const key = `plant:${plant.id}`
@@ -130,7 +115,7 @@ export function getSelectedTopLevelTargets(
 
   for (const zone of persisted.zones) {
     if (
-      !selectedIds.has(zone.name)
+      !selectedKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))
       || groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))
     ) continue
     const key = `zone:${zone.name}`
@@ -141,7 +126,7 @@ export function getSelectedTopLevelTargets(
 
   for (const annotation of persisted.annotations) {
     if (
-      !selectedIds.has(annotation.id)
+      !selectedKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))
       || groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))
     ) continue
     const key = `annotation:${annotation.id}`
@@ -151,7 +136,7 @@ export function getSelectedTopLevelTargets(
   }
 
   for (const guide of persisted.measurementGuides) {
-    if (!selectedIds.has(guide.id)) continue
+    if (!selectedKeys.has(sceneTargetKey({ kind: 'measurement-guide', id: guide.id }))) continue
     const key = `measurement-guide:${guide.id}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -163,22 +148,23 @@ export function getSelectedTopLevelTargets(
 
 export function getDesignObjectSelectionModel(
   persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
+  selectedTargets: SceneDesignObjectSelection,
   options: SceneSelectionReadModelOptions,
 ): CanvasDesignObjectSelectionModel {
-  const topLevelTargets = getSelectedTopLevelTargets(persisted, selectedIds)
-  const blockedTargets = getBlockedSelectionTargets(persisted, selectedIds)
-  const blockedKeys = new Set(blockedTargets.map((blocked) => targetKey(blocked.target)))
+  const topLevelTargets = getSelectedTopLevelTargets(persisted, selectedTargets)
+  const blockedTargets = getBlockedSelectionTargets(persisted, selectedTargets)
+  const blockedKeys = new Set(blockedTargets.map((blocked) => sceneTargetKey(blocked.target)))
   const lockedTargets = blockedTargets
     .filter((blocked): blocked is CanvasDesignObjectSelectionBlockedTarget & {
       target: CanvasDesignObjectSelectionTarget
     } =>
       blocked.reason === 'locked-design-object'
-      && blocked.target.kind !== 'missing'
-      && isDirectSceneDesignObjectLocked(persisted, blocked.target.id),
+      && isDirectSceneDesignObjectLocked(persisted, blocked.target),
     )
     .map((blocked) => blocked.target)
-  const editableTargets = topLevelTargets.filter((target) => !blockedKeys.has(targetKey(target)))
+  const editableTargets = topLevelTargets.filter(
+    (target) => !blockedKeys.has(sceneTargetKey(target)),
+  )
   const plantNamePinning = getPlantNamePinning(persisted, editableTargets)
   return {
     editableTargets,
@@ -208,14 +194,6 @@ function getPlantNamePinning(
     plantIds,
     allPinned: plantIds.every((id) => pinnedById.get(id) === true),
   }
-}
-
-export function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  if (left.size !== right.size) return false
-  for (const value of left) {
-    if (!right.has(value)) return false
-  }
-  return true
 }
 
 export function getSelectionLayer(target: SceneSelectionTarget): string {
@@ -315,17 +293,16 @@ export function getTargetBounds(
 
 function getBlockedSelectionTargets(
   persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
+  selectedTargets: SceneDesignObjectSelection,
 ): CanvasDesignObjectSelectionBlockedTarget[] {
   const blockedTargets: CanvasDesignObjectSelectionBlockedTarget[] = []
   const seen = new Set<string>()
   const groupedMemberKeys = getSceneGroupedMemberKeys(persisted)
 
-  for (const selectedId of selectedIds) {
-    const target = resolveTarget(persisted, selectedId)
-    if (!target) {
+  for (const target of selectedTargets) {
+    if (!sceneContainsTarget(persisted, target)) {
       pushBlocked(blockedTargets, seen, {
-        target: { kind: 'missing', id: selectedId },
+        target,
         reason: 'missing-design-object',
         layerName: null,
       })
@@ -361,7 +338,7 @@ function getBlockedSelectionTargets(
       })
       continue
     }
-    if (isSceneDesignObjectLocked(persisted, target.id)) {
+    if (isSceneDesignObjectLocked(persisted, target)) {
       pushBlocked(blockedTargets, seen, {
         target,
         reason: 'locked-design-object',
@@ -378,22 +355,23 @@ function pushBlocked(
   seen: Set<string>,
   blocked: CanvasDesignObjectSelectionBlockedTarget,
 ): void {
-  const key = targetKey(blocked.target)
+  const key = sceneTargetKey(blocked.target)
   if (seen.has(key)) return
   seen.add(key)
   blockedTargets.push(blocked)
 }
 
-function resolveTarget(
+function sceneContainsTarget(
   persisted: ScenePersistedState,
-  id: string,
-): SceneSelectionTarget | null {
-  if (persisted.groups.some((group) => group.id === id)) return { kind: 'group', id }
-  if (persisted.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
-  if (persisted.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
-  if (persisted.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
-  if (persisted.measurementGuides.some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
-  return null
+  target: SceneSelectionTarget,
+): boolean {
+  if (target.kind === 'group') return persisted.groups.some((group) => group.id === target.id)
+  if (target.kind === 'plant') return persisted.plants.some((plant) => plant.id === target.id)
+  if (target.kind === 'zone') return persisted.zones.some((zone) => zone.name === target.id)
+  if (target.kind === 'annotation') {
+    return persisted.annotations.some((annotation) => annotation.id === target.id)
+  }
+  return persisted.measurementGuides.some((guide) => guide.id === target.id)
 }
 
 function getTargetPrimaryLayerName(
@@ -457,8 +435,4 @@ function findLayer(
   layerName: string,
 ): SceneLayerEntity | null {
   return persisted.layers.find((layer) => layer.name === layerName) ?? null
-}
-
-function targetKey(target: SceneSelectionTarget | CanvasDesignObjectSelectionMissingTarget): string {
-  return `${target.kind}:${target.id}`
 }

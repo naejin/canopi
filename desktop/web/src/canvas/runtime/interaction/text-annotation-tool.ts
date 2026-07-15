@@ -112,7 +112,7 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
       tx.mutate((draft) => {
         nextId = appendTextAnnotationToDraft(draft, position, text)
       })
-      tx.setSelection([nextId])
+      tx.setSelection([{ kind: 'annotation', id: nextId }])
     }, { onCommitted: cancel })
   }
 

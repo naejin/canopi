@@ -10,6 +10,7 @@ import {
 import type { SceneHistory } from '../scene-history'
 import {
   cloneScenePersistedState,
+  type SceneDesignObjectTarget,
   type ScenePersistedState,
   type ScenePlantEntity,
   type SceneStore,
@@ -27,7 +28,7 @@ export type SceneEditInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
 export interface SceneEditTransaction {
   mutate(edit: (draft: ScenePersistedState) => void): void
-  setSelection(ids: Iterable<string>): void
+  setSelection(targets: Iterable<SceneDesignObjectTarget>): void
   commit(options?: { type?: string; invalidate?: SceneEditInvalidationKind }): boolean
   abort(): void
   readonly changed: boolean
@@ -133,7 +134,7 @@ export class SceneEditBusyError extends CanvasAuthorityBusyError {
 interface SceneRuntimeEditCoordinatorOptions {
   sceneStore: SceneStore
   history: SceneHistory
-  setSelection(ids: Iterable<string>): void
+  setSelection(targets: Iterable<SceneDesignObjectTarget>): void
   incrementSceneRevision(): void
   syncCanvasSignalsFromScene(): void
   invalidate(kind: SceneEditInvalidationKind): void
@@ -611,7 +612,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   private _captureSnapshot(): SceneCommandSnapshot {
     return {
       persisted: this._sceneStore.persisted,
-      selectedEntityIds: this._sceneStore.session.selectedEntityIds,
+      selectedTargets: this._sceneStore.session.selectedTargets,
     }
   }
 
@@ -1127,7 +1128,7 @@ interface SceneRuntimeEditTransactionOptions {
   type: string
   sceneStore: SceneStore
   captureSnapshot(): SceneCommandSnapshot
-  setSelection(ids: Iterable<string>): void
+  setSelection(targets: Iterable<SceneDesignObjectTarget>): void
   recordHistory(command: SceneCommand, token: object): void
   wasHistoryRecorded(token: object): boolean
   noteCommitted(command: SceneCommand): void
@@ -1203,9 +1204,9 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
     this._sceneStore.updatePersisted(edit)
   }
 
-  setSelection(ids: Iterable<string>): void {
+  setSelection(targets: Iterable<SceneDesignObjectTarget>): void {
     this._assertMutable()
-    this._options.setSelection(ids)
+    this._options.setSelection(targets)
   }
 
   commit(options: { type?: string; invalidate?: SceneEditInvalidationKind } = {}): boolean {

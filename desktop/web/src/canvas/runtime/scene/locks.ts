@@ -1,17 +1,38 @@
-import { resolveSceneObjectGroupMembers, type SceneConcreteDesignObjectTarget } from './group-members'
+import {
+  resolveSceneObjectGroupMembers,
+} from './group-members'
+import {
+  sceneTargetKey,
+  type SceneConcreteDesignObjectTarget,
+  type SceneDesignObjectTarget,
+} from './design-object-targets'
 import type { ScenePersistedState } from './types'
 
-export function isSceneDesignObjectLocked(state: ScenePersistedState, id: string): boolean {
-  return isDirectSceneDesignObjectLocked(state, id)
-    || isSceneGroupLockedByMember(state, id)
+export function isSceneDesignObjectLocked(
+  state: ScenePersistedState,
+  target: SceneDesignObjectTarget,
+): boolean {
+  return isDirectSceneDesignObjectLocked(state, target)
+    || (target.kind === 'group' && isSceneGroupLockedByMember(state, target.id))
 }
 
-export function isDirectSceneDesignObjectLocked(state: ScenePersistedState, id: string): boolean {
-  return state.plants.some((plant) => plant.id === id && plant.locked)
-    || state.zones.some((zone) => zone.name === id && zone.locked)
-    || state.annotations.some((annotation) => annotation.id === id && annotation.locked)
-    || state.measurementGuides.some((guide) => guide.id === id && guide.locked)
-    || state.groups.some((group) => group.id === id && group.locked)
+export function isDirectSceneDesignObjectLocked(
+  state: ScenePersistedState,
+  target: SceneDesignObjectTarget,
+): boolean {
+  if (target.kind === 'plant') {
+    return state.plants.some((plant) => plant.id === target.id && plant.locked)
+  }
+  if (target.kind === 'zone') {
+    return state.zones.some((zone) => zone.name === target.id && zone.locked)
+  }
+  if (target.kind === 'annotation') {
+    return state.annotations.some((annotation) => annotation.id === target.id && annotation.locked)
+  }
+  if (target.kind === 'measurement-guide') {
+    return state.measurementGuides.some((guide) => guide.id === target.id && guide.locked)
+  }
+  return state.groups.some((group) => group.id === target.id && group.locked)
 }
 
 function isSceneGroupLockedByMember(state: ScenePersistedState, id: string): boolean {
@@ -25,50 +46,28 @@ function isDirectSceneDesignObjectTargetLocked(
   state: ScenePersistedState,
   target: SceneConcreteDesignObjectTarget,
 ): boolean {
-  if (target.kind === 'plant') return state.plants.some((plant) => plant.id === target.id && plant.locked)
-  if (target.kind === 'zone') return state.zones.some((zone) => zone.name === target.id && zone.locked)
-  return state.annotations.some((annotation) => annotation.id === target.id && annotation.locked)
-}
-
-export function getLockedSceneDesignObjectIds(state: ScenePersistedState): Set<string> {
-  const ids = new Set<string>()
-  for (const plant of state.plants) {
-    if (plant.locked) ids.add(plant.id)
-  }
-  for (const zone of state.zones) {
-    if (zone.locked) ids.add(zone.name)
-  }
-  for (const annotation of state.annotations) {
-    if (annotation.locked) ids.add(annotation.id)
-  }
-  for (const guide of state.measurementGuides) {
-    if (guide.locked) ids.add(guide.id)
-  }
-  for (const group of state.groups) {
-    if (group.locked) ids.add(group.id)
-  }
-  return ids
+  return isDirectSceneDesignObjectLocked(state, target)
 }
 
 export function setSceneDesignObjectLocks(
   state: ScenePersistedState,
-  ids: Iterable<string>,
+  targets: Iterable<SceneDesignObjectTarget>,
   locked: boolean,
 ): void {
-  const idSet = new Set(ids)
+  const targetKeys = new Set([...targets].map(sceneTargetKey))
   for (const plant of state.plants) {
-    if (idSet.has(plant.id)) plant.locked = locked
+    if (targetKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) plant.locked = locked
   }
   for (const zone of state.zones) {
-    if (idSet.has(zone.name)) zone.locked = locked
+    if (targetKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))) zone.locked = locked
   }
   for (const annotation of state.annotations) {
-    if (idSet.has(annotation.id)) annotation.locked = locked
+    if (targetKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) annotation.locked = locked
   }
   for (const guide of state.measurementGuides) {
-    if (idSet.has(guide.id)) guide.locked = locked
+    if (targetKeys.has(sceneTargetKey({ kind: 'measurement-guide', id: guide.id }))) guide.locked = locked
   }
   for (const group of state.groups) {
-    if (idSet.has(group.id)) group.locked = locked
+    if (targetKeys.has(sceneTargetKey({ kind: 'group', id: group.id }))) group.locked = locked
   }
 }

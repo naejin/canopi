@@ -5,6 +5,7 @@ import type { CameraController } from './camera'
 import type { CanvasDesignObjectSelectionModel, CanvasQueryRevision, CanvasQuerySurface } from './runtime'
 import type {
   SceneDocumentReader,
+  SceneDesignObjectTarget,
   ScenePersistedState,
   SceneStateReader,
 } from './scene'
@@ -40,12 +41,14 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   get revision(): CanvasQueryRevision { return this.options.revision }
   get viewport(): CameraController['snapshot'] { return this.options.camera.snapshot }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
-  getSelection(): Set<string> { return new Set(this.options.sceneStore.session.selectedEntityIds) }
+  getSelection(): SceneDesignObjectTarget[] {
+    return this.options.sceneStore.session.selectedTargets.map((target) => ({ ...target }))
+  }
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel {
     const viewportScale = this.options.camera.viewport.scale
     return getDesignObjectSelectionModel(
       this.options.sceneStore.persisted,
-      this.options.sceneStore.session.selectedEntityIds,
+      this.options.sceneStore.session.selectedTargets,
       {
         annotationViewportScale: viewportScale,
         plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),

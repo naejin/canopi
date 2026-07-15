@@ -9,7 +9,7 @@ import {
   createCanvasDocumentReplacementToken,
 } from '../runtime'
 import { SceneHistory } from '../scene-history'
-import { SceneStore } from '../scene'
+import { SceneStore, type SceneDesignObjectTarget } from '../scene'
 import {
   SceneEditBusyError,
   SceneRuntimeEditCoordinator,
@@ -75,10 +75,10 @@ function createHarness() {
   const history = new SceneHistory()
   const invalidations: SceneEditInvalidationKind[] = []
   let sceneRevision = 0
-  const setSelection = (ids: Iterable<string>) => {
-    const next = new Set(ids)
+  const setSelection = (targets: Iterable<SceneDesignObjectTarget>) => {
+    const next = [...targets]
     sceneStore.setSelection(next)
-    selectedObjectIds.value = next
+    selectedObjectIds.value = new Set(next.map((target) => target.id))
   }
   const sceneEdits = new SceneRuntimeEditCoordinator({
     sceneStore,
@@ -144,7 +144,7 @@ describe('scene edit transactions', () => {
       tx.mutate((draft) => {
         draft.plants = draft.plants.map((plant) => ({ ...plant }))
       })
-      tx.setSelection(sceneStore.session.selectedEntityIds)
+      tx.setSelection(sceneStore.session.selectedTargets)
     })
 
     expect(committed).toBe(false)
@@ -155,7 +155,7 @@ describe('scene edit transactions', () => {
 
   it('aborts and restores persisted scene, selection, and embedded locks', () => {
     const { sceneStore, history, sceneEdits, invalidations, setSelection, readSceneRevision } = createHarness()
-    setSelection(['plant-1'])
+    setSelection([{ kind: 'plant', id: 'plant-1' }])
     sceneStore.updatePersisted((draft) => {
       draft.plants[0]!.locked = true
     })
@@ -166,7 +166,7 @@ describe('scene edit transactions', () => {
       draft.plants[0]!.locked = false
       draft.plants = draft.plants.slice(0, 1)
     })
-    tx.setSelection(['plant-2'])
+    tx.setSelection([{ kind: 'plant', id: 'plant-2' }])
 
     expect(tx.changed).toBe(true)
 
@@ -175,7 +175,7 @@ describe('scene edit transactions', () => {
     expect(sceneStore.persisted.plants).toHaveLength(2)
     expect(sceneStore.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
     expect(sceneStore.persisted.plants[0]?.locked).toBe(true)
-    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(history.canUndo.value).toBe(false)
     expect(readSceneRevision()).toBe(0)
@@ -199,8 +199,9 @@ describe('scene edit transactions', () => {
 })
 
 function createAdmissionHarness(options: {
+  readonly file?: CanopiFile
   readonly history?: SceneHistory
-  readonly setSelection?: (ids: Iterable<string>) => void
+  readonly setSelection?: (targets: Iterable<SceneDesignObjectTarget>) => void
   readonly incrementSceneRevision?: () => void
   readonly syncCanvasSignalsFromScene?: () => void
   readonly invalidate?: (kind: SceneEditInvalidationKind) => void
@@ -209,12 +210,12 @@ function createAdmissionHarness(options: {
   readonly store: SceneStore
   readonly history: SceneHistory
 } {
-  const store = new SceneStore(makeFile())
+  const store = new SceneStore(options.file ?? makeFile())
   const history = options.history ?? new SceneHistory()
   const coordinator = new SceneRuntimeEditCoordinator({
     sceneStore: store,
     history,
-    setSelection: options.setSelection ?? ((ids) => store.setSelection(ids)),
+    setSelection: options.setSelection ?? ((targets) => store.setSelection(targets)),
     incrementSceneRevision: options.incrementSceneRevision ?? (() => {}),
     syncCanvasSignalsFromScene: options.syncCanvasSignalsFromScene ?? (() => {}),
     invalidate: options.invalidate ?? vi.fn(),
@@ -223,6 +224,44 @@ function createAdmissionHarness(options: {
 }
 
 describe('Scene Edit single-writer admission', () => {
+  it('replays the exact typed selection when raw ids collide', () => {
+    const file = makeFile()
+    file.plants[0]!.id = 'shared-id'
+    file.zones = [{
+      name: 'shared-id',
+      zone_type: 'rect',
+      rotation: 0,
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 0 },
+        { x: 5, y: 5 },
+        { x: 0, y: 5 },
+      ],
+      fill_color: null,
+      notes: null,
+      locked: false,
+    }]
+    const { coordinator, store } = createAdmissionHarness({ file })
+    store.setSelection([{ kind: 'plant', id: 'shared-id' }])
+
+    const preview = coordinator.begin('preview-colliding-zone')
+    preview.setSelection([{ kind: 'zone', id: 'shared-id' }])
+    expect(store.session.selectedTargets).toEqual([{ kind: 'zone', id: 'shared-id' }])
+    preview.abort()
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'shared-id' }])
+
+    expect(coordinator.run('select-colliding-zone', (tx) => {
+      tx.setSelection([{ kind: 'zone', id: 'shared-id' }])
+    })).toBe(true)
+    expect(store.session.selectedTargets).toEqual([{ kind: 'zone', id: 'shared-id' }])
+
+    expect(coordinator.undo()).toBe(true)
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'shared-id' }])
+
+    expect(coordinator.redo()).toBe(true)
+    expect(store.session.selectedTargets).toEqual([{ kind: 'zone', id: 'shared-id' }])
+  })
+
   it('does not strand authority when admission observers throw during acquire or release', () => {
     const { coordinator } = createAdmissionHarness()
     let publicationFailure: string | null = null
@@ -280,26 +319,26 @@ describe('Scene Edit single-writer admission', () => {
   it('retains ownership until a failed abort is retried successfully', () => {
     let failNextSelection = false
     const { coordinator, store } = createAdmissionHarness({
-      setSelection: (ids) => {
+      setSelection: (targets) => {
         if (failNextSelection) {
           failNextSelection = false
           throw new Error('selection restore failed')
         }
-        store.setSelection(ids)
+        store.setSelection(targets)
       },
     })
-    store.setSelection(['plant-1'])
+    store.setSelection([{ kind: 'plant', id: 'plant-1' }])
     const active = coordinator.begin('interaction-drag')
     active.mutate((draft) => {
       draft.plants[0]!.position = { x: 99, y: 99 }
     })
-    active.setSelection(['plant-2'])
+    active.setSelection([{ kind: 'plant', id: 'plant-2' }])
     failNextSelection = true
 
     expect(() => active.abort()).toThrow('selection restore failed')
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-2']))
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-2' }])
     const blockedEdit = vi.fn()
     expect(coordinator.run('delete-selected', blockedEdit)).toBe(false)
     expect(blockedEdit).not.toHaveBeenCalled()
@@ -309,7 +348,7 @@ describe('Scene Edit single-writer admission', () => {
     active.abort()
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     const next = coordinator.begin('interaction-rotation')
     next.abort()
   })
@@ -321,13 +360,13 @@ describe('Scene Edit single-writer admission', () => {
       draft.plants[0]!.position = { x: 99, y: 99 }
     })
     store.updateSession((session) => {
-      session.hoveredEntityId = 'plant-2'
+      session.hoveredTarget = { kind: 'plant', id: 'plant-2' }
     })
 
     active.abort()
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
-    expect(store.session.hoveredEntityId).toBe('plant-2')
+    expect(store.session.hoveredTarget).toEqual({ kind: 'plant', id: 'plant-2' })
   })
 
   it('retries committed publication without recording history twice or permitting abort', () => {
@@ -665,27 +704,30 @@ describe('Scene Edit single-writer admission', () => {
   it('retries a once-failed immediate abort before reporting the edit error', () => {
     let selectionRestoreFailures = 1
     const { coordinator, store } = createAdmissionHarness({
-      setSelection: (ids) => {
-        const next = new Set(ids)
-        if (next.has('plant-1') && selectionRestoreFailures > 0) {
+      setSelection: (targets) => {
+        const next = [...targets]
+        if (
+          next.some((target) => target.kind === 'plant' && target.id === 'plant-1')
+          && selectionRestoreFailures > 0
+        ) {
           selectionRestoreFailures -= 1
           throw new Error('selection restore failed')
         }
         store.setSelection(next)
       },
     })
-    store.setSelection(['plant-1'])
+    store.setSelection([{ kind: 'plant', id: 'plant-1' }])
 
     expect(() => coordinator.run('failing-immediate', (tx) => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
-      tx.setSelection(['plant-2'])
+      tx.setSelection([{ kind: 'plant', id: 'plant-2' }])
       throw new Error('edit failed')
     })).toThrow('edit failed')
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     expect(coordinator.run('after-abort', (tx) => {
       tx.mutate((draft) => {
         draft.plants[1]!.position = { x: 31, y: 32 }
@@ -696,21 +738,24 @@ describe('Scene Edit single-writer admission', () => {
   it('keeps a twice-failed immediate abort reachable without rerunning the failed edit', () => {
     let selectionRestoreFailures = 2
     const { coordinator, store } = createAdmissionHarness({
-      setSelection: (ids) => {
-        const next = new Set(ids)
-        if (next.has('plant-1') && selectionRestoreFailures > 0) {
+      setSelection: (targets) => {
+        const next = [...targets]
+        if (
+          next.some((target) => target.kind === 'plant' && target.id === 'plant-1')
+          && selectionRestoreFailures > 0
+        ) {
           selectionRestoreFailures -= 1
           throw new Error('selection restore failed')
         }
         store.setSelection(next)
       },
     })
-    store.setSelection(['plant-1'])
+    store.setSelection([{ kind: 'plant', id: 'plant-1' }])
     const failedEdit = vi.fn((tx: SceneEditTransaction) => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
-      tx.setSelection(['plant-2'])
+      tx.setSelection([{ kind: 'plant', id: 'plant-2' }])
       throw new Error('edit failed')
     })
 
@@ -720,7 +765,7 @@ describe('Scene Edit single-writer admission', () => {
     expect(() => coordinator.run('blocked-during-abort', quarantinedEdit)).toThrow('edit failed')
     expect(quarantinedEdit).not.toHaveBeenCalled()
     expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     expect(coordinator.run('after-abort', (tx) => {
       tx.mutate((draft) => {
         draft.plants[1]!.position = { x: 31, y: 32 }
@@ -750,19 +795,19 @@ describe('Scene Edit single-writer admission', () => {
   it('quarantines a partially applied undo and redo until selection replay succeeds', () => {
     let selectionFailures = 0
     const { coordinator, store } = createAdmissionHarness({
-      setSelection: (ids) => {
+      setSelection: (targets) => {
         if (selectionFailures > 0) {
           selectionFailures -= 1
           throw new Error('selection replay failed')
         }
-        store.setSelection(ids)
+        store.setSelection(targets)
       },
     })
     expect(coordinator.run('move-and-select', (tx) => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
-      tx.setSelection(['plant-2'])
+      tx.setSelection([{ kind: 'plant', id: 'plant-2' }])
     })).toBe(true)
 
     selectionFailures = 1
@@ -772,7 +817,7 @@ describe('Scene Edit single-writer admission', () => {
     expect(blockedUndo).not.toHaveBeenCalled()
     expect(coordinator.undo()).toBe(true)
     expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
-    expect(store.session.selectedEntityIds).toEqual(new Set())
+    expect(store.session.selectedTargets).toEqual([])
 
     selectionFailures = 1
     expect(() => coordinator.redo()).toThrow('selection replay failed')
@@ -781,7 +826,7 @@ describe('Scene Edit single-writer admission', () => {
     expect(blockedRedo).not.toHaveBeenCalled()
     expect(coordinator.redo()).toBe(true)
     expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-2']))
+    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-2' }])
   })
 
   it('quarantines history after cursor movement until undo and redo publication succeeds', () => {
@@ -1685,10 +1730,14 @@ describe('Settled Scene presentation maintenance', () => {
 
   it('hydrates Scene content without introducing camera state into the Scene Session', () => {
     const { coordinator, store } = createAdmissionHarness()
+    store.setSelection([{ kind: 'zone', id: 'shared-id' }])
+    store.setHoveredTarget({ kind: 'annotation', id: 'shared-id' })
 
     coordinator.hydrate(makeFile())
 
     expect(store.session).not.toHaveProperty('viewport')
+    expect(store.session.selectedTargets).toEqual([])
+    expect(store.session.hoveredTarget).toBeNull()
   })
 
   it('retries the retained replacement finalizer without accepting a duplicate callback', () => {

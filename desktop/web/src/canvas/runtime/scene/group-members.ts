@@ -3,16 +3,11 @@ import type {
   SceneObjectGroupMember,
   ScenePersistedState,
 } from './types'
-
-export type SceneConcreteDesignObjectTarget =
-  | { kind: 'plant'; id: string }
-  | { kind: 'zone'; id: string }
-  | { kind: 'annotation'; id: string }
-
-export type SceneDesignObjectTarget =
-  | SceneConcreteDesignObjectTarget
-  | { kind: 'measurement-guide'; id: string }
-  | { kind: 'group'; id: string }
+import {
+  sceneTargetKey,
+  type SceneConcreteDesignObjectTarget,
+  type SceneDesignObjectTarget,
+} from './design-object-targets'
 
 export function cloneSceneObjectGroupMember(
   member: SceneObjectGroupMember,
@@ -27,11 +22,7 @@ export function cloneSceneObjectGroupMembers(
 }
 
 export function sceneObjectGroupMemberKey(member: SceneObjectGroupMember): string {
-  return `${member.kind}:${member.id}`
-}
-
-export function sceneTargetKey(target: SceneDesignObjectTarget): string {
-  return `${target.kind}:${target.id}`
+  return sceneTargetKey(member)
 }
 
 export function sceneObjectGroupMemberFromTarget(

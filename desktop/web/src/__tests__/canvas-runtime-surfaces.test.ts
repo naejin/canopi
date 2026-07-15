@@ -29,7 +29,7 @@ function createQuerySurface() {
       revision: 0,
     }),
     getSceneSnapshot: () => createDefaultScenePersistedState(),
-    getSelection: () => new Set<string>(),
+    getSelection: () => [],
     getDesignObjectSelection: () => ({
       editableTargets: [],
       lockedTargets: [],
@@ -227,7 +227,7 @@ describe('canvas runtime surfaces', () => {
     expect(runtimeSource).not.toContain('getSelection():')
     expect(runtimeSource).not.toContain('return this._sceneStore.persisted')
     expect(runtimeSource).not.toContain('return this._camera.viewport')
-    expect(runtimeSource).not.toContain('return new Set(this._sceneStore.session.selectedEntityIds)')
+    expect(runtimeSource).not.toContain('selectedEntityIds')
     expect(runtimeSource).not.toContain('return this._sceneStore.toCanopiFile().plants')
   })
 

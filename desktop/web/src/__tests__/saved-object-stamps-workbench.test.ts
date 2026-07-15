@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
+import {
+  createDefaultScenePersistedState,
+  type SceneDesignObjectTarget,
+} from '../canvas/runtime/scene'
 import type { CanvasRuntimeSavedObjectStampCapture } from '../canvas/runtime/app-adapter'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createSavedObjectStampWorkbench } from '../app/saved-object-stamps/workbench'
@@ -221,11 +224,11 @@ describe('Saved Object Stamp Workbench', () => {
   })
 
   it('updates selection availability when the canvas selection changes without a scene edit', () => {
-    let selectedIds = new Set<string>()
+    let selectedTargets: SceneDesignObjectTarget[] = []
     const query = {
       ...createTestCanvasQuerySurface(),
-      getSelection: () => new Set(selectedIds),
-      getDesignObjectSelection: () => selectedIds.size === 0
+      getSelection: () => selectedTargets.map((target) => ({ ...target })),
+      getDesignObjectSelection: () => selectedTargets.length === 0
         ? {
             editableTargets: [],
             lockedTargets: [],
@@ -253,8 +256,8 @@ describe('Saved Object Stamp Workbench', () => {
 
     expect(workbench.selection.value.canSave).toBe(false)
 
-    selectedIds = new Set(['plant-1'])
-    setCanvasSelection(selectedIds)
+    selectedTargets = [{ kind: 'plant', id: 'plant-1' }]
+    setCanvasSelection(selectedTargets.map((target) => target.id))
 
     expect(workbench.selection.value.canSave).toBe(true)
   })

@@ -19,6 +19,7 @@ import { CameraController } from '../canvas/runtime/camera'
 import {
   SceneStore,
   type SceneAnnotationEntity,
+  type SceneDesignObjectTarget,
   type SceneMeasurementGuideEntity,
   type ScenePlantEntity,
   type ScenePoint,
@@ -67,21 +68,21 @@ function createInteractionDeps(
     | 'getDesignObjectSelection'
     | 'selectionCommands'
     | 'setTool'
-    | 'setHoveredEntityId'
+    | 'setHoveredTarget'
     | 'getPlantPresentationContext'
     | 'readPlantSpacingIntervalMeters'
     | 'commitPlantSpacingIntervalMeters'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionSessionDeps {
-  let selection = new Set<string>()
-  const setSelection = vi.fn((ids: Iterable<string>) => {
-    selection = new Set(ids)
+  let selection: SceneDesignObjectTarget[] = []
+  const setSelection = vi.fn((targets: Iterable<SceneDesignObjectTarget>) => {
+    selection = [...targets].map((target) => ({ ...target }))
     store.setSelection(selection)
-    selectedObjectIds.value = new Set(selection)
+    selectedObjectIds.value = new Set(selection.map((target) => target.id))
   })
   const clearSelection = vi.fn(() => {
-    selection = new Set()
+    selection = []
     store.setSelection(selection)
     selectedObjectIds.value = new Set()
   })
@@ -125,7 +126,7 @@ function createInteractionDeps(
     camera,
     getSpeciesCache: () => new Map(),
     getPlantPresentationContext: overrides.getPlantPresentationContext ?? createPlantPresentationContext,
-    getSelection: () => new Set(selection),
+    getSelection: () => selection.map((target) => ({ ...target })),
     setSelection,
     clearSelection,
     sceneEdits,
@@ -159,7 +160,7 @@ function createInteractionDeps(
     commitPlantSpacingIntervalMeters: overrides.commitPlantSpacingIntervalMeters ?? ((meters) => {
       plantSpacingIntervalM.value = meters
     }),
-    setHoveredEntityId: overrides.setHoveredEntityId ?? (() => {}),
+    setHoveredTarget: overrides.setHoveredTarget ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
   }
 }
@@ -183,6 +184,26 @@ function createSelectionCommands(
     ungroupSelected: vi.fn(),
     ...overrides,
   }
+}
+
+function plantTarget(id: string): SceneDesignObjectTarget {
+  return { kind: 'plant', id }
+}
+
+function zoneTarget(id: string): SceneDesignObjectTarget {
+  return { kind: 'zone', id }
+}
+
+function annotationTarget(id: string): SceneDesignObjectTarget {
+  return { kind: 'annotation', id }
+}
+
+function measurementGuideTarget(id: string): SceneDesignObjectTarget {
+  return { kind: 'measurement-guide', id }
+}
+
+function groupTarget(id: string): SceneDesignObjectTarget {
+  return { kind: 'group', id }
 }
 
 function createRecoveringCommandAdmission(): {
@@ -391,7 +412,7 @@ function getDesignObjectSelectionFromStore(
 ): CanvasDesignObjectSelectionModel {
   return getDesignObjectSelectionModel(
     store.persisted,
-    store.session.selectedEntityIds,
+    store.session.selectedTargets,
     {
       annotationViewportScale: camera.viewport.scale,
       plantContext: createPlantPresentationContext(camera.viewport.scale),
@@ -581,7 +602,7 @@ describe('SceneInteractionSession', () => {
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
-    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
+    expect(deps.setSelection).toHaveBeenCalledWith([plantTarget('plant-1')])
     session.dispose()
   })
 
@@ -650,20 +671,20 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const setHoveredEntityId = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit, setHoveredEntityId })
+    const setHoveredTarget = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit, setHoveredTarget })
     const session = createTestSession(deps)
     session.setTool('select')
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 3 })
     events.pointerMove({ x: 35, y: 45 }, { pointerId: 3 })
     events.holdSpace()
-    setHoveredEntityId.mockClear()
+    setHoveredTarget.mockClear()
     events.windowBlur()
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
     expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(setHoveredEntityId).toHaveBeenCalledWith(null)
+    expect(setHoveredTarget).toHaveBeenCalledWith(null)
     expect(container.style.cursor).toBe('default')
 
     events.pointerDown({ x: 200, y: 150 }, { pointerId: 4 })
@@ -691,7 +712,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['plant-1', 'plant-2'])
+    deps.setSelection([plantTarget('plant-1'), plantTarget('plant-2')])
 
     events.pointerDown({ x: 0, y: 0 })
     events.pointerMove({ x: 3, y: 4 })
@@ -727,7 +748,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -751,22 +772,22 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }, { commonName: 'Apple' })]
     })
-    const setHoveredEntityId = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setHoveredEntityId })
+    const setHoveredTarget = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
 
     events.pointerMove({ x: 20, y: 30 })
     const tooltip = plantHoverTooltip(container)
     expect(tooltip.style.display).toBe('block')
-    expect(setHoveredEntityId).toHaveBeenCalledWith('plant-1')
-    setHoveredEntityId.mockClear()
+    expect(setHoveredTarget).toHaveBeenCalledWith(plantTarget('plant-1'))
+    setHoveredTarget.mockClear()
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     expect(tooltip.style.display).toBe('none')
-    expect(setHoveredEntityId).toHaveBeenCalledWith(null)
+    expect(setHoveredTarget).toHaveBeenCalledWith(null)
 
     events.pointerMove({ x: 35, y: 45 }, { button: 0 })
     events.pointerUp({ x: 35, y: 45 }, { button: 0 })
@@ -791,7 +812,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -823,7 +844,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -859,7 +880,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     expect(toolbar.style.display).toBe('flex')
@@ -875,7 +896,7 @@ describe('SceneInteractionSession', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
 
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
     const lockedAffordance = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
@@ -906,7 +927,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     expect(toolbar.style.display).toBe('flex')
@@ -959,7 +980,10 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['apple-1', 'apple-2']))
-    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['apple-1', 'apple-2']))
+    expect(deps.setSelection).toHaveBeenCalledWith([
+      plantTarget('apple-1'),
+      plantTarget('apple-2'),
+    ])
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })
@@ -974,7 +998,7 @@ describe('SceneInteractionSession', () => {
     })
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    deps.setSelection(['apple-1', 'apple-2', 'pear-1'])
+    deps.setSelection([plantTarget('apple-1'), plantTarget('apple-2'), plantTarget('pear-1')])
     vi.mocked(deps.setSelection).mockClear()
     const session = createTestSession(deps)
     session.setTool('select')
@@ -1247,7 +1271,7 @@ describe('SceneInteractionSession', () => {
       getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
 
     session.refreshMeasurements()
 
@@ -1307,7 +1331,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
 
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
@@ -1350,7 +1374,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
 
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
@@ -1360,7 +1384,7 @@ describe('SceneInteractionSession', () => {
     expect(toolbar.style.display).toBe('flex')
     expect(tooltip.style.display).toBe('inline-flex')
 
-    deps.setSelection(['zone-2'])
+    deps.setSelection([zoneTarget('zone-2')])
     session.refreshMeasurements()
 
     expect(toolbar.style.display).toBe('flex')
@@ -1386,7 +1410,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
@@ -1405,7 +1429,7 @@ describe('SceneInteractionSession', () => {
     expect(tooltip.style.display).toBe('none')
 
     session.setTool('select')
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
     session.refreshMeasurements()
     expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
@@ -1705,7 +1729,7 @@ describe('SceneInteractionSession', () => {
       ],
       lockedTargets: [],
       blockedTargets: [{
-        target: { kind: 'missing' as const, id: 'missing-object' },
+        target: { kind: 'plant' as const, id: 'missing-object' },
         reason: 'missing-design-object' as const,
         layerName: null,
       }],
@@ -1807,24 +1831,24 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
 
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')
     expect(handle).not.toBeNull()
     expect(handle?.style.display).toBe('inline-flex')
 
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
 
     expect(handle?.style.display).toBe('none')
 
-    deps.setSelection(['measurement-guide-1'])
+    deps.setSelection([measurementGuideTarget('measurement-guide-1')])
     session.refreshMeasurements()
 
     expect(handle?.style.display).toBe('none')
 
-    deps.setSelection(['plant-1', 'measurement-guide-1'])
+    deps.setSelection([plantTarget('plant-1'), measurementGuideTarget('measurement-guide-1')])
     session.refreshMeasurements()
 
     expect(handle?.style.display).toBe('none')
@@ -1849,7 +1873,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
 
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')
@@ -1873,7 +1897,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -1909,7 +1933,7 @@ describe('SceneInteractionSession', () => {
       getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -1941,7 +1965,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -1978,7 +2002,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -2012,7 +2036,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -2046,7 +2070,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
@@ -2069,7 +2093,7 @@ describe('SceneInteractionSession', () => {
       getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
     })
     const session = createTestSession(deps)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
 
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('zone-1', [
@@ -2126,7 +2150,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['plant-1', 'plant-2'])
+    deps.setSelection([plantTarget('plant-1'), plantTarget('plant-2')])
     session.refreshMeasurements()
     const selection = getDesignObjectSelectionFromStore(store, camera)
     const pivot = selectionBoundsCenter(selection)
@@ -2180,7 +2204,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['plant-1', 'line-1', 'rect-1', 'annotation-1'])
+    deps.setSelection([plantTarget('plant-1'), zoneTarget('line-1'), zoneTarget('rect-1'), annotationTarget('annotation-1')])
     session.refreshMeasurements()
     const selection = getDesignObjectSelectionFromStore(store, camera)
     const pivot = selectionBoundsCenter(selection)
@@ -2232,7 +2256,7 @@ describe('SceneInteractionSession', () => {
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
-    deps.setSelection(['group-1'])
+    deps.setSelection([groupTarget('group-1')])
     session.refreshMeasurements()
     const selection = getDesignObjectSelectionFromStore(store, camera)
     const pivot = selectionBoundsCenter(selection)
@@ -2276,7 +2300,7 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
 
-    deps.setSelection(['group-1'])
+    deps.setSelection([groupTarget('group-1')])
     session.refreshMeasurements()
 
     expect(container.querySelector<HTMLElement>('[data-rotation-handle]')?.style.display).toBe('none')
@@ -2429,7 +2453,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
     const downstreamContextMenu = vi.fn()
     container.addEventListener('contextmenu', downstreamContextMenu)
 
@@ -2482,7 +2506,7 @@ describe('SceneInteractionSession', () => {
     }
     const session = createTestSession(deps)
     session.setTool('select')
-    baseDeps.setSelection(['plant-1'])
+    baseDeps.setSelection([plantTarget('plant-1')])
     const before = store.snapshot().persisted
 
     events.pointerDown({ x: 120, y: 30 }, { pointerId: 43 })
@@ -2492,7 +2516,7 @@ describe('SceneInteractionSession', () => {
     expect(recoveryCalls).toHaveBeenCalledOnce()
     expect(recoveryCalls).toHaveBeenCalledWith(true)
     expect(store.persisted).toEqual(before)
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
   })
 
   it('quarantines the contextmenu that recovers pending Scene settlement', () => {
@@ -2515,7 +2539,7 @@ describe('SceneInteractionSession', () => {
     }
     const session = createTestSession(deps)
     session.setTool('select')
-    baseDeps.setSelection(['plant-1'])
+    baseDeps.setSelection([plantTarget('plant-1')])
     const point = events.clientPoint({ x: 120, y: 30 })
     const contextMenu = new MouseEvent('contextmenu', {
       bubbles: true,
@@ -2528,7 +2552,7 @@ describe('SceneInteractionSession', () => {
 
     expect(recoveryCalls).toHaveBeenCalledOnce()
     expect(recoveryCalls).toHaveBeenCalledWith(true)
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
     expect(container.querySelector<HTMLElement>('[data-canvas-context-menu]')?.style.display)
       .not.toBe('block')
   })
@@ -2980,7 +3004,7 @@ describe('SceneInteractionSession', () => {
     }
     const session = createTestSession(deps)
 
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
     vi.mocked(deps.setSelection).mockClear()
     const point = events.clientPoint({ x: 110, y: 30 })
     container.dispatchEvent(new MouseEvent('contextmenu', {
@@ -3092,7 +3116,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
     vi.mocked(deps.setSelection).mockClear()
     const plantTwoContext = events.clientPoint({ x: 80, y: 30 })
     container.dispatchEvent(new MouseEvent('contextmenu', {
@@ -3103,9 +3127,9 @@ describe('SceneInteractionSession', () => {
     }))
 
     expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
-    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-2']))
+    expect(deps.setSelection).toHaveBeenCalledWith([plantTarget('plant-2')])
 
-    deps.setSelection(['plant-1', 'plant-2'])
+    deps.setSelection([plantTarget('plant-1'), plantTarget('plant-2')])
     vi.mocked(deps.setSelection).mockClear()
     container.dispatchEvent(new MouseEvent('contextmenu', {
       bubbles: true,
@@ -3321,7 +3345,7 @@ describe('SceneInteractionSession', () => {
     })
 
     const deps = createInteractionDeps(container, store, camera)
-    deps.setSelection(['already-selected'])
+    deps.setSelection([plantTarget('already-selected')])
     vi.mocked(deps.setSelection).mockClear()
     const session = createTestSession(deps)
 
@@ -3353,7 +3377,7 @@ describe('SceneInteractionSession', () => {
     })
     let failSceneRead = false
     const baseDeps = createInteractionDeps(container, store, camera)
-    baseDeps.setSelection(['missing-selection'])
+    baseDeps.setSelection([zoneTarget('missing-selection')])
     const deps: SceneInteractionSessionDeps = {
       ...baseDeps,
       getSceneStore: () => {
@@ -3408,7 +3432,7 @@ describe('SceneInteractionSession', () => {
 
   it('keeps Plant Spacing in source-picking mode on missed clicks without clearing selection', () => {
     const deps = createInteractionDeps(container, store, camera)
-    deps.setSelection(['already-selected'])
+    deps.setSelection([plantTarget('already-selected')])
     vi.mocked(deps.setSelection).mockClear()
     vi.mocked(deps.clearSelection).mockClear()
     const session = createTestSession(deps)
@@ -4857,7 +4881,9 @@ describe('SceneInteractionSession', () => {
       text: 'Guild note',
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-text')
-    expect(deps.setSelection).toHaveBeenCalledWith([store.persisted.annotations[0]!.id])
+    expect(deps.setSelection).toHaveBeenCalledWith([
+      annotationTarget(store.persisted.annotations[0]!.id),
+    ])
     expect(container.querySelector('textarea')).toBeNull()
     session.dispose()
   })
@@ -5114,7 +5140,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
     events.keyDown({ key: 'F2', cancelable: true, target: container })
     const oldTextarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     oldTextarea.value = 'Stale draft'
@@ -5196,7 +5222,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
 
     events.keyDown({ key: 'F2', cancelable: true, target: container })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
@@ -5221,7 +5247,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
 
     const event = events.keyDown({ key: 'Enter', cancelable: true, target: container })
 
@@ -5237,7 +5263,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
     const externalButton = document.createElement('button')
     document.body.appendChild(externalButton)
     externalButton.focus()
@@ -5396,7 +5422,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
 
     events.keyDown({ key: 'F2', cancelable: true, target: container })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
@@ -5418,7 +5444,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['annotation-1'])
+    deps.setSelection([annotationTarget('annotation-1')])
 
     events.keyDown({ key: 'F2', cancelable: true, target: container })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
@@ -5460,7 +5486,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
 
-    deps.setSelection(['locked-annotation'])
+    deps.setSelection([annotationTarget('locked-annotation')])
     events.keyDown({ key: 'F2', cancelable: true, target: container })
     expect(container.querySelector('textarea')).toBeNull()
 
@@ -6356,7 +6382,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 80, y: 50 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
-    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['zone-ellipse']))
+    expect(deps.setSelection).toHaveBeenCalledWith([zoneTarget('zone-ellipse')])
     session.dispose()
   })
 
@@ -6507,7 +6533,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const deps = createInteractionDeps(container, store, camera)
-    deps.setSelection(['plant-1'])
+    deps.setSelection([plantTarget('plant-1')])
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -6746,11 +6772,11 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
     session.setTool('select')
-    deps.setSelection(['plant-2'])
+    deps.setSelection([plantTarget('plant-2')])
 
     events.pointerDown({ x: 0, y: 0 }, { button: 0, pointerId: 101 })
     events.pointerMove({ x: 50, y: 50 }, { button: 0, pointerId: 101 })
-    expect(store.session.selectedEntityIds).toEqual(new Set())
+    expect(store.session.selectedTargets).toEqual([])
     const unrelated = deps.sceneEdits.begin('external-preview')
     unrelated.mutate((draft) => {
       draft.plants[1]!.position = { x: 130, y: 130 }
@@ -6762,14 +6788,14 @@ describe('SceneInteractionSession', () => {
     )
 
     expect(blockedPointerUp.defaultPrevented).toBe(true)
-    expect(store.session.selectedEntityIds).toEqual(new Set())
+    expect(store.session.selectedTargets).toEqual([])
     unrelated.abort()
 
     events.pointerDown({ x: 0, y: 0 }, { button: 0, pointerId: 102 })
     events.pointerMove({ x: 50, y: 50 }, { button: 0, pointerId: 102 })
     events.pointerUp({ x: 50, y: 50 }, { button: 0, pointerId: 102 })
 
-    expect(store.session.selectedEntityIds).toEqual(new Set(['plant-1']))
+    expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
     session.dispose()
   })
 
@@ -7354,7 +7380,7 @@ describe('SceneInteractionSession', () => {
     })
 
     const deps = createInteractionDeps(container, store, camera)
-    deps.setSelection(['zone-1'])
+    deps.setSelection([zoneTarget('zone-1')])
     const session = createTestSession(deps)
 
     session.refreshMeasurements()
@@ -7380,7 +7406,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 60, y: 50 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set())
-    expect(deps.setSelection).not.toHaveBeenCalledWith(new Set(['zone-1']))
+    expect(deps.setSelection).not.toHaveBeenCalledWith([zoneTarget('zone-1')])
 
     events.pointerDown({ x: 10, y: 50 }, { button: 0 })
     events.pointerUp({ x: 10, y: 50 }, { button: 0 })
@@ -7722,7 +7748,7 @@ describe('SceneInteractionSession', () => {
       symbol: 'tree',
       position: { x: 50, y: 70 },
     })
-    expect(store.session.selectedEntityIds).toEqual(new Set([store.persisted.plants[0]!.id]))
+    expect(store.session.selectedTargets).toEqual([plantTarget(store.persisted.plants[0]!.id)])
     expect(selectedObjectIds.value).toEqual(new Set([store.persisted.plants[0]!.id]))
     session.dispose()
   })
@@ -7748,7 +7774,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 50, y: 70 }, { button: 0 })
 
     expect(store.persisted.plants).toHaveLength(0)
-    expect(store.session.selectedEntityIds).toEqual(new Set())
+    expect(store.session.selectedTargets).toEqual([])
     expect(selectedObjectIds.value).toEqual(new Set())
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -9574,12 +9600,12 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('selects annotations before overlapping zones', () => {
+  it('selects the typed Annotation before an overlapping Zone with the same raw id', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'zone-1',
+        name: 'shared',
         zoneType: 'rect',
         rotationDeg: 0,
         points: [
@@ -9594,7 +9620,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [{
         kind: 'annotation',
         locked: false,
-        id: 'annotation-1',
+        id: 'shared',
         annotationType: 'text',
         position: { x: 20, y: 20 },
         text: 'Top note',
@@ -9610,8 +9636,8 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 24, y: 24 }, { button: 0 })
     events.pointerUp({ x: 24, y: 24 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set(['annotation-1']))
-    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['annotation-1']))
+    expect(selectedObjectIds.value).toEqual(new Set(['shared']))
+    expect(deps.setSelection).toHaveBeenCalledWith([annotationTarget('shared')])
     session.dispose()
   })
 
@@ -9749,13 +9775,13 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     let failHoveredWrite = false
-    const setHoveredEntityId = vi.fn(() => {
+    const setHoveredTarget = vi.fn(() => {
       if (failHoveredWrite) throw new Error('hover cleanup failed')
     })
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, {
       onSceneEditCommit,
-      setHoveredEntityId,
+      setHoveredTarget,
     })
     const session = createTestSession(deps)
     session.setTool('select')
@@ -9933,7 +9959,7 @@ describe('SceneInteractionSession', () => {
     let failHoveredWrite = false
     const deps = createInteractionDeps(container, store, camera, {
       getDesignObjectSelection,
-      setHoveredEntityId: () => {
+      setHoveredTarget: () => {
         if (failHoveredWrite) throw new Error('pointer-up cleanup failed')
       },
     })
@@ -9979,7 +10005,9 @@ describe('SceneInteractionSession', () => {
           if (failRender) throw new Error(`${kind} cancellation render failed`)
         },
       })
-      deps.setSelection([kind === 'Zone' ? 'zone-1' : 'measurement-guide-1'])
+      deps.setSelection([
+        kind === 'Zone' ? zoneTarget('zone-1') : measurementGuideTarget('measurement-guide-1'),
+      ])
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
@@ -10033,7 +10061,11 @@ describe('SceneInteractionSession', () => {
         throw new Error(`${kind} commit failed`)
       })
       const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-      deps.setSelection([targetId])
+      deps.setSelection([
+        kind === 'Measurement Guide Control Point'
+          ? measurementGuideTarget(targetId)
+          : zoneTarget(targetId),
+      ])
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
@@ -10120,7 +10152,11 @@ describe('SceneInteractionSession', () => {
         `${kind} abort failed`,
       )
       const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
-      deps.setSelection([designObjectId])
+      deps.setSelection([
+        kind === 'Measurement Guide Control Point'
+          ? measurementGuideTarget(designObjectId)
+          : zoneTarget(designObjectId),
+      ])
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
@@ -10232,7 +10268,11 @@ describe('SceneInteractionSession', () => {
         'always',
       )
       const session = createTestSession({ ...baseDeps, sceneEdits: abortFailure.sceneEdits })
-      baseDeps.setSelection([designObjectId])
+      baseDeps.setSelection([
+        kind === 'Measurement Guide Control Point'
+          ? measurementGuideTarget(designObjectId)
+          : zoneTarget(designObjectId),
+      ])
       session.setTool('select')
       session.refreshMeasurements()
       const handle = kind === 'Rotation Handle'
@@ -10433,12 +10473,12 @@ describe('SceneInteractionSession', () => {
   })
 
   it('clears hover when disposed', () => {
-    const setHoveredEntityId = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setHoveredEntityId })
+    const setHoveredTarget = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
     const session = createTestSession(deps)
 
     session.dispose()
 
-    expect(setHoveredEntityId).toHaveBeenCalledWith(null)
+    expect(setHoveredTarget).toHaveBeenCalledWith(null)
   })
 })

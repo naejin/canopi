@@ -2,8 +2,18 @@ import { computeSelectionRect } from '../../operations'
 import type { CameraController } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
-import type { ScenePoint, SceneStateReader } from '../scene'
-import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
+import type {
+  SceneDesignObjectSelection,
+  SceneDesignObjectTarget,
+  ScenePoint,
+  SceneStateReader,
+} from '../scene'
+import {
+  isDirectSceneDesignObjectLocked,
+  isSceneDesignObjectLocked,
+  normalizeSceneDesignObjectTargets,
+  sceneTargetKey,
+} from '../scene'
 import {
   applySpeciesSelection,
   getSelectablePlantIdsForSpecies,
@@ -40,9 +50,9 @@ export interface SceneInteractionSharedGestureContext {
   readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
-  readonly getSelection: () => ReadonlySet<string>
+  readonly getSelection: () => SceneDesignObjectSelection
   readonly getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
-  readonly setSelection: (ids: Iterable<string>) => void
+  readonly setSelection: (targets: Iterable<SceneDesignObjectTarget>) => void
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void
@@ -161,8 +171,8 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.context.getSpeciesCache(),
       this.context.getPlantPresentationContext,
     )
-    const lockedHit = rawHit && isDirectSceneDesignObjectLocked(scene, rawHit.id) ? rawHit : null
-    const hit = rawHit && (!isSceneDesignObjectLocked(scene, rawHit.id) || lockedHit) ? rawHit : null
+    const lockedHit = rawHit && isDirectSceneDesignObjectLocked(scene, rawHit) ? rawHit : null
+    const hit = rawHit && (!isSceneDesignObjectLocked(scene, rawHit) || lockedHit) ? rawHit : null
     const additive = hasAdditiveModifier(event)
 
     if (!hit) {
@@ -177,15 +187,9 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     }
 
     if (lockedHit) {
-      const currentSelection = new Set(this.context.getSelection())
-      if (additive) {
-        if (currentSelection.has(lockedHit.id)) currentSelection.delete(lockedHit.id)
-        else currentSelection.add(lockedHit.id)
-      } else {
-        currentSelection.clear()
-        currentSelection.add(lockedHit.id)
-      }
-      this.context.setSelection(currentSelection)
+      this.context.setSelection(additive
+        ? toggleSelectionTarget(this.context.getSelection(), lockedHit)
+        : [lockedHit])
       this.context.render('scene')
       this.context.refreshSelectionDependent()
       return true
@@ -216,40 +220,33 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       )
     if (recognizedAnnotationDoubleClick) {
       this.lastClick = null
-      this.context.setSelection([hit.id])
+      this.context.setSelection([hit])
       this.context.render('scene')
       this.context.refreshSelectionDependent()
       this.context.beginAnnotationTextEdit(hit.id)
       return true
     }
 
-    const currentSelection = new Set(this.context.getSelection())
+    const currentSelection = this.context.getSelection()
     if (additive) {
-      if (currentSelection.has(hit.id)) currentSelection.delete(hit.id)
-      else currentSelection.add(hit.id)
-      this.context.setSelection(currentSelection)
+      this.context.setSelection(toggleSelectionTarget(currentSelection, hit))
       this.context.render('scene')
       return true
     }
 
-    if (!currentSelection.has(hit.id)) {
-      currentSelection.clear()
-      currentSelection.add(hit.id)
-      this.context.setSelection(currentSelection)
+    if (!selectionHasTarget(currentSelection, hit)) {
+      this.context.setSelection([hit])
       this.context.render('scene')
     }
 
     this.mode = 'dragging'
     this.bandAdditive = false
     this.dragEdit = this.context.sceneEdits.begin('interaction-drag')
-    captureSceneDragState(this.dragState, scene, editableSelectionIds(this.context.getDesignObjectSelection()))
-    this.dragSnapRef =
-      this.dragState.plantStarts.get(hit.id) ??
-      this.dragState.annotationStarts.get(hit.id) ??
-      this.dragState.measurementGuideStarts.get(hit.id)?.start ??
-      this.dragState.zoneStarts.get(hit.id)?.[0] ??
-      firstCapturedDragStart(this.dragState)
-    this.activeDraggedPlantId = this.dragState.plantStarts.has(hit.id) ? hit.id : null
+    captureSceneDragState(this.dragState, scene, this.context.getDesignObjectSelection().editableTargets)
+    this.dragSnapRef = dragStartForTarget(this.dragState, hit) ?? firstCapturedDragStart(this.dragState)
+    this.activeDraggedPlantId = hit.kind === 'plant' && this.dragState.plantStarts.has(hit.id)
+      ? hit.id
+      : null
     this.activeClickTarget = hit
     this.activeClickScreen = screen
     this.activeClickAdditive = additive
@@ -326,8 +323,8 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       const rect = computeSelectionRect(this.startWorld, rawWorld)
       const scene = this.context.getSceneStore().persisted
       const current = this.bandAdditive
-        ? new Set(this.context.getSelection())
-        : new Set<string>()
+        ? new Map(this.context.getSelection().map((target) => [sceneTargetKey(target), target]))
+        : new Map<string, SceneDesignObjectTarget>()
       for (const target of queryRectTopLevel(
         scene,
         rect,
@@ -335,10 +332,10 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
         this.context.getSpeciesCache(),
         this.context.getPlantPresentationContext,
       )) {
-        if (isSceneDesignObjectLocked(scene, target.id)) continue
-        current.add(target.id)
+        if (isSceneDesignObjectLocked(scene, target)) continue
+        current.set(sceneTargetKey(target), target)
       }
-      this.context.setSelection(current)
+      this.context.setSelection(current.values())
       this.context.render('scene')
     }
 
@@ -441,8 +438,36 @@ function distance(a: ScenePoint, b: ScenePoint): number {
   return Math.hypot(b.x - a.x, b.y - a.y)
 }
 
-function editableSelectionIds(selection: CanvasDesignObjectSelectionModel): Set<string> {
-  return new Set(selection.editableTargets.map((target) => target.id))
+function selectionHasTarget(
+  selection: SceneDesignObjectSelection,
+  target: SceneDesignObjectTarget,
+): boolean {
+  const key = sceneTargetKey(target)
+  return selection.some((candidate) => sceneTargetKey(candidate) === key)
+}
+
+function toggleSelectionTarget(
+  selection: SceneDesignObjectSelection,
+  target: SceneDesignObjectTarget,
+): SceneDesignObjectTarget[] {
+  const next = new Map(selection.map((candidate) => [sceneTargetKey(candidate), candidate]))
+  const key = sceneTargetKey(target)
+  if (next.has(key)) next.delete(key)
+  else next.set(key, target)
+  return normalizeSceneDesignObjectTargets(next.values())
+}
+
+function dragStartForTarget(
+  state: ReturnType<typeof createSceneDragState>,
+  target: SceneDesignObjectTarget,
+): ScenePoint | null {
+  if (target.kind === 'plant') return state.plantStarts.get(target.id) ?? null
+  if (target.kind === 'annotation') return state.annotationStarts.get(target.id) ?? null
+  if (target.kind === 'measurement-guide') {
+    return state.measurementGuideStarts.get(target.id)?.start ?? null
+  }
+  if (target.kind === 'zone') return state.zoneStarts.get(target.id)?.[0] ?? null
+  return null
 }
 
 function firstCapturedDragStart(

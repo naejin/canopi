@@ -2,10 +2,16 @@ import { getCanvasTool } from '../session-state'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import type {
+  SceneDesignObjectSelection,
+  SceneDesignObjectTarget,
   ScenePoint,
   SceneStateReader,
 } from './scene'
-import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from './scene'
+import {
+  includesSceneDesignObjectTarget,
+  resolveSceneObjectGroupMembers,
+  sceneObjectGroupMemberLayerName,
+} from './scene'
 import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
@@ -82,7 +88,6 @@ import {
   type LockedObjectAffordanceController,
 } from './interaction/locked-object-affordance'
 import {
-  getLockedSceneDesignObjectIds,
   isDirectSceneDesignObjectLocked,
   isSceneDesignObjectLocked,
   setSceneDesignObjectLocks,
@@ -112,8 +117,8 @@ export interface SceneInteractionSessionDeps {
   camera: CameraController
   getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
-  getSelection: () => ReadonlySet<string>
-  setSelection: (ids: Iterable<string>) => void
+  getSelection: () => SceneDesignObjectSelection
+  setSelection: (targets: Iterable<SceneDesignObjectTarget>) => void
   clearSelection: () => void
   sceneEdits: SceneEditCoordinator
   commandAdmission: SceneCommandAdmission
@@ -144,7 +149,7 @@ export interface SceneInteractionSessionDeps {
   readSnapToGuidesEnabled: () => boolean
   readPlantSpacingIntervalMeters: () => number
   commitPlantSpacingIntervalMeters: (meters: number) => void
-  setHoveredEntityId: (id: string | null) => void
+  setHoveredTarget: (target: SceneDesignObjectTarget | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   notifyTransientHistoryChange?: () => void
 }
@@ -299,7 +304,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }), (controlPoints) => controlPoints.dispose())
       this._lockedAffordance = own(createLockedObjectAffordance({
         container: this._deps.container,
-        onUnlock: (id) => this._unlockLockedObject(id),
+        onUnlock: (target) => this._unlockLockedObject(target),
       }), (affordance) => affordance.dispose())
       this.setTool(getCanvasTool())
       this._attach()
@@ -407,7 +412,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._forEachUniqueToolHook('dispose', (dispose) => attempt(dispose)))
     attempt(() => this._preview.remove())
     attempt(() => this._tooltip.dispose())
-    attempt(() => this._deps.setHoveredEntityId(null))
+    attempt(() => this._deps.setHoveredTarget(null))
 
     throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction Session disposal failed')
   }
@@ -544,9 +549,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._deps.getSpeciesCache(),
       this._deps.getPlantPresentationContext,
     )
-    if (hit) {
-      this._deps.setHoveredEntityId(hit.id)
-    }
+    this._deps.setHoveredTarget(hit)
     this._syncLockedObjectAffordance(hit, screen, this._deps.getSceneStore().persisted)
 
     if (hit?.kind === 'plant') {
@@ -556,7 +559,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         this._tooltip.show(screen.x, screen.y, commonName, plant.canonicalName)
       }
     } else {
-      if (!hit) this._deps.setHoveredEntityId(null)
       this._tooltip.hide()
     }
   }
@@ -792,7 +794,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       tx.mutate((draft) => {
         placedPlantId = appendPlantStampSourceToDraft(draft, source, world)
       })
-      if (placedPlantId) tx.setSelection([placedPlantId])
+      if (placedPlantId) tx.setSelection([{ kind: 'plant', id: placedPlantId }])
     }, {
       onCommitted: () => {
         this._switchTool('select')
@@ -850,8 +852,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     )
     if (!hit) return visibleHit ? disabledContextMenuSelection() : null
     if (isContextMenuTargetStructurallyBlocked(scene, hit)) return disabledContextMenuSelection()
-    if (this._deps.getSelection().has(hit.id)) return null
-    this._deps.setSelection(new Set([hit.id]))
+    if (includesSceneDesignObjectTarget(this._deps.getSelection(), hit)) return null
+    this._deps.setSelection([hit])
     this._deps.render('scene')
     this._refreshSelectionDependentMeasurements()
     return null
@@ -904,7 +906,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         () => this._zoneControlPoints.cancelActiveDrag(),
         () => this._measurementGuideControlPoints.cancelActiveDrag(),
         () => activeAdapter?.cancelTransient?.(options),
-        () => this._deps.setHoveredEntityId(null),
+        () => this._deps.setHoveredTarget(null),
         () => this._tooltip.hide(),
         () => this._lockedAffordance.hide(),
         () => {
@@ -972,7 +974,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _clearPassiveHoverPresentation(): void {
-    this._deps.setHoveredEntityId(null)
+    this._deps.setHoveredTarget(null)
     this._tooltip.hide()
     this._lockedAffordance.hide()
   }
@@ -1081,7 +1083,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const viewportScale = this._deps.camera.viewport.scale
     const selection = getDesignObjectSelectionModel(
       this._deps.getSceneStore().persisted,
-      new Set([annotationId]),
+      [{ kind: 'annotation', id: annotationId }],
       {
         annotationViewportScale: viewportScale,
         plantContext: this._deps.getPlantPresentationContext(viewportScale),
@@ -1103,20 +1105,20 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._lockedAffordance.hide()
       return
     }
-    if (!getLockedSceneDesignObjectIds(scene).has(hit.id)) {
+    if (!isDirectSceneDesignObjectLocked(scene, hit)) {
       this._lockedAffordance.hide()
       return
     }
     this._lockedAffordance.show({
-      id: hit.id,
+      target: hit,
       screenX: screen.x,
       screenY: screen.y,
     })
   }
 
-  private _unlockLockedObject(id: string): void {
+  private _unlockLockedObject(target: SceneDesignObjectTarget): void {
     this._deps.sceneEdits.run('unlock-design-object', (tx) => {
-      tx.mutate((draft) => setSceneDesignObjectLocks(draft, [id], false))
+      tx.mutate((draft) => setSceneDesignObjectLocks(draft, [target], false))
     }, { onCommitted: () => this._lockedAffordance.hide() })
   }
 
@@ -1248,8 +1250,8 @@ function disabledContextMenuSelection(): CanvasDesignObjectSelectionModel {
 
 function isContextMenuTargetStructurallyBlocked(scene: ScenePersistedState, target: TopLevelTarget): boolean {
   if (isTargetLayerLocked(scene, target)) return true
-  return isSceneDesignObjectLocked(scene, target.id)
-    && !isDirectSceneDesignObjectLocked(scene, target.id)
+  return isSceneDesignObjectLocked(scene, target)
+    && !isDirectSceneDesignObjectLocked(scene, target)
 }
 
 function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget): boolean {

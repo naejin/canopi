@@ -1,16 +1,14 @@
 import type { SceneRendererSnapshot } from '../../canvas/runtime/renderers/scene-types'
-import type { ScenePersistedState } from '../../canvas/runtime/scene'
-import {
-  getSelectedAnnotationIds,
-  getSelectedMeasurementGuideIds,
-  getSelectedPlantIds,
-  getSelectedZoneIds,
-} from '../../canvas/runtime/scene-runtime/selection'
+import type {
+  SceneDesignObjectSelection,
+  ScenePersistedState,
+} from '../../canvas/runtime/scene'
+import { projectSceneSelectionEntityIds } from '../../canvas/runtime/scene-runtime/selection'
 
 export interface TestSceneRendererSnapshotOptions {
   readonly scene?: Partial<ScenePersistedState>
   readonly viewport?: SceneRendererSnapshot['viewport']
-  readonly selectedEntityIds?: SceneRendererSnapshot['selectedEntityIds']
+  readonly selectedTargets?: SceneDesignObjectSelection
   readonly highlightedPlantIds?: SceneRendererSnapshot['highlightedPlantIds']
   readonly highlightedZoneIds?: SceneRendererSnapshot['highlightedZoneIds']
   readonly speciesCache?: SceneRendererSnapshot['speciesCache']
@@ -35,16 +33,17 @@ export function createTestSceneRendererSnapshot(
     groups: options.scene?.groups ?? [],
     guides: options.scene?.guides ?? [],
   }
-  const selectedEntityIds = new Set(options.selectedEntityIds ?? [])
+  const selectedTargets = options.selectedTargets ?? []
+  const singleSelectedPlant = selectedTargets.length === 1 && selectedTargets[0]?.kind === 'plant'
+    ? selectedTargets[0]
+    : null
+  const selectionProjection = projectSceneSelectionEntityIds(scene, selectedTargets)
 
   return {
     scene,
     viewport: options.viewport ?? { x: 0, y: 0, scale: 1 },
-    selectedEntityIds,
-    selectedPlantIds: getSelectedPlantIds(scene, selectedEntityIds),
-    selectedZoneIds: getSelectedZoneIds(scene, selectedEntityIds),
-    selectedAnnotationIds: getSelectedAnnotationIds(scene, selectedEntityIds),
-    selectedMeasurementGuideIds: getSelectedMeasurementGuideIds(scene, selectedEntityIds),
+    selectionLabelPlantIds: new Set(singleSelectedPlant ? [singleSelectedPlant.id] : []),
+    ...selectionProjection,
     highlightedPlantIds: new Set(options.highlightedPlantIds ?? []),
     highlightedZoneIds: new Set(options.highlightedZoneIds ?? []),
     speciesCache: new Map(options.speciesCache ?? []),

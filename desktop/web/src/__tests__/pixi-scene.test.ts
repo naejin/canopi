@@ -359,7 +359,7 @@ describe('createPixiSceneRenderer', () => {
           rotationDeg: null,
         }],
       },
-      selectedEntityIds: new Set(['annotation-1']),
+      selectedTargets: [{ kind: 'annotation', id: 'annotation-1' }],
     })
 
     renderer.renderScene(snapshot)
@@ -643,7 +643,7 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 
-  it('keeps zone and plant strokes screen-readable across viewport scale', async () => {
+  it('keeps colliding Zone and Plant selection strokes typed and screen-readable', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
@@ -682,7 +682,7 @@ describe('createPixiSceneRenderer', () => {
         plants: [{
           kind: 'plant',
           locked: false,
-          id: 'plant-1',
+          id: 'shared-id',
           canonicalName: 'Malus domestica',
           commonName: 'Apple',
           color: null,
@@ -698,7 +698,7 @@ describe('createPixiSceneRenderer', () => {
         zones: [{
           kind: 'zone',
           locked: false,
-          name: 'zone-1',
+          name: 'shared-id',
           zoneType: 'rect',
           points: [
             { x: 0, y: 0 },
@@ -712,7 +712,7 @@ describe('createPixiSceneRenderer', () => {
         }],
       },
       viewport: { x: 0, y: 0, scale: 4 },
-      selectedEntityIds: new Set(['plant-1', 'zone-1']),
+      selectedTargets: [{ kind: 'zone', id: 'shared-id' }],
     })
 
     renderer.renderScene(snapshot)
@@ -720,7 +720,24 @@ describe('createPixiSceneRenderer', () => {
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
     const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
     expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.125 })
-    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.125 })
+    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.4 })
+
+    renderer.setViewport({ x: 0, y: 0, scale: 2 })
+
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 0.8 })
+
+    renderer.renderScene(createTestSceneRendererSnapshot({
+      scene: snapshot.scene,
+      viewport: { x: 0, y: 0, scale: 4 },
+      selectedTargets: [
+        { kind: 'zone', id: 'shared-id' },
+        { kind: 'plant', id: 'shared-id' },
+      ],
+    }))
+
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.125 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.125 })
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
@@ -797,7 +814,7 @@ describe('createPixiSceneRenderer', () => {
           },
         ],
       },
-      selectedEntityIds: new Set(['selected-zone']),
+      selectedTargets: [{ kind: 'zone', id: 'selected-zone' }],
       highlightedZoneIds: new Set<string>(['hover-zone']),
     })
 

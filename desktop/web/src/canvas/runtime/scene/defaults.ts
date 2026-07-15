@@ -1,9 +1,15 @@
 import { SCENE_LAYER_NAMES, type ScenePersistedState, type SceneSessionState } from './types'
+import {
+  cloneSceneDesignObjectTarget,
+  normalizeSceneDesignObjectTargets,
+} from './design-object-targets'
 
 export function createDefaultSceneSessionState(overrides: Partial<SceneSessionState> = {}): SceneSessionState {
   return {
-    selectedEntityIds: new Set(overrides.selectedEntityIds ?? []),
-    hoveredEntityId: overrides.hoveredEntityId ?? null,
+    selectedTargets: normalizeSceneDesignObjectTargets(overrides.selectedTargets ?? []),
+    hoveredTarget: overrides.hoveredTarget
+      ? cloneSceneDesignObjectTarget(overrides.hoveredTarget)
+      : null,
     documentRevision: overrides.documentRevision ?? 0,
   }
 }

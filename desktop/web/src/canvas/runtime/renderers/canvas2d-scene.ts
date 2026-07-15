@@ -94,7 +94,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
           if (!snapshot) return
           const labels = computeSelectionLabels(
             snapshot.scene.plants,
-            snapshot.selectedEntityIds,
+            snapshot.selectionLabelPlantIds,
             viewport,
             snapshot.localizedCommonNames,
             {
