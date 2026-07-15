@@ -149,6 +149,69 @@ describe('Web Edition reduced Species Catalog adapter', () => {
     })
   })
 
+  it('uses DuckDB binary ordering and the Species id tie-break while browsing', async () => {
+    const template = catalogFixture().species[0]!
+    const reader = createInMemoryReducedSpeciesCatalogReader({
+      species: [
+        { ...template, id: 'lower', slug: 'lower', canonical_name: 'a' },
+        { ...template, id: 'z-id', slug: 'upper-z-id', canonical_name: 'A' },
+        { ...template, id: 'emoji', slug: 'emoji', canonical_name: '😀' },
+        { ...template, id: 'private', slug: 'private', canonical_name: '\uE000' },
+        { ...template, id: 'a-id', slug: 'upper-a-id', canonical_name: 'A' },
+      ],
+      names: [],
+      images: [],
+    })
+
+    const page = await reader.searchSpecies(searchRequest(), new Set())
+
+    expect(page.items.map((item) => item.slug)).toEqual([
+      'upper-a-id',
+      'upper-z-id',
+      'lower',
+      'private',
+      'emoji',
+    ])
+  })
+
+  it('orders localized names by Unicode scalar length and binary text order', async () => {
+    const template = catalogFixture().species[0]!
+    const reader = createInMemoryReducedSpeciesCatalogReader({
+      species: [template],
+      names: ['𐀀', 'zz', 'Á', 'a', 'A'].map((commonName) => ({
+        species_id: template.id,
+        language: 'fr',
+        common_name: commonName,
+        normalized_name: commonName,
+        is_primary: false,
+        display_order: 0,
+      })),
+      images: [],
+    })
+
+    const detail = await reader.getSpeciesDetail(template.canonical_name, 'fr')
+
+    expect(detail?.common_names).toEqual(['A', 'a', 'Á', '𐀀', 'zz'])
+  })
+
+  it('never returns a continuation cursor for a zero-sized or exactly exhausted page', async () => {
+    const reader = createInMemoryReducedSpeciesCatalogReader(catalogFixture())
+
+    const zeroPage = await reader.searchSpecies(searchRequest({
+      limit: 0,
+      include_total: true,
+    }), new Set())
+    const exactPage = await reader.searchSpecies(searchRequest({ limit: 3 }), new Set())
+
+    expect(zeroPage).toEqual({
+      items: [],
+      next_cursor: null,
+      total_estimate: 3,
+    })
+    expect(exactPage.items).toHaveLength(3)
+    expect(exactPage.next_cursor).toBeNull()
+  })
+
   it('filters v1 fields and stores favorites or recently viewed Species in browser app data', async () => {
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const adapters = createReducedSpeciesCatalogAdapters({

@@ -732,6 +732,102 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     expect(database.terminate).not.toHaveBeenCalled()
   })
 
+  it('looks one row ahead instead of returning a redundant terminal cursor', async () => {
+    const queries: string[] = []
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql)
+        return table([
+          {
+            id: 'species-apple',
+            slug: 'malus-domestica',
+            canonical_name: 'Malus domestica',
+            common_name: 'Apple',
+            climate_zones: '[]',
+            life_cycles: '[]',
+          },
+        ])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => ({
+        connect: vi.fn(async () => connection),
+        registerFileURL: vi.fn(async () => {}),
+        terminate: vi.fn(async () => {}),
+      }),
+    })
+
+    const page = await reader.searchSpecies(searchRequest({ limit: 1 }), new Set())
+
+    expect(queries.at(-1)).toContain('LIMIT 2')
+    expect(page.items).toHaveLength(1)
+    expect(page.next_cursor).toBeNull()
+  })
+
+  it('uses the lookahead row only to prove that another page exists', async () => {
+    const connection = {
+      query: vi.fn(async () => table([
+        {
+          id: 'species-apple',
+          slug: 'malus-domestica',
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          climate_zones: '[]',
+          life_cycles: '[]',
+        },
+        {
+          id: 'species-balm',
+          slug: 'melissa-officinalis',
+          canonical_name: 'Melissa officinalis',
+          common_name: 'Lemon balm',
+          climate_zones: '[]',
+          life_cycles: '[]',
+        },
+      ])),
+      close: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => ({
+        connect: vi.fn(async () => connection),
+        registerFileURL: vi.fn(async () => {}),
+        terminate: vi.fn(async () => {}),
+      }),
+    })
+
+    const page = await reader.searchSpecies(searchRequest({ limit: 1 }), new Set())
+
+    expect(page.items.map((item) => item.canonical_name)).toEqual(['Malus domestica'])
+    expect(page.next_cursor).toBe('offset:1')
+  })
+
+  it('returns an empty terminal page without querying DuckDB when the limit is zero', async () => {
+    const connection = {
+      query: vi.fn(async () => table([])),
+      close: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => ({
+        connect: vi.fn(async () => connection),
+        registerFileURL: vi.fn(async () => {}),
+        terminate: vi.fn(async () => {}),
+      }),
+    })
+
+    await expect(reader.searchSpecies(searchRequest({ limit: 0 }), new Set())).resolves.toEqual({
+      items: [],
+      next_cursor: null,
+      total_estimate: 0,
+    })
+    expect(connection.query).not.toHaveBeenCalled()
+  })
+
   it('rejects legacy NDJSON catalog manifests in the production Web reader', async () => {
     const createDatabase = vi.fn(async () => ({
       connect: vi.fn(async () => ({
