@@ -69,6 +69,8 @@ export function validWebCatalogManifest(): Record<string, unknown> {
         { name: 'slug', logical_type: 'required_text' },
         { name: 'canonical_name', logical_type: 'required_text' },
         { name: 'common_name', logical_type: 'nullable_text' },
+        { name: 'normalized_canonical_name', logical_type: 'required_text' },
+        { name: 'normalized_common_name', logical_type: 'nullable_text' },
         { name: 'climate_zones', logical_type: 'json_text_array' },
         { name: 'habit', logical_type: 'nullable_text' },
         { name: 'growth_form', logical_type: 'nullable_text' },

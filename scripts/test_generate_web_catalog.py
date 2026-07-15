@@ -139,6 +139,9 @@ class GenerateWebCatalogTests(unittest.TestCase):
             self.assertEqual(apple["habit"], "Tree")
             self.assertEqual(apple["growth_form"], "Tree")
             self.assertEqual(apple["life_cycles"], ["Perennial"])
+            balm = next(row for row in species_rows if row["slug"] == "melissa-officinalis")
+            self.assertEqual(balm["normalized_canonical_name"], "strasse officinalis")
+            self.assertEqual(balm["normalized_common_name"], "cafe balm")
 
             forbidden = json.dumps(species_rows)
             for field in [
@@ -840,8 +843,8 @@ def create_export_fixture(path: Path):
             (
                 "species-balm",
                 "melissa-officinalis",
-                "Melissa officinalis",
-                "Lemon balm",
+                "Straße officinalis",
+                "Café balm",
                 "Herbaceous",
                 None,
                 "Forb",

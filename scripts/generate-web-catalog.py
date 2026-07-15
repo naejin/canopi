@@ -90,6 +90,8 @@ PROJECTED_ROW_CAPABILITIES = {
         "slug": "required_text",
         "canonical_name": "required_text",
         "common_name": "nullable_text",
+        "normalized_canonical_name": "required_text",
+        "normalized_common_name": "nullable_text",
         "climate_zones": "json_text_array",
         "habit": "nullable_text",
         "growth_form": "nullable_text",
@@ -496,6 +498,14 @@ def write_species_assets(
                 "slug": row["slug"],
                 "canonical_name": row["canonical_name"],
                 "common_name": row["common_name"],
+                "normalized_canonical_name": normalize_search_name(
+                    row["canonical_name"] or ""
+                ),
+                "normalized_common_name": (
+                    normalize_search_name(row["common_name"])
+                    if row["common_name"]
+                    else None
+                ),
                 "climate_zones": climate_zones.get(species_id)
                 or parse_list_field(row["climate_zones"]),
                 "habit": row["habit"],

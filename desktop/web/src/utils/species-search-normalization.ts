@@ -24,7 +24,8 @@ function scalarInRanges(
   let high = ranges.length
   while (low < high) {
     const middle = Math.floor((low + high) / 2)
-    if (ranges[middle][1] < scalar) low = middle + 1
+    const range = ranges[middle]!
+    if (range[1] < scalar) low = middle + 1
     else high = middle
   }
   const range = ranges[low]

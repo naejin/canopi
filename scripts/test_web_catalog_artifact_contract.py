@@ -173,6 +173,8 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
             "slug": "species-1",
             "canonical_name": "Species one",
             "common_name": None,
+            "normalized_canonical_name": "species one",
+            "normalized_common_name": None,
             "climate_zones": ["Temperate"],
             "habit": "Tree",
             "growth_form": None,
@@ -431,8 +433,8 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
                 raised.exception.violations,
                 (
                     "contract_format_version: unsupported version 2",
-                    "tables.species.fields[8].name: duplicate field 'id'",
-                    "tables.species.fields[8].logical_type: unsupported logical type 'binary'",
+                    "tables.species.fields[10].name: duplicate field 'id'",
+                    "tables.species.fields[10].logical_type: unsupported logical type 'binary'",
                     "supported_filters[0].predicate.kind: unsupported predicate kind 'unknown'",
                 ),
             )

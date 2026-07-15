@@ -15,7 +15,7 @@ const CONTRACT = deepFreeze({
     "risk",
     "taxonomy"
   ],
-  "fingerprint": "1f4dcb7478d7bd23b07746b9cef82de7304015333718fa0fd1dfa3b818347528",
+  "fingerprint": "ecd8beaa361d081751b689fcf8c8e3dcf6fac05c466eeb3ed87512841bec9581",
   "generatedBy": "canopi-web-catalog-v1",
   "locales": [
     "en",
@@ -157,6 +157,14 @@ const CONTRACT = deepFreeze({
         {
           "logical_type": "nullable_text",
           "name": "common_name"
+        },
+        {
+          "logical_type": "required_text",
+          "name": "normalized_canonical_name"
+        },
+        {
+          "logical_type": "nullable_text",
+          "name": "normalized_common_name"
         },
         {
           "logical_type": "json_text_array",

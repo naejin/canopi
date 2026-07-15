@@ -855,8 +855,8 @@ function searchPredicateSql(searchText: NormalizedSearchText): string {
   if (!searchText.text) return ''
   return `
     (
-       ${nameMatchCondition('LOWER(s.canonical_name)', searchText)}
-       OR ${nameMatchCondition("LOWER(COALESCE(s.common_name, ''))", searchText)}
+       ${nameMatchCondition('s.normalized_canonical_name', searchText)}
+       OR ${nameMatchCondition("COALESCE(s.normalized_common_name, '')", searchText)}
        OR EXISTS (
          SELECT 1
          FROM locale_names search_names
@@ -875,7 +875,7 @@ function speciesOrderBySql(searchText: NormalizedSearchText): string {
       WHEN ${primaryName} LIKE ${quoteLikePrefixPattern(searchText.text)} ESCAPE '\\' THEN 1
       WHEN ${allTokenContainsCondition(primaryName, searchText)} THEN 2
       WHEN matched_names.species_id IS NOT NULL THEN 3
-      WHEN ${nameMatchCondition('LOWER(s.canonical_name)', searchText)} THEN 4
+      WHEN ${nameMatchCondition('s.normalized_canonical_name', searchText)} THEN 4
       ELSE 5
     END,
     COALESCE(matched_names.match_tier, 2147483647),
