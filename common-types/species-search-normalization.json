@@ -1,0 +1,23 @@
+{
+  "contract_format_version": 1,
+  "normalization_version": 1,
+  "algorithm": {
+    "compatibility_decomposition": "NFKD",
+    "stripped_general_categories": ["Mn", "Mc", "Me"],
+    "token_character_classes": ["Letter", "Number", "Underscore"],
+    "case_folds": [
+      { "from": "ß", "to": "ss" },
+      { "from": "ς", "to": "σ" }
+    ],
+    "minimum_admitted_scalar_count": 2
+  },
+  "corpus": [
+    {
+      "name": "greek-final-sigma",
+      "input": "Σίσυφος",
+      "normalized_text": "σισυφοσ",
+      "tokens": ["σισυφοσ"],
+      "admission": "active-text"
+    }
+  ]
+}

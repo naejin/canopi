@@ -604,6 +604,53 @@ mod tests {
     }
 
     #[test]
+    fn test_species_search_normalization_corpus_matches_query_tokens() {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../common-types/species-search-normalization.json"
+        ))
+        .unwrap();
+
+        for case in corpus["corpus"].as_array().unwrap() {
+            let input = case["input"].as_str().unwrap();
+            let expected = case["tokens"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|token| {
+                    let token = token.as_str().unwrap();
+                    (token.chars().count() >= 2).then(|| format!("{token}%"))
+                })
+                .collect::<Vec<_>>();
+            let plan = SpeciesSearchPlan::build(request(
+                Some(input),
+                default_filter(),
+                None,
+                Sort::Relevance,
+                20,
+                false,
+            ));
+            let actual = plan
+                .list()
+                .params()
+                .iter()
+                .filter_map(|param| match param {
+                    Value::Text(value)
+                        if value.ends_with('%')
+                            && !value.starts_with('%')
+                            && !value.starts_with('{') =>
+                    {
+                        Some(value.clone())
+                    }
+                    _ => None,
+                })
+                .take(expected.len())
+                .collect::<Vec<_>>();
+
+            assert_eq!(actual, expected, "normalization case {}", case["name"]);
+        }
+    }
+
+    #[test]
     fn test_explicit_non_name_sort_skips_common_name_relevance_ordering() {
         let plan = SpeciesSearchPlan::build(request(
             Some("lin"),
