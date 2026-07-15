@@ -3,7 +3,11 @@ import {
   createMapFrame,
   maplibreBearingFromNorthBearing,
 } from '../canvas/maplibre-camera'
-import { geoToMercator, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
+import {
+  geoToMercator,
+  stageScaleToMapZoom,
+  worldToGeo,
+} from '../canvas/projection'
 import { CameraController } from '../canvas/runtime/camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 
@@ -214,7 +218,7 @@ describe('createMapFrame', () => {
     expect(frame).not.toBeNull()
     expect(frame!.diagnostics.viewportCenterWorld.x).toBeCloseTo(350, 8)
     expect(frame!.diagnostics.viewportCenterWorld.y).toBeCloseTo(250, 8)
-    expect(frame!.diagnostics.backendId).toBe('local-mercator')
+    expect(frame!.diagnostics.projectionId).toBe('local-mercator')
     expect(frame!.diagnostics.warningThresholdMeters).toBe(10_000)
     expect(frame!.diagnostics.viewportCornerGeo).toHaveLength(4)
   })

@@ -24,7 +24,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - The current in-canvas basemap is non-interactive and must not mutate document or canvas state.
 - Map/canvas projection is bearing-aware, Mercator-backed, and shared.
 - `north_bearing_deg` participates in camera derivation and world-to-geo feature projection.
-- Projection backend choice is centralized in `desktop/web/src/canvas/projection.ts`.
+- `desktop/web/src/canvas/projection.ts` is the single canonical seam for local-Mercator math, precision policy, and projection diagnostics. Consumers import only the operations and constants they need; do not add a strategy or selector until a second demonstrated implementation has a real selection seam.
 - MapLibre-facing bearing adaptation belongs in `desktop/web/src/canvas/maplibre-camera.ts`.
 - Do not keep separate bearing math, zoom shortcuts, or equirectangular fallbacks in surface or overlay code.
 - Exact sync is correctness-critical. Do not add camera deadbands or tolerances that can suppress tiny pan/zoom changes.

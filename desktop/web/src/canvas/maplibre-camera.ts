@@ -1,6 +1,11 @@
 import type { SceneViewportState } from './runtime/scene'
 import {
-  getActiveProjectionBackend,
+  LOCAL_MERCATOR_PROJECTION_ID,
+  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+  stageScaleToMapZoom,
+  viewportCenterGeo,
+  viewportCenterWorld,
+  viewportCornerGeoPoints,
 } from './projection'
 
 export interface MapLibreCameraLocation {
@@ -20,7 +25,7 @@ export interface MapLibreCameraOptions {
 }
 
 export interface MapFrameDiagnostics {
-  readonly backendId: string
+  readonly projectionId: typeof LOCAL_MERCATOR_PROJECTION_ID
   readonly warningThresholdMeters: number
   readonly viewportCenterWorld: { x: number; y: number }
   readonly viewportCornerGeo: readonly [
@@ -68,26 +73,24 @@ export function createMapFrame(
   if (screenSize.width <= 0 || screenSize.height <= 0) return null
   if (viewport.scale <= 0) return null
 
-  const backend = getActiveProjectionBackend()
-
-  const center = backend.viewportCenterGeo(
+  const center = viewportCenterGeo(
     viewport,
     screenSize,
     location.lat,
     location.lon,
     northBearingDeg,
   )
-  const viewportCenter = backend.viewportCenterWorld(viewport, screenSize)
+  const viewportCenter = viewportCenterWorld(viewport, screenSize)
 
   return {
     center: [center.lng, center.lat],
-    zoom: clampZoom(backend.stageScaleToMapZoom(viewport.scale, location.lat)),
+    zoom: clampZoom(stageScaleToMapZoom(viewport.scale, location.lat)),
     bearing: maplibreBearingFromNorthBearing(northBearingDeg),
     diagnostics: {
-      backendId: backend.id,
-      warningThresholdMeters: backend.warningThresholdMeters,
+      projectionId: LOCAL_MERCATOR_PROJECTION_ID,
+      warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
       viewportCenterWorld: viewportCenter,
-      viewportCornerGeo: backend.viewportCornerGeoPoints(
+      viewportCornerGeo: viewportCornerGeoPoints(
         viewport,
         screenSize,
         location.lat,

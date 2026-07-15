@@ -1,4 +1,4 @@
-import { getActiveProjectionBackend } from '../canvas/projection'
+import { worldToGeo } from '../canvas/projection'
 import type { SceneZoneEntity } from '../canvas/runtime/scene'
 import {
   getEllipticalZonePolygon,
@@ -110,8 +110,6 @@ export function projectTargetResolutionToMapFeatures(
   const features: TargetMapFeature[] = []
   const skippedSceneIds: string[] = []
   const skippedFeatureKeys = new Set<string>()
-  const projectionBackend = getActiveProjectionBackend()
-
   const pushSkipped = (key: string, sceneId: string): void => {
     if (skippedFeatureKeys.has(key)) return
     skippedFeatureKeys.add(key)
@@ -119,7 +117,7 @@ export function projectTargetResolutionToMapFeatures(
   }
 
   const projectPoint = (point: TargetMapProjectionPoint): readonly [number, number] => {
-    const geo = projectionBackend.worldToGeo(
+    const geo = worldToGeo(
       point.x,
       point.y,
       location.lat,
@@ -136,7 +134,7 @@ export function projectTargetResolutionToMapFeatures(
         pushSkipped(key, ref.id)
         continue
       }
-      const geo = projectionBackend.worldToGeo(
+      const geo = worldToGeo(
         ref.plant.position.x,
         ref.plant.position.y,
         location.lat,

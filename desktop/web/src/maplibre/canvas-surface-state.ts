@@ -1,13 +1,9 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import {
-  createProjectionPrecisionSnapshot,
-  getActiveProjectionBackend,
-} from '../canvas/projection'
-
-export {
+  LOCAL_MERCATOR_PROJECTION_ID,
   LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-  computeSceneExtentMeters,
+  createProjectionPrecisionSnapshot,
 } from '../canvas/projection'
 
 export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -76,12 +72,12 @@ export function publishMapDiagnostics(
 ): void {
   if (!import.meta.env.DEV) return
   const warningThresholdMeters = frame?.diagnostics.warningThresholdMeters
-    ?? getActiveProjectionBackend().warningThresholdMeters
-  const backendId = frame?.diagnostics.backendId ?? getActiveProjectionBackend().id
+    ?? LOCAL_PROJECTION_WARNING_THRESHOLD_METERS
+  const projectionId = frame?.diagnostics.projectionId ?? LOCAL_MERCATOR_PROJECTION_ID
   const precisionWarning = designExtentMeters != null && designExtentMeters > warningThresholdMeters
   ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
     ? {
-      projectionBackendId: backendId,
+      projectionId,
       precisionWarningThresholdMeters: warningThresholdMeters,
       center: frame.center,
       zoom: frame.zoom,

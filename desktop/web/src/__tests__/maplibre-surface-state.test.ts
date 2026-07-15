@@ -1,14 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
-  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-  computeSceneExtentMeters,
   mapLibreCanvasSurfaceStateEquals,
   mergeMapLibreCanvasSurfaceState,
+  publishMapDiagnostics,
 } from '../maplibre/canvas-surface-state'
+import {
+  LOCAL_MERCATOR_PROJECTION_ID,
+  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+  computeSceneExtentMeters,
+} from '../canvas/projection'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 
 describe('maplibre surface state adapter', () => {
+  afterEach(() => {
+    delete (globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__
+  })
+
   it('returns idle defaults from the shared state constant', () => {
     expect(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE).toEqual({
       status: 'idle',
@@ -66,8 +74,10 @@ describe('maplibre surface state adapter', () => {
     expect(mapLibreCanvasSurfaceStateEquals(left, different)).toBe(false)
   })
 
-  it('computes scene extent from all geometry-bearing entities', () => {
+  it('computes scene extent from plants, zone points, and annotations', () => {
     const scene = createDefaultScenePersistedState()
+    expect(computeSceneExtentMeters(scene)).toBeNull()
+
     scene.plants.push({
       kind: 'plant',
       id: 'plant-1',
@@ -84,14 +94,68 @@ describe('maplibre surface state adapter', () => {
       plantedDate: null,
       quantity: null,
     })
-    scene.groups.push({
-      kind: 'group',
+    expect(computeSceneExtentMeters(scene)).toBeCloseTo(50, 8)
+
+    scene.zones.push({
+      kind: 'zone',
       locked: false,
-      id: 'group-1',
-      name: 'orchard',
-      members: [{ kind: 'plant', id: 'plant-1' }],
+      name: 'zone-1',
+      zoneType: 'polygon',
+      points: [{ x: 60, y: 80 }],
+      rotationDeg: 0,
+      fillColor: null,
+      notes: null,
+    })
+    expect(computeSceneExtentMeters(scene)).toBeCloseTo(100, 8)
+
+    scene.annotations.push({
+      kind: 'annotation',
+      locked: false,
+      id: 'annotation-1',
+      annotationType: 'text',
+      position: { x: -120, y: 160 },
+      text: 'Extent',
+      fontSize: 16,
+      rotationDeg: null,
+    })
+    expect(computeSceneExtentMeters(scene)).toBeCloseTo(200, 8)
+  })
+
+  it('publishes the stable canonical projection diagnostics without backend selection', () => {
+    const frame = {
+      center: [2.3522, 48.8566],
+      zoom: 17,
+      bearing: 12,
+      diagnostics: {
+        projectionId: LOCAL_MERCATOR_PROJECTION_ID,
+        warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+        viewportCenterWorld: { x: 20, y: -10 },
+        viewportCornerGeo: [
+          { lng: 2.35, lat: 48.86 },
+          { lng: 2.36, lat: 48.86 },
+          { lng: 2.36, lat: 48.85 },
+          { lng: 2.35, lat: 48.85 },
+        ],
+      },
+    } as const
+
+    publishMapDiagnostics(frame, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
+    const atThreshold = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
+      .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
+    expect(atThreshold).toMatchObject({
+      designExtentMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+      precisionWarning: false,
     })
 
-    expect(computeSceneExtentMeters(scene)).toBeCloseTo(50, 8)
+    publishMapDiagnostics(frame, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 1)
+    const beyondThreshold = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
+      .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
+    expect(beyondThreshold).toMatchObject({
+      projectionId: 'local-mercator',
+      precisionWarningThresholdMeters: 10_000,
+      designExtentMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 1,
+      precisionWarning: true,
+    })
+    expect(beyondThreshold).not.toHaveProperty('projectionBackendId')
   })
 })

@@ -6,10 +6,11 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  LOCAL_MERCATOR_PROJECTION_BACKEND,
+  LOCAL_MERCATOR_PROJECTION_ID,
   LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
   createProjectionPrecisionSnapshot,
-  getActiveProjectionBackend,
+  mercatorToWorld,
+  worldToMercator,
   worldToGeo,
   geoToWorld,
   stageScaleToMapZoom,
@@ -131,6 +132,16 @@ describe('worldToGeo / geoToWorld round-trip', () => {
   })
 })
 
+describe('worldToMercator / mercatorToWorld round-trip', () => {
+  it('preserves local meters and bearing through the canonical Mercator operations', () => {
+    const mercator = worldToMercator(325.5, -149.25, 45.52, -122.68, 37)
+    const world = mercatorToWorld(mercator.x, mercator.y, 45.52, -122.68, 37)
+
+    expect(world.x).toBeCloseTo(325.5, 6)
+    expect(world.y).toBeCloseTo(-149.25, 6)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // stageScaleToMapZoom
 // ---------------------------------------------------------------------------
@@ -163,13 +174,8 @@ describe('stageScaleToMapZoom', () => {
   })
 })
 
-describe('projection backend seam', () => {
-  it('exposes the local Mercator backend as the active implementation', () => {
-    expect(getActiveProjectionBackend()).toBe(LOCAL_MERCATOR_PROJECTION_BACKEND)
-    expect(getActiveProjectionBackend().id).toBe('local-mercator')
-  })
-
-  it('derives warning-only precision metrics from the active backend', () => {
+describe('canonical projection diagnostics', () => {
+  it('derives warning-only precision metrics with a stable local-Mercator identity', () => {
     const scene = createDefaultScenePersistedState()
     scene.plants.push({
       kind: 'plant',
@@ -180,7 +186,7 @@ describe('projection backend seam', () => {
       color: null,
       stratum: null,
       canopySpreadM: null,
-      position: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 25, y: 0 },
+      position: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS, y: 0 },
       rotationDeg: null,
       scale: null,
       notes: null,
@@ -188,9 +194,23 @@ describe('projection backend seam', () => {
       quantity: 1,
     })
 
+    const atThreshold = createProjectionPrecisionSnapshot(scene)
+    expect(atThreshold.precisionWarning).toBe(false)
+
+    scene.annotations.push({
+      kind: 'annotation',
+      locked: false,
+      id: 'annotation-warning',
+      annotationType: 'text',
+      position: { x: 0, y: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 25 },
+      text: 'Projection extent',
+      fontSize: 16,
+      rotationDeg: null,
+    })
     const precision = createProjectionPrecisionSnapshot(scene)
 
-    expect(precision.backendId).toBe('local-mercator')
+    expect(LOCAL_MERCATOR_PROJECTION_ID).toBe('local-mercator')
+    expect(precision.projectionId).toBe(LOCAL_MERCATOR_PROJECTION_ID)
     expect(precision.warningThresholdMeters).toBe(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
     expect(precision.designExtentMeters).toBeGreaterThan(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
     expect(precision.precisionWarning).toBe(true)
