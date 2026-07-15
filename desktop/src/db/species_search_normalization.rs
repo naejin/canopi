@@ -1,11 +1,14 @@
 use rusqlite::{Connection, functions::FunctionFlags};
 use serde::Deserialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
-use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
+use unicode_normalization::UnicodeNormalization;
 
 const CONTRACT_SOURCE: &str =
     include_str!("../../../common-types/species-search-normalization.json");
+const UNICODE_FACTS_SOURCE: &str =
+    include_str!("../../../common-types/species-search-unicode-15.json");
+const UNICODE_FACTS_FILENAME: &str = "species-search-unicode-15.json";
 const SQLITE_FUNCTION_NAME: &str = "canopi_normalize_species_search";
 
 #[derive(Debug, Deserialize)]
@@ -13,8 +16,34 @@ const SQLITE_FUNCTION_NAME: &str = "canopi_normalize_species_search";
 struct NormalizationContract {
     contract_format_version: u32,
     normalization_version: u32,
+    unicode_data: UnicodeDataReference,
     algorithm: NormalizationAlgorithm,
     corpus: Vec<CorpusCase>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UnicodeDataReference {
+    version: String,
+    facts_file: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UnicodeFacts {
+    facts_format_version: u32,
+    unicode_data_version: String,
+    known_scalar_ranges: Vec<[u32; 2]>,
+    mark_scalar_ranges: Vec<[u32; 2]>,
+    token_scalar_ranges: Vec<[u32; 2]>,
+    lowercase_mappings: Vec<(u32, String)>,
+}
+
+#[derive(Debug)]
+struct LoadedNormalizationContract {
+    authority: NormalizationContract,
+    unicode_facts: UnicodeFacts,
+    lowercase_by_scalar: HashMap<u32, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,13 +90,13 @@ pub(crate) enum SpeciesSearchAdmission {
     ActiveText,
 }
 
-fn contract() -> &'static NormalizationContract {
-    static CONTRACT: OnceLock<NormalizationContract> = OnceLock::new();
+fn contract() -> &'static LoadedNormalizationContract {
+    static CONTRACT: OnceLock<LoadedNormalizationContract> = OnceLock::new();
     CONTRACT.get_or_init(|| {
-        let contract = parse_contract(CONTRACT_SOURCE)
+        let contract = parse_contract(CONTRACT_SOURCE, UNICODE_FACTS_SOURCE)
             .expect("authored Species Search normalization contract must be valid");
         assert_eq!(
-            contract.normalization_version,
+            contract.authority.normalization_version,
             crate::db::schema_contract::SPECIES_SEARCH_NORMALIZATION_VERSION,
             "storage and Species Search normalization versions must match"
         );
@@ -75,25 +104,72 @@ fn contract() -> &'static NormalizationContract {
     })
 }
 
-fn parse_contract(source: &str) -> Result<NormalizationContract, String> {
-    let contract: NormalizationContract =
+fn parse_contract(
+    source: &str,
+    unicode_facts_source: &str,
+) -> Result<LoadedNormalizationContract, String> {
+    let authority: NormalizationContract =
         serde_json::from_str(source).map_err(|error| error.to_string())?;
-    if contract.contract_format_version != 1 {
+    let unicode_facts: UnicodeFacts =
+        serde_json::from_str(unicode_facts_source).map_err(|error| error.to_string())?;
+    if authority.contract_format_version != 1 {
         return Err("contract format version must equal 1".to_owned());
     }
-    if contract.normalization_version == 0 {
+    if authority.normalization_version == 0 {
         return Err("normalization version must be positive".to_owned());
     }
-    if contract.algorithm.compatibility_decomposition != "NFKD"
-        || contract.algorithm.stripped_general_categories != ["Mn", "Mc", "Me"]
-        || contract.algorithm.token_character_classes != ["Letter", "Number", "Underscore"]
-        || contract.algorithm.minimum_admitted_scalar_count == 0
-        || contract.algorithm.query_token_policy != "unique-admitted-or-all-when-active"
+    if authority.unicode_data.version.is_empty()
+        || authority.unicode_data.facts_file != UNICODE_FACTS_FILENAME
+        || unicode_facts.facts_format_version != 1
+        || unicode_facts.unicode_data_version != authority.unicode_data.version
+    {
+        return Err("Unicode facts do not match the normalization authority".to_owned());
+    }
+    validate_scalar_ranges("known", &unicode_facts.known_scalar_ranges)?;
+    validate_scalar_ranges("mark", &unicode_facts.mark_scalar_ranges)?;
+    validate_scalar_ranges("token", &unicode_facts.token_scalar_ranges)?;
+    for ranges in [
+        &unicode_facts.mark_scalar_ranges,
+        &unicode_facts.token_scalar_ranges,
+    ] {
+        for [start, end] in ranges {
+            if !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *start)
+                || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *end)
+            {
+                return Err("Unicode property ranges must contain only known scalars".to_owned());
+            }
+        }
+    }
+    let mut lowercase_by_scalar = HashMap::new();
+    let mut previous_scalar = None;
+    for (scalar, target) in &unicode_facts.lowercase_mappings {
+        if target.is_empty()
+            || previous_scalar.is_some_and(|previous| *scalar <= previous)
+            || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *scalar)
+            || target.chars().any(|character| {
+                !scalar_in_ranges(&unicode_facts.known_scalar_ranges, character as u32)
+            })
+            || lowercase_by_scalar
+                .insert(*scalar, target.clone())
+                .is_some()
+        {
+            return Err("Unicode lowercase mappings must be ordered known scalars".to_owned());
+        }
+        previous_scalar = Some(*scalar);
+    }
+    if lowercase_by_scalar.is_empty() {
+        return Err("Unicode lowercase mappings must not be empty".to_owned());
+    }
+    if authority.algorithm.compatibility_decomposition != "NFKD"
+        || authority.algorithm.stripped_general_categories != ["Mn", "Mc", "Me"]
+        || authority.algorithm.token_character_classes != ["Letter", "Number", "Underscore"]
+        || authority.algorithm.minimum_admitted_scalar_count == 0
+        || authority.algorithm.query_token_policy != "unique-admitted-or-all-when-active"
     {
         return Err("normalization algorithm uses unsupported semantics".to_owned());
     }
     let mut fold_sources = HashSet::new();
-    for case_fold in &contract.algorithm.case_folds {
+    for case_fold in &authority.algorithm.case_folds {
         if case_fold.from.is_empty()
             || case_fold.to.is_empty()
             || !fold_sources.insert(case_fold.from.as_str())
@@ -102,7 +178,7 @@ fn parse_contract(source: &str) -> Result<NormalizationContract, String> {
         }
     }
     let mut corpus_names = HashSet::new();
-    for case in &contract.corpus {
+    for case in &authority.corpus {
         if case.name.is_empty()
             || !corpus_names.insert(case.name.as_str())
             || case.tokens.iter().any(String::is_empty)
@@ -116,26 +192,81 @@ fn parse_contract(source: &str) -> Result<NormalizationContract, String> {
         }
         let _semantic_case_fields = (&case.input, &case.normalized_text);
     }
-    if contract.corpus.is_empty() {
+    if authority.corpus.is_empty() {
         return Err("normalization corpus must not be empty".to_owned());
     }
-    Ok(contract)
+    Ok(LoadedNormalizationContract {
+        authority,
+        unicode_facts,
+        lowercase_by_scalar,
+    })
+}
+
+fn validate_scalar_ranges(label: &str, ranges: &[[u32; 2]]) -> Result<(), String> {
+    if ranges.is_empty() {
+        return Err(format!("Unicode {label} scalar ranges must not be empty"));
+    }
+    let mut previous_end = None;
+    for [start, end] in ranges {
+        if start > end
+            || *end > char::MAX as u32
+            || previous_end.is_some_and(|previous| *start <= previous)
+            || (*start <= 0xDFFF && *end >= 0xD800)
+        {
+            return Err(format!(
+                "Unicode {label} scalar ranges must be ordered, disjoint scalar values"
+            ));
+        }
+        previous_end = Some(*end);
+    }
+    Ok(())
+}
+
+fn scalar_in_ranges(ranges: &[[u32; 2]], scalar: u32) -> bool {
+    let insertion = ranges.partition_point(|[_start, end]| *end < scalar);
+    ranges
+        .get(insertion)
+        .is_some_and(|[start, end]| *start <= scalar && scalar <= *end)
 }
 
 pub(crate) fn normalize_species_search(raw: &str) -> NormalizedSpeciesSearch {
-    let mut folded = raw
-        .nfkd()
-        .filter(|character| !is_combining_mark(*character))
-        .flat_map(char::to_lowercase)
-        .collect::<String>();
-    for replacement in &contract().algorithm.case_folds {
+    let contract = contract();
+    let mut decomposed = String::with_capacity(raw.len());
+    for character in raw.chars() {
+        if scalar_in_ranges(
+            &contract.unicode_facts.known_scalar_ranges,
+            character as u32,
+        ) {
+            decomposed.extend(character.to_string().nfkd());
+        } else {
+            decomposed.push(' ');
+        }
+    }
+
+    let mut folded = String::with_capacity(decomposed.len());
+    for character in decomposed.chars() {
+        let scalar = character as u32;
+        if scalar_in_ranges(&contract.unicode_facts.mark_scalar_ranges, scalar) {
+            continue;
+        }
+        match contract.lowercase_by_scalar.get(&scalar) {
+            Some(replacement) => folded.push_str(replacement),
+            None => folded.push(character),
+        }
+    }
+    for replacement in &contract.authority.algorithm.case_folds {
         folded = folded.replace(&replacement.from, &replacement.to);
     }
 
     let mut tokens = Vec::new();
     let mut token = String::new();
     for character in folded.chars() {
-        if character == '_' || character.is_alphanumeric() {
+        if character == '_'
+            || scalar_in_ranges(
+                &contract.unicode_facts.token_scalar_ranges,
+                character as u32,
+            )
+        {
             token.push(character);
         } else if !token.is_empty() {
             tokens.push(std::mem::take(&mut token));
@@ -154,7 +285,7 @@ pub(crate) fn normalize_species_search(raw: &str) -> NormalizedSpeciesSearch {
 }
 
 pub(crate) fn species_search_query_tokens(normalized: &NormalizedSpeciesSearch) -> Vec<String> {
-    let minimum = contract().algorithm.minimum_admitted_scalar_count;
+    let minimum = contract().authority.algorithm.minimum_admitted_scalar_count;
     if normalized.scalar_count < minimum {
         return Vec::new();
     }
@@ -180,7 +311,7 @@ pub(crate) fn species_search_query_tokens(normalized: &NormalizedSpeciesSearch) 
 pub(crate) fn species_search_admission(raw: &str) -> SpeciesSearchAdmission {
     match normalize_species_search(raw).scalar_count {
         0 => SpeciesSearchAdmission::Browse,
-        count if count < contract().algorithm.minimum_admitted_scalar_count => {
+        count if count < contract().authority.algorithm.minimum_admitted_scalar_count => {
             SpeciesSearchAdmission::TooShort
         }
         _ => SpeciesSearchAdmission::ActiveText,
@@ -280,7 +411,8 @@ mod tests {
         let mut raw: serde_json::Value = serde_json::from_str(CONTRACT_SOURCE).unwrap();
         raw["algorithm"]["accidental_new_rule"] = serde_json::json!(true);
 
-        let error = parse_contract(&serde_json::to_string(&raw).unwrap()).unwrap_err();
+        let error = parse_contract(&serde_json::to_string(&raw).unwrap(), UNICODE_FACTS_SOURCE)
+            .unwrap_err();
 
         assert!(
             error.contains("unknown field `accidental_new_rule`"),
@@ -290,8 +422,16 @@ mod tests {
 
     #[test]
     fn rust_and_python_compilers_fingerprint_the_same_canonical_json() {
-        let raw: serde_json::Value = serde_json::from_str(CONTRACT_SOURCE).unwrap();
-        let rust_fingerprint = format!("{:x}", Sha256::digest(serde_json::to_vec(&raw).unwrap()));
+        let authority: serde_json::Value = serde_json::from_str(CONTRACT_SOURCE).unwrap();
+        let unicode_facts: serde_json::Value = serde_json::from_str(UNICODE_FACTS_SOURCE).unwrap();
+        let semantic_source = serde_json::json!({
+            "authority": authority,
+            "unicode_facts": unicode_facts,
+        });
+        let rust_fingerprint = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&semantic_source).unwrap())
+        );
 
         assert_eq!(
             rust_fingerprint,

@@ -17,6 +17,7 @@ FILTER_PATH = SCRIPT_DIR.parent / "common-types/plant-filter-fields.json"
 NORMALIZATION_PATH = (
     SCRIPT_DIR.parent / "common-types/species-search-normalization.json"
 )
+UNICODE_FACTS_PATH = SCRIPT_DIR.parent / "common-types/species-search-unicode-15.json"
 
 
 def copy_contract_sources(root: Path) -> None:
@@ -34,6 +35,10 @@ def copy_contract_sources(root: Path) -> None:
     )
     (filter_dir / "species-search-normalization.json").write_text(
         NORMALIZATION_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (filter_dir / "species-search-unicode-15.json").write_text(
+        UNICODE_FACTS_PATH.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 

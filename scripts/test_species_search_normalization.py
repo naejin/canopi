@@ -6,10 +6,12 @@ import tempfile
 import unittest
 
 from scripts import species_search_normalization as normalization
+from scripts import species_search_unicode_facts as unicode_facts
 
 
 SCRIPT_DIR = Path(__file__).parent
 CONTRACT_PATH = SCRIPT_DIR.parent / "common-types/species-search-normalization.json"
+UNICODE_FACTS_PATH = SCRIPT_DIR.parent / "common-types/species-search-unicode-15.json"
 
 
 def load_script(filename: str, module_name: str):
@@ -30,6 +32,14 @@ generate_web_catalog = load_script(
 
 
 class SpeciesSearchNormalizationTests(unittest.TestCase):
+    def test_checked_in_unicode_facts_match_pinned_unicode_data(self):
+        authored = json.loads(UNICODE_FACTS_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            authored,
+            unicode_facts.compile_unicode_data(authored["unicode_data_version"]),
+        )
+
     def test_both_python_builders_match_the_authored_corpus(self):
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
@@ -93,6 +103,26 @@ class SpeciesSearchNormalizationTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(match.group(1), normalization.CONTRACT.fingerprint)
 
+    def test_normalization_fingerprint_includes_generated_unicode_facts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common_types = root / "common-types"
+            common_types.mkdir(parents=True)
+            (common_types / CONTRACT_PATH.name).write_text(
+                CONTRACT_PATH.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            facts = json.loads(UNICODE_FACTS_PATH.read_text(encoding="utf-8"))
+            facts["lowercase_mappings"][-1][1] = "a"
+            (common_types / UNICODE_FACTS_PATH.name).write_text(
+                json.dumps(facts),
+                encoding="utf-8",
+            )
+
+            changed = normalization.load_contract(root=root)
+
+        self.assertNotEqual(changed.fingerprint, normalization.CONTRACT.fingerprint)
+
     def test_authority_parser_rejects_unknown_semantic_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -101,6 +131,10 @@ class SpeciesSearchNormalizationTests(unittest.TestCase):
             raw = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
             raw["algorithm"]["accidental_new_rule"] = True
             path.write_text(json.dumps(raw), encoding="utf-8")
+            (path.parent / "species-search-unicode-15.json").write_text(
+                UNICODE_FACTS_PATH.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
 
             with self.assertRaisesRegex(
                 RuntimeError,

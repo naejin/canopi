@@ -9,8 +9,27 @@ use std::path::Path;
 struct NormalizationContract {
     contract_format_version: u32,
     normalization_version: u32,
+    unicode_data: UnicodeDataReference,
     algorithm: NormalizationAlgorithm,
     corpus: Vec<CorpusCase>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UnicodeDataReference {
+    version: String,
+    facts_file: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UnicodeFacts {
+    facts_format_version: u32,
+    unicode_data_version: String,
+    known_scalar_ranges: Vec<[u32; 2]>,
+    mark_scalar_ranges: Vec<[u32; 2]>,
+    token_scalar_ranges: Vec<[u32; 2]>,
+    lowercase_mappings: Vec<(u32, String)>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,14 +67,27 @@ pub(crate) fn render_typescript_adapter(
     let source = std::fs::read_to_string(authority_path)?;
     let raw: serde_json::Value = serde_json::from_str(&source)?;
     let contract: NormalizationContract = serde_json::from_value(raw.clone())?;
-    validate(&contract)?;
+    let facts_path = authority_path
+        .parent()
+        .ok_or("Species Search authority must have a parent directory")?
+        .join(&contract.unicode_data.facts_file);
+    let facts_source = std::fs::read_to_string(&facts_path)?;
+    let raw_facts: serde_json::Value = serde_json::from_str(&facts_source)?;
+    let unicode_facts: UnicodeFacts = serde_json::from_value(raw_facts.clone())?;
+    validate(&contract, &unicode_facts)?;
 
-    let canonical = serde_json::to_vec(&raw)?;
+    let canonical = serde_json::to_vec(&serde_json::json!({
+        "authority": raw,
+        "unicode_facts": raw_facts,
+    }))?;
     let fingerprint = format!("{:x}", Sha256::digest(canonical));
-    Ok(render_typescript(&contract, &fingerprint)?)
+    Ok(render_typescript(&contract, &unicode_facts, &fingerprint)?)
 }
 
-fn validate(contract: &NormalizationContract) -> Result<(), Box<dyn std::error::Error>> {
+fn validate(
+    contract: &NormalizationContract,
+    unicode_facts: &UnicodeFacts,
+) -> Result<(), Box<dyn std::error::Error>> {
     if contract.contract_format_version != 1 {
         return Err(format!(
             "unsupported Species Search normalization contract format {}",
@@ -65,6 +97,34 @@ fn validate(contract: &NormalizationContract) -> Result<(), Box<dyn std::error::
     }
     if contract.normalization_version == 0 {
         return Err("Species Search normalization version must be positive".into());
+    }
+    if contract.unicode_data.version.is_empty()
+        || contract.unicode_data.facts_file.is_empty()
+        || Path::new(&contract.unicode_data.facts_file).file_name()
+            != Some(contract.unicode_data.facts_file.as_ref())
+        || unicode_facts.facts_format_version != 1
+        || unicode_facts.unicode_data_version != contract.unicode_data.version
+    {
+        return Err("Species Search Unicode facts do not match the authority".into());
+    }
+    validate_scalar_ranges("known", &unicode_facts.known_scalar_ranges)?;
+    validate_scalar_ranges("mark", &unicode_facts.mark_scalar_ranges)?;
+    validate_scalar_ranges("token", &unicode_facts.token_scalar_ranges)?;
+    let mut previous_mapping = None;
+    for (scalar, target) in &unicode_facts.lowercase_mappings {
+        if target.is_empty()
+            || previous_mapping.is_some_and(|previous| *scalar <= previous)
+            || !scalar_in_ranges(&unicode_facts.known_scalar_ranges, *scalar)
+            || target.chars().any(|character| {
+                !scalar_in_ranges(&unicode_facts.known_scalar_ranges, character as u32)
+            })
+        {
+            return Err("Species Search lowercase mappings must be ordered known scalars".into());
+        }
+        previous_mapping = Some(*scalar);
+    }
+    if unicode_facts.lowercase_mappings.is_empty() {
+        return Err("Species Search lowercase mappings must not be empty".into());
     }
     let algorithm = &contract.algorithm;
     if algorithm.compatibility_decomposition != "NFKD" {
@@ -122,8 +182,40 @@ fn validate(contract: &NormalizationContract) -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+fn validate_scalar_ranges(
+    label: &str,
+    ranges: &[[u32; 2]],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if ranges.is_empty() {
+        return Err(format!("Species Search {label} scalar ranges must not be empty").into());
+    }
+    let mut previous_end = None;
+    for [start, end] in ranges {
+        if start > end
+            || *end > char::MAX as u32
+            || previous_end.is_some_and(|previous| *start <= previous)
+            || (*start <= 0xDFFF && *end >= 0xD800)
+        {
+            return Err(format!(
+                "Species Search {label} scalar ranges must be ordered scalar values"
+            )
+            .into());
+        }
+        previous_end = Some(*end);
+    }
+    Ok(())
+}
+
+fn scalar_in_ranges(ranges: &[[u32; 2]], scalar: u32) -> bool {
+    let insertion = ranges.partition_point(|[_start, end]| *end < scalar);
+    ranges
+        .get(insertion)
+        .is_some_and(|[start, end]| *start <= scalar && scalar <= *end)
+}
+
 fn render_typescript(
     contract: &NormalizationContract,
+    unicode_facts: &UnicodeFacts,
     fingerprint: &str,
 ) -> Result<String, std::fmt::Error> {
     let mut output = String::from(concat!(
@@ -151,6 +243,11 @@ fn render_typescript(
     )?;
     writeln!(
         output,
+        "export const SPECIES_SEARCH_UNICODE_DATA_VERSION = {} as const\n",
+        json_string(&unicode_facts.unicode_data_version)
+    )?;
+    writeln!(
+        output,
         "export const SPECIES_SEARCH_MINIMUM_ADMITTED_SCALAR_COUNT = {} as const\n",
         contract.algorithm.minimum_admitted_scalar_count
     )?;
@@ -170,6 +267,27 @@ fn render_typescript(
         )?;
     }
     output.push_str("] as const\n\n");
+
+    render_scalar_ranges(
+        &mut output,
+        "SPECIES_SEARCH_KNOWN_SCALAR_RANGES",
+        &unicode_facts.known_scalar_ranges,
+    )?;
+    render_scalar_ranges(
+        &mut output,
+        "SPECIES_SEARCH_MARK_SCALAR_RANGES",
+        &unicode_facts.mark_scalar_ranges,
+    )?;
+    render_scalar_ranges(
+        &mut output,
+        "SPECIES_SEARCH_TOKEN_SCALAR_RANGES",
+        &unicode_facts.token_scalar_ranges,
+    )?;
+    output.push_str("export const SPECIES_SEARCH_LOWERCASE_MAPPINGS = [\n");
+    for (scalar, target) in &unicode_facts.lowercase_mappings {
+        writeln!(output, "  [{scalar}, {}],", json_string(target))?;
+    }
+    output.push_str("] as const satisfies readonly (readonly [number, string])[]\n\n");
 
     output.push_str("export const SPECIES_SEARCH_NORMALIZATION_CORPUS = [\n");
     for case in &contract.corpus {
@@ -192,6 +310,19 @@ fn render_typescript(
     }
     output.push_str("] as const satisfies readonly SpeciesSearchNormalizationCorpusCase[]\n");
     Ok(output)
+}
+
+fn render_scalar_ranges(
+    output: &mut String,
+    name: &str,
+    ranges: &[[u32; 2]],
+) -> Result<(), std::fmt::Error> {
+    writeln!(output, "export const {name} = [")?;
+    for [start, end] in ranges {
+        writeln!(output, "  [{start}, {end}],")?;
+    }
+    output.push_str("] as const satisfies readonly (readonly [number, number])[]\n\n");
+    Ok(())
 }
 
 fn json_string(value: &str) -> String {

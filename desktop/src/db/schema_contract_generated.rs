@@ -5,12 +5,12 @@ pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = 12;
 pub(crate) const SPECIES_SEARCH_NORMALIZATION_VERSION: u32 = 1;
 #[cfg(test)]
 pub(crate) const SPECIES_SEARCH_NORMALIZATION_FINGERPRINT: &str =
-    "1ebea6f63b1adc608b2bf952367f416c7740eb1123d0202a3e6521b81f6cb60d";
+    "d77215639301b1cdf0884cf437534b14c067a35cfeecf5dab33d08e550db9337";
 #[cfg(test)]
 pub(crate) const MINIMUM_EXPORT_SCHEMA_VERSION: i32 = 14;
 #[cfg(test)]
 pub(crate) const SPECIES_STORAGE_CONTRACT_FINGERPRINT: &str =
-    "3c13bebbb275ee85cdb3af3e26e3726cffcffc139d2cad5cd47729238d0f1da5";
+    "b3662cc26f4c2dcddc367728f2584935cb452940b5a09313f7b8e0d97610b595";
 
 #[cfg(test)]
 #[rustfmt::skip]

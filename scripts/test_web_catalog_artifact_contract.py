@@ -10,6 +10,7 @@ from scripts import web_catalog_artifact_contract as contract
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NORMALIZATION_PATH = REPO_ROOT / "common-types/species-search-normalization.json"
+UNICODE_FACTS_PATH = REPO_ROOT / "common-types/species-search-unicode-15.json"
 
 
 class WebCatalogArtifactContractTests(unittest.TestCase):
@@ -602,6 +603,10 @@ def write_contract(root: Path, raw: object) -> None:
     path.write_text(json.dumps(raw), encoding="utf-8")
     (root / "common-types/species-search-normalization.json").write_text(
         NORMALIZATION_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (root / "common-types/species-search-unicode-15.json").write_text(
+        UNICODE_FACTS_PATH.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 

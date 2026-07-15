@@ -1,13 +1,31 @@
 {
   "contract_format_version": 1,
   "normalization_version": 1,
+  "unicode_data": {
+    "version": "15.0.0",
+    "facts_file": "species-search-unicode-15.json"
+  },
   "algorithm": {
     "compatibility_decomposition": "NFKD",
-    "stripped_general_categories": ["Mn", "Mc", "Me"],
-    "token_character_classes": ["Letter", "Number", "Underscore"],
+    "stripped_general_categories": [
+      "Mn",
+      "Mc",
+      "Me"
+    ],
+    "token_character_classes": [
+      "Letter",
+      "Number",
+      "Underscore"
+    ],
     "case_folds": [
-      { "from": "ß", "to": "ss" },
-      { "from": "ς", "to": "σ" }
+      {
+        "from": "ß",
+        "to": "ss"
+      },
+      {
+        "from": "ς",
+        "to": "σ"
+      }
     ],
     "minimum_admitted_scalar_count": 2,
     "query_token_policy": "unique-admitted-or-all-when-active"
@@ -39,7 +57,7 @@
     },
     {
       "name": "scalar-newer-than-pinned-unicode-data",
-      "input": "\ud839\uddd0",
+      "input": "𞗐",
       "normalized_text": "",
       "tokens": [],
       "query_tokens": [],
@@ -49,7 +67,9 @@
       "name": "one-normalized-scalar",
       "input": " É ",
       "normalized_text": "e",
-      "tokens": ["e"],
+      "tokens": [
+        "e"
+      ],
       "query_tokens": [],
       "admission": "too-short"
     },
@@ -57,72 +77,126 @@
       "name": "two-normalized-scalars",
       "input": "Ér",
       "normalized_text": "er",
-      "tokens": ["er"],
-      "query_tokens": ["er"],
+      "tokens": [
+        "er"
+      ],
+      "query_tokens": [
+        "er"
+      ],
       "admission": "active-text"
     },
     {
       "name": "greek-final-sigma",
       "input": "Σίσυφος",
       "normalized_text": "σισυφοσ",
-      "tokens": ["σισυφοσ"],
-      "query_tokens": ["σισυφοσ"],
+      "tokens": [
+        "σισυφοσ"
+      ],
+      "query_tokens": [
+        "σισυφοσ"
+      ],
       "admission": "active-text"
     },
     {
       "name": "sharp-s-expansion",
       "input": "Straße ẞ",
       "normalized_text": "strasse ss",
-      "tokens": ["strasse", "ss"],
-      "query_tokens": ["strasse", "ss"],
+      "tokens": [
+        "strasse",
+        "ss"
+      ],
+      "query_tokens": [
+        "strasse",
+        "ss"
+      ],
       "admission": "active-text"
     },
     {
       "name": "compatibility-ligatures",
       "input": "oﬃce ﬆyle",
       "normalized_text": "office style",
-      "tokens": ["office", "style"],
-      "query_tokens": ["office", "style"],
+      "tokens": [
+        "office",
+        "style"
+      ],
+      "query_tokens": [
+        "office",
+        "style"
+      ],
       "admission": "active-text"
     },
     {
       "name": "composed-and-combining-marks",
       "input": "Café café áb",
       "normalized_text": "cafe cafe ab",
-      "tokens": ["cafe", "cafe", "ab"],
-      "query_tokens": ["cafe", "ab"],
+      "tokens": [
+        "cafe",
+        "cafe",
+        "ab"
+      ],
+      "query_tokens": [
+        "cafe",
+        "ab"
+      ],
       "admission": "active-text"
     },
     {
       "name": "punctuation-delimits-tokens",
       "input": "Carleton's soap/pod",
       "normalized_text": "carleton s soap pod",
-      "tokens": ["carleton", "s", "soap", "pod"],
-      "query_tokens": ["carleton", "soap", "pod"],
+      "tokens": [
+        "carleton",
+        "s",
+        "soap",
+        "pod"
+      ],
+      "query_tokens": [
+        "carleton",
+        "soap",
+        "pod"
+      ],
       "admission": "active-text"
     },
     {
       "name": "underscores-remain-token-characters",
       "input": "snake_case __",
       "normalized_text": "snake_case __",
-      "tokens": ["snake_case", "__"],
-      "query_tokens": ["snake_case", "__"],
+      "tokens": [
+        "snake_case",
+        "__"
+      ],
+      "query_tokens": [
+        "snake_case",
+        "__"
+      ],
       "admission": "active-text"
     },
     {
       "name": "non-latin-scripts-remain-searchable",
       "input": "РОЗА 東京",
       "normalized_text": "роза 東京",
-      "tokens": ["роза", "東京"],
-      "query_tokens": ["роза", "東京"],
+      "tokens": [
+        "роза",
+        "東京"
+      ],
+      "query_tokens": [
+        "роза",
+        "東京"
+      ],
       "admission": "active-text"
     },
     {
       "name": "separated-short-tokens-are-admitted-together",
       "input": "A/B",
       "normalized_text": "a b",
-      "tokens": ["a", "b"],
-      "query_tokens": ["a", "b"],
+      "tokens": [
+        "a",
+        "b"
+      ],
+      "query_tokens": [
+        "a",
+        "b"
+      ],
       "admission": "active-text"
     }
   ]
