@@ -569,14 +569,14 @@ export class DesignSessionStateMachine {
         source: "queued-template",
         label: queuedTemplate.name,
         load: async () => ({
-          file: await this.deps.loadDesign(queuedTemplate.path),
+          file: cloneDocument(queuedTemplate.file),
           path: null,
           name: queuedTemplate.name,
         }),
         isStillPending: () =>
-          this.deps.store.readPendingTemplateImport()?.path === queuedTemplate.path,
+          this.deps.store.readPendingTemplateImport()?.identity === queuedTemplate.identity,
         clearPending: () => {
-          if (this.deps.store.readPendingTemplateImport()?.path === queuedTemplate.path) {
+          if (this.deps.store.readPendingTemplateImport()?.identity === queuedTemplate.identity) {
             this.deps.store.setPendingTemplateImport(null);
           }
         },
@@ -929,6 +929,10 @@ export class DesignSessionStateMachine {
       operation: null,
     };
   }
+}
+
+function cloneDocument(file: CanopiFile): CanopiFile {
+  return JSON.parse(JSON.stringify(file)) as CanopiFile;
 }
 
 export function createDesignSessionStateMachine(

@@ -1,4 +1,5 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
+import type { CanopiFile } from "../../types/design";
 import {
   type DocumentTransitionResult,
   consumeQueuedDocumentLoad,
@@ -43,13 +44,13 @@ export async function openDesignFromPath(
   throwIfFailed(result);
 }
 
-/** Open a downloaded template as a new unsaved design through the shared guard. */
+/** Open a decoded template as a new unsaved design through the shared guard. */
 export async function openDesignAsTemplate(
-  path: string,
+  file: CanopiFile,
   name: string,
   options: DocumentLoadOptions = {},
 ): Promise<TemplateOpenResult> {
-  const result = await openTemplateDesignSession(path, name, {
+  const result = await openTemplateDesignSession(file, name, {
     session: options.session,
     isCancelled: options.isCancelled,
   });

@@ -35,7 +35,11 @@ describe('Design Edit authority', () => {
       detachedCanvasDirty: true,
       autosaveFailed: true,
       pendingDesignPath: '/queued.canopi',
-      pendingTemplateImport: { path: '/template.canopi', name: 'Template' },
+      pendingTemplateImport: {
+        identity: 'template-reset',
+        file: design('Template'),
+        name: 'Template',
+      },
     })
 
     fixture.reset({

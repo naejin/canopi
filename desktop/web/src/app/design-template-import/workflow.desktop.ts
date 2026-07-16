@@ -1,5 +1,6 @@
-import { downloadTemplate } from '../../ipc/community'
+import { acquireDesignTemplate } from '../../ipc/community'
 import type { TemplateMeta } from '../../types/community'
+import type { CanopiFile } from '../../types/design'
 import {
   openDesignAsTemplate,
 } from '../document-session/actions'
@@ -9,12 +10,12 @@ import {
 } from './coordinator'
 
 export interface DesignTemplateImportAdapters {
-  readonly downloadTemplate: (url: string) => Promise<string>
+  readonly acquireDesignTemplate: (id: string) => Promise<CanopiFile>
   readonly openDesignAsTemplate: typeof openDesignAsTemplate
 }
 
 const DEFAULT_ADAPTERS: DesignTemplateImportAdapters = {
-  downloadTemplate,
+  acquireDesignTemplate,
   openDesignAsTemplate,
 }
 
@@ -22,9 +23,9 @@ export function createDesktopDesignTemplateImportWorkflow(
   adapters: DesignTemplateImportAdapters,
 ) {
   return createDesignTemplateImportCoordinator({
-    acquire: (template) => adapters.downloadTemplate(template.download_url),
-    open: (path, template, isCancelled) => adapters.openDesignAsTemplate(
-      path,
+    acquire: (template) => adapters.acquireDesignTemplate(template.id),
+    open: (file, template, isCancelled) => adapters.openDesignAsTemplate(
+      file,
       template.title,
       { isCancelled },
     ),

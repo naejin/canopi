@@ -352,7 +352,7 @@ describe('browser Design Session lifecycle', () => {
 
     await expect(controller.openCanopiTemplate({
       name: 'Forest Edge',
-      text: JSON.stringify(templateFile),
+      file: templateFile,
     })).resolves.toBe('opened')
 
     expect(store.readCurrentDesign()?.name).toBe('Downloaded Template')
@@ -360,23 +360,6 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignName()).toBe('Forest Edge')
     expect(store.readDesignPath()).toBeNull()
     expect(store.isDesignDirty()).toBe(false)
-  })
-
-  it('rejects a malformed template before replacing the active session', async () => {
-    const original = makeCanopiFile({ name: 'Working Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: original,
-      path: null,
-      name: original.name,
-    })
-    const controller = createBrowserDesignSessionController({ store, now: () => NOW })
-
-    await expect(controller.openCanopiTemplate({
-      name: 'Malformed Template',
-      text: JSON.stringify({ ...makeCanopiFile(), zones: [{ name: 'missing fields' }] }),
-    })).rejects.toThrow('$.zones[0].points: missing required value')
-    expect(store.readDesignName()).toBe('Working Garden')
-    expect(store.readCurrentDesign()).toEqual(original)
   })
 
   it('does not let an older pending Open overwrite a later template replacement', async () => {
@@ -400,7 +383,7 @@ describe('browser Design Session lifecycle', () => {
     const opening = controller.openCanopi()
     await controller.openCanopiTemplate({
       name: 'Later Template',
-      text: JSON.stringify(makeCanopiFile({ name: 'Later Template Design' })),
+      file: makeCanopiFile({ name: 'Later Template Design' }),
     })
     pendingOpen.resolve({
       fileName: 'older-picker.canopi',
@@ -986,7 +969,7 @@ describe('browser Design Session lifecycle', () => {
     await controller.openCanopi()
     await controller.openCanopiTemplate({
       name: 'Template Display',
-      text: JSON.stringify(makeCanopiFile({ name: 'Template Replacement' })),
+      file: makeCanopiFile({ name: 'Template Replacement' }),
     })
     expect(controller.openDraft('draft-replacement')).toBe(true)
 
@@ -1640,7 +1623,7 @@ describe('browser Design Session lifecycle', () => {
 
     await expect(controller.openCanopiTemplate({
       name: 'Rejected Browser Target',
-      text: JSON.stringify(makeCanopiFile({ name: 'Rejected Browser Target' })),
+      file: makeCanopiFile({ name: 'Rejected Browser Target' }),
     })).rejects.toBe(preparationError)
 
     sceneColor = '#335577'
@@ -1710,7 +1693,7 @@ describe('browser Design Session lifecycle', () => {
 
     await expect(controller.openCanopiTemplate({
       name: 'Interrupted Target',
-      text: JSON.stringify(makeCanopiFile({ name: 'Interrupted Target' })),
+      file: makeCanopiFile({ name: 'Interrupted Target' }),
     })).rejects.toThrow('retained browser hydration publication failed')
 
     await expect(controller.openCanopi()).resolves.toBe(false)
@@ -1774,7 +1757,7 @@ describe('browser Design Session lifecycle', () => {
 
     await expect(controller.openCanopiTemplate({
       name: firstTarget.name,
-      text: JSON.stringify(firstTarget),
+      file: firstTarget,
     })).rejects.toThrow('post-finalizer browser publication failed')
     editDesignSessionForTest(store, (design) => ({
       ...design,
@@ -1783,7 +1766,7 @@ describe('browser Design Session lifecycle', () => {
 
     await expect(controller.openCanopiTemplate({
       name: secondTarget.name,
-      text: JSON.stringify(secondTarget),
+      file: secondTarget,
     })).rejects.toBeInstanceOf(CanvasAuthorityBusyError)
     expect(detach).not.toThrow()
     expect(store.readDesignName()).toBe('First Browser Target')

@@ -14,7 +14,8 @@ import {
 } from './persistence-capability'
 
 export interface PendingTemplateImport {
-  readonly path: string
+  readonly identity: string
+  readonly file: CanopiFile
   readonly name: string
 }
 
@@ -395,6 +396,8 @@ function createDesignSessionStore(
 
     setPendingTemplateImport(template) {
       signals.pendingTemplateImport.value = template
+        ? { ...template, file: cloneDocument(template.file) }
+        : null
     },
   } as PersistenceCapableDesignSessionStore
 

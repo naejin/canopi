@@ -53,9 +53,9 @@ export interface BrowserCanopiDownload {
   readonly text: string;
 }
 
-export interface BrowserTemplateCanopiFile {
+export interface BrowserTemplateDesignEnvelope {
   readonly name: string;
-  readonly text: string;
+  readonly file: CanopiFile;
 }
 
 export interface BrowserDesignFileAdapter {
@@ -77,7 +77,10 @@ export interface BrowserDesignSessionController {
   readDesignIdentity(): BrowserShellDesignIdentity | null;
   newDesign(): Promise<void>;
   openCanopi(): Promise<boolean>;
-  openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened">;
+  openCanopiTemplate(
+    template: BrowserTemplateDesignEnvelope,
+    options?: { readonly isCancelled?: () => boolean },
+  ): Promise<"opened" | "cancelled">;
   downloadCanopi(): Promise<void>;
   renameDesign(name: string): void;
   saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null;
@@ -264,9 +267,13 @@ export function createBrowserDesignSessionController({
     return true;
   }
 
-  async function openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened"> {
+  async function openCanopiTemplate(
+    template: BrowserTemplateDesignEnvelope,
+    options: { readonly isCancelled?: () => boolean } = {},
+  ): Promise<"opened" | "cancelled"> {
     replacementIntent += 1;
-    const file = parseCanopiJson(template.text);
+    if (options.isCancelled?.()) return "cancelled";
+    const file = template.file;
     const draftId = createDraftId();
     applyDesignReplacement({
       file,

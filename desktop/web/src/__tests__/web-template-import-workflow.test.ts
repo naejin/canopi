@@ -30,10 +30,13 @@ describe('Web Edition Design Template import workflow', () => {
     })).resolves.toBe('opened')
 
     expect(fetchTemplateAsset).toHaveBeenCalledWith('https://web.canopi.test/app/templates/forest-edge.canopi')
-    expect(openCanopiTemplate).toHaveBeenCalledWith({
-      name: 'Forest Edge',
-      file: templateFile,
-    })
+    expect(openCanopiTemplate).toHaveBeenCalledWith(
+      {
+        name: 'Forest Edge',
+        file: templateFile,
+      },
+      { isCancelled: expect.any(Function) },
+    )
   })
 
   it('rejects malformed static assets at the Web ingestion boundary before opening', async () => {

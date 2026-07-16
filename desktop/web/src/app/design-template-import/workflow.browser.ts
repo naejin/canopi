@@ -1,7 +1,8 @@
 import type { TemplateMeta } from '../../types/community'
+import { decodeCanopiDesign } from '../contracts/design-ingestion'
 import {
   browserDesignSessionController,
-  type BrowserTemplateCanopiFile,
+  type BrowserTemplateDesignEnvelope,
 } from '../../web/browser-design-session'
 import { WEB_STATIC_DESIGN_TEMPLATE_ASSET_ORIGINS } from '../../web/static-design-templates'
 import {
@@ -22,7 +23,10 @@ export interface BrowserDesignTemplateImportAdapters {
   readonly baseUrl?: string
   readonly allowedAssetOrigins?: readonly string[]
   readonly fetchTemplateAsset?: (url: string) => Promise<StaticTemplateAssetResponse>
-  readonly openCanopiTemplate?: (template: BrowserTemplateCanopiFile) => Promise<DesignTemplateOpenResult>
+  readonly openCanopiTemplate?: (
+    template: BrowserTemplateDesignEnvelope,
+    options?: { readonly isCancelled?: () => boolean },
+  ) => Promise<DesignTemplateOpenResult>
 }
 
 export function createBrowserDesignTemplateImportWorkflow(
@@ -42,12 +46,16 @@ export function createBrowserDesignTemplateImportWorkflow(
           + `${response.status} ${response.statusText}`.trim(),
         )
       }
-      return response.text()
+      const text = await response.text()
+      return decodeCanopiDesign(JSON.parse(text) as unknown)
     },
-    open: (text, template) => {
+    open: (file, template, isCancelled) => {
       const openCanopiTemplate = adapters.openCanopiTemplate
-        ?? ((file: BrowserTemplateCanopiFile) => browserDesignSessionController.openCanopiTemplate(file))
-      return openCanopiTemplate({ name: template.title, text })
+        ?? ((envelope, options) => browserDesignSessionController.openCanopiTemplate(
+          envelope,
+          options,
+        ))
+      return openCanopiTemplate({ name: template.title, file }, { isCancelled })
     },
   })
 }
