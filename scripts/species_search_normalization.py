@@ -537,10 +537,6 @@ def normalize_search_name(name: str) -> str:
     return normalize_species_search(name).text
 
 
-def normalize_search_token(token: str) -> str:
-    return normalize_search_name(token)
-
-
 def species_search_admission(raw: str) -> SpeciesSearchAdmission:
     scalar_count = normalize_species_search(raw).scalar_count
     if scalar_count == 0:

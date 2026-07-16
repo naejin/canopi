@@ -30,7 +30,6 @@ from scripts import web_catalog_artifact_contract as artifact_contract
 from scripts.species_search_normalization import (
     common_name_tokens,
     normalize_search_name,
-    normalize_search_token,
 )
 
 DEFAULT_EXPORTS_DIR = Path.home() / "projects/canopi-data/data/exports"
