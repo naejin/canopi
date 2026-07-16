@@ -1,15 +1,12 @@
+use common_types::design::CanopiFile;
 use common_types::design::Location;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Maximum template download size (50 MB).
 const MAX_TEMPLATE_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Allowed domain for template downloads.
 const ALLOWED_HOST: &str = "templates.canopi.app";
-static DOWNLOAD_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateMeta {
@@ -133,8 +130,8 @@ pub fn get_template_preview(id: &str) -> Result<TemplateMeta, String> {
         .ok_or_else(|| format!("Template not found: {id}"))
 }
 
-pub fn download_template_blocking(url: String) -> Result<String, String> {
-    download_template_blocking_with_fetch(url, |url| {
+pub fn acquire_template_blocking(id: String) -> Result<CanopiFile, String> {
+    acquire_template_blocking_with_fetch(id, |url| {
         let mut response =
             crate::http::build_get_request(url, "Canopi/1.0", std::time::Duration::from_secs(30))
                 .call()
@@ -144,31 +141,22 @@ pub fn download_template_blocking(url: String) -> Result<String, String> {
     })
 }
 
-fn download_template_blocking_with_fetch<F>(
-    url: String,
+fn acquire_template_blocking_with_fetch<F>(
+    id: String,
     mut fetch_bytes: F,
-) -> Result<String, String>
+) -> Result<CanopiFile, String>
 where
     F: FnMut(&str) -> Result<Vec<u8>, String>,
 {
-    validate_download_url(&url)?;
-    let bytes = fetch_bytes(&url)?;
-    persist_downloaded_template(&url, &bytes, &std::env::temp_dir())
-}
-
-fn persist_downloaded_template(
-    url: &str,
-    bytes: &[u8],
-    tmp_dir: &std::path::Path,
-) -> Result<String, String> {
-    let file_name = sanitized_download_file_name(url);
-    let dest = unique_download_destination(tmp_dir, &file_name)?;
-
-    std::fs::write(&dest, bytes).map_err(|e| format!("Failed to write template to disk: {e}"))?;
-
-    dest.to_str()
-        .map(|path| path.to_string())
-        .ok_or_else(|| "Invalid temp path encoding".into())
+    let template = get_template_preview(&id)?;
+    validate_download_url(&template.download_url)?;
+    let bytes = fetch_bytes(&template.download_url)?;
+    crate::design::format::decode_from_bytes(&bytes).map_err(|error| {
+        format!(
+            "Failed to decode Design Template '{}': {error}",
+            template.id
+        )
+    })
 }
 
 fn validate_download_url(url: &str) -> Result<(), String> {
@@ -190,63 +178,11 @@ fn extract_https_host(url: &str) -> Option<&str> {
         .and_then(|host_port| host_port.split(':').next())
 }
 
-fn sanitized_download_file_name(url: &str) -> String {
-    let raw_name = url.rsplit('/').next().unwrap_or("template.canopi");
-    let safe_name: String = raw_name
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
-        .collect();
-
-    if safe_name.is_empty() || safe_name.starts_with('.') {
-        "template.canopi".to_owned()
-    } else {
-        safe_name
-    }
-}
-
-fn resolve_download_destination(
-    tmp_dir: &std::path::Path,
-    file_name: &str,
-) -> Result<PathBuf, String> {
-    let canonical_tmp = tmp_dir
-        .canonicalize()
-        .map_err(|e| format!("Failed to resolve temp dir: {e}"))?;
-    let canonical_dest = canonical_tmp.join(file_name);
-
-    if !canonical_dest.starts_with(&canonical_tmp) {
-        return Err("Path traversal detected — download aborted".into());
-    }
-
-    Ok(canonical_dest)
-}
-
-fn unique_download_destination(
-    tmp_dir: &std::path::Path,
-    file_name: &str,
-) -> Result<PathBuf, String> {
-    resolve_download_destination(tmp_dir, &unique_file_name(file_name))
-}
-
-fn unique_file_name(file_name: &str) -> String {
-    let sequence = DOWNLOAD_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    match file_name.rsplit_once('.') {
-        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => {
-            format!("{stem}-{stamp}-{sequence}.{ext}")
-        }
-        _ => format!("{file_name}-{stamp}-{sequence}"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        acquire_template_blocking_with_fetch, download_template_blocking_with_fetch,
-        get_template_catalog, get_template_preview, resolve_download_destination,
-        sanitized_download_file_name, unique_download_destination, validate_download_url,
+        acquire_template_blocking_with_fetch, get_template_catalog, get_template_preview,
+        validate_download_url,
     };
 
     #[test]
@@ -264,55 +200,17 @@ mod tests {
     }
 
     #[test]
-    fn sanitizes_download_file_name() {
-        assert_eq!(
-            sanitized_download_file_name("https://templates.canopi.app/../weird?.canopi"),
-            "weird.canopi"
-        );
-        assert_eq!(
-            sanitized_download_file_name("https://templates.canopi.app/.env"),
-            "template.canopi"
-        );
-    }
-
-    #[test]
-    fn resolves_downloads_under_temp_dir() {
-        let tmp = std::env::temp_dir();
-        let dest = resolve_download_destination(&tmp, "template.canopi").unwrap();
-        assert!(dest.starts_with(tmp.canonicalize().unwrap()));
-    }
-
-    #[test]
-    fn generates_unique_download_destinations() {
-        let tmp = std::env::temp_dir();
-        let first = unique_download_destination(&tmp, "template.canopi").unwrap();
-        let second = unique_download_destination(&tmp, "template.canopi").unwrap();
-        assert_ne!(first, second);
-    }
-
-    #[test]
-    fn download_workflow_persists_bytes_to_a_unique_temp_file() {
-        let url = "https://templates.canopi.app/tpl-001.canopi".to_string();
-        let path = download_template_blocking_with_fetch(url, |_| Ok(vec![1, 2, 3, 4])).unwrap();
-        let bytes = std::fs::read(&path).unwrap();
-        assert_eq!(bytes, vec![1, 2, 3, 4]);
-        std::fs::remove_file(path).unwrap();
-    }
-
-    #[test]
-    fn download_workflow_surfaces_fetch_errors() {
-        let url = "https://templates.canopi.app/tpl-001.canopi".to_string();
+    fn acquisition_workflow_surfaces_fetch_errors() {
         let error =
-            download_template_blocking_with_fetch(url, |_| Err("network down".into())).unwrap_err();
+            acquire_template_blocking_with_fetch("tpl-001".into(), |_| Err("network down".into()))
+                .unwrap_err();
         assert!(error.contains("network down"));
     }
 
     #[test]
     fn template_acquisition_resolves_catalog_identity_and_decodes_design_bytes() {
-        let expected = crate::design::format::create_new_design(
-            "Decoded Template",
-            "2026-07-16T00:00:00Z",
-        );
+        let expected =
+            crate::design::format::create_new_design("Decoded Template", "2026-07-16T00:00:00Z");
         let bytes = serde_json::to_vec(&expected).unwrap();
         let mut requested_url = None;
 
@@ -322,7 +220,10 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(requested_url.as_deref(), Some("https://templates.canopi.app/tpl-001.canopi"));
+        assert_eq!(
+            requested_url.as_deref(),
+            Some("https://templates.canopi.app/tpl-001.canopi")
+        );
         assert_eq!(acquired.name, "Decoded Template");
         assert_eq!(acquired.version, expected.version);
     }

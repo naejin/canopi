@@ -91,6 +91,13 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
         .map_err(|error| format!("Failed to parse design from {}: {error}", path.display()))
 }
 
+/// Decode an in-memory `.canopi` payload through the native compatibility authority.
+pub fn decode_from_bytes(bytes: &[u8]) -> Result<CanopiFile, String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| format!("Invalid JSON in Design payload: {error}"))?;
+    decode_design_value(value).map_err(|error| format!("Failed to parse Design payload: {error}"))
+}
+
 fn decode_design_value(
     mut value: serde_json::Value,
 ) -> Result<CanopiFile, CanopiDesignIngestionError> {

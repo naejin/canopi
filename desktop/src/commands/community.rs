@@ -1,4 +1,5 @@
 pub use crate::services::community::TemplateMeta;
+use common_types::design::CanopiFile;
 
 #[tauri::command]
 pub fn get_template_catalog() -> Result<Vec<TemplateMeta>, String> {
@@ -11,9 +12,9 @@ pub fn get_template_preview(id: String) -> Result<TemplateMeta, String> {
 }
 
 #[tauri::command]
-pub async fn download_template(url: String) -> Result<String, String> {
-    crate::blocking::run_blocking("template download", move || {
-        crate::services::community::download_template_blocking(url)
+pub async fn acquire_design_template(id: String) -> Result<CanopiFile, String> {
+    crate::blocking::run_blocking("template acquisition", move || {
+        crate::services::community::acquire_template_blocking(id)
     })
     .await
 }
