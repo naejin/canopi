@@ -21,6 +21,7 @@ import type {
 import {
   admittedSpeciesSearchText,
   EMPTY_ADMITTED_SPECIES_SEARCH_TEXT,
+  speciesSearchAdmission,
   type AdmittedSpeciesSearchText as NormalizedSearchText,
 } from '../utils/species-search-normalization'
 
@@ -161,6 +162,14 @@ export function createDuckDbReducedSpeciesCatalogReader(
       request: SpeciesSearchRequest,
       favoriteNames: ReadonlySet<string>,
     ): Promise<PaginatedResult<SpeciesListItem>> {
+      if (disposed) throw new DuckDbCatalogDisposedError()
+      if (speciesSearchAdmission(request.text) === 'too-short') {
+        return {
+          items: [],
+          next_cursor: null,
+          total_estimate: 0,
+        }
+      }
       return run((loaded) => loaded.searchSpecies(request, favoriteNames))
     },
 
