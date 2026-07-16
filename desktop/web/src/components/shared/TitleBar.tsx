@@ -53,9 +53,6 @@ export function TitleBar() {
   const [isEditingName, setIsEditingName] = useState(false)
   const [draftName, setDraftName] = useState(visibleName)
   const nameInputRef = useRef<HTMLInputElement>(null)
-  // Subscribe to locale so aria-labels re-render on language change
-  void locale.value
-
   useEffect(() => {
     if (isEditingName) return
     setDraftName(visibleName)

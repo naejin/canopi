@@ -1,5 +1,4 @@
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../../canvas/session'
 import {
@@ -23,7 +22,6 @@ interface Props {
 }
 
 export function PlantRow({ plant, variant = 'catalog' }: Props) {
-  void locale.value
   const session = currentCanvasToolCommandSurface.value
 
   const handleDragStart = (e: DragEvent) => {

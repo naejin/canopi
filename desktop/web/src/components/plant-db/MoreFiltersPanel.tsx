@@ -18,7 +18,6 @@ interface Props {
 }
 
 export function MoreFiltersPanel({ open, onClose }: Props) {
-  void locale.value
   const searchQuery = useSignal('')
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -100,7 +99,6 @@ function CategorySection({ category, searchQuery }: {
   category: typeof CATEGORIES[number]
   searchQuery: string
 }) {
-  void locale.value
   const open = useSignal(false)
   const fields = fieldsForCategory(category.key as FilterCategory)
   const extras = speciesCatalogWorkbench.intent.value.extraFilters

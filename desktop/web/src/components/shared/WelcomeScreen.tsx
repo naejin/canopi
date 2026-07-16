@@ -6,8 +6,6 @@ import { createRecentFilesController } from '../../app/recent-files'
 import styles from './WelcomeScreen.module.css'
 
 export function WelcomeScreen() {
-  void locale.value
-
   const recentFilesController = useMemo(() => createRecentFilesController(), [])
 
   useEffect(() => {

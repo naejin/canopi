@@ -1,4 +1,3 @@
-import { locale } from '../app/settings/state'
 import { t } from '../i18n'
 import styles from '../components/shared/WelcomeScreen.module.css'
 import {
@@ -13,8 +12,6 @@ interface WebWelcomeScreenProps {
 export function WebWelcomeScreen({
   controller = browserDesignSessionController,
 }: WebWelcomeScreenProps) {
-  void locale.value
-
   return (
     <div
       className={styles.welcome}

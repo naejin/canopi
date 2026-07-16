@@ -1,5 +1,4 @@
 import { t } from '../../i18n';
-import { locale } from '../../app/settings/state';
 import { speciesCatalogWorkbench, type ViewMode } from '../../app/plant-browser';
 import styles from './PlantDb.module.css';
 
@@ -15,7 +14,6 @@ const VIEW_OPTIONS: ViewOption[] = [
 ];
 
 export function ViewModeToggle() {
-  void locale.value;
   const current = speciesCatalogWorkbench.viewMode.value;
 
   return (

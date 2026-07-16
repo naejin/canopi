@@ -1,12 +1,8 @@
 import { t } from '../../i18n';
-import { locale } from '../../app/settings/state';
 import { speciesCatalogWorkbench } from '../../app/plant-browser';
 import styles from './PlantDb.module.css';
 
 export function SearchBar() {
-  // Subscribe to locale for re-render on language change
-  void locale.value;
-
   const intent = speciesCatalogWorkbench.intent.value;
   const results = speciesCatalogWorkbench.results.value;
   const text = intent.text;

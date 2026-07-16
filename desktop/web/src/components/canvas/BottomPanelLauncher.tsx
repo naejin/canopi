@@ -1,5 +1,4 @@
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
 import { type BottomPanelTab } from '../../app/canvas-settings/bottom-panel-state'
 import { openBottomPanel, setBottomPanelOpen } from '../../app/canvas-settings/controller'
 import { bottomPanelView } from '../../app/canvas-settings/state'
@@ -17,8 +16,6 @@ function getLabel(tab: BottomPanelTab): string {
 }
 
 export function BottomPanelLauncher() {
-  void locale.value
-
   const { open: isOpen, tab: activeTab, visibleTabs } = bottomPanelView.value
 
   function handleClick(tab: BottomPanelTab) {

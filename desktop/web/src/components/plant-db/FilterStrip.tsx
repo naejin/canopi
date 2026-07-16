@@ -1,6 +1,5 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import type { FilterOptions, SpeciesFilter } from '../../types/species'
 import type { StripControlField } from '../../app/plant-browser'
@@ -10,7 +9,6 @@ import { toggleArrayValue } from './filter-utils'
 import styles from './PlantDb.module.css'
 
 export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
-  void locale.value;
   const filterStrip = speciesCatalogWorkbench.filterStrip.value;
 
   useEffect(() => {

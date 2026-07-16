@@ -1,8 +1,5 @@
 import { t } from '../../i18n'
 import {
-  locale,
-} from '../../app/settings/state'
-import {
   useLocationWorkbench,
   type LocationSearchResult,
 } from '../../app/location'
@@ -11,8 +8,6 @@ import { navigateTo } from '../../app/shell/state'
 import styles from './LocationTab.module.css'
 
 export function LocationTab() {
-  void locale.value
-
   const workbench = useLocationWorkbench()
   const search = workbench.search
   const mapHost = useLocationMapEditingHost(workbench)

@@ -1,5 +1,4 @@
 import { t } from '../../i18n';
-import { locale } from '../../app/settings/state';
 import type { SpeciesDetail } from '../../types/species';
 import styles from './PlantDetail.module.css';
 
@@ -21,8 +20,6 @@ function formatZone(min: number | null, max: number | null): string {
 }
 
 export function AttributeGrid({ detail }: Props) {
-  void locale.value;
-
   const heightStr = formatRange(detail.height_min_m, detail.height_max_m, 'm');
   const widthStr = detail.width_max_m !== null ? `${detail.width_max_m}m` : t('plantDetail.unknown');
   const zoneStr = formatZone(detail.hardiness_zone_min, detail.hardiness_zone_max);

@@ -1,7 +1,6 @@
 import { useSignalEffect } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
-import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import {
@@ -75,8 +74,6 @@ function iconForAction(id: string): IconComponent {
 }
 
 export function CanvasToolbar() {
-  // Subscribe to locale so labels re-render on language change
-  void locale.value
   void currentCanvasSelection.value
   const querySurface = currentCanvasQuerySurface.value
   const toolbarProjection = appCommandGraphToolbarProjection.value

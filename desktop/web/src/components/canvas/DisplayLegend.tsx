@@ -1,4 +1,3 @@
-import { locale } from '../../app/settings/state'
 import { buildPinnedPlantNameLegendEntries } from '../../canvas/pinned-plant-name-legend'
 import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../../canvas/scale-bar'
 import { currentCanvasQuerySurface } from '../../canvas/session'
@@ -9,7 +8,6 @@ import styles from './DisplayLegend.module.css'
 const DISPLAY_LEGEND_TOP_RESERVED_PX = 32
 
 export function DisplayLegend() {
-  void locale.value
   const querySurface = currentCanvasQuerySurface.value
   void querySurface?.revision.scene.value
   void querySurface?.revision.plantNames.value

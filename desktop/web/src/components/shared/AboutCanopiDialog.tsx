@@ -5,7 +5,6 @@ import {
   CANOPI_LICENSE,
   CANOPI_VERSION,
 } from '../../app/about/metadata'
-import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import styles from './AboutCanopiDialog.module.css'
 
@@ -16,8 +15,6 @@ export function AboutCanopiDialog() {
 
 function AboutCanopiDialogContent() {
   const closeRef = useRef<HTMLButtonElement>(null)
-  void locale.value
-
   useEffect(() => {
     closeRef.current?.focus()
   }, [])

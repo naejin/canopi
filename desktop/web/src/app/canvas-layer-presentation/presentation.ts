@@ -1,7 +1,6 @@
 import { activeLayerName, contourIntervalMeters, hillshadeOpacity, hillshadeVisible, layerLockState, layerOpacity, layerPanelOpen, layerVisibility } from '../canvas-settings/signals'
 import { readSavedLocationPresentation } from '../location'
 import { mutateSettingsProjection } from '../settings/projection'
-import { locale } from '../settings/state'
 import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
 
@@ -61,8 +60,6 @@ export interface CanvasLayerPresentation {
 }
 
 export function readCanvasLayerPresentation(): CanvasLayerPresentation {
-  void locale.value
-
   const runtime = currentCanvasQuerySurface.value
   void runtime?.revision.scene.value
   const scene = runtime?.getSceneSnapshot()

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
 import {
   communityView,
   importTemplateIntoCurrentSession,
@@ -78,8 +77,6 @@ function FilterChips({
 }
 
 export function WorldMapPanel() {
-  void locale.value
-
   const [Surface, setSurface] = useState<SurfaceComponent | null>(null)
   const { catalog, loading, error, selected, climate, style, importPending, importError } = communityView.value
 

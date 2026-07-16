@@ -24,8 +24,6 @@ interface Props {
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function PlantDetailCard({ canonicalName }: Props) {
-  void locale.value;
-
   const detailController = useMemo(() => createPlantDetailController(), []);
   const expanded = useSignal<Set<string>>(new Set());
 

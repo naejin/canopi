@@ -1,4 +1,3 @@
-import { locale } from '../../app/settings/state'
 import {
   currentCanvasQuerySurface,
   currentCanvasViewportCommandSurface,
@@ -7,7 +6,6 @@ import { t } from '../../i18n'
 import styles from './ZoomControls.module.css'
 
 export function ZoomControls() {
-  void locale.value
   const viewport = currentCanvasQuerySurface.value?.viewport.value
   const zoomPercent = viewport
     ? Math.round((viewport.viewport.scale / viewport.referenceScale) * 100)

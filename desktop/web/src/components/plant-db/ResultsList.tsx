@@ -7,7 +7,6 @@ import {
   elementScroll,
 } from '@tanstack/virtual-core';
 import { t } from '../../i18n';
-import { locale } from '../../app/settings/state';
 import { speciesCatalogWorkbench } from '../../app/plant-browser';
 import { PlantRow } from './PlantRow';
 import { PlantCard } from './PlantCard';
@@ -47,7 +46,6 @@ export function ResultsList() {
   const error = resultState.error;
   const hasMore = resultState.nextCursor !== null;
   const mode = speciesCatalogWorkbench.viewMode.value;
-  void locale.value;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const forceUpdate = useForceUpdate();

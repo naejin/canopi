@@ -3,7 +3,6 @@ import {
   designSessionStore,
   type DesignSessionStore,
 } from '../app/document-session/store'
-import { locale } from '../app/settings/state'
 import { getCurrentCanvasSession, setCanvasRuntimeSurfaces } from '../canvas/session'
 import { runCanvasRuntimeCleanups } from '../canvas/runtime/cleanup'
 import type { CanvasDocumentSurface, CanvasRuntimeHost } from '../canvas/runtime/runtime'
@@ -36,7 +35,6 @@ export function WebCanvasWorkspace({
   store = designSessionStore,
   createRuntimeHost = createBrowserCanvasRuntimeHost,
 }: WebCanvasWorkspaceProps) {
-  void locale.value
   const hasDesign = store.currentDesign.value !== null
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)

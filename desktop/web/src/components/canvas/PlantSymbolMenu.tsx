@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'preact/hooks'
-import { locale } from '../../app/settings/state'
 import { currentCanvasPlantPresentationCommandSurface, currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
 import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../../canvas/plant-colors'
@@ -25,7 +24,6 @@ function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
 
 export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
   void currentCanvasSelection.value
-  void locale.value
   const commandSurface = currentCanvasPlantPresentationCommandSurface.value
   const querySurface = currentCanvasQuerySurface.value
   void querySurface?.revision.plantNames.value

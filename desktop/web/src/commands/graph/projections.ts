@@ -6,7 +6,6 @@ import type {
 } from '../../app/canvas-commands'
 import type { Panel } from '../../app/shell/state'
 import { designNotebookWorkbench } from '../../app/design-notebook'
-import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import {
   APP_COMMANDS,
@@ -170,7 +169,6 @@ export const commands: Command[] = APP_COMMANDS
   .map(commandProjection)
 
 export const appCommandGraphChromeProjection = computed<AppCommandGraphChromeProjection>(() => {
-  void locale.value
   const state = readAppCommandState()
   for (const command of APP_COMMANDS) {
     void (command.disabled?.(state) ?? false)
@@ -204,7 +202,6 @@ function panelCommandProjection(
 }
 
 export const appCommandGraphPanelProjection = computed<AppCommandGraphPanelProjection>(() => {
-  void locale.value
   const state = readAppCommandState()
 
   return {
@@ -214,7 +211,6 @@ export const appCommandGraphPanelProjection = computed<AppCommandGraphPanelProje
 })
 
 export const appCommandGraphToolbarProjection = computed<AppCommandGraphToolbarProjection>(() => {
-  void locale.value
   const state = readAppCommandState()
   return createDesktopCanvasCommandProjection(state)
 })

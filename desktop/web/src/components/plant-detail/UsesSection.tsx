@@ -1,5 +1,4 @@
 import { t } from '../../i18n';
-import { locale } from '../../app/settings/state';
 import type { SpeciesUse } from '../../types/species';
 import styles from './PlantDetail.module.css';
 
@@ -35,8 +34,6 @@ function RatingDots({ rating, dotClass }: { rating: number | null; dotClass: str
 }
 
 export function UsesSection({ uses, edibilityRating, medicinalRating, otherUsesRating }: Props) {
-  void locale.value;
-
   const edibleUses = uses.filter((u) => u.use_category.toLowerCase().includes('edible'));
   const medicinalUses = uses.filter((u) => u.use_category.toLowerCase().includes('medicin'));
   const otherUses = uses.filter(

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { problemReportDialogOpen } from '../../app/problem-report/state'
 import { problemReportSubmission } from '../../app/problem-report/submission'
-import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import styles from './ProblemReportDialog.module.css'
 
@@ -19,8 +18,6 @@ function ProblemReportDialogContent() {
   const error = problemReportSubmission.error.value
   const copyState = problemReportSubmission.copyState.value
   const showFolderState = problemReportSubmission.showFolderState.value
-
-  void locale.value
 
   useEffect(() => {
     textareaRef.current?.focus()
