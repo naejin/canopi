@@ -314,11 +314,29 @@ describe('document replacement actions', () => {
     mocks.message.mockResolvedValue('Cancel')
 
     await expect(openDesignAsTemplate(
-      makeFile('Downloaded Template'),
-      'Forest Edge',
+      { file: makeFile('Downloaded Template'), name: 'Forest Edge' },
     )).resolves.toBe('cancelled')
 
     expect(mocks.loadDesign).not.toHaveBeenCalled()
+    expect(currentDesign.value?.name).toBe('Current')
+  })
+
+  it('does not apply a decoded template after its acquisition intent is cancelled', async () => {
+    designSessionFixture.nonCanvasRevision = 1
+    const decision = deferred<string>()
+    mocks.message.mockReturnValue(decision.promise)
+    let cancelled = false
+
+    const opening = openDesignAsTemplate(
+      { file: makeFile('Superseded Template'), name: 'Superseded Display' },
+      { isCancelled: () => cancelled },
+    )
+    await flushMicrotasks()
+    cancelled = true
+    decision.resolve("Don't Save")
+
+    await expect(opening).resolves.toBe('cancelled')
+    expect(mocks.canvasSession.replaceDocument).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
   })
 
@@ -383,8 +401,7 @@ describe('document replacement actions', () => {
     mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
 
     await expect(openDesignAsTemplate(
-      makeFile('Downloaded Template'),
-      'Forest Edge',
+      { file: makeFile('Downloaded Template'), name: 'Forest Edge' },
     )).resolves.toBe('opened')
     expect(mocks.loadDesign).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Downloaded Template')
@@ -399,7 +416,10 @@ describe('document replacement actions', () => {
     designSessionFixture.path = null
     const queuedFile = makeFile('Downloaded Template')
 
-    await expect(openDesignAsTemplate(queuedFile, 'Forest Edge')).resolves.toBe('queued')
+    await expect(openDesignAsTemplate({
+      file: queuedFile,
+      name: 'Forest Edge',
+    })).resolves.toBe('queued')
     expect(pendingTemplateImport.value).toEqual(expect.objectContaining({
       file: queuedFile,
       name: 'Forest Edge',
@@ -422,6 +442,59 @@ describe('document replacement actions', () => {
     expect(designPath.value).toBe(null)
     expect(pendingTemplateImport.value).toBe(null)
     cancel()
+  })
+
+  it('keeps the newest exact queued template envelope when display names are equal', async () => {
+    mocks.canvasSession = null
+    designSessionFixture.file = null
+    designSessionFixture.path = null
+    const older = makeFile('Older Internal Design')
+    const newer = makeFile('Newer Internal Design')
+    older.description = 'older bytes'
+    newer.description = 'newer bytes'
+
+    await expect(openDesignAsTemplate({
+      file: older,
+      name: 'Shared Display Name',
+    })).resolves.toBe('queued')
+    const olderIdentity = pendingTemplateImport.value?.identity
+    await expect(openDesignAsTemplate({
+      file: newer,
+      name: 'Shared Display Name',
+    })).resolves.toBe('queued')
+
+    expect(pendingTemplateImport.value?.identity).not.toBe(olderIdentity)
+    const nextSession = makeSession()
+    consumeQueuedDocumentLoad(nextSession as any)
+    await flushMicrotasks()
+
+    expect(nextSession.replaceDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Newer Internal Design',
+        description: 'newer bytes',
+      }),
+      expect.any(Object),
+      expect.any(Function),
+    )
+    expect(designName.value).toBe('Shared Display Name')
+    expect(pendingTemplateImport.value).toBe(null)
+  })
+
+  it('leaves an exact queued template envelope available when mount consumption is cancelled', async () => {
+    mocks.canvasSession = null
+    designSessionFixture.file = null
+    designSessionFixture.path = null
+    const queued = makeFile('Queued For Later Mount')
+
+    await openDesignAsTemplate({ file: queued, name: 'Queued Display Name' })
+    const pendingBeforeMount = pendingTemplateImport.value
+    const nextSession = makeSession()
+    const cancel = consumeQueuedDocumentLoad(nextSession as any)
+    cancel()
+    await flushMicrotasks()
+
+    expect(nextSession.replaceDocument).not.toHaveBeenCalled()
+    expect(pendingTemplateImport.value).toEqual(pendingBeforeMount)
   })
 
   it('opens from the file dialog while the canvas session is detached', async () => {

@@ -1,5 +1,6 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import type { CanopiFile } from "../../types/design";
+import type { DesignTemplateEnvelope } from "../design-template-import/types";
 import * as designIpc from "../../ipc/design";
 import {
   createDesignSessionStateMachine,
@@ -120,14 +121,13 @@ export function openDesignSessionFromPath(
 }
 
 export function openTemplateDesignSession(
-  file: CanopiFile,
-  name: string,
+  template: DesignTemplateEnvelope,
   options: DesignSessionLoadOptions = {},
 ): Promise<DocumentTransitionResult> {
   const envelope = {
-    identity: `template-envelope-${nextTemplateEnvelopeIdentity++}`,
-    file: cloneDocument(file),
-    name,
+    identity: Object.freeze({}),
+    file: cloneDocument(template.file),
+    name: template.name,
   };
   return designSessionStateMachine.transitionDocument({
     source: "template",
@@ -136,7 +136,7 @@ export function openTemplateDesignSession(
     load: async () => ({
       file: cloneDocument(envelope.file),
       path: null,
-      name,
+      name: envelope.name,
     }),
     isCancelled: options.isCancelled,
     deferWhenDetachedAndEmpty: () => {
@@ -166,8 +166,6 @@ export function autosaveDesignSession(
 export function teardownAttachedDesignSession(options: TeardownDesignSessionOptions): void {
   designSessionStateMachine.teardownAttachedDesignSession(options);
 }
-
-let nextTemplateEnvelopeIdentity = 1
 
 function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile

@@ -1,12 +1,11 @@
 import type { TemplateMeta } from '../../types/community'
+import type { CanopiFile } from '../../types/design'
+import type { DesignTemplateEnvelope, DesignTemplateImportResult } from './types'
 
-export type DesignTemplateImportResult = 'opened' | 'queued' | 'cancelled' | 'superseded'
-
-export interface DesignTemplateImportCoordinatorAdapters<Resource> {
-  readonly acquire: (template: TemplateMeta) => Promise<Resource>
+export interface DesignTemplateImportCoordinatorAdapters {
+  readonly acquire: (template: TemplateMeta) => Promise<CanopiFile>
   readonly open: (
-    resource: Resource,
-    template: TemplateMeta,
+    envelope: DesignTemplateEnvelope,
     isCancelled: () => boolean,
   ) => Promise<Exclude<DesignTemplateImportResult, 'superseded'>>
 }
@@ -16,8 +15,8 @@ export interface DesignTemplateImportCoordinator {
   dispose(): void
 }
 
-export function createDesignTemplateImportCoordinator<Resource>(
-  adapters: DesignTemplateImportCoordinatorAdapters<Resource>,
+export function createDesignTemplateImportCoordinator(
+  adapters: DesignTemplateImportCoordinatorAdapters,
 ): DesignTemplateImportCoordinator {
   let latestIntent = 0
   let disposed = false
@@ -30,10 +29,13 @@ export function createDesignTemplateImportCoordinator<Resource>(
       const isCancelled = () => disposed || intent !== latestIntent
 
       try {
-        const resource = await adapters.acquire(template)
+        const file = await adapters.acquire(template)
         if (isCancelled()) return 'superseded'
 
-        const result = await adapters.open(resource, template, isCancelled)
+        const result = await adapters.open({
+          file: cloneDocument(file),
+          name: template.title,
+        }, isCancelled)
         return isCancelled() ? 'superseded' : result
       } catch (error) {
         if (isCancelled()) return 'superseded'
@@ -47,4 +49,8 @@ export function createDesignTemplateImportCoordinator<Resource>(
       latestIntent += 1
     },
   })
+}
+
+function cloneDocument(file: CanopiFile): CanopiFile {
+  return JSON.parse(JSON.stringify(file)) as CanopiFile
 }

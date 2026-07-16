@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { importDesignTemplateIntoCurrentSession } from '../app/design-template-import/workflow.browser'
+import { createBrowserDesignTemplateImportWorkflow } from '../app/design-template-import/workflow.browser'
 import type { TemplateMeta } from '../types/community'
 import type { CanopiFile } from '../types/design'
 
@@ -22,12 +22,13 @@ describe('Web Edition Design Template import workflow', () => {
     const templateText = JSON.stringify(templateFile)
     const fetchTemplateAsset = vi.fn(async () => new Response(templateText))
     const openCanopiTemplate = vi.fn(async () => 'opened' as const)
-
-    await expect(importDesignTemplateIntoCurrentSession(TEMPLATE, {
+    const workflow = createBrowserDesignTemplateImportWorkflow({
       baseUrl: 'https://web.canopi.test/app/',
       fetchTemplateAsset,
       openCanopiTemplate,
-    })).resolves.toBe('opened')
+    })
+
+    await expect(workflow.importTemplate(TEMPLATE)).resolves.toBe('opened')
 
     expect(fetchTemplateAsset).toHaveBeenCalledWith('https://web.canopi.test/app/templates/forest-edge.canopi')
     expect(openCanopiTemplate).toHaveBeenCalledWith(
@@ -45,12 +46,14 @@ describe('Web Edition Design Template import workflow', () => {
       zones: [{ name: 'missing fields' }],
     })))
     const openCanopiTemplate = vi.fn(async () => 'opened' as const)
-
-    await expect(importDesignTemplateIntoCurrentSession(TEMPLATE, {
+    const workflow = createBrowserDesignTemplateImportWorkflow({
       baseUrl: 'https://web.canopi.test/app/',
       fetchTemplateAsset,
       openCanopiTemplate,
-    })).rejects.toThrow('$.zones[0].points: missing required value')
+    })
+
+    await expect(workflow.importTemplate(TEMPLATE))
+      .rejects.toThrow('$.zones[0].points: missing required value')
 
     expect(openCanopiTemplate).not.toHaveBeenCalled()
   })
@@ -58,14 +61,15 @@ describe('Web Edition Design Template import workflow', () => {
   it('rejects arbitrary remote template URLs before fetching', async () => {
     const fetchTemplateAsset = vi.fn(async () => new Response(''))
     const openCanopiTemplate = vi.fn(async () => 'opened' as const)
-
-    await expect(importDesignTemplateIntoCurrentSession({
-      ...TEMPLATE,
-      download_url: 'https://templates.example.net/forest-edge.canopi',
-    }, {
+    const workflow = createBrowserDesignTemplateImportWorkflow({
       baseUrl: 'https://web.canopi.test/app/',
       fetchTemplateAsset,
       openCanopiTemplate,
+    })
+
+    await expect(workflow.importTemplate({
+      ...TEMPLATE,
+      download_url: 'https://templates.example.net/forest-edge.canopi',
     })).rejects.toThrow('Static Design Template asset origin is not allowed')
 
     expect(fetchTemplateAsset).not.toHaveBeenCalled()

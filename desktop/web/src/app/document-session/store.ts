@@ -14,7 +14,7 @@ import {
 } from './persistence-capability'
 
 export interface PendingTemplateImport {
-  readonly identity: string
+  readonly identity: object
   readonly file: CanopiFile
   readonly name: string
 }

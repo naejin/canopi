@@ -6,8 +6,8 @@ import {
 } from '../document-session/actions'
 import {
   createDesignTemplateImportCoordinator,
-  type DesignTemplateImportResult,
 } from './coordinator'
+import type { DesignTemplateImportResult } from './types'
 
 export interface DesignTemplateImportAdapters {
   readonly acquireDesignTemplate: (id: string) => Promise<CanopiFile>
@@ -24,9 +24,8 @@ export function createDesktopDesignTemplateImportWorkflow(
 ) {
   return createDesignTemplateImportCoordinator({
     acquire: (template) => adapters.acquireDesignTemplate(template.id),
-    open: (file, template, isCancelled) => adapters.openDesignAsTemplate(
-      file,
-      template.title,
+    open: (envelope, isCancelled) => adapters.openDesignAsTemplate(
+      envelope,
       { isCancelled },
     ),
   })
@@ -36,11 +35,8 @@ const defaultWorkflow = createDesktopDesignTemplateImportWorkflow(DEFAULT_ADAPTE
 
 export async function importDesignTemplateIntoCurrentSession(
   template: TemplateMeta,
-  adapters?: DesignTemplateImportAdapters,
 ): Promise<DesignTemplateImportResult> {
-  return adapters
-    ? createDesktopDesignTemplateImportWorkflow(adapters).importTemplate(template)
-    : defaultWorkflow.importTemplate(template)
+  return defaultWorkflow.importTemplate(template)
 }
 
 if (import.meta.hot) {

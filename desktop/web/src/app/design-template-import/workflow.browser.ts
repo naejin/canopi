@@ -2,13 +2,12 @@ import type { TemplateMeta } from '../../types/community'
 import { decodeCanopiDesign } from '../contracts/design-ingestion'
 import {
   browserDesignSessionController,
-  type BrowserTemplateDesignEnvelope,
 } from '../../web/browser-design-session'
 import { WEB_STATIC_DESIGN_TEMPLATE_ASSET_ORIGINS } from '../../web/static-design-templates'
 import {
   createDesignTemplateImportCoordinator,
-  type DesignTemplateImportResult,
 } from './coordinator'
+import type { DesignTemplateEnvelope, DesignTemplateImportResult } from './types'
 
 export type DesignTemplateOpenResult = 'opened' | 'queued' | 'cancelled'
 
@@ -24,7 +23,7 @@ export interface BrowserDesignTemplateImportAdapters {
   readonly allowedAssetOrigins?: readonly string[]
   readonly fetchTemplateAsset?: (url: string) => Promise<StaticTemplateAssetResponse>
   readonly openCanopiTemplate?: (
-    template: BrowserTemplateDesignEnvelope,
+    template: DesignTemplateEnvelope,
     options?: { readonly isCancelled?: () => boolean },
   ) => Promise<DesignTemplateOpenResult>
 }
@@ -49,13 +48,13 @@ export function createBrowserDesignTemplateImportWorkflow(
       const text = await response.text()
       return decodeCanopiDesign(JSON.parse(text) as unknown)
     },
-    open: (file, template, isCancelled) => {
+    open: (envelope, isCancelled) => {
       const openCanopiTemplate = adapters.openCanopiTemplate
         ?? ((envelope, options) => browserDesignSessionController.openCanopiTemplate(
           envelope,
           options,
         ))
-      return openCanopiTemplate({ name: template.title, file }, { isCancelled })
+      return openCanopiTemplate(envelope, { isCancelled })
     },
   })
 }
@@ -64,11 +63,8 @@ const defaultWorkflow = createBrowserDesignTemplateImportWorkflow()
 
 export async function importDesignTemplateIntoCurrentSession(
   template: TemplateMeta,
-  adapters?: BrowserDesignTemplateImportAdapters,
 ): Promise<DesignTemplateImportResult> {
-  return adapters
-    ? createBrowserDesignTemplateImportWorkflow(adapters).importTemplate(template)
-    : defaultWorkflow.importTemplate(template)
+  return defaultWorkflow.importTemplate(template)
 }
 
 if (import.meta.hot) {

@@ -36,7 +36,7 @@ describe('Design Edit authority', () => {
       autosaveFailed: true,
       pendingDesignPath: '/queued.canopi',
       pendingTemplateImport: {
-        identity: 'template-reset',
+        identity: Object.freeze({}),
         file: design('Template'),
         name: 'Template',
       },

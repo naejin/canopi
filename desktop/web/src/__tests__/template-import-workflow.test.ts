@@ -21,6 +21,7 @@ import {
   templateImporting,
 } from '../app/community/state'
 import { importTemplateIntoCurrentSession, selectTemplate } from '../app/community/controller'
+import { createDesktopDesignTemplateImportWorkflow } from '../app/design-template-import/workflow.desktop'
 import type { TemplateMeta } from '../types/community'
 import type { CanopiFile } from '../types/design'
 
@@ -63,8 +64,7 @@ describe('template import workflow', () => {
 
     expect(mocks.acquireDesignTemplate).toHaveBeenCalledWith(TEMPLATE.id)
     expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
-      acquired,
-      TEMPLATE.title,
+      { file: acquired, name: TEMPLATE.title },
       { isCancelled: expect.any(Function) },
     )
     expect(selectedTemplate.value).toBe(null)
@@ -118,12 +118,57 @@ describe('template import workflow', () => {
 
     expect(mocks.openDesignAsTemplate).toHaveBeenCalledOnce()
     expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
-      newerFile,
-      NEWER_TEMPLATE.title,
+      { file: newerFile, name: NEWER_TEMPLATE.title },
       { isCancelled: expect.any(Function) },
     )
     expect(templateImporting.value).toBe(false)
     expect(selectedTemplate.value).toBe(null)
+  })
+
+  it('keeps a newer successful import authoritative when the older acquisition finishes last', async () => {
+    const older = deferred<CanopiFile>()
+    const newer = deferred<CanopiFile>()
+    mocks.acquireDesignTemplate
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise)
+    mocks.openDesignAsTemplate.mockResolvedValue('opened')
+
+    const olderImport = importTemplateIntoCurrentSession(TEMPLATE)
+    const newerImport = importTemplateIntoCurrentSession(NEWER_TEMPLATE)
+    const newerFile = makeCanopiFile({ name: 'Newer Template' })
+    newer.resolve(newerFile)
+    await newerImport
+
+    expect(templateImporting.value).toBe(false)
+    expect(selectedTemplate.value).toBe(null)
+    expect(templateImportError.value).toBe(null)
+
+    older.resolve(makeCanopiFile({ name: 'Older Template' }))
+    await olderImport
+
+    expect(mocks.openDesignAsTemplate).toHaveBeenCalledOnce()
+    expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
+      { file: newerFile, name: NEWER_TEMPLATE.title },
+      { isCancelled: expect.any(Function) },
+    )
+    expect(templateImportError.value).toBe(null)
+    expect(templateImporting.value).toBe(false)
+  })
+
+  it('cancels acquisition settlement when its workflow owner is disposed', async () => {
+    const pending = deferred<CanopiFile>()
+    const openDesignAsTemplate = vi.fn(async () => 'opened' as const)
+    const workflow = createDesktopDesignTemplateImportWorkflow({
+      acquireDesignTemplate: vi.fn(() => pending.promise),
+      openDesignAsTemplate,
+    })
+
+    const importing = workflow.importTemplate(TEMPLATE)
+    workflow.dispose()
+    pending.resolve(makeCanopiFile())
+
+    await expect(importing).resolves.toBe('superseded')
+    expect(openDesignAsTemplate).not.toHaveBeenCalled()
   })
 
   it('does not restore a dismissed preview when an older request resolves late', async () => {

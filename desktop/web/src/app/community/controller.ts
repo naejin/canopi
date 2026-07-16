@@ -95,3 +95,10 @@ export async function importTemplateIntoCurrentSession(template: TemplateMeta): 
     }
   }
 }
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    templateImportRequestId += 1
+    templateImporting.value = false
+  })
+}

@@ -796,7 +796,10 @@ const REQUIRED_IMPORT_POLICIES = [
     kind: 'require-imports',
     name: 'Browser Design Template workflow owns browser ingestion',
     from: ['src/app/design-template-import/workflow.browser.ts'],
-    targets: ['src/web/browser-design-session.ts'],
+    targets: [
+      'src/app/contracts/design-ingestion.ts',
+      'src/web/browser-design-session.ts',
+    ],
   },
   {
     kind: 'require-imports',
@@ -1371,9 +1374,21 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   },
   {
     kind: 'forbid-source-symbols',
-    name: 'Design Template controller does not download assets directly',
+    name: 'Design Template controller does not acquire assets directly',
     from: ['src/app/community/controller.ts'],
-    names: ['downloadTemplate'],
+    names: ['acquireDesignTemplate', 'downloadTemplate'],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Design Template adapters keep retired path and raw-text handoff deleted',
+    from: [
+      'src/app/design-template-import/workflow.desktop.ts',
+      'src/app/design-template-import/workflow.browser.ts',
+      'src/app/document-session/actions.ts',
+      'src/app/document-session/transition.ts',
+      'src/web/browser-design-session.ts',
+    ],
+    names: ['downloadTemplate', 'BrowserTemplateCanopiFile'],
   },
   {
     kind: 'forbid-source-symbols',

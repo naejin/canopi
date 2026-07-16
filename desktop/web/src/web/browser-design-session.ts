@@ -30,6 +30,7 @@ import {
   type CanvasDocumentSurface,
 } from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
+import type { DesignTemplateEnvelope } from "../app/design-template-import/types";
 import { CURRENT_CANOPI_FILE_VERSION } from "../generated/canopi-design-format";
 import {
   NEW_DESIGN_LAYER_DEFAULTS,
@@ -53,11 +54,6 @@ export interface BrowserCanopiDownload {
   readonly text: string;
 }
 
-export interface BrowserTemplateDesignEnvelope {
-  readonly name: string;
-  readonly file: CanopiFile;
-}
-
 export interface BrowserDesignFileAdapter {
   openCanopiFile(): Promise<BrowserOpenedCanopiFile | null>;
   downloadCanopiFile(download: BrowserCanopiDownload): Promise<void>;
@@ -78,7 +74,7 @@ export interface BrowserDesignSessionController {
   newDesign(): Promise<void>;
   openCanopi(): Promise<boolean>;
   openCanopiTemplate(
-    template: BrowserTemplateDesignEnvelope,
+    template: DesignTemplateEnvelope,
     options?: { readonly isCancelled?: () => boolean },
   ): Promise<"opened" | "cancelled">;
   downloadCanopi(): Promise<void>;
@@ -268,7 +264,7 @@ export function createBrowserDesignSessionController({
   }
 
   async function openCanopiTemplate(
-    template: BrowserTemplateDesignEnvelope,
+    template: DesignTemplateEnvelope,
     options: { readonly isCancelled?: () => boolean } = {},
   ): Promise<"opened" | "cancelled"> {
     replacementIntent += 1;
