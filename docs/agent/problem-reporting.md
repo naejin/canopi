@@ -17,8 +17,9 @@ Use this guide when changing Problem Report, Report Summary, or Diagnostic Bundl
 
 - Shared IPC types live in `common-types/src/support.rs`; regenerate frontend bindings when they change.
 - Rust Problem Report orchestration belongs in `desktop/src/services/problem_report/mod.rs`; Diagnostic Bundle content assembly, redactions, stored ZIP encoding, and folder reveal validation live in focused sibling modules under `desktop/src/services/problem_report/`.
-- The Tauri command should stay thin and only resolve app paths, settings, health, and runtime metadata before calling the service.
+- The Tauri command should stay thin: resolve app paths, health, and runtime metadata, read diagnostic settings through the executor's `UserData` class, then run folder creation, summary/bundle assembly, and publication through `Local`. A full Local class must reject before creating the report root or timestamped folder.
 - Native folder reveal uses fixed platform commands from Rust (`open`, `explorer`, or `xdg-open`) after service validation; tests should inject the reveal seam instead of launching a file manager.
+- Problem Report creation and folder reveal are both asynchronous command surfaces. Folder validation, metadata reads, and process spawn remain inside the `Local` closure; static executor labels must not include the report description, diagnostics, attachment content, or filesystem path.
 - Frontend entry points should go through the App Command Graph in `desktop/web/src/commands/registry.ts`; do not wire menu-only problem-report actions.
 - Frontend submission state and request assembly live in `desktop/web/src/app/problem-report/submission.ts`. The dialog should render that module's state and call its commands instead of assembling diagnostics, sensitive attachments, clipboard writes, folder reveals, or IPC requests itself.
 - Current Design attachments should be built through the document-session persistence seam so canvas-owned and document-owned state are composed the same way as saves.

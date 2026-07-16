@@ -1,6 +1,8 @@
 use crate::db::UserDb;
+use crate::native_operation::{NativeOperationClass, NativeOperationExecutor};
 use common_types::design::CanopiFile;
 use common_types::saved_object_stamps::SavedObjectStamp;
+use tauri::State;
 
 #[tauri::command]
 pub fn get_saved_object_stamps(
@@ -44,14 +46,30 @@ pub fn reorder_saved_object_stamps(
 }
 
 #[tauri::command]
-pub fn export_saved_object_stamp_canopi_file(
+pub async fn export_saved_object_stamp_canopi_file(
+    executor: State<'_, NativeOperationExecutor>,
     path: String,
     content: CanopiFile,
 ) -> Result<String, String> {
-    crate::services::design_files::export_design_file(path, content)
+    executor
+        .run(
+            NativeOperationClass::Local,
+            "saved object stamp export",
+            move || crate::services::design_files::export_design_file(path, content),
+        )
+        .await
 }
 
 #[tauri::command]
-pub fn load_saved_object_stamp_canopi_file(path: String) -> Result<CanopiFile, String> {
-    crate::services::design_files::load_design_file(path)
+pub async fn load_saved_object_stamp_canopi_file(
+    executor: State<'_, NativeOperationExecutor>,
+    path: String,
+) -> Result<CanopiFile, String> {
+    executor
+        .run(
+            NativeOperationClass::Local,
+            "saved object stamp import",
+            move || crate::services::design_files::load_design_file(path),
+        )
+        .await
 }
