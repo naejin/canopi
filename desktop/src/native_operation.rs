@@ -258,8 +258,6 @@ mod tests {
         NativeOperationLimits,
     };
     use std::{
-        fs,
-        path::Path,
         sync::{
             Arc,
             atomic::{AtomicBool, Ordering},
@@ -276,17 +274,6 @@ mod tests {
             NativeOperationClassLimits::new(admitted, running),
         ))
         .unwrap()
-    }
-
-    fn rust_sources_under(path: &Path, sources: &mut Vec<std::path::PathBuf>) {
-        for entry in fs::read_dir(path).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                rust_sources_under(&path, sources);
-            } else if path.extension().is_some_and(|extension| extension == "rs") {
-                sources.push(path);
-            }
-        }
     }
 
     fn wait_until(mut condition: impl FnMut() -> bool) {
@@ -319,29 +306,6 @@ mod tests {
         assert_eq!(
             limits.for_class(NativeOperationClass::Network),
             NativeOperationClassLimits::new(12, 4),
-        );
-    }
-
-    #[test]
-    fn native_blocking_work_cannot_bypass_the_executor() {
-        let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let executor_source = source_root.join("native_operation.rs");
-        let mut sources = Vec::new();
-        rust_sources_under(&source_root, &mut sources);
-
-        let bypasses = sources
-            .into_iter()
-            .filter(|path| path != &executor_source)
-            .filter(|path| fs::read_to_string(path).unwrap().contains("spawn_blocking"))
-            .collect::<Vec<_>>();
-
-        assert!(
-            bypasses.is_empty(),
-            "native blocking work must cross NativeOperationExecutor; bypasses: {bypasses:?}",
-        );
-        assert!(
-            !source_root.join("blocking.rs").exists(),
-            "the obsolete unbounded blocking helper must stay deleted",
         );
     }
 

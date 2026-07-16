@@ -4,16 +4,17 @@ mod design;
 mod http;
 mod image_cache;
 mod logging;
+#[cfg(test)]
+mod native_command_policy;
 mod native_operation;
 mod platform;
 mod services;
 
 use common_types::health::SubsystemHealth;
 use rusqlite::{Connection, OpenFlags};
-use std::sync::Mutex;
 use tauri::Manager;
 
-pub struct AppHealth(pub Mutex<SubsystemHealth>);
+pub struct AppHealth(pub SubsystemHealth);
 
 const PLANT_DB_BUNDLED_PATHS: &[&str] = &["resources/canopi-core.db", "canopi-core.db"];
 
@@ -178,9 +179,9 @@ pub fn run() {
             app.manage(plant_db);
             app.manage(services::plant_browser::SpeciesSearchCancellation::default());
 
-            app.manage(AppHealth(Mutex::new(SubsystemHealth {
+            app.manage(AppHealth(SubsystemHealth {
                 plant_db: plant_db_status,
-            })));
+            }));
 
             // Note: db_ready event is not emitted here because the frontend
             // JS listener hasn't registered yet during setup. The DB is ready

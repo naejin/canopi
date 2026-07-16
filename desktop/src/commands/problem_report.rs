@@ -22,7 +22,7 @@ pub async fn create_problem_report(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let health = crate::services::health::get_health(&health)?;
+    let health = crate::services::health::get_health(&health);
     let (settings, settings_error) =
         read_problem_report_settings(executor.inner(), user_db.inner().clone()).await?;
 

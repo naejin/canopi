@@ -15,7 +15,7 @@ cargo fmt --all -- --check
 CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings
 
 # Rust tests
-cargo test --workspace
+CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace
 
 # Frontend build
 cd desktop/web && npm run build
@@ -124,7 +124,8 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 
 ## Native Operation Executor
 
-- Async commands must send blocking native work through the Tauri-managed `NativeOperationExecutor`; direct `spawn_blocking` calls outside `desktop/src/native_operation.rs` are an architecture violation. Synchronous command migration is tracked separately.
+- Async commands must carry and await the Tauri-managed `NativeOperationExecutor`; direct `spawn_blocking`/`block_in_place` calls outside `desktop/src/native_operation.rs` are architecture violations. `desktop/src/native_command_policy.rs` parses production Rust sources with the test-only `syn` dependency during the Rust test suite, cross-checks every `#[tauri::command]` against `tauri::generate_handler!`, and fails closed on missing executor state/use/await, registry drift, blocking-pool bypasses, or a new synchronous command. Keep this parser out of runtime dependencies.
+- The synchronous allowlist is intentionally limited to bounded built-in Template metadata reads, New Design default construction, the immutable startup health snapshot, and the immediate in-memory Species Search cancellation signal. Every entry carries a reviewed reason; stale entries and direct filesystem, SQLite, network, rendering, encoding/decoding, compression, thread/process, sleeping, or unbounded-loop capabilities fail the guard. Do not expand it merely to avoid migrating a command.
 - Classify operations by the constrained resource they consume: Species Catalog reads use `Catalog`, user app-data persistence uses `UserData`, Design/file/export work uses `Local`, and HTTP or remote-asset work uses `Network`.
 - Desktop Design save/load, autosave/recovery, text and native rendering exports, Saved Object Stamp file import/export, Problem Report assembly, and Problem Report folder reveal use `Local`. Keep decoding, validation, rendering, and filesystem publication inside the admitted closure; overload rejection must happen before a destination file or report folder is touched.
 - Desktop Species search, detail, batch, filter, Common Name, Flower Color, and media/link projections use `Catalog`. Do not acquire the shared Plant DB connection or reinterpret an overload as missing/corrupt catalog state before Catalog admission.

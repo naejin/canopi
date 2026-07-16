@@ -94,7 +94,10 @@ cd desktop/web && npm run check:types
 CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
 
 # Rust tests
-cargo test --workspace
+CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace
+
+# Native command execution architecture guard
+CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests
 
 # Verify Species Catalog contract, Filter storage references, and generated Rust facts
 python3 scripts/species_catalog_contract.py check
@@ -158,7 +161,8 @@ cargo build --release
 - Species Catalog storage-contract changes require `python3 scripts/species_catalog_contract.py check`, the focused Python contract/preparation/Web tests, binding regeneration checks, and strict verification of any prepared DB artifact.
 - Web Species Catalog artifact-contract changes require the focused Python artifact/generator tests, `cd desktop/web && npm run gen:types`, `cd desktop/web && npm run check:types`, and the focused browser-admission and packaging tests.
 - Rust changes require `cargo fmt --all -- --check`, `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`, and `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace`.
-- Persistence, database, IPC, or shared type changes require the relevant frontend checks plus `cargo test --workspace`.
+- Native Tauri command or executor changes require `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests`; the full Rust suite also runs this guard.
+- Persistence, database, IPC, or shared type changes require the relevant frontend checks plus `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace`.
 - Before pushing Rust, shared-contract, or mixed architecture branches, rebase or pull onto latest `main` and rerun the relevant CI-parity gates after that rebase.
 - If `main` already fails formatting, Clippy, generated-binding, or typecheck gates, create a separate maintenance bead and land the baseline repair before rebasing feature branches. Do not hide pre-existing gate repairs inside unrelated feature commits.
 - If a required gate cannot be run, record the exact command, failure reason, and residual risk in the bead and final handoff.
@@ -237,6 +241,11 @@ cargo build --release
 - Every resource-owning surface must have one explicit lifecycle owner for setup, update, and teardown.
 - Applies to canvas runtime, renderer host, MapLibre instances, timers, listeners, async cancellation tokens, and DOM overlays.
 - Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()` when used under Vite HMR.
+
+### Native Execution
+
+- Every `#[tauri::command]` must be registered exactly once and be either executor-backed async or one of the reviewed bounded synchronous commands in `desktop/src/native_command_policy.rs`.
+- Do not add a synchronous allowance for filesystem, SQLite, network, rendering, encoding/decoding, compression, process/thread, sleeping, or unbounded CPU work. Direct global blocking-pool calls belong only in `desktop/src/native_operation.rs`.
 
 ## Before Writing Code
 

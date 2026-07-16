@@ -24,6 +24,9 @@ ureq = "3"
 sys-locale = "0.3"
 tauri-plugin-mcp-bridge = "0.10"
 
+[dev-dependencies]
+syn = { version = "2", features = ["full", "visit"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 lib-swift = { path = "../lib-swift" }
 
