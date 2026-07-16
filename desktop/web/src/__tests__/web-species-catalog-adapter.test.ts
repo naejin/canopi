@@ -9,6 +9,25 @@ import {
 import type { FilterOptions, SpeciesSearchRequest } from '../types/species'
 
 describe('Web Edition reduced Species Catalog adapter', () => {
+  it('does not broaden direct one-character searches into blank browsing', async () => {
+    const reader = createInMemoryReducedSpeciesCatalogReader(catalogFixture())
+
+    const tooShort = await reader.searchSpecies(searchRequest({
+      text: 'm',
+      include_total: true,
+    }), new Set())
+    const blankBrowse = await reader.searchSpecies(searchRequest({ text: '' }), new Set())
+    const whitespaceBrowse = await reader.searchSpecies(searchRequest({ text: ' \t ' }), new Set())
+
+    expect(tooShort).toEqual({
+      items: [],
+      next_cursor: null,
+      total_estimate: 0,
+    })
+    expect(blankBrowse.items).toHaveLength(3)
+    expect(whitespaceBrowse.items).toHaveLength(3)
+  })
+
   it('matches all search tokens when they are separated in a stored normalized name', async () => {
     const data = catalogFixture()
     const reader = createInMemoryReducedSpeciesCatalogReader({
