@@ -44,4 +44,17 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => disposeLocaleSync());
 }
 
-export const t = i18n.t.bind(i18n);
+const fixedTranslations = new Map<string, typeof i18n.t>();
+
+function translateForObservedLocale(...args: unknown[]): unknown {
+  const currentLocale = locale.value;
+  let fixedTranslation = fixedTranslations.get(currentLocale);
+  if (!fixedTranslation) {
+    fixedTranslation = i18n.getFixedT(currentLocale);
+    fixedTranslations.set(currentLocale, fixedTranslation);
+  }
+  return Reflect.apply(fixedTranslation, undefined, args);
+}
+
+// i18next brands TFunction structurally; this wrapper preserves its complete overload contract.
+export const t = translateForObservedLocale as unknown as typeof i18n.t;
