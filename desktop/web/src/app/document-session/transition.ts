@@ -168,5 +168,5 @@ export function teardownAttachedDesignSession(options: TeardownDesignSessionOpti
 }
 
 function cloneDocument(file: CanopiFile): CanopiFile {
-  return JSON.parse(JSON.stringify(file)) as CanopiFile
+  return JSON.parse(JSON.stringify(file)) as CanopiFile;
 }

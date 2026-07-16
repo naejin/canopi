@@ -2,6 +2,7 @@ import { effect } from "@preact/signals";
 import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
 import { encodeCanopiDesign } from "../app/contracts/canopi-design-wire";
 import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
+import type { DesignTemplateEnvelope } from "../app/design-template-import/types";
 import {
   createDesignSessionReplacement,
   type DesignSessionPendingCanvasReplacementIdentity,
@@ -30,7 +31,6 @@ import {
   type CanvasDocumentSurface,
 } from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
-import type { DesignTemplateEnvelope } from "../app/design-template-import/types";
 import { CURRENT_CANOPI_FILE_VERSION } from "../generated/canopi-design-format";
 import {
   NEW_DESIGN_LAYER_DEFAULTS,
