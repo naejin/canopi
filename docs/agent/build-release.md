@@ -2,6 +2,13 @@
 
 Use this guide when changing build scripts, Tauri config, CI workflows, native platform code, packaging, release candidates, or generated desktop assets.
 
+## Rust Toolchain
+
+- `rust-toolchain.toml` pins the Rust compiler used by local development to the exact stable point release validated by CI and release packaging. Rustup installs that toolchain automatically when a Rust command runs from this repository.
+- Every `dtolnay/rust-toolchain` step in Build & Test and Release Candidate must select the same exact version. Update the toolchain file and every workflow reference together, then run the full Build & Test matrix before merging.
+- Cargo cache keys include the installed toolchain's action-provided cache identity so a compiler upgrade cannot restore an incompatible `target` cache as an exact match.
+- The toolchain pin is not Canopi's minimum supported Rust version. Do not add Cargo `rust-version` metadata unless the project separately chooses and verifies an MSRV policy.
+
 ## Local Build Commands
 
 ```bash
