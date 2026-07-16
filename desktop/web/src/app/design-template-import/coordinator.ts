@@ -26,15 +26,16 @@ export function createDesignTemplateImportCoordinator(
       if (disposed) throw new Error('Design Template import coordinator is disposed')
 
       const intent = ++latestIntent
+      const request = cloneTemplateMeta(template)
       const isCancelled = () => disposed || intent !== latestIntent
 
       try {
-        const file = await adapters.acquire(template)
+        const file = await adapters.acquire(request)
         if (isCancelled()) return 'superseded'
 
         const result = await adapters.open({
           file: cloneDocument(file),
-          name: template.title,
+          name: request.title,
         }, isCancelled)
         return isCancelled() ? 'superseded' : result
       } catch (error) {
@@ -49,6 +50,14 @@ export function createDesignTemplateImportCoordinator(
       latestIntent += 1
     },
   })
+}
+
+function cloneTemplateMeta(template: TemplateMeta): TemplateMeta {
+  return {
+    ...template,
+    location: { ...template.location },
+    tags: [...template.tags],
+  }
 }
 
 function cloneDocument(file: CanopiFile): CanopiFile {

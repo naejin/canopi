@@ -21,6 +21,7 @@ import {
   templateImporting,
 } from '../app/community/state'
 import { importTemplateIntoCurrentSession, selectTemplate } from '../app/community/controller'
+import { createDesignTemplateImportCoordinator } from '../app/design-template-import/coordinator'
 import { createDesktopDesignTemplateImportWorkflow } from '../app/design-template-import/workflow.desktop'
 import type { TemplateMeta } from '../types/community'
 import type { CanopiFile } from '../types/design'
@@ -190,10 +191,11 @@ describe('template import workflow', () => {
 
   it('owns the template identity issued before acquisition completes', async () => {
     const pending = deferred<CanopiFile>()
-    const openDesignAsTemplate = vi.fn(async () => 'opened' as const)
-    const workflow = createDesktopDesignTemplateImportWorkflow({
-      acquireDesignTemplate: vi.fn(() => pending.promise),
-      openDesignAsTemplate,
+    const acquire = vi.fn(() => pending.promise)
+    const open = vi.fn(async () => 'opened' as const)
+    const workflow = createDesignTemplateImportCoordinator({
+      acquire,
+      open,
     })
     const requestedTemplate: TemplateMeta = {
       ...TEMPLATE,
@@ -209,9 +211,15 @@ describe('template import workflow', () => {
     pending.resolve(acquired)
 
     await expect(importing).resolves.toBe('opened')
-    expect(openDesignAsTemplate).toHaveBeenCalledWith(
+    expect(acquire).toHaveBeenCalledWith({
+      ...TEMPLATE,
+      location: { ...TEMPLATE.location },
+      tags: [...TEMPLATE.tags],
+    })
+    expect(acquire.mock.calls[0]?.[0]).not.toBe(requestedTemplate)
+    expect(open).toHaveBeenCalledWith(
       { file: acquired, name: TEMPLATE.title },
-      { isCancelled: expect.any(Function) },
+      expect.any(Function),
     )
   })
 
