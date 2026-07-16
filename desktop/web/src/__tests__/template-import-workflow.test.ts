@@ -155,6 +155,21 @@ describe('template import workflow', () => {
     expect(templateImporting.value).toBe(false)
   })
 
+  it('does not clear a different preview selected while the import is pending', async () => {
+    const pending = deferred<CanopiFile>()
+    mocks.acquireDesignTemplate.mockReturnValue(pending.promise)
+    mocks.openDesignAsTemplate.mockResolvedValue('opened')
+
+    const importing = importTemplateIntoCurrentSession(TEMPLATE)
+    selectedTemplate.value = NEWER_TEMPLATE
+    pending.resolve(makeCanopiFile({ name: 'Imported Template' }))
+    await importing
+
+    expect(selectedTemplate.value).toEqual(NEWER_TEMPLATE)
+    expect(templateImportError.value).toBe(null)
+    expect(templateImporting.value).toBe(false)
+  })
+
   it('cancels acquisition settlement when its workflow owner is disposed', async () => {
     const pending = deferred<CanopiFile>()
     const openDesignAsTemplate = vi.fn(async () => 'opened' as const)
