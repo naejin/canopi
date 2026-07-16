@@ -191,7 +191,7 @@ describe('template import workflow', () => {
 
   it('owns the template identity issued before acquisition completes', async () => {
     const pending = deferred<CanopiFile>()
-    const acquire = vi.fn(() => pending.promise)
+    const acquire = vi.fn<(template: TemplateMeta) => Promise<CanopiFile>>(() => pending.promise)
     const open = vi.fn(async () => 'opened' as const)
     const workflow = createDesignTemplateImportCoordinator({
       acquire,
