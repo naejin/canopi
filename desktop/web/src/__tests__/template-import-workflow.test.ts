@@ -36,6 +36,13 @@ const TEMPLATE: TemplateMeta = {
   download_url: 'https://templates.canopi.app/tpl-001.canopi',
 }
 
+const NEWER_TEMPLATE: TemplateMeta = {
+  ...TEMPLATE,
+  id: 'tpl-002',
+  title: 'Later Forest Edge',
+  download_url: 'https://templates.canopi.app/tpl-002.canopi',
+}
+
 beforeEach(() => {
   mocks.downloadTemplate.mockReset()
   mocks.getTemplatePreview.mockReset()
@@ -81,6 +88,36 @@ describe('template import workflow', () => {
     expect(templateImporting.value).toBe(false)
   })
 
+  it('does not let an older acquisition open or settle while a newer import is pending', async () => {
+    const older = deferred<string>()
+    const newer = deferred<string>()
+    mocks.downloadTemplate
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise)
+    mocks.openDesignAsTemplate.mockResolvedValue('opened')
+
+    const olderImport = importTemplateIntoCurrentSession(TEMPLATE)
+    const newerImport = importTemplateIntoCurrentSession(NEWER_TEMPLATE)
+
+    older.resolve('/tmp/older-template.canopi')
+    await flushMicrotasks()
+
+    expect(mocks.openDesignAsTemplate).not.toHaveBeenCalled()
+    expect(templateImporting.value).toBe(true)
+    expect(selectedTemplate.value).toEqual(TEMPLATE)
+
+    newer.resolve('/tmp/newer-template.canopi')
+    await Promise.all([olderImport, newerImport])
+
+    expect(mocks.openDesignAsTemplate).toHaveBeenCalledOnce()
+    expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
+      '/tmp/newer-template.canopi',
+      NEWER_TEMPLATE.title,
+    )
+    expect(templateImporting.value).toBe(false)
+    expect(selectedTemplate.value).toBe(null)
+  })
+
   it('does not restore a dismissed preview when an older request resolves late', async () => {
     let resolvePreview: ((value: TemplateMeta) => void) | null = null
     mocks.getTemplatePreview.mockReturnValue(new Promise<TemplateMeta>((resolve) => {
@@ -96,3 +133,18 @@ describe('template import workflow', () => {
     expect(selectedTemplate.value).toBe(null)
   })
 })
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
