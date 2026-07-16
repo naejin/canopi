@@ -244,9 +244,9 @@ fn unique_file_name(file_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        download_template_blocking_with_fetch, get_template_catalog, get_template_preview,
-        resolve_download_destination, sanitized_download_file_name, unique_download_destination,
-        validate_download_url,
+        acquire_template_blocking_with_fetch, download_template_blocking_with_fetch,
+        get_template_catalog, get_template_preview, resolve_download_destination,
+        sanitized_download_file_name, unique_download_destination, validate_download_url,
     };
 
     #[test]
@@ -305,5 +305,49 @@ mod tests {
         let error =
             download_template_blocking_with_fetch(url, |_| Err("network down".into())).unwrap_err();
         assert!(error.contains("network down"));
+    }
+
+    #[test]
+    fn template_acquisition_resolves_catalog_identity_and_decodes_design_bytes() {
+        let expected = crate::design::format::create_new_design(
+            "Decoded Template",
+            "2026-07-16T00:00:00Z",
+        );
+        let bytes = serde_json::to_vec(&expected).unwrap();
+        let mut requested_url = None;
+
+        let acquired = acquire_template_blocking_with_fetch("tpl-001".into(), |url| {
+            requested_url = Some(url.to_owned());
+            Ok(bytes.clone())
+        })
+        .unwrap();
+
+        assert_eq!(requested_url.as_deref(), Some("https://templates.canopi.app/tpl-001.canopi"));
+        assert_eq!(acquired.name, "Decoded Template");
+        assert_eq!(acquired.version, expected.version);
+    }
+
+    #[test]
+    fn template_acquisition_rejects_unknown_identity_without_fetching() {
+        let mut fetched = false;
+
+        let error = acquire_template_blocking_with_fetch("missing-template".into(), |_| {
+            fetched = true;
+            Ok(Vec::new())
+        })
+        .unwrap_err();
+
+        assert!(!fetched);
+        assert!(error.contains("Template not found"));
+    }
+
+    #[test]
+    fn template_acquisition_rejects_invalid_design_bytes() {
+        let error = acquire_template_blocking_with_fetch("tpl-001".into(), |_| {
+            Ok(b"not a Canopi Design".to_vec())
+        })
+        .unwrap_err();
+
+        assert!(error.contains("Invalid JSON"));
     }
 }
