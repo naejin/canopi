@@ -188,6 +188,33 @@ describe('template import workflow', () => {
     expect(openDesignAsTemplate).not.toHaveBeenCalled()
   })
 
+  it('owns the template identity issued before acquisition completes', async () => {
+    const pending = deferred<CanopiFile>()
+    const openDesignAsTemplate = vi.fn(async () => 'opened' as const)
+    const workflow = createDesktopDesignTemplateImportWorkflow({
+      acquireDesignTemplate: vi.fn(() => pending.promise),
+      openDesignAsTemplate,
+    })
+    const requestedTemplate: TemplateMeta = {
+      ...TEMPLATE,
+      location: { ...TEMPLATE.location },
+      tags: [...TEMPLATE.tags],
+    }
+
+    const importing = workflow.importTemplate(requestedTemplate)
+    requestedTemplate.id = 'mutated-id'
+    requestedTemplate.title = 'Mutated Display Name'
+    requestedTemplate.tags.push('mutated-tag')
+    const acquired = makeCanopiFile({ name: 'Owned Template' })
+    pending.resolve(acquired)
+
+    await expect(importing).resolves.toBe('opened')
+    expect(openDesignAsTemplate).toHaveBeenCalledWith(
+      { file: acquired, name: TEMPLATE.title },
+      { isCancelled: expect.any(Function) },
+    )
+  })
+
   it('does not restore a dismissed preview when an older request resolves late', async () => {
     let resolvePreview: ((value: TemplateMeta) => void) | null = null
     mocks.getTemplatePreview.mockReturnValue(new Promise<TemplateMeta>((resolve) => {
