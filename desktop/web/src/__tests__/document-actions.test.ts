@@ -89,6 +89,7 @@ import {
   openDesignFromPath,
   saveCurrentDesign,
 } from '../app/document-session/actions'
+import { setPendingTemplateImport } from '../app/document-session/store'
 import { resetDesignSessionStateForTests } from '../app/document-session/transition'
 import type { CanopiFile } from '../types/design'
 
@@ -495,6 +496,39 @@ describe('document replacement actions', () => {
 
     expect(nextSession.replaceDocument).not.toHaveBeenCalled()
     expect(pendingTemplateImport.value).toEqual(pendingBeforeMount)
+  })
+
+  it('does not restore an older queued template over a newer envelope after mount failure', async () => {
+    mocks.canvasSession = null
+    designSessionFixture.file = null
+    designSessionFixture.path = null
+    const older = makeFile('Older Queued Template')
+    const newer = makeFile('Newer Queued Template')
+
+    await openDesignAsTemplate({ file: older, name: 'Older Display Name' })
+    const nextSession = makeSession()
+    const newerIdentity = Object.freeze({})
+    nextSession.replaceDocument.mockImplementation(() => {
+      setPendingTemplateImport({
+        identity: newerIdentity,
+        file: newer,
+        name: 'Newer Display Name',
+      })
+      throw new Error('Older mount failed')
+    })
+
+    consumeQueuedDocumentLoad(nextSession as any)
+    await flushMicrotasks()
+
+    expect(pendingTemplateImport.value).toEqual(expect.objectContaining({
+      identity: newerIdentity,
+      file: newer,
+      name: 'Newer Display Name',
+    }))
+    expect(mocks.message).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to open Older Display Name'),
+      expect.objectContaining({ title: 'Open failed', kind: 'error' }),
+    )
   })
 
   it('opens from the file dialog while the canvas session is detached', async () => {
