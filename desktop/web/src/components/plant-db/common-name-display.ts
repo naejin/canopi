@@ -1,4 +1,5 @@
 import type { SpeciesListItem } from '../../types/species'
+import { normalizeSpeciesSearch } from '../../utils/species-search-normalization'
 
 export function secondaryCommonNameForDisplay(
   plant: SpeciesListItem,
@@ -27,9 +28,5 @@ function distinctCommonName(
 }
 
 function normalizeCommonName(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLocaleLowerCase()
+  return normalizeSpeciesSearch(value).text
 }
