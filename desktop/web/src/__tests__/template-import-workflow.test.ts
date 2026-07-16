@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  downloadTemplate: vi.fn(),
+  acquireDesignTemplate: vi.fn(),
   getTemplatePreview: vi.fn(),
   openDesignAsTemplate: vi.fn(),
 }))
 
 vi.mock('../ipc/community', () => ({
-  downloadTemplate: mocks.downloadTemplate,
+  acquireDesignTemplate: mocks.acquireDesignTemplate,
   getTemplatePreview: mocks.getTemplatePreview,
 }))
 
@@ -22,6 +22,7 @@ import {
 } from '../app/community/state'
 import { importTemplateIntoCurrentSession, selectTemplate } from '../app/community/controller'
 import type { TemplateMeta } from '../types/community'
+import type { CanopiFile } from '../types/design'
 
 const TEMPLATE: TemplateMeta = {
   id: 'tpl-001',
@@ -44,7 +45,7 @@ const NEWER_TEMPLATE: TemplateMeta = {
 }
 
 beforeEach(() => {
-  mocks.downloadTemplate.mockReset()
+  mocks.acquireDesignTemplate.mockReset()
   mocks.getTemplatePreview.mockReset()
   mocks.openDesignAsTemplate.mockReset()
   selectedTemplate.value = TEMPLATE
@@ -53,15 +54,16 @@ beforeEach(() => {
 })
 
 describe('template import workflow', () => {
-  it('downloads and opens the selected template through document actions', async () => {
-    mocks.downloadTemplate.mockResolvedValue('/tmp/template.canopi')
+  it('acquires and opens the selected template through document actions', async () => {
+    const acquired = makeCanopiFile({ name: 'Acquired Template' })
+    mocks.acquireDesignTemplate.mockResolvedValue(acquired)
     mocks.openDesignAsTemplate.mockResolvedValue('opened')
 
     await importTemplateIntoCurrentSession(TEMPLATE)
 
-    expect(mocks.downloadTemplate).toHaveBeenCalledWith(TEMPLATE.download_url)
+    expect(mocks.acquireDesignTemplate).toHaveBeenCalledWith(TEMPLATE.id)
     expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
-      '/tmp/template.canopi',
+      acquired,
       TEMPLATE.title,
       { isCancelled: expect.any(Function) },
     )
@@ -71,7 +73,7 @@ describe('template import workflow', () => {
   })
 
   it('captures workflow failures without clearing the current selection', async () => {
-    mocks.downloadTemplate.mockRejectedValue(new Error('Network failed'))
+    mocks.acquireDesignTemplate.mockRejectedValue(new Error('Network failed'))
 
     await importTemplateIntoCurrentSession(TEMPLATE)
 
@@ -82,7 +84,7 @@ describe('template import workflow', () => {
   })
 
   it('keeps the selected template open when the replacement prompt is cancelled', async () => {
-    mocks.downloadTemplate.mockResolvedValue('/tmp/template.canopi')
+    mocks.acquireDesignTemplate.mockResolvedValue(makeCanopiFile())
     mocks.openDesignAsTemplate.mockResolvedValue('cancelled')
 
     await importTemplateIntoCurrentSession(TEMPLATE)
@@ -93,9 +95,9 @@ describe('template import workflow', () => {
   })
 
   it('does not let an older acquisition open or settle while a newer import is pending', async () => {
-    const older = deferred<string>()
-    const newer = deferred<string>()
-    mocks.downloadTemplate
+    const older = deferred<CanopiFile>()
+    const newer = deferred<CanopiFile>()
+    mocks.acquireDesignTemplate
       .mockReturnValueOnce(older.promise)
       .mockReturnValueOnce(newer.promise)
     mocks.openDesignAsTemplate.mockResolvedValue('opened')
@@ -103,19 +105,20 @@ describe('template import workflow', () => {
     const olderImport = importTemplateIntoCurrentSession(TEMPLATE)
     const newerImport = importTemplateIntoCurrentSession(NEWER_TEMPLATE)
 
-    older.resolve('/tmp/older-template.canopi')
+    older.resolve(makeCanopiFile({ name: 'Older Template' }))
     await flushMicrotasks()
 
     expect(mocks.openDesignAsTemplate).not.toHaveBeenCalled()
     expect(templateImporting.value).toBe(true)
     expect(selectedTemplate.value).toEqual(TEMPLATE)
 
-    newer.resolve('/tmp/newer-template.canopi')
+    const newerFile = makeCanopiFile({ name: 'Newer Template' })
+    newer.resolve(newerFile)
     await Promise.all([olderImport, newerImport])
 
     expect(mocks.openDesignAsTemplate).toHaveBeenCalledOnce()
     expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
-      '/tmp/newer-template.canopi',
+      newerFile,
       NEWER_TEMPLATE.title,
       { isCancelled: expect.any(Function) },
     )
@@ -152,4 +155,30 @@ function deferred<T>() {
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
+}
+
+function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
+  return {
+    version: 5,
+    name: 'Test Template',
+    description: null,
+    location: null,
+    north_bearing_deg: 0,
+    plant_species_colors: {},
+    plant_species_symbols: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    measurement_guides: [],
+    groups: [],
+    consortiums: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-07-16T00:00:00.000Z',
+    updated_at: '2026-07-16T00:00:00.000Z',
+    extra: {},
+    ...overrides,
+  }
 }

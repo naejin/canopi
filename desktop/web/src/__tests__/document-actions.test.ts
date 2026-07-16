@@ -313,7 +313,10 @@ describe('document replacement actions', () => {
     designSessionFixture.nonCanvasRevision = 1
     mocks.message.mockResolvedValue('Cancel')
 
-    await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('cancelled')
+    await expect(openDesignAsTemplate(
+      makeFile('Downloaded Template'),
+      'Forest Edge',
+    )).resolves.toBe('cancelled')
 
     expect(mocks.loadDesign).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
@@ -379,8 +382,11 @@ describe('document replacement actions', () => {
     mocks.canvasSession = null
     mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
 
-    await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('opened')
-    expect(mocks.loadDesign).toHaveBeenCalledWith('/tmp/template.canopi')
+    await expect(openDesignAsTemplate(
+      makeFile('Downloaded Template'),
+      'Forest Edge',
+    )).resolves.toBe('opened')
+    expect(mocks.loadDesign).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Downloaded Template')
     expect(designName.value).toBe('Forest Edge')
     expect(designPath.value).toBe(null)
@@ -391,16 +397,21 @@ describe('document replacement actions', () => {
     mocks.canvasSession = null
     designSessionFixture.file = null
     designSessionFixture.path = null
-    mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
+    const queuedFile = makeFile('Downloaded Template')
 
-    await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('queued')
-    expect(pendingTemplateImport.value).toEqual({ path: '/tmp/template.canopi', name: 'Forest Edge' })
+    await expect(openDesignAsTemplate(queuedFile, 'Forest Edge')).resolves.toBe('queued')
+    expect(pendingTemplateImport.value).toEqual(expect.objectContaining({
+      file: queuedFile,
+      name: 'Forest Edge',
+    }))
+
+    queuedFile.name = 'Mutated After Queue'
 
     const nextSession = makeSession()
     const cancel = consumeQueuedDocumentLoad(nextSession as any)
     await flushMicrotasks()
 
-    expect(mocks.loadDesign).toHaveBeenCalledWith('/tmp/template.canopi')
+    expect(mocks.loadDesign).not.toHaveBeenCalled()
     expect(nextSession.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Downloaded Template', extra: {} }),
       expect.any(Object),

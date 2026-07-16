@@ -18,7 +18,8 @@ const TEMPLATE: TemplateMeta = {
 
 describe('Web Edition Design Template import workflow', () => {
   it('fetches a configured static .canopi asset and opens it as a browser template', async () => {
-    const templateText = JSON.stringify(makeCanopiFile({ name: 'Downloaded Template' }))
+    const templateFile = makeCanopiFile({ name: 'Downloaded Template' })
+    const templateText = JSON.stringify(templateFile)
     const fetchTemplateAsset = vi.fn(async () => new Response(templateText))
     const openCanopiTemplate = vi.fn(async () => 'opened' as const)
 
@@ -31,8 +32,24 @@ describe('Web Edition Design Template import workflow', () => {
     expect(fetchTemplateAsset).toHaveBeenCalledWith('https://web.canopi.test/app/templates/forest-edge.canopi')
     expect(openCanopiTemplate).toHaveBeenCalledWith({
       name: 'Forest Edge',
-      text: templateText,
+      file: templateFile,
     })
+  })
+
+  it('rejects malformed static assets at the Web ingestion boundary before opening', async () => {
+    const fetchTemplateAsset = vi.fn(async () => new Response(JSON.stringify({
+      ...makeCanopiFile(),
+      zones: [{ name: 'missing fields' }],
+    })))
+    const openCanopiTemplate = vi.fn(async () => 'opened' as const)
+
+    await expect(importDesignTemplateIntoCurrentSession(TEMPLATE, {
+      baseUrl: 'https://web.canopi.test/app/',
+      fetchTemplateAsset,
+      openCanopiTemplate,
+    })).rejects.toThrow('$.zones[0].points: missing required value')
+
+    expect(openCanopiTemplate).not.toHaveBeenCalled()
   })
 
   it('rejects arbitrary remote template URLs before fetching', async () => {
