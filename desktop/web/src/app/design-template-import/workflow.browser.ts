@@ -4,6 +4,10 @@ import {
   type BrowserTemplateCanopiFile,
 } from '../../web/browser-design-session'
 import { WEB_STATIC_DESIGN_TEMPLATE_ASSET_ORIGINS } from '../../web/static-design-templates'
+import {
+  createDesignTemplateImportCoordinator,
+  type DesignTemplateImportResult,
+} from './coordinator'
 
 export type DesignTemplateOpenResult = 'opened' | 'queued' | 'cancelled'
 
@@ -21,29 +25,46 @@ export interface BrowserDesignTemplateImportAdapters {
   readonly openCanopiTemplate?: (template: BrowserTemplateCanopiFile) => Promise<DesignTemplateOpenResult>
 }
 
+export function createBrowserDesignTemplateImportWorkflow(
+  adapters: BrowserDesignTemplateImportAdapters = {},
+) {
+  return createDesignTemplateImportCoordinator({
+    acquire: async (template) => {
+      const assetUrl = resolveStaticTemplateAssetUrl(template.download_url, {
+        baseUrl: adapters.baseUrl,
+        allowedAssetOrigins: adapters.allowedAssetOrigins ?? WEB_STATIC_DESIGN_TEMPLATE_ASSET_ORIGINS,
+      })
+      const response = await (adapters.fetchTemplateAsset ?? fetchStaticTemplateAsset)(assetUrl.href)
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch static Design Template "${template.title}" from ${assetUrl.href}: `
+          + `${response.status} ${response.statusText}`.trim(),
+        )
+      }
+      return response.text()
+    },
+    open: (text, template) => {
+      const openCanopiTemplate = adapters.openCanopiTemplate
+        ?? ((file: BrowserTemplateCanopiFile) => browserDesignSessionController.openCanopiTemplate(file))
+      return openCanopiTemplate({ name: template.title, text })
+    },
+  })
+}
+
+const defaultWorkflow = createBrowserDesignTemplateImportWorkflow()
+
 export async function importDesignTemplateIntoCurrentSession(
   template: TemplateMeta,
-  adapters: BrowserDesignTemplateImportAdapters = {},
-): Promise<DesignTemplateOpenResult> {
-  const assetUrl = resolveStaticTemplateAssetUrl(template.download_url, {
-    baseUrl: adapters.baseUrl,
-    allowedAssetOrigins: adapters.allowedAssetOrigins ?? WEB_STATIC_DESIGN_TEMPLATE_ASSET_ORIGINS,
-  })
-  const response = await (adapters.fetchTemplateAsset ?? fetchStaticTemplateAsset)(assetUrl.href)
+  adapters?: BrowserDesignTemplateImportAdapters,
+): Promise<DesignTemplateImportResult> {
+  return adapters
+    ? createBrowserDesignTemplateImportWorkflow(adapters).importTemplate(template)
+    : defaultWorkflow.importTemplate(template)
+}
 
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch static Design Template "${template.title}" from ${assetUrl.href}: `
-      + `${response.status} ${response.statusText}`.trim(),
-    )
-  }
-
-  const openCanopiTemplate = adapters.openCanopiTemplate
-    ?? ((file: BrowserTemplateCanopiFile) => browserDesignSessionController.openCanopiTemplate(file))
-  return openCanopiTemplate({
-    name: template.title,
-    text: await response.text(),
-  })
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => defaultWorkflow.dispose())
 }
 
 export function resolveStaticTemplateAssetUrl(

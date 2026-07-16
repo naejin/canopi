@@ -2,12 +2,15 @@ import { downloadTemplate } from '../../ipc/community'
 import type { TemplateMeta } from '../../types/community'
 import {
   openDesignAsTemplate,
-  type TemplateOpenResult,
 } from '../document-session/actions'
+import {
+  createDesignTemplateImportCoordinator,
+  type DesignTemplateImportResult,
+} from './coordinator'
 
 export interface DesignTemplateImportAdapters {
   readonly downloadTemplate: (url: string) => Promise<string>
-  readonly openDesignAsTemplate: (path: string, name: string) => Promise<TemplateOpenResult>
+  readonly openDesignAsTemplate: typeof openDesignAsTemplate
 }
 
 const DEFAULT_ADAPTERS: DesignTemplateImportAdapters = {
@@ -15,10 +18,30 @@ const DEFAULT_ADAPTERS: DesignTemplateImportAdapters = {
   openDesignAsTemplate,
 }
 
+export function createDesktopDesignTemplateImportWorkflow(
+  adapters: DesignTemplateImportAdapters,
+) {
+  return createDesignTemplateImportCoordinator({
+    acquire: (template) => adapters.downloadTemplate(template.download_url),
+    open: (path, template, isCancelled) => adapters.openDesignAsTemplate(
+      path,
+      template.title,
+      { isCancelled },
+    ),
+  })
+}
+
+const defaultWorkflow = createDesktopDesignTemplateImportWorkflow(DEFAULT_ADAPTERS)
+
 export async function importDesignTemplateIntoCurrentSession(
   template: TemplateMeta,
-  adapters: DesignTemplateImportAdapters = DEFAULT_ADAPTERS,
-): Promise<TemplateOpenResult> {
-  const path = await adapters.downloadTemplate(template.download_url)
-  return adapters.openDesignAsTemplate(path, template.title)
+  adapters?: DesignTemplateImportAdapters,
+): Promise<DesignTemplateImportResult> {
+  return adapters
+    ? createDesktopDesignTemplateImportWorkflow(adapters).importTemplate(template)
+    : defaultWorkflow.importTemplate(template)
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => defaultWorkflow.dispose())
 }

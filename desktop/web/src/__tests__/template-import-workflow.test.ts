@@ -60,7 +60,11 @@ describe('template import workflow', () => {
     await importTemplateIntoCurrentSession(TEMPLATE)
 
     expect(mocks.downloadTemplate).toHaveBeenCalledWith(TEMPLATE.download_url)
-    expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith('/tmp/template.canopi', TEMPLATE.title)
+    expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
+      '/tmp/template.canopi',
+      TEMPLATE.title,
+      { isCancelled: expect.any(Function) },
+    )
     expect(selectedTemplate.value).toBe(null)
     expect(templateImportError.value).toBe(null)
     expect(templateImporting.value).toBe(false)
@@ -113,6 +117,7 @@ describe('template import workflow', () => {
     expect(mocks.openDesignAsTemplate).toHaveBeenCalledWith(
       '/tmp/newer-template.canopi',
       NEWER_TEMPLATE.title,
+      { isCancelled: expect.any(Function) },
     )
     expect(templateImporting.value).toBe(false)
     expect(selectedTemplate.value).toBe(null)

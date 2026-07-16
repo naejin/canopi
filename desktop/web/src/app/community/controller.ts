@@ -14,6 +14,7 @@ import {
 } from './state'
 
 let previewRequestId = 0
+let templateImportRequestId = 0
 
 export const communityView = computed(() => ({
   catalog: templateCatalog.value,
@@ -75,17 +76,22 @@ export function setStyleFilter(value: string): void {
 }
 
 export async function importTemplateIntoCurrentSession(template: TemplateMeta): Promise<void> {
+  const requestId = ++templateImportRequestId
   templateImporting.value = true
   templateImportError.value = null
 
   try {
     const result = await importDesignTemplateIntoCurrentSession(template)
-    if (result !== 'cancelled') {
+    if (requestId !== templateImportRequestId) return
+    if (result !== 'cancelled' && result !== 'superseded') {
       selectedTemplate.value = null
     }
   } catch (error) {
+    if (requestId !== templateImportRequestId) return
     templateImportError.value = error instanceof Error ? error.message : String(error)
   } finally {
-    templateImporting.value = false
+    if (requestId === templateImportRequestId) {
+      templateImporting.value = false
+    }
   }
 }
