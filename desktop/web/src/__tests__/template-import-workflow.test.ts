@@ -103,6 +103,7 @@ describe('template import workflow', () => {
     mocks.openDesignAsTemplate.mockResolvedValue('opened')
 
     const olderImport = importTemplateIntoCurrentSession(TEMPLATE)
+    selectedTemplate.value = NEWER_TEMPLATE
     const newerImport = importTemplateIntoCurrentSession(NEWER_TEMPLATE)
 
     older.resolve(makeCanopiFile({ name: 'Older Template' }))
@@ -110,7 +111,7 @@ describe('template import workflow', () => {
 
     expect(mocks.openDesignAsTemplate).not.toHaveBeenCalled()
     expect(templateImporting.value).toBe(true)
-    expect(selectedTemplate.value).toEqual(TEMPLATE)
+    expect(selectedTemplate.value).toEqual(NEWER_TEMPLATE)
 
     const newerFile = makeCanopiFile({ name: 'Newer Template' })
     newer.resolve(newerFile)
@@ -134,6 +135,7 @@ describe('template import workflow', () => {
     mocks.openDesignAsTemplate.mockResolvedValue('opened')
 
     const olderImport = importTemplateIntoCurrentSession(TEMPLATE)
+    selectedTemplate.value = NEWER_TEMPLATE
     const newerImport = importTemplateIntoCurrentSession(NEWER_TEMPLATE)
     const newerFile = makeCanopiFile({ name: 'Newer Template' })
     newer.resolve(newerFile)

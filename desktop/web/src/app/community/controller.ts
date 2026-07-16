@@ -83,7 +83,11 @@ export async function importTemplateIntoCurrentSession(template: TemplateMeta): 
   try {
     const result = await importDesignTemplateIntoCurrentSession(template)
     if (requestId !== templateImportRequestId) return
-    if (result !== 'cancelled' && result !== 'superseded') {
+    if (
+      result !== 'cancelled'
+      && result !== 'superseded'
+      && selectedTemplate.value?.id === template.id
+    ) {
       selectedTemplate.value = null
     }
   } catch (error) {
