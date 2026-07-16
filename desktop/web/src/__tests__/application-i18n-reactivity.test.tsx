@@ -27,8 +27,8 @@ describe('application translation authority', () => {
     container.remove()
     plantDbStatus.value = 'available'
     commandPaletteOpen.value = false
-    locale.value = 'en'
     vi.restoreAllMocks()
+    locale.value = 'en'
   })
 
   it('rerenders mounted degraded chrome when only the locale changes', async () => {
