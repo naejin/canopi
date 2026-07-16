@@ -2,16 +2,18 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
-import { activePanel, sidePanel } from '../app/shell/state'
+import { activePanel, navigateTo, sidePanel } from '../app/shell/state'
 import { locale, theme } from '../app/settings/state'
 import {
   installSettingsProjection,
+  mutateSettingsProjection,
   resetSettingsProjectionForTests,
 } from '../app/settings/projection'
 import type { Settings } from '../types/settings'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
-import { BrowserAppShell, type BrowserShellCommandHandlers } from '../web/BrowserAppShell'
+import { BrowserAppShell } from '../web/BrowserAppShell'
+import { createBrowserShellCommandProjection } from '../web/browser-shell-commands'
 import { WebApp } from '../web/WebApp'
 import { editDesignSessionForTest } from './support/design-session-edit'
 
@@ -63,6 +65,32 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
   }
 }
 
+function shellCommandProjection({
+  templatesEnabled = false,
+  downloadCanopiEnabled = true,
+}: {
+  readonly templatesEnabled?: boolean
+  readonly downloadCanopiEnabled?: boolean
+} = {}) {
+  return createBrowserShellCommandProjection({
+    currentPanel: activePanel.value,
+    currentSidePanel: sidePanel.value,
+    downloadCanopiEnabled,
+    templatesEnabled,
+    capabilities: {
+      newDesign: () => undefined,
+      openCanopi: () => undefined,
+      downloadCanopi: () => undefined,
+      navigate: navigateTo,
+      toggleTheme: () => {
+        mutateSettingsProjection((settings) => {
+          settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
+        }, { persist: 'immediate' })
+      },
+    },
+  })
+}
+
 describe('Web Edition Browser App Shell', () => {
   let container: HTMLDivElement
 
@@ -101,6 +129,8 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-testid="browser-drafts-list"]')).toBeNull()
     expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
     expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
+    expect(commandIds(container)).toContain('view.toggleTheme')
+    expect(commandIds(container)).not.toContain('settings.theme')
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
       'nav.plantDb',
@@ -144,7 +174,7 @@ describe('Web Edition Browser App Shell', () => {
 
   it('dismisses open Web Edition menus on outside pointerup and Escape', async () => {
     await act(async () => {
-      render(<BrowserAppShell />, container)
+      render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
     })
 
     await act(async () => {
@@ -177,7 +207,7 @@ describe('Web Edition Browser App Shell', () => {
 
   it('shows the templates entry point only when static templates are configured', async () => {
     await act(async () => {
-      render(<BrowserAppShell templatesEnabled />, container)
+      render(<BrowserAppShell commandProjection={shellCommandProjection({ templatesEnabled: true })} />, container)
     })
 
     expect(commandIds(container)).toContain('nav.templates')
@@ -192,7 +222,7 @@ describe('Web Edition Browser App Shell', () => {
 
   it('renders web-safe panel navigation in a desktop-style right PanelBar', async () => {
     await act(async () => {
-      render(<BrowserAppShell templatesEnabled />, container)
+      render(<BrowserAppShell commandProjection={shellCommandProjection({ templatesEnabled: true })} />, container)
     })
 
     expect(container.querySelector('[data-testid="web-panel-bar"]')).not.toBeNull()
@@ -266,7 +296,7 @@ describe('Web Edition Browser App Shell', () => {
 
   it('omits the Web Location feature from browser chrome', async () => {
     await act(async () => {
-      render(<BrowserAppShell />, container)
+      render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
     })
 
     expect(commandIds(container)).not.toContain('nav.location')
@@ -275,14 +305,23 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-testid="web-location-workspace"]')).toBeNull()
   })
 
-  it('routes shell commands through command handlers and browser-safe app state', async () => {
-    const handlers: BrowserShellCommandHandlers = {
+  it('runs caller-ready shell command projections without local dispatch policy', async () => {
+    const capabilities = {
       newDesign: vi.fn(),
       openCanopi: vi.fn(),
       downloadCanopi: vi.fn(),
+      navigate: vi.fn(),
+      toggleTheme: vi.fn(),
     }
+    const commandProjection = createBrowserShellCommandProjection({
+      currentPanel: 'canvas',
+      currentSidePanel: null,
+      downloadCanopiEnabled: true,
+      templatesEnabled: false,
+      capabilities,
+    })
     await act(async () => {
-      render(<BrowserAppShell handlers={handlers} />, container)
+      render(<BrowserAppShell commandProjection={commandProjection} />, container)
     })
 
     await clickShellCommand(container, 'file.new')
@@ -296,13 +335,16 @@ describe('Web Edition Browser App Shell', () => {
       clickCommand(container, 'nav.canvas')
     })
 
-    expect(handlers.newDesign).toHaveBeenCalledOnce()
-    expect(handlers.openCanopi).toHaveBeenCalledOnce()
-    expect(handlers.downloadCanopi).toHaveBeenCalledOnce()
-    expect(theme.value).toBe('dark')
+    expect(capabilities.newDesign).toHaveBeenCalledOnce()
+    expect(capabilities.openCanopi).toHaveBeenCalledOnce()
+    expect(capabilities.downloadCanopi).toHaveBeenCalledOnce()
+    expect(capabilities.toggleTheme).toHaveBeenCalledOnce()
+    expect(capabilities.navigate.mock.calls).toEqual([
+      ['plant-db'],
+      ['favorites'],
+      ['canvas'],
+    ])
     expect(locale.value).toBe('fr')
-    expect(activePanel.value).toBe('canvas')
-    expect(sidePanel.value).toBeNull()
   })
 
   it('persists the browser theme command through the Settings Projection', async () => {
@@ -313,7 +355,7 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     await act(async () => {
-      render(<BrowserAppShell />, container)
+      render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
     })
     await clickThemeControl(container)
 
@@ -332,7 +374,7 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     await act(async () => {
-      render(<BrowserAppShell />, container)
+      render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
     })
     await selectLocale(container, 'fr')
 
@@ -499,7 +541,7 @@ function menuIdForCommand(id: string): string | null {
 
 async function clickThemeControl(container: HTMLElement): Promise<void> {
   await act(async () => {
-    commandButton(container, 'settings.theme').click()
+    commandButton(container, 'view.toggleTheme').click()
   })
 }
 

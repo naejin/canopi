@@ -3,7 +3,12 @@ import { lazy, Suspense } from "preact/compat";
 import { useEffect, useMemo } from "preact/hooks";
 import { activePanel, sidePanel } from "../app/shell/state";
 import styles from "./WebApp.module.css";
-import { BrowserAppShell, type BrowserShellCommandHandlers } from "./BrowserAppShell";
+import { BrowserAppShell } from "./BrowserAppShell";
+import {
+  createBrowserShellCommandProjection,
+  createBrowserShellCapabilities,
+  type BrowserShellCapabilities,
+} from "./browser-shell-commands";
 import {
   browserDesignSessionController,
   type BrowserDesignSessionController,
@@ -30,27 +35,25 @@ export function WebApp({
 }: WebAppProps) {
   const hasDesign = controller.hasCurrentDesign();
   const designIdentity = controller.readDesignIdentity();
-  const handlers = useMemo<BrowserShellCommandHandlers>(() => ({
-    newDesign: () => {
-      void controller.newDesign().catch(logWebAppCommandError);
-    },
-    openCanopi: () => {
-      void controller.openCanopi().catch(logWebAppCommandError);
-    },
-    downloadCanopi: () => {
-      void controller.downloadCanopi().catch(logWebAppCommandError);
-    },
-  }), [controller]);
+  const shellCapabilities = useMemo<BrowserShellCapabilities>(
+    () => createBrowserShellCapabilities(controller, logWebAppCommandError),
+    [controller],
+  );
+  const commandProjection = createBrowserShellCommandProjection({
+    currentPanel: activePanel.value,
+    currentSidePanel: sidePanel.value,
+    downloadCanopiEnabled: hasDesign,
+    templatesEnabled,
+    capabilities: shellCapabilities,
+  });
 
   useEffect(() => controller.installAutosave(), [controller]);
 
   return (
     <div className={styles.root} data-canopi-web-root>
       <BrowserAppShell
-        handlers={handlers}
+        commandProjection={commandProjection}
         designIdentity={designIdentity}
-        downloadCanopiEnabled={hasDesign}
-        templatesEnabled={templatesEnabled}
         onRenameDesign={(name) => controller.renameDesign(name)}
       >
         {workspace ?? <WebWorkspace controller={controller} templatesEnabled={templatesEnabled} />}

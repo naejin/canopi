@@ -4,19 +4,24 @@ import type {
   CanvasToolbarActionCommand,
   CanvasToolbarToolCommand,
 } from '../../app/canvas-commands'
+import {
+  projectShellCommandCatalog,
+  type ProjectedShellCommand,
+} from '../../app/shell-commands'
 import type { Panel } from '../../app/shell/state'
 import { designNotebookWorkbench } from '../../app/design-notebook'
 import { t } from '../../i18n'
 import {
   APP_COMMANDS,
   createDesktopCanvasCommandProjection,
+  DESKTOP_SHELL_COMMAND_CATALOG,
   getAppCommandDefinition,
   isCatalogCommandDisabled,
   readAppCommandState,
   runCatalogCommand,
   type AppCommandDefinition,
   type AppCommandId,
-  type AppCommandState,
+  type DesktopShellCommandId,
 } from './catalog'
 
 type AppMenuId = 'file' | 'edit' | 'view' | 'help'
@@ -88,62 +93,16 @@ export type AppCommandGraphToolbarActionCommand = CanvasToolbarActionCommand
 export type AppCommandGraphToolbarProjection = CanvasCommandProjection
 
 const MENU_ORDER: readonly AppMenuId[] = ['file', 'edit', 'view', 'help']
-const MENU_COMMAND_ORDER: Record<AppMenuId, readonly (AppCommandId | 'separator')[]> = {
-  file: [
-    'file.new',
-    'file.open',
-    'separator',
-    'file.save',
-    'file.saveAs',
-    'separator',
-    'file.exit',
-  ],
+const MENU_COMMAND_ORDER = {
   edit: ['edit.undo', 'edit.redo'],
   view: ['view.zoomIn', 'view.zoomOut', 'view.fitToContent'],
   help: ['help.aboutCanopi', 'separator', 'help.reportProblem'],
-}
+} as const satisfies Record<Exclude<AppMenuId, 'file'>, readonly (AppCommandId | 'separator')[]>
 
-const MENU_LABELS: Record<AppMenuId, () => string> = {
-  file: () => t('menu.file'),
+const MENU_LABELS: Record<Exclude<AppMenuId, 'file'>, () => string> = {
   edit: () => t('menu.edit'),
   view: () => t('menu.view'),
   help: () => t('menu.help'),
-}
-
-const PANEL_COMMAND_GROUPS = {
-  primary: [
-    { panel: 'canvas', commandId: 'nav.canvas' },
-    { panel: 'location', commandId: 'nav.location' },
-  ],
-  side: [
-    { panel: 'design-notebook', commandId: 'nav.designNotebook' },
-    { panel: 'plant-db', commandId: 'nav.plantDb' },
-    { panel: 'favorites', commandId: 'nav.favorites' },
-  ],
-} as const satisfies Record<string, readonly { panel: Panel, commandId: AppCommandId }[]>
-
-const PANEL_LABELS: Record<Panel, () => string> = {
-  canvas: () => t('nav.canvas'),
-  location: () => t('canvas.location.title'),
-  templates: () => t('worldMap.title'),
-  'plant-db': () => t('nav.plantDb'),
-  'design-notebook': () => t('nav.designNotebook'),
-  favorites: () => t('nav.favorites'),
-}
-
-function isPanelChromeDisabled(panel: Panel, state: AppCommandState): boolean {
-  if (panel === 'canvas') return false
-  if (panel === 'design-notebook') return false
-  if (panel === 'templates') return false
-  if (isPanelCommandActive(panel, state)) return false
-  return !state.hasDesign
-}
-
-function isPanelCommandActive(panel: Panel, state: AppCommandState): boolean {
-  if (panel === 'canvas') return state.activePanel === 'canvas' && state.sidePanel === null
-  if (panel === 'location') return state.activePanel === 'location'
-  if (panel === 'templates') return state.activePanel === 'templates'
-  return state.activePanel === 'canvas' && state.sidePanel === panel
 }
 
 function commandProjection(command: AppCommandDefinition): Command {
@@ -181,32 +140,31 @@ export const appCommandGraphChromeProjection = computed<AppCommandGraphChromePro
 })
 
 function panelCommandProjection(
-  entry: { readonly panel: Panel, readonly commandId: AppCommandId },
-  state: AppCommandState,
+  command: ProjectedShellCommand<DesktopShellCommandId>,
 ): AppCommandGraphPanelCommand {
-  const command = getAppCommandDefinition(entry.commandId)
-  if (!command?.label) {
-    throw new Error(`Missing panel navigation command '${entry.commandId}'`)
+  if (!command.panel) {
+    throw new Error(`Missing panel identity for navigation command '${command.id}'`)
   }
   return {
-    panel: entry.panel,
-    commandId: entry.commandId,
-    label: PANEL_LABELS[entry.panel](),
+    panel: command.panel,
+    commandId: command.id,
+    label: command.label,
     shortcut: command.shortcut,
-    disabled: isPanelChromeDisabled(entry.panel, state) || (command.disabled?.(state) ?? false),
-    active: isPanelCommandActive(entry.panel, state),
+    disabled: command.disabled,
+    active: command.active ?? false,
     action: () => {
-      runCatalogCommand(entry.commandId)
+      runCatalogCommand(command.id)
     },
   }
 }
 
 export const appCommandGraphPanelProjection = computed<AppCommandGraphPanelProjection>(() => {
   const state = readAppCommandState()
+  const shell = projectShellCommandCatalog(DESKTOP_SHELL_COMMAND_CATALOG, state, t)
 
   return {
-    primary: PANEL_COMMAND_GROUPS.primary.map((entry) => panelCommandProjection(entry, state)),
-    side: PANEL_COMMAND_GROUPS.side.map((entry) => panelCommandProjection(entry, state)),
+    primary: shell.panelBar.primary.map(panelCommandProjection),
+    side: shell.panelBar.side.map(panelCommandProjection),
   }
 })
 
@@ -219,22 +177,52 @@ export function getMenuDefinitions(): MenuDefinition[] {
   const separator: MenuSeparator = { type: 'separator' }
 
   return MENU_ORDER.map((menuId): MenuDefinition => {
+    if (menuId === 'file') return getFileMenuDefinition(separator)
     return {
       id: menuId,
       label: MENU_LABELS[menuId](),
-      items: menuId === 'file'
-        ? getFileMenuEntries(separator)
-        : MENU_COMMAND_ORDER[menuId].map((entry) => staticMenuEntry(menuId, entry, separator)),
+      items: MENU_COMMAND_ORDER[menuId].map((entry) =>
+        staticMenuEntry(menuId, entry, separator)
+      ),
     }
   })
 }
 
-function getFileMenuEntries(separator: MenuSeparator): MenuEntry[] {
-  const staticEntries = MENU_COMMAND_ORDER.file.map((entry) => staticMenuEntry('file', entry, separator))
+function getFileMenuDefinition(separator: MenuSeparator): MenuDefinition {
+  const shell = projectShellCommandCatalog(
+    DESKTOP_SHELL_COMMAND_CATALOG,
+    readAppCommandState(),
+    t,
+  )
+  const staticEntries: MenuEntry[] = []
+  const fileMenu = shell.menus.find((menu) => menu.id === 'file')
+  if (!fileMenu) throw new Error('Desktop shell catalog requires the File menu')
+  for (const [sectionIndex, section] of fileMenu.sections.entries()) {
+    if (sectionIndex > 0) staticEntries.push(separator)
+    for (const command of section) {
+      staticEntries.push({
+        type: 'action',
+        id: command.id,
+        label: command.label,
+        shortcut: command.shortcut,
+        action: () => {
+          runCatalogCommand(command.id)
+        },
+        disabled: command.disabled,
+      })
+    }
+  }
   const recentEntries = designNotebookWorkbench.view.value.recentEntries
 
-  const openIndex = staticEntries.findIndex((entry) => entry.type === 'action' && entry.id === 'file.open')
-  if (openIndex < 0) return staticEntries
+  const openDesignCommand = DESKTOP_SHELL_COMMAND_CATALOG.find(
+    (command) => command.capabilityId === 'openDesign',
+  )
+  const openIndex = staticEntries.findIndex((entry) =>
+    entry.type === 'action' && entry.id === openDesignCommand?.id
+  )
+  if (openIndex < 0) {
+    return { id: 'file', label: fileMenu.label, items: staticEntries }
+  }
 
   const openRecent: MenuSubmenu = {
     type: 'submenu',
@@ -252,11 +240,15 @@ function getFileMenuEntries(separator: MenuSeparator): MenuEntry[] {
     })),
   }
 
-  return [
-    ...staticEntries.slice(0, openIndex + 1),
-    openRecent,
-    ...staticEntries.slice(openIndex + 1),
-  ]
+  return {
+    id: 'file',
+    label: fileMenu.label,
+    items: [
+      ...staticEntries.slice(0, openIndex + 1),
+      openRecent,
+      ...staticEntries.slice(openIndex + 1),
+    ],
+  }
 }
 
 function staticMenuEntry(

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
 import { activeTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -26,8 +26,9 @@ import {
   getMenuDefinitions,
   handleAppCommandKeyDown,
   runAppCommand,
+  type AppCommandId,
 } from '../commands/registry'
-import { EDIT_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
+import { EDIT_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -46,6 +47,11 @@ function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvas
 }
 
 describe('command registry canvas tool switching', () => {
+  it('keeps Web-only file identities outside the Desktop command interface', () => {
+    expectTypeOf<'file.openCanopi'>().not.toMatchTypeOf<AppCommandId>()
+    expectTypeOf<'file.downloadCanopi'>().not.toMatchTypeOf<AppCommandId>()
+  })
+
   beforeEach(() => {
     activeTool.value = 'select'
     activePanel.value = 'canvas'
@@ -191,8 +197,8 @@ describe('command registry canvas tool switching', () => {
   })
 
   it('uses the shared shortcut definitions for panel navigation and tools', () => {
-    expect(getCommand('nav.canvas').shortcut).toBe(PANEL_SHORTCUTS.canvas)
-    expect(getCommand('nav.plantDb').shortcut).toBe(PANEL_SHORTCUTS.plantDb)
+    expect(getCommand('nav.canvas').shortcut).toBe('Ctrl+1')
+    expect(getCommand('nav.plantDb').shortcut).toBe('Ctrl+2')
     expect(getCommand('nav.designNotebook').shortcut).toBeUndefined()
     expect(getCommand('nav.location').shortcut).toBeUndefined()
     expect(getCommand('canvas.tool.select').shortcut).toBe(TOOL_SHORTCUTS.select)

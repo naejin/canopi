@@ -76,6 +76,37 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Neutral shell command catalog stays platform-neutral',
+    from: ['src/app/shell-commands/**'],
+    targets: [
+      '@tauri-apps/**',
+      'src/web/**',
+      'src/commands/**',
+      'src/ipc/**',
+      'src/platform/**',
+      'src/app/document-session/**',
+      'src/app/settings/**',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Browser App Shell consumes caller-ready command projections',
+    from: ['src/web/BrowserAppShell.tsx'],
+    targets: [
+      'src/app/shell/state.ts',
+      'src/app/shell-commands/**',
+      'src/commands/**',
+      'src/web/browser-design-session.ts',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Browser Design Session stays independent of shell components',
+    from: ['src/web/browser-design-session.ts'],
+    targets: ['src/web/BrowserAppShell.tsx'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Web Species detail stays behind the reduced adapter',
     from: ['src/web/WebSpeciesCatalogPanel.tsx'],
     targets: ['src/components/plant-detail/**', 'src/app/plant-detail/**', 'src/ipc/species.ts'],
@@ -567,7 +598,11 @@ const CONFINED_IMPORTER_POLICIES = [
     name: 'Web settings mutations use the shared Settings Projection',
     from: ['src/web/**'],
     targets: ['src/app/settings/projection.ts'],
-    allowedFrom: ['src/web/BrowserAppShell.tsx', 'src/web/browser-canvas-runtime.ts'],
+    allowedFrom: [
+      'src/web/BrowserAppShell.tsx',
+      'src/web/browser-canvas-runtime.ts',
+      'src/web/browser-shell-commands.ts',
+    ],
   },
   {
     kind: 'confine-importers',
@@ -678,7 +713,11 @@ const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
     name: 'Web settings callers mutate through the shared projection',
-    from: ['src/web/BrowserAppShell.tsx', 'src/web/browser-canvas-runtime.ts'],
+    from: [
+      'src/web/BrowserAppShell.tsx',
+      'src/web/browser-canvas-runtime.ts',
+      'src/web/browser-shell-commands.ts',
+    ],
     targets: ['src/app/settings/projection.ts'],
   },
   {
@@ -1057,6 +1096,49 @@ const REQUIRED_IMPORT_POLICIES = [
 const NAMED_IMPORT_POLICIES = [
   {
     kind: 'named-imports',
+    name: 'Desktop command catalog composes neutral shell capabilities',
+    from: ['src/commands/graph/catalog.ts'],
+    target: 'src/app/shell-commands/index.ts',
+    requiredNames: ['composeShellCommandCatalog'],
+    allowedNames: [
+      'composeShellCommandCatalog',
+      'ShellCommandCatalogEntry',
+      'ShellCommandIdForCapability',
+      'ShellCommandState',
+    ],
+  },
+  {
+    kind: 'named-imports',
+    name: 'Desktop chrome projects the neutral shell catalog',
+    from: ['src/commands/graph/projections.ts'],
+    target: 'src/app/shell-commands/index.ts',
+    requiredNames: ['projectShellCommandCatalog'],
+    allowedNames: ['projectShellCommandCatalog', 'ProjectedShellCommand'],
+  },
+  {
+    kind: 'named-imports',
+    name: 'Desktop shortcuts match the neutral shell catalog',
+    from: ['src/commands/graph/shortcuts.ts'],
+    target: 'src/app/shell-commands/index.ts',
+    requiredNames: ['matchShellCommandShortcut'],
+    allowedNames: ['matchShellCommandShortcut'],
+  },
+  {
+    kind: 'named-imports',
+    name: 'Web shell adapter composes and projects neutral commands',
+    from: ['src/web/browser-shell-commands.ts'],
+    target: 'src/app/shell-commands/index.ts',
+    requiredNames: ['composeShellCommandCatalog', 'projectShellCommandCatalog'],
+    allowedNames: [
+      'composeShellCommandCatalog',
+      'projectShellCommandCatalog',
+      'ProjectedShellCommand',
+      'ShellChromeProjection',
+      'ShellCommandIdForCapability',
+    ],
+  },
+  {
+    kind: 'named-imports',
     name: 'Scene physical extent delegates every Zone shape to canonical geometry',
     from: ['src/canvas/runtime/scene-physical-extent.ts'],
     target: 'src/canvas/runtime/zone-geometry.ts',
@@ -1201,12 +1283,42 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/app/plant-browser/state.ts',
       'src/app/plant-browser/controller.ts',
       'src/web/browser-theme.ts',
+      'src/web/browser-shell-projection.ts',
       'src/state/design.ts',
     ],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
 const SYMBOL_OWNERSHIP_POLICIES = [
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Browser App Shell does not revive command dispatch ownership',
+    from: ['src/web/BrowserAppShell.tsx'],
+    names: [
+      'BrowserShellCommandHandlers',
+      'createBrowserShellCommandProjection',
+      'runBrowserShellCommand',
+      'navigateTo',
+    ],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Browser Design Session does not project shell handlers',
+    from: ['src/web/browser-design-session.ts'],
+    names: ['BrowserShellCommandHandlers'],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Desktop shortcut adapter does not revive shell command switches or aliases',
+    from: ['src/commands/graph/shortcuts.ts', 'src/shortcuts/definitions.ts'],
+    names: [
+      'panelCommandId',
+      'fileShortcutCommand',
+      'panelKeys',
+      'FILE_SHORTCUTS',
+      'PANEL_SHORTCUTS',
+    ],
+  },
   {
     kind: 'forbid-source-symbols',
     name: 'Scene Interaction uses the Control Point Overlay collection',
@@ -1624,6 +1736,25 @@ const DESIGN_SESSION_TEST_FIXTURE_ALLOWED_SOURCES =
   'src/app/document-session/store.ts, src/__tests__/**, src/**/*.test.ts, src/**/*.test.tsx'
 
 describe('declarative frontend architecture policies', () => {
+  it('rejects platform imports from the neutral shell command catalog', () => {
+    const graph = createTypeScriptSourceGraph([{
+      path: 'src/app/shell-commands/index.ts',
+      source: `
+        import { getCurrentWindow } from '@tauri-apps/api/window'
+        void getCurrentWindow
+      `,
+    }])
+    const policies = FRONTEND_ARCHITECTURE_POLICIES.filter(({ name }) =>
+      name === 'Neutral shell command catalog stays platform-neutral'
+    )
+
+    expect(collectArchitecturePolicyViolations(graph, policies)).toEqual([
+      expect.stringContaining(
+        '[Neutral shell command catalog stays platform-neutral] src/app/shell-commands/index.ts',
+      ),
+    ])
+  })
+
   it.each([
     {
       caseName: 'root production entry',

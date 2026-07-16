@@ -13,6 +13,12 @@ import {
   type CanvasToolId,
 } from '../../app/canvas-commands'
 import {
+  composeShellCommandCatalog,
+  type ShellCommandCatalogEntry,
+  type ShellCommandIdForCapability,
+  type ShellCommandState,
+} from '../../app/shell-commands'
+import {
   gridVisible,
   rulersVisible,
   snapToGridEnabled,
@@ -24,7 +30,7 @@ import {
   saveAsCurrentDesign,
   saveCurrentDesign,
 } from '../../app/document-session/actions'
-import { activePanel, navigateTo, sidePanel, type Panel, type SidePanel } from '../../app/shell/state'
+import { activePanel, navigateTo, sidePanel, type Panel } from '../../app/shell/state'
 import {
   diagnosticMessageFromError,
   recordFrontendDiagnostic,
@@ -40,29 +46,14 @@ import {
 } from '../../canvas/session'
 import type { CanvasCommandSurface } from '../../canvas/runtime/runtime'
 import { t } from '../../i18n'
-import {
-  FILE_SHORTCUTS,
-  PANEL_SHORTCUTS,
-  VIEW_SHORTCUTS,
-} from '../../shortcuts/definitions'
+import { VIEW_SHORTCUTS } from '../../shortcuts/definitions'
 
 type NonToolbarAppCommandId =
-  | 'file.new'
-  | 'file.open'
-  | 'file.save'
-  | 'file.saveAs'
-  | 'file.exit'
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToContent'
   | 'help.aboutCanopi'
   | 'help.reportProblem'
-  | 'nav.canvas'
-  | 'nav.location'
-  | 'nav.plantDb'
-  | 'nav.favorites'
-  | 'nav.designNotebook'
-  | 'view.toggleTheme'
   | 'canvas.copy'
   | 'canvas.paste'
   | 'canvas.duplicateSelected'
@@ -74,15 +65,26 @@ type NonToolbarAppCommandId =
   | 'canvas.groupSelected'
   | 'canvas.ungroupSelected'
 
-export type AppCommandId = NonToolbarAppCommandId | CanvasCommandId
+type DesktopShellCapabilityId =
+  | 'newDesign'
+  | 'openDesign'
+  | 'saveDesign'
+  | 'saveDesignAs'
+  | 'exitApp'
+  | 'navigateCanvas'
+  | 'navigateLocation'
+  | 'navigatePlantDatabase'
+  | 'navigateFavorites'
+  | 'navigateDesignNotebook'
+  | 'toggleTheme'
 
-export interface AppCommandState {
-  readonly hasDesign: boolean
-  readonly designDirty: boolean
+export type DesktopShellCommandId = ShellCommandIdForCapability<DesktopShellCapabilityId>
+
+export type AppCommandId = NonToolbarAppCommandId | DesktopShellCommandId | CanvasCommandId
+
+export interface AppCommandState extends ShellCommandState {
   readonly canvas: CanvasCommandSurface | null
   readonly canvasHasSelection: boolean
-  readonly activePanel: Panel
-  readonly sidePanel: SidePanel | null
 }
 
 export interface AppCommandDefinition {
@@ -228,42 +230,76 @@ function runAsyncCommand(label: string, action: () => Promise<unknown>): void {
   void action().catch((error) => logCommandFailure(label, error))
 }
 
+export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
+  newDesign: {
+    execute: () => runAsyncCommand('New design', newDesignAction),
+  },
+  openDesign: {
+    execute: () => runAsyncCommand('Open design', openDesign),
+  },
+  saveDesign: {
+    execute: () => runAsyncCommand('Save design', saveCurrentDesign),
+    isExecutionDisabled: (state) => !state.hasDesign || !state.designDirty,
+  },
+  saveDesignAs: {
+    execute: () => runAsyncCommand('Save design as', saveAsCurrentDesign),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  exitApp: {
+    execute: () => runAsyncCommand('Close window', () => getCurrentWindow().close()),
+  },
+  navigateCanvas: {
+    execute: () => switchPanel('canvas'),
+  },
+  navigateLocation: {
+    execute: () => switchPanel('location'),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  navigatePlantDatabase: {
+    execute: () => switchPanel('plant-db'),
+    isProjectionDisabled: (state) =>
+      !(state.activePanel === 'canvas' && state.sidePanel === 'plant-db')
+        && !state.hasDesign,
+  },
+  navigateFavorites: {
+    execute: () => switchPanel('favorites'),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  navigateDesignNotebook: {
+    execute: () => switchPanel('design-notebook'),
+  },
+  toggleTheme: {
+    execute: cycleTheme,
+  },
+})
+
+function shellAppCommandDefinition(
+  command: ShellCommandCatalogEntry<DesktopShellCommandId>,
+): AppCommandDefinition {
+  return {
+    id: command.id,
+    label: () => t(command.labelKey),
+    shortcut: command.shortcut,
+    palette: command.palette,
+    run: () => command.execute(),
+    disabled: (state) => command.isExecutionDisabled(state),
+  }
+}
+
+function desktopShellAppCommands(
+  family: ShellCommandCatalogEntry['family'],
+): readonly AppCommandDefinition[] {
+  return DESKTOP_SHELL_COMMAND_CATALOG
+    .filter((command) => command.family === family)
+    .map(shellAppCommandDefinition)
+}
+
+const DESKTOP_FILE_COMMANDS = desktopShellAppCommands('file')
+const DESKTOP_NAVIGATION_COMMANDS = desktopShellAppCommands('navigation')
+const DESKTOP_SETTINGS_COMMANDS = desktopShellAppCommands('settings')
+
 export const APP_COMMANDS: readonly AppCommandDefinition[] = [
-  {
-    id: 'file.new',
-    label: () => t('canvas.file.new'),
-    shortcut: FILE_SHORTCUTS.newDesign,
-    palette: true,
-    run: () => runAsyncCommand('New design', newDesignAction),
-  },
-  {
-    id: 'file.open',
-    label: () => t('canvas.file.open'),
-    shortcut: FILE_SHORTCUTS.openDesign,
-    palette: true,
-    run: () => runAsyncCommand('Open design', openDesign),
-  },
-  {
-    id: 'file.save',
-    label: () => t('canvas.file.save'),
-    shortcut: FILE_SHORTCUTS.saveDesign,
-    palette: true,
-    run: () => runAsyncCommand('Save design', saveCurrentDesign),
-    disabled: (state) => !state.hasDesign || !state.designDirty,
-  },
-  {
-    id: 'file.saveAs',
-    label: () => t('canvas.file.saveAs'),
-    shortcut: FILE_SHORTCUTS.saveDesignAs,
-    palette: true,
-    run: () => runAsyncCommand('Save design as', saveAsCurrentDesign),
-    disabled: (state) => !state.hasDesign,
-  },
-  {
-    id: 'file.exit',
-    label: () => t('menu.file.exit'),
-    run: () => runAsyncCommand('Close window', () => getCurrentWindow().close()),
-  },
+  ...DESKTOP_FILE_COMMANDS,
   ...CANVAS_HISTORY_COMMANDS,
   {
     id: 'view.zoomIn',
@@ -301,46 +337,8 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     palette: true,
     run: showProblemReportDialog,
   },
-  {
-    id: 'nav.canvas',
-    label: () => t('commands.canvas'),
-    shortcut: PANEL_SHORTCUTS.canvas,
-    palette: true,
-    run: () => switchPanel('canvas'),
-  },
-  {
-    id: 'nav.location',
-    label: () => t('canvas.location.title'),
-    palette: true,
-    run: () => switchPanel('location'),
-    disabled: (state) => !state.hasDesign,
-  },
-  {
-    id: 'nav.plantDb',
-    label: () => t('commands.plantDb'),
-    shortcut: PANEL_SHORTCUTS.plantDb,
-    palette: true,
-    run: () => switchPanel('plant-db'),
-  },
-  {
-    id: 'nav.favorites',
-    label: () => t('nav.favorites'),
-    palette: true,
-    run: () => switchPanel('favorites'),
-    disabled: (state) => !state.hasDesign,
-  },
-  {
-    id: 'nav.designNotebook',
-    label: () => t('nav.designNotebook'),
-    palette: true,
-    run: () => switchPanel('design-notebook'),
-  },
-  {
-    id: 'view.toggleTheme',
-    label: () => t('commands.toggleTheme'),
-    palette: true,
-    run: cycleTheme,
-  },
+  ...DESKTOP_NAVIGATION_COMMANDS,
+  ...DESKTOP_SETTINGS_COMMANDS,
   ...CANVAS_TOOL_AND_SETTINGS_COMMANDS,
   {
     id: 'canvas.copy',

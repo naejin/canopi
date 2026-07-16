@@ -123,6 +123,20 @@ describe('shortcut manager canvas tool switching', () => {
     expect(sidePanel.value).toBe(null)
   })
 
+  it('preserves bare panel shortcuts outside editable controls', () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }))
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }))
+
+    expect(sidePanel.value).toBe('plant-db')
+    input.remove()
+  })
+
   it('toggles and closes the command palette through the keyboard seam', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true }))
 

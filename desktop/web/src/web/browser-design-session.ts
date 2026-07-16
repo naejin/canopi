@@ -42,7 +42,7 @@ import {
   type BrowserAppDataWriteResult,
   type BrowserDraftSummary,
 } from "./browser-app-data";
-import type { BrowserShellCommandHandlers, BrowserShellDesignIdentity } from "./BrowserAppShell";
+import type { BrowserShellDesignIdentity } from "./browser-shell-commands";
 
 export interface BrowserOpenedCanopiFile {
   readonly fileName: string;
@@ -84,7 +84,6 @@ export interface BrowserDesignSessionController {
   openDraft(id: string): boolean;
   attachCanvasSession(session: CanvasDocumentSurface): () => void;
   installAutosave(options?: BrowserDesignSessionAutosaveOptions): () => void;
-  handlers(): BrowserShellCommandHandlers;
 }
 
 export interface BrowserDesignSessionAutosaveOptions {
@@ -542,13 +541,6 @@ export function createBrowserDesignSessionController({
     openDraft,
     attachCanvasSession,
     installAutosave,
-    handlers() {
-      return {
-        newDesign: () => void newDesign().catch(logBrowserDesignSessionError),
-        openCanopi: () => void openCanopi().catch(logBrowserDesignSessionError),
-        downloadCanopi: () => void downloadCanopi().catch(logBrowserDesignSessionError),
-      };
-    },
   };
 }
 
