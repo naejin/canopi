@@ -580,9 +580,6 @@ export class DesignSessionStateMachine {
             this.deps.store.setPendingTemplateImport(null);
           }
         },
-        restorePending: () => {
-          this.deps.store.setPendingTemplateImport(queuedTemplate);
-        },
       });
     }
 
@@ -607,9 +604,6 @@ export class DesignSessionStateMachine {
         if (this.deps.store.readPendingDesignPath() === queuedPath) {
           this.deps.store.setPendingDesignPath(null);
         }
-      },
-      restorePending: () => {
-        this.deps.store.setPendingDesignPath(queuedPath);
       },
     });
   }
@@ -741,7 +735,6 @@ export class DesignSessionStateMachine {
     load,
     isStillPending,
     clearPending,
-    restorePending,
   }: QueuedDocumentLoadRequest): () => void {
     let cancelled = false;
 
@@ -759,7 +752,6 @@ export class DesignSessionStateMachine {
         return;
       }
       if (result.status === "failed") {
-        restorePending();
         console.error("Queued document load failed:", result.error);
         void this.deps.showMessage(`Failed to open ${label}.\n\n${formatError(result.error)}`, {
           title: "Open failed",
@@ -955,7 +947,6 @@ interface QueuedDocumentLoadRequest {
   load: () => Promise<DocumentTransitionLoadResult>;
   isStillPending: () => boolean;
   clearPending: () => void;
-  restorePending: () => void;
 }
 
 function cancelledResult(session: CanvasDocumentSurface | null): DocumentTransitionResult {
