@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearCanvasSelection, selectedObjectIds } from '../canvas/session-state'
-import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
+import { createDesktopCanvasRuntimeAppAdapter } from '../app/canvas-runtime/desktop-adapter'
 import type { CanopiFile } from '../types/design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 import {
@@ -97,7 +97,7 @@ function createRuntimeHost(options: TestCanvasRuntimeHostOptions = {}) {
 
 function createRuntimeHostWithAppComposition() {
   return createRuntimeHost({
-    appAdapter: createAppCanvasRuntimeAppAdapter(),
+    appAdapter: createDesktopCanvasRuntimeAppAdapter(),
   })
 }
 

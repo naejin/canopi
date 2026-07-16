@@ -100,9 +100,6 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
     document: {
       composeDocumentForSave: composeDetachedCanvasDocument,
     },
-    savedObjectStamps: {
-      saveCurrentSelection: () => {},
-    },
     translate: detachedCanvasRuntimeTranslator,
     settings: {
       readLocale: () => 'en',

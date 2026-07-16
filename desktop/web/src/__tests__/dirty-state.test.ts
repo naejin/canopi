@@ -41,7 +41,7 @@ function acknowledgeCurrentScene(): void {
 }
 
 beforeEach(() => {
-  const appAdapter = createAppCanvasRuntimeAppAdapter()
+  const appAdapter = createAppCanvasRuntimeAppAdapter({ presentationData: {} })
   history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
   })

@@ -2,9 +2,9 @@ import { batch, effect } from '@preact/signals'
 import type {
   CanvasRuntimeAppAdapter,
   CanvasRuntimeLayerProjectionSource,
+  CanvasRuntimePresentationDataAdapter,
+  CanvasRuntimeSavedObjectStampAdapter,
 } from '../../canvas/runtime/app-adapter'
-import { CanvasPlantLabelResolver } from '../../canvas/runtime/plant-labels'
-import { CanvasSpeciesCache } from '../../canvas/runtime/species-cache'
 import {
   gridVisible,
   layerLockState,
@@ -18,25 +18,25 @@ import { mutateSettingsProjection } from '../settings/projection'
 import { locale, plantSpacingIntervalM, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
-import { savedObjectStampWorkbench } from '../saved-object-stamps'
 import { t } from '../../i18n'
 
 const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
 
-export function createAppCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
-  const plantLabels = new CanvasPlantLabelResolver()
-  const speciesCache = new CanvasSpeciesCache()
+export interface CanvasRuntimeAppCapabilities {
+  readonly presentationData: CanvasRuntimePresentationDataAdapter
+  readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
+}
 
+export function createAppCanvasRuntimeAppAdapter(
+  capabilities: CanvasRuntimeAppCapabilities,
+): CanvasRuntimeAppAdapter {
   return {
     cleanState: { setCanvasClean },
     document: { composeDocumentForSave },
-    savedObjectStamps: {
-      saveCurrentSelection: (capture) => savedObjectStampWorkbench.saveSelection(capture),
-    },
-    presentationData: {
-      plantLabels,
-      speciesCache,
-    },
+    ...(capabilities.savedObjectStamps
+      ? { savedObjectStamps: capabilities.savedObjectStamps }
+      : {}),
+    presentationData: capabilities.presentationData,
     translate: t,
     settings: {
       readLocale: () => locale.value,

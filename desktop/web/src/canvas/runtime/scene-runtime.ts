@@ -176,10 +176,12 @@ export class SceneCanvasRuntime {
         settledReader: this._settledReader,
         getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
         selectionCommands: this._commandSurface.sceneEdits,
-        contextualCommands: {
-          saveSelectionAsObjectStamp: () =>
-            this._commandSurface.sceneEdits.saveSelectionAsObjectStamp(),
-        },
+        contextualCommands: this._appAdapter.savedObjectStamps
+          ? {
+              saveSelectionAsObjectStamp: () =>
+                this._commandSurface.sceneEdits.saveSelectionAsObjectStamp(),
+            }
+          : undefined,
         setTool: (name) => this._commandSurface.tools.setTool(name),
         render: (kind) => this._invalidate(kind),
         readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),

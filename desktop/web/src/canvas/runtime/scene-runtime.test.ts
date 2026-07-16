@@ -29,6 +29,7 @@ import {
   selectedPanelTargets,
 } from '../../app/panel-targets/state'
 import { createAppCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/app-adapter'
+import { createDesktopCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/desktop-adapter'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
@@ -782,7 +783,7 @@ describe('scene canvas runtime', () => {
 
   it('restores the previous tool adapter when post-transition refresh fails', async () => {
     const runtime = new SceneCanvasRuntime({
-      appAdapter: createAppCanvasRuntimeAppAdapter(),
+      appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
@@ -918,7 +919,7 @@ describe('scene canvas runtime', () => {
     ])
     const runtime = new SceneCanvasRuntime({
       appAdapter: {
-        ...createAppCanvasRuntimeAppAdapter(),
+        ...createDesktopCanvasRuntimeAppAdapter(),
         settings: createTestSettingsAdapter(),
         savedObjectStamps: { saveCurrentSelection },
       },
@@ -949,6 +950,35 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.saveSelectionAsObjectStamp()
     expect(saveCurrentSelection).toHaveBeenCalledTimes(2)
     runtime.destroy()
+  })
+
+  it('advertises Saved Object Stamp actions only when the edition supplies the capability', async () => {
+    const withoutStamps = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
+    })
+    const withoutStampsMount = await initRuntimeWithStubbedRenderer(withoutStamps)
+    withoutStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    withoutStamps.commandSurface.sceneEdits.selectAll()
+
+    expect(withoutStampsMount.container.querySelector(
+      '[data-selection-action-command="save-object-stamp"]',
+    )).toBeNull()
+    withoutStamps.destroy()
+
+    const withStamps = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter({
+        presentationData: {},
+        savedObjectStamps: { saveCurrentSelection: vi.fn() },
+      }),
+    })
+    const withStampsMount = await initRuntimeWithStubbedRenderer(withStamps)
+    withStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    withStamps.commandSurface.sceneEdits.selectAll()
+
+    expect(withStampsMount.container.querySelector(
+      '[data-selection-action-command="save-object-stamp"]',
+    )).not.toBeNull()
+    withStamps.destroy()
   })
 
   it('groups, duplicates, and deletes grouped scene entities', () => {
@@ -1136,7 +1166,7 @@ describe('scene canvas runtime', () => {
 
   it('toggles snap-to-grid through shared canvas state', () => {
     const runtime = new SceneCanvasRuntime({
-      appAdapter: createAppCanvasRuntimeAppAdapter(),
+      appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
 
     runtime.commandSurface.chrome.toggleSnapToGrid()
@@ -2762,7 +2792,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({
       appAdapter: {
         ...cleanState.adapter,
-        settings: createAppCanvasRuntimeAppAdapter().settings,
+        settings: createDesktopCanvasRuntimeAppAdapter().settings,
       },
     })
     const file = makeFile()
@@ -2848,7 +2878,7 @@ describe('scene canvas runtime', () => {
       .mockResolvedValueOnce({ 'Malus domestica': 'Pommier' })
 
     const runtime = new SceneCanvasRuntime({
-      appAdapter: createAppCanvasRuntimeAppAdapter(),
+      appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
@@ -2875,7 +2905,7 @@ describe('scene canvas runtime', () => {
       .mockResolvedValueOnce({ 'Malus domestica': 'Pommier' })
 
     const runtime = new SceneCanvasRuntime({
-      appAdapter: createAppCanvasRuntimeAppAdapter(),
+      appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
@@ -2907,7 +2937,7 @@ describe('scene canvas runtime', () => {
     }))
 
     const runtime = new SceneCanvasRuntime({
-      appAdapter: createAppCanvasRuntimeAppAdapter(),
+      appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
     runtime.documentSurface.loadDocument(makeFile())
     runtime.commandSurface.sceneEdits.selectAll()

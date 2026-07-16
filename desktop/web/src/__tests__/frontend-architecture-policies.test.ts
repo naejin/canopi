@@ -76,6 +76,40 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Shared Canvas Runtime app composition stays capability-neutral',
+    from: ['src/app/canvas-runtime/app-adapter.ts'],
+    targets: [
+      '@tauri-apps/**',
+      'src/web/**',
+      'src/ipc/**',
+      'src/canvas/runtime/plant-labels.ts',
+      'src/canvas/runtime/species-cache.ts',
+      'src/app/saved-object-stamps/**',
+      'src/app/canvas-runtime/desktop-adapter.ts',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Browser Canvas Runtime composes capabilities instead of app policy',
+    from: ['src/web/browser-canvas-runtime.ts'],
+    targets: [
+      'src/ipc/**',
+      'src/app/canvas-settings/**',
+      'src/app/settings/**',
+      'src/app/contracts/document.ts',
+      'src/app/document-session/**',
+      'src/app/saved-object-stamps/**',
+      'src/app/canvas-runtime/desktop-adapter.ts',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Scene Canvas Runtime host stays in runtime core',
+    from: ['src/canvas/runtime/host.ts'],
+    targets: ['@tauri-apps/**', 'src/app/**', 'src/web/**', 'src/ipc/**'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Neutral shell command catalog stays platform-neutral',
     from: ['src/app/shell-commands/**'],
     targets: [
@@ -600,7 +634,6 @@ const CONFINED_IMPORTER_POLICIES = [
     targets: ['src/app/settings/projection.ts'],
     allowedFrom: [
       'src/web/BrowserAppShell.tsx',
-      'src/web/browser-canvas-runtime.ts',
       'src/web/browser-shell-commands.ts',
     ],
   },
@@ -715,7 +748,6 @@ const REQUIRED_IMPORT_POLICIES = [
     name: 'Web settings callers mutate through the shared projection',
     from: [
       'src/web/BrowserAppShell.tsx',
-      'src/web/browser-canvas-runtime.ts',
       'src/web/browser-shell-commands.ts',
     ],
     targets: ['src/app/settings/projection.ts'],
@@ -1002,9 +1034,27 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Canvas Runtime host constructs the app adapter',
+    name: 'Desktop Canvas Runtime host constructs the Desktop capability adapter',
     from: ['src/app/canvas-runtime/host.ts'],
+    targets: ['src/app/canvas-runtime/desktop-adapter.ts'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Edition Canvas Runtime adapters delegate shared app policy',
+    from: [
+      'src/app/canvas-runtime/desktop-adapter.ts',
+      'src/web/browser-canvas-runtime.ts',
+    ],
     targets: ['src/app/canvas-runtime/app-adapter.ts'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Edition Canvas Runtime hosts delegate the concrete runtime wrapper',
+    from: [
+      'src/app/canvas-runtime/host.ts',
+      'src/web/browser-canvas-runtime.ts',
+    ],
+    targets: ['src/canvas/runtime/host.ts'],
   },
   {
     kind: 'require-imports',
@@ -1584,9 +1634,15 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   },
   {
     kind: 'forbid-source-symbols',
-    name: 'Canvas Runtime Host delegates presentation data to the App Adapter',
-    from: ['src/app/canvas-runtime/host.ts'],
-    names: ['CanvasPlantLabelResolver', 'CanvasSpeciesCache'],
+    name: 'Shared Canvas Runtime app composition does not construct edition capabilities',
+    from: ['src/app/canvas-runtime/app-adapter.ts'],
+    names: [
+      'CanvasPlantLabelResolver',
+      'CanvasSpeciesCache',
+      'savedObjectStampWorkbench',
+      'createDetachedCanvasPlantLabelSource',
+      'createDetachedCanvasSpeciesPresentationCache',
+    ],
   },
   {
     kind: 'forbid-source-symbols',
@@ -1647,10 +1703,17 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     targets: ['locale.value', 'theme.value'],
   },
   {
-    kind: 'forbid-writes',
-    name: 'Web Canvas settings mutations cross the shared projection',
+    kind: 'forbid-source-symbols',
+    name: 'Browser Canvas Runtime does not rebuild shared app policy',
     from: ['src/web/browser-canvas-runtime.ts'],
-    targets: ['plantSpacingIntervalM.value', 'snapToGridEnabled.value'],
+    names: [
+      'APP_OWNED_LAYER_PROJECTIONS',
+      'mutateSettingsProjection',
+      'syncFromLayers',
+      'syncLayer',
+      'setCanvasClean',
+      'composeDocumentForSave',
+    ],
   },
   {
     kind: 'forbid-writes',

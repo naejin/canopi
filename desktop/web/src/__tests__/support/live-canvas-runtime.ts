@@ -1,4 +1,4 @@
-import { createSceneCanvasRuntimeHost } from '../../app/canvas-runtime/host'
+import { createSceneCanvasRuntimeHost } from '../../canvas/runtime/host'
 import { SceneCanvasRuntime, type SceneCanvasRuntimeOptions } from '../../canvas/runtime/scene-runtime'
 import type { CanvasRuntimeHost } from '../../canvas/runtime/runtime'
 
