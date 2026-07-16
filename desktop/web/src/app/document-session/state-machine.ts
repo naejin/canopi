@@ -752,6 +752,7 @@ export class DesignSessionStateMachine {
         return;
       }
       if (result.status === "failed") {
+        if (!isStillPending()) return;
         console.error("Queued document load failed:", result.error);
         void this.deps.showMessage(`Failed to open ${label}.\n\n${formatError(result.error)}`, {
           title: "Open failed",
