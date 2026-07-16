@@ -308,7 +308,7 @@ pub fn search_species(
     };
 
     {
-        hydrate_search_favorites(user_db, &mut result.items);
+        hydrate_favorite_flags(user_db, &mut result.items);
     }
 
     Ok(result)
@@ -382,7 +382,7 @@ pub async fn search_species_async_cancellable(
                     cancellation.ensure_current()?;
                 }
 
-                hydrate_search_favorites(&user_db, &mut result.items);
+                hydrate_favorite_flags(&user_db, &mut result.items);
 
                 if let Some(cancellation) = &cancellation {
                     cancellation.ensure_current()?;
@@ -394,7 +394,7 @@ pub async fn search_species_async_cancellable(
         .await
 }
 
-fn hydrate_search_favorites(user_db: &UserDb, items: &mut [SpeciesListItem]) {
+pub(crate) fn hydrate_favorite_flags(user_db: &UserDb, items: &mut [SpeciesListItem]) {
     let conn = user_db.acquire();
     for item in items {
         item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name);
@@ -431,57 +431,58 @@ pub fn toggle_favorite(user_db: &UserDb, canonical_name: String) -> Result<bool,
         .map_err(|e| format!("Failed to toggle favorite for '{canonical_name}': {e}"))
 }
 
+pub(crate) fn get_favorite_names(user_db: &UserDb) -> Result<Vec<String>, String> {
+    let conn = user_db.acquire();
+    crate::db::user_db::get_favorite_names(&conn)
+        .map_err(|e| format!("Failed to read favorites: {e}"))
+}
+
+pub(crate) fn get_recently_viewed_names(
+    user_db: &UserDb,
+    limit: u32,
+) -> Result<Vec<String>, String> {
+    let conn = user_db.acquire();
+    crate::db::user_db::get_recently_viewed_names(&conn, limit)
+        .map_err(|e| format!("Failed to read recently viewed: {e}"))
+}
+
+pub(crate) fn project_personal_species_list_items(
+    plant_db: &PlantDb,
+    names: Vec<String>,
+    locale: String,
+) -> Result<Vec<SpeciesListItem>, String> {
+    if names.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let conn = db::require_plant_db(plant_db)?;
+    SpeciesCatalogRead::new(&conn).list_items_for_canonical_names(&names, &locale)
+}
+
+#[cfg(test)]
 pub fn get_favorites(
     user_db: &UserDb,
     plant_db: &PlantDb,
     locale: String,
 ) -> Result<Vec<SpeciesListItem>, String> {
-    let names = {
-        let conn = user_db.acquire();
-        crate::db::user_db::get_favorite_names(&conn)
-            .map_err(|e| format!("Failed to read favorites: {e}"))?
-    };
-
-    if names.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let conn = db::require_plant_db(plant_db)?;
-    let mut items =
-        SpeciesCatalogRead::new(&conn).list_items_for_canonical_names(&names, &locale)?;
+    let names = get_favorite_names(user_db)?;
+    let mut items = project_personal_species_list_items(plant_db, names, locale)?;
     for item in &mut items {
         item.is_favorite = true;
     }
     Ok(items)
 }
 
+#[cfg(test)]
 pub fn get_recently_viewed(
     user_db: &UserDb,
     plant_db: &PlantDb,
     locale: String,
     limit: u32,
 ) -> Result<Vec<SpeciesListItem>, String> {
-    let names = {
-        let conn = user_db.acquire();
-        crate::db::user_db::get_recently_viewed_names(&conn, limit)
-            .map_err(|e| format!("Failed to read recently viewed: {e}"))?
-    };
-
-    if names.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let mut items = {
-        let plant_conn = db::require_plant_db(plant_db)?;
-        SpeciesCatalogRead::new(&plant_conn).list_items_for_canonical_names(&names, &locale)?
-    };
-
-    {
-        let user_conn = user_db.acquire();
-        for item in &mut items {
-            item.is_favorite = crate::db::user_db::is_favorite(&user_conn, &item.canonical_name);
-        }
-    }
+    let names = get_recently_viewed_names(user_db, limit)?;
+    let mut items = project_personal_species_list_items(plant_db, names, locale)?;
+    hydrate_favorite_flags(user_db, &mut items);
 
     Ok(items)
 }

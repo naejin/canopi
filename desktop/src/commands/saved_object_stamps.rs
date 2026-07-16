@@ -5,44 +5,94 @@ use common_types::saved_object_stamps::SavedObjectStamp;
 use tauri::State;
 
 #[tauri::command]
-pub fn get_saved_object_stamps(
-    user_db: tauri::State<'_, UserDb>,
+pub async fn get_saved_object_stamps(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
 ) -> Result<Vec<SavedObjectStamp>, String> {
-    crate::services::saved_object_stamps::get_saved_object_stamps(&user_db)
+    let user_db = user_db.inner().clone();
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "saved object stamp read",
+            move || crate::services::saved_object_stamps::get_saved_object_stamps(&user_db),
+        )
+        .await
 }
 
 #[tauri::command]
-pub fn create_saved_object_stamp(
-    user_db: tauri::State<'_, UserDb>,
+pub async fn create_saved_object_stamp(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
     name: String,
     payload_json: String,
 ) -> Result<SavedObjectStamp, String> {
-    crate::services::saved_object_stamps::create_saved_object_stamp(&user_db, name, payload_json)
+    let user_db = user_db.inner().clone();
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "saved object stamp create",
+            move || {
+                crate::services::saved_object_stamps::create_saved_object_stamp(
+                    &user_db,
+                    name,
+                    payload_json,
+                )
+            },
+        )
+        .await
 }
 
 #[tauri::command]
-pub fn rename_saved_object_stamp(
-    user_db: tauri::State<'_, UserDb>,
+pub async fn rename_saved_object_stamp(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
     id: String,
     name: String,
 ) -> Result<SavedObjectStamp, String> {
-    crate::services::saved_object_stamps::rename_saved_object_stamp(&user_db, id, name)
+    let user_db = user_db.inner().clone();
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "saved object stamp rename",
+            move || {
+                crate::services::saved_object_stamps::rename_saved_object_stamp(&user_db, id, name)
+            },
+        )
+        .await
 }
 
 #[tauri::command]
-pub fn delete_saved_object_stamp(
-    user_db: tauri::State<'_, UserDb>,
+pub async fn delete_saved_object_stamp(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
     id: String,
 ) -> Result<bool, String> {
-    crate::services::saved_object_stamps::delete_saved_object_stamp(&user_db, id)
+    let user_db = user_db.inner().clone();
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "saved object stamp delete",
+            move || crate::services::saved_object_stamps::delete_saved_object_stamp(&user_db, id),
+        )
+        .await
 }
 
 #[tauri::command]
-pub fn reorder_saved_object_stamps(
-    user_db: tauri::State<'_, UserDb>,
+pub async fn reorder_saved_object_stamps(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
     ids: Vec<String>,
 ) -> Result<Vec<SavedObjectStamp>, String> {
-    crate::services::saved_object_stamps::reorder_saved_object_stamps(&user_db, ids)
+    let user_db = user_db.inner().clone();
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "saved object stamp reorder",
+            move || {
+                crate::services::saved_object_stamps::reorder_saved_object_stamps(&user_db, ids)
+            },
+        )
+        .await
 }
 
 #[tauri::command]

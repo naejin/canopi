@@ -52,8 +52,18 @@ pub async fn load_design(
 
 /// Return up to 20 recently opened files, most recent first.
 #[tauri::command]
-pub fn get_recent_files(user_db: tauri::State<'_, UserDb>) -> Result<Vec<DesignSummary>, String> {
-    crate::services::design_files::get_recent_files(&user_db)
+pub async fn get_recent_files(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
+) -> Result<Vec<DesignSummary>, String> {
+    let user_db = user_db.inner().clone();
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "recent designs read",
+            move || crate::services::design_files::get_recent_files(&user_db),
+        )
+        .await
 }
 
 /// Autosave `content` to the autosave directory.
