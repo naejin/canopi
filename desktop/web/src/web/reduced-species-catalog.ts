@@ -11,6 +11,7 @@ import {
   admittedSpeciesSearchText,
   EMPTY_ADMITTED_SPECIES_SEARCH_TEXT,
   normalizedSpeciesSearchMatchTier,
+  speciesSearchAdmission,
   type AdmittedSpeciesSearchText,
   type SpeciesSearchMatchTier,
 } from '../utils/species-search-normalization'
@@ -177,6 +178,13 @@ export function createInMemoryReducedSpeciesCatalogReader(
 
   return {
     async searchSpecies(request, favoriteNames) {
+      if (speciesSearchAdmission(request.text) === 'too-short') {
+        return {
+          items: [],
+          next_cursor: null,
+          total_estimate: 0,
+        }
+      }
       const searchText = admittedSpeciesSearchText(request.text)
       const offset = cursorToOffset(request.cursor)
       const matched = species.filter((row) => (
