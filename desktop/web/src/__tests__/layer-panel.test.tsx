@@ -142,6 +142,22 @@ describe('LayerPanel', () => {
     expect(layerVisibility.value.base).toBe(false)
   })
 
+  it('updates mounted Layer chrome when only the locale changes', async () => {
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+
+    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Layers')
+    expect(container.textContent).toContain('Basemap')
+
+    await act(async () => {
+      locale.value = 'fr'
+    })
+
+    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Calques')
+    expect(container.textContent).toContain('Fond de carte')
+  })
+
   it('does not expose basemap style selection in the base layer controls', async () => {
     await act(async () => {
       render(<LayerPanel />, container)

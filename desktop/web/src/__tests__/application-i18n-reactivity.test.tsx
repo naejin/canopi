@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { plantDbStatus } from '../app/health/state'
 import { locale } from '../app/settings/state'
+import { commandPaletteOpen } from '../commands/registry'
+import { CommandPalette } from '../components/shared/CommandPalette'
 import { DegradedBanner } from '../components/shared/DegradedBanner'
 import { t } from '../i18n'
 
@@ -17,12 +19,14 @@ describe('application translation authority', () => {
     locale.value = 'en'
     await i18n.changeLanguage('en')
     plantDbStatus.value = 'missing'
+    commandPaletteOpen.value = false
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
     plantDbStatus.value = 'available'
+    commandPaletteOpen.value = false
     locale.value = 'en'
     vi.restoreAllMocks()
   })
@@ -52,5 +56,24 @@ describe('application translation authority', () => {
     expect(t('plantDb.placeSpecies', { name: 'Poirier' })).toBe('Placer Poirier')
     expect(t('worldMap.plantCount', { count: 4 })).toBe('4 plantes')
     expect(t('missing.test.key', 'Fallback label')).toBe('Fallback label')
+  })
+
+  it('updates an open command palette and its command labels when only locale changes', async () => {
+    commandPaletteOpen.value = true
+    await act(async () => {
+      render(<CommandPalette />, container)
+    })
+
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
+      .toBe('Command Palette')
+    expect(container.textContent).toContain('New Design')
+
+    await act(async () => {
+      locale.value = 'fr'
+    })
+
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
+      .toBe('Palette de commandes')
+    expect(container.textContent).toContain('Nouveau design')
   })
 })
