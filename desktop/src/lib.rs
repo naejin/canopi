@@ -1,10 +1,10 @@
-mod blocking;
 mod commands;
 mod db;
 mod design;
 mod http;
 mod image_cache;
 mod logging;
+mod native_operation;
 mod platform;
 mod services;
 
@@ -115,6 +115,9 @@ pub fn run() {
             std::fs::create_dir_all(&log_dir)?;
             logging::init(&log_dir);
             tracing::info!("Canopi starting");
+
+            app.manage(native_operation::NativeOperationExecutor::production());
+            tracing::info!("Native operation executor initialized");
 
             // User DB (writable, in app data dir)
             let data_dir = app.path().app_data_dir()?;

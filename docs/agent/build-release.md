@@ -122,6 +122,15 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 - macOS and Windows platform code is stubbed behind `#[cfg(target_os = "...")]`.
 - CI validates platform compilation on actual platforms.
 
+## Native Operation Executor
+
+- Async commands must send blocking native work through the Tauri-managed `NativeOperationExecutor`; direct `spawn_blocking` calls outside `desktop/src/native_operation.rs` are an architecture violation. Synchronous command migration is tracked separately.
+- Classify operations by the constrained resource they consume: Species Catalog reads use `Catalog`, user app-data persistence uses `UserData`, Design/file/export work uses `Local`, and HTTP or remote-asset work uses `Network`.
+- Production admitted/running limits are Catalog 8/1, User Data 8/1, Local 6/2, and Network 12/4. Admission is immediate: a full class returns its stable busy error instead of creating another waiter. Admitted operations wait FIFO for their class's running capacity, while classes remain isolated.
+- Both admission and running permits move into a started blocking closure. Dropping an async caller may cancel queued work, but it must not release capacity for native work that can no longer be aborted.
+- Operation labels must be static and payload-safe. Trace class, label, settlement, and timings; never trace request values, paths, URLs, Design content, or returned error payloads at this boundary.
+- The direct Tokio dependency enables only `sync` and supplies owned semaphores for Tauri's existing Tokio runtime. Do not construct a second runtime or expand Tokio features without a separate need.
+
 ## Linux Native
 
 - Linux native code uses Cairo PNG/PDF.

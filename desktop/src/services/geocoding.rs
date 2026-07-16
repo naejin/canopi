@@ -12,8 +12,17 @@ struct NominatimResult {
 
 const MAX_GEOCODING_BYTES: u64 = 1024 * 1024;
 
-pub async fn geocode_address(query: String) -> Result<Vec<GeoResult>, String> {
-    crate::blocking::run_blocking("geocoding", move || geocode_address_blocking(query)).await
+pub async fn geocode_address(
+    executor: &crate::native_operation::NativeOperationExecutor,
+    query: String,
+) -> Result<Vec<GeoResult>, String> {
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Network,
+            "geocoding",
+            move || geocode_address_blocking(query),
+        )
+        .await
 }
 
 fn geocode_address_blocking(query: String) -> Result<Vec<GeoResult>, String> {

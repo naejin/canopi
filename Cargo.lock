@@ -443,6 +443,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-mcp-bridge",
  "tauri-plugin-single-instance",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

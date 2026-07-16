@@ -315,73 +315,83 @@ pub fn search_species(
 }
 
 pub async fn search_species_async(
+    executor: &crate::native_operation::NativeOperationExecutor,
     plant_db: PlantDb,
     user_db: UserDb,
     request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    crate::blocking::run_blocking("species search", move || {
-        search_species(&plant_db, &user_db, request)
-    })
-    .await
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Catalog,
+            "species search",
+            move || search_species(&plant_db, &user_db, request),
+        )
+        .await
 }
 
 pub async fn search_species_async_cancellable(
+    executor: &crate::native_operation::NativeOperationExecutor,
     plant_db: PlantDb,
     user_db: UserDb,
     request: SpeciesSearchRequest,
     cancellation: Option<SpeciesSearchCancellationToken>,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    crate::blocking::run_blocking("species search", move || {
-        if let Some(cancellation) = &cancellation {
-            cancellation.ensure_current()?;
-        }
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Catalog,
+            "species search",
+            move || {
+                if let Some(cancellation) = &cancellation {
+                    cancellation.ensure_current()?;
+                }
 
-        let mut result = {
-            let conn = db::require_plant_db(&plant_db)?;
-            let _progress = cancellation
-                .as_ref()
-                .map(|cancellation| cancellation.install_progress_handler(&conn));
-            let _running = cancellation
-                .as_ref()
-                .map(|cancellation| cancellation.mark_running())
-                .transpose()?;
-            #[cfg(test)]
-            if let Some(cancellation) = &cancellation {
-                cancellation.cancellation.run_after_mark_running_hook();
-            }
-            if let Some(cancellation) = &cancellation {
-                cancellation.ensure_current()?;
-            }
-            match SpeciesCatalogRead::new(&conn).search(request) {
-                Ok(result) => {
+                let mut result = {
+                    let conn = db::require_plant_db(&plant_db)?;
+                    let _progress = cancellation
+                        .as_ref()
+                        .map(|cancellation| cancellation.install_progress_handler(&conn));
+                    let _running = cancellation
+                        .as_ref()
+                        .map(|cancellation| cancellation.mark_running())
+                        .transpose()?;
                     #[cfg(test)]
                     if let Some(cancellation) = &cancellation {
-                        cancellation.cancellation.run_after_search_success_hook();
+                        cancellation.cancellation.run_after_mark_running_hook();
                     }
-                    result
-                }
-                Err(error) => {
                     if let Some(cancellation) = &cancellation {
                         cancellation.ensure_current()?;
                     }
-                    return Err(error);
+                    match SpeciesCatalogRead::new(&conn).search(request) {
+                        Ok(result) => {
+                            #[cfg(test)]
+                            if let Some(cancellation) = &cancellation {
+                                cancellation.cancellation.run_after_search_success_hook();
+                            }
+                            result
+                        }
+                        Err(error) => {
+                            if let Some(cancellation) = &cancellation {
+                                cancellation.ensure_current()?;
+                            }
+                            return Err(error);
+                        }
+                    }
+                };
+
+                if let Some(cancellation) = &cancellation {
+                    cancellation.ensure_current()?;
                 }
-            }
-        };
 
-        if let Some(cancellation) = &cancellation {
-            cancellation.ensure_current()?;
-        }
+                hydrate_search_favorites(&user_db, &mut result.items);
 
-        hydrate_search_favorites(&user_db, &mut result.items);
+                if let Some(cancellation) = &cancellation {
+                    cancellation.ensure_current()?;
+                }
 
-        if let Some(cancellation) = &cancellation {
-            cancellation.ensure_current()?;
-        }
-
-        Ok(result)
-    })
-    .await
+                Ok(result)
+            },
+        )
+        .await
 }
 
 fn hydrate_search_favorites(user_db: &UserDb, items: &mut [SpeciesListItem]) {
@@ -484,6 +494,7 @@ mod tests {
         search_species_async_cancellable, toggle_favorite,
     };
     use crate::db::{self, PlantDb, UserDb};
+    use crate::native_operation::NativeOperationExecutor;
     use common_types::species::{Sort, SpeciesFilter, SpeciesSearchRequest};
     use rusqlite::Connection;
     use std::{
@@ -615,6 +626,10 @@ mod tests {
         UserDb::initialize(conn).unwrap()
     }
 
+    fn test_executor() -> NativeOperationExecutor {
+        NativeOperationExecutor::production()
+    }
+
     fn search_request(
         text: &str,
         filters: SpeciesFilter,
@@ -674,8 +689,10 @@ mod tests {
         let user_db = test_user_db();
 
         toggle_favorite(&user_db, "Malus domestica".to_owned()).unwrap();
+        let executor = test_executor();
 
         let result = tauri::async_runtime::block_on(search_species_async(
+            &executor,
             plant_db.clone(),
             user_db.clone(),
             search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
@@ -693,11 +710,13 @@ mod tests {
         let plant_db = test_plant_db();
         let user_db = test_user_db();
         let cancellation = SpeciesSearchCancellation::default();
+        let executor = test_executor();
 
         let first = cancellation.begin(plant_db.interrupt_handle().unwrap());
         let _second = cancellation.begin(plant_db.interrupt_handle().unwrap());
 
         let error = tauri::async_runtime::block_on(search_species_async_cancellable(
+            &executor,
             plant_db,
             user_db,
             search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
@@ -730,9 +749,11 @@ mod tests {
         cancellation.set_after_search_success_hook(move || {
             hook_query_completed.store(true, Ordering::SeqCst);
         });
+        let executor = test_executor();
 
         let search = std::thread::spawn(move || {
             tauri::async_runtime::block_on(search_species_async_cancellable(
+                &executor,
                 plant_db,
                 user_db,
                 search_request("Malus", SpeciesFilter::default(), 10, true, "en"),

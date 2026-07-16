@@ -18,6 +18,7 @@ use common_types::species::{
 pub async fn search_species(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
     user_db: tauri::State<'_, crate::db::UserDb>,
+    executor: tauri::State<'_, crate::native_operation::NativeOperationExecutor>,
     search_cancellation: tauri::State<
         '_,
         crate::services::plant_browser::SpeciesSearchCancellation,
@@ -48,6 +49,7 @@ pub async fn search_species(
     let user_db = user_db.inner().clone();
     if let Some(cancellation) = cancellation {
         crate::services::plant_browser::search_species_async_cancellable(
+            executor.inner(),
             plant_db,
             user_db,
             request,
@@ -55,7 +57,13 @@ pub async fn search_species(
         )
         .await
     } else {
-        crate::services::plant_browser::search_species_async(plant_db, user_db, request).await
+        crate::services::plant_browser::search_species_async(
+            executor.inner(),
+            plant_db,
+            user_db,
+            request,
+        )
+        .await
     }
 }
 
@@ -157,6 +165,7 @@ pub fn get_locale_common_names(
 #[tauri::command]
 pub async fn get_cached_image_path(
     cache: State<'_, crate::image_cache::ImageCache>,
+    executor: State<'_, crate::native_operation::NativeOperationExecutor>,
     url: String,
 ) -> Result<String, String> {
     if let Some(path) = cache.cached_path_if_present(&url) {
@@ -164,10 +173,15 @@ pub async fn get_cached_image_path(
     }
 
     let cache = cache.inner().clone();
-    crate::blocking::run_blocking("image cache fetch", move || {
-        cache
-            .fetch_and_cache(&url)
-            .map(|path| path.to_string_lossy().to_string())
-    })
-    .await
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Network,
+            "image cache fetch",
+            move || {
+                cache
+                    .fetch_and_cache(&url)
+                    .map(|path| path.to_string_lossy().to_string())
+            },
+        )
+        .await
 }
