@@ -53,6 +53,7 @@ import type {
 } from './app-adapter'
 import { resolvePersistedNorthBearingDeg } from './document-metadata'
 import { getCommonNames } from '../../ipc/species'
+import { t } from '../../i18n'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
 
 const plantTarget = (id: string) => ({ kind: 'plant' as const, id })
@@ -283,6 +284,7 @@ function createCleanStateAdapterProbe() {
       cleanState: { setCanvasClean },
       document: { composeDocumentForSave: composeTestDocumentForSave },
       settings: createTestSettingsAdapter(),
+      translate: t,
     } satisfies CanvasRuntimeAppAdapter,
     setCanvasClean,
   }
@@ -423,6 +425,39 @@ describe('scene canvas runtime', () => {
     plantSpacingIntervalM.value = 0.5
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
+  })
+
+  it('routes locale subscriptions through the mounted interaction translation refresh', async () => {
+    let language = 'en'
+    let notifyLocale = (): void => {}
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...cleanState.adapter,
+        translate: (key, options?: Readonly<Record<string, unknown>>) =>
+          `${language}:${key}${options?.count === undefined ? '' : `:${String(options.count)}`}`,
+        settings: createTestSettingsAdapter({
+          subscribeLocale: (onChange) => {
+            notifyLocale = onChange
+            onChange()
+            return () => {}
+          },
+        }),
+      },
+    })
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    runtime.commandSurface.tools.setTool('plant-spacing')
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+
+    expect(hud.textContent).toContain('en:canvas.plantSpacing.selectSource')
+
+    language = 'fr'
+    notifyLocale()
+
+    expect(container.querySelector('[data-plant-spacing-hud]')).toBe(hud)
+    expect(hud.style.display).toBe('block')
+    expect(hud.textContent).toContain('fr:canvas.plantSpacing.selectSource')
+    runtime.destroy()
   })
 
   it('rolls back effects acquired before a later subscription fails', () => {
@@ -746,7 +781,9 @@ describe('scene canvas runtime', () => {
   })
 
   it('restores the previous tool adapter when post-transition refresh fails', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter(),
+    })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1907,6 +1944,7 @@ describe('scene canvas runtime', () => {
         cleanState: { setCanvasClean: () => {} },
         document: { composeDocumentForSave },
         settings: createTestSettingsAdapter(),
+        translate: t,
       },
     })
     const file = makeFile()

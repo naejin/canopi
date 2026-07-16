@@ -82,6 +82,7 @@ import {
 } from './interaction/measurement-guide-control-points'
 import type { ControlPointOverlayController } from './interaction/control-point-overlay'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
+import type { CanvasRuntimeTranslator } from './app-adapter'
 import {
   createLockedObjectAffordance,
   type LockedObjectAffordanceController,
@@ -148,6 +149,7 @@ export interface SceneInteractionSessionDeps {
   readSnapToGuidesEnabled: () => boolean
   readPlantSpacingIntervalMeters: () => number
   commitPlantSpacingIntervalMeters: (meters: number) => void
+  translate: CanvasRuntimeTranslator
   setHoveredTarget: (target: SceneDesignObjectTarget | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   notifyTransientHistoryChange?: () => void
@@ -157,6 +159,7 @@ export interface SceneInteractionSession {
   setTool(name: string): void
   prepareForDocumentReplacement(): void
   refreshMeasurements(): void
+  refreshTranslations(): void
   canUndoTransientHistory(): boolean
   canRedoTransientHistory(): boolean
   undoTransientHistory(): boolean
@@ -221,6 +224,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         getLocalizedCommonNames: this._deps.getLocalizedCommonNames,
         readPlantSpacingIntervalMeters: this._deps.readPlantSpacingIntervalMeters,
         commitPlantSpacingIntervalMeters: this._deps.commitPlantSpacingIntervalMeters,
+        translate: this._deps.translate,
         switchTool: (name) => this._switchTool(name),
         applySnapping: (point) => this._applySnapping(point),
         getContainerRect: () => this._currentContainerRect(),
@@ -259,11 +263,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         camera: this._deps.camera,
         getSelection: this._deps.getDesignObjectSelection,
         commands: this._deps.selectionCommands,
+        translate: this._deps.translate,
         saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
       }), (toolbar) => toolbar.dispose())
       this._contextMenu = own(createCanvasContextMenu({
         container: this._deps.container,
         commands: this._deps.selectionCommands,
+        translate: this._deps.translate,
         getSelection: this._deps.getDesignObjectSelection,
         saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
       }), (menu) => menu.dispose())
@@ -274,6 +280,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         getSelection: this._deps.getDesignObjectSelection,
         sceneEdits: this._deps.sceneEdits,
         render: this._deps.render,
+        translate: this._deps.translate,
         refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
       }), (handle) => handle.dispose())
       const controlPointOverlayOptions = {
@@ -300,6 +307,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       ]
       this._lockedAffordance = own(createLockedObjectAffordance({
         container: this._deps.container,
+        translate: this._deps.translate,
         onUnlock: (target) => this._unlockLockedObject(target),
       }), (affordance) => affordance.dispose())
       this.setTool(getCanvasTool())
@@ -414,6 +422,15 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   refreshMeasurements(): void {
     if (this._disposed) return
     this._refreshViewportDependentMeasurements()
+  }
+
+  refreshTranslations(): void {
+    if (this._disposed) return
+    this._selectionToolbar.refreshTranslations()
+    this._contextMenu.refreshTranslations()
+    this._rotationHandle.refreshTranslations()
+    this._lockedAffordance.refreshTranslations()
+    this._forEachUniqueToolHook('refreshTranslations', (refresh) => refresh())
   }
 
   canUndoTransientHistory(): boolean {
@@ -1133,7 +1150,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _forEachUniqueToolHook(
-    hook: 'refreshSelectionDependent' | 'dispose',
+    hook: 'refreshSelectionDependent' | 'refreshTranslations' | 'dispose',
     visit: (callback: () => void) => void,
   ): void {
     const callbacks = new Set<() => void>()

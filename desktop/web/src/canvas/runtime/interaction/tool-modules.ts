@@ -32,6 +32,7 @@ import {
 import type {
   SceneToolAdapter,
 } from './tool-adapter'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import {
   createTextAnnotationTool,
   createTextAnnotationToolAdapter,
@@ -51,6 +52,7 @@ export interface SceneToolRegistryContext {
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   readonly readPlantSpacingIntervalMeters: () => number
   readonly commitPlantSpacingIntervalMeters: (meters: number) => void
+  readonly translate: CanvasRuntimeTranslator
   readonly getSelection: () => SceneDesignObjectSelection
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
@@ -126,6 +128,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       getLocalizedCommonNames: context.getLocalizedCommonNames,
       readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters,
       commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters,
+      translate: context.translate,
       sceneEdits: context.sceneEdits,
       switchTool: context.switchTool,
       applySnapping: context.applySnapping,

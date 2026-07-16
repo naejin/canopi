@@ -440,6 +440,13 @@ const FORBIDDEN_IMPORT_POLICIES = [
     targets: ['src/app.tsx', 'src/app/**'],
   },
   {
+    kind: 'forbid-transitive-imports',
+    name: 'Canvas Runtime translations and settings stay behind the App Adapter',
+    from: ['src/canvas/runtime/**'],
+    exceptFrom: ['src/canvas/runtime/**/*.test.ts', 'src/canvas/runtime/**/*.test.tsx'],
+    targets: ['src/i18n/**', 'src/app/settings/**', 'src/app/canvas-settings/**'],
+  },
+  {
     kind: 'forbid-imports',
     name: 'Problem Report dialog delegates to the submission module',
     from: ['src/components/shared/ProblemReportDialog.tsx'],

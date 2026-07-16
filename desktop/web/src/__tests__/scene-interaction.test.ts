@@ -15,6 +15,7 @@ import { guides } from '../canvas/scene-metadata-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
+import { t } from '../i18n'
 import { CameraController } from '../canvas/runtime/camera'
 import {
   SceneStore,
@@ -72,6 +73,7 @@ function createInteractionDeps(
     | 'getPlantPresentationContext'
     | 'readPlantSpacingIntervalMeters'
     | 'commitPlantSpacingIntervalMeters'
+    | 'translate'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionSessionDeps {
@@ -160,6 +162,7 @@ function createInteractionDeps(
     commitPlantSpacingIntervalMeters: overrides.commitPlantSpacingIntervalMeters ?? ((meters) => {
       plantSpacingIntervalM.value = meters
     }),
+    translate: overrides.translate ?? t,
     setHoveredTarget: overrides.setHoveredTarget ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
   }
@@ -546,6 +549,116 @@ describe('SceneInteractionSession', () => {
     snapToGuidesEnabled.value = false
     guides.value = []
     plantSpacingIntervalM.value = 0.5
+  })
+
+  it('refreshes mounted interaction translations in place without closing or moving focus', () => {
+    let language = 'en'
+    const translate = (key: string, options?: Readonly<Record<string, unknown>>): string =>
+      `${language}:${key}${options?.count === undefined ? '' : `:${String(options.count)}`}`
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 100, y: 100 },
+        { x: 160, y: 150 },
+      ])]
+      draft.plants = [makePlant(
+        'locked-plant',
+        'Malus domestica',
+        { x: 20, y: 30 },
+        { locked: true },
+      )]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      translate,
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([zoneTarget('zone-1')])
+    session.refreshMeasurements()
+    events.pointerMove({ x: 20, y: 30 })
+
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 300,
+      clientY: 250,
+    }))
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
+    const rotationHandle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const lockedAffordance = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
+    const unlock = lockedAffordance.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')!
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    const paste = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
+    paste.focus()
+
+    expect(toolbar.getAttribute('aria-label')).toBe('en:canvas.selectionActions.ariaLabel')
+    expect(rotationHandle.getAttribute('aria-label')).toBe('en:canvas.rotationHandle.label')
+    expect(unlock.getAttribute('aria-label')).toBe('en:canvas.selectionActions.unlock')
+    expect(paste.textContent).toBe('en:canvas.contextMenu.paste')
+
+    language = 'fr'
+    session.refreshTranslations()
+
+    expect(container.querySelector('[data-selection-action-toolbar]')).toBe(toolbar)
+    expect(container.querySelector('[data-rotation-handle]')).toBe(rotationHandle)
+    expect(container.querySelector('[data-locked-object-affordance]')).toBe(lockedAffordance)
+    expect(container.querySelector('[data-canvas-context-menu]')).toBe(menu)
+    expect(toolbar.style.display).toBe('flex')
+    expect(rotationHandle.style.display).toBe('inline-flex')
+    expect(lockedAffordance.style.display).toBe('inline-flex')
+    expect(menu.style.display).toBe('block')
+    expect(document.activeElement).toBe(paste)
+    expect(toolbar.getAttribute('aria-label')).toBe('fr:canvas.selectionActions.ariaLabel')
+    expect(duplicate.getAttribute('aria-label')).toContain('fr:canvas.selectionActions.duplicate')
+    expect(rotationHandle.getAttribute('aria-label')).toBe('fr:canvas.rotationHandle.label')
+    expect(unlock.getAttribute('aria-label')).toBe('fr:canvas.selectionActions.unlock')
+    expect(paste.textContent).toBe('fr:canvas.contextMenu.paste')
+  })
+
+  it('refreshes Plant Spacing translations without resetting its phase, interval, count, or input selection', () => {
+    let language = 'en'
+    const translate = (key: string, options?: Readonly<Record<string, unknown>>): string =>
+      `${language}:${key}${options?.count === undefined ? '' : `:${String(options.count)}`}`
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const deps = createInteractionDeps(container, store, camera, { translate })
+    const session = createTestSession(deps)
+    session.setTool('plant-spacing')
+    events.pointerDown({ x: 20, y: 30 })
+
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    const input = hud.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    input.value = '2 m'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    events.pointerMove({ x: 26, y: 30 })
+    input.focus()
+    input.setSelectionRange(1, 3)
+    const count = hud.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
+    const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
+    const density = count.dataset.density
+
+    expect(hud.dataset.state).toBe('source-selected')
+    expect(count.textContent).toBe('en:canvas.plantSpacing.generatedCount:3')
+
+    language = 'fr'
+    session.refreshTranslations()
+
+    expect(container.querySelector('[data-plant-spacing-hud]')).toBe(hud)
+    expect(hud.querySelector('[data-plant-spacing-interval-input]')).toBe(input)
+    expect(hud.dataset.state).toBe('source-selected')
+    expect(hud.style.display).toBe('block')
+    expect(input.value).toBe('2 m')
+    expect(document.activeElement).toBe(input)
+    expect(input.selectionStart).toBe(1)
+    expect(input.selectionEnd).toBe(3)
+    expect(count.textContent).toBe('fr:canvas.plantSpacing.generatedCount:3')
+    expect(count.dataset.density).toBe(density)
+    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(ghostCount)
+    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
   })
 
   afterEach(() => {

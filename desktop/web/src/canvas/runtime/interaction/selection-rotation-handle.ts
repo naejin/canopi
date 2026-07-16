@@ -1,4 +1,4 @@
-import { t } from '../../../i18n'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { CameraController, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStateReader } from '../scene'
@@ -13,12 +13,14 @@ interface SelectionRotationHandleOptions {
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void
+  readonly translate: CanvasRuntimeTranslator
   readonly refreshSelectionDependent: () => void
 }
 
 export interface SelectionRotationHandleController {
   readonly dragActive: boolean
   refresh(): void
+  refreshTranslations(): void
   hide(): void
   pointerDown(context: SelectionRotationHandlePointerDownContext): SceneToolPointerDrag | null
   cancelActiveDrag(): boolean
@@ -136,8 +138,12 @@ export function createSelectionRotationHandle(
   })
   let activeDrag: ActiveRotationDrag | null = null
 
+  function refreshTranslations(): void {
+    root.setAttribute('aria-label', options.translate('canvas.rotationHandle.label'))
+  }
+
   function refresh(): void {
-    root.setAttribute('aria-label', t('canvas.rotationHandle.label'))
+    refreshTranslations()
     const selection = options.getSelection()
     if (!isRotatableSelection(selection)) {
       hide()
@@ -274,6 +280,7 @@ export function createSelectionRotationHandle(
       return activeDrag !== null
     },
     refresh,
+    refreshTranslations,
     hide,
     pointerDown,
     cancelActiveDrag,

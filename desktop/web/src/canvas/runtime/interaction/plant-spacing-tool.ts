@@ -1,4 +1,3 @@
-import { t } from '../../../i18n'
 import {
   formatPlantSpacingGuideLength,
   formatPlantSpacingIntervalInput,
@@ -27,6 +26,7 @@ import {
 } from './plant-spacing-overlay'
 import { isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 
 const PLANT_SPACING_DENSE_WARNING_THRESHOLD = 100
 const PLANT_SPACING_PREVIEW_POSITION_LIMIT = 250
@@ -52,6 +52,7 @@ export interface PlantSpacingToolContext {
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   readonly readPlantSpacingIntervalMeters: () => number
   readonly commitPlantSpacingIntervalMeters: (meters: number) => void
+  readonly translate: CanvasRuntimeTranslator
   readonly sceneEdits: SceneEditCoordinator
   readonly switchTool: (name: string) => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
@@ -73,6 +74,7 @@ export interface PlantSpacingTool {
   readonly beginDrag: () => void
   readonly commitDragFromEvent: (event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>) => void
   readonly refreshViewportDependent: () => void
+  readonly refreshTranslations: () => void
   readonly dispose: () => void
 }
 
@@ -96,6 +98,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
         focusInputOnInvalid: false,
       }),
     },
+    context.translate,
   )
 
   function pointerDown(
@@ -117,13 +120,13 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     )
 
     if (!hit || hit.kind !== 'plant' || isSceneDesignObjectLocked(scene, hit)) {
-      overlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
+      overlay.showSourcePicking('source-missed')
       return { clearPointerGesture: true }
     }
 
     const plant = scene.plants.find((entry) => entry.id === hit.id)
     if (!plant) {
-      overlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
+      overlay.showSourcePicking('source-missed')
       return { clearPointerGesture: true }
     }
 
@@ -302,7 +305,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
 
   function clearUnavailableSource(): void {
     clear()
-    overlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
+    overlay.showSourcePicking('source-missed')
   }
 
   function handleIntervalInput(value: string): void {
@@ -411,6 +414,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     beginDrag,
     commitDragFromEvent,
     refreshViewportDependent,
+    refreshTranslations: overlay.refreshTranslations,
     dispose,
   }
 }
@@ -462,6 +466,7 @@ export function createPlantSpacingToolAdapter(tool: PlantSpacingTool): SceneTool
       return true
     },
     refreshViewportDependent: tool.refreshViewportDependent,
+    refreshTranslations: tool.refreshTranslations,
     dispose: tool.dispose,
   }
 }

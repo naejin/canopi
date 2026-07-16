@@ -187,6 +187,7 @@ export class SceneCanvasRuntime {
         readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
         commitPlantSpacingIntervalMeters: (meters) =>
           this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
+        translate: this._appAdapter.translate,
         getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
         notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
         setHoveredTarget: (target) => {
@@ -292,6 +293,7 @@ export class SceneCanvasRuntime {
         this._invalidate('scene')
       },
       onLocale: () => {
+        this._interaction?.refreshTranslations()
         this._invalidate('scene')
       },
       onChromeOverlay: () => {

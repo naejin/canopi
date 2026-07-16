@@ -1,4 +1,4 @@
-import { t } from '../../../i18n'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { CameraController } from '../camera'
 import type { ScenePoint } from '../scene'
 import { resolveCanvasNoticePlacement } from '../../canvas-notice-layout'
@@ -35,8 +35,10 @@ interface PlantSpacingOverlayEvents {
   onIntervalBlur: (value: string) => void
 }
 
+type PlantSpacingSourcePickingReason = 'select-source' | 'source-missed'
+
 export interface PlantSpacingOverlayController {
-  showSourcePicking(message?: string): void
+  showSourcePicking(reason?: PlantSpacingSourcePickingReason): void
   showSourceSelected(source: PlantSpacingSourceView, camera: CameraController, interval: PlantSpacingIntervalView): void
   setIntervalValidity(valid: boolean): void
   setGeneratedCount(count: number | null, options?: { dense?: boolean; blocked?: boolean }): void
@@ -44,6 +46,7 @@ export interface PlantSpacingOverlayController {
   hidePreview(): void
   focusIntervalInput(): void
   refreshSourceHighlight(source: PlantSpacingSourceView | null, camera: CameraController): void
+  refreshTranslations(): void
   hide(): void
   dispose(): void
 }
@@ -51,6 +54,7 @@ export interface PlantSpacingOverlayController {
 export function createPlantSpacingOverlay(
   container: HTMLElement,
   events: PlantSpacingOverlayEvents,
+  translate: CanvasRuntimeTranslator,
 ): PlantSpacingOverlayController {
   const hudPlacement = resolveCanvasNoticePlacement('tool-hud', {
     canvasWidth: container.clientWidth,
@@ -124,7 +128,7 @@ export function createPlantSpacingOverlay(
   ].join(';')
 
   const intervalLabel = document.createElement('span')
-  intervalLabel.textContent = t('canvas.plantSpacing.interval')
+  intervalLabel.textContent = translate('canvas.plantSpacing.interval')
 
   const intervalInput = document.createElement('input')
   intervalInput.type = 'text'
@@ -242,8 +246,26 @@ export function createPlantSpacingOverlay(
     throw error
   }
 
-  function refreshStaticLabels(): void {
-    intervalLabel.textContent = t('canvas.plantSpacing.interval')
+  let sourcePickingReason: PlantSpacingSourcePickingReason = 'select-source'
+  let generatedCountView: {
+    readonly count: number
+    readonly dense: boolean
+    readonly blocked: boolean
+  } | null = null
+
+  function refreshTranslations(): void {
+    intervalLabel.textContent = translate('canvas.plantSpacing.interval')
+    if (root.dataset.state === 'source-picking') {
+      status.textContent = translate(
+        sourcePickingReason === 'source-missed'
+          ? 'canvas.plantSpacing.sourceMissed'
+          : 'canvas.plantSpacing.selectSource',
+      )
+      hint.textContent = translate('canvas.plantSpacing.escToExit')
+    } else if (root.dataset.state === 'source-selected') {
+      hint.textContent = translate('canvas.plantSpacing.escToCancel')
+    }
+    renderGeneratedCount()
   }
 
   function show(): void {
@@ -261,6 +283,39 @@ export function createPlantSpacingOverlay(
     intervalInput.style.borderColor = valid
       ? 'var(--color-border-strong, var(--color-border))'
       : 'var(--color-danger, var(--color-primary))'
+  }
+
+  function setGeneratedCount(
+    generatedCount: number | null,
+    options: { dense?: boolean; blocked?: boolean } = {},
+  ): void {
+    generatedCountView = generatedCount === null
+      ? null
+      : {
+          count: generatedCount,
+          dense: options.dense ?? false,
+          blocked: options.blocked ?? false,
+        }
+    renderGeneratedCount()
+  }
+
+  function renderGeneratedCount(): void {
+    if (!generatedCountView) {
+      count.style.display = 'none'
+      count.textContent = ''
+      count.removeAttribute('data-density')
+      return
+    }
+    const { count: generatedCount, dense, blocked } = generatedCountView
+    count.textContent = blocked
+      ? `${translate('canvas.plantSpacing.generatedCount', { count: generatedCount })} · ${translate('canvas.plantSpacing.commitLimitWarning')}`
+      : translate('canvas.plantSpacing.generatedCount', { count: generatedCount })
+    count.dataset.density = blocked ? 'blocked' : (dense ? 'dense' : 'normal')
+    count.style.color = blocked
+      ? 'var(--color-danger, var(--color-primary))'
+      : (dense ? 'var(--color-primary)' : 'var(--color-text)')
+    count.style.fontWeight = dense || blocked ? '600' : '400'
+    count.style.display = 'block'
   }
 
   function updateSourceHighlight(sourceView: PlantSpacingSourceView, camera: CameraController): void {
@@ -288,51 +343,29 @@ export function createPlantSpacingOverlay(
   }
 
   return {
-    showSourcePicking(message = t('canvas.plantSpacing.selectSource')) {
-      refreshStaticLabels()
+    showSourcePicking(reason = 'select-source') {
+      sourcePickingReason = reason
       root.dataset.state = 'source-picking'
-      status.textContent = message
-      count.style.display = 'none'
-      count.textContent = ''
-      count.removeAttribute('data-density')
-      hint.textContent = t('canvas.plantSpacing.escToExit')
+      setGeneratedCount(null)
       intervalRow.style.display = 'none'
       root.removeAttribute('data-interval-validity')
       hideSourceHighlight()
       hidePreview()
+      refreshTranslations()
       show()
     },
     showSourceSelected(sourceView, camera, interval) {
-      refreshStaticLabels()
       root.dataset.state = 'source-selected'
       status.textContent = sourceView.label
-      hint.textContent = t('canvas.plantSpacing.escToCancel')
       intervalInput.value = interval.value
       setIntervalValidity(interval.valid)
       intervalRow.style.display = 'flex'
       updateSourceHighlight(sourceView, camera)
+      refreshTranslations()
       show()
     },
     setIntervalValidity,
-    setGeneratedCount(generatedCount, options = {}) {
-      if (generatedCount === null) {
-        count.style.display = 'none'
-        count.textContent = ''
-        count.removeAttribute('data-density')
-        return
-      }
-      count.textContent = options.blocked
-        ? `${t('canvas.plantSpacing.generatedCount', { count: generatedCount })} · ${t('canvas.plantSpacing.commitLimitWarning')}`
-        : t('canvas.plantSpacing.generatedCount', { count: generatedCount })
-      count.dataset.density = options.blocked
-        ? 'blocked'
-        : (options.dense ? 'dense' : 'normal')
-      count.style.color = options.blocked
-        ? 'var(--color-danger, var(--color-primary))'
-        : (options.dense ? 'var(--color-primary)' : 'var(--color-text)')
-      count.style.fontWeight = options.dense || options.blocked ? '600' : '400'
-      count.style.display = 'block'
-    },
+    setGeneratedCount,
     showPreview(preview, camera) {
       const start = camera.worldToScreen(preview.start)
       const end = camera.worldToScreen(preview.end)
@@ -388,6 +421,7 @@ export function createPlantSpacingOverlay(
       }
       updateSourceHighlight(sourceView, camera)
     },
+    refreshTranslations,
     hide() {
       root.style.display = 'none'
       hideSourceHighlight()

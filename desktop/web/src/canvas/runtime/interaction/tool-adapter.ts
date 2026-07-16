@@ -47,5 +47,6 @@ export interface SceneToolAdapter {
   readonly cancelTransient?: (options?: SceneToolTransientOptions) => void
   readonly refreshViewportDependent?: () => boolean | void
   readonly refreshSelectionDependent?: () => void
+  readonly refreshTranslations?: () => void
   readonly dispose?: () => void
 }

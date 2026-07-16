@@ -49,6 +49,7 @@ function createPlantSpacingAdapter(
     getLocalizedCommonNames: () => new Map(),
     readPlantSpacingIntervalMeters: options.readPlantSpacingIntervalMeters,
     commitPlantSpacingIntervalMeters: options.commitPlantSpacingIntervalMeters,
+    translate: (key) => key,
     sceneEdits: createSceneEdits(store),
     switchTool: () => {},
     applySnapping: (point) => point,

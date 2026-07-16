@@ -21,6 +21,7 @@ import { mutateSettingsProjection } from '../app/settings/projection'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { setCanvasClean } from '../app/document-session/store'
 import { createAppSceneRuntimePanelTargetAdapter } from '../app/canvas-runtime/panel-target-adapter'
+import { t } from '../i18n'
 
 const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
 
@@ -41,6 +42,7 @@ export function createBrowserCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter 
     savedObjectStamps: {
       saveCurrentSelection: () => {},
     },
+    translate: t,
     settings: {
       readLocale: () => locale.value,
       readChromeOverlay: () => ({

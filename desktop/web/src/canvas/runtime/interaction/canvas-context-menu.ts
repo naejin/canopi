@@ -1,4 +1,4 @@
-import { t } from '../../../i18n'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
 import type { ScenePoint } from '../scene'
 import { canSaveSelectionAsObjectStamp } from './contextual-selection-actions'
@@ -12,6 +12,7 @@ interface CanvasContextMenuOptions {
   readonly container: HTMLElement
   readonly commands: CanvasContextMenuCommandSurface
   readonly getSelection: () => CanvasDesignObjectSelectionModel
+  readonly translate: CanvasRuntimeTranslator
   readonly saveSelectionAsObjectStamp?: () => void
 }
 
@@ -23,6 +24,7 @@ export interface CanvasContextMenuShowOptions {
 
 export interface CanvasContextMenuController {
   show(options: CanvasContextMenuShowOptions): void
+  refreshTranslations(): void
   hide(): void
   contains(target: EventTarget | null): boolean
   dispose(): void
@@ -107,18 +109,25 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
   function show({ screen, world, selection: selectionOverride }: CanvasContextMenuShowOptions): void {
     activeWorld = world
     const selection = selectionOverride ?? options.getSelection()
-    refreshLabelsAndStates(selection)
+    refreshTranslations()
+    refreshStates(selection)
     root.style.display = 'block'
     const placement = resolveMenuPlacement(screen, options.container, root, actions.length)
     root.style.left = `${placement.left}px`
     root.style.top = `${placement.top}px`
   }
 
-  function refreshLabelsAndStates(selection: CanvasDesignObjectSelectionModel): void {
-    root.setAttribute('aria-label', t('canvas.contextMenu.ariaLabel'))
+  function refreshTranslations(): void {
+    root.setAttribute('aria-label', options.translate('canvas.contextMenu.ariaLabel'))
     for (const [index, action] of actions.entries()) {
       const button = buttons[index]!
-      button.textContent = t(action.labelKey)
+      button.textContent = options.translate(action.labelKey)
+    }
+  }
+
+  function refreshStates(selection: CanvasDesignObjectSelectionModel): void {
+    for (const [index, action] of actions.entries()) {
+      const button = buttons[index]!
       setButtonEnabled(button, action.isEnabled(selection))
     }
   }
@@ -133,6 +142,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
 
   return {
     show,
+    refreshTranslations,
     hide,
     contains(target) {
       return target instanceof Node && root.contains(target)

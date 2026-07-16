@@ -1,5 +1,5 @@
-import { t } from '../../../i18n'
 import type { CameraController, SceneBounds } from '../camera'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
 import { canSaveSelectionAsObjectStamp } from './contextual-selection-actions'
 
@@ -22,11 +22,13 @@ interface SelectionActionToolbarOptions {
   readonly camera: CameraController
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly commands: SelectionActionCommandSurface
+  readonly translate: CanvasRuntimeTranslator
   readonly saveSelectionAsObjectStamp?: () => void
 }
 
 export interface SelectionActionToolbarController {
   refresh(): void
+  refreshTranslations(): void
   hide(): void
   contains(target: EventTarget | null): boolean
   dispose(): void
@@ -264,7 +266,7 @@ export function createSelectionActionToolbar(
 
   const actionButtons = actions.map((action) => ({
     action,
-    button: createActionButton(action, () => {
+    button: createActionButton(action, options.translate, () => {
       action.run()
       refresh()
     }),
@@ -272,9 +274,15 @@ export function createSelectionActionToolbar(
   let renderedActionIds = ''
   let renderedSelectionKey = ''
 
+  function refreshTranslations(): void {
+    root.setAttribute('aria-label', options.translate('canvas.selectionActions.ariaLabel'))
+    for (const { action, button } of actionButtons) {
+      refreshButtonLabel(button, action, options.translate)
+    }
+  }
+
   function refresh(): void {
-    root.setAttribute('aria-label', t('canvas.selectionActions.ariaLabel'))
-    for (const { action, button } of actionButtons) refreshButtonLabel(button, action)
+    refreshTranslations()
 
     const selection = options.getSelection()
     if (!hasToolbarSelection(selection) || hasStructuralSelectionBlocker(selection) || !selection.bounds) {
@@ -339,6 +347,7 @@ export function createSelectionActionToolbar(
 
   return {
     refresh,
+    refreshTranslations,
     hide,
     contains(target) {
       return target instanceof Node && root.contains(target)
@@ -361,7 +370,11 @@ function targetListKey(targets: readonly { readonly kind: string; readonly id: s
   return targets.map((target) => `${target.kind}:${target.id}`).join(',')
 }
 
-function createActionButton(action: SelectionAction, run: () => void): HTMLButtonElement {
+function createActionButton(
+  action: SelectionAction,
+  translate: CanvasRuntimeTranslator,
+  run: () => void,
+): HTMLButtonElement {
   const button = document.createElement('button')
   button.type = 'button'
   button.dataset.selectionActionCommand = action.id
@@ -381,8 +394,8 @@ function createActionButton(action: SelectionAction, run: () => void): HTMLButto
     'outline: none',
   ].join(';')
   button.appendChild(createIcon(action.icon))
-  button.appendChild(createTooltip(action))
-  refreshButtonLabel(button, action)
+  button.appendChild(createTooltip(action, translate))
+  refreshButtonLabel(button, action, translate)
   button.addEventListener('pointerdown', () => {
     hideTooltip(button)
   })
@@ -429,8 +442,12 @@ function setButtonEnabled(button: HTMLButtonElement, enabled: boolean): void {
   button.style.opacity = enabled ? '1' : '0.42'
 }
 
-function refreshButtonLabel(button: HTMLButtonElement, action: Pick<SelectionAction, 'labelKey' | 'shortcut'>): void {
-  const label = t(action.labelKey)
+function refreshButtonLabel(
+  button: HTMLButtonElement,
+  action: Pick<SelectionAction, 'labelKey' | 'shortcut'>,
+  translate: CanvasRuntimeTranslator,
+): void {
+  const label = translate(action.labelKey)
   button.setAttribute('aria-label', action.shortcut ? `${label} (${action.shortcut})` : label)
   const text = button.querySelector<HTMLElement>('[data-selection-action-tooltip-label]')
   const shortcut = button.querySelector<HTMLElement>('[data-selection-action-shortcut]')
@@ -438,7 +455,10 @@ function refreshButtonLabel(button: HTMLButtonElement, action: Pick<SelectionAct
   if (shortcut) shortcut.textContent = action.shortcut ?? ''
 }
 
-function createTooltip(action: SelectionAction): HTMLSpanElement {
+function createTooltip(
+  action: SelectionAction,
+  translate: CanvasRuntimeTranslator,
+): HTMLSpanElement {
   const tooltip = document.createElement('span')
   tooltip.dataset.selectionActionTooltip = 'true'
   tooltip.setAttribute('aria-hidden', 'true')
@@ -468,7 +488,7 @@ function createTooltip(action: SelectionAction): HTMLSpanElement {
   ].join(';')
   const label = document.createElement('span')
   label.dataset.selectionActionTooltipLabel = 'true'
-  label.textContent = t(action.labelKey)
+  label.textContent = translate(action.labelKey)
   tooltip.appendChild(label)
   if (action.shortcut) {
     const shortcut = document.createElement('span')

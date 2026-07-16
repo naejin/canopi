@@ -71,12 +71,18 @@ export interface CanvasRuntimePresentationDataAdapter {
   readonly speciesCache?: CanvasSpeciesPresentationCache
 }
 
+export type CanvasRuntimeTranslator = (
+  key: string,
+  options?: Readonly<Record<string, unknown>>,
+) => string
+
 export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
   readonly document: CanvasRuntimeDocumentAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
   readonly presentationData?: CanvasRuntimePresentationDataAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
+  readonly translate: CanvasRuntimeTranslator
 }
 
 export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
@@ -97,6 +103,7 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
     savedObjectStamps: {
       saveCurrentSelection: () => {},
     },
+    translate: detachedCanvasRuntimeTranslator,
     settings: {
       readLocale: () => 'en',
       readChromeOverlay: () => ({ gridVisible, rulersVisible }),
@@ -130,6 +137,13 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       },
     },
   }
+}
+
+function detachedCanvasRuntimeTranslator(
+  key: string,
+  options?: Readonly<Record<string, unknown>>,
+): string {
+  return typeof options?.defaultValue === 'string' ? options.defaultValue : key
 }
 
 function subscribeImmediately(onChange: () => void): () => void {

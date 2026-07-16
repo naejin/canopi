@@ -1,8 +1,9 @@
-import { t } from '../../../i18n'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { SceneDesignObjectTarget } from '../scene'
 
 interface LockedObjectAffordanceOptions {
   readonly container: HTMLElement
+  readonly translate: CanvasRuntimeTranslator
   readonly onUnlock: (target: SceneDesignObjectTarget) => void
 }
 
@@ -14,6 +15,7 @@ interface LockedObjectAffordanceView {
 
 export interface LockedObjectAffordanceController {
   show(view: LockedObjectAffordanceView): void
+  refreshTranslations(): void
   hide(): void
   contains(target: EventTarget | null): boolean
   dispose(): void
@@ -108,14 +110,14 @@ export function createLockedObjectAffordance(
 
   root.replaceChildren(status, unlockButton)
 
-  function refreshLabels(): void {
-    statusText.textContent = t('canvas.selectionActions.locked')
-    unlockButton.setAttribute('aria-label', t('canvas.selectionActions.unlock'))
+  function refreshTranslations(): void {
+    statusText.textContent = options.translate('canvas.selectionActions.locked')
+    unlockButton.setAttribute('aria-label', options.translate('canvas.selectionActions.unlock'))
   }
 
   try {
     options.container.appendChild(root)
-    refreshLabels()
+    refreshTranslations()
   } catch (error) {
     root.remove()
     throw error
@@ -123,7 +125,7 @@ export function createLockedObjectAffordance(
 
   return {
     show(view) {
-      refreshLabels()
+      refreshTranslations()
       activeTarget = { ...view.target }
       root.dataset.lockedObjectId = view.target.id
       root.dataset.lockedObjectKind = view.target.kind
@@ -133,6 +135,7 @@ export function createLockedObjectAffordance(
       root.style.left = `${x}px`
       root.style.top = `${y}px`
     },
+    refreshTranslations,
     hide() {
       activeTarget = null
       root.style.display = 'none'
