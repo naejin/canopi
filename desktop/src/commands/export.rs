@@ -171,22 +171,15 @@ mod tests {
         NativeOperationLimits,
     };
     use std::sync::{
-        Arc,
         atomic::{AtomicU64, Ordering},
         mpsc,
     };
-    use std::task::{Context, Poll, Wake, Waker};
+    use std::task::{Context, Poll, Waker};
     use std::time::Duration;
     use std::{future::Future, path::PathBuf};
 
     static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
     const WAIT_TIMEOUT: Duration = Duration::from_secs(2);
-
-    struct NoopWake;
-
-    impl Wake for NoopWake {
-        fn wake(self: Arc<Self>) {}
-    }
 
     struct TempTestDir {
         root: PathBuf,
@@ -248,8 +241,7 @@ mod tests {
                 text_path.display().to_string(),
             ));
             {
-                let waker = Waker::from(Arc::new(NoopWake));
-                let mut context = Context::from_waker(&waker);
+                let mut context = Context::from_waker(Waker::noop());
                 assert!(matches!(export.as_mut().poll(&mut context), Poll::Pending));
             }
             assert!(!text_path.exists());

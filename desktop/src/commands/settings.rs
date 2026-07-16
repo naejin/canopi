@@ -60,18 +60,12 @@ mod tests {
     use common_types::settings::{Locale, Settings};
     use std::{
         future::Future,
-        sync::{Arc, mpsc},
-        task::{Context, Poll, Wake, Waker},
+        sync::mpsc,
+        task::{Context, Poll, Waker},
         time::Duration,
     };
 
     const WAIT_TIMEOUT: Duration = Duration::from_secs(2);
-
-    struct NoopWake;
-
-    impl Wake for NoopWake {
-        fn wake(self: Arc<Self>) {}
-    }
 
     fn test_user_db() -> UserDb {
         UserDb::initialize(rusqlite::Connection::open_in_memory().unwrap()).unwrap()
@@ -107,8 +101,7 @@ mod tests {
 
             let mut settings_read = Box::pin(get_settings_with_executor(&executor, test_user_db()));
             {
-                let waker = Waker::from(Arc::new(NoopWake));
-                let mut context = Context::from_waker(&waker);
+                let mut context = Context::from_waker(Waker::noop());
                 assert!(matches!(
                     settings_read.as_mut().poll(&mut context),
                     Poll::Pending

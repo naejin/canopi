@@ -321,18 +321,12 @@ mod tests {
     };
     use std::{
         future::Future,
-        sync::{Arc, mpsc},
-        task::{Context, Poll, Wake, Waker},
+        sync::mpsc,
+        task::{Context, Poll, Waker},
         time::Duration,
     };
 
     const WAIT_TIMEOUT: Duration = Duration::from_secs(2);
-
-    struct NoopWake;
-
-    impl Wake for NoopWake {
-        fn wake(self: Arc<Self>) {}
-    }
 
     fn catalog_test_executor(admitted: usize, running: usize) -> NativeOperationExecutor {
         let limits = NativeOperationClassLimits::new(admitted, running);
@@ -369,8 +363,7 @@ mod tests {
                 "fr".to_owned(),
             ));
             {
-                let waker = Waker::from(Arc::new(NoopWake));
-                let mut context = Context::from_waker(&waker);
+                let mut context = Context::from_waker(Waker::noop());
                 assert!(matches!(batch.as_mut().poll(&mut context), Poll::Pending));
             }
 
