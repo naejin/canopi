@@ -668,6 +668,61 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     expect(filterQueryAttempts).toBe(2)
   })
 
+  it('does not initialize DuckDB for direct one-character searches while preserving blank browsing', async () => {
+    const connection = {
+      query: vi.fn(async () => table([{
+        id: 'species-apple',
+        slug: 'malus-domestica',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        localized_common_name: null,
+        matched_common_name: null,
+        climate_zones: '[]',
+        habit: 'Tree',
+        growth_form: 'Tree',
+        life_cycles: '[]',
+      }])),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const fetchJson = vi.fn(async () => validWebCatalogManifest())
+    const createDatabase = vi.fn(async () => database)
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson,
+      createDatabase,
+    })
+
+    try {
+      const tooShort = await reader.searchSpecies(searchRequest({
+        text: 'm',
+        include_total: true,
+      }), new Set())
+
+      expect(fetchJson).not.toHaveBeenCalled()
+      expect(createDatabase).not.toHaveBeenCalled()
+      expect(connection.query).not.toHaveBeenCalled()
+      expect(tooShort).toEqual({
+        items: [],
+        next_cursor: null,
+        total_estimate: 0,
+      })
+
+      const blankBrowse = await reader.searchSpecies(searchRequest({ text: '' }), new Set())
+      const whitespaceBrowse = await reader.searchSpecies(searchRequest({ text: ' \t ' }), new Set())
+
+      expect(blankBrowse.items).toHaveLength(1)
+      expect(whitespaceBrowse.items).toHaveLength(1)
+      expect(connection.query).toHaveBeenCalledTimes(2)
+    } finally {
+      await reader.dispose()
+    }
+  })
+
   it('browses Species from Parquet assets and keeps DuckDB alive for reuse', async () => {
     const queries: string[] = []
     const connection = {
