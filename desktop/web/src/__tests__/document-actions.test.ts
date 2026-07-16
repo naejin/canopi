@@ -525,10 +525,7 @@ describe('document replacement actions', () => {
       file: newer,
       name: 'Newer Display Name',
     }))
-    expect(mocks.message).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to open Older Display Name'),
-      expect.objectContaining({ title: 'Open failed', kind: 'error' }),
-    )
+    expect(mocks.message).not.toHaveBeenCalled()
   })
 
   it('opens from the file dialog while the canvas session is detached', async () => {
