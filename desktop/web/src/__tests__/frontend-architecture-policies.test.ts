@@ -264,7 +264,12 @@ const FORBIDDEN_IMPORT_POLICIES = [
   {
     kind: 'forbid-imports',
     name: 'Design Template common orchestration stays platform-neutral',
-    from: ['src/app/community/controller.ts', 'src/app/design-template-import/workflow.ts'],
+    from: [
+      'src/app/community/controller.ts',
+      'src/app/design-template-import/coordinator.ts',
+      'src/app/design-template-import/types.ts',
+      'src/app/design-template-import/workflow.ts',
+    ],
     targets: ['src/ipc/community.ts', 'src/app/document-session/actions.ts'],
   },
   {
