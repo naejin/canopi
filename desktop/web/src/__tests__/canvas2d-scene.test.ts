@@ -9,6 +9,7 @@ import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapsh
 describe('createCanvas2DSceneRenderer', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
@@ -65,6 +66,135 @@ describe('createCanvas2DSceneRenderer', () => {
     expect(ctx.arc).toHaveBeenCalled()
     expect(ctx.rect).not.toHaveBeenCalled()
     expect(ctx.lineTo).not.toHaveBeenCalled()
+    renderer.dispose()
+  })
+
+  it('keeps a pinned plant name attached after viewport changes on a HiDPI canvas', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
+    renderer.renderScene(createRendererSnapshot({
+      plants: [createPlant({
+        pinnedName: true,
+        position: { x: 10, y: 20 },
+      })],
+      viewport: { x: 0, y: 0, scale: 2 },
+    }))
+
+    renderer.setViewport({ x: 0, y: 0, scale: 3 })
+    renderer.setViewport({ x: 0, y: 0, scale: 1.5 })
+    canvas.clearDraws()
+    renderer.setViewport({ x: 40, y: -15, scale: 1.5 })
+
+    expect(canvas.arcs[0]?.centerCss).toEqual({ x: 55, y: 15 })
+    const label = canvas.texts.find((entry) => entry.text === 'Apple')
+    expect(label?.originCss.x).toBe(55)
+    expect(label?.originCss.y).toBeGreaterThan(15)
+    renderer.dispose()
+  })
+
+  it('keeps a pinned plant name attached at a fractional device pixel ratio', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(1.25)
+    renderer.renderScene(createRendererSnapshot({
+      plants: [createPlant({
+        pinnedName: true,
+        position: { x: 10, y: 20 },
+      })],
+      viewport: { x: 0, y: 0, scale: 2 },
+    }))
+
+    canvas.clearDraws()
+    renderer.setViewport({ x: 12.5, y: -6.25, scale: 1.75 })
+
+    expect(canvas.arcs[0]?.centerCss.x).toBeCloseTo(30)
+    expect(canvas.arcs[0]?.centerCss.y).toBeCloseTo(28.75)
+    const label = canvas.texts.find((entry) => entry.text === 'Apple')
+    expect(label?.originCss.x).toBeCloseTo(30)
+    expect(label?.originCss.y).toBeGreaterThan(28.75)
+    renderer.dispose()
+  })
+
+  it('keeps a selected plant label attached on a HiDPI canvas', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
+    renderer.renderScene(createRendererSnapshot({
+      plants: [createPlant({ position: { x: 10, y: 20 } })],
+      selectedTargets: [{ kind: 'plant', id: 'plant-1' }],
+      viewport: { x: 0, y: 0, scale: 2 },
+    }))
+
+    canvas.clearDraws()
+    renderer.setViewport({ x: 40, y: -15, scale: 3 })
+
+    expect(canvas.arcs[0]?.centerCss).toEqual({ x: 70, y: 45 })
+    const label = canvas.texts.find((entry) => entry.text === 'Apple')
+    expect(label?.originCss.x).toBe(70)
+    expect(label?.originCss.y).toBeGreaterThan(45)
+    renderer.dispose()
+  })
+
+  it('keeps annotation text anchored on a HiDPI canvas', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
+
+    renderer.renderScene(createRendererSnapshot({
+      annotations: [{
+        kind: 'annotation',
+        locked: false,
+        id: 'annotation-1',
+        annotationType: 'text',
+        position: { x: 25, y: 35 },
+        text: 'Hello',
+        fontSize: 16,
+        rotationDeg: null,
+      }],
+      viewport: { x: 10, y: 20, scale: 2 },
+    }))
+
+    expect(canvas.texts.find((entry) => entry.text === 'Hello')?.originCss).toEqual({ x: 60, y: 90 })
+    renderer.dispose()
+  })
+
+  it('keeps a Measurement Guide label anchored on a HiDPI canvas', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
+
+    renderer.renderScene(createRendererSnapshot({
+      measurementGuides: [{
+        kind: 'measurement-guide',
+        id: 'guide-1',
+        locked: false,
+        start: { x: 0, y: 0 },
+        end: { x: 10, y: 0 },
+      }],
+      layers: [{
+        kind: 'layer',
+        name: 'measurement-guides',
+        visible: true,
+        locked: false,
+        opacity: 1,
+      }],
+      viewport: { x: 10, y: 20, scale: 2 },
+    }))
+
+    expect(canvas.texts.find((entry) => entry.text === '10 m')?.originCss).toEqual({
+      x: 20,
+      y: 10.5,
+    })
+    renderer.dispose()
+  })
+
+  it('keeps a Placed Plant stack badge anchored and screen-sized on a HiDPI canvas', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
+
+    renderer.renderScene(createRendererSnapshot({
+      plants: [
+        createPlant({ id: 'plant-1', position: { x: 10, y: 20 } }),
+        createPlant({ id: 'plant-2', position: { x: 10, y: 20 } }),
+      ],
+      viewport: { x: 40, y: -15, scale: 3 },
+    }))
+
+    const plantCenter = canvas.arcs[0]!.centerCss
+    const badgeText = canvas.texts.find((entry) => entry.text === '2')!
+    expect(badgeText.originCss.x).toBeGreaterThan(plantCenter.x)
+    expect(badgeText.originCss.y).toBeLessThan(plantCenter.y)
+    expect(Math.max(...canvas.arcs.map((entry) => entry.radiusCss))).toBe(7)
     renderer.dispose()
   })
 
@@ -367,9 +497,44 @@ describe('createCanvas2DSceneRenderer', () => {
   })
 })
 
+async function initializeTransformTrackingRenderer(dpr: number) {
+  vi.stubGlobal('devicePixelRatio', dpr)
+  const canvas = createTransformTrackingCanvasContext(dpr)
+  const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
+    mockImplementation(implementation: (contextId: string) => CanvasRenderingContext2D | null): void
+  }
+  getContextSpy.mockImplementation((contextId) => (
+    contextId === '2d' ? canvas.context as unknown as CanvasRenderingContext2D : null
+  ))
+
+  const host = document.createElement('div')
+  Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+  Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+  const renderer = await createCanvas2DSceneRenderer().initialize({ container: host }, {
+    backendId: 'canvas2d',
+    capabilities: {
+      domCanvas: true,
+      canvas2d: true,
+      offscreenCanvas: false,
+      offscreenCanvas2d: false,
+      webgl: false,
+      webgl2: false,
+      webgpu: false,
+      imageBitmap: false,
+      createImageBitmap: false,
+      worker: false,
+      devicePixelRatio: dpr,
+      prefersReducedMotion: null,
+    },
+  } as never)
+
+  return { canvas, renderer }
+}
+
 function createRendererSnapshot(overrides: {
   plants?: SceneRendererSnapshot['scene']['plants']
   zones?: SceneRendererSnapshot['scene']['zones']
+  annotations?: SceneRendererSnapshot['scene']['annotations']
   measurementGuides?: SceneRendererSnapshot['scene']['measurementGuides']
   layers?: SceneRendererSnapshot['scene']['layers']
   plantSpeciesSymbols?: Record<string, string>
@@ -381,7 +546,7 @@ function createRendererSnapshot(overrides: {
     scene: {
       plants: overrides.plants ?? [],
       zones: overrides.zones ?? [],
-      annotations: [],
+      annotations: overrides.annotations ?? [],
       groups: [],
       layers: overrides.layers ?? [],
       plantSpeciesColors: {},
@@ -448,5 +613,63 @@ function createMockCanvasContext() {
     strokeStyle: '',
     globalAlpha: 1,
     lineWidth: 1,
+  }
+}
+
+function createTransformTrackingCanvasContext(backingStoreScale: number) {
+  type Transform = { a: number; b: number; c: number; d: number; e: number; f: number }
+  let transform: Transform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+  const stack: Transform[] = []
+  const arcs: Array<{ centerCss: { x: number; y: number }; radiusCss: number }> = []
+  const texts: Array<{ text: string; originCss: { x: number; y: number } }> = []
+  const toCssPoint = (x: number, y: number) => ({
+    x: (transform.a * x + transform.c * y + transform.e) / backingStoreScale,
+    y: (transform.b * x + transform.d * y + transform.f) / backingStoreScale,
+  })
+  const context = {
+    ...createMockCanvasContext(),
+    setTransform: vi.fn((a: number, b: number, c: number, d: number, e: number, f: number) => {
+      transform = { a, b, c, d, e, f }
+    }),
+    getTransform: vi.fn(() => ({ ...transform })),
+    translate: vi.fn((x: number, y: number) => {
+      transform = {
+        ...transform,
+        e: transform.e + transform.a * x + transform.c * y,
+        f: transform.f + transform.b * x + transform.d * y,
+      }
+    }),
+    scale: vi.fn((x: number, y: number) => {
+      transform = {
+        ...transform,
+        a: transform.a * x,
+        b: transform.b * x,
+        c: transform.c * y,
+        d: transform.d * y,
+      }
+    }),
+    save: vi.fn(() => stack.push({ ...transform })),
+    restore: vi.fn(() => {
+      transform = stack.pop() ?? transform
+    }),
+    arc: vi.fn((x: number, y: number, radius: number) => {
+      arcs.push({
+        centerCss: toCssPoint(x, y),
+        radiusCss: Math.hypot(transform.a, transform.b) * radius / backingStoreScale,
+      })
+    }),
+    fillText: vi.fn((text: string, x: number, y: number) => {
+      texts.push({ text, originCss: toCssPoint(x, y) })
+    }),
+  }
+
+  return {
+    context,
+    arcs,
+    texts,
+    clearDraws() {
+      arcs.length = 0
+      texts.length = 0
+    },
   }
 }
