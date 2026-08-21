@@ -148,7 +148,7 @@ export function renderCanvas2DSceneSnapshot(
   const widthPx = Math.max(1, options.widthPx)
   const heightPx = Math.max(1, options.heightPx)
 
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  applyScreenSpaceTransform(ctx, dpr)
   ctx.clearRect(0, 0, widthPx, heightPx)
   if (options.background) {
     ctx.fillStyle = options.background
@@ -163,14 +163,18 @@ export function renderCanvas2DSceneSnapshot(
 
   applyViewport(ctx, snapshot.viewport)
   renderZones(ctx, snapshot)
-  renderMeasurementGuides(ctx, snapshot)
-  renderPlants(ctx, snapshot)
-  renderPinnedPlantNameLabels(ctx, snapshot)
-  renderSelectionLabels(ctx, snapshot)
-  renderAnnotations(ctx, snapshot)
+  renderMeasurementGuides(ctx, snapshot, dpr)
+  renderPlants(ctx, snapshot, dpr)
+  renderPinnedPlantNameLabels(ctx, snapshot, dpr)
+  renderSelectionLabels(ctx, snapshot, dpr)
+  renderAnnotations(ctx, snapshot, dpr)
 }
 
-function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+function renderMeasurementGuides(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SceneRendererSnapshot,
+  dpr: number,
+): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'measurement-guides')
   if (!layer.visible) return
 
@@ -211,7 +215,7 @@ function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneR
   ctx.restore()
 
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  applyScreenSpaceTransform(ctx, dpr)
   ctx.font = `400 ${MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX}px Inter, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -325,7 +329,11 @@ function drawClosedPath(ctx: CanvasRenderingContext2D, points: readonly { x: num
   ctx.closePath()
 }
 
-function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+function renderPlants(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SceneRendererSnapshot,
+  dpr: number,
+): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return
 
@@ -389,7 +397,7 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
 
     const stackCount = layout.stackCounts.get(entry.plant.id)
     if (stackCount) {
-      drawStackBadge(ctx, entry, stackCount, layer.opacity)
+      drawStackBadge(ctx, entry, stackCount, layer.opacity, dpr)
     }
   }
 
@@ -515,9 +523,10 @@ function drawStackBadge(
   entry: PlantPresentationEntry,
   count: number,
   opacity: number,
+  dpr: number,
 ): void {
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  applyScreenSpaceTransform(ctx, dpr)
   const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
   const x = entry.screenPoint.x + offset.x
   const y = entry.screenPoint.y + offset.y
@@ -534,7 +543,11 @@ function drawStackBadge(
   ctx.restore()
 }
 
-function renderAnnotations(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+function renderAnnotations(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SceneRendererSnapshot,
+  dpr: number,
+): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'annotations')
   if (!layer.visible) return
 
@@ -545,7 +558,7 @@ function renderAnnotations(ctx: CanvasRenderingContext2D, snapshot: SceneRendere
       false,
       hoverStateForTarget(snapshot, 'annotation', annotation.id),
     )
-    drawAnnotationText(ctx, annotation, snapshot.viewport, interactionState, layer.opacity)
+    drawAnnotationText(ctx, annotation, snapshot.viewport, interactionState, layer.opacity, dpr)
   }
 }
 
@@ -555,12 +568,13 @@ function drawAnnotationText(
   viewport: SceneViewportState,
   interactionState: CanvasInteractionVisualState | null,
   opacity: number,
+  dpr: number,
 ): void {
   const frame = getAnnotationScreenFrame(annotation, viewport)
   const lines = annotation.text.split('\n')
 
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  applyScreenSpaceTransform(ctx, dpr)
   ctx.translate(frame.origin.x, frame.origin.y)
   ctx.rotate((frame.rotationDeg * Math.PI) / 180)
   ctx.font = `${annotation.fontSize}px Inter, sans-serif`
@@ -583,10 +597,14 @@ function drawAnnotationText(
   ctx.restore()
 }
 
-function renderSelectionLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+function renderSelectionLabels(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SceneRendererSnapshot,
+  dpr: number,
+): void {
   if (snapshot.selectionLabels.length === 0) return
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  applyScreenSpaceTransform(ctx, dpr)
   for (const label of snapshot.selectionLabels) {
     ctx.fillStyle = getPlantLabelColor()
     ctx.globalAlpha = 1
@@ -598,13 +616,17 @@ function renderSelectionLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRen
   ctx.restore()
 }
 
-function renderPinnedPlantNameLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+function renderPinnedPlantNameLabels(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SceneRendererSnapshot,
+  dpr: number,
+): void {
   const labels = snapshot.pinnedPlantNameLabels
   if (labels.length === 0) return
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  applyScreenSpaceTransform(ctx, dpr)
   for (const label of labels) {
     ctx.fillStyle = getPlantLabelColor()
     ctx.globalAlpha = layer.opacity
@@ -622,6 +644,10 @@ function applyViewport(ctx: CanvasRenderingContext2D, viewport: SceneViewportSta
   ctx.setTransform(current.a, current.b, current.c, current.d, 0, 0)
   ctx.translate(viewport.x, viewport.y)
   ctx.scale(viewport.scale, viewport.scale)
+}
+
+function applyScreenSpaceTransform(ctx: CanvasRenderingContext2D, dpr: number): void {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 }
 
 function resolveInteractionState(
