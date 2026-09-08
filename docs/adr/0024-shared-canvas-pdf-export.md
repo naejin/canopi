@@ -18,6 +18,8 @@ Alongside existing Zones, the first release lets users draw temporary rectangula
 
 The print setup lasts for the current Design Session. Closing the preview to edit the Design preserves the selected Layers, Zones, Print Areas, scales, and other print options. Reopening the preview rebuilds the output from the latest Design using that setup. Closing or replacing the Design discards the setup; the next Design starts with the defaults above. Print setup is temporary session state, not `.canopi` content or persistent settings, and changing it does not mark the Design dirty.
 
+The first release uses a fixed print style: white page and canvas backgrounds with dark legend and navigation text, independent of the app's light or dark theme, to support paper readability and limit background ink use. Authored Plant Colors and Plant Symbols remain unchanged, and a selected street basemap appears over the white canvas background. This print style does not alter the Design or app theme.
+
 The first release supports A4 and US Letter paper. Canopi automatically chooses portrait or landscape to minimize page count at the selected scale, with a manual orientation override.
 
 Detail pages offer six initial real-world scale presets: 1:20, 1:50, 1:100, 1:200, 1:500, and 1:1000. Users choose a common detail-page scale for the export and can override it for individual Zones or Print Areas, allowing dense beds and sparse plantings to use different levels of detail. Users can measure Design distances with a ruler when printing at actual size. An oversized Zone or Print Area spans several numbered detail sheets while preserving its chosen scale. The overview fits its page. All pages showing canvas content include a scale bar.
