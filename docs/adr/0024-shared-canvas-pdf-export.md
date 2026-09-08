@@ -6,6 +6,8 @@ status: accepted
 
 Canopi will offer Canvas PDF export for sharing and field printing on Linux, macOS, Windows, and Web Edition through shared browser-compatible print layout and PDF generation, with edition-specific file saving or downloading. Small Designs fit on one page; larger or denser Designs use an overview plus numbered detail pages when needed to preserve paper readability, including a plant-identification legend. The first release focuses on the canvas; Timeline, Budget, and Consortium PDF sections are deferred to later work.
 
+The default export area covers the full extent of the Design, including areas outside the current view. Canvas pan and zoom do not determine the exported area.
+
 The first release supports A4 and US Letter paper. Canopi automatically chooses portrait or landscape to minimize page count at the selected scale, with a manual orientation override. Detail pages support a chosen real-world scale, such as 1:100 or 1:200, so users can measure Design distances with a ruler when printing at actual size. The overview fits its page, and every page includes a scale bar.
 
 **Consequences**:
@@ -13,4 +15,4 @@ Including Web Edition in the first release makes consistent print output a share
 
 This decision revises the restriction on new PDF export in [ADR 0011](0011-remove-design-report-export-and-display-modes.md) and supersedes [ADR 0019](0019-web-edition-canopi-export-only.md) by adding Canvas PDF alongside `.canopi` download in Web Edition. The previous structured Design Report implementation and its Rust `printpdf` choice remain retired; ADR 0011's plant-presentation decisions remain in force. PNG, SVG, CSV, Diagnostic Bundle export, and native file-management flows remain outside the approved Web export scope; Saved Object Stamp portability still requires its own decision. Timeline, Budget, and Consortium PDF sections are release deferrals, not permanent exclusions.
 
-This records an approved direction; the shared Canvas PDF feature is not implemented yet. The PDF library, vector/raster strategy, paper defaults, margins, export area, label layout, and map inclusion remain unresolved. Any map inclusion must account for the existing [Web map scope](0013-web-edition-map-scope.md), attribution, and provider constraints; local PDF generation does not imply an [offline-first Web app](0022-web-edition-not-offline-first.md).
+This records an approved direction; the shared Canvas PDF feature is not implemented yet. The PDF library, vector/raster strategy, paper defaults, margins, Layer inclusion, optional area selection, label layout, and map inclusion remain unresolved. Any map inclusion must account for the existing [Web map scope](0013-web-edition-map-scope.md), attribution, and provider constraints; local PDF generation does not imply an [offline-first Web app](0022-web-edition-not-offline-first.md).
