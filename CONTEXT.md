@@ -9,7 +9,7 @@ An agroecological plan that combines plants, spatial layout, scheduling, budget,
 _Avoid_: Document, file, project
 
 **Canvas PDF**:
-A printable, shareable representation of a Design's spatial layout with a plant-identification legend. A Canvas PDF may contain an overview and numbered detail pages; the editable Design remains the source of truth.
+A printable, shareable representation of selected Layers from a Design's spatial layout, with a plant-identification legend. A Canvas PDF may contain a whole-Design overview and numbered detail pages focused on selected Zones; the editable Design remains the source of truth.
 _Avoid_: Design Report, Design file, canvas screenshot
 
 **Design Session**:
