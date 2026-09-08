@@ -135,6 +135,7 @@ cargo build --release
 ## Branch And Git Hygiene
 
 - Use one branch per implementation bead unless the user explicitly requests otherwise.
+- Preserve accepted fixes in the user's active development checkout across tasks. Use a separate worktree when a new bead starts from a baseline missing those fixes. Before reporting an integrated fix complete, verify that the delivered checkout contains every required fix commit and run the combined checks there; pushing separate branches does not establish integration.
 - Name branches by intent: `feature/...`, `fix/...`, `refactor/...`, `test/...`, or `docs/...`.
 - Stage only files intentionally changed for the bead. Do not stage unrelated dirty files.
 - If unrelated tracked changes block rebase, testing, or push, ask before stashing unless the user has already approved autostash for that operation.
