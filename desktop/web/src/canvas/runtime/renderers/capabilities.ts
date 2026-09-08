@@ -18,6 +18,18 @@ function _tryCreateCanvas(
   }
 }
 
+function _tryCreateOffscreenCanvas(
+  constructor: typeof OffscreenCanvas | undefined,
+): OffscreenCanvas | null {
+  if (typeof constructor !== 'function') return null
+
+  try {
+    return new constructor(1, 1)
+  } catch {
+    return null
+  }
+}
+
 function _tryGetContext(
   canvas: Pick<HTMLCanvasElement | OffscreenCanvas, 'getContext'> | null,
   contextId: '2d' | 'webgl' | 'webgl2',
@@ -47,15 +59,10 @@ export function detectRendererCapabilities(
   environment: RendererCapabilityEnvironment = globalThis as unknown as RendererCapabilityEnvironment,
 ): RendererCapabilities {
   const htmlCanvas = _tryCreateCanvas(environment.document)
-  let offscreenCanvas: OffscreenCanvas | null = null
-  if (typeof environment.OffscreenCanvas === 'function') {
-    try {
-      offscreenCanvas = new environment.OffscreenCanvas(1, 1)
-    } catch {
-      offscreenCanvas = null
-    }
-  }
+  const offscreenCanvas = _tryCreateOffscreenCanvas(environment.OffscreenCanvas)
 
+  // A successful getContext locks that canvas to its context type. Probe
+  // incompatible types on independent canvases, including OffscreenCanvas.
   return {
     domCanvas: htmlCanvas !== null,
     canvas2d:
@@ -64,11 +71,11 @@ export function detectRendererCapabilities(
     offscreenCanvas: environment.OffscreenCanvas !== undefined,
     offscreenCanvas2d: _tryGetContext(offscreenCanvas, '2d'),
     webgl:
-      _tryGetContext(htmlCanvas, 'webgl') ||
-      _tryGetContext(offscreenCanvas, 'webgl'),
+      _tryGetContext(_tryCreateCanvas(environment.document), 'webgl') ||
+      _tryGetContext(_tryCreateOffscreenCanvas(environment.OffscreenCanvas), 'webgl'),
     webgl2:
-      _tryGetContext(htmlCanvas, 'webgl2') ||
-      _tryGetContext(offscreenCanvas, 'webgl2'),
+      _tryGetContext(_tryCreateCanvas(environment.document), 'webgl2') ||
+      _tryGetContext(_tryCreateOffscreenCanvas(environment.OffscreenCanvas), 'webgl2'),
     webgpu: environment.navigator?.gpu !== undefined,
     imageBitmap: environment.ImageBitmap !== undefined,
     createImageBitmap: environment.createImageBitmap !== undefined,
