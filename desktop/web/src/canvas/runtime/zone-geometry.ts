@@ -51,16 +51,6 @@ export function getRectangularZoneCorners(zone: SceneZoneEntity): ScenePoint[] |
   return corners.map((point) => rotatePointAround(point, center, rotationRad))
 }
 
-export function pointInEllipticalZone(zone: SceneZoneEntity, point: ScenePoint): boolean {
-  if (zone.zoneType !== 'ellipse' || zone.points.length < 2) return false
-  const center = zone.points[0]!
-  const radii = zone.points[1]!
-  const local = rotatePointAround(point, center, -degreesToRadians(zone.rotationDeg))
-  const nx = (local.x - center.x) / Math.max(Math.abs(radii.x), 0.001)
-  const ny = (local.y - center.y) / Math.max(Math.abs(radii.y), 0.001)
-  return nx * nx + ny * ny <= 1
-}
-
 export function getEllipticalZonePolygon(zone: SceneZoneEntity, segmentCount = 48): ScenePoint[] | null {
   if (zone.zoneType !== 'ellipse' || zone.points.length < 2) return null
   const center = zone.points[0]!

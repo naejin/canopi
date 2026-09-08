@@ -213,7 +213,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 
 ## Testing
 
-- Vitest tests live in `desktop/web/src/__tests__/`.
+- Add Vitest tests under `desktop/web/src/__tests__/`. The full suite also discovers existing colocated `*.test.ts` files under `src/app/` and `src/canvas/runtime/`; include those tests when auditing coverage.
 - `frontend-architecture-policies.test.ts` is the declarative dependency and ownership guard. Its TypeScript source graph discovers `.ts`, `.tsx`, `.mts`, and `.cts` files recursively, parses imports and re-exports through the compiler AST, follows named/default/namespace/star and transparent imported-alias export identity, and reports the named policy, importer, and resolved target. Add a compact policy there when introducing or changing a durable module boundary; retain a source-symbol policy on a protected public barrel when wrappers must not mention a private capability, and do not add implementation-shaped substring snapshots.
 - Use `source-tombstones` only for deliberately retired files and symbol policies only for durable capability ownership that imports alone cannot express. Behavior and layout belong in focused tests, not architecture policy tables.
 - `css-module-policies.test.ts` discovers every CSS Module recursively. New modules are covered automatically. Raw spacing, typography, radius, and transition values need shared tokens or an exact file/at-rule/rule/property/value exception with a durable reason; duplicate, repeated-use, unexplained, and unused exceptions fail the suite. Design-scale custom properties are declared globally and must not be shadowed in a CSS Module.

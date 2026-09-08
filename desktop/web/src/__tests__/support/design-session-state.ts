@@ -62,12 +62,6 @@ export const designSessionFixture = {
   },
 }
 
-export function resetDesignSessionState(
-  initial?: DesignSessionStoreTestState,
-): void {
-  fixture.reset(initial)
-}
-
 export const resetDirtyBaselines = () => designSessionStore.resetDirtyBaselines()
 export const markSaved = () => fixture.markSaved()
 export const markCanvasDetachedDirty = (dirty: boolean) =>

@@ -154,7 +154,7 @@ cargo build --release
 ## Quality Gates
 
 - Docs-only changes do not require code tests, but the final handoff must say tests were skipped because the change was docs-only.
-- Frontend tests live in `desktop/web/src/__tests__/` as `*.test.ts` or `*.test.tsx`.
+- Add frontend tests under `desktop/web/src/__tests__/` as `*.test.ts` or `*.test.tsx`. Existing colocated `*.test.ts` runtime tests are also part of the full Vitest suite.
 - Bug fixes require focused regression tests, especially around document lifecycle, canvas runtime, IPC boundaries, persistence, and shared contracts.
 - Frontend changes require `cd desktop/web && npx tsc --noEmit` and focused Vitest coverage.
 - Run `cd desktop/web && npm test` when the frontend surface area is broad or the change touches shared runtime behavior.

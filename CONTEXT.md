@@ -548,7 +548,7 @@ Developer: "Layer visibility is canvas-owned design state. Changing it is a scen
 
 Designer: "Can I search for an address and keep the site's altitude?"
 
-Developer: "On desktop, yes. In the Web Edition, the location workbench sets the site from latitude and longitude coordinates or a map pick, without address search or altitude editing."
+Developer: "On desktop, yes. Web Edition v1 preserves saved Location data when opening and downloading Designs, but does not expose Location editing."
 
 Designer: "Can a timeline action apply to every apple tree in the design?"
 

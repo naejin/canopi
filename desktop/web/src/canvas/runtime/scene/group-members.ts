@@ -32,12 +32,6 @@ export function sceneObjectGroupMemberFromTarget(
   return { kind: target.kind, id: target.id }
 }
 
-export function sceneObjectGroupMemberToTarget(
-  member: SceneObjectGroupMember,
-): SceneConcreteDesignObjectTarget {
-  return { kind: member.kind, id: member.id }
-}
-
 export function sceneObjectGroupMemberLayerName(member: SceneObjectGroupMember): string {
   if (member.kind === 'zone') return 'zones'
   if (member.kind === 'annotation') return 'annotations'

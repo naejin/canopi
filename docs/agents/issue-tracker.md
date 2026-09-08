@@ -16,6 +16,7 @@ Canopi uses **bd (beads)** for task, bug, feature, epic, chore, and decision tra
 - When batch creation flows cannot express `design`, `acceptance`, or readiness labels directly, backfill those fields immediately.
 - Use labels only for workflow hints such as triage readiness; status still comes from bd.
 - Close completed work with `bd close <id>` after verification.
+- Bead mutations update Dolt; they do not automatically refresh the tracked `.beads/issues.jsonl` snapshot. After final bead updates, run `bd export -o .beads/issues.jsonl` and include the export with the implementation commit. Avoid separate claim/close-only Git commits.
 
 Direct `main` work is acceptable only for explicitly requested mainline maintenance, small docs-only updates, or repository administration. Feature, refactor, and bug-fix implementation work should use a scoped branch.
 

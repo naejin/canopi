@@ -1,7 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save, open } from '@tauri-apps/plugin-dialog'
 import type {
-  AutosaveEntry,
   CanopiFile,
   DesignNotebookSection,
   DesignNotebookSnapshot,
@@ -99,11 +98,6 @@ export async function getRecentFiles(): Promise<DesignSummary[]> {
   return invoke('get_recent_files')
 }
 
-/** Get saved Design references for the Design Notebook. */
-export async function getDesignNotebookEntries(): Promise<DesignSummary[]> {
-  return invoke('get_design_notebook_entries')
-}
-
 /** Get saved Design references plus user-owned Notebook Section organization. */
 export async function getDesignNotebook(): Promise<DesignNotebookSnapshot> {
   return invoke('get_design_notebook')
@@ -150,9 +144,4 @@ export async function reorderDesignReferences(paths: string[]): Promise<void> {
 /** Silent autosave to app data dir. */
 async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
   return invoke('autosave_design', { content: encodeCanopiDesign(content), path })
-}
-
-/** List available autosave files for crash recovery. */
-export async function listAutosaves(): Promise<AutosaveEntry[]> {
-  return invoke('list_autosaves')
 }

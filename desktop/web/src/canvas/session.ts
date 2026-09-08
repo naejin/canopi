@@ -62,20 +62,8 @@ export function getCurrentCanvasToolCommandSurface(): CanvasToolCommandSurface |
   return currentCanvasToolCommandSurface.value
 }
 
-export function getCurrentCanvasViewportCommandSurface(): CanvasViewportCommandSurface | null {
-  return currentCanvasViewportCommandSurface.value
-}
-
 export function getCurrentCanvasLayerCommandSurface(): CanvasLayerCommandSurface | null {
   return currentCanvasLayerCommandSurface.value
-}
-
-export function getCurrentCanvasPlantPresentationCommandSurface(): CanvasPlantPresentationCommandSurface | null {
-  return currentCanvasPlantPresentationCommandSurface.value
-}
-
-export function getCurrentCanvasQuerySurface(): CanvasQuerySurface | null {
-  return currentCanvasQuerySurface.value
 }
 
 export function getCurrentCanvasDocumentSurface(): CanvasDocumentSurface | null {

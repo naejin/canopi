@@ -10,7 +10,6 @@ import {
 } from './state'
 
 export type PanelTargetPresentationOrigin = BottomPanelTab
-export type TargetPresentationOrigin = PanelTargetPresentationOrigin
 
 export interface PanelTargetSelectionSnapshot {
   readonly origin: BottomPanelTab | null

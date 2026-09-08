@@ -603,7 +603,6 @@ export const canvasDirty = designSessionStore.canvasDirty
 export const autosaveFailed = designSessionStore.autosaveFailed
 
 export const readCurrentDesign = () => designSessionStore.readCurrentDesign()
-export const readDesignSessionMetadata = () => designSessionStore.readMetadata()
 export const readDesignPath = () => designSessionStore.readDesignPath()
 export const readDesignName = () => designSessionStore.readDesignName()
 export const replaceCurrentDesignState = (

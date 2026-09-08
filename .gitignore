@@ -2,6 +2,13 @@
 /target/
 **/*.rs.bk
 
+# Python
+__pycache__/
+*.py[cod]
+
+# Local planning scratch
+/.tmp/
+
 # Node
 node_modules/
 dist/

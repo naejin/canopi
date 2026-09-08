@@ -1,4 +1,4 @@
-import type { RendererBackendContext, RendererBackendDefinition, RendererBackendInstance } from './types'
+import type { RendererBackendDefinition, RendererBackendInstance } from './types'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { SpeciesCacheEntry } from '../species-cache'
@@ -47,8 +47,3 @@ export interface SceneRendererInstance extends RendererBackendInstance {
 }
 
 export type SceneRendererDefinition = RendererBackendDefinition<SceneRendererContext, SceneRendererInstance>
-
-export interface SceneRendererBackendInit {
-  readonly context: SceneRendererContext
-  readonly backendContext: RendererBackendContext
-}

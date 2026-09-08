@@ -3,10 +3,8 @@ import type {
   DynamicFilterOptions,
   FilterOp,
   FilterOptions,
-  PaginatedResult,
   SpeciesFilter,
   SpeciesListItem,
-  SpeciesSearchRequest,
 } from '../../types/species'
 import { locale } from '../settings/state'
 import {
@@ -136,10 +134,6 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly pageSize?: number
   readonly textDebounceMs?: number
 }
-
-export type SpeciesCatalogSearchAdapter = (
-  request: SpeciesSearchRequest,
-) => Promise<PaginatedResult<SpeciesListItem>>
 
 const missingSearchAdapter: PlantSearchAdapter = async () => {
   throw new Error('Species Catalog Workbench search adapter is not configured.')

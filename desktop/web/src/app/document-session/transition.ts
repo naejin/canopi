@@ -5,7 +5,6 @@ import * as designIpc from "../../ipc/design";
 import {
   createDesignSessionStateMachine,
   type AutosaveDesignSessionOptions,
-  type DesignSessionState,
   type DocumentTransitionResult,
   type QueuedDocumentLoadOptions,
   type SaveCurrentDesignOptions,
@@ -36,10 +35,6 @@ const designSessionStateMachine = createDesignSessionStateMachine();
 interface DesignSessionLoadOptions {
   readonly session?: CanvasDocumentSurface | null;
   readonly isCancelled?: () => boolean;
-}
-
-export function getDesignSessionState(): DesignSessionState {
-  return designSessionStateMachine.getState();
 }
 
 export function captureCurrentDesignObservation() {

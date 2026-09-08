@@ -17,10 +17,6 @@ export function setCanvasTool(name: string): void {
 // node with no behavioral difference since computed(() => signal.value) === signal.
 export { activeTool as canvasToolState }
 
-export function getCanvasSelection(): Set<string> {
-  return new Set(selectedObjectIds.value)
-}
-
 export function setCanvasSelection(
   ids: Iterable<string>,
   options: { readonly publishIfUnchanged?: boolean } = {},
@@ -39,19 +35,11 @@ export function clearCanvasSelection(): void {
   selectedObjectIds.value = new Set()
 }
 
-export function hasCanvasSelection(): boolean {
-  return selectedObjectIds.value.size > 0
-}
-
 // Derived value — genuinely needs computed() since it maps Set → boolean.
 export const canvasHasSelectionState = computed(() => selectedObjectIds.value.size > 0)
 
 export function setCanvasReadyState(ready: boolean): void {
   canvasReady.value = ready
-}
-
-export function isCanvasReady(): boolean {
-  return canvasReady.value
 }
 
 export { canvasReady as canvasReadyState }

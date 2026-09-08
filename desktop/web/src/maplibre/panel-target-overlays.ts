@@ -1,5 +1,3 @@
-import type { ScenePersistedState } from '../canvas/runtime/scene'
-import { indexTargetScene, type TargetSceneIndex } from '../target'
 import type {
   TargetMapFeature,
   TargetMapProjectionResult,
@@ -110,10 +108,6 @@ function createLayerSpecs(
       },
     },
   ]
-}
-
-export function buildPanelTargetProjectionScene(scene: ScenePersistedState): TargetSceneIndex {
-  return indexTargetScene(scene)
 }
 
 export function createPanelTargetMapOverlayContract(
