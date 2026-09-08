@@ -4962,13 +4962,29 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('pans both axes on ordinary scrolling without changing scale or Design content', () => {
+  it('zooms with an unmodified mouse wheel around the pointer without changing Design content', () => {
+    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const pointer = { x: 200, y: 150 }
+    const anchor = camera.screenToWorld(pointer)
+    const scene = structuredClone(store.persisted)
+
+    events.wheel(pointer, { deltaY: -120 })
+    expect(camera.viewport.scale).toBeCloseTo(1.271249, 6)
+    expectPointCloseTo(camera.screenToWorld(pointer), anchor)
+    events.wheel(pointer, { deltaY: 120 })
+    expect(camera.viewport.scale).toBeCloseTo(1, 10)
+    expectPointCloseTo(camera.screenToWorld(pointer), anchor)
+    expect(store.persisted).toEqual(scene)
+    session.dispose()
+  })
+
+  it('pans both axes with Shift scrolling without changing scale or Design content', () => {
     const render = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render })
     const session = createTestSession(deps)
     const before = camera.viewport
     const scene = structuredClone(store.persisted)
-    const wheel = events.wheel({ x: 200, y: 150 }, { deltaX: 24, deltaY: -40 })
+    const wheel = events.wheel({ x: 200, y: 150 }, { deltaX: 24, deltaY: -40, shiftKey: true })
 
     expect(wheel.defaultPrevented).toBe(true)
     expect(camera.viewport).toEqual({ x: before.x - 24, y: before.y + 40, scale: before.scale })
@@ -4977,19 +4993,22 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it.each(['ctrlKey', 'metaKey'] as const)('zooms proportionally around the pointer with %s', (modifier) => {
+  it.each([
+    { ctrlKey: true }, { metaKey: true },
+    { ctrlKey: true, shiftKey: true }, { metaKey: true, shiftKey: true },
+  ])('zooms proportionally around the pointer with modifiers %j', (modifiers) => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
     const pointer = { x: 200, y: 150 }
     const anchor = camera.screenToWorld(pointer)
 
-    events.wheel(pointer, { deltaY: -1, [modifier]: true })
+    events.wheel(pointer, { deltaY: -1, ...modifiers })
     expect(camera.viewport.scale).toBeCloseTo(1.002002, 6)
     expectPointCloseTo(camera.screenToWorld(pointer), anchor)
-    events.wheel(pointer, { deltaY: -119, [modifier]: true })
+    events.wheel(pointer, { deltaY: -119, ...modifiers })
     expect(camera.viewport.scale).toBeCloseTo(1.271249, 6)
     expectPointCloseTo(camera.screenToWorld(pointer), anchor)
-    events.wheel(pointer, { deltaY: 120, [modifier]: true })
+    events.wheel(pointer, { deltaY: 120, ...modifiers })
     expect(camera.viewport.scale).toBeCloseTo(1, 10)
     expectPointCloseTo(camera.screenToWorld(pointer), anchor)
     session.dispose()
@@ -4998,10 +5017,24 @@ describe('SceneInteractionSession', () => {
   it.each([
     { mode: 1, x: 2, y: -3, expected: { x: -32, y: 48, scale: 1 } },
     { mode: 2, x: 0.25, y: -0.5, expected: { x: -100, y: 150, scale: 1 } },
-  ])('normalizes scroll units for deltaMode $mode', ({ mode, x, y, expected }) => {
+  ])('normalizes Shift pan units for deltaMode $mode', ({ mode, x, y, expected }) => {
     const session = createTestSession(createInteractionDeps(container, store, camera))
-    events.wheel({ x: 200, y: 150 }, { deltaMode: mode, deltaX: x, deltaY: y })
+    events.wheel({ x: 200, y: 150 }, { deltaMode: mode, deltaX: x, deltaY: y, shiftKey: true })
     expect(camera.viewport).toEqual(expected)
+    session.dispose()
+  })
+
+  it.each([
+    { mode: 0, deltaY: -48 },
+    { mode: 1, deltaY: -3 },
+    { mode: 2, deltaY: -0.16 },
+  ])('normalizes unmodified wheel zoom units for deltaMode $mode', ({ mode, deltaY }) => {
+    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const pointer = { x: 200, y: 150 }
+    const anchor = camera.screenToWorld(pointer)
+    events.wheel(pointer, { deltaMode: mode, deltaY })
+    expect(camera.viewport.scale).toBeCloseTo(1.100759, 6)
+    expectPointCloseTo(camera.screenToWorld(pointer), anchor)
     session.dispose()
   })
 
@@ -5011,7 +5044,8 @@ describe('SceneInteractionSession', () => {
     const before = camera.snapshot.peek()
     render.mockClear()
     for (const input of [
-      { deltaY: 0 }, { deltaY: 0, ctrlKey: true },
+      { deltaY: 0 }, { deltaY: 0, ctrlKey: true }, { deltaY: 0, shiftKey: true },
+      { deltaX: 24, deltaY: 0 },
       { deltaX: Number.MAX_VALUE, deltaMode: 2 }, { deltaY: Number.MAX_VALUE, deltaMode: 1, ctrlKey: true },
     ]) events.wheel({ x: 200, y: 150 }, input)
     expect(camera.snapshot.peek()).toBe(before)

@@ -694,7 +694,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const deltaY = event.deltaY * (mode === 1 ? 16 : mode === 2 ? size.height : 1)
     if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return
     const beforeRevision = this._deps.camera.snapshot.peek().revision
-    if (event.ctrlKey || event.metaKey) {
+    if (!event.shiftKey || event.ctrlKey || event.metaKey) {
       const factor = Math.exp(Math.max(-1, Math.min(1, -deltaY * 0.002)))
       this._deps.camera.zoomAroundScreenPoint(screen, factor)
     } else {

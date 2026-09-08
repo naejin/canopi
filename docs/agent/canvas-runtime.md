@@ -133,7 +133,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 ## Interaction Ownership
 
-- Ordinary wheel/two-finger scrolling pans both axes; Ctrl/Cmd + wheel and wheel-based trackpad pinch zoom around the pointer. The interaction owner normalizes pixel/line/page deltas (16 CSS px per line; viewport dimensions per page), applies the calibrated exponential zoom response, and publishes only effective viewport changes. Empty/nonfinite deltas and movement beyond scale limits do not render. Native editors and owned controls retain wheel input, and teardown removes the wheel listener.
+- Unmodified vertical wheel input zooms around the pointer. Shift + wheel pans both axes; Ctrl/Cmd + wheel and wheel-based trackpad pinch retain pointer-anchored zoom, including when Shift is held. Apply this explicit modifier policy to both mouse and trackpad events without device heuristics. Space-drag and middle-button pan remain available. The interaction owner normalizes pixel/line/page deltas (16 CSS px per line; viewport dimensions per page), applies the calibrated exponential zoom response, and publishes only effective viewport changes. Empty/nonfinite deltas and movement beyond scale limits do not render. Native editors and owned controls retain wheel input, and teardown removes the wheel listener.
 
 - The factory-created `SceneInteractionSession` in `canvas/runtime/scene-interaction.ts` owns live listener lifetime, pointer capture, generic drag routing, active-tool transitions, cancellation, refresh ordering, pending host focus, and teardown. Tool adapters own only tool-specific draft and geometry state.
 - Hit testing and selection geometry must stay scene-side.
