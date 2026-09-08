@@ -1,6 +1,6 @@
 # Canvas zoom calibration
 
-Calibration for `canopi-ms7l`, under PRD `canopi-fido`. These are implementation inputs; the dependent feature beads own production behavior.
+Calibration for `canopi-ms7l`, under PRD `canopi-fido`. The selected values are now implemented. The final integrated evidence below records `canopi-lpdp` acceptance and the rendering corrections found during visual comparison.
 
 ## Selected defaults
 
@@ -17,7 +17,7 @@ Calibration for `canopi-ms7l`, under PRD `canopi-fido`. These are implementation
 | Modified wheel/pinch | Multiply scale by `exp(−0.002 × normalizedDeltaY)` | A 120 px gesture changes scale by about 27%, between the tested 13% and 62% alternatives; small gestures remain small. Clamp the exponent to ±1 per event and retain camera limits. |
 | Delta units | Pixel: 1; line: 16 CSS px; page: viewport width/height for the matching axis | Explicitly normalize units before interpreting a gesture. Read delta mode before the delta values. Zero and nonfinite input produce no camera movement. |
 
-The existing symbolic Plant Visual Footprint curve (about 2–6.75 px radius), low-scale symbol simplification, Zone strokes, stack badges, selection/hover/lock cue hierarchy, and editing handle sizes remain the baseline. Their screen-space weight remains proportionate when text is removed; no evidence currently justifies a blanket resizing change. Physical Zone and Measurement Guide geometry and measurement visibility remain unchanged. The final coherence bead repeats this judgment with the integrated production behavior and actual interaction overlays.
+The existing symbolic Plant Visual Footprint curve (about 2–6.75 px radius), low-scale symbol simplification, Zone strokes, stack badges, selection/hover/lock cue hierarchy, and editing handle sizes remain the baseline. Their screen-space weight remains proportionate when text is removed; no evidence currently justifies a blanket resizing change. Physical Zone and Measurement Guide geometry and measurement visibility remain unchanged. The final coherence pass retained these numeric values and corrected renderer inconsistencies, as recorded below.
 
 ## Evidence and reproduction
 
@@ -45,4 +45,45 @@ The initial inspection browser had no WebGL/WebGL2 context, so its visual compar
 
 Wheel handling follows the platform's [wheel event semantics](https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event) and [delta units](https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent/deltaMode): modified wheel/pinch input must be normalized and consumed by the canvas owner. No device classifier is needed because ordinary scrolling pans for both mouse and trackpad.
 
-Production navigation check (`canopi-84un`): the real SceneCanvasRuntime in headless Chrome with software WebGL started at (100,0), scale 8, reference 20 in a 1000×800 viewport. A browser wheel event (24,−40) panned to (76,40) at scale 8; Ctrl+wheel (0,−120) at pointer (300,250) zoomed to scale 10.169993 while preserving the pointer anchor. Each published one viewport revision; device pixel ratio and browser page scale stayed at 1. The runtime was destroyed after the check. These are browser-generated input events, not physical device measurements.
+Production navigation check (`canopi-84un`): the real SceneCanvasRuntime in headless Chrome with software WebGL enabled started at (100,0), scale 8, reference 20 in a 1000×800 viewport. A browser wheel event (24,−40) panned to (76,40) at scale 8; Ctrl+wheel (0,−120) at pointer (300,250) zoomed to scale 10.169993 while preserving the pointer anchor. Each published one viewport revision; device pixel ratio and browser page scale stayed at 1. The runtime was destroyed after the check. These are browser-generated input events, not physical device measurements.
+
+
+## Final integrated verification
+
+The production comparison uses actual renderer instances and `SceneRuntimePresentationController` snapshots from the synthetic corpus. Each pair shows Canvas2D on the left and Pixi on the right, at 560×460 CSS px with the viewport settings in the original calibration. Each renderer traversed 8→14→20→14→8 px/m, returned to the photographed scale, resized to 440×340 and back to 560×460, and refreshed its viewport. Each was disposed afterward. Screenshots are saved at CSS size; backing stores use the listed actual device density. Both backends now agree on density (for example, 1120×920 backing pixels at DPR 2).
+
+| Capture | Theme / DPR | Observation |
+| --- | --- | --- |
+| [Garden overview, 8 px/m](assets/canvas-zoom/production-garden-8-dark.png) | Dark / 1.5 | Three discoverable note markers, no pinned text, visible distance and plant arrangement. |
+| [Garden transition, 14 px/m](assets/canvas-zoom/production-garden-14-light.png) | Light / 2 | Both text types at half opacity, with upright note markers crossfading. |
+| [Garden working view, 20 px/m](assets/canvas-zoom/production-garden-20-light.png) | Light / 2 | Readable authored fonts return fully; long pinned names may still overlap (collision layout remains outside scope). |
+| [Dense bed, 4 px/m](assets/canvas-zoom/production-dense-4-light.png) | Light / 1 | Overview clarity with compact plant and note symbols. |
+| [Large site, 2 px/m](assets/canvas-zoom/production-site-2-light.png) | Light / 1 | 1,280 plants remain spatially identifiable without covering the site with names. |
+| [Precision, 1,000 px/m](assets/canvas-zoom/production-garden-1000-dark.png) | Dark / 2 | Plant symbol keeps its bounded radius and curved shape. |
+| [Selected note, 4 px/m](assets/canvas-zoom/production-selected-note-4-dark.png) | Dark / 1.25 | One rotated multiline note reveals fully; outline follows its text; other notes remain markers. |
+| [Selected group, 4 px/m](assets/canvas-zoom/production-selected-group-4-light.png) | Light / 1 | Member selection cues remain readable without revealing all pinned names. |
+
+### Retained sizes and corrected rendering
+
+No blanket resizing was justified. Retain the symbolic Plant radius curve and dot fallback, 8px note marker, 1.5px note stroke, existing Zone/selection/hover/lock stroke hierarchy, stack badge radius, and editing handle sizes. Physical dimensions and measurement visibility do not change.
+
+The actual backend comparison revealed defects that simulated opacity alone could not expose:
+
+- [Before: transition](assets/canvas-zoom/before-coherence-garden-14-light.png) and [before: selected note](assets/canvas-zoom/before-coherence-selected-note-4-dark.png) show blurred Pixi Annotation text. Pixi rasterized `fontSize / cameraScale`, then enlarged that texture. Text now rasterizes at authored CSS-pixel size, with the same font family and multiline spacing as Canvas2D; badges use the same screen-space approach.
+- [Before: precision](assets/canvas-zoom/before-coherence-garden-1000-dark.png) shows a circular Pixi symbol collapsing into a diamond. Pixi now tessellates symbolic geometry at its shared screen footprint, avoiding tiny world-space primitives. Physical geometry keeps the camera transform.
+- Pixi now uses the detected device density, instead of a one-pixel backing resolution at every DPR. Canvas2D Zone strokes divide by camera scale alone, so DPR 2 no longer halves their CSS-pixel weight.
+- Pixi preserves CSS alpha when converting Zone fills and interaction strokes into numeric colors. This removes the previously heavier Zone fill and restores the same compositing as Canvas2D, including Layer opacity.
+
+These changes follow the renderer's [scene graph coordinates](https://pixijs.com/8.x/guides/concepts/scene-graph), [text resolution behavior](https://pixijs.com/8.x/guides/concepts/performance-tips), and [application density options](https://pixijs.download/v8.14.1/docs/app.ApplicationOptions.html). Shared interaction/physical geometry is unchanged by these rendering corrections.
+
+### Runtime interaction, fallback, and performance
+
+In the actual 1000×800 SceneCanvasRuntime at DPR 2, clicking the overview note at (228,136) selected `note-1`, revealed its multiline text, and displayed the existing [Rotation Handle and Selection Action Toolbar](assets/canvas-zoom/production-runtime-selection.png). F2 opened the [readable 14px editor](assets/canvas-zoom/production-runtime-editing.png). Escape preserved the exact Scene snapshot, left undo unavailable, and destruction removed all canvases. These captures use the naturally selected Canvas2D backend.
+
+The acceptance run discovered a pre-existing capability probe defect, tracked separately as `canopi-o1me`: `detectRendererCapabilities` requests incompatible context types on the same canvas, causing false WebGL negatives after acquiring 2D. This explains why automatic runtime selection uses Canvas2D even in software-WebGL Chrome. For backend verification, fresh independent canvases confirmed WebGL/WebGL2 support, and those measured capability facts were supplied to the existing RendererHost. It initialized actual Pixi, handled a deliberately injected render failure by switching to actual Canvas2D, rendered the same Scene, accepted a viewport-only change to 14 px/m, retained exactly one canvas, and removed it on disposal. This is an injected failure test, not a claim of physical GPU failure testing. The direct paired Pixi captures above do not depend on the faulty automatic probe.
+
+A paired timing run compared the original Canvas2D renderer and pinned-label implementation from `ac30b478` with the final production renderer, using the same synthetic 1,280-plant site, 2 px/m, 560×460 CSS px, DPR 2, and one browser/canvas. After five warmup pairs, 30 samples per version alternated execution order. Baseline median/p95 was **8.2/10.9 ms**; final was **6.2/7.8 ms**. That is about 24% lower median synchronous rendering time. Temporary baseline modules were removed. A separate run during the full test suite measured 11.9/27.8 ms for the final renderer, demonstrating why the paired idle comparison is more useful than comparing unrelated samples. These are local synchronous draw timings, not end-to-end input latency or hardware guarantees.
+
+TypeScript and the full frontend suite passed: **2,058 tests across 213 files**. Coverage includes camera percentage/limits, pointer anchoring and delta units, renderer viewport updates, DPR and fonts, Annotation geometry and text/marker boundaries, singleton versus mixed/group selection, locks/hidden Layers, editing cancellation, context paste after zoom, stable Fit to content from overview and precision scales, renderer-host fallback/lifetime, and exact map-camera projection. Agent guidance now describes implemented behavior; no pending zoom specification remains there.
+
+Physical mouse/trackpad feel and native desktop WebView gesture handling were not exercised in this headless browser environment. Browser-generated wheel/modifier input was verified without changing page scale, while map alignment is supported by the existing map-camera regression suite. Native GPU/driver combinations and real basemap tile rendering were not visually tested. These limits do not imply new tuning settings or require the user to choose numeric defaults.

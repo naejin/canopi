@@ -146,11 +146,53 @@ describe('createPixiSceneRenderer', () => {
       const text = pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')!
       expect(text.alpha).toBe(opacity)
       expect(text.visible).toBe(opacity! > 0)
-      expect(text.style.options.fontSize * scale!).toBeCloseTo(16)
-      if (scale === 8) expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.stroke.mock.calls.some(([stroke]) => stroke.width === 1.5 / 8 && stroke.alpha === 1))).toBe(true)
+      expect(text.style.options.fontSize).toBe(16)
+      if (scale === 8) expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.stroke.mock.calls.some(([stroke]) => stroke.width === 1.5 && stroke.alpha === 1))).toBe(true)
     }
     renderer.renderScene({ ...snapshot, viewport: { x: 0, y: 0, scale: 4 }, revealedAnnotationId: 'note', selectedAnnotationIds: new Set(['note']) })
     expect(pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')).toMatchObject({ alpha: 1, visible: true })
+    renderer.dispose()
+  })
+
+  it('renders precision glyphs and stack badges in CSS pixels at the detected density', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        apps: Array<{ init: ReturnType<typeof vi.fn> }>;
+        graphics: Array<{ circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn> }>;
+        texts: Array<{ text: string; style: { options: { fontSize: number } } }>;
+      }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: { devicePixelRatio: 1.5 },
+    } as never)
+    expect(pixi.__pixiMockState.apps[0]?.init).toHaveBeenCalledWith(expect.objectContaining({ resolution: 1.5, autoDensity: true }))
+    renderer.renderScene(createRendererSnapshot({
+      plants: [createPlant({ id: 'a', symbol: 'round' }), createPlant({ id: 'b', symbol: 'round' })],
+      viewport: { x: -9900, y: -9900, scale: 1000 },
+    }))
+    const circles = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.circle.mock.calls)
+    expect(circles.some(([x, y, radius]) => x === 100 && y === 100 && radius > 6 && radius < 7)).toBe(true)
+    expect(pixi.__pixiMockState.texts.find((text) => text.text === '2')?.style.options.fontSize).toBe(9)
+    renderer.dispose()
+  })
+
+  it('preserves CSS Zone fill alpha when composing Layer opacity', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphics: Array<{ fill: ReturnType<typeof vi.fn> }>; containers: Array<{ alpha: number }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: { devicePixelRatio: 1 },
+    } as never)
+    renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
+      zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
+        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: 'rgba(45, 95, 63, 0.1)', notes: null }],
+      layers: [{ kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 0.5 }],
+    } }))
+    const fills = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.fill.mock.calls)
+    expect(fills[0]?.[0].alpha).toBeCloseTo(0.02)
+    expect(pixi.__pixiMockState.containers.some((container) => container.alpha === 0.5)).toBe(true)
     renderer.dispose()
   })
 
@@ -430,7 +472,7 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 
-  it('applies text annotation rotation in world space', async () => {
+  it('applies text annotation rotation in screen space', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
@@ -483,7 +525,7 @@ describe('createPixiSceneRenderer', () => {
     renderer.renderScene(snapshot)
 
     const annotationText = pixi.__pixiMockState.texts.find((text) => text.text === 'Hello')
-    expect(annotationText?.position.set).toHaveBeenCalledWith(25, 35)
+    expect(annotationText?.position.set).toHaveBeenCalledWith(60, 90)
     expect(annotationText?.rotation).toBeCloseTo(Math.PI / 2)
     renderer.dispose()
   })
@@ -687,7 +729,7 @@ describe('createPixiSceneRenderer', () => {
       .map((graphics) => graphics.stroke.mock.calls[0]?.[0])
 
     expect(rotatedZoneStrokes).toHaveLength(2)
-    expect(rotatedZoneStrokes.map((stroke) => stroke?.alpha)).toEqual([0.72, 0.72])
+    for (const stroke of rotatedZoneStrokes) expect(stroke?.alpha).toBeCloseTo(0.72 * 0.62)
     renderer.dispose()
   })
 
@@ -768,12 +810,12 @@ describe('createPixiSceneRenderer', () => {
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
     const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
     expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.125 })
-    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.4 })
+    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.6 })
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 0.8 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.6 })
 
     renderer.renderScene(createTestSceneRendererSnapshot({
       scene: snapshot.scene,
@@ -785,12 +827,12 @@ describe('createPixiSceneRenderer', () => {
     }))
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.125 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.125 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 4.5 })
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 4.5 })
     renderer.dispose()
   })
 

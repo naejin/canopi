@@ -12,6 +12,18 @@ describe('createCanvas2DSceneRenderer', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps Zone outlines two CSS pixels wide on a high-density backing store', () => {
+    const canvas = createTransformTrackingCanvasContext(2)
+    const widths: number[] = []
+    canvas.context.stroke.mockImplementation(() => { widths.push(canvas.context.lineWidth) })
+    renderCanvas2DSceneSnapshot(canvas.context as unknown as CanvasRenderingContext2D, createRendererSnapshot({
+      viewport: { x: 0, y: 0, scale: 20 },
+      zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
+        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: null, notes: null }],
+    }), { widthPx: 400, heightPx: 300, dpr: 2 })
+    expect(widths).toEqual([0.1])
+  })
+
   it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
     const ctx = createMockCanvasContext()
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {

@@ -273,7 +273,7 @@ function renderZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnaps
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     ctx.strokeStyle = interactionVisual?.color ?? visual.stroke
     ctx.globalAlpha = (interactionVisual?.alpha ?? 1) * layer.opacity
-    ctx.lineWidth = (interactionVisual?.widthPx ?? 2) / Math.max(ctx.getTransform().a, 1e-6)
+    ctx.lineWidth = (interactionVisual?.widthPx ?? 2) / snapshot.viewport.scale
     ctx.stroke()
   }
 

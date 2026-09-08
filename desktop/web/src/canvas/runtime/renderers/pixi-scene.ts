@@ -1,5 +1,11 @@
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
-import { getAnnotationVisualWorldCorners, getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
+import {
+  getAnnotationVisualWorldCorners,
+  getAnnotationPresentation,
+  ANNOTATION_MARKER_PATHS,
+  ANNOTATION_MARKER_STROKE_PX,
+  worldToScreen,
+} from '../annotation-layout'
 import {
   createMeasurementGuidePresentation,
   MEASUREMENT_GUIDE_DASH_PX,
@@ -45,12 +51,14 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
     supports(capabilities) {
       return capabilities.webgl || capabilities.webgl2
     },
-    async initialize(context) {
+    async initialize(context, backendContext) {
       const app = new Application()
       await app.init({
         width: Math.max(1, context.container.clientWidth),
         height: Math.max(1, context.container.clientHeight),
         antialias: true,
+        resolution: Math.max(1, backendContext.capabilities.devicePixelRatio ?? 1),
+        autoDensity: true,
         autoStart: false,
         backgroundAlpha: 0,
         clearBeforeRender: true,
@@ -76,14 +84,18 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       const annotationHighlightLayer = new Container()
       world.addChild(zonesLayer)
       world.addChild(measurementGuideLayer)
-      world.addChild(plantsLayer)
-      world.addChild(plantsOverlayLayer)
-      world.addChild(annotationTextLayer)
-      world.addChild(annotationHighlightLayer)
+      // Rasterize text and tessellate symbols at their readable CSS-pixel size.
+      // Tiny world-unit primitives lose detail before the camera enlarges them.
+      const screen = new Container()
+      screen.addChild(plantsLayer)
+      screen.addChild(plantsOverlayLayer)
+      screen.addChild(annotationTextLayer)
+      screen.addChild(annotationHighlightLayer)
       const measurementGuideLabelLayer = new Container()
       const pinnedPlantNameLabelLayer = new Container()
       const selectionLabelLayer = new Container()
       app.stage.addChild(world)
+      app.stage.addChild(screen)
       app.stage.addChild(measurementGuideLabelLayer)
       app.stage.addChild(pinnedPlantNameLabelLayer)
       app.stage.addChild(selectionLabelLayer)
@@ -266,6 +278,7 @@ function syncMeasurementGuides(
     )
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     text.style = new TextStyle({
+      fontFamily: 'Inter, sans-serif',
       fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
       fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
     })
@@ -311,7 +324,7 @@ function drawMeasurementGuide(
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
   const color = toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0)
   const strokeWidth = screenPxToWorldPx(interactionVisual?.widthPx ?? 1.5, viewportScale)
-  const strokeAlpha = interactionVisual?.alpha ?? 1
+  const strokeAlpha = (interactionVisual?.alpha ?? 1) * cssColorAlpha(interactionVisual?.color ?? getAnnotationTextColor())
   graphics.clear()
   drawDashedMeasurementGuideLine(
     graphics,
@@ -418,6 +431,7 @@ function drawZone(
 ): void {
   const visual = resolveZoneVisual(zone)
   const fillColor = toPixiColor(visual.fill, 0)
+  const fillAlpha = 0.2 * cssColorAlpha(visual.fill)
   const interactionState = resolveInteractionState(selected, highlighted, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
   const strokeColor = toPixiColor(interactionVisual?.color ?? visual.stroke, 0)
@@ -425,7 +439,7 @@ function drawZone(
     interactionVisual?.widthPx ?? ZONE_STROKE_PX,
     viewportScale,
   )
-  const strokeAlpha = interactionVisual?.alpha ?? 1
+  const strokeAlpha = (interactionVisual?.alpha ?? 1) * cssColorAlpha(interactionVisual?.color ?? visual.stroke)
 
   graphics.clear()
 
@@ -434,7 +448,7 @@ function drawZone(
       const corners = getRectangularZoneCorners(zone)
       if (!corners) return
       drawClosedZonePath(graphics, corners)
-        .fill({ color: fillColor, alpha: 0.2 })
+        .fill({ color: fillColor, alpha: fillAlpha })
         .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
       return
     }
@@ -442,7 +456,7 @@ function drawZone(
     const start = zone.points[0]!
     const end = zone.points[2]!
     graphics.rect(start.x, start.y, end.x - start.x, end.y - start.y)
-      .fill({ color: fillColor, alpha: 0.2 })
+      .fill({ color: fillColor, alpha: fillAlpha })
       .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
     return
   }
@@ -452,7 +466,7 @@ function drawZone(
       const polygon = getEllipticalZonePolygon(zone)
       if (!polygon) return
       drawClosedZonePath(graphics, polygon)
-        .fill({ color: fillColor, alpha: 0.2 })
+        .fill({ color: fillColor, alpha: fillAlpha })
         .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
       return
     }
@@ -460,7 +474,7 @@ function drawZone(
     const center = zone.points[0]!
     const radii = zone.points[1]!
     graphics.ellipse(center.x, center.y, radii.x, radii.y)
-      .fill({ color: fillColor, alpha: 0.2 })
+      .fill({ color: fillColor, alpha: fillAlpha })
       .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
     return
   }
@@ -475,7 +489,7 @@ function drawZone(
   }
 
   if (zone.zoneType !== 'line') {
-    graphics.closePath().fill({ color: fillColor, alpha: 0.2 })
+    graphics.closePath().fill({ color: fillColor, alpha: fillAlpha })
   }
 
   graphics.stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
@@ -493,7 +507,7 @@ function drawClosedZonePath(graphics: Graphics, points: readonly { x: number; y:
 }
 
 function syncPlants(
-  world: Container,
+  symbolLayer: Container,
   overlay: Container,
   plantGraphicsById: Map<string, Graphics>,
   plantBadgeGraphicsById: Map<string, Graphics>,
@@ -502,8 +516,8 @@ function syncPlants(
   reconcileRemoved: boolean,
 ): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
-  world.visible = layer.visible
-  world.alpha = layer.opacity
+  symbolLayer.visible = layer.visible
+  symbolLayer.alpha = layer.opacity
   overlay.visible = layer.visible
   overlay.alpha = layer.opacity
   if (!layer.visible) return
@@ -521,7 +535,7 @@ function syncPlants(
     const circle = plantGraphicsById.get(entry.plant.id) ?? new Graphics()
     if (!plantGraphicsById.has(entry.plant.id)) {
       plantGraphicsById.set(entry.plant.id, circle)
-      world.addChild(circle)
+      symbolLayer.addChild(circle)
     }
     drawPlant(
       circle,
@@ -529,7 +543,6 @@ function syncPlants(
       snapshot.hoveredCanonicalName,
       snapshot.highlightedPlantIds.has(entry.plant.id),
       hoverStateForTarget(snapshot, 'plant', entry.plant.id),
-      snapshot.viewport.scale,
     )
     circle.visible = true
 
@@ -540,7 +553,7 @@ function syncPlants(
         plantBadgeGraphicsById.set(entry.plant.id, badge)
         overlay.addChild(badge)
       }
-      drawStackBadge(badge, entry, snapshot.viewport.scale)
+      drawStackBadge(badge, entry)
       badge.visible = true
 
       const badgeText = plantBadgeTextById.get(entry.plant.id) ?? new Text()
@@ -548,7 +561,7 @@ function syncPlants(
         plantBadgeTextById.set(entry.plant.id, badgeText)
         overlay.addChild(badgeText)
       }
-      drawStackBadgeText(badgeText, entry, stackCount, snapshot.viewport.scale)
+      drawStackBadgeText(badgeText, entry, stackCount)
       badgeText.visible = true
     } else if (reconcileRemoved) {
       const badge = plantBadgeGraphicsById.get(entry.plant.id)
@@ -598,16 +611,15 @@ function drawPlant(
   hoveredCanonicalName: string | null,
   highlighted: boolean,
   hoverState: SceneRendererHoverState | null,
-  viewportScale: number,
 ): void {
   const color = toPixiColor(entry.color, 0)
   const selected = entry.selected
   const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
   const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const x = entry.plant.position.x
-  const y = entry.plant.position.y
-  const r = entry.radiusWorld
+  const x = entry.screenPoint.x
+  const y = entry.screenPoint.y
+  const r = entry.radiusScreenPx
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
   const strokeColor = renderedSymbol === 'round' && selected ? selectedStrokeColor : color
@@ -621,15 +633,15 @@ function drawPlant(
     entry,
     color,
     strokeColor,
-    screenPxToWorldPx(strokeWidthPx, viewportScale),
-    viewportScale,
+    strokeWidthPx,
+    renderedSymbol === 'round' && selected ? cssColorAlpha(interactionVisual?.color ?? entry.color) : 1,
   )
   if (selected && renderedSymbol !== 'round') {
     graphics.circle(x, y, r)
       .stroke({
         color: selectedStrokeColor,
-        width: screenPxToWorldPx(interactionVisual?.widthPx ?? PLANT_STROKE_PX, viewportScale),
-        alpha: 1,
+        width: interactionVisual?.widthPx ?? PLANT_STROKE_PX,
+        alpha: cssColorAlpha(interactionVisual?.color ?? entry.color),
       })
   }
   if (interactionState && !selected) {
@@ -637,8 +649,8 @@ function drawPlant(
     graphics.circle(x, y, r * 1.4)
       .stroke({
         color: toPixiColor(ringVisual.color, 0),
-        width: screenPxToWorldPx(ringVisual.widthPx, viewportScale),
-        alpha: ringVisual.alpha,
+        width: ringVisual.widthPx,
+        alpha: ringVisual.alpha * cssColorAlpha(ringVisual.color),
       })
   }
 }
@@ -653,13 +665,13 @@ function drawPlantSymbolGlyph(
   entry: PlantPresentationEntry,
   fillColor: number,
   strokeColor: number,
-  worldLineWidth: number,
-  viewportScale: number,
+  lineWidthPx: number,
+  strokeAlpha: number,
 ): void {
-  const x = entry.plant.position.x
-  const y = entry.plant.position.y
-  const r = entry.radiusWorld
-  const lineWidth = Math.max(worldLineWidth, screenPxToWorldPx(1.6, viewportScale))
+  const x = entry.screenPoint.x
+  const y = entry.screenPoint.y
+  const r = entry.radiusScreenPx
+  const lineWidth = Math.max(lineWidthPx, 1.6)
 
   for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
     switch (command.kind) {
@@ -671,6 +683,7 @@ function drawPlantSymbolGlyph(
           fillColor,
           strokeColor,
           lineWidth,
+          strokeAlpha,
         )
         break
       case 'rect':
@@ -681,6 +694,7 @@ function drawPlantSymbolGlyph(
           fillColor,
           strokeColor,
           lineWidth,
+          strokeAlpha,
         )
         break
       case 'path': {
@@ -702,6 +716,7 @@ function drawPlantSymbolGlyph(
             (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
             DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
           ),
+          strokeAlpha,
         )
         break
       }
@@ -732,6 +747,7 @@ function drawPlantSymbolGlyph(
             (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
             DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
           ),
+          strokeAlpha,
         )
         break
       case 'lines':
@@ -745,7 +761,7 @@ function drawPlantSymbolGlyph(
             (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH) /
             DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH
           ),
-          alpha: 1,
+          alpha: strokeAlpha,
         })
         break
     }
@@ -759,9 +775,10 @@ function fillAndStrokePixiSymbolCommand(
   fillColor: number,
   strokeColor: number,
   lineWidth: number,
+  strokeAlpha: number,
 ): void {
   if (fill) graphics.fill({ color: fillColor, alpha: 0.55 })
-  if (stroke) graphics.stroke({ color: strokeColor, width: lineWidth, alpha: 1 })
+  if (stroke) graphics.stroke({ color: strokeColor, width: lineWidth, alpha: strokeAlpha })
 }
 
 function screenPxToWorldPx(px: number, viewportScale: number): number {
@@ -771,14 +788,13 @@ function screenPxToWorldPx(px: number, viewportScale: number): number {
 function drawStackBadge(
   badge: Graphics,
   entry: ReturnType<typeof buildPlantPresentationEntries>[number],
-  viewportScale: number,
 ): void {
   const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
   badge.clear()
   badge.circle(
-    entry.plant.position.x + offset.x / viewportScale,
-    entry.plant.position.y + offset.y / viewportScale,
-    STACK_BADGE_RADIUS_PX / viewportScale,
+    entry.screenPoint.x + offset.x,
+    entry.screenPoint.y + offset.y,
+    STACK_BADGE_RADIUS_PX,
   ).fill({ color: toPixiColor(getStackBadgeBackgroundColor(), 0), alpha: 1 })
 }
 
@@ -786,17 +802,17 @@ function drawStackBadgeText(
   badgeText: Text,
   entry: ReturnType<typeof buildPlantPresentationEntries>[number],
   stackCount: number,
-  viewportScale: number,
 ): void {
   const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
   badgeText.text = String(stackCount)
   badgeText.style = new TextStyle({
-    fontSize: 9 / viewportScale,
+    fontFamily: 'Inter, sans-serif',
+    fontSize: 9,
     fill: toPixiColor(getStackBadgeTextColor(), 0),
   })
   badgeText.position.set(
-    entry.plant.position.x + offset.x / viewportScale,
-    entry.plant.position.y + offset.y / viewportScale,
+    entry.screenPoint.x + offset.x,
+    entry.screenPoint.y + offset.y,
   )
   badgeText.anchor.set(0.5, 0.5)
 }
@@ -844,7 +860,7 @@ function syncAnnotations(
         annotationHighlightById.set(annotation.id, nextHighlight)
         highlightLayer.addChild(nextHighlight)
       }
-      drawAnnotationDecoration(nextHighlight, annotation, snapshot.viewport.scale, interactionState, revealText)
+      drawAnnotationDecoration(nextHighlight, annotation, snapshot.viewport, interactionState, revealText)
       nextHighlight.visible = true
     } else if (reconcileRemoved) {
       if (highlight) {
@@ -879,10 +895,13 @@ function drawAnnotationText(
 ): void {
   text.text = annotation.text
   text.style = new TextStyle({
-    fontSize: annotation.fontSize / viewport.scale,
+    fontFamily: 'Inter, sans-serif',
+    fontSize: annotation.fontSize,
+    lineHeight: getAnnotationPresentation(annotation, viewport).textFrame.lineHeightPx,
     fill: getAnnotationTextColor(),
   })
-  text.position.set(annotation.position.x, annotation.position.y)
+  const origin = worldToScreen(annotation.position, viewport)
+  text.position.set(origin.x, origin.y)
   text.rotation = ((annotation.rotationDeg ?? 0) * Math.PI) / 180
   text.anchor.set(0, 0)
 }
@@ -890,31 +909,33 @@ function drawAnnotationText(
 function drawAnnotationDecoration(
   graphics: Graphics,
   annotation: SceneAnnotationEntity,
-  viewportScale: number,
+  viewport: SceneRendererSnapshot['viewport'],
   state: CanvasInteractionVisualState | null,
   revealText: boolean,
 ): void {
-  const { markerOpacity } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, revealText)
+  const { markerOpacity } = getAnnotationPresentation(annotation, viewport, revealText)
+  const origin = worldToScreen(annotation.position, viewport)
   graphics.clear()
   if (markerOpacity > 0) {
     for (const path of ANNOTATION_MARKER_PATHS) {
       path.forEach((point, index) => {
-        const x = annotation.position.x + point.x / viewportScale
-        const y = annotation.position.y + point.y / viewportScale
+        const x = origin.x + point.x
+        const y = origin.y + point.y
         if (index === 0) graphics.moveTo(x, y)
         else graphics.lineTo(x, y)
       })
     }
     graphics.stroke({ color: toPixiColor(getAnnotationTextColor(), 0),
-      width: ANNOTATION_MARKER_STROKE_PX / viewportScale, alpha: markerOpacity })
+      width: ANNOTATION_MARKER_STROKE_PX, alpha: markerOpacity })
   }
   if (state) {
-    const corners = getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, { x: 4, y: 2 })
+    const corners = getAnnotationVisualWorldCorners(annotation, viewport.scale, revealText, { x: 4, y: 2 })
+      .map((point) => worldToScreen(point, viewport))
     const visual = getCanvasInteractionStrokeVisual(state)
     drawClosedZonePath(graphics, corners).stroke({
       color: toPixiColor(visual.color, 0),
-      width: screenPxToWorldPx(visual.widthPx, viewportScale),
-      alpha: visual.alpha,
+      width: visual.widthPx,
+      alpha: visual.alpha * cssColorAlpha(visual.color),
     })
   }
 }
@@ -935,6 +956,7 @@ function syncSelectionLabels(
     }
     text.text = label.text
     text.style = new TextStyle({
+      fontFamily: 'Inter, sans-serif',
       fontSize: 12,
       fontWeight: '600',
       fontStyle: label.fontStyle,
@@ -974,6 +996,7 @@ function syncPinnedPlantNameLabels(
       }
       text.text = label.text
       text.style = new TextStyle({
+        fontFamily: 'Inter, sans-serif',
         fontSize: 12,
         fontWeight: '600',
         fontStyle: label.fontStyle,
@@ -992,6 +1015,11 @@ function syncPinnedPlantNameLabels(
     text.destroy()
     labelByPlantId.delete(plantId)
   }
+}
+
+function cssColorAlpha(color: string): number {
+  const channels = color.match(/^rgba\(([^)]+)\)$/i)?.[1]?.split(',')
+  return channels?.length === 4 ? Number.parseFloat(channels[3]!) : 1
 }
 
 function toPixiColor(color: string | null | undefined, fallback: string | number): number {
