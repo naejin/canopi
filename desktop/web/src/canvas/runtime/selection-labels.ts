@@ -1,3 +1,4 @@
+import { getCanvasTextOpacity } from './text-visibility'
 import { worldToScreen } from './annotation-layout'
 import {
   getPlantWorldBounds,
@@ -15,6 +16,7 @@ export interface SelectionLabel {
 
 export interface PlantNameLabel {
   plantId: string
+  opacity: number
   text: string
   fontStyle: 'normal' | 'italic'
   screenPoint: ScenePoint
@@ -22,6 +24,7 @@ export interface PlantNameLabel {
 
 export interface SelectionLabelOptions {
   plantContext?: PlantPresentationContext
+  selectionLabelPlantIds?: ReadonlySet<string>
 }
 
 const PLANT_LABEL_GAP_PX = 2
@@ -59,15 +62,21 @@ export function computePinnedPlantNameLabels(
   options: SelectionLabelOptions = {},
 ): PlantNameLabel[] {
   const labels: PlantNameLabel[] = []
+  const overviewOpacity = getCanvasTextOpacity(viewport.scale)
+  const revealedId = options.selectionLabelPlantIds?.size === 1
+    ? options.selectionLabelPlantIds.values().next().value
+    : null
   for (const plant of plants) {
     if (!plant.pinnedName) continue
+    const opacity = plant.id === revealedId ? 1 : overviewOpacity
+    if (opacity === 0) continue
     const screenPoint = worldToScreen(plant.position, viewport)
     screenPoint.y += plantLabelOffsetPx([plant], viewport, options.plantContext)
 
     const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
     const text = localizedName || abbreviateCanonical(plant.canonicalName)
     const fontStyle = localizedName ? 'normal' as const : 'italic' as const
-    labels.push({ plantId: plant.id, text, fontStyle, screenPoint })
+    labels.push({ plantId: plant.id, text, fontStyle, screenPoint, opacity })
   }
 
   return labels

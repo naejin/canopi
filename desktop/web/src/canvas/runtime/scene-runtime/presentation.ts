@@ -130,7 +130,7 @@ export class SceneRuntimePresentationController {
         scene.plants,
         viewport,
         localizedCommonNames,
-        { plantContext },
+        { plantContext, selectionLabelPlantIds },
       ),
       selectionLabels: computeSelectionLabels(
         scene.plants,

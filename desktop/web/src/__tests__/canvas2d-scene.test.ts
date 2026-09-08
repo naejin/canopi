@@ -76,6 +76,7 @@ describe('createCanvas2DSceneRenderer', () => {
         pinnedName: true,
         position: { x: 10, y: 20 },
       })],
+      selectedTargets: [{ kind: 'plant', id: 'plant-1' }],
       viewport: { x: 0, y: 0, scale: 2 },
     }))
 
@@ -98,6 +99,7 @@ describe('createCanvas2DSceneRenderer', () => {
         pinnedName: true,
         position: { x: 10, y: 20 },
       })],
+      selectedTargets: [{ kind: 'plant', id: 'plant-1' }],
       viewport: { x: 0, y: 0, scale: 2 },
     }))
 
@@ -109,6 +111,25 @@ describe('createCanvas2DSceneRenderer', () => {
     const label = canvas.texts.find((entry) => entry.text === 'Apple')
     expect(label?.originCss.x).toBeCloseTo(30)
     expect(label?.originCss.y).toBeGreaterThan(28.75)
+    renderer.dispose()
+  })
+
+  it('refreshes pinned-name opacity without scaling its font or ignoring Layer opacity', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(1.25)
+    renderer.renderScene(createRendererSnapshot({
+      plants: [createPlant({ pinnedName: true })],
+      layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 0.6 }],
+    }))
+    for (const [scale, opacity] of [[20, 0.6], [14, 0.3], [8, 0], [14, 0.3], [20, 0.6]]) {
+      canvas.clearDraws()
+      renderer.setViewport({ x: 0, y: 0, scale: scale! })
+      const labels = canvas.texts.filter((entry) => entry.text === 'Apple')
+      expect(labels).toHaveLength(opacity === 0 ? 0 : 1)
+      if (opacity) {
+        expect(labels[0]?.alpha).toBeCloseTo(opacity)
+        expect(labels[0]?.font).toBe('600 12px Inter, sans-serif')
+      }
+    }
     renderer.dispose()
   })
 
@@ -621,7 +642,7 @@ function createTransformTrackingCanvasContext(backingStoreScale: number) {
   let transform: Transform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
   const stack: Transform[] = []
   const arcs: Array<{ centerCss: { x: number; y: number }; radiusCss: number }> = []
-  const texts: Array<{ text: string; originCss: { x: number; y: number } }> = []
+  const texts: Array<{ text: string; alpha: number; font: string; originCss: { x: number; y: number } }> = []
   const toCssPoint = (x: number, y: number) => ({
     x: (transform.a * x + transform.c * y + transform.e) / backingStoreScale,
     y: (transform.b * x + transform.d * y + transform.f) / backingStoreScale,
@@ -659,7 +680,7 @@ function createTransformTrackingCanvasContext(backingStoreScale: number) {
       })
     }),
     fillText: vi.fn((text: string, x: number, y: number) => {
-      texts.push({ text, originCss: toCssPoint(x, y) })
+      texts.push({ text, alpha: context.globalAlpha, font: context.font, originCss: toCssPoint(x, y) })
     }),
   }
 

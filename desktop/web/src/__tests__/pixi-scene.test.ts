@@ -106,6 +106,28 @@ describe('createPixiSceneRenderer', () => {
     pixi.__pixiMockState.texts.length = 0
   })
 
+  it('refreshes pinned-name fading on zoom reversal while retaining readable font size', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { texts: Array<{ text: string; alpha: number; style: { options: { fontSize: number } }; destroy: ReturnType<typeof vi.fn> }> }
+    }
+    const host = document.createElement('div')
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi', capabilities: { devicePixelRatio: 2 },
+    } as never)
+    renderer.renderScene(createRendererSnapshot({ plants: [createPlant({ pinnedName: true })] }))
+    for (const [scale, opacity] of [[20, 1], [14, 0.5], [8, 0], [14, 0.5], [20, 1]]) {
+      renderer.setViewport({ x: 0, y: 0, scale: scale! })
+      const labels = pixi.__pixiMockState.texts.filter((text) => text.text === 'Apple' && !text.destroy.mock.calls.length)
+      expect(labels).toHaveLength(opacity === 0 ? 0 : 1)
+      if (opacity) {
+        expect(labels[0]?.alpha).toBe(opacity)
+        expect(labels[0]?.style.options.fontSize).toBe(12)
+      }
+    }
+    renderer.dispose()
+  })
+
   it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {

@@ -2909,6 +2909,7 @@ describe('scene canvas runtime', () => {
     })
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    setInteractionViewport(runtime, { x: 0, y: 0, scale: 20 })
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.toggleSelectedPlantNamePins()
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.pinnedName)).toEqual([true, true])

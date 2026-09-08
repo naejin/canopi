@@ -110,6 +110,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
             viewport,
             snapshot.localizedCommonNames,
             {
+              selectionLabelPlantIds: snapshot.selectionLabelPlantIds,
               plantContext: {
                 viewport,
                 speciesCache: snapshot.speciesCache,
@@ -629,7 +630,7 @@ function renderPinnedPlantNameLabels(
   applyScreenSpaceTransform(ctx, dpr)
   for (const label of labels) {
     ctx.fillStyle = getPlantLabelColor()
-    ctx.globalAlpha = layer.opacity
+    ctx.globalAlpha = layer.opacity * label.opacity
     ctx.font = `${label.fontStyle === 'italic' ? 'italic ' : ''}600 12px Inter, sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'

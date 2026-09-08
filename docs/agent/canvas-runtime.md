@@ -122,7 +122,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 ## Agreed Text Visibility And Zoom Behavior (Pending Implementation)
 
-The following product decisions were accepted during the zoom and text visibility design session. They describe intended behavior, not functionality already implemented. `CONTEXT.md` reflects the resolved meaning of Pinned Plant Name; the current renderer still shows pinned names at every zoom level.
+Pinned Plant Name fading is implemented through the shared `text-visibility.ts` policy: smoothstep from hidden at 8 CSS px/m to fully visible at 20 CSS px/m, with readable font size unchanged. Exactly one directly selected pinned Plant stays readable. The following Annotation behavior remains pending.
 
 - Annotations and Pinned Plant Names keep their readable screen-space text size, then fade to hidden over the same short range of absolute canvas scales when zooming out. Zooming back in restores the text. Fading changes presentation only; it does not remove Annotations or clear saved pinning choices.
 - A hidden Annotation leaves a small, subtle selectable marker at its position. Selecting that marker reveals the Annotation text. Plant Symbols continue to identify plants whose pinned names are hidden.
@@ -130,7 +130,7 @@ The following product decisions were accepted during the zoom and text visibilit
 
 The [zoom calibration](canvas-zoom-calibration.md) records the selected numeric reference, fade thresholds, marker geometry, and navigation sensitivity with reproducible evidence. This decision covers Annotation and Pinned Plant Name visibility; existing Measurement Guide, Zone Measurement, ruler, and scale-bar rules still apply. Future implementation must keep Pixi and Canvas2D presentation and interaction bounds consistent, including the marker used when an Annotation's text is hidden.
 
-Current implementation differs: Annotation text and Pinned Plant Names remain visible at every zoom level. Replace this pending section and update the affected current-behavior guidance when the feature lands.
+Current implementation differs: Annotation text remains visible at every zoom level. Replace this pending section and update the affected current-behavior guidance when the feature lands.
 
 ## Interaction Ownership
 
@@ -257,7 +257,7 @@ Current implementation differs: Annotation text and Pinned Plant Names remain vi
 - Plant Symbols apply inside the symbolic marker Visual Footprint. Do not reintroduce a separate canopy-spread display mode or other plant-size display modes without a new decision record.
 - Plant Symbols stay upright and ignore placed plant rotation unless a future feature deliberately defines oriented marker symbols.
 - Stack badges indicate placed plants whose centers collapse to nearly the same screen position, not all plants whose symbolic Visual Footprints overlap. Badge placement should derive from the current plant visual radius instead of fixed legacy dot-size assumptions.
-- Do not reintroduce general per-plant labels on canvas. Identification is through hover tooltip and single-plant Selection Labels, except for explicit Pinned Plant Names, which are persisted per placed plant. The current implementation renders pinned names at every zoom level; the agreed replacement is recorded under "Agreed Text Visibility And Zoom Behavior (Pending Implementation)" above.
+- Do not reintroduce general per-plant labels on canvas. Identification is through hover tooltip and single-plant Selection Labels, except for explicit Pinned Plant Names, which are persisted per placed plant. Pinned names fade through the shared absolute-scale text policy. `selectionLabelPlantIds` reveals only one direct selected Plant; mixed, multiple, and group selections follow normal fading. Renderers multiply name opacity by Layer opacity and recompute it on viewport-only updates.
 - Hover tooltip is an HTML overlay managed by the Scene Interaction Session through `runtime/interaction/hover-tooltip.ts`.
 - Hover species highlight flows through renderer snapshots.
 - Selection Labels are temporary identification for the current selection only. Render them only when the whole canvas selection is exactly one unpinned Placed Plant; multi-selection, mixed-object selection, and selected pinned plants should not render transient plant names.

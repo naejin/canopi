@@ -168,6 +168,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             viewport,
             snapshot.localizedCommonNames,
             {
+              selectionLabelPlantIds: snapshot.selectionLabelPlantIds,
               plantContext: {
                 viewport,
                 speciesCache: snapshot.speciesCache,
@@ -962,6 +963,7 @@ function syncPinnedPlantNameLabels(
       })
       text.position.set(label.screenPoint.x, label.screenPoint.y)
       text.anchor.set(0.5, 0)
+      text.alpha = label.opacity
       text.visible = true
     }
   }
