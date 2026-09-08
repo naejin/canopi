@@ -223,7 +223,7 @@ A temporary visible name label shown only when one unpinned placed plant is the 
 _Avoid_: Pinned Plant Name, annotation, hover tooltip
 
 **Pinned Plant Name**:
-A persistent visible name label attached to an individual placed plant in a design. A pinned plant name is a presentation aid and does not prevent editing, moving, deleting, or otherwise changing the placed plant.
+A saved choice to display the name of an individual placed plant in a design, subject to zoom-dependent visibility. A pinned plant name is a presentation aid; hiding it at low zoom does not unpin the name or lock the placed plant.
 _Avoid_: Locked plant name, Design Object Lock, annotation
 
 **Layer**:
@@ -475,7 +475,7 @@ A **Plant Spacing Interval** positions plant centers. Canopy spread describes a 
 A **Plant Drag Distance Guide** is temporary feedback while moving an existing placed plant. A **Plant Spacing Interval** is the chosen repeat spacing used by Plant Spacing to create additional placed plants.
 
 **Pinned Plant Name vs Design Object Lock**:
-A **Pinned Plant Name** keeps a placed plant's name visible. A **Design Object Lock** prevents editing a design object; pinning a name does not lock the placed plant.
+A **Pinned Plant Name** records the choice to display a placed plant's name, not a guarantee of visibility at every zoom level. A **Design Object Lock** prevents editing a design object; pinning a name does not lock the placed plant.
 
 **Stratum vs Layer**:
 Use **Stratum** for vertical ecological position in a consortium. Use **Layer** for design-object visibility and locking.
