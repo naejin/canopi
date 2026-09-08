@@ -9,8 +9,12 @@ An agroecological plan that combines plants, spatial layout, scheduling, budget,
 _Avoid_: Document, file, project
 
 **Canvas PDF**:
-A printable, shareable representation of selected Layers from a Design's spatial layout, with a plant-identification legend. A Canvas PDF may contain a whole-Design overview and numbered detail pages focused on selected Zones; the editable Design remains the source of truth.
+A printable, shareable representation of selected Layers from a Design's spatial layout, with a plant-identification legend. A Canvas PDF may contain a whole-Design overview and numbered detail pages focused on selected Zones or Print Areas; the editable Design remains the source of truth.
 _Avoid_: Design Report, Design file, canvas screenshot
+
+**Print Area**:
+A temporary rectangular part of a Design's spatial layout selected for Canvas PDF detail pages, independently of Zones. A Print Area belongs to the export setup and does not create or modify the Design's spatial features.
+_Avoid_: Zone, Zone Draft
 
 **Design Session**:
 The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
