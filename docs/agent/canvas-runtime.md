@@ -127,13 +127,14 @@ The following product decisions were accepted during the zoom and text visibilit
 - Annotations and Pinned Plant Names keep their readable screen-space text size, then fade to hidden over the same short range of absolute canvas scales when zooming out. Zooming back in restores the text. Fading changes presentation only; it does not remove Annotations or clear saved pinning choices.
 - A hidden Annotation leaves a small, subtle selectable marker at its position. Selecting that marker reveals the Annotation text. Plant Symbols continue to identify plants whose pinned names are hidden.
 - When the whole canvas selection is exactly one direct Placed Plant or Annotation, keep that object's text fully readable regardless of the fade range. A selected unpinned plant uses its existing Selection Label; a selected pinned plant reveals its Pinned Plant Name without adding a duplicate Selection Label. An Annotation being edited also remains readable. Multi-object and Object Group selections follow normal fading rather than revealing every member's text.
-- Ordinary scrolling pans the canvas for both mouse and trackpad input. Ctrl/Cmd + wheel and trackpad pinch zoom smoothly, responding to gesture magnitude and preserving the canvas point under the pointer.
 
 The [zoom calibration](canvas-zoom-calibration.md) records the selected numeric reference, fade thresholds, marker geometry, and navigation sensitivity with reproducible evidence. This decision covers Annotation and Pinned Plant Name visibility; existing Measurement Guide, Zone Measurement, ruler, and scale-bar rules still apply. Future implementation must keep Pixi and Canvas2D presentation and interaction bounds consistent, including the marker used when an Annotation's text is hidden.
 
-Current implementation differs: `SceneInteractionSession` treats each wheel event as a fixed zoom step; Annotation text and Pinned Plant Names remain visible at every zoom level. Replace this pending section and update the affected current-behavior guidance when the feature lands.
+Current implementation differs: Annotation text and Pinned Plant Names remain visible at every zoom level. Replace this pending section and update the affected current-behavior guidance when the feature lands.
 
 ## Interaction Ownership
+
+- Ordinary wheel/two-finger scrolling pans both axes; Ctrl/Cmd + wheel and wheel-based trackpad pinch zoom around the pointer. The interaction owner normalizes pixel/line/page deltas (16 CSS px per line; viewport dimensions per page), applies the calibrated exponential zoom response, and publishes only effective viewport changes. Empty/nonfinite deltas and movement beyond scale limits do not render. Native editors and owned controls retain wheel input, and teardown removes the wheel listener.
 
 - The factory-created `SceneInteractionSession` in `canvas/runtime/scene-interaction.ts` owns live listener lifetime, pointer capture, generic drag routing, active-tool transitions, cancellation, refresh ordering, pending host focus, and teardown. Tool adapters own only tool-specific draft and geometry state.
 - Hit testing and selection geometry must stay scene-side.
