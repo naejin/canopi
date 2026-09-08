@@ -1,6 +1,11 @@
+---
+status: superseded
+superseded_by: 0024-shared-canvas-pdf-export.md
+---
+
 # Web Edition exports `.canopi` only in v1
 
-Status: Accepted
+Historical decision, superseded by [ADR 0024](0024-shared-canvas-pdf-export.md), which adds planned Canvas PDF export and carries forward the unrelated Web export exclusions.
 
 The Web Edition v1 supports explicit `.canopi` download/export as its only export format. It should not expose PNG, SVG, PDF, CSV, report, diagnostic bundle, or native-style file export flows.
 

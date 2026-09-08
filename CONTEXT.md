@@ -8,6 +8,10 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 An agroecological plan that combines plants, spatial layout, scheduling, budget, consortium planning, and site information. A design may be saved as a `.canopi` file, but "design" is the user-facing domain term.
 _Avoid_: Document, file, project
 
+**Canvas PDF**:
+A printable, shareable representation of a Design's spatial layout with a plant-identification legend. A Canvas PDF may contain an overview and numbered detail pages; the editable Design remains the source of truth.
+_Avoid_: Design Report, Design file, canvas screenshot
+
 **Design Session**:
 The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
 _Avoid_: Document session, file session, canvas session
@@ -358,6 +362,9 @@ _Avoid_: Template adaptation, plant review
 
 **Document vs Design**:
 Use **Design** for the user's agroecological plan. Reserve "document" and "file" for implementation, persistence, or agent-facing technical docs.
+
+**Design vs Canvas PDF**:
+A **Design** includes spatial layout and planning information. A **Canvas PDF** communicates the spatial layout on paper or for sharing; it does not replace the editable Design or imply inclusion of Timeline, Budget, and Consortium information.
 
 **Design vs Design Session**:
 A **Design** is the agroecological plan. A **Design Session** is the active app runtime context around that design, including lifecycle and persistence behavior.

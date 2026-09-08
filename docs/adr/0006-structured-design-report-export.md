@@ -4,4 +4,4 @@ Status: Superseded by [0011 Remove Design Report PDF export and plant display mo
 
 Canopi Design Reports are generated from structured report data with print-specific layouts instead of screenshotting the app or reusing the current canvas-snapshot PDF path. The canvas contributes a fitted image with the page/background forced white while respecting visible design and map layers, and metadata, Timeline, Budget, Consortium, legends, and tables are rendered as structured paginated PDF content so long text can wrap cleanly and the export can behave consistently across supported desktop platforms.
 
-Renderer strategy was decided separately in [0007 Design Report PDF Renderer](0007-design-report-pdf-renderer.md), which is also superseded by ADR 0011.
+Renderer strategy was decided separately in [0007 Design Report PDF Renderer](0007-design-report-pdf-renderer.md), which is also superseded by ADR 0011. The newly planned Canvas PDF export follows [ADR 0024](0024-shared-canvas-pdf-export.md); it does not reinstate this full-report scope.

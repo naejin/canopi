@@ -125,7 +125,7 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 
 - Platform trait lives in `desktop/src/platform/mod.rs`, not `common-types`.
 - Lib crates export marker structs; `platform/mod.rs` implements the trait through conditional modules.
-- The platform trait intentionally exposes only native PNG/PDF snapshot export. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
+- The current platform trait exposes native PNG/PDF snapshot export. [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) approves a future shared browser-compatible Canvas PDF pipeline; the existing OS-specific renderers do not define its architecture. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
 - macOS and Windows platform code is stubbed behind `#[cfg(target_os = "...")]`.
 - CI validates platform compilation on actual platforms.
 
