@@ -146,7 +146,7 @@ These timings are tokenized in CSS and must be referenced as:
 
 ## Controls
 
-All retained rewrite-exit surfaces use four control patterns only:
+UI surfaces use four control patterns:
 - **Primary**: filled `--color-primary`, `--color-primary-contrast` text, `--radius-md`, `var(--space-2) var(--space-3)` padding, hover via `--color-primary-hover`
 - **Secondary**: `--color-surface` fill, `--color-border` border, `--color-text` text, `--radius-md`, `var(--space-2) var(--space-3)` padding
 - **Ghost**: transparent fill, muted text, hover via `--color-control-hover`, `--radius-sm`
@@ -275,7 +275,7 @@ The rubber-band itself is a runtime-owned DOM preview. Selection is resolved and
 - **Left toolbar**: 38px, grouped command-graph tools, history actions, selected-Plant presentation actions, and Grid/Snap/Ruler toggles. Active: 2px ochre left bar.
 - **Right panel bar**: 36px, always visible for Canvas and Location workspaces. Primary commands switch workspace; side commands toggle sliding panels. Active: 2px ochre right bar.
 - **Right side panels**: Design Notebook, Species Catalog, and Favorites. They slide in between the workspace and panel bar. First-use width is `clamp(320px, 35vw, 90vw)` so the default remains proportional instead of stopping at a fixed pixel cap; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
-- **Title bar**: 36px. Logo left, file name center-left, lang/theme controls + window buttons right.
+- **Title bar**: 36px. Logo and menu left, Design identity in the central drag region, language/theme controls and window buttons right.
 - **No activity bar** — merged into panel bar.
 - **No status bar** — lang/theme moved to title bar.
 
@@ -286,7 +286,7 @@ The **strata separation** — the UI chrome (potting shed) is a completely diffe
 ## Semantic Colors
 
 Earthy, not neon:
-- Success/growth: `#5A7D3A` moss green
+- Readiness and saved-state chrome: existing ochre/ink tokens. Green status indicators in current components are a tracked discrepancy (`canopi-90wm`), not a change to the chrome palette.
 - Warning: `#B8860B` dark goldenrod
 - Danger: `#B5432A` terracotta red
 - Plant attributes use naturally-occurring colors (moss, lavender, pond teal, amber, stone, winter sky, bark)
@@ -295,21 +295,21 @@ Earthy, not neon:
 
 ### Title Bar
 - 36px tall, background `--color-bg` (blends with canvas area)
-- Left: logo (16px) + file name (when saved)
+- Left: logo (16px) + menu; central drag region: Design name and dirty indicator
 - Right: locale picker (custom dropdown, 3-column grid) + theme toggle (sun/moon SVG) + window controls
 - Theme: light/dark only (no system option) — simple toggle
 
 ### Welcome Screen
 - Logo (96px), no text headings, centered vertically
 - Two action buttons: primary (ochre) + secondary (surface with border)
-- Recent files section below with document icon, name, relative date
+- Desktop has a Recent Designs section below with document icon, name, and relative date; Web Edition omits it
 - Buttons have warm shadow, subtle lift on hover
 
 ### Canvas Workspace
 - Toolbar left (38px): command-graph tool and action groups separated by dividers
 - Bottom canvas bar: bottom-panel launcher on the left and Zoom Controls on the right
 - Scale bar bottom-left: uses `--color-text-muted` for subtlety
-- Zoom displays relative to initial view (100% = fit 100m in viewport)
+- Zoom uses a fixed reference: 100% is 20 CSS pixels per design meter, independent of viewport size. Initial framing and Fit to content select their own scale; see [zoom calibration](../docs/agent/canvas-zoom-calibration.md).
 - Rulers: background `--canvas-ruler-bg` (close to canvas bg, no harsh L-frame)
 
 ### Canvas Notice Layout
@@ -337,7 +337,7 @@ Earthy, not neon:
 - Search-first: full-width search input at top
 - Filter region: contains the always-visible `FilterStrip` rows and the `ActiveChips` strip. Natural height by default; in extreme small-height cases, the combined region scrolls vertically at `max-height: min(45vh, 360px)` so results never disappear entirely.
 - FilterStrip: always-visible compact controls below search. Filter rows come from the Species Catalog Filter catalog; do not hard-code the row list in component layout. Example rows may include Climate Zone, Sun, Habit, Life Cycle, Edibility, Woody, or N₂ Fixer depending on catalog metadata.
-- Each filter row: right-aligned label + control flex-1. Rows are 24px min-height, `height: auto`, and grow or shrink based on their own visible filter choices at the current panel width. Choice-chip rows use a responsive chip grid so normal sidebar widths produce real row-count changes instead of appearing stuck at two flex-wrap rows. Filter choices must remain visible rather than clipped. No per-row scrolling.
+- Each filter row: right-aligned label + control flex-1. Rows are 24px min-height, `height: auto`, and grow or shrink with the available width. Choice chips form a natural flex-wrapping ribbon rather than equal-width grid tracks. Filter choices remain visible without clipping or per-row scrolling.
 - "More filters ›" text link + badge count at bottom of the FilterStrip, 58px left indent
 - ActiveChips strip: horizontal wrap of dismissable `FilterChip` pills, 58px left indent matching controls. Shows all active filters from both strip and "More" panel. Border-top + border-bottom separation. It participates in the combined filter-region height cap rather than owning a separate scroll surface.
 - Terms: use `filter row` for always-visible controls, `filter choice` for an individual chip/option inside a row, and `filter category` only for More Filters drawer groups such as Climate & Soil or Growth.
@@ -390,7 +390,7 @@ Earthy, not neon:
 - Icon before label (single character/emoji), chevron `›` after (right-aligned, rotates 90° on open)
 - Header: `--color-bg` background, border-bottom on open
 - Body: `--color-surface`, padding `--space-3`, flex column with `--space-3` gap
-- Animation: chevron `transition: transform 0.15s ease`
+- Animation: chevron uses the shared transition token, `transition: transform var(--transition-normal)`
 - Used in: detail card sections, filter drawer sections
 
 ### Favorites Panel
@@ -405,7 +405,7 @@ Earthy, not neon:
 - Nav arrows: transparent 32×48px hit targets, chevron character via `text-shadow`, visible on container hover (0.8 → 1.0 opacity)
 - Dot indicators: 8px, 6px gap, `--color-border` inactive, `--color-primary` active with `scale(1.15)`. Minimum size for interactive elements
 - Placeholder: subtle icon (`--color-border`, 0.6 opacity), same 3:2 aspect ratio
-- Images served as base64 data URLs from Rust image cache (asset protocol not scoped)
+- Desktop images use paths from the Rust image cache, converted through Tauri's asset protocol scoped to the app-data image-cache directory, with remote URL fallback. Web Edition loads a remote hero image from catalog metadata; it has no native image cache.
 
 ### Pinned Plant Name Legend
 - Floating reference card above the scale-bar reservation, past the ruler gutter, at `z-index: 19`

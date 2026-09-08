@@ -13,24 +13,23 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-A06B1F?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-A06B1F?style=flat-square" alt="Platforms" />
   <img src="https://img.shields.io/badge/languages-11-A06B1F?style=flat-square" alt="Languages" />
-  <img src="https://img.shields.io/badge/species-175%2C000%2B-A06B1F?style=flat-square" alt="Species" />
 </p>
 
 ---
 
-Canopi is a desktop design tool that combines a 175,000-species plant database with an interactive canvas for designing agroecological systems. It helps designers choose plants based on ecological characteristics, arrange them spatially, and plan temporal succession.
+Canopi combines a Species Catalog with an interactive canvas for designing agroecological systems. The desktop app runs on Linux, macOS, and Windows. The Web Edition shares the canvas and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, planning panels, Location editing, and native file management.
 
 ## Features
 
-**Plant database** -- 175K species with 173 columns of ecological, morphological, and agronomic data. Full-text search, structured filters, detail cards, favorites, and 11-language support.
+**Species Catalog** -- Ecological, morphological, and agronomic data with text search, structured filters, detail cards, favorites, and 11-language support. Web Edition offers a reduced set of filters and details.
 
-**Design canvas** -- PixiJS-based workspace with zone drawing, plant placement via drag-and-drop, undo/redo, grid, rulers, scale bar, document-scoped plant colors, and density-aware labels.
+**Design canvas** -- PixiJS-based workspace with Zones, Annotations, Plant placement, Object Groups, undo/redo, grid, rulers, and Measurement Guides. Design-scoped Plant colors and symbols, Pinned Plant Names, and zoom-aware text keep the canvas readable.
 
-**Bottom panels** -- Timeline for scheduling work, budget tracker with per-species pricing and CSV export, and consortium succession chart with drag reorder and canvas hover sync.
+**Desktop planning panels** -- Timeline for scheduling work, Budget with per-species pricing and CSV export, and Consortium planning across Strata and Succession Phases with canvas hover sync.
 
-**Location** -- MapLibre-powered map picker with geocoding search, drag, zoom, and confirmation flow.
+**Desktop Location** -- MapLibre-powered Location editing, geocoding search, and a canvas basemap with terrain overlays.
 
-**File format** -- `.canopi` JSON documents with autosave, dirty tracking, and full round-trip integrity.
+**File format** -- `.canopi` JSON documents with autosave and dirty tracking. Desktop saves files; Web Edition keeps browser drafts and downloads portable `.canopi` files. Canvas PDF sharing and printing is [planned](docs/adr/0024-shared-canvas-pdf-export.md).
 
 **Field notebook aesthetic** -- Parchment, ink, and ochre palette. Light and dark themes.
 
@@ -47,24 +46,35 @@ Canopi is a desktop design tool that combines a 175,000-species plant database w
 
 ## Getting started
 
+Install Rust through rustup, Node.js 22.x (at least 22.13), and Python 3. The repository pins the Rust toolchain in [rust-toolchain.toml](rust-toolchain.toml).
+
 ```bash
-# Prerequisites: Rust toolchain, Node.js 22.13+ (Node 22 LTS)
-
 # Linux system dependencies
-sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+sudo apt-get install pkg-config libcairo2-dev libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
 
-# Generate the plant database (first time only)
+# From the repository root
+npm ci --prefix desktop/web
+cargo install tauri-cli --version '^2' --locked
+
+# Prepare the plant database from a local, pinned canopi-data export
 python3 scripts/prepare-db.py
 
 # Run the app
 cargo tauri dev
 ```
 
+Database preparation requires the exact source export pinned by the repository; see the [database guide](docs/agent/database.md#canopi-data-export). Rebuild it when that contract or source pin changes. Platform dependencies and packaging are covered in the [build guide](docs/agent/build-release.md).
+
 ## Development
+
+Run each command independently from the repository root.
 
 ```bash
 # Frontend only (hot reload)
 cd desktop/web && npm run dev
+
+# Static Web Edition build (requires generated catalog assets for packaging)
+cd desktop/web && npm run build:web
 
 # TypeScript check
 cd desktop/web && npx tsc --noEmit
@@ -93,8 +103,12 @@ canopi/
 │   ├── web/            # Preact frontend
 │   └── tauri.conf.json
 ├── common-types/       # Shared Rust <> TypeScript types
+├── bindings-gen/       # Shared contract and adapter generation
+├── lib-c/              # Linux native rendering
+├── lib-swift/          # macOS platform stub
+├── lib-cpp/            # Windows platform stub
 ├── scripts/            # DB generation, release tooling
-├── docs/               # Release operations
+├── docs/               # Architecture decisions, subsystem guides, releases
 ├── .interface-design/  # Design system documentation
 └── AGENTS.md           # Agent operating contract
 ```
@@ -102,7 +116,11 @@ canopi/
 ## Documentation
 
 - [`AGENTS.md`](AGENTS.md) — agent operating contract, architecture rules, and coding standards
+- [`CONTEXT.md`](CONTEXT.md) — domain vocabulary
+- [`docs/adr/`](docs/adr/) — architectural decisions and their history
+- [`docs/agent/`](docs/agent/) — current subsystem implementation guidance
 - [`docs/release.md`](docs/release.md) — release operations
+- [Web Edition integration](docs/agent/web-edition-website-integration.md) — static artifacts and website handoff
 - [`.interface-design/system.md`](.interface-design/system.md) — design system (field notebook aesthetic, tokens, component patterns)
 
 ## License

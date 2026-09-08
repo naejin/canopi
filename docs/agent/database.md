@@ -90,6 +90,7 @@ When canopi-data removes or adds columns, update atomically:
 - The reader registers Species assets at startup, active-locale Common Name assets on demand, and image metadata on first detail-image read. Locale, image, and filter-option lazy work is single-flight and must evict rejected Promises so a later user Retry can recover. Keep inactive locales, image metadata, and full Species rows out of eager JavaScript startup state.
 - Preserve the shared Species Search admission policy in Web Edition: no normalized token scalars browses, one normalized token scalar stays local/too-short, and two or more normalized token scalars activate search with first-page exact counts omitted. Separators do not count, so punctuation-only text browses and `A/B` is active. Query tokens are unique tokens of at least two scalars; when an active query contains only shorter tokens, all unique tokens remain active so that query does not degrade into browse.
 - Web Edition active search orders displayed selected-language Common Name exact, prefix, and contains-all-tokens matches before selected-language alternate Matched Common Names and Canonical Name fallback. Empty browse and filter-only results use stable Canonical Name order. Exact desktop BM25 parity over family/genus, uses text, and broader text remains out of scope unless the Web catalog data scope explicitly adds a richer search index.
+- The intended name contract uses selected-locale Common Names and language-neutral Canonical Name fallback. The current DuckDB adapter additionally matches source `normalized_common_name` and falls back to the source `common_name` in list/detail projections when localized names are absent. `canopi-qj4w` tracks this cross-language discrepancy; do not treat it as intended locale parity or expand the exported language scope to preserve it.
 - Web catalog failures surface through Workbench search or detail error state; search failures with no retained results expose Retry. One user Retry also reloads unresolved filter metadata and sidebar projections so a recovered search does not leave a partial catalog UI. Do not silently return an empty catalog or hide the Plant Database panel when catalog assets fail.
 - The Species Catalog Workbench retains successful per-Species favorite mutations as projection overrides and replays them across search results, Favorites, and Recently Viewed. Apply those overrides to later full snapshots so an older async read cannot reverse a committed mutation; when no authoritative Favorites adapter is supplied, favorite-list loads must not replace locally reconciled state with the empty default. Full Favorites hydration is owned by the coalesced Workbench load path (one active read plus a requested trailing refresh), not by an additional read inside each mutation.
 - Web Edition v1 detail hydration projects only hero image metadata, Canonical Name, Common Names, climate zone, habit or growth form, and life cycle. The DuckDB reader loads every selected-locale Common Name in `display_order`, primary, Unicode-length, and binary-text order, then deduplicates without disturbing that order; it falls back to the Species row's Common Name only when the locale has none. Do not recreate the desktop `SpeciesDetail` payload in the DuckDB-WASM catalog just because filterable columns are present for search predicates.
@@ -171,14 +172,14 @@ When canopi-data removes or adds columns, update atomically:
 ## canopi-data Export
 
 - canopi-data exports live under `~/projects/canopi-data/data/exports/canopi-export-YYYY-MM-DD.db`.
-- Use the latest dated export unless the bead specifies another export.
+- Desktop preparation requires the exact export bytes pinned by `scripts/schema-contract.json` `prepared_artifact.source_export_sha256`. A catalog refresh must explicitly update that reviewed source pin; a newer export is not automatically compatible with the current release identity.
 - The canopi-data changelog lives at `~/projects/canopi-data/data/exports/changelog.md`.
-- Regenerate with `python3 scripts/prepare-db.py --export-path ~/projects/canopi-data/data/exports/<latest>.db`.
-- Omitting `--export-path` auto-discovers the latest export.
+- Regenerate with `python3 scripts/prepare-db.py --export-path ~/projects/canopi-data/data/exports/<pinned-export>.db`.
+- Omitting `--export-path` auto-discovers the latest export and still verifies the pin. If that file is newer than the pinned source, pass the matching export explicitly. The Web generator independently admits its source against the Web storage contract.
 - The prepared desktop DB intentionally omits export tables that the app does not query, including `species_relationships`, `species_distributions`, `species_text_translations`, and `synonym_lookup`.
 - canopi-data v14 removed provenance/audit columns from exported Species and `source` columns from supporting tables; do not reintroduce app dependencies on those columns.
 - Stop the Tauri app before regenerating; finalization can hit DB locks.
-- There is no `sqlite3` CLI on this system by default. Use Python `sqlite3` for DB inspection.
+- Python's standard-library `sqlite3` is a portable option for DB inspection when the SQLite CLI is unavailable.
 
 ## Image Cache And Network
 

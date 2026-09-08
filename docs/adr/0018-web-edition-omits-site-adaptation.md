@@ -2,8 +2,6 @@
 
 Status: Accepted
 
-The Web Edition v1 does not include Site Adaptation, compatibility checks, or replacement suggestions. Static Design Templates import as Designs without a web-specific adaptation review step.
+Web Edition v1 excludes Site Adaptation, compatibility checks, and replacement suggestions. Static Design Templates import as Designs without an adaptation review. The retired adaptation implementation required hardiness data for compatibility and additional height/stratum metadata for replacements; exporting those fields would expand the deliberately reduced Web Species Catalog.
 
-Site Adaptation currently depends on Species hardiness data for compatibility checks and Species hardiness, height, and stratum metadata for replacement suggestions. Web Edition v1 intentionally removes those fields from the reduced Species Catalog to keep the static DuckDB-WASM dataset smaller and simpler.
-
-Site Adaptation can be reconsidered later only if the Web Edition expands the reduced catalog to include the required compatibility and replacement fields, and if the added data size and query behavior still fit the static Cloudflare Pages deployment model.
+[ADR 0023](0023-retire-dormant-site-adaptation.md) subsequently retired the dormant implementation across both editions. Restoring adaptation requires an explicit product and architecture decision, including the data scope and query costs for any browser implementation.

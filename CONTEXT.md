@@ -111,7 +111,6 @@ _Avoid_: Plant filter, SQL filter, column filter
 
 **Species Catalog Read Projection**:
 A storage-backed read model that translates Species Catalog rows into caller-oriented data for search, detail, favorites, or recently viewed Species. A species catalog read projection owns query shape, row mapping, parameter binding, and localized Common Name hydration; consuming workflows add their own interpretation.
-For `SpeciesListItem`, search results and canonical-name hydration share the same list projection row mapper so list display fields, secondary Common Names, and fallback flags stay consistent across Species Catalog workflows.
 _Avoid_: Raw species row, SQL result, ad hoc lookup
 
 **Canonical Name**:

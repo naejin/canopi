@@ -1,9 +1,7 @@
-# Web Edition uses street basemap only in v1
+# Web Edition map scope is street basemaps only
 
 Status: Accepted
 
-The Web Edition v1 keeps Location and interactive MapLibre street basemap behavior, but does not include satellite basemaps, terrain contours, hillshade, or offline tile download features. The v1 street basemap may use `https://tile.openstreetmap.org/{z}/{x}/{y}.png` for normal interactive viewing only.
+Web Edition v1 map scope permits street basemaps and excludes satellite imagery, terrain contours, hillshade, and offline tile downloads. This is a scope limit, not a promise of desktop map parity: [ADR 0016](0016-web-edition-omits-geocoding.md) excludes Location editing, and the current Web Canvas mounts no basemap. The static Design Template world map is available only when templates are configured, as described in [ADR 0017](0017-web-edition-static-design-templates.md).
 
-This keeps the Web Edition compatible with static hosting on Cloudflare Pages without introducing a backend tile proxy, protected map-provider API keys, large bundled tile pyramids, or offline tile archives. It also keeps the web map scope aligned with OpenStreetMap tile policy: browser clients may request tiles needed for normal human map viewing with attribution, referer, and standard HTTP caching, but must not bulk-download, prefetch large areas, or offer offline tile use from `tile.openstreetmap.org`.
-
-Satellite basemaps, terrain contours, hillshade, and offline maps can be reconsidered later only with a provider plan that is compatible with public-browser credentials, static hosting, attribution, caching, rate limits, and offline/prefetch terms. ADR 0022 separately records that Web Edition v1 should not add a service worker, PWA install flow, or offline-first cache.
+Permitted maps use tiles for normal interactive viewing with attribution and provider-compatible caching, without a backend tile proxy, protected credentials, bundled tile pyramids, bulk downloads, or offline archives. Adding other map sources or capabilities requires a provider plan compatible with public browser access and its attribution, rate, caching, and offline/prefetch terms. [ADR 0022](0022-web-edition-not-offline-first.md) separately excludes service workers, PWA installation, and offline-first caching.
