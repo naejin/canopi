@@ -3,7 +3,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
+import { CameraController, type CameraViewportSnapshot } from '../canvas/runtime/camera'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import {
@@ -23,6 +23,26 @@ describe('ZoomControls', () => {
     render(null, container)
     container.remove()
     setCurrentCanvasSession(null)
+  })
+
+  it('shows the same magnification across different initial window sizes and reinitialization', async () => {
+    const camera = new CameraController()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: { ...createTestCanvasQuerySurface(), viewport: camera.snapshot },
+    }))
+    for (const screen of [{ width: 1000, height: 800 }, { width: 600, height: 400 }]) {
+      await act(async () => {
+        camera.initialize(screen)
+        camera.setViewport({ x: 0, y: 0, scale: 20 })
+        render(<ZoomControls />, container)
+      })
+      expect(container.textContent).toContain('100%')
+      await act(async () => {
+        camera.resize({ width: 1200, height: 900 })
+        camera.setViewport({ x: 0, y: 0, scale: 10 })
+      })
+      expect(container.textContent).toContain('50%')
+    }
   })
 
   it('reads zoom percentage from the canonical viewport snapshot', async () => {

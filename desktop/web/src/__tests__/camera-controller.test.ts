@@ -57,7 +57,7 @@ describe('CameraController', () => {
     expect(camera.snapshot.value).toEqual({
       viewport: { x: 0, y: 0, scale: 1 },
       screenSize: { width: 0, height: 0 },
-      referenceScale: 1,
+      referenceScale: 20,
       revision: 0,
     })
   })
@@ -77,13 +77,13 @@ describe('CameraController', () => {
       {
         viewport: { x: 100, y: 0, scale: 8 },
         screenSize: { width: 1000, height: 800 },
-        referenceScale: 8,
+        referenceScale: 20,
         revision: 1,
       },
     ])
   })
 
-  it('increments once for each effective pan, zoom, resize, and reference update', () => {
+  it('increments once for each effective pan, zoom, resize, and reinitialization', () => {
     const camera = new CameraController()
     camera.initialize({ width: 1000, height: 800 })
 
@@ -97,11 +97,11 @@ describe('CameraController', () => {
     camera.resize({ width: 1200, height: 900 })
     expect(camera.snapshot.value.revision).toBe(4)
     expect(camera.snapshot.value.screenSize).toEqual({ width: 1200, height: 900 })
-    expect(camera.snapshot.value.referenceScale).toBe(8)
+    expect(camera.snapshot.value.referenceScale).toBe(20)
 
     camera.initialize({ width: 1200, height: 900 })
     expect(camera.snapshot.value.revision).toBe(5)
-    expect(camera.snapshot.value.referenceScale).toBe(9)
+    expect(camera.snapshot.value.referenceScale).toBe(20)
   })
 
   it('does not publish no-op viewport mutations', () => {

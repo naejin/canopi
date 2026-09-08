@@ -5,6 +5,7 @@ import { getPlantWorldBounds, type PlantPresentationContext } from './plant-pres
 import { getZoneWorldBounds } from './zone-geometry'
 
 const DEFAULT_VIEWPORT_METERS = 100
+const ZOOM_REFERENCE_SCALE = 20
 const DEFAULT_FIT_PADDING = 0.1
 const FIT_MAX_ITERATIONS = 20
 const FIT_CONVERGENCE_THRESHOLD = 0.0001
@@ -40,7 +41,7 @@ export class CameraController {
   private readonly _snapshot = signal<CameraViewportSnapshot>(createCameraViewportSnapshot({
     viewport: { x: 0, y: 0, scale: 1 },
     screenSize: { width: 0, height: 0 },
-    referenceScale: 1,
+    referenceScale: ZOOM_REFERENCE_SCALE,
     revision: 0,
   }))
 
@@ -63,7 +64,7 @@ export class CameraController {
         scale,
       },
       screenSize: screen,
-      referenceScale: scale > 0 ? scale : 1,
+      referenceScale: ZOOM_REFERENCE_SCALE,
     })
   }
 
