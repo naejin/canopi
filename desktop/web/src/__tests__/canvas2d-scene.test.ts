@@ -151,6 +151,37 @@ describe('createCanvas2DSceneRenderer', () => {
     renderer.dispose()
   })
 
+  it.each([1, 1.25, 2])('crossfades Annotation text and markers on viewport-only updates at DPR %s', async (dpr) => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(dpr)
+    const snapshot = createRendererSnapshot({
+      annotations: [{ kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
+        position: { x: 10, y: 20 }, text: 'First\nSecond', fontSize: 16, rotationDeg: 45 }],
+      layers: [{ kind: 'layer', name: 'annotations', visible: true, locked: false, opacity: 0.6 }],
+      viewport: { x: 5, y: 10, scale: 20 },
+    })
+    renderer.renderScene(snapshot)
+    expect(canvas.texts.filter((text) => text.text === 'First')).toHaveLength(1)
+    for (const [scale, opacity] of [[20, 0.6], [14, 0.3], [8, 0], [14, 0.3], [20, 0.6]]) {
+      canvas.clearDraws()
+      canvas.context.moveTo.mockClear()
+      renderer.setViewport({ x: 5, y: 10, scale: scale! })
+      const lines = canvas.texts.filter((text) => ['First', 'Second'].includes(text.text))
+      expect(lines).toHaveLength(opacity === 0 ? 0 : 2)
+      for (const line of lines) {
+        expect(line.alpha).toBe(opacity)
+        expect(line.font).toBe('16px Inter, sans-serif')
+      }
+      if (scale! < 20) expect(canvas.context.moveTo).toHaveBeenCalledWith(5 + 10 * scale! - 4, 10 + 20 * scale! - 4)
+    }
+    canvas.clearDraws()
+    renderer.renderScene({ ...snapshot, viewport: { x: 0, y: 0, scale: 4 }, revealedAnnotationId: 'note', selectedAnnotationIds: new Set(['note']) })
+    expect(canvas.texts.find((text) => text.text === 'First')?.alpha).toBe(0.6)
+    canvas.clearDraws()
+    renderer.renderScene({ ...snapshot, scene: { ...snapshot.scene, layers: [{ kind: 'layer', name: 'annotations', visible: false, locked: false, opacity: 1 }] } })
+    expect(canvas.texts).toEqual([])
+    renderer.dispose()
+  })
+
   it('keeps annotation text anchored on a HiDPI canvas', async () => {
     const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
 
@@ -165,6 +196,7 @@ describe('createCanvas2DSceneRenderer', () => {
         fontSize: 16,
         rotationDeg: null,
       }],
+      selectedTargets: [{ kind: 'annotation', id: 'annotation-1' }],
       viewport: { x: 10, y: 20, scale: 2 },
     }))
 
@@ -421,6 +453,7 @@ describe('createCanvas2DSceneRenderer', () => {
         guides: [],
       },
       viewport: { x: 10, y: 20, scale: 2 },
+      revealedAnnotationId: 'annotation-1',
       selectionLabelPlantIds: new Set<string>(),
       selectedPlantIds: new Set<string>(),
       selectedZoneIds: new Set<string>(),

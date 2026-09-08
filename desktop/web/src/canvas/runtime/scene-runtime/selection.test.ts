@@ -275,7 +275,7 @@ describe('scene design object selection model', () => {
       .toBeNull()
   })
 
-  it('combines Object Group member geometry and annotation readable bounds', () => {
+  it('combines Object Group member geometry with an overview Annotation marker', () => {
     const model = readModel(makeScene(), [
       { kind: 'group', id: 'group-1' },
       { kind: 'annotation', id: 'annotation-1' },
@@ -288,8 +288,8 @@ describe('scene design object selection model', () => {
     expect(model.bounds).toEqual({
       minX: 0,
       minY: 0,
-      maxX: 98,
-      maxY: 85,
+      maxX: 54,
+      maxY: 64,
     })
   })
 

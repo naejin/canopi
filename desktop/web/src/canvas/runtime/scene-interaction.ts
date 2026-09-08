@@ -555,6 +555,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._deps.camera.viewport.scale,
       this._deps.getSpeciesCache(),
       this._deps.getPlantPresentationContext,
+      this._deps.getSelection(),
     )
     this._deps.setHoveredTarget(hit)
     this._syncLockedObjectAffordance(hit, screen, this._deps.getSceneStore().persisted)
@@ -858,6 +859,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       viewportScale,
       speciesCache,
       getPlantContext,
+      this._deps.getSelection(),
     )
     if (visibleHit && isContextMenuTargetStructurallyBlocked(scene, visibleHit)) {
       return disabledContextMenuSelection()
@@ -868,6 +870,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       viewportScale,
       speciesCache,
       getPlantContext,
+      this._deps.getSelection(),
     )
     if (!hit) return visibleHit ? disabledContextMenuSelection() : null
     if (isContextMenuTargetStructurallyBlocked(scene, hit)) return disabledContextMenuSelection()

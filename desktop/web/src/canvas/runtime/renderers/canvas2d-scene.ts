@@ -1,4 +1,4 @@
-import { getAnnotationScreenFrame } from '../annotation-layout'
+import { getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
 import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
@@ -559,7 +559,7 @@ function renderAnnotations(
       false,
       hoverStateForTarget(snapshot, 'annotation', annotation.id),
     )
-    drawAnnotationText(ctx, annotation, snapshot.viewport, interactionState, layer.opacity, dpr)
+    drawAnnotationText(ctx, annotation, snapshot.viewport, interactionState, layer.opacity, dpr, annotation.id === snapshot.revealedAnnotationId)
   }
 }
 
@@ -570,31 +570,51 @@ function drawAnnotationText(
   interactionState: CanvasInteractionVisualState | null,
   opacity: number,
   dpr: number,
+  revealText: boolean,
 ): void {
-  const frame = getAnnotationScreenFrame(annotation, viewport)
+  const { frame, textFrame, textOpacity, markerOpacity } = getAnnotationPresentation(annotation, viewport, revealText)
   const lines = annotation.text.split('\n')
 
   ctx.save()
   applyScreenSpaceTransform(ctx, dpr)
-  ctx.translate(frame.origin.x, frame.origin.y)
-  ctx.rotate((frame.rotationDeg * Math.PI) / 180)
-  ctx.font = `${annotation.fontSize}px Inter, sans-serif`
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-
+  if (markerOpacity > 0) {
+    ctx.strokeStyle = getAnnotationTextColor()
+    ctx.globalAlpha = opacity * markerOpacity
+    ctx.lineWidth = ANNOTATION_MARKER_STROKE_PX
+    ctx.beginPath()
+    for (const path of ANNOTATION_MARKER_PATHS) {
+      path.forEach((point, index) => {
+        const x = textFrame.origin.x + point.x
+        const y = textFrame.origin.y + point.y
+        if (index === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+    }
+    ctx.stroke()
+  }
   if (interactionState) {
     const visual = getCanvasInteractionStrokeVisual(interactionState)
+    ctx.save()
+    ctx.translate(frame.origin.x, frame.origin.y)
+    ctx.rotate((frame.rotationDeg * Math.PI) / 180)
     ctx.strokeStyle = visual.color
     ctx.globalAlpha = visual.alpha * opacity
     ctx.lineWidth = visual.widthPx
     ctx.strokeRect(-4, -2, frame.widthPx + 8, frame.heightPx + 4)
+    ctx.restore()
   }
-
-  ctx.fillStyle = getAnnotationTextColor()
-  ctx.globalAlpha = opacity
-  lines.forEach((line, index) => {
-    ctx.fillText(line, 0, index * frame.lineHeightPx)
-  })
+  if (textOpacity > 0) {
+    ctx.translate(textFrame.origin.x, textFrame.origin.y)
+    ctx.rotate((textFrame.rotationDeg * Math.PI) / 180)
+    ctx.font = `${annotation.fontSize}px Inter, sans-serif`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillStyle = getAnnotationTextColor()
+    ctx.globalAlpha = opacity * textOpacity
+    lines.forEach((line, index) => {
+      ctx.fillText(line, 0, index * textFrame.lineHeightPx)
+    })
+  }
   ctx.restore()
 }
 

@@ -44,6 +44,18 @@ function getPlantContext(viewportScale: number): PlantPresentationContext {
 }
 
 describe('scene hit testing', () => {
+  it('hits the overview note marker without letting hidden text steal a plant hit', () => {
+    const scene = createScene()
+    scene.annotations = [{ kind: 'annotation', id: 'note', annotationType: 'text',
+      position: { x: 0, y: 20 }, text: 'A long note over the plant', fontSize: 16, rotationDeg: null, locked: false }]
+    expect(hitTestTopLevel(scene, { x: -6, y: 20 }, 1, new Map(), getPlantContext))
+      .toEqual({ kind: 'annotation', id: 'note' })
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 1, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'plant-1' })
+    expect(queryRectTopLevel(scene, { x: 30, y: 22, width: 2, height: 2 }, 1, new Map(), getPlantContext))
+      .toEqual([])
+  })
+
   it('uses the symbolic Placed Plant Visual Footprint for band selection bounds', () => {
     const scene = createScene()
     const targets = queryRectTopLevel(
@@ -207,7 +219,7 @@ describe('scene hit testing', () => {
       .toEqual([])
   })
 
-  it('hit-tests rotated text annotations by their oriented text geometry', () => {
+  it('hit-tests selected rotated text annotations by their oriented text geometry', () => {
     const scene = createScene()
     scene.plants = []
     scene.annotations = [{
@@ -221,17 +233,17 @@ describe('scene hit testing', () => {
       rotationDeg: 90,
     }]
 
-    expect(hitTestTopLevel(scene, { x: 0, y: 30 }, 1, new Map(), getPlantContext))
+    expect(hitTestTopLevel(scene, { x: 0, y: 30 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual({ kind: 'annotation', id: 'annotation-1' })
-    expect(hitTestTopLevel(scene, { x: 20, y: 25 }, 1, new Map(), getPlantContext))
+    expect(hitTestTopLevel(scene, { x: 20, y: 25 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toBeNull()
-    expect(queryRectTopLevel(scene, { x: 0, y: 30, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryRectTopLevel(scene, { x: 0, y: 30, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
-    expect(queryRectTopLevel(scene, { x: 20, y: 25, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryRectTopLevel(scene, { x: 20, y: 25, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([])
   })
 
-  it('band-selects rotated text annotations by their oriented geometry instead of empty AABB corners', () => {
+  it('band-selects revealed rotated text annotations by their oriented geometry instead of empty AABB corners', () => {
     const scene = createScene()
     scene.plants = []
     scene.annotations = [{
@@ -245,11 +257,11 @@ describe('scene hit testing', () => {
       rotationDeg: 45,
     }]
 
-    expect(hitTestTopLevel(scene, { x: 16, y: 2 }, 1, new Map(), getPlantContext))
+    expect(hitTestTopLevel(scene, { x: 16, y: 2 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toBeNull()
-    expect(queryRectTopLevel(scene, { x: 16, y: 2, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryRectTopLevel(scene, { x: 16, y: 2, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([])
-    expect(queryRectTopLevel(scene, { x: 8, y: 8, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryRectTopLevel(scene, { x: 8, y: 8, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
   })
 })

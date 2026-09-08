@@ -1,4 +1,4 @@
-import { getAnnotationWorldBounds } from '../annotation-layout'
+import { getAnnotationVisualWorldBounds } from '../annotation-layout'
 import type {
   SceneAnnotationEntity,
   SceneObjectGroupEntity,
@@ -110,6 +110,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
       context.camera.viewport.scale,
       context.getSpeciesCache(),
       context.getPlantPresentationContext,
+      context.getSceneStore().session.selectedTargets,
     )
     if (!hit || isSceneDesignObjectLocked(scene, hit)) return
 
@@ -277,7 +278,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
         source.annotation.position,
         objectStampDelta(source, anchorWorld),
       )
-      const bounds = getAnnotationWorldBounds(previewAnnotation, context.camera.viewport.scale)
+      const bounds = getAnnotationVisualWorldBounds(previewAnnotation, context.camera.viewport.scale)
       showInteractionPreview(
         context.preview,
         'rectangle',
@@ -518,7 +519,7 @@ function objectStampGroupBounds(
   for (const annotation of source.annotations) {
     const previewAnnotation = cloneAnnotationForObjectStamp(annotation)
     previewAnnotation.position = translatePoint(annotation.position, delta)
-    bounds.push(getAnnotationWorldBounds(previewAnnotation, viewportScale))
+    bounds.push(getAnnotationVisualWorldBounds(previewAnnotation, viewportScale))
   }
 
   if (bounds.length === 0) return null

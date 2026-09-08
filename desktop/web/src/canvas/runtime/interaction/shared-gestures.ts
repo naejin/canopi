@@ -170,6 +170,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.context.camera.viewport.scale,
       this.context.getSpeciesCache(),
       this.context.getPlantPresentationContext,
+      this.context.getSelection(),
     )
     const lockedHit = rawHit && isDirectSceneDesignObjectLocked(scene, rawHit) ? rawHit : null
     const hit = rawHit && (!isSceneDesignObjectLocked(scene, rawHit) || lockedHit) ? rawHit : null
@@ -331,6 +332,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
         this.context.camera.viewport.scale,
         this.context.getSpeciesCache(),
         this.context.getPlantPresentationContext,
+        this.context.getSelection(),
       )) {
         if (isSceneDesignObjectLocked(scene, target)) continue
         current.set(sceneTargetKey(target), target)

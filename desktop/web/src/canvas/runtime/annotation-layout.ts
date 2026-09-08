@@ -1,4 +1,5 @@
-import type { SceneAnnotationEntity, ScenePoint, SceneViewportState } from './scene'
+import { getCanvasTextOpacity } from './text-visibility'
+import type { SceneAnnotationEntity, SceneDesignObjectSelection, ScenePoint, SceneViewportState } from './scene'
 
 export interface AnnotationTextMetrics {
   widthPx: number
@@ -19,6 +20,82 @@ export interface AnnotationScreenFrame {
   heightPx: number
   lineHeightPx: number
   rotationDeg: number
+}
+
+export const ANNOTATION_MARKER_SIZE_PX = 8
+export const ANNOTATION_MARKER_STROKE_PX = 1.5
+export const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
+  [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 4, y: 4 }, { x: -4, y: 4 }, { x: -4, y: -4 }],
+  [{ x: -2, y: -1 }, { x: 2, y: -1 }],
+  [{ x: -2, y: 1 }, { x: 1, y: 1 }],
+]
+
+export function getRevealedAnnotationId(selection: SceneDesignObjectSelection): string | null {
+  return selection.length === 1 && selection[0]?.kind === 'annotation' ? selection[0].id : null
+}
+
+export function getAnnotationPresentation(
+  annotation: SceneAnnotationEntity,
+  viewport: SceneViewportState,
+  revealText = false,
+) {
+  const textOpacity = revealText ? 1 : getCanvasTextOpacity(viewport.scale)
+  const textFrame = getAnnotationScreenFrame(annotation, viewport)
+  const markerOwnsGeometry = textOpacity < 0.5
+  return {
+    textOpacity,
+    markerOpacity: 1 - textOpacity,
+    markerOwnsGeometry,
+    textFrame,
+    frame: markerOwnsGeometry ? {
+      origin: { x: textFrame.origin.x - 4, y: textFrame.origin.y - 4 },
+      widthPx: ANNOTATION_MARKER_SIZE_PX,
+      heightPx: ANNOTATION_MARKER_SIZE_PX,
+      lineHeightPx: 0,
+      rotationDeg: 0,
+    } : textFrame,
+  }
+}
+
+export function getAnnotationVisualWorldCorners(
+  annotation: SceneAnnotationEntity,
+  viewportScale: number,
+  revealText = false,
+  paddingPx: { x: number; y: number } = { x: 0, y: 0 },
+): ScenePoint[] {
+  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, revealText)
+  const safeScale = Math.max(viewportScale, 0.001)
+  return rotatedRectCorners({
+    origin: { x: frame.origin.x / safeScale, y: frame.origin.y / safeScale },
+    width: frame.widthPx / safeScale,
+    height: frame.heightPx / safeScale,
+    paddingX: paddingPx.x / safeScale,
+    paddingY: paddingPx.y / safeScale,
+    rotationDeg: frame.rotationDeg,
+  })
+}
+
+export function getAnnotationVisualWorldBounds(
+  annotation: SceneAnnotationEntity,
+  viewportScale: number,
+  revealText = false,
+): AnnotationWorldBounds {
+  return boundsForPoints(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText))
+}
+
+export function isPointInAnnotationPresentation(
+  annotation: SceneAnnotationEntity,
+  point: ScenePoint,
+  viewportScale: number,
+  revealText = false,
+): boolean {
+  if (revealText || getCanvasTextOpacity(viewportScale) >= 0.5) {
+    return isPointInAnnotationText(annotation, point, viewportScale)
+  }
+  // Four CSS pixels of pointer allowance around the visible 8px marker.
+  const radius = (ANNOTATION_MARKER_SIZE_PX / 2 + 4) / Math.max(viewportScale, 0.001)
+  return Math.abs(point.x - annotation.position.x) <= radius + HIT_EPSILON
+    && Math.abs(point.y - annotation.position.y) <= radius + HIT_EPSILON
 }
 
 const CHARACTER_WIDTH_FACTOR = 0.6

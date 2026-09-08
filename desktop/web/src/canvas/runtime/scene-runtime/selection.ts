@@ -1,4 +1,4 @@
-import { getAnnotationWorldBounds } from '../annotation-layout'
+import { getAnnotationVisualWorldBounds, getRevealedAnnotationId } from '../annotation-layout'
 import type { SceneBounds } from '../camera'
 import {
   getPlantWorldBounds,
@@ -26,6 +26,7 @@ import { getSameSpeciesReferenceCanonicalName } from './species-selection'
 export type SceneSelectionTarget = CanvasDesignObjectSelectionTarget
 
 export interface SceneSelectionReadModelOptions {
+  readonly revealedAnnotationId?: string | null
   readonly annotationViewportScale: number
   readonly plantContext: PlantPresentationContext
 }
@@ -170,7 +171,9 @@ export function getDesignObjectSelectionModel(
     editableTargets,
     lockedTargets,
     blockedTargets,
-    bounds: getCombinedTargetBounds(persisted, [...editableTargets, ...lockedTargets], options),
+    bounds: getCombinedTargetBounds(persisted, [...editableTargets, ...lockedTargets], {
+      ...options, revealedAnnotationId: getRevealedAnnotationId(selectedTargets),
+    }),
     sameSpeciesReferenceCanonicalName: getSameSpeciesReferenceCanonicalName(persisted, editableTargets),
     plantNamePinning,
   }
@@ -235,7 +238,7 @@ export function getTargetBounds(
     return getCombinedTargetBounds(
       persisted,
       resolveSceneObjectGroupMembers(persisted, group),
-      options,
+      { ...options, revealedAnnotationId: null },
     )
   }
 
@@ -270,7 +273,9 @@ export function getTargetBounds(
     ? persisted.annotations.find((entry) => entry.id === target.id)
     : null
   if (annotation) {
-    const bounds = getAnnotationWorldBounds(annotation, options.annotationViewportScale)
+    const bounds = getAnnotationVisualWorldBounds(
+      annotation, options.annotationViewportScale, annotation.id === options.revealedAnnotationId,
+    )
     return {
       minX: bounds.x,
       minY: bounds.y,

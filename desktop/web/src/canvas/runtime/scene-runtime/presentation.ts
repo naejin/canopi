@@ -1,3 +1,4 @@
+import { getRevealedAnnotationId } from '../annotation-layout'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
 import {
   resolvePlantCanopySpreadM,
@@ -119,6 +120,7 @@ export class SceneRuntimePresentationController {
       scene,
       viewport,
       selectionLabelPlantIds,
+      revealedAnnotationId: getRevealedAnnotationId(session.selectedTargets),
       ...selectionProjection,
       highlightedPlantIds: new Set(highlightedTargets.plantIds),
       highlightedZoneIds: new Set(highlightedTargets.zoneIds),

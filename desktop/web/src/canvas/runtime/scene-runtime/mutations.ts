@@ -1,3 +1,4 @@
+import { getRevealedAnnotationId } from '../annotation-layout'
 import { createUuid } from '../../../utils/ids'
 import type { PlantPresentationContext } from '../plant-presentation'
 import { normalizeHexColor } from '../../plant-colors'
@@ -795,7 +796,10 @@ export class SceneRuntimeMutationController {
     return centerOfBounds(getCombinedTargetBounds(
       clipboardScene,
       payload.sourceTargets,
-      this._getSelectionReadModelOptions(),
+      {
+        ...this._getSelectionReadModelOptions(),
+        revealedAnnotationId: getRevealedAnnotationId(payload.sourceTargets),
+      },
     ))
   }
 }

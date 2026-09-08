@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
-import { getAnnotationWorldCorners } from '../annotation-layout'
+import { getAnnotationVisualWorldCorners, getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
 import {
   createMeasurementGuidePresentation,
   MEASUREMENT_GUIDE_DASH_PX,
@@ -825,8 +825,11 @@ function syncAnnotations(
       annotationTextById.set(annotation.id, text)
       textLayer.addChild(text)
     }
+    const revealText = annotation.id === snapshot.revealedAnnotationId
+    const { textOpacity, markerOpacity } = getAnnotationPresentation(annotation, snapshot.viewport, revealText)
     drawAnnotationText(text, annotation, snapshot.viewport)
-    text.visible = true
+    text.alpha = textOpacity
+    text.visible = textOpacity > 0
 
     const selected = snapshot.selectedAnnotationIds.has(annotation.id)
     const interactionState = resolveInteractionState(
@@ -835,13 +838,13 @@ function syncAnnotations(
       hoverStateForTarget(snapshot, 'annotation', annotation.id),
     )
     const highlight = annotationHighlightById.get(annotation.id)
-    if (interactionState) {
+    if (interactionState || markerOpacity > 0) {
       const nextHighlight = highlight ?? new Graphics()
       if (!annotationHighlightById.has(annotation.id)) {
         annotationHighlightById.set(annotation.id, nextHighlight)
         highlightLayer.addChild(nextHighlight)
       }
-      drawAnnotationHighlight(nextHighlight, annotation, snapshot.viewport.scale, interactionState)
+      drawAnnotationDecoration(nextHighlight, annotation, snapshot.viewport.scale, interactionState, revealText)
       nextHighlight.visible = true
     } else if (reconcileRemoved) {
       if (highlight) {
@@ -884,21 +887,36 @@ function drawAnnotationText(
   text.anchor.set(0, 0)
 }
 
-function drawAnnotationHighlight(
-  highlight: Graphics,
+function drawAnnotationDecoration(
+  graphics: Graphics,
   annotation: SceneAnnotationEntity,
   viewportScale: number,
-  state: CanvasInteractionVisualState,
+  state: CanvasInteractionVisualState | null,
+  revealText: boolean,
 ): void {
-  const corners = getAnnotationWorldCorners(annotation, viewportScale, { x: 4, y: 2 })
-  const visual = getCanvasInteractionStrokeVisual(state)
-  highlight.clear()
-  drawClosedZonePath(highlight, corners)
-    .stroke({
+  const { markerOpacity } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, revealText)
+  graphics.clear()
+  if (markerOpacity > 0) {
+    for (const path of ANNOTATION_MARKER_PATHS) {
+      path.forEach((point, index) => {
+        const x = annotation.position.x + point.x / viewportScale
+        const y = annotation.position.y + point.y / viewportScale
+        if (index === 0) graphics.moveTo(x, y)
+        else graphics.lineTo(x, y)
+      })
+    }
+    graphics.stroke({ color: toPixiColor(getAnnotationTextColor(), 0),
+      width: ANNOTATION_MARKER_STROKE_PX / viewportScale, alpha: markerOpacity })
+  }
+  if (state) {
+    const corners = getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, { x: 4, y: 2 })
+    const visual = getCanvasInteractionStrokeVisual(state)
+    drawClosedZonePath(graphics, corners).stroke({
       color: toPixiColor(visual.color, 0),
       width: screenPxToWorldPx(visual.widthPx, viewportScale),
       alpha: visual.alpha,
     })
+  }
 }
 
 function syncSelectionLabels(

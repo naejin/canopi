@@ -120,17 +120,15 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Do not route viewport-only work through the full scene render path.
 - `renderScene()` is for scene/presentation/selection rebuilds; `setViewport()` is for camera-only updates.
 
-## Agreed Text Visibility And Zoom Behavior (Pending Implementation)
+## Text Visibility And Zoom
 
-Pinned Plant Name fading is implemented through the shared `text-visibility.ts` policy: smoothstep from hidden at 8 CSS px/m to fully visible at 20 CSS px/m, with readable font size unchanged. Exactly one directly selected pinned Plant stays readable. The following Annotation behavior remains pending.
-
-- Annotations and Pinned Plant Names keep their readable screen-space text size, then fade to hidden over the same short range of absolute canvas scales when zooming out. Zooming back in restores the text. Fading changes presentation only; it does not remove Annotations or clear saved pinning choices.
-- A hidden Annotation leaves a small, subtle selectable marker at its position. Selecting that marker reveals the Annotation text. Plant Symbols continue to identify plants whose pinned names are hidden.
-- When the whole canvas selection is exactly one direct Placed Plant or Annotation, keep that object's text fully readable regardless of the fade range. A selected unpinned plant uses its existing Selection Label; a selected pinned plant reveals its Pinned Plant Name without adding a duplicate Selection Label. An Annotation being edited also remains readable. Multi-object and Object Group selections follow normal fading rather than revealing every member's text.
-
-The [zoom calibration](canvas-zoom-calibration.md) records the selected numeric reference, fade thresholds, marker geometry, and navigation sensitivity with reproducible evidence. This decision covers Annotation and Pinned Plant Name visibility; existing Measurement Guide, Zone Measurement, ruler, and scale-bar rules still apply. Future implementation must keep Pixi and Canvas2D presentation and interaction bounds consistent, including the marker used when an Annotation's text is hidden.
-
-Current implementation differs: Annotation text remains visible at every zoom level. Replace this pending section and update the affected current-behavior guidance when the feature lands.
+- `text-visibility.ts` owns the shared opacity curve for Annotation text and Pinned Plant Names: smoothstep from hidden at 8 CSS px per design meter to fully visible at 20. Font sizes stay screen-readable. Fading and selection are transient presentation; they must not change authored content, pinning, history, or dirty state.
+- Only one directly selected Plant or Annotation bypasses fading. Mixed, multiple, and Object Group selection follow the fade. Renderer snapshots project `selectionLabelPlantIds` and nullable `revealedAnnotationId` from the whole typed selection; never infer this exception from expanded per-kind selected IDs. A pinned Plant reveals its name without a duplicate Selection Label. An unpinned Plant retains its existing Selection Label.
+- Annotation creation/editing uses the existing readable DOM editor. Inline editing first selects the Annotation, preserving its readable renderer presentation across navigation.
+- `annotation-layout.ts` owns Annotation presentation and geometry. An upright 8px note marker with a 1.5px stroke crossfades with text at the authored anchor. Below half text opacity, marker geometry drives hit testing, band selection, outlines, selection/group bounds, and placement previews; at or above half opacity, rotated text geometry does. Pointer hits have 4px allowance around a marker; band/visual bounds use the visible 8px footprint. Coincident markers follow existing topmost scene hit order.
+- Fit to content deliberately uses full authored rotated text bounds at every scale through `getAnnotationWorldBounds`, so framing is stable when the marker/text transition is crossed. Interactive geometry uses the explicit `getAnnotationVisualWorldBounds`/`Corners` helpers instead. Physical extent still uses Annotation anchors.
+- Both Pixi and Canvas2D apply Layer visibility/opacity and refresh text/marker presentation on viewport-only updates. Marker discovery follows existing object/Layer lock rules. Hidden text must not intercept clicks outside its visible marker or reveal hidden-Layer content.
+- The [zoom calibration](canvas-zoom-calibration.md) records numeric defaults, comparisons, and verification limits. Measurement Guides, Zone Measurements, rulers, and the scale bar retain their existing visibility rules.
 
 ## Interaction Ownership
 
@@ -241,7 +239,7 @@ Current implementation differs: Annotation text remains visible at every zoom le
 
 - Annotation geometry comes from shared helpers in `runtime/annotation-layout.ts`.
 - Annotation text is readable presentation anchored to a design position; its visible text bounds are screen-space and should not be treated as physical world geometry.
-- Annotation `rotationDeg` is visible geometry. Renderers, hit testing, band selection, grouping, zoom-to-fit, and selection/read-model bounds must consume the rotated frame helpers from `annotation-layout.ts` rather than reading unrotated text bounds directly.
+- Annotation `rotationDeg` rotates readable text, while overview markers stay upright. Renderers and interactive geometry consume the shared presentation helpers; Fit to content consumes authored rotated text bounds.
 - Use the same annotation bounds for hit testing, band select, grouping, zoom-to-fit, and selection outlines.
 - Visible text should win hit testing over underlying zones/plants when it is on top.
 - Creating a new text Annotation is owned by `interaction/text-annotation-tool.ts`; editing an existing text Annotation in place is owned by `interaction/annotation-inline-editor.ts` and is started from Select-tool interaction only after the Design Object selection read model says the target is editable.

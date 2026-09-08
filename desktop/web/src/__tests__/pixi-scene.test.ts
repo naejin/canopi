@@ -128,6 +128,32 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 
+  it('crossfades Annotation markers and text, and reveals only the direct selected note', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { texts: Array<{ text: string; alpha: number; visible: boolean; style: { options: { fontSize: number } } }>; graphics: Array<{ stroke: ReturnType<typeof vi.fn> }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: { devicePixelRatio: 2 },
+    } as never)
+    const snapshot = createTestSceneRendererSnapshot({ scene: {
+      annotations: [{ kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
+        position: { x: 10, y: 20 }, text: 'First\nSecond', fontSize: 16, rotationDeg: 45 }],
+    }, viewport: { x: 0, y: 0, scale: 20 } })
+    renderer.renderScene(snapshot)
+    for (const [scale, opacity] of [[20, 1], [14, 0.5], [8, 0], [14, 0.5], [20, 1]]) {
+      renderer.setViewport({ x: 0, y: 0, scale: scale! })
+      const text = pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')!
+      expect(text.alpha).toBe(opacity)
+      expect(text.visible).toBe(opacity! > 0)
+      expect(text.style.options.fontSize * scale!).toBeCloseTo(16)
+      if (scale === 8) expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.stroke.mock.calls.some(([stroke]) => stroke.width === 1.5 / 8 && stroke.alpha === 1))).toBe(true)
+    }
+    renderer.renderScene({ ...snapshot, viewport: { x: 0, y: 0, scale: 4 }, revealedAnnotationId: 'note', selectedAnnotationIds: new Set(['note']) })
+    expect(pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')).toMatchObject({ alpha: 1, visible: true })
+    renderer.dispose()
+  })
+
   it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {

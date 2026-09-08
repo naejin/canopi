@@ -1,3 +1,4 @@
+import { getRevealedAnnotationId } from '../../canvas/runtime/annotation-layout'
 import type { SceneRendererSnapshot } from '../../canvas/runtime/renderers/scene-types'
 import type {
   SceneDesignObjectSelection,
@@ -43,6 +44,7 @@ export function createTestSceneRendererSnapshot(
     scene,
     viewport: options.viewport ?? { x: 0, y: 0, scale: 1 },
     selectionLabelPlantIds: new Set(singleSelectedPlant ? [singleSelectedPlant.id] : []),
+    revealedAnnotationId: getRevealedAnnotationId(selectedTargets),
     ...selectionProjection,
     highlightedPlantIds: new Set(options.highlightedPlantIds ?? []),
     highlightedZoneIds: new Set(options.highlightedZoneIds ?? []),

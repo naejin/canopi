@@ -1,6 +1,6 @@
 import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../../saved-object-stamp-source'
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
-import { getAnnotationScreenFrame } from '../annotation-layout'
+import { getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
 import type { CameraController } from '../camera'
 import {
   buildPlantPresentationEntries,
@@ -430,7 +430,20 @@ function appendAnnotationGhost(
   annotation: SceneAnnotationEntity,
 ): void {
   if (annotation.annotationType !== 'text') return
-  const frame = getAnnotationScreenFrame(annotation, context.camera.viewport)
+  const { textFrame: frame, textOpacity, markerOpacity } = getAnnotationPresentation(annotation, context.camera.viewport)
+  if (markerOpacity > 0) {
+    const marker = createSvgElement('path')
+    marker.dataset.savedObjectStampPart = 'annotation-marker'
+    setSvgAttributes(marker, {
+      d: ANNOTATION_MARKER_PATHS.map((path) => path.map((point, index) =>
+        `${index === 0 ? 'M' : 'L'} ${formatNumber(frame.origin.x + point.x)} ${formatNumber(frame.origin.y + point.y)}`,
+      ).join(' ')).join(' '),
+      fill: 'none', stroke: getAnnotationTextColor(), 'stroke-width': ANNOTATION_MARKER_STROKE_PX,
+      opacity: STAMP_GHOST_ANNOTATION_OPACITY * markerOpacity,
+    })
+    svg.appendChild(marker)
+  }
+  if (textOpacity === 0) return
   const text = createSvgElement('text')
   text.dataset.savedObjectStampPart = 'annotation'
   setSvgAttributes(text, {
@@ -439,7 +452,7 @@ function appendAnnotationGhost(
     fill: getAnnotationTextColor(),
     'font-family': 'Inter, sans-serif',
     'font-size': annotation.fontSize,
-    opacity: STAMP_GHOST_ANNOTATION_OPACITY,
+    opacity: STAMP_GHOST_ANNOTATION_OPACITY * textOpacity,
     transform: `rotate(${formatNumber(frame.rotationDeg)} ${formatNumber(frame.origin.x)} ${formatNumber(frame.origin.y)})`,
     'dominant-baseline': 'text-before-edge',
   })

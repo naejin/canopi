@@ -5277,6 +5277,33 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('reveals an overview marker, keeps its selected text hittable, and navigates without a Scene edit', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('note', { x: 100, y: 100 }, 'A long overview note')]
+    })
+    const before = store.persisted
+    const onSceneEditCommit = vi.fn()
+    const setHoveredTarget = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit, setHoveredTarget })
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 96, y: 100 }, { button: 0 })
+    events.pointerUp({ x: 96, y: 100 }, { button: 0 })
+    expect(store.session.selectedTargets).toEqual([annotationTarget('note')])
+    expect(getDesignObjectSelectionFromStore(store, camera).bounds!.maxX).toBeGreaterThan(200)
+    events.pointerMove({ x: 150, y: 105 })
+    expect(setHoveredTarget).toHaveBeenLastCalledWith(annotationTarget('note'))
+    for (const deltaY of [-120, 120, -120, 120]) {
+      container.dispatchEvent(new WheelEvent('wheel', { deltaY, ctrlKey: true, clientX: 100, clientY: 100, bubbles: true, cancelable: true }))
+    }
+    events.keyDown({ key: 'F2', cancelable: true, target: container })
+    expect(container.querySelector('textarea')?.value).toBe('A long overview note')
+    container.querySelector('textarea')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(store.persisted).toEqual(before)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    session.dispose()
+  })
+
   it('edits an existing text Annotation in place after double-click and Enter', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Old note')]
@@ -8511,7 +8538,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('object-stamp')
 
-    events.pointerDown({ x: 30, y: 40 }, { button: 0 })
+    events.pointerDown({ x: 26, y: 36 }, { button: 0 })
     expect(store.persisted.annotations).toHaveLength(1)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
@@ -8519,6 +8546,7 @@ describe('SceneInteractionSession', () => {
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.display).toBe('block')
+    expect(preview?.style.width).toBe('8px')
 
     events.pointerDown({ x: 100, y: 110 }, { button: 0 })
 
@@ -8527,7 +8555,7 @@ describe('SceneInteractionSession', () => {
     expect(clone.id).not.toBe('annotation-1')
     expect(clone).toMatchObject({
       annotationType: 'text',
-      position: { x: 90, y: 100 },
+      position: { x: 94, y: 104 },
       text: 'Guild note',
       fontSize: 20,
       rotationDeg: 12,
@@ -9050,9 +9078,17 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelector('[data-saved-object-stamp-part="zone"]')?.tagName.toLowerCase())
       .toBe('polygon')
     expect(container.querySelector('[data-saved-object-stamp-part="plant-symbol"] path')).toBeTruthy()
+    expect(container.querySelector('[data-saved-object-stamp-part="annotation"]')).toBeNull()
+    expect(container.querySelector('[data-saved-object-stamp-part="annotation-marker"]')).not.toBeNull()
+    const overviewViewport = camera.viewport
+    camera.setViewport({ ...overviewViewport, scale: 20 })
+    container.dispatchEvent(dragOverEvent)
     const annotationGhost = container.querySelector<SVGTextElement>('[data-saved-object-stamp-part="annotation"]')
     expect(annotationGhost?.getAttribute('font-size')).toBe('11')
     expect(annotationGhost?.getAttribute('transform')).toContain('rotate(45')
+
+    camera.setViewport(overviewViewport)
+    container.dispatchEvent(dragOverEvent)
 
     protectedDragData = false
     container.dispatchEvent(dropEvent)

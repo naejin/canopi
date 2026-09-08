@@ -1,5 +1,5 @@
 import { rectsIntersect, type SimpleRect } from '../../operations'
-import { getAnnotationWorldCorners, isPointInAnnotationText } from '../annotation-layout'
+import { getAnnotationVisualWorldCorners, getRevealedAnnotationId, isPointInAnnotationPresentation } from '../annotation-layout'
 import {
   getPlantWorldBounds,
   hitTestPlant,
@@ -7,6 +7,7 @@ import {
 } from '../plant-presentation'
 import type {
   SceneAnnotationEntity,
+  SceneDesignObjectSelection,
   SceneMeasurementGuideEntity,
   SceneObjectGroupEntity,
   ScenePersistedState,
@@ -36,6 +37,7 @@ export function hitTestTopLevel(
   viewportScale: number,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
+  selection: SceneDesignObjectSelection = [],
 ): TopLevelTarget | null {
   return hitTestTopLevelWithLayerFilter(
     scene,
@@ -44,6 +46,7 @@ export function hitTestTopLevel(
     speciesCache,
     getPlantContext,
     isLayerInteractive,
+    getRevealedAnnotationId(selection),
   )
 }
 
@@ -53,6 +56,7 @@ export function hitTestVisibleTopLevel(
   viewportScale: number,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
+  selection: SceneDesignObjectSelection = [],
 ): TopLevelTarget | null {
   return hitTestTopLevelWithLayerFilter(
     scene,
@@ -61,6 +65,7 @@ export function hitTestVisibleTopLevel(
     speciesCache,
     getPlantContext,
     isLayerVisible,
+    getRevealedAnnotationId(selection),
   )
 }
 
@@ -71,6 +76,7 @@ function hitTestTopLevelWithLayerFilter(
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   isLayerHitEligible: (scene: ScenePersistedState, layerName: string) => boolean,
+  revealedAnnotationId: string | null,
 ): TopLevelTarget | null {
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
 
@@ -96,7 +102,7 @@ function hitTestTopLevelWithLayerFilter(
     const annotation = scene.annotations[i]!
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerHitEligible(scene, 'annotations')) continue
-    if (hitAnnotation(annotation, point, viewportScale)) return { kind: 'annotation', id: annotation.id }
+    if (hitAnnotation(annotation, point, viewportScale, annotation.id === revealedAnnotationId)) return { kind: 'annotation', id: annotation.id }
   }
 
   for (let i = scene.plants.length - 1; i >= 0; i -= 1) {
@@ -144,6 +150,7 @@ export function queryRectTopLevel(
   viewportScale: number,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
+  selection: SceneDesignObjectSelection = [],
 ): TopLevelTarget[] {
   const targets: TopLevelTarget[] = []
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
@@ -188,7 +195,7 @@ export function queryRectTopLevel(
   for (const annotation of scene.annotations) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerInteractive(scene, 'annotations')) continue
-    if (annotationIntersectsRect(annotation, rect, viewportScale)) {
+    if (annotationIntersectsRect(annotation, rect, viewportScale, annotation.id === getRevealedAnnotationId(selection))) {
       targets.push({ kind: 'annotation', id: annotation.id })
     }
   }
@@ -469,16 +476,17 @@ function pointsBounds(points: readonly ScenePoint[]): SimpleRect {
   }
 }
 
-function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, viewportScale: number): boolean {
-  return isPointInAnnotationText(annotation, point, viewportScale)
+function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, viewportScale: number, revealText = false): boolean {
+  return isPointInAnnotationPresentation(annotation, point, viewportScale, revealText)
 }
 
 function annotationIntersectsRect(
   annotation: SceneAnnotationEntity,
   rect: SimpleRect,
   viewportScale: number,
+  revealText = false,
 ): boolean {
-  return polygonIntersectsRect(getAnnotationWorldCorners(annotation, viewportScale), rect)
+  return polygonIntersectsRect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText), rect)
 }
 
 function isLayerInteractive(scene: ScenePersistedState, layerName: string): boolean {

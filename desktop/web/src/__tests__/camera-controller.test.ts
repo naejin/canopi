@@ -195,6 +195,23 @@ describe('CameraController', () => {
     expect(bottomRight.y).toBeLessThanOrEqual(800)
   })
 
+  it('fits the full rotated note envelope consistently from marker and text scales', () => {
+    const scene = createScene()
+    scene.annotations = [{ kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
+      position: { x: 50, y: 60 }, text: 'A long note\nWith another line', fontSize: 16, rotationDeg: 45 }]
+    const results = [1, 14, 1000].map((scale) => {
+      const camera = new CameraController()
+      camera.initialize({ width: 1000, height: 800 })
+      camera.setViewport({ x: 0, y: 0, scale })
+      return camera.zoomToFit(scene)
+    })
+    for (const result of results) {
+      expect(result.scale).toBeCloseTo(results[0]!.scale, 2)
+      expect(result.x).toBeCloseTo(results[0]!.x, 1)
+      expect(result.y).toBeCloseTo(results[0]!.y, 1)
+    }
+  })
+
   it('converges in a single call despite scale-dependent bounds', () => {
     const camera = new CameraController()
     camera.initialize({ width: 1000, height: 800 })

@@ -117,6 +117,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
       context.camera.viewport.scale,
       context.getSpeciesCache(),
       context.getPlantPresentationContext,
+      context.getSceneStore().session.selectedTargets,
     )
 
     if (!hit || hit.kind !== 'plant' || isSceneDesignObjectLocked(scene, hit)) {
