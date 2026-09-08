@@ -30,6 +30,8 @@ When no detail pages are selected, the overview uses the same canvas-and-legend 
 
 If a Species list cannot fit its legend column at a readable size, the export preview offers clearly linked legend continuation pages as an explicit user option. The narrow column remains the normal layout; continuation pages are offered only for overflow and are not added automatically. Each continuation identifies the overview or detail page whose legend it continues. Added pages count in the preview's total, and overview navigation and neighbouring-sheet references use the resulting page numbers.
 
+Unresolved legend overflow blocks PDF export. If users decline continuation pages, they must adjust the print setup until every legend fits completely at a readable size. The exporter must not truncate the Species list or shrink text below a readable size to force it to fit.
+
 **Consequences**:
 Including Web Edition in the first release makes consistent print output a shared capability and accepts the additional browser testing, memory, and asset-loading work. Layout and PDF generation must work within the [static Web bundle](0012-web-edition-static-app-bundle.md), while saving and downloading follow the [compile-time platform adapter boundary](0021-web-edition-compile-time-adapters.md). Canvas PDF is derived from the Design's existing authorities and does not become another editable Design model or replace `.canopi` persistence.
 
@@ -39,4 +41,4 @@ This decision revises the restriction on new PDF export in [ADR 0011](0011-remov
 
 Printed basemaps must retain required attribution and use a provider-compatible export path within the [Web map scope](0013-web-edition-map-scope.md). Current interactive tile use does not establish suitability for the planned print coverage and resolution. Local PDF generation does not imply an [offline-first Web app](0022-web-edition-not-offline-first.md).
 
-This records an approved direction; the shared Canvas PDF feature is not implemented yet. The initial default scale remains unresolved. Printed examples must validate text and symbol readability and inform the default scale and column widths. The PDF library, vector/raster strategy, paper defaults, margins, overlap size, Zone context padding, handling of declined legend continuations, and validation of the print map source and rendering approach also remain unresolved.
+This records an approved direction; the shared Canvas PDF feature is not implemented yet. The initial default scale remains unresolved. Printed examples must validate text and symbol readability and inform the default scale and column widths. The PDF library, vector/raster strategy, paper defaults, margins, overlap size, Zone context padding, and validation of the print map source and rendering approach also remain unresolved.
