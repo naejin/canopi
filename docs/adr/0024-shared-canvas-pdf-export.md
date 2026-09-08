@@ -48,3 +48,5 @@ This decision revises the restriction on new PDF export in [ADR 0011](0011-remov
 Printed basemaps must retain required attribution and use a provider-compatible export path within the [Web map scope](0013-web-edition-map-scope.md). Current interactive tile use does not establish suitability for the planned print coverage and resolution. Local PDF generation does not imply an [offline-first Web app](0022-web-edition-not-offline-first.md).
 
 This records an approved direction; the shared Canvas PDF feature is not implemented yet. The initial default scale remains unresolved. Printed examples must validate text and symbol readability and inform the default scale and column widths. The PDF library, vector/raster strategy, paper defaults, margins, overlap size, Zone context padding, and validation of the print map source and rendering approach also remain unresolved.
+
+The [Canvas PDF research brief](../canvas-pdf-export-research.md) compares technical options and proposes a print-validation plan. Its recommendations inform later planning without changing the accepted decisions above.
