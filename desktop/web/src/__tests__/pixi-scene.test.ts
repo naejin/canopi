@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { detectRendererCapabilities } from '../canvas/runtime/renderers/capabilities'
 
 vi.mock('pixi.js', () => {
   const state = {
@@ -49,6 +50,7 @@ vi.mock('pixi.js', () => {
   }
 
   class MockText {
+    resolution: number | null
     visible = true
     alpha = 1
     rotation = 0
@@ -59,7 +61,8 @@ vi.mock('pixi.js', () => {
     scale = { set: vi.fn() }
     removeFromParent = vi.fn()
     destroy = vi.fn()
-    constructor() {
+    constructor(options: { resolution?: number } = {}) {
+      this.resolution = options.resolution ?? null
       state.texts.push(this)
     }
   }
@@ -104,6 +107,44 @@ describe('createPixiSceneRenderer', () => {
     pixi.__pixiMockState.containers.length = 0
     pixi.__pixiMockState.graphics.length = 0
     pixi.__pixiMockState.texts.length = 0
+  })
+
+  it.each([1, 1.5, 2])('rasterizes every text role at twice DPR %s without enlarging text during zoom', async (dpr) => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { texts: Array<{ text: string; resolution: number; style: { options: { fontSize: number; fontFamily: string } }; scale: { set: ReturnType<typeof vi.fn> } }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: { ...detectRendererCapabilities({}), devicePixelRatio: dpr },
+    })
+    try {
+      renderer.renderScene(createTestSceneRendererSnapshot({
+        scene: {
+          plants: [createPlant({ id: 'a' }), createPlant({ id: 'b' })],
+          annotations: [{ kind: 'annotation', annotationType: 'text', id: 'note', locked: false,
+            position: { x: 1, y: 1 }, text: 'Érable 日本語', fontSize: 16, rotationDeg: 15 }],
+          measurementGuides: [{ kind: 'measurement-guide', id: 'guide', locked: false,
+            start: { x: 0, y: 0 }, end: { x: 10, y: 0 } }],
+        },
+        viewport: { x: 0.35, y: 0.45, scale: 20 },
+        pinnedPlantNameLabels: [{ plantId: 'a', text: 'Pinned name', fontStyle: 'normal', opacity: 1, screenPoint: { x: 10.35, y: 20.45 } }],
+        selectionLabels: [{ canonicalName: 'Malus domestica', text: 'Selected name', fontStyle: 'italic', screenPoint: { x: 10.35, y: 30.45 } }],
+      }))
+      const texts = pixi.__pixiMockState.texts
+      expect(texts.map(text => text.text)).toEqual(expect.arrayContaining(['2', 'Érable 日本語', 'Pinned name', 'Selected name']))
+      expect(texts).toHaveLength(5)
+      for (const scale of [0.1, 8, 14, 20, 63.75, 1000, 20]) {
+        renderer.setViewport({ x: 0.35, y: 0.45, scale })
+        for (const text of texts) {
+          expect(text.resolution).toBe(dpr * 2)
+          expect(text.style.options.fontFamily).toBe('Inter, sans-serif')
+          expect(text.scale.set).not.toHaveBeenCalled()
+        }
+        expect(texts.find(text => text.text === 'Érable 日本語')?.style.options.fontSize).toBe(16)
+      }
+    } finally {
+      renderer.dispose()
+    }
   })
 
   it('refreshes pinned-name fading on zoom reversal while retaining readable font size', async () => {

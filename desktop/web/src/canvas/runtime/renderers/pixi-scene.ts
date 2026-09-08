@@ -53,11 +53,15 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
     },
     async initialize(context, backendContext) {
       const app = new Application()
+      const resolution = Math.max(1, backendContext.capabilities.devicePixelRatio ?? 1)
+      // Textures need extra samples to retain glyph edges at fractional screen
+      // positions. Keep this text-only density independent of camera zoom.
+      const createText = () => new Text({ resolution: resolution * 2 })
       await app.init({
         width: Math.max(1, context.container.clientWidth),
         height: Math.max(1, context.container.clientHeight),
         antialias: true,
-        resolution: Math.max(1, backendContext.capabilities.devicePixelRatio ?? 1),
+        resolution,
         autoDensity: true,
         autoStart: false,
         backgroundAlpha: 0,
@@ -130,6 +134,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           snapshot = nextSnapshot
           syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
           syncMeasurementGuides(
+            createText,
             measurementGuideLayer,
             measurementGuideLabelLayer,
             measurementGuideGraphicsById,
@@ -138,6 +143,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             true,
           )
           syncPlants(
+            createText,
             plantsLayer,
             plantsOverlayLayer,
             plantGraphicsById,
@@ -147,6 +153,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             true,
           )
           syncAnnotations(
+            createText,
             annotationTextLayer,
             annotationHighlightLayer,
             annotationTextById,
@@ -154,8 +161,8 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             nextSnapshot,
             true,
           )
-          syncPinnedPlantNameLabels(pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot)
-          syncSelectionLabels(selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
+          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot)
+          syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
           world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
           world.scale.set(nextSnapshot.viewport.scale)
           app.render()
@@ -191,6 +198,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
           syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
           syncMeasurementGuides(
+            createText,
             measurementGuideLayer,
             measurementGuideLabelLayer,
             measurementGuideGraphicsById,
@@ -199,6 +207,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             false,
           )
           syncPlants(
+            createText,
             plantsLayer,
             plantsOverlayLayer,
             plantGraphicsById,
@@ -208,6 +217,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             false,
           )
           syncAnnotations(
+            createText,
             annotationTextLayer,
             annotationHighlightLayer,
             annotationTextById,
@@ -215,8 +225,8 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             snapshot,
             false,
           )
-          syncPinnedPlantNameLabels(pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot)
-          syncSelectionLabels(selectionLabelLayer, selectionLabelBySpecies, snapshot)
+          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot)
+          syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, snapshot)
           world.position.set(viewport.x, viewport.y)
           world.scale.set(viewport.scale)
           app.render()
@@ -229,6 +239,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
 }
 
 function syncMeasurementGuides(
+  createText: () => Text,
   worldLayer: Container,
   labelLayer: Container,
   graphicsById: Map<string, Graphics>,
@@ -266,7 +277,7 @@ function syncMeasurementGuides(
 
     let text = labelById.get(guide.id)
     if (!text) {
-      text = new Text()
+      text = createText()
       labelById.set(guide.id, text)
       labelLayer.addChild(text)
     }
@@ -507,6 +518,7 @@ function drawClosedZonePath(graphics: Graphics, points: readonly { x: number; y:
 }
 
 function syncPlants(
+  createText: () => Text,
   symbolLayer: Container,
   overlay: Container,
   plantGraphicsById: Map<string, Graphics>,
@@ -556,7 +568,7 @@ function syncPlants(
       drawStackBadge(badge, entry)
       badge.visible = true
 
-      const badgeText = plantBadgeTextById.get(entry.plant.id) ?? new Text()
+      const badgeText = plantBadgeTextById.get(entry.plant.id) ?? createText()
       if (!plantBadgeTextById.has(entry.plant.id)) {
         plantBadgeTextById.set(entry.plant.id, badgeText)
         overlay.addChild(badgeText)
@@ -818,6 +830,7 @@ function drawStackBadgeText(
 }
 
 function syncAnnotations(
+  createText: () => Text,
   textLayer: Container,
   highlightLayer: Container,
   annotationTextById: Map<string, Text>,
@@ -836,7 +849,7 @@ function syncAnnotations(
   for (const annotation of snapshot.scene.annotations) {
     if (annotation.annotationType !== 'text') continue
     nextIds.add(annotation.id)
-    const text = annotationTextById.get(annotation.id) ?? new Text()
+    const text = annotationTextById.get(annotation.id) ?? createText()
     if (!annotationTextById.has(annotation.id)) {
       annotationTextById.set(annotation.id, text)
       textLayer.addChild(text)
@@ -941,6 +954,7 @@ function drawAnnotationDecoration(
 }
 
 function syncSelectionLabels(
+  createText: () => Text,
   layer: Container,
   labelBySpecies: Map<string, Text>,
   snapshot: SceneRendererSnapshot,
@@ -950,7 +964,7 @@ function syncSelectionLabels(
   for (const label of snapshot.selectionLabels) {
     let text = labelBySpecies.get(label.canonicalName)
     if (!text) {
-      text = new Text()
+      text = createText()
       labelBySpecies.set(label.canonicalName, text)
       layer.addChild(text)
     }
@@ -976,6 +990,7 @@ function syncSelectionLabels(
 }
 
 function syncPinnedPlantNameLabels(
+  createText: () => Text,
   layer: Container,
   labelByPlantId: Map<string, Text>,
   snapshot: SceneRendererSnapshot,
@@ -990,7 +1005,7 @@ function syncPinnedPlantNameLabels(
     for (const label of labels) {
       let text = labelByPlantId.get(label.plantId)
       if (!text) {
-        text = new Text()
+        text = createText()
         labelByPlantId.set(label.plantId, text)
         layer.addChild(text)
       }
