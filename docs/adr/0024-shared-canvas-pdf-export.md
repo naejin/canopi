@@ -16,6 +16,8 @@ A new print setup starts with the overview only, with no Zones preselected for d
 
 Alongside existing Zones, the first release lets users draw temporary rectangular Print Areas in the export preview. This provides detail coverage even when a Design contains no Zones. Print Areas belong to the export setup and do not create or modify the Design's spatial features.
 
+The print setup lasts for the current Design Session. Closing the preview to edit the Design preserves the selected Layers, Zones, Print Areas, scales, and other print options. Reopening the preview rebuilds the output from the latest Design using that setup. Closing or replacing the Design discards the setup; the next Design starts with the defaults above. Print setup is temporary session state, not `.canopi` content or persistent settings, and changing it does not mark the Design dirty.
+
 The first release supports A4 and US Letter paper. Canopi automatically chooses portrait or landscape to minimize page count at the selected scale, with a manual orientation override.
 
 Detail pages offer six initial real-world scale presets: 1:20, 1:50, 1:100, 1:200, 1:500, and 1:1000. Users choose a common detail-page scale for the export and can override it for individual Zones or Print Areas, allowing dense beds and sparse plantings to use different levels of detail. Users can measure Design distances with a ruler when printing at actual size. An oversized Zone or Print Area spans several numbered detail sheets while preserving its chosen scale. The overview fits its page. All pages showing canvas content include a scale bar.
