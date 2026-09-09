@@ -7,6 +7,7 @@ import subprocess
 import sys
 import zlib
 from PIL import Image, ImageChops, ImageStat, ImageFilter
+from preview_files import preview_files
 
 reports = []
 for argument in sys.argv[1:]:
@@ -46,10 +47,7 @@ for argument in sys.argv[1:]:
                     'canvasPages': canvas_pages, 'exact50mmBars': bars, 'embeddedUnicodeFonts': True, 'vectorCanvas': True,
                     'textSha256': hashlib.sha256(text.encode()).hexdigest(), 'planSha256': report['planSha256']}
     comparisons = []
-    previews = [(i, path.parent / f'preview-{i}.png') for i in range(1, min(3, report['pages']) + 1)] if path.name == 'pdfkit.pdf' else [(min(2, report['pages']), path.with_name(path.stem + '-preview.png'))]
-    for number, preview in previews:
-        if not preview.exists():
-            continue
+    for number, preview in preview_files(path, report['pages']):
         rendered = path.with_name(f'{path.stem}-render-{number}')
         subprocess.run(['pdftoppm', '-f', str(number), '-singlefile', '-r', '108', '-png', str(path), str(rendered)], check=True)
         expected = Image.open(preview).convert('RGB')

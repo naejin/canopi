@@ -45,7 +45,7 @@ final class Probe: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
             else { throw NSError(domain: "Probe", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid fixture result"]) }
             if let error = payload["error"] as? String { finish(error); return }
             guard let encoded = payload["pdf"] as? String, let pdf = Data(base64Encoded: encoded),
-                  let report = payload["report"], let previews = payload["previews"] as? [String], previews.count == 3
+                  let report = payload["report"], let previews = payload["previews"] as? [String], (1...3).contains(previews.count)
             else { finish("Missing fixture output"); return }
             try pdf.write(to: output.appendingPathComponent("pdfkit.pdf"), options: .atomic)
             try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: output.appendingPathComponent("pdfkit.json"))

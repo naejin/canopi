@@ -41,7 +41,7 @@ def received(_manager, result):
             raise RuntimeError(data['error'])
         (output / 'pdfkit.pdf').write_bytes(base64.b64decode(data['pdf'], validate=True))
         (output / 'pdfkit.json').write_text(json.dumps(data['report'], ensure_ascii=False, indent=2) + '\n')
-        assert len(data['previews']) == 3
+        assert 1 <= len(data['previews']) <= 3, 'Expected one to three previews'
         for index, png in enumerate(data['previews'], 1):
             (output / f'preview-{index}.png').write_bytes(base64.b64decode(png, validate=True))
         (output / 'runtime.json').write_text(json.dumps({

@@ -94,6 +94,8 @@ jobs:
         with:
           pattern: pdf-production-*
           path: production-results
+      - name: Verify required preview admission
+        run: python3 -m unittest discover -s desktop/web/scripts/pdf-validation -p 'test_*.py'
       - name: Independently verify geometry, text and identical page plans
         run: /usr/bin/python3 desktop/web/scripts/pdf-validation/verify.py production-results/*/pdfkit.pdf
       - uses: actions/upload-artifact@v4

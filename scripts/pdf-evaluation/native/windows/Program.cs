@@ -41,8 +41,9 @@ internal static class Program
                         File.WriteAllBytes(Path.Combine(output, "pdfkit.pdf"), Convert.FromBase64String(data.GetProperty("pdf").GetString()!));
                         File.WriteAllText(Path.Combine(output, "pdfkit.json"), data.GetProperty("report").GetRawText());
                         var previews = data.GetProperty("previews");
-                        if (previews.GetArrayLength() != 3) throw new InvalidDataException("Expected three previews");
-                        for (int index = 0; index < 3; index++)
+                        int previewCount = previews.GetArrayLength();
+                        if (previewCount < 1 || previewCount > 3) throw new InvalidDataException("Expected one to three previews");
+                        for (int index = 0; index < previewCount; index++)
                             File.WriteAllBytes(Path.Combine(output, $"preview-{index + 1}.png"), Convert.FromBase64String(previews[index].GetString()!));
                         File.WriteAllText(Path.Combine(output, "runtime.json"), JsonSerializer.Serialize(new
                         {
