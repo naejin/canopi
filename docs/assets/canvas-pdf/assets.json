@@ -1,0 +1,121 @@
+{
+  "node": "v22.22.0",
+  "packages": {
+    "pdfkit": {
+      "version": "0.20.2",
+      "license": "MIT"
+    },
+    "fontkit": {
+      "version": "2.0.4",
+      "license": "MIT"
+    },
+    "pdf-lib": {
+      "version": "1.17.1",
+      "license": "MIT"
+    },
+    "@pdf-lib/fontkit": {
+      "version": "1.1.1",
+      "license": "MIT"
+    },
+    "vite": {
+      "version": "6.4.1",
+      "license": "MIT"
+    }
+  },
+  "pdfkitEncoderAndPreview": {
+    "files": [
+      {
+        "file": "assets/pdfkit-VcumLkju.js",
+        "rawBytes": 174644,
+        "gzipBytes": 65899
+      },
+      {
+        "file": "assets/browser-module-D5sxXXZw.js",
+        "rawBytes": 363199,
+        "gzipBytes": 150568
+      },
+      {
+        "file": "assets/_commonjsHelpers-CqkleIqs.js",
+        "rawBytes": 116,
+        "gzipBytes": 126
+      }
+    ],
+    "rawBytes": 537959,
+    "gzipBytes": 216593
+  },
+  "pdfLibEncoder": {
+    "files": [
+      {
+        "file": "assets/pdf-lib-CLhIZ1kP.js",
+        "rawBytes": 1150435,
+        "gzipBytes": 509574
+      },
+      {
+        "file": "assets/_commonjsHelpers-CqkleIqs.js",
+        "rawBytes": 116,
+        "gzipBytes": 126
+      }
+    ],
+    "rawBytes": 1150551,
+    "gzipBytes": 509700
+  },
+  "pdfLibEncoderAndSharedPreview": {
+    "files": [
+      {
+        "file": "assets/pdf-lib-CLhIZ1kP.js",
+        "rawBytes": 1150435,
+        "gzipBytes": 509574
+      },
+      {
+        "file": "assets/_commonjsHelpers-CqkleIqs.js",
+        "rawBytes": 116,
+        "gzipBytes": 126
+      },
+      {
+        "file": "assets/browser-module-D5sxXXZw.js",
+        "rawBytes": 363199,
+        "gzipBytes": 150568
+      }
+    ],
+    "rawBytes": 1513750,
+    "gzipBytes": 660268
+  },
+  "fonts": [
+    {
+      "id": "latin",
+      "file": "NotoSans-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSans/NotoSans-Regular.ttf",
+      "license": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/LICENSE",
+      "sha256": "b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5",
+      "rawBytes": 569208,
+      "gzipBytes": 286289
+    },
+    {
+      "id": "sc",
+      "file": "NotoSansCJKsc-Regular.otf",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+      "license": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/LICENSE",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "rawBytes": 16437364,
+      "gzipBytes": 13652425
+    },
+    {
+      "id": "jp",
+      "file": "NotoSansCJKjp-Regular.otf",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
+      "license": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/LICENSE",
+      "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+      "rawBytes": 16467736,
+      "gzipBytes": 13695738
+    },
+    {
+      "id": "kr",
+      "file": "NotoSansCJKkr-Regular.otf",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf",
+      "license": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/LICENSE",
+      "sha256": "6bcb2a0703aa137e874fc2dffa85f6c21ba9a67fa329e81b8c801663af7e992a",
+      "rawBytes": 16433112,
+      "gzipBytes": 13671734
+    }
+  ]
+}

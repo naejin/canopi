@@ -1,0 +1,52 @@
+{
+  "pdfkit": {
+    "bytes": 187658,
+    "pages": 3,
+    "calibrationMm": [
+      49.99999983611111,
+      49.99999983611111,
+      49.99999983611111
+    ],
+    "extraction": "pass",
+    "embeddedFonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBZZZZZ+NotoSans-Regular              CID TrueType      Identity-H       yes yes yes      8  0\nCZZZZZ+NotoSansCJKjp-Regular         CID Type 0C       Identity-H       yes yes yes     12  0\nDZZZZZ+NotoSansCJKsc-Regular         CID Type 0C       Identity-H       yes yes yes     13  0\nEZZZZZ+NotoSansCJKkr-Regular         CID Type 0C       Identity-H       yes yes yes     14  0\n",
+    "readerDiagnostics": [],
+    "fontReaderPass": true,
+    "japaneseTextWidthPt": [
+      59.50000000000006,
+      59.50000000000006
+    ],
+    "maxShapedPreviewWidthDeltaPt": 5.684341886080802e-14,
+    "coldGenerationMs": 352.3999999985099,
+    "warmMedianMs": 298.90000000596046,
+    "observedHeapBeforeAfterBytes": [
+      97320442,
+      159481139
+    ]
+  },
+  "pdf-lib": {
+    "bytes": 181990,
+    "pages": 3,
+    "calibrationMm": [
+      50.0,
+      50.0,
+      50.0
+    ],
+    "extraction": "pass",
+    "embeddedFonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nNotoSans-Regular-2514                CID TrueType      Identity-H       yes no  yes      4  0\nNotoSansCJKjp-Regular-2759           CID Type 0C       Identity-H       yes no  yes      6  0\nNotoSansCJKsc-Regular-2917           CID Type 0C       Identity-H       yes no  yes      5  0\nNotoSansCJKkr-Regular-2515           CID Type 0C       Identity-H       yes no  yes      7  0\n",
+    "readerDiagnostics": [
+      "Syntax Error: Embedded font file may be invalid"
+    ],
+    "fontReaderPass": false,
+    "japaneseTextWidthPt": [
+      60.00000000000006,
+      60.00000000000006
+    ],
+    "maxShapedPreviewWidthDeltaPt": 2.9000000000000057,
+    "coldGenerationMs": 518.9000000059605,
+    "warmMedianMs": 397.8999999985099,
+    "observedHeapBeforeAfterBytes": [
+      178290085,
+      382571242
+    ]
+  }
+}

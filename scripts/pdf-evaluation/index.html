@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canopi PDF evaluation</title>
+<style>
+  body { margin: 24px; background: #e9e4d9; color: #29241c; font: 16px system-ui; }
+  button, select { font: inherit; padding: 8px 12px; margin-right: 8px; }
+  canvas { background: white; border: 1px solid #aaa; margin: 12px; max-width: 100%; height: auto; }
+  #previews { display: flex; flex-wrap: wrap; align-items: flex-start; }
+  pre { white-space: pre-wrap; }
+</style>
+<h1>Canvas PDF evaluation</h1>
+<p>Three provisional sheets. This is a technical sample, not Canopi's export interface.</p>
+<select id="candidate" aria-label="PDF candidate"><option value="pdfkit">PDFKit</option><option value="pdf-lib">pdf-lib</option></select>
+<button id="generate">Generate sample</button><button id="download" disabled>Download sample PDF</button>
+<pre id="status">Ready</pre><div id="previews"></div>
+<script type="module" src="./main.mjs"></script>
+</html>

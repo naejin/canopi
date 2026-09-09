@@ -2,7 +2,7 @@
 
 Research date: 2026-09-09. Local baseline: `466c577d`. Research bead: `canopi-u7r3`. Subsequent PRD: `canopi-cd7x`.
 
-The agreed product scope follows [ADR 0024](adr/0024-shared-canvas-pdf-export.md): Canvas PDF on Linux, macOS, Windows, and Web; user-selected Design Layers and detail coverage; physical scales; readable page-specific legends; and preserved Design content. All map backgrounds and Timeline, Budget, and Consortium sections are deferred. This brief supplies recommendations and validation gates, not new accepted architecture decisions. No PDF implementation, library installation, provider account, map capture, or physical print test was performed.
+The agreed product scope follows [ADR 0024](adr/0024-shared-canvas-pdf-export.md): Canvas PDF on Linux, macOS, Windows, and Web; user-selected Design Layers and detail coverage; physical scales; readable page-specific legends; and preserved Design content. All map backgrounds and Timeline, Budget, and Consortium sections are deferred. This brief supplies recommendations and validation gates, not new accepted architecture decisions. The initial research performed no PDF implementation, library installation, provider account setup, map capture, or physical print test. The subsequent [isolated encoder evaluation](canvas-pdf-evaluation.md) supplies measured PDF/font evidence; production selection still belongs to `canopi-orpp`.
 
 Scope revision, 2026-09-09: retain print-layer selection but remove map export from v1. Provider research below is preserved for later work; provider selection, map acquisition/alignment, and map-failure handling no longer gate the first release. Interactive Web maps remain a separate plan.
 
@@ -148,7 +148,7 @@ The requested work order is PRD, reviewed delivery beads, `canopi-qj4w`, `canopi
 
 ## Updated Assumptions
 
-- Shared browser-compatible generation remains feasible from documented capabilities, but has not been prototyped in this repository.
+- The initial research judged shared browser-compatible generation feasible from documented capabilities. The later `canopi-4nzq` evaluation now demonstrates it in Linux Chromium, with the other browser/WebView and physical-print checks still pending.
 - Existing scene logic is reusable input; screen snapshots and CSS font fallbacks are insufficient export contracts. Geographic projection and map acquisition are outside v1.
 - PDFKit is a stronger browser candidate than older packaging advice suggests. Library choice remains provisional.
 - Retaining Design Layer selection adds no map-provider dependency. The export overrides remain separate from saved canvas visibility.
@@ -165,4 +165,4 @@ Deferred map questions: provider plan, retained/shared PDF rights, attribution, 
 
 ## Recommended Next Skill
 
-The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Follow the requested execution order: fix `canopi-qj4w`, fix `canopi-90wm`, then begin the PDF evaluation in `canopi-4nzq`. Preserve the encoder, font, interaction, and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.
+The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`) are complete. The `canopi-4nzq` [evaluation evidence](canvas-pdf-evaluation.md) is ready for the foundation and interaction decision in `canopi-orpp`. Preserve the font, interaction, platform and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.

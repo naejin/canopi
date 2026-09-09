@@ -1,0 +1,19 @@
+{
+  "name": "canopi-pdf-evaluation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fonts": "node fetch-fonts.mjs",
+    "build": "vite build",
+    "serve": "vite preview --host 127.0.0.1 --port 1422 --strictPort",
+    "inspect": "python3 verify_pdf.py",
+    "measure": "node measure-assets.mjs"
+  },
+  "devDependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
+    "fontkit": "2.0.4",
+    "pdf-lib": "1.17.1",
+    "pdfkit": "0.20.2",
+    "vite": "6.4.1"
+  }
+}

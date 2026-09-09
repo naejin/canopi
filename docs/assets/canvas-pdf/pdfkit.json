@@ -1,0 +1,2044 @@
+{
+  "candidate": "pdfkit",
+  "runtime": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+  "hardwareConcurrency": 8,
+  "fontLoadMs": 1207.7000000029802,
+  "importMs": 35.5,
+  "samples": [
+    {
+      "generationMs": 352.3999999985099,
+      "bytes": 187658,
+      "heapBefore": 97320442,
+      "heapAfter": 123223121
+    },
+    {
+      "generationMs": 298.90000000596046,
+      "bytes": 187658,
+      "heapBefore": 123223121,
+      "heapAfter": 123984063
+    },
+    {
+      "generationMs": 369.1000000014901,
+      "bytes": 187658,
+      "heapBefore": 123984063,
+      "heapAfter": 143275849
+    },
+    {
+      "generationMs": 282.8999999985099,
+      "bytes": 187658,
+      "heapBefore": 143275849,
+      "heapAfter": 159481139
+    }
+  ],
+  "fontFacts": [
+    {
+      "id": "latin",
+      "name": "Noto Sans Regular",
+      "version": "Version 2.008; ttfautohint (v1.8) -l 8 -r 50 -G 200 -x 14 -D latn -f none -a qsq -X \"\"",
+      "bytes": 569208,
+      "rejectsNoncharacter": true
+    },
+    {
+      "id": "sc",
+      "name": "Noto Sans CJK SC",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+      "bytes": 16437364,
+      "rejectsNoncharacter": true
+    },
+    {
+      "id": "jp",
+      "name": "Noto Sans CJK JP",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+      "bytes": 16467736,
+      "rejectsNoncharacter": true
+    },
+    {
+      "id": "kr",
+      "name": "Noto Sans CJK KR",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+      "bytes": 16433112,
+      "rejectsNoncharacter": true
+    }
+  ],
+  "missing": [],
+  "sha256": "abd3af4a0e901043dfdbf874e82348e1ca079121ae6b1c4425bf2ee51d1709ce",
+  "measurements": [
+    {
+      "text": "Canopi PDF evaluation · Overview · 1/3",
+      "font": "latin",
+      "previewWidth": 252.126,
+      "pdfWidth": 252.12600000000003
+    },
+    {
+      "text": "Provisional geometry · A4 · print at actual size",
+      "font": "latin",
+      "previewWidth": 191.87099999999998,
+      "pdfWidth": 191.87099999999998
+    },
+    {
+      "text": "Page 2",
+      "font": "latin",
+      "previewWidth": 31.77,
+      "pdfWidth": 31.77
+    },
+    {
+      "text": "Page 3",
+      "font": "latin",
+      "previewWidth": 31.77,
+      "pdfWidth": 31.77
+    },
+    {
+      "text": "AVATAR Toffee office é Ø Ł ß Æ × m²",
+      "font": "latin",
+      "previewWidth": 165.55,
+      "pdfWidth": 165.55
+    },
+    {
+      "text": "50 mm calibration · 8.42 m on plan",
+      "font": "latin",
+      "previewWidth": 146.376,
+      "pdfWidth": 146.37599999999998
+    },
+    {
+      "text": "Numbered frames identify detail coverage",
+      "font": "latin",
+      "previewWidth": 178.15500000000003,
+      "pdfWidth": 178.15499999999997
+    },
+    {
+      "text": "Canopi PDF evaluation · Detail · 2/3",
+      "font": "latin",
+      "previewWidth": 229.306,
+      "pdfWidth": 229.306
+    },
+    {
+      "text": "Provisional geometry · A4 · print at actual size",
+      "font": "latin",
+      "previewWidth": 191.87099999999998,
+      "pdfWidth": 191.87099999999998
+    },
+    {
+      "text": "Keep access clear",
+      "font": "latin",
+      "previewWidth": 82.01,
+      "pdfWidth": 82.01
+    },
+    {
+      "text": "Pommier · Яблоня",
+      "font": "latin",
+      "previewWidth": 87.2,
+      "pdfWidth": 87.2
+    },
+    {
+      "text": "庭園 · 정원 · Jardin",
+      "font": "jp",
+      "previewWidth": 88.38,
+      "pdfWidth": 88.38
+    },
+    {
+      "text": "Plants on this page",
+      "font": "latin",
+      "previewWidth": 89.56,
+      "pdfWidth": 89.56
+    },
+    {
+      "text": "Cerisier de",
+      "font": "latin",
+      "previewWidth": 50.199999999999996,
+      "pdfWidth": 50.2
+    },
+    {
+      "text": "Sainte-Lucie",
+      "font": "latin",
+      "previewWidth": 56.769999999999996,
+      "pdfWidth": 56.77
+    },
+    {
+      "text": "Elaeagnus ×",
+      "font": "latin",
+      "previewWidth": 56.62,
+      "pdfWidth": 56.62
+    },
+    {
+      "text": "ebbingei",
+      "font": "latin",
+      "previewWidth": 41.07,
+      "pdfWidth": 41.07
+    },
+    {
+      "text": "Яблоня домашняя",
+      "font": "latin",
+      "previewWidth": 90.22999999999999,
+      "pdfWidth": 90.23
+    },
+    {
+      "text": "苹果树",
+      "font": "sc",
+      "previewWidth": 30,
+      "pdfWidth": 30
+    },
+    {
+      "text": "ローズマリー",
+      "font": "jp",
+      "previewWidth": 59.5,
+      "pdfWidth": 59.5
+    },
+    {
+      "text": "검은딸기나무",
+      "font": "kr",
+      "previewWidth": 55.199999999999996,
+      "pdfWidth": 55.2
+    },
+    {
+      "text": "Rosmarinus",
+      "font": "latin",
+      "previewWidth": 55.88,
+      "pdfWidth": 55.88
+    },
+    {
+      "text": "officinalis var.",
+      "font": "latin",
+      "previewWidth": 63.129999999999995,
+      "pdfWidth": 63.13
+    },
+    {
+      "text": "angustifolius",
+      "font": "latin",
+      "previewWidth": 60.72,
+      "pdfWidth": 60.72
+    },
+    {
+      "text": "Érable 日本語 한국어",
+      "font": "jp",
+      "previewWidth": 91.77,
+      "pdfWidth": 91.77
+    },
+    {
+      "text": "25 m²",
+      "font": "jp",
+      "previewWidth": 26.709999999999997,
+      "pdfWidth": 26.71
+    },
+    {
+      "text": "50 mm calibration · 5.00 m on plan",
+      "font": "latin",
+      "previewWidth": 146.376,
+      "pdfWidth": 146.37599999999998
+    },
+    {
+      "text": "1:100 · Next: page 3 · 1 m overlap",
+      "font": "latin",
+      "previewWidth": 140.148,
+      "pdfWidth": 140.148
+    },
+    {
+      "text": "Canopi PDF evaluation · Detail · 3/3",
+      "font": "latin",
+      "previewWidth": 229.306,
+      "pdfWidth": 229.306
+    },
+    {
+      "text": "Provisional geometry · A4 · print at actual size",
+      "font": "latin",
+      "previewWidth": 191.87099999999998,
+      "pdfWidth": 191.87099999999998
+    },
+    {
+      "text": "Keep access clear",
+      "font": "latin",
+      "previewWidth": 82.01,
+      "pdfWidth": 82.01
+    },
+    {
+      "text": "Pommier · Яблоня",
+      "font": "latin",
+      "previewWidth": 87.2,
+      "pdfWidth": 87.2
+    },
+    {
+      "text": "庭園 · 정원 · Jardin",
+      "font": "jp",
+      "previewWidth": 88.38,
+      "pdfWidth": 88.38
+    },
+    {
+      "text": "Plants on this page",
+      "font": "latin",
+      "previewWidth": 89.56,
+      "pdfWidth": 89.56
+    },
+    {
+      "text": "Cerisier de",
+      "font": "latin",
+      "previewWidth": 50.199999999999996,
+      "pdfWidth": 50.2
+    },
+    {
+      "text": "Sainte-Lucie",
+      "font": "latin",
+      "previewWidth": 56.769999999999996,
+      "pdfWidth": 56.77
+    },
+    {
+      "text": "Elaeagnus ×",
+      "font": "latin",
+      "previewWidth": 56.62,
+      "pdfWidth": 56.62
+    },
+    {
+      "text": "ebbingei",
+      "font": "latin",
+      "previewWidth": 41.07,
+      "pdfWidth": 41.07
+    },
+    {
+      "text": "Яблоня домашняя",
+      "font": "latin",
+      "previewWidth": 90.22999999999999,
+      "pdfWidth": 90.23
+    },
+    {
+      "text": "苹果树",
+      "font": "sc",
+      "previewWidth": 30,
+      "pdfWidth": 30
+    },
+    {
+      "text": "ローズマリー",
+      "font": "jp",
+      "previewWidth": 59.5,
+      "pdfWidth": 59.5
+    },
+    {
+      "text": "검은딸기나무",
+      "font": "kr",
+      "previewWidth": 55.199999999999996,
+      "pdfWidth": 55.2
+    },
+    {
+      "text": "Rosmarinus",
+      "font": "latin",
+      "previewWidth": 55.88,
+      "pdfWidth": 55.88
+    },
+    {
+      "text": "officinalis var.",
+      "font": "latin",
+      "previewWidth": 63.129999999999995,
+      "pdfWidth": 63.13
+    },
+    {
+      "text": "angustifolius",
+      "font": "latin",
+      "previewWidth": 60.72,
+      "pdfWidth": 60.72
+    },
+    {
+      "text": "Érable 日本語 한국어",
+      "font": "jp",
+      "previewWidth": 91.77,
+      "pdfWidth": 91.77
+    },
+    {
+      "text": "25 m²",
+      "font": "jp",
+      "previewWidth": 26.709999999999997,
+      "pdfWidth": 26.71
+    },
+    {
+      "text": "50 mm calibration · 5.00 m on plan",
+      "font": "latin",
+      "previewWidth": 146.376,
+      "pdfWidth": 146.37599999999998
+    },
+    {
+      "text": "1:100 · Previous: page 2 · 1 m overlap",
+      "font": "latin",
+      "previewWidth": 156.49200000000002,
+      "pdfWidth": 156.492
+    }
+  ],
+  "browserMeasurements": [
+    {
+      "text": "Canopi PDF evaluation · Overview · 1/3",
+      "font": "latin",
+      "shapedWidth": 252.126,
+      "browserWidth": 252.12498474121094
+    },
+    {
+      "text": "Provisional geometry · A4 · print at actual size",
+      "font": "latin",
+      "shapedWidth": 191.87099999999998,
+      "browserWidth": 191.8723907470703
+    },
+    {
+      "text": "Page 2",
+      "font": "latin",
+      "shapedWidth": 31.77,
+      "browserWidth": 31.769973754882812
+    },
+    {
+      "text": "Page 3",
+      "font": "latin",
+      "shapedWidth": 31.77,
+      "browserWidth": 31.769973754882812
+    },
+    {
+      "text": "AVATAR Toffee office é Ø Ł ß Æ × m²",
+      "font": "latin",
+      "shapedWidth": 165.55,
+      "browserWidth": 165.54986572265625
+    },
+    {
+      "text": "50 mm calibration · 8.42 m on plan",
+      "font": "latin",
+      "shapedWidth": 146.376,
+      "browserWidth": 146.37705993652344
+    },
+    {
+      "text": "Numbered frames identify detail coverage",
+      "font": "latin",
+      "shapedWidth": 178.15500000000003,
+      "browserWidth": 178.15628051757812
+    },
+    {
+      "text": "Canopi PDF evaluation · Detail · 2/3",
+      "font": "latin",
+      "shapedWidth": 229.306,
+      "browserWidth": 229.30508422851562
+    },
+    {
+      "text": "Provisional geometry · A4 · print at actual size",
+      "font": "latin",
+      "shapedWidth": 191.87099999999998,
+      "browserWidth": 191.8723907470703
+    },
+    {
+      "text": "Keep access clear",
+      "font": "latin",
+      "shapedWidth": 82.01,
+      "browserWidth": 82.00994873046875
+    },
+    {
+      "text": "Pommier · Яблоня",
+      "font": "latin",
+      "shapedWidth": 87.2,
+      "browserWidth": 87.19989013671875
+    },
+    {
+      "text": "庭園 · 정원 · Jardin",
+      "font": "jp",
+      "shapedWidth": 88.38,
+      "browserWidth": 88.37994384765625
+    },
+    {
+      "text": "Plants on this page",
+      "font": "latin",
+      "shapedWidth": 89.56,
+      "browserWidth": 89.55990600585938
+    },
+    {
+      "text": "Cerisier de",
+      "font": "latin",
+      "shapedWidth": 50.199999999999996,
+      "browserWidth": 50.199951171875
+    },
+    {
+      "text": "Sainte-Lucie",
+      "font": "latin",
+      "shapedWidth": 56.769999999999996,
+      "browserWidth": 56.76997375488281
+    },
+    {
+      "text": "Elaeagnus ×",
+      "font": "latin",
+      "shapedWidth": 56.62,
+      "browserWidth": 56.619964599609375
+    },
+    {
+      "text": "ebbingei",
+      "font": "latin",
+      "shapedWidth": 41.07,
+      "browserWidth": 41.069976806640625
+    },
+    {
+      "text": "Яблоня домашняя",
+      "font": "latin",
+      "shapedWidth": 90.22999999999999,
+      "browserWidth": 90.22991943359375
+    },
+    {
+      "text": "苹果树",
+      "font": "sc",
+      "shapedWidth": 30,
+      "browserWidth": 29.999954223632812
+    },
+    {
+      "text": "ローズマリー",
+      "font": "jp",
+      "shapedWidth": 59.5,
+      "browserWidth": 59.999908447265625
+    },
+    {
+      "text": "검은딸기나무",
+      "font": "kr",
+      "shapedWidth": 55.199999999999996,
+      "browserWidth": 55.199981689453125
+    },
+    {
+      "text": "Rosmarinus",
+      "font": "latin",
+      "shapedWidth": 55.88,
+      "browserWidth": 55.87994384765625
+    },
+    {
+      "text": "officinalis var.",
+      "font": "latin",
+      "shapedWidth": 63.129999999999995,
+      "browserWidth": 63.12994384765625
+    },
+    {
+      "text": "angustifolius",
+      "font": "latin",
+      "shapedWidth": 60.72,
+      "browserWidth": 60.71995544433594
+    },
+    {
+      "text": "Érable 日本語 한국어",
+      "font": "jp",
+      "shapedWidth": 91.77,
+      "browserWidth": 91.76991271972656
+    },
+    {
+      "text": "25 m²",
+      "font": "jp",
+      "shapedWidth": 26.709999999999997,
+      "browserWidth": 26.709976196289062
+    },
+    {
+      "text": "50 mm calibration · 5.00 m on plan",
+      "font": "latin",
+      "shapedWidth": 146.376,
+      "browserWidth": 146.37705993652344
+    },
+    {
+      "text": "1:100 · Next: page 3 · 1 m overlap",
+      "font": "latin",
+      "shapedWidth": 140.148,
+      "browserWidth": 140.14898681640625
+    },
+    {
+      "text": "Canopi PDF evaluation · Detail · 3/3",
+      "font": "latin",
+      "shapedWidth": 229.306,
+      "browserWidth": 229.30508422851562
+    },
+    {
+      "text": "Provisional geometry · A4 · print at actual size",
+      "font": "latin",
+      "shapedWidth": 191.87099999999998,
+      "browserWidth": 191.8723907470703
+    },
+    {
+      "text": "Keep access clear",
+      "font": "latin",
+      "shapedWidth": 82.01,
+      "browserWidth": 82.00994873046875
+    },
+    {
+      "text": "Pommier · Яблоня",
+      "font": "latin",
+      "shapedWidth": 87.2,
+      "browserWidth": 87.19989013671875
+    },
+    {
+      "text": "庭園 · 정원 · Jardin",
+      "font": "jp",
+      "shapedWidth": 88.38,
+      "browserWidth": 88.37994384765625
+    },
+    {
+      "text": "Plants on this page",
+      "font": "latin",
+      "shapedWidth": 89.56,
+      "browserWidth": 89.55990600585938
+    },
+    {
+      "text": "Cerisier de",
+      "font": "latin",
+      "shapedWidth": 50.199999999999996,
+      "browserWidth": 50.199951171875
+    },
+    {
+      "text": "Sainte-Lucie",
+      "font": "latin",
+      "shapedWidth": 56.769999999999996,
+      "browserWidth": 56.76997375488281
+    },
+    {
+      "text": "Elaeagnus ×",
+      "font": "latin",
+      "shapedWidth": 56.62,
+      "browserWidth": 56.619964599609375
+    },
+    {
+      "text": "ebbingei",
+      "font": "latin",
+      "shapedWidth": 41.07,
+      "browserWidth": 41.069976806640625
+    },
+    {
+      "text": "Яблоня домашняя",
+      "font": "latin",
+      "shapedWidth": 90.22999999999999,
+      "browserWidth": 90.22991943359375
+    },
+    {
+      "text": "苹果树",
+      "font": "sc",
+      "shapedWidth": 30,
+      "browserWidth": 29.999954223632812
+    },
+    {
+      "text": "ローズマリー",
+      "font": "jp",
+      "shapedWidth": 59.5,
+      "browserWidth": 59.999908447265625
+    },
+    {
+      "text": "검은딸기나무",
+      "font": "kr",
+      "shapedWidth": 55.199999999999996,
+      "browserWidth": 55.199981689453125
+    },
+    {
+      "text": "Rosmarinus",
+      "font": "latin",
+      "shapedWidth": 55.88,
+      "browserWidth": 55.87994384765625
+    },
+    {
+      "text": "officinalis var.",
+      "font": "latin",
+      "shapedWidth": 63.129999999999995,
+      "browserWidth": 63.12994384765625
+    },
+    {
+      "text": "angustifolius",
+      "font": "latin",
+      "shapedWidth": 60.72,
+      "browserWidth": 60.71995544433594
+    },
+    {
+      "text": "Érable 日本語 한국어",
+      "font": "jp",
+      "shapedWidth": 91.77,
+      "browserWidth": 91.76991271972656
+    },
+    {
+      "text": "25 m²",
+      "font": "jp",
+      "shapedWidth": 26.709999999999997,
+      "browserWidth": 26.709976196289062
+    },
+    {
+      "text": "50 mm calibration · 5.00 m on plan",
+      "font": "latin",
+      "shapedWidth": 146.376,
+      "browserWidth": 146.37705993652344
+    },
+    {
+      "text": "1:100 · Previous: page 2 · 1 m overlap",
+      "font": "latin",
+      "shapedWidth": 156.49200000000002,
+      "browserWidth": 156.49313354492188
+    }
+  ],
+  "fixture": {
+    "provisional": true,
+    "plants": 36,
+    "pages": [
+      {
+        "width": 595.2755905511812,
+        "height": 841.8897637795276,
+        "ops": [
+          {
+            "kind": "text",
+            "text": "Canopi PDF evaluation · Overview · 1/3",
+            "x": 28.34645669291339,
+            "y": 36.85039370078741,
+            "size": 14,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 252.126
+          },
+          {
+            "kind": "text",
+            "text": "Provisional geometry · A4 · print at actual size",
+            "x": 28.34645669291339,
+            "y": 56.69291338582678,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 191.87099999999998
+          },
+          {
+            "kind": "rect",
+            "x": 28.34645669291339,
+            "y": 79.37007874015748,
+            "width": 538.5826771653543,
+            "height": 671.8110236220473,
+            "color": "#777777",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "clip",
+            "x": 28.34645669291339,
+            "y": 79.37007874015748,
+            "w": 538.5826771653543,
+            "h": 671.8110236220473
+          },
+          {
+            "kind": "rect",
+            "x": 62.00787401574803,
+            "y": 129.86220472440945,
+            "width": 504.92125984251965,
+            "height": 521.751968503937,
+            "color": "#777777",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "marker",
+            "x": 112.5,
+            "y": 197.18503937007875,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 179.8228346456693,
+            "y": 197.18503937007875,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 247.14566929133858,
+            "y": 197.18503937007875,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 314.4685039370078,
+            "y": 197.18503937007875,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 381.79133858267716,
+            "y": 197.18503937007875,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 449.11417322834643,
+            "y": 197.18503937007875,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "marker",
+            "x": 112.5,
+            "y": 264.50787401574803,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "marker",
+            "x": 179.8228346456693,
+            "y": 264.50787401574803,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "marker",
+            "x": 247.14566929133858,
+            "y": 264.50787401574803,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 314.4685039370078,
+            "y": 264.50787401574803,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 381.79133858267716,
+            "y": 264.50787401574803,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 449.11417322834643,
+            "y": 264.50787401574803,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 112.5,
+            "y": 331.8307086614173,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 179.8228346456693,
+            "y": 331.8307086614173,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "marker",
+            "x": 247.14566929133858,
+            "y": 331.8307086614173,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "marker",
+            "x": 314.4685039370078,
+            "y": 331.8307086614173,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "marker",
+            "x": 381.79133858267716,
+            "y": 331.8307086614173,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 449.11417322834643,
+            "y": 331.8307086614173,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 112.5,
+            "y": 399.1535433070866,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 179.8228346456693,
+            "y": 399.1535433070866,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 247.14566929133858,
+            "y": 399.1535433070866,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 314.4685039370078,
+            "y": 399.1535433070866,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "marker",
+            "x": 381.79133858267716,
+            "y": 399.1535433070866,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "marker",
+            "x": 449.11417322834643,
+            "y": 399.1535433070866,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "marker",
+            "x": 112.5,
+            "y": 466.4763779527559,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 179.8228346456693,
+            "y": 466.4763779527559,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 247.14566929133858,
+            "y": 466.4763779527559,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 314.4685039370078,
+            "y": 466.4763779527559,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 381.79133858267716,
+            "y": 466.4763779527559,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 449.11417322834643,
+            "y": 466.4763779527559,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "marker",
+            "x": 112.5,
+            "y": 533.7992125984251,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "marker",
+            "x": 179.8228346456693,
+            "y": 533.7992125984251,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "marker",
+            "x": 247.14566929133858,
+            "y": 533.7992125984251,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 314.4685039370078,
+            "y": 533.7992125984251,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 381.79133858267716,
+            "y": 533.7992125984251,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 449.11417322834643,
+            "y": 533.7992125984251,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "rect",
+            "x": 28.34645669291339,
+            "y": 79.37007874015748,
+            "width": 244.04527559055117,
+            "height": 398.8877952755905,
+            "color": "#333333",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "text",
+            "text": "Page 2",
+            "x": 34.01574803149607,
+            "y": 93.54330708661418,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 31.77
+          },
+          {
+            "kind": "rect",
+            "x": 255.56102362204723,
+            "y": 79.37007874015748,
+            "width": 244.04527559055117,
+            "height": 398.8877952755905,
+            "color": "#333333",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "text",
+            "text": "Page 3",
+            "x": 261.2303149606299,
+            "y": 93.54330708661418,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 31.77
+          },
+          {
+            "kind": "text",
+            "text": "AVATAR Toffee office é Ø Ł ß Æ × m²",
+            "x": 62.00787401574803,
+            "y": 685.2755905511812,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 165.55
+          },
+          {
+            "kind": "unclip"
+          },
+          {
+            "kind": "line",
+            "x1": 28.34645669291339,
+            "y1": 782.3622047244095,
+            "x2": 170.07874015748033,
+            "y2": 782.3622047244095,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "line",
+            "x1": 28.34645669291339,
+            "y1": 779.5275590551181,
+            "x2": 28.34645669291339,
+            "y2": 785.1968503937009,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "line",
+            "x1": 170.07874015748033,
+            "y1": 779.5275590551181,
+            "x2": 170.07874015748033,
+            "y2": 785.1968503937009,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "text",
+            "text": "50 mm calibration · 8.42 m on plan",
+            "x": 28.34645669291339,
+            "y": 802.2047244094489,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 146.376
+          },
+          {
+            "kind": "text",
+            "text": "Numbered frames identify detail coverage",
+            "x": 198.42519685039372,
+            "y": 802.2047244094489,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 178.15500000000003
+          }
+        ]
+      },
+      {
+        "width": 595.2755905511812,
+        "height": 841.8897637795276,
+        "ops": [
+          {
+            "kind": "text",
+            "text": "Canopi PDF evaluation · Detail · 2/3",
+            "x": 28.34645669291339,
+            "y": 36.85039370078741,
+            "size": 14,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 229.306
+          },
+          {
+            "kind": "text",
+            "text": "Provisional geometry · A4 · print at actual size",
+            "x": 28.34645669291339,
+            "y": 56.69291338582678,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 191.87099999999998
+          },
+          {
+            "kind": "rect",
+            "x": 28.34645669291339,
+            "y": 79.37007874015748,
+            "width": 411.0236220472441,
+            "height": 671.8110236220473,
+            "color": "#777777",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "clip",
+            "x": 28.34645669291339,
+            "y": 79.37007874015748,
+            "w": 411.0236220472441,
+            "h": 671.8110236220473
+          },
+          {
+            "kind": "rect",
+            "x": 85.03937007874016,
+            "y": 164.40944881889766,
+            "width": 850.3937007874017,
+            "height": 878.740157480315,
+            "color": "#777777",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "marker",
+            "x": 170.07874015748033,
+            "y": 277.7952755905512,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 283.46456692913387,
+            "y": 277.7952755905512,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 396.85039370078744,
+            "y": 277.7952755905512,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 170.07874015748033,
+            "y": 391.1811023622048,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "marker",
+            "x": 283.46456692913387,
+            "y": 391.1811023622048,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "marker",
+            "x": 396.85039370078744,
+            "y": 391.1811023622048,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 170.07874015748033,
+            "y": 504.56692913385837,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 283.46456692913387,
+            "y": 504.56692913385837,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "marker",
+            "x": 396.85039370078744,
+            "y": 504.56692913385837,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "marker",
+            "x": 170.07874015748033,
+            "y": 617.9527559055119,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 283.46456692913387,
+            "y": 617.9527559055119,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 396.85039370078744,
+            "y": 617.9527559055119,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 170.07874015748033,
+            "y": 731.3385826771655,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 283.46456692913387,
+            "y": 731.3385826771655,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 396.85039370078744,
+            "y": 731.3385826771655,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "text",
+            "text": "Keep access clear",
+            "x": 56.69291338582678,
+            "y": 136.06299212598427,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 82.01
+          },
+          {
+            "kind": "text",
+            "text": "Pommier · Яблоня",
+            "x": 56.69291338582678,
+            "y": 192.75590551181102,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 87.2
+          },
+          {
+            "kind": "text",
+            "text": "庭園 · 정원 · Jardin",
+            "x": 56.69291338582678,
+            "y": 249.4488188976378,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 88.38
+          },
+          {
+            "kind": "unclip"
+          },
+          {
+            "kind": "text",
+            "text": "Plants on this page",
+            "x": 453.5433070866142,
+            "y": 96.37795275590551,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 89.56
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 119.05511811023622,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "text",
+            "text": "Cerisier de",
+            "x": 470.55118110236225,
+            "y": 121.88976377952756,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 50.199999999999996
+          },
+          {
+            "kind": "text",
+            "text": "Sainte-Lucie",
+            "x": 470.55118110236225,
+            "y": 135.49606299212599,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 56.769999999999996
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 157.60629921259843,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "text",
+            "text": "Elaeagnus ×",
+            "x": 470.55118110236225,
+            "y": 160.44094488188978,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 56.62
+          },
+          {
+            "kind": "text",
+            "text": "ebbingei",
+            "x": 470.55118110236225,
+            "y": 174.0472440944882,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 41.07
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 196.15748031496065,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "text",
+            "text": "Яблоня домашняя",
+            "x": 470.55118110236225,
+            "y": 198.992125984252,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 90.22999999999999
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 221.10236220472444,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "text",
+            "text": "苹果树",
+            "x": 470.55118110236225,
+            "y": 223.9370078740158,
+            "size": 10,
+            "font": "sc",
+            "color": "#211D18",
+            "previewWidth": 30
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 246.04724409448824,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "text",
+            "text": "ローズマリー",
+            "x": 470.55118110236225,
+            "y": 248.88188976377958,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 59.5
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 270.992125984252,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "text",
+            "text": "검은딸기나무",
+            "x": 470.55118110236225,
+            "y": 273.82677165354335,
+            "size": 10,
+            "font": "kr",
+            "color": "#211D18",
+            "previewWidth": 55.199999999999996
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 295.93700787401576,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "text",
+            "text": "Rosmarinus",
+            "x": 470.55118110236225,
+            "y": 298.7716535433071,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 55.88
+          },
+          {
+            "kind": "text",
+            "text": "officinalis var.",
+            "x": 470.55118110236225,
+            "y": 312.3779527559055,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 63.129999999999995
+          },
+          {
+            "kind": "text",
+            "text": "angustifolius",
+            "x": 470.55118110236225,
+            "y": 325.9842519685039,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 60.72
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 348.0944881889763,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "text",
+            "text": "Érable 日本語 한국어",
+            "x": 470.55118110236225,
+            "y": 350.9291338582676,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 91.77
+          },
+          {
+            "kind": "text",
+            "text": "25 m²",
+            "x": 470.55118110236225,
+            "y": 364.535433070866,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 26.709999999999997
+          },
+          {
+            "kind": "line",
+            "x1": 28.34645669291339,
+            "y1": 782.3622047244095,
+            "x2": 170.07874015748033,
+            "y2": 782.3622047244095,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "line",
+            "x1": 28.34645669291339,
+            "y1": 779.5275590551181,
+            "x2": 28.34645669291339,
+            "y2": 785.1968503937009,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "line",
+            "x1": 170.07874015748033,
+            "y1": 779.5275590551181,
+            "x2": 170.07874015748033,
+            "y2": 785.1968503937009,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "text",
+            "text": "50 mm calibration · 5.00 m on plan",
+            "x": 28.34645669291339,
+            "y": 802.2047244094489,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 146.376
+          },
+          {
+            "kind": "text",
+            "text": "1:100 · Next: page 3 · 1 m overlap",
+            "x": 198.42519685039372,
+            "y": 802.2047244094489,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 140.148
+          }
+        ]
+      },
+      {
+        "width": 595.2755905511812,
+        "height": 841.8897637795276,
+        "ops": [
+          {
+            "kind": "text",
+            "text": "Canopi PDF evaluation · Detail · 3/3",
+            "x": 28.34645669291339,
+            "y": 36.85039370078741,
+            "size": 14,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 229.306
+          },
+          {
+            "kind": "text",
+            "text": "Provisional geometry · A4 · print at actual size",
+            "x": 28.34645669291339,
+            "y": 56.69291338582678,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 191.87099999999998
+          },
+          {
+            "kind": "rect",
+            "x": 28.34645669291339,
+            "y": 79.37007874015748,
+            "width": 411.0236220472441,
+            "height": 671.8110236220473,
+            "color": "#777777",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "clip",
+            "x": 28.34645669291339,
+            "y": 79.37007874015748,
+            "w": 411.0236220472441,
+            "h": 671.8110236220473
+          },
+          {
+            "kind": "rect",
+            "x": -297.63779527559063,
+            "y": 164.40944881889766,
+            "width": 850.3937007874017,
+            "height": 878.740157480315,
+            "color": "#777777",
+            "stroke": 0.7086614173228347
+          },
+          {
+            "kind": "marker",
+            "x": 127.55905511811025,
+            "y": 277.7952755905512,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 240.94488188976382,
+            "y": 277.7952755905512,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 354.33070866141736,
+            "y": 277.7952755905512,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "marker",
+            "x": 127.55905511811025,
+            "y": 391.1811023622048,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 240.94488188976382,
+            "y": 391.1811023622048,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "marker",
+            "x": 354.33070866141736,
+            "y": 391.1811023622048,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 127.55905511811025,
+            "y": 504.56692913385837,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "marker",
+            "x": 240.94488188976382,
+            "y": 504.56692913385837,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "marker",
+            "x": 354.33070866141736,
+            "y": 504.56692913385837,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "marker",
+            "x": 127.55905511811025,
+            "y": 617.9527559055119,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "marker",
+            "x": 240.94488188976382,
+            "y": 617.9527559055119,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "marker",
+            "x": 354.33070866141736,
+            "y": 617.9527559055119,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "marker",
+            "x": 127.55905511811025,
+            "y": 731.3385826771655,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "marker",
+            "x": 240.94488188976382,
+            "y": 731.3385826771655,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "marker",
+            "x": 354.33070866141736,
+            "y": 731.3385826771655,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "text",
+            "text": "Keep access clear",
+            "x": 56.69291338582678,
+            "y": 136.06299212598427,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 82.01
+          },
+          {
+            "kind": "text",
+            "text": "Pommier · Яблоня",
+            "x": 56.69291338582678,
+            "y": 192.75590551181102,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 87.2
+          },
+          {
+            "kind": "text",
+            "text": "庭園 · 정원 · Jardin",
+            "x": 56.69291338582678,
+            "y": 249.4488188976378,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 88.38
+          },
+          {
+            "kind": "unclip"
+          },
+          {
+            "kind": "text",
+            "text": "Plants on this page",
+            "x": 453.5433070866142,
+            "y": 96.37795275590551,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 89.56
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 119.05511811023622,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#476C38"
+          },
+          {
+            "kind": "text",
+            "text": "Cerisier de",
+            "x": 470.55118110236225,
+            "y": 121.88976377952756,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 50.199999999999996
+          },
+          {
+            "kind": "text",
+            "text": "Sainte-Lucie",
+            "x": 470.55118110236225,
+            "y": 135.49606299212599,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 56.769999999999996
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 157.60629921259843,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#756B8B"
+          },
+          {
+            "kind": "text",
+            "text": "Elaeagnus ×",
+            "x": 470.55118110236225,
+            "y": 160.44094488188978,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 56.62
+          },
+          {
+            "kind": "text",
+            "text": "ebbingei",
+            "x": 470.55118110236225,
+            "y": 174.0472440944882,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 41.07
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 196.15748031496065,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#9B582F"
+          },
+          {
+            "kind": "text",
+            "text": "Яблоня домашняя",
+            "x": 470.55118110236225,
+            "y": 198.992125984252,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 90.22999999999999
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 221.10236220472444,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#335B5B"
+          },
+          {
+            "kind": "text",
+            "text": "苹果树",
+            "x": 470.55118110236225,
+            "y": 223.9370078740158,
+            "size": 10,
+            "font": "sc",
+            "color": "#211D18",
+            "previewWidth": 30
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 246.04724409448824,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#526846"
+          },
+          {
+            "kind": "text",
+            "text": "ローズマリー",
+            "x": 470.55118110236225,
+            "y": 248.88188976377958,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 59.5
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 270.992125984252,
+            "radius": 3.6850393700787407,
+            "shape": 2,
+            "color": "#955C78"
+          },
+          {
+            "kind": "text",
+            "text": "검은딸기나무",
+            "x": 470.55118110236225,
+            "y": 273.82677165354335,
+            "size": 10,
+            "font": "kr",
+            "color": "#211D18",
+            "previewWidth": 55.199999999999996
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 295.93700787401576,
+            "radius": 3.6850393700787407,
+            "shape": 0,
+            "color": "#76642F"
+          },
+          {
+            "kind": "text",
+            "text": "Rosmarinus",
+            "x": 470.55118110236225,
+            "y": 298.7716535433071,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 55.88
+          },
+          {
+            "kind": "text",
+            "text": "officinalis var.",
+            "x": 470.55118110236225,
+            "y": 312.3779527559055,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 63.129999999999995
+          },
+          {
+            "kind": "text",
+            "text": "angustifolius",
+            "x": 470.55118110236225,
+            "y": 325.9842519685039,
+            "size": 10,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 60.72
+          },
+          {
+            "kind": "marker",
+            "x": 459.21259842519686,
+            "y": 348.0944881889763,
+            "radius": 3.6850393700787407,
+            "shape": 1,
+            "color": "#45526F"
+          },
+          {
+            "kind": "text",
+            "text": "Érable 日本語 한국어",
+            "x": 470.55118110236225,
+            "y": 350.9291338582676,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 91.77
+          },
+          {
+            "kind": "text",
+            "text": "25 m²",
+            "x": 470.55118110236225,
+            "y": 364.535433070866,
+            "size": 10,
+            "font": "jp",
+            "color": "#211D18",
+            "previewWidth": 26.709999999999997
+          },
+          {
+            "kind": "line",
+            "x1": 28.34645669291339,
+            "y1": 782.3622047244095,
+            "x2": 170.07874015748033,
+            "y2": 782.3622047244095,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "line",
+            "x1": 28.34645669291339,
+            "y1": 779.5275590551181,
+            "x2": 28.34645669291339,
+            "y2": 785.1968503937009,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "line",
+            "x1": 170.07874015748033,
+            "y1": 779.5275590551181,
+            "x2": 170.07874015748033,
+            "y2": 785.1968503937009,
+            "color": "#211D18",
+            "width": 0.7086614173228347
+          },
+          {
+            "kind": "text",
+            "text": "50 mm calibration · 5.00 m on plan",
+            "x": 28.34645669291339,
+            "y": 802.2047244094489,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 146.376
+          },
+          {
+            "kind": "text",
+            "text": "1:100 · Previous: page 2 · 1 m overlap",
+            "x": 198.42519685039372,
+            "y": 802.2047244094489,
+            "size": 9,
+            "font": "latin",
+            "color": "#211D18",
+            "previewWidth": 156.49200000000002
+          }
+        ]
+      }
+    ],
+    "names": [
+      {
+        "text": "Cerisier de Sainte-Lucie",
+        "font": "latin"
+      },
+      {
+        "text": "Elaeagnus × ebbingei",
+        "font": "latin"
+      },
+      {
+        "text": "Яблоня домашняя",
+        "font": "latin"
+      },
+      {
+        "text": "苹果树",
+        "font": "sc"
+      },
+      {
+        "text": "ローズマリー",
+        "font": "jp"
+      },
+      {
+        "text": "검은딸기나무",
+        "font": "kr"
+      },
+      {
+        "text": "Rosmarinus officinalis var. angustifolius",
+        "font": "latin"
+      },
+      {
+        "text": "Érable 日本語 한국어 25 m²",
+        "font": "jp"
+      }
+    ]
+  }
+}
