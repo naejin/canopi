@@ -1,0 +1,256 @@
+{
+  "date": "2026-09-09",
+  "bead": "canopi-cd7x.1",
+  "fixtureCommit": "2b8eb1001ace50b35276d2993fb4d3ae4fe9be80",
+  "workflowRun": "https://github.com/naejin/canopi/actions/runs/34339546058",
+  "conclusion": "success",
+  "tooling": {
+    "node": "22.23.2",
+    "npm": "10.9.8",
+    "popplerCI": "24.02.0-1ubuntu9.9",
+    "windowsBuildSDK": "10.0.400",
+    "windowsTargetFramework": "net8.0-windows"
+  },
+  "checks": {
+    "nativeGenerationAndFileWrite": "pass",
+    "referencePDFBytes": "pass",
+    "independentFontsTextAndGeometry": "pass",
+    "previewDimensions": "pass",
+    "detailPreviewVisualReview": "pass",
+    "localLinuxMissingFont": "HTTP 404 propagated; nonzero exit in 1.8 s; no PDF or report published"
+  },
+  "platforms": {
+    "linux": {
+      "runtime": {
+        "host": "GTK3 WebKitGTK 4.1",
+        "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "engine": "2.52.6",
+        "delivery": "Native fixed-path binary write; no save dialog"
+      },
+      "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+      "pdfMatchesReference": true,
+      "inspection": {
+        "bytes": 187658,
+        "pages": 3,
+        "calibrationMm": [
+          49.99999983611111,
+          49.99999983611111,
+          49.99999983611111
+        ],
+        "extraction": "pass",
+        "embeddedFonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBZZZZZ+NotoSans-Regular              CID TrueType      Identity-H       yes yes yes      8  0\nCZZZZZ+NotoSansCJKjp-Regular         CID Type 0C       Identity-H       yes yes yes     12  0\nDZZZZZ+NotoSansCJKsc-Regular         CID Type 0C       Identity-H       yes yes yes     13  0\nEZZZZZ+NotoSansCJKkr-Regular         CID Type 0C       Identity-H       yes yes yes     14  0\n",
+        "readerDiagnostics": [],
+        "fontReaderPass": true,
+        "japaneseTextWidthPt": [
+          59.50000000000006,
+          59.50000000000006
+        ],
+        "maxShapedPreviewWidthDeltaPt": 5.684341886080802e-14,
+        "coldGenerationMs": 183,
+        "warmMedianMs": 143.9999999999999,
+        "observedHeapBeforeAfterBytes": null
+      },
+      "previews": [
+        {
+          "page": 1,
+          "width": 794,
+          "height": 1123,
+          "bytes": 39752,
+          "sha256": "18863f5eead9f593e4ac67b1d8f609fcdd80d26bf8fbd3370f64729ea68ca1f9"
+        },
+        {
+          "page": 2,
+          "width": 794,
+          "height": 1123,
+          "bytes": 58910,
+          "sha256": "895565b8144539711154ecbdb6ea36ea5cc45478520d488b6d267e29b78f6bbc"
+        },
+        {
+          "page": 3,
+          "width": 794,
+          "height": 1123,
+          "bytes": 59110,
+          "sha256": "8f942288838905ea002513c8572c978a118ec79f489bf38e8083eccc91b4356c"
+        }
+      ],
+      "pdfSha256": "abd3af4a0e901043dfdbf874e82348e1ca079121ae6b1c4425bf2ee51d1709ce",
+      "jobURL": "https://github.com/naejin/canopi/actions/runs/34339546058/job/102426828450",
+      "archivedDetailPreview": "linux-detail.png"
+    },
+    "macos-arm64": {
+      "runtime": {
+        "delivery": "Native fixed-path binary write; no save dialog",
+        "engine": "19618.3.11.11.5",
+        "host": "WKWebView",
+        "os": "Version 14.8.9 (Build 23J631)"
+      },
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+      "pdfMatchesReference": true,
+      "inspection": {
+        "bytes": 187658,
+        "pages": 3,
+        "calibrationMm": [
+          49.99999983611111,
+          49.99999983611111,
+          49.99999983611111
+        ],
+        "extraction": "pass",
+        "embeddedFonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBZZZZZ+NotoSans-Regular              CID TrueType      Identity-H       yes yes yes      8  0\nCZZZZZ+NotoSansCJKjp-Regular         CID Type 0C       Identity-H       yes yes yes     12  0\nDZZZZZ+NotoSansCJKsc-Regular         CID Type 0C       Identity-H       yes yes yes     13  0\nEZZZZZ+NotoSansCJKkr-Regular         CID Type 0C       Identity-H       yes yes yes     14  0\n",
+        "readerDiagnostics": [],
+        "fontReaderPass": true,
+        "japaneseTextWidthPt": [
+          59.50000000000006,
+          59.50000000000006
+        ],
+        "maxShapedPreviewWidthDeltaPt": 5.684341886080802e-14,
+        "coldGenerationMs": 238,
+        "warmMedianMs": 126,
+        "observedHeapBeforeAfterBytes": null
+      },
+      "previews": [
+        {
+          "page": 1,
+          "width": 794,
+          "height": 1123,
+          "bytes": 53520,
+          "sha256": "94a4b2211773d735ba6c1c822adb63dae94c1fb6d0f5c6593cd328a226705061"
+        },
+        {
+          "page": 2,
+          "width": 794,
+          "height": 1123,
+          "bytes": 73288,
+          "sha256": "f5b909128df4e5f60c6a2089228f5e22c178c7315d543efb493de279c07c6c78"
+        },
+        {
+          "page": 3,
+          "width": 794,
+          "height": 1123,
+          "bytes": 73194,
+          "sha256": "9b93e9e2d41ad2666e55f57fcc87941f315afeb0c0c1c767156b2bbd215bd147"
+        }
+      ],
+      "pdfSha256": "abd3af4a0e901043dfdbf874e82348e1ca079121ae6b1c4425bf2ee51d1709ce",
+      "jobURL": "https://github.com/naejin/canopi/actions/runs/34339546058/job/102426828466",
+      "archivedDetailPreview": "macos-arm64-detail.png"
+    },
+    "macos-intel": {
+      "runtime": {
+        "delivery": "Native fixed-path binary write; no save dialog",
+        "engine": "20621.3.11.11.3",
+        "host": "WKWebView",
+        "os": "Version 15.7.9 (Build 24G830)"
+      },
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+      "pdfMatchesReference": true,
+      "inspection": {
+        "bytes": 187658,
+        "pages": 3,
+        "calibrationMm": [
+          49.99999983611111,
+          49.99999983611111,
+          49.99999983611111
+        ],
+        "extraction": "pass",
+        "embeddedFonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBZZZZZ+NotoSans-Regular              CID TrueType      Identity-H       yes yes yes      8  0\nCZZZZZ+NotoSansCJKjp-Regular         CID Type 0C       Identity-H       yes yes yes     12  0\nDZZZZZ+NotoSansCJKsc-Regular         CID Type 0C       Identity-H       yes yes yes     13  0\nEZZZZZ+NotoSansCJKkr-Regular         CID Type 0C       Identity-H       yes yes yes     14  0\n",
+        "readerDiagnostics": [],
+        "fontReaderPass": true,
+        "japaneseTextWidthPt": [
+          59.50000000000006,
+          59.50000000000006
+        ],
+        "maxShapedPreviewWidthDeltaPt": 5.684341886080802e-14,
+        "coldGenerationMs": 875,
+        "warmMedianMs": 247,
+        "observedHeapBeforeAfterBytes": null
+      },
+      "previews": [
+        {
+          "page": 1,
+          "width": 794,
+          "height": 1123,
+          "bytes": 53213,
+          "sha256": "71f11b1ed02ce9979d05c77ed02aedc5c107ed65c1230c22004e2b9217a1ef57"
+        },
+        {
+          "page": 2,
+          "width": 794,
+          "height": 1123,
+          "bytes": 72662,
+          "sha256": "59524fd53f7bc7a2851b9ba1db47d25af6e351955ee765986437f5f19a7720b5"
+        },
+        {
+          "page": 3,
+          "width": 794,
+          "height": 1123,
+          "bytes": 72778,
+          "sha256": "49469f21fb6d144a279c5f611ca734d8d26a31a829badfbe3504805cd173bc84"
+        }
+      ],
+      "pdfSha256": "abd3af4a0e901043dfdbf874e82348e1ca079121ae6b1c4425bf2ee51d1709ce",
+      "jobURL": "https://github.com/naejin/canopi/actions/runs/34339546058/job/102426828521",
+      "archivedDetailPreview": "macos-intel-detail.png"
+    },
+    "windows": {
+      "runtime": {
+        "host": "WinForms WebView2",
+        "os": "Microsoft Windows NT 10.0.26100.0",
+        "engine": "151.0.4129.101",
+        "sdk": "1.0.2903.40",
+        "delivery": "Native fixed-path binary write; no save dialog"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+      "pdfMatchesReference": true,
+      "inspection": {
+        "bytes": 187658,
+        "pages": 3,
+        "calibrationMm": [
+          49.99999983611111,
+          49.99999983611111,
+          49.99999983611111
+        ],
+        "extraction": "pass",
+        "embeddedFonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBZZZZZ+NotoSans-Regular              CID TrueType      Identity-H       yes yes yes      8  0\nCZZZZZ+NotoSansCJKjp-Regular         CID Type 0C       Identity-H       yes yes yes     12  0\nDZZZZZ+NotoSansCJKsc-Regular         CID Type 0C       Identity-H       yes yes yes     13  0\nEZZZZZ+NotoSansCJKkr-Regular         CID Type 0C       Identity-H       yes yes yes     14  0\n",
+        "readerDiagnostics": [],
+        "fontReaderPass": true,
+        "japaneseTextWidthPt": [
+          59.50000000000006,
+          59.50000000000006
+        ],
+        "maxShapedPreviewWidthDeltaPt": 5.684341886080802e-14,
+        "coldGenerationMs": 267.20000000001164,
+        "warmMedianMs": 161.60000000000582,
+        "observedHeapBeforeAfterBytes": [
+          86596215,
+          141113336
+        ]
+      },
+      "previews": [
+        {
+          "page": 1,
+          "width": 794,
+          "height": 1123,
+          "bytes": 57834,
+          "sha256": "8d35849ceb01a7d6c1eb3ffb6056c52d8e6e6eabcb2ad058336715106729e2d2"
+        },
+        {
+          "page": 2,
+          "width": 794,
+          "height": 1123,
+          "bytes": 77404,
+          "sha256": "895fb582c7c5b3d13839e784373d9980fbf790b7df270c5cbfde52d96d114064"
+        },
+        {
+          "page": 3,
+          "width": 794,
+          "height": 1123,
+          "bytes": 77597,
+          "sha256": "65885979e112ddf9ce4908b6855eb2aa402c57fa86a1ac1ac73753e32674df39"
+        }
+      ],
+      "pdfSha256": "abd3af4a0e901043dfdbf874e82348e1ca079121ae6b1c4425bf2ee51d1709ce",
+      "jobURL": "https://github.com/naejin/canopi/actions/runs/34339546058/job/102426828279",
+      "archivedDetailPreview": "windows-detail.png"
+    }
+  }
+}

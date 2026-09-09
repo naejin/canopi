@@ -149,7 +149,7 @@ The requested work order is PRD, reviewed delivery beads, `canopi-qj4w`, `canopi
 
 ## Updated Assumptions
 
-- The initial research judged shared browser-compatible generation feasible from documented capabilities. The later `canopi-4nzq` evaluation now demonstrates it in Linux Chromium, with [native engine verification](canvas-pdf-native-verification.md) now scheduled before the foundation decision. Integrated browser/WebView and physical-print checks remain release obligations.
+- The initial research judged shared browser-compatible generation feasible from documented capabilities. The later `canopi-4nzq` evaluation now demonstrates it in Linux Chromium, and the subsequent [native engine verification](canvas-pdf-native-verification.md) passed Linux WebKitGTK, macOS WKWebView on both architectures, and Windows WebView2 before the foundation decision. Integrated browser/WebView and physical-print checks remain release obligations.
 - Existing scene logic is reusable input; screen snapshots and CSS font fallbacks are insufficient export contracts. Geographic projection and map acquisition are outside v1.
 - PDFKit is a stronger browser candidate than older packaging advice suggests. Library choice remains provisional.
 - Retaining Design Layer selection adds no map-provider dependency. The export overrides remain separate from saved canvas visibility.
@@ -166,4 +166,4 @@ Deferred map questions: provider plan, retained/shared PDF rights, attribution, 
 
 ## Recommended Next Skill
 
-The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`) are complete. The `canopi-4nzq` [evaluation evidence](canvas-pdf-evaluation.md) supports the pending foundation and interaction decision in `canopi-orpp`. The user approved completing `canopi-cd7x.1` native WebView evidence before that decision and substantial export UI work; this ordering does not accept the outstanding preview edge-case proposals. Preserve the font, interaction, platform and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.
+The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`) are complete. The `canopi-4nzq` [evaluation evidence](canvas-pdf-evaluation.md) supports the pending foundation and interaction decision in `canopi-orpp`. The approved `canopi-cd7x.1` native WebView gate has also passed all three desktop engines. That evidence is ready for the foundation decision; it does not accept the outstanding preview edge-case proposals. Preserve the font, interaction, platform and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.
