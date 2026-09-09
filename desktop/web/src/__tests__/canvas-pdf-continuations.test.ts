@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
+import { planLegend } from '../app/canvas-pdf/legend'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels, PdfSetup } from '../app/canvas-pdf/types'
@@ -91,4 +92,46 @@ it('preserves duplicate local names, mixed scripts and every appearance across e
   expect(operations.filter((op) => op.kind === 'text' && op.size === 10).length).toBeGreaterThan(100)
   const samples = plan.pages.slice(1).flatMap((page) => page.operations.filter((op) => op.kind === 'path'))
   expect(samples.some((op) => op.fill === '#987654' && op.opacity === .7)).toBe(true)
+})
+
+it('fits forty short species names in the narrow sidebar without shrinking text', () => {
+  const input = garden(40)
+  const plan = buildPdfPlan(input, setup, engine(), labels)
+  expect(plan.blocked).toBeNull()
+  expect(plan.pages).toHaveLength(1)
+  const names = plan.pages[0]!.operations.filter((op) => op.kind === 'text').filter((op) => op.size === 10)
+    .flatMap((op) => op.line.runs.map((run) => run.text))
+  for (const plant of input.canvas.plants) expect(names).toContain(plant.canonicalName)
+})
+
+it('keeps two authored samples beside a full name in a compact sidebar row', () => {
+  const plant = garden(1).canvas.plants[0]!
+  const appearances = [plant, { ...plant, color: '#987654' }]
+  const result = planLegend([{ canonicalName: plant.canonicalName, name: 'Apple', appearances }],
+    { x: 0, y: 0, width: 119, height: 15 }, () => ({ x: 0, y: 0, width: 500, height: 600 }), engine(), labels, false, .7)
+  expect(result.overflow).toBe(false)
+  expect(result.operations.filter((op) => op.kind === 'text').flatMap((op) => op.line.runs.map((run) => run.text))).toEqual(['Apple'])
+  const marks = result.operations.filter((op) => op.kind === 'path').filter((op) => op.fill)
+  expect(marks.map((op) => op.fill)).toEqual(['#234567', '#987654'])
+  for (const mark of marks) expect(mark.matrix[5]).toBe(7)
+})
+
+it('places complete large appearance sets below their name and separates species within the frame', () => {
+  const plant = garden(1).canvas.plants[0]!
+  const appearances = Array.from({ length: 12 }, (_, i) => ({ ...plant, color: `#${String(i).padStart(6, '0')}` }))
+  const result = planLegend([
+    { canonicalName: 'Apple', name: 'Apple', appearances },
+    { canonicalName: 'Pear', name: 'Pear', appearances: [plant] },
+  ], { x: 0, y: 0, width: 119, height: 56 }, () => ({ x: 0, y: 0, width: 500, height: 600 }), engine(), labels, false, .7)
+  expect(result.overflow).toBe(false)
+  const paths = result.operations.filter((op) => op.kind === 'path')
+  expect(paths.filter((op) => op.fill).map((op) => op.fill)).toEqual([...appearances.map((plant) => plant.color), plant.color])
+  const rules = paths.filter((op) => !op.fill && op.stroke)
+  expect(rules.length).toBeGreaterThan(0)
+  const texts = result.operations.filter((op) => op.kind === 'text')
+  expect(texts.flatMap((op) => op.line.runs.map((run) => run.text))).toEqual(['Apple', 'Pear'])
+  for (const mark of paths.filter((op) => op.fill)) {
+    expect(mark.matrix[4] + mark.matrix[0]).toBeLessThanOrEqual(119)
+    expect(mark.matrix[5] + mark.matrix[3]).toBeLessThanOrEqual(56)
+  }
 })

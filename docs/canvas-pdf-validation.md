@@ -145,6 +145,30 @@ independently. The Scene snapshot and source-file hashes remained unchanged. The
 local artifacts remain outside Git. Packaged native and physical paper review remain
 tracked in `canopi-h0q3`; the earlier native matrix below predates this update.
 
+## Compact legend update (2026-09-09)
+
+`canopi-cd7x.3` implements the accepted narrow-column comparison: 2 pt entry gaps,
+inline authored samples where space permits, a 1 mm name gutter, 0.8 mm sample
+spacing and fine separators. The sidebar remains 42 mm; names remain 10 pt with
+13 pt leading and samples remain nominally 3 mm. The temporary comparison is
+removed. These values remain provisional for the physical review above.
+
+TypeScript, all 235 frontend test files / 2,192 tests, Desktop and Web builds
+(including the Web boundary scan), and the production validation build passed.
+New regressions cover forty full short names fitting on one page, inline appearance
+pairs, and complete larger appearance sets. Existing tests retain oversized
+mixed-script names and independently oriented continuation pages.
+
+Chrome 150.0.7871.46 exercised the built Web Edition: repeated downloads, explicit
+continuation consent and withdrawal, retained setup, drawn pages, zoom/orientation,
+keyboard framing, inspection, overview navigation, compact workspace and removal.
+Poppler text extraction verified all 90 species names in both downloads. The private
+2,201-plant orchard exported as two A4 pages; independent extraction verified all
+117 full canonical names, and rendered source/continuation pages were inspected.
+The imported source hash remained unchanged. Local PDFs, images and the browser
+report are in ignored `.tmp/compact-legend-production/`; no private Design data is
+committed. These checks provide no new packaged-native or physical-print approval.
+
 ## Completion evidence for the original implementation
 
 The combined checkout includes both prerequisite fixes and all six PDF implementation/validation beads. `canopi-urxb` records the technical completion. [Compact measured data](canvas-pdf-validation-data.json) preserves browser timings, resource samples, file/plan/text hashes, image comparisons, actual runtime versions and native CI results beyond temporary artifact retention.

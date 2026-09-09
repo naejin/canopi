@@ -1,7 +1,7 @@
 import type { PrintBounds, PrintPlant } from '../../canvas/print'
 import type { PdfTextEngine, TextLine } from './text'
 import type { PdfLabels, PdfLegendEntry, PdfOperation } from './types'
-import { PRINT, drawMark, textOp } from './page-drawing'
+import { PRINT, MM, drawMark, pathOp, textOp } from './page-drawing'
 
 interface Row { line?: TextLine; samples?: readonly PrintPlant[]; indent: number }
 interface LegendBody { operations: PdfOperation[]; entries: PdfLegendEntry[] }
@@ -11,26 +11,33 @@ interface LegendPlan { operations: PdfOperation[]; overflow: boolean; continuati
 // appearances longer than a whole column may continue, always at the same size.
 export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBounds, continuationFrame: (index: number) => PrintBounds,
   text: PdfTextEngine, labels: PdfLabels, allow: boolean, opacity: number): LegendPlan {
+  const sampleStep = 2 * PRINT.marker + PRINT.legendSampleGap
   const rows = (entry: PdfLegendEntry, width: number): Row[] => {
-    const single = entry.appearances.length === 1
-    const indent = single ? 2 * PRINT.marker + 5 : 0
+    const sampleWidth = entry.appearances.length * sampleStep - PRINT.legendSampleGap
+    // Reserve at least two thirds of the column for the full name.
+    const inline = sampleWidth + MM <= width / 3
+    const indent = inline ? sampleWidth + MM : 0
     const result: Row[] = text.wrap(entry.name, PRINT.text, width - indent).map((line, i) => ({ line, indent,
-      ...(single && i === 0 ? { samples: entry.appearances } : {}) }))
-    if (!single) {
-      const count = Math.max(1, Math.floor(width / (3 * PRINT.marker)))
+      ...(inline && i === 0 ? { samples: entry.appearances } : {}) }))
+    if (!inline) {
+      const count = Math.max(1, Math.floor((width + PRINT.legendSampleGap) / sampleStep))
       for (let i = 0; i < entry.appearances.length; i += count) result.push({ samples: entry.appearances.slice(i, i + count), indent: 0 })
     }
     return result
   }
   const draw = (row: Row, x: number, y: number, operations: PdfOperation[]) => {
     if (row.line) operations.push(textOp(row.line, x + row.indent, y + PRINT.text, PRINT.text))
-    row.samples?.forEach((plant, i) => drawMark(plant, x + PRINT.marker + i * 3 * PRINT.marker, y + PRINT.text - 3, PRINT.marker, opacity, operations))
+    row.samples?.forEach((plant, i) => drawMark(plant, x + PRINT.marker + i * sampleStep, y + PRINT.text - 3, PRINT.marker, opacity, operations))
+  }
+  const separator = (x: number, y: number, width: number, operations: PdfOperation[]) => {
+    const baseline = y + PRINT.legendGap / 2
+    operations.push(pathOp(`M${x} ${baseline} h${width}`, PRINT.legendRule, null, .25))
   }
   const measured = entries.map((entry) => rows(entry, column.width))
   const fit = (height: number) => {
     let used = 0, count = 0
     for (const entry of measured) {
-      const size = entry.length * PRINT.line + 6
+      const size = entry.length * PRINT.line + PRINT.legendGap
       if (used + size > height) break
       used += size; count++
     }
@@ -43,7 +50,8 @@ export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBoun
   let y = column.y
   for (const entry of measured.slice(0, count)) {
     for (const row of entry) { draw(row, column.x, y, operations); y += PRINT.line }
-    y += 6
+    separator(column.x, y, column.width, operations)
+    y += PRINT.legendGap
   }
   if (!overflow || !allow) return { operations, overflow, continuations: [] }
 
@@ -65,7 +73,7 @@ export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBoun
   nextPage()
   for (const entry of entries.slice(count)) {
     let entryRows = rows(entry, width!)
-    if (y > frame!.y && y + entryRows.length * PRINT.line + 6 > bottom!) {
+    if (y > frame!.y && y + entryRows.length * PRINT.line + PRINT.legendGap > bottom!) {
       nextColumn(); entryRows = rows(entry, width!)
     }
     for (let i = 0; i < entryRows.length; i++) {
@@ -81,8 +89,8 @@ export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBoun
       if (row.line && row.line.width + row.indent > width!) {
         const lines = text.wrap(row.line.runs.map((run) => run.text).join(''), PRINT.text, width! - row.indent)
         entryRows.splice(i, 1, ...lines.map((line, index) => ({ line, indent: row.indent, ...(index === 0 ? { samples: row.samples } : {}) })))
-      } else if (!row.line && row.samples && row.samples.length * 3 * PRINT.marker > width!) {
-        const count = Math.max(1, Math.floor(width! / (3 * PRINT.marker)))
+      } else if (!row.line && row.samples && row.samples.length * sampleStep - PRINT.legendSampleGap > width!) {
+        const count = Math.max(1, Math.floor((width! + PRINT.legendSampleGap) / sampleStep))
         const split: Row[] = []
         for (let j = 0; j < row.samples.length; j += count) split.push({ samples: row.samples.slice(j, j + count), indent: 0 })
         entryRows.splice(i, 1, ...split)
@@ -91,7 +99,8 @@ export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBoun
       draw(entryRows[i]!, frame!.x + columnIndex * (width! + PRINT.gutter), y, body!.operations)
       y += PRINT.line
     }
-    y += 6
+    if (y + PRINT.legendGap <= bottom!) separator(frame!.x + columnIndex * (width! + PRINT.gutter), y, width!, body!.operations)
+    y += PRINT.legendGap
   }
   return { operations, overflow: false, continuations,
     link: { x: column.x, y: column.y + column.height - linkHeight + PRINT.line, width: column.width, height: linkHeight } }

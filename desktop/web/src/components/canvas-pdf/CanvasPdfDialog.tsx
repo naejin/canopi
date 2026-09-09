@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { ComponentType } from 'preact'
 import { canvasPdf } from '../../app/canvas-pdf/live'
 import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
-import { type PdfPlan, type PdfPaper, type PdfPage } from '../../app/canvas-pdf/types'
+import { type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
 import { PdfPageEditor } from './PdfPageEditor'
 import { PdfPageRail } from './PdfPageRail'
 import { PdfPageToolbar } from './PdfPageToolbar'
 import styles from './canvas-pdf.module.css'
-
-const legendPrototypeEnabled = import.meta.env.DEV && new URLSearchParams(location.search).get('legendPrototype') === '1'
 
 export function CanvasPdfDialog({ workflow = canvasPdf }: { readonly workflow?: PdfWorkflow }) {
   if (!workflow.open.value) return null
@@ -19,7 +16,6 @@ export function CanvasPdfDialog({ workflow = canvasPdf }: { readonly workflow?: 
 function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
   const root = useRef<HTMLElement>(null)
   const [pageId, setPageId] = useState('overview')
-  const [comparingLegend, setComparingLegend] = useState(legendPrototypeEnabled)
   const lastPlan = useRef<PdfPlan>()
   const [adding, setAdding] = useState(false)
   const [inspecting, setInspecting] = useState(false)
@@ -66,8 +62,6 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
     }
   }
-  if (import.meta.env.DEV && comparingLegend && page?.legend.length && plan) return <LegendPrototypeHost
-    page={page} plan={plan} onClose={() => setComparingLegend(false)} />
   return <div className={styles.overlay}>
     <section ref={root} role="dialog" aria-modal="true" aria-labelledby="canvas-pdf-title" className={styles.workspace}
       data-preserve-overlays="true" onKeyDown={keyDown}>
@@ -131,15 +125,6 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
       </footer>
     </section>
   </div>
-}
-function LegendPrototypeHost(props: { page: PdfPage; plan: PdfPlan; onClose(): void }) {
-  const [Component, setComponent] = useState<ComponentType<typeof props> | null>(null)
-  useEffect(() => {
-    let active = true
-    void import('./legend-prototype/LegendPrototype').then(module => { if (active) setComponent(() => module.default) })
-    return () => { active = false }
-  }, [])
-  return Component ? <Component {...props} /> : null
 }
 function LayerSettings({ workflow, disabled }: { readonly workflow: PdfWorkflow; readonly disabled: boolean }) {
   const [open, setOpen] = useState(false)

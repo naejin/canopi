@@ -81,9 +81,14 @@ The printed overview's interactive coverage targets derive from finalized detail
 
 ## Legend pagination
 
-A [temporary compact-legend comparison](pdf-legend-prototype.md) is available for
-review behind a development-only toggle. Its alternatives are proposals; the
-production rules below remain in force.
+The fixed narrow column uses compact rows in both source sheets and continuations:
+10 pt full names with 13 pt leading, 3 mm nominal samples, 0.8 mm between samples,
+and a 1 mm sample/name gutter. Samples sit beside the first name line when their
+combined width and gutter consume at most one third of the column. Otherwise all
+samples wrap beneath the full-width name. Entries have a 2 pt trailing gap with a
+fine neutral separator; wrapped names and appearance sets remain grouped.
+These dimensions live in `print-style.ts` and remain provisional for field review.
+The accepted compact comparison prototype and its development toggle are retired.
 
 `legend.ts` lays out full selected-language names (canonical fallback) and every authored appearance at the shared readable size. The source sheet keeps an ordered prefix in its narrow column. Overflow blocks output until the user explicitly chooses Add legend pages or changes setup. Remove legend pages withdraws the setup-wide continuation consent. The rail groups continuations by source ID, and selection falls back to the source if reflow removes the current continuation. Accepted continuations use two columns, retain complete entries where they fit, and can continue an exceptionally long entry without shrinking it. Source and continuation links resolve final page identities. Ambiguity always considers the complete source legend, including entries on continuations, and never changes authored presentation.
 
