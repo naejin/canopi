@@ -1,6 +1,6 @@
 # Export a Canvas PDF
 
-Open a Design and choose **File → Canvas PDF**. Desktop opens a PDF save dialog; Web Edition requests a PDF download. The PDF is for sharing and printing. Keep the `.canopi` file to edit your Design later.
+Open a Design and choose **File → Export to PDF**. Desktop opens a PDF save dialog; Web Edition requests a PDF download. The PDF is for sharing and printing. Keep the `.canopi` file to edit your Design later.
 
 Choose A4 or US Letter, orientation, and the Design Layers to print. Initially, the export uses the visible printable layers. These choices never change visibility or other content in your Design. Maps and the Timeline, Budget, and Consortium tabs are excluded.
 

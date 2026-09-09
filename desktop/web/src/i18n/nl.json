@@ -884,7 +884,7 @@
     "currentDesignUnavailable": "Er is geen huidig ontwerp beschikbaar om bij te voegen."
   },
   "pdf": {
-    "title": "PDF van het canvas",
+    "title": "Exporteren naar PDF",
     "intro": "Maak een leesbaar plan om te delen en mee te nemen naar het veld.",
     "paper": "Papier",
     "orientation": "Afdrukstand",

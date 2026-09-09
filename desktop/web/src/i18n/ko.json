@@ -884,7 +884,7 @@
     "currentDesignUnavailable": "첨부할 현재 디자인이 없습니다."
   },
   "pdf": {
-    "title": "캔버스 PDF",
+    "title": "PDF로 내보내기",
     "intro": "공유하거나 현장에서 인쇄할 읽기 쉬운 도면을 만드세요.",
     "paper": "용지",
     "orientation": "방향",
@@ -932,6 +932,6 @@
       "coverage-too-large": "현재 설정은 200페이지 제한을 초과합니다. 영역 수를 줄이거나 더 작은 축척을 선택하세요."
     },
     "printAreas": "인쇄 영역",
-    "commonScale": "공통"
+    "commonScale": "기본값"
   }
 }

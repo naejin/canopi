@@ -884,7 +884,7 @@
     "currentDesignUnavailable": "Es ist kein aktuelles Design zum Anhängen verfügbar."
   },
   "pdf": {
-    "title": "PDF der Zeichenfläche",
+    "title": "Als PDF exportieren",
     "intro": "Erstellen Sie einen lesbaren Plan zum Teilen und für die Arbeit vor Ort.",
     "paper": "Papier",
     "orientation": "Ausrichtung",

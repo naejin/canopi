@@ -884,7 +884,7 @@
     }
   },
   "pdf": {
-    "title": "Canvas PDF",
+    "title": "Export to PDF",
     "intro": "Prepare a readable plan for sharing and field printing.",
     "paper": "Paper",
     "orientation": "Orientation",
@@ -932,6 +932,6 @@
       "coverage-too-large": "This setup exceeds the 200-page limit. Select fewer areas or a smaller drawing scale."
     },
     "printAreas": "Print areas",
-    "commonScale": "Common"
+    "commonScale": "Default"
   }
 }

@@ -884,7 +884,7 @@
     "currentDesignUnavailable": "Não há um Design atual disponível para anexar."
   },
   "pdf": {
-    "title": "PDF da tela",
+    "title": "Exportar para PDF",
     "intro": "Prepare um plano legível para compartilhar e levar ao campo.",
     "paper": "Papel",
     "orientation": "Orientação",
@@ -932,6 +932,6 @@
       "coverage-too-large": "Esta seleção ultrapassa o limite de 200 páginas. Selecione menos áreas ou uma escala de desenho menor."
     },
     "printAreas": "Áreas de impressão",
-    "commonScale": "Comum"
+    "commonScale": "Padrão"
   }
 }

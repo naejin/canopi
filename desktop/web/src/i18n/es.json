@@ -884,7 +884,7 @@
     "currentDesignUnavailable": "No hay un diseño actual disponible para adjuntar."
   },
   "pdf": {
-    "title": "PDF del lienzo",
+    "title": "Exportar a PDF",
     "intro": "Prepare un plano legible para compartir y llevar al campo.",
     "paper": "Papel",
     "orientation": "Orientación",
@@ -932,6 +932,6 @@
       "coverage-too-large": "Esta selección supera el límite de 200 páginas. Selecciona menos áreas o una escala de dibujo menor."
     },
     "printAreas": "Áreas de impresión",
-    "commonScale": "Común"
+    "commonScale": "Predeterminada"
   }
 }

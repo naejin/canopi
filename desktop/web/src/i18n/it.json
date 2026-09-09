@@ -884,7 +884,7 @@
     "currentDesignUnavailable": "Nessun design attuale è disponibile da allegare."
   },
   "pdf": {
-    "title": "PDF della tavola",
+    "title": "Esporta in PDF",
     "intro": "Prepara una pianta leggibile da condividere e portare sul campo.",
     "paper": "Carta",
     "orientation": "Orientamento",
@@ -932,6 +932,6 @@
       "coverage-too-large": "La selezione supera il limite di 200 pagine. Seleziona meno aree o una scala di disegno più piccola."
     },
     "printAreas": "Aree di stampa",
-    "commonScale": "Comune"
+    "commonScale": "Predefinita"
   }
 }

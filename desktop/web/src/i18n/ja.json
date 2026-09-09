@@ -884,7 +884,7 @@
     "currentDesignUnavailable": "添付できる現在のデザインがありません。"
   },
   "pdf": {
-    "title": "キャンバス PDF",
+    "title": "PDF にエクスポート",
     "intro": "共有や現場での印刷に使う、読みやすい図面を作成します。",
     "paper": "用紙",
     "orientation": "向き",
@@ -932,6 +932,6 @@
       "coverage-too-large": "この設定では上限の200ページを超えます。範囲を減らすか、より小さい縮尺を選んでください。"
     },
     "printAreas": "印刷範囲",
-    "commonScale": "共通"
+    "commonScale": "デフォルト"
   }
 }
