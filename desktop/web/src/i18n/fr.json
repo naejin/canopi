@@ -110,6 +110,20 @@
     "plantDbCorrupt": "Base de données végétale corrompue. Réinstallez ou régénérez avec prepare-db.py. La recherche de plantes est indisponible."
   },
   "canvas": {
+    "inspection": {
+      "title": "Loupe d’inspection",
+      "close": "Fermer la loupe",
+      "hold": "Figer",
+      "follow": "Suivre le pointeur",
+      "held": "Position figée",
+      "following": "Suit le pointeur",
+      "nearby": "Plantes les plus proches",
+      "hint": "Survolez ou sélectionnez un nom au clavier pour repérer la plante. Activez-le pour centrer le canevas.",
+      "empty": "Aucune plante visible dans ce design.",
+      "unavailable": "L’aperçu est indisponible. La liste des plantes reste accessible.",
+      "locate": "Centrer sur {{name}}",
+      "distance": "À {{distance}} m du centre de la loupe"
+    },
     "emptyWelcome": "Commencez votre design",
     "emptyNewDesign": "Nouveau design",
     "emptyOpenDesign": "Ouvrir un design",

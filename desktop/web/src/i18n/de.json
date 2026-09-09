@@ -110,6 +110,20 @@
     "plantDbCorrupt": "Pflanzendatenbank ist beschädigt. Installieren Sie neu oder erzeugen Sie sie mit prepare-db.py neu. Pflanzensuche ist nicht verfügbar."
   },
   "canvas": {
+    "inspection": {
+      "title": "Inspektionslupe",
+      "close": "Lupe schließen",
+      "hold": "Festhalten",
+      "follow": "Zeiger folgen",
+      "held": "Position festgehalten",
+      "following": "Folgt dem Zeiger",
+      "nearby": "Nächstgelegene Pflanzen",
+      "hint": "Zeige auf einen Namen oder fokussiere ihn, um die Pflanze zu finden. Aktiviere ihn, um die Zeichenfläche zu zentrieren.",
+      "empty": "Keine sichtbaren Pflanzen in diesem Entwurf.",
+      "unavailable": "Die Vorschau ist nicht verfügbar. Die Pflanzenliste bleibt nutzbar.",
+      "locate": "Auf {{name}} zentrieren",
+      "distance": "{{distance}} m vom Lupenmittelpunkt"
+    },
     "emptyWelcome": "Starten Sie Ihren Entwurf",
     "emptyNewDesign": "Neuer Entwurf",
     "emptyOpenDesign": "Entwurf öffnen",

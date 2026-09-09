@@ -3,6 +3,7 @@ import { t } from '../../i18n'
 import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-document-session'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
+import { InspectionLens } from '../canvas/InspectionLens'
 import { DisplayLegend } from '../canvas/DisplayLegend'
 import {
   MapLibreCanvasSurface,
@@ -137,6 +138,7 @@ export function CanvasPanel() {
               )}
             </div>
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
+            {hasDesign && <InspectionLens canvasRef={containerRef} />}
             {locationNotice.visible && (
               <div
                 className={styles.basemapFeedback}

@@ -174,7 +174,7 @@ A derived physical size description of a zone or zone edge, such as width, heigh
 _Avoid_: Shape metadata, annotation, label
 
 **Measurement Guide**:
-A persistent straight measuring aid in a design with two endpoints and an always-visible distance. A measurement guide helps a designer read distance without making the line an ecological boundary, spacing instruction, or text note.
+A persistent straight measuring aid in a design with two endpoints and a derived distance. Its line remains visible; Automatic Detail reveals the distance when space allows or the guide is inspected. A measurement guide helps a designer read distance without making the line an ecological boundary, spacing instruction, or text note.
 _Avoid_: Linear Zone, Spacing Guide, ruler line
 
 **Zone Control Point**:
@@ -221,6 +221,14 @@ _Avoid_: Selection lock, runtime lock
 The visible on-screen presence of a design object or its readable presentation aids at the current zoom level. A visual footprint may differ from the object's real-world geometry when readability requires it.
 _Avoid_: Object scale, canvas scale, display size
 
+**Automatic Detail**:
+The Canvas presentation that reveals plant symbols, names, annotations and measurements as local screen space allows. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
+_Avoid_: Display by mode, canopy sizing, automatic design editing
+
+**Inspection Lens**:
+A temporary magnified view of a small part of the Canvas, with nearby plant names for identification while the surrounding Design remains in view. Holding the lens fixes its inspection location; it does not pin plant names or create a Design Object.
+_Avoid_: Planting strip, Print Area, second Design
+
 **Plant Drag Distance Guide**:
 A temporary on-canvas distance cue shown while dragging a placed plant. A plant drag distance guide describes the center-to-center distance from the active dragged placed plant to nearby non-dragged placed plants, and it is not saved in the design.
 _Avoid_: Plant spacing interval, zone measurement, ruler
@@ -230,7 +238,7 @@ A temporary visible name label shown only when one unpinned placed plant is the 
 _Avoid_: Pinned Plant Name, annotation, hover tooltip
 
 **Pinned Plant Name**:
-A saved choice to display the name of an individual placed plant in a design, subject to zoom-dependent visibility on the canvas. A pinned plant name is a presentation aid; hiding it at low zoom does not unpin the name or lock the placed plant.
+A saved choice to display the name of an individual placed plant in a design, subject to zoom and local screen space on the canvas. Pinned names take priority over automatic names. A pinned plant name is a presentation aid; hiding it at low zoom does not unpin the name or lock the placed plant.
 _Avoid_: Locked plant name, Design Object Lock, annotation
 
 **Layer**:

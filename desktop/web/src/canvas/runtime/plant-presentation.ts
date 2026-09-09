@@ -13,14 +13,14 @@ import {
   type SceneViewportState,
 } from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
+import { nearestPlantSpacing } from './plant-spacing'
 
-const STACK_THRESHOLD_PX = 5
-const STACK_THRESHOLD_SQ = STACK_THRESHOLD_PX * STACK_THRESHOLD_PX
 export const STACK_BADGE_RADIUS_PX = 7
 export const STACK_BADGE_GAP_PX = 2
 
 export interface PlantPresentationContext {
   viewport: SceneViewportState
+  plants?: readonly ScenePlantEntity[]
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
   plantSpeciesSymbols?: Readonly<Record<string, string>>
   localizedCommonNames?: ReadonlyMap<string, string | null>
@@ -90,8 +90,9 @@ export function buildPlantPresentationEntries(
   selectedPlantIds: ReadonlySet<string>,
 ): PlantPresentationEntry[] {
   const lod = getPlantLOD(context.viewport.scale)
+  context = { ...context, plants: context.plants ?? plants }
   return plants.map((plant) => {
-    const radiusPresentation = resolvePlantRadiusPresentation(context)
+    const radiusPresentation = resolvePlantRadiusPresentation(plant, context)
     const radiusWorld = radiusPresentation.radiusWorld
     const radiusScreenPx = radiusWorld * context.viewport.scale
     const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
@@ -108,7 +109,7 @@ export function buildPlantPresentationEntries(
       symbol,
       usesCanopyRadius: radiusPresentation.usesCanopyRadius,
       stackPriority: getStackPriority(plant, selected),
-      lod,
+      lod: radiusScreenPx < 3.6 ? 'dot' : lod,
       screenPoint,
       hitBoundsScreen,
       selected,
@@ -131,7 +132,7 @@ export function getPlantWorldBounds(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
 ): PlantWorldBounds {
-  const radiusWorld = resolvePlantRadiusWorld(context)
+  const radiusWorld = resolvePlantRadiusWorld(plant, context)
   return {
     x: plant.position.x - radiusWorld,
     y: plant.position.y - radiusWorld,
@@ -145,7 +146,7 @@ export function getPlantScreenHitBounds(
   context: PlantPresentationContext,
 ): PlantScreenHitBounds {
   const screenPoint = worldToScreen(plant.position, context.viewport)
-  const radiusScreenPx = resolvePlantRadiusWorld(context) * context.viewport.scale
+  const radiusScreenPx = resolvePlantRadiusWorld(plant, context) * context.viewport.scale
   const hitRadiusPx = radiusScreenPx + 4
   return {
     center: screenPoint,
@@ -212,50 +213,19 @@ export function resolvePlantDisplayColor(
 export function resolveStackBadgeDecisions(
   entries: readonly PlantPresentationEntry[],
 ): PlantStackBadgeDecision[] {
-  const index = new ScreenBucketIndex(STACK_THRESHOLD_PX, (entry) => entry.screenPoint)
-  index.rebuild(entries)
-  const byId = new Map(entries.map((entry) => [entry.plant.id, entry]))
-  const visited = new Set<string>()
-  const decisions: PlantStackBadgeDecision[] = []
-
+  const coincident = new Map<string, PlantPresentationEntry[]>()
   for (const entry of entries) {
-    if (visited.has(entry.plant.id)) continue
-
-    const queue = [entry]
-    const memberIds: string[] = []
-    visited.add(entry.plant.id)
-
-    while (queue.length > 0) {
-      const current = queue.shift()
-      if (!current) continue
-      memberIds.push(current.plant.id)
-
-      for (const neighbor of index.queryNeighbors(
-        current.screenPoint.x,
-        current.screenPoint.y,
-        STACK_THRESHOLD_PX,
-      )) {
-        if (visited.has(neighbor.plant.id) || neighbor.plant.id === current.plant.id) continue
-        const dx = current.screenPoint.x - neighbor.screenPoint.x
-        const dy = current.screenPoint.y - neighbor.screenPoint.y
-        if (dx * dx + dy * dy >= STACK_THRESHOLD_SQ) continue
-        visited.add(neighbor.plant.id)
-        queue.push(neighbor)
-      }
-    }
-
-    if (memberIds.length < 2) continue
-
-    const members = memberIds
-      .map((memberId) => byId.get(memberId))
-      .filter((value): value is PlantPresentationEntry => value !== undefined)
-      .sort((left, right) => {
-        if (left.stackPriority !== right.stackPriority) {
-          return left.stackPriority - right.stackPriority
-        }
-        return (left.screenPoint.y - right.screenPoint.y)
-          || (left.screenPoint.x - right.screenPoint.x)
-      })
+    const { x, y } = entry.plant.position
+    const key = `${x}:${y}`
+    const members = coincident.get(key)
+    if (members) members.push(entry)
+    else coincident.set(key, [entry])
+  }
+  const decisions: PlantStackBadgeDecision[] = []
+  for (const members of coincident.values()) {
+    if (members.length < 2) continue
+    members.sort((left, right) => left.stackPriority - right.stackPriority || left.plant.id.localeCompare(right.plant.id))
+    const memberIds = members.map((entry) => entry.plant.id)
     const anchor = members[0]
     if (!anchor) continue
 
@@ -293,19 +263,18 @@ const SYMBOLIC_PLANT_MIN_SCREEN_PX = 2
 const SYMBOLIC_PLANT_MAX_SCREEN_PX = 6.75
 const SYMBOLIC_PLANT_HALF_GROWTH_SCALE = 21
 
-function resolvePlantRadiusWorld(context: PlantPresentationContext): number {
-  return resolvePlantRadiusPresentation(context).radiusWorld
+function resolvePlantRadiusWorld(plant: ScenePlantEntity, context: PlantPresentationContext): number {
+  return resolvePlantRadiusPresentation(plant, context).radiusWorld
 }
 
 function resolvePlantRadiusPresentation(
+  plant: ScenePlantEntity,
   context: PlantPresentationContext,
 ): { radiusWorld: number; usesCanopyRadius: boolean } {
-  return { radiusWorld: getSymbolicPlantRadiusWorld(context.viewport.scale), usesCanopyRadius: false }
-}
-
-function getSymbolicPlantRadiusWorld(viewportScale: number): number {
-  const scale = Math.max(viewportScale, 0.001)
-  return getSymbolicPlantRadiusScreenPx(scale) / scale
+  const scale = Math.max(context.viewport.scale, .001)
+  const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
+  const radiusPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42))
+  return { radiusWorld: radiusPx / scale, usesCanopyRadius: false }
 }
 
 function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {
@@ -319,44 +288,4 @@ function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {
 function getStackPriority(plant: ScenePlantEntity, selected: boolean): number {
   if (selected) return 0
   return normalizeHexColor(plant.color) ? 1 : 2
-}
-
-class ScreenBucketIndex {
-  private readonly _cells = new Map<string, PlantPresentationEntry[]>()
-
-  constructor(
-    private readonly _cellSize: number,
-    private readonly _pointOf: (entry: PlantPresentationEntry) => ScenePoint,
-  ) {}
-
-  rebuild(entries: readonly PlantPresentationEntry[]): void {
-    this._cells.clear()
-    for (const entry of entries) {
-      const point = this._pointOf(entry)
-      const key = this._keyFor(point.x, point.y)
-      const current = this._cells.get(key)
-      if (current) current.push(entry)
-      else this._cells.set(key, [entry])
-    }
-  }
-
-  queryNeighbors(x: number, y: number, radius: number): PlantPresentationEntry[] {
-    const minX = Math.floor((x - radius) / this._cellSize)
-    const maxX = Math.floor((x + radius) / this._cellSize)
-    const minY = Math.floor((y - radius) / this._cellSize)
-    const maxY = Math.floor((y + radius) / this._cellSize)
-    const results: PlantPresentationEntry[] = []
-
-    for (let cellX = minX; cellX <= maxX; cellX += 1) {
-      for (let cellY = minY; cellY <= maxY; cellY += 1) {
-        const cell = this._cells.get(`${cellX}:${cellY}`)
-        if (cell) results.push(...cell)
-      }
-    }
-    return results
-  }
-
-  private _keyFor(x: number, y: number): string {
-    return `${Math.floor(x / this._cellSize)}:${Math.floor(y / this._cellSize)}`
-  }
 }

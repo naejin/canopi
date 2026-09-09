@@ -110,6 +110,20 @@
     "plantDbCorrupt": "Plant database is corrupt. Reinstall or regenerate with prepare-db.py. Plant search is unavailable."
   },
   "canvas": {
+    "inspection": {
+      "title": "Inspection lens",
+      "close": "Close inspection lens",
+      "hold": "Hold",
+      "follow": "Follow pointer",
+      "held": "Held in place",
+      "following": "Following pointer",
+      "nearby": "Closest plants",
+      "hint": "Hover or focus a name to find its plant. Activate it to centre the canvas.",
+      "empty": "No visible plants in this design.",
+      "unavailable": "The preview is unavailable. You can still use the plant list.",
+      "locate": "Centre on {{name}}",
+      "distance": "{{distance}} m from lens centre"
+    },
     "emptyWelcome": "Start your design",
     "emptyNewDesign": "New Design",
     "emptyOpenDesign": "Open Design",

@@ -85,6 +85,7 @@ export class SceneRuntimePresentationController {
 
   createPlantPresentationContext(viewportScale = this._getViewport().scale): PlantPresentationContext {
     return {
+      plants: this._sceneStore.persisted.plants,
       viewport: {
         x: 0,
         y: 0,
@@ -106,6 +107,7 @@ export class SceneRuntimePresentationController {
 
     const viewport = this._getViewport()
     const plantContext = {
+      plants: scene.plants,
       viewport,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames,

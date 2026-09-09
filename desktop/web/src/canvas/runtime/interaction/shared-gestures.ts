@@ -171,6 +171,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.context.getSpeciesCache(),
       this.context.getPlantPresentationContext,
       this.context.getSelection(),
+      this.context.getSceneStore().session.hoveredTarget,
     )
     const lockedHit = rawHit && isDirectSceneDesignObjectLocked(scene, rawHit) ? rawHit : null
     const hit = rawHit && (!isSceneDesignObjectLocked(scene, rawHit) || lockedHit) ? rawHit : null

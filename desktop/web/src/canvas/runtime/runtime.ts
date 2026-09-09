@@ -1,4 +1,5 @@
 import type { CanvasPrintSnapshot } from '../print'
+import type { CanvasInspectionHandle } from '../inspection'
 import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
@@ -175,6 +176,7 @@ export function createCanvasDocumentReplacementToken(): CanvasDocumentReplacemen
 }
 
 export interface CanvasDocumentSurface {
+  attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
   initializeViewport(): void
   attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void

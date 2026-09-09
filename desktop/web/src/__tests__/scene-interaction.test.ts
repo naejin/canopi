@@ -9111,7 +9111,7 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelectorAll('[data-saved-object-stamp-ghost]')).toHaveLength(1)
     expect(container.querySelector('[data-saved-object-stamp-part="zone"]')?.tagName.toLowerCase())
       .toBe('polygon')
-    expect(container.querySelector('[data-saved-object-stamp-part="plant-symbol"] path')).toBeTruthy()
+    expect(container.querySelector('[data-saved-object-stamp-part="plant-symbol"] circle')).toBeTruthy()
     expect(container.querySelector('[data-saved-object-stamp-part="annotation"]')).toBeNull()
     expect(container.querySelector('[data-saved-object-stamp-part="annotation-marker"]')).not.toBeNull()
     const overviewViewport = camera.viewport

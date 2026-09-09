@@ -110,6 +110,20 @@
     "plantDbCorrupt": "식물 데이터베이스가 손상되었습니다. prepare-db.py로 재설치하거나 재생성하세요. 식물 검색을 사용할 수 없습니다."
   },
   "canvas": {
+    "inspection": {
+      "title": "확인 돋보기",
+      "close": "돋보기 닫기",
+      "hold": "위치 고정",
+      "follow": "포인터 따라가기",
+      "held": "위치 고정됨",
+      "following": "포인터 따라가는 중",
+      "nearby": "가까운 식물",
+      "hint": "이름 위에 포인터를 올리거나 초점을 맞추면 식물 위치를 확인할 수 있습니다. 이름을 선택하면 캔버스 중앙에 표시합니다.",
+      "empty": "이 디자인에 표시된 식물이 없습니다.",
+      "unavailable": "미리보기를 사용할 수 없습니다. 식물 목록은 계속 사용할 수 있습니다.",
+      "locate": "{{name}}을(를) 중앙에 표시",
+      "distance": "돋보기 중심에서 {{distance}} m"
+    },
     "emptyWelcome": "설계를 시작하세요",
     "emptyNewDesign": "새 설계",
     "emptyOpenDesign": "설계 열기",

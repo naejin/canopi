@@ -110,6 +110,20 @@
     "plantDbCorrupt": "Base de datos de plantas corrupta. Reinstale o regenere con prepare-db.py. La búsqueda de plantas no está disponible."
   },
   "canvas": {
+    "inspection": {
+      "title": "Lupa de inspección",
+      "close": "Cerrar lupa",
+      "hold": "Fijar",
+      "follow": "Seguir el puntero",
+      "held": "Posición fija",
+      "following": "Sigue el puntero",
+      "nearby": "Plantas más cercanas",
+      "hint": "Pasa el puntero o enfoca un nombre para localizar la planta. Actívalo para centrar el lienzo.",
+      "empty": "No hay plantas visibles en este diseño.",
+      "unavailable": "La vista previa no está disponible. Puedes seguir usando la lista de plantas.",
+      "locate": "Centrar en {{name}}",
+      "distance": "A {{distance}} m del centro de la lupa"
+    },
     "emptyWelcome": "Comienza tu diseño",
     "emptyNewDesign": "Nuevo diseño",
     "emptyOpenDesign": "Abrir diseño",

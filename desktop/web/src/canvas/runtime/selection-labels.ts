@@ -46,7 +46,7 @@ export function computeSelectionLabels(
   if (!plant || plant.pinnedName) return []
 
   const screenPoint = worldToScreen(plant.position, viewport)
-  screenPoint.y += plantLabelOffsetPx([plant], viewport, options.plantContext)
+  screenPoint.y += plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
 
   const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
   const text = localizedName || abbreviateCanonical(plant.canonicalName)
@@ -71,7 +71,7 @@ export function computePinnedPlantNameLabels(
     const opacity = plant.id === revealedId ? 1 : overviewOpacity
     if (opacity === 0) continue
     const screenPoint = worldToScreen(plant.position, viewport)
-    screenPoint.y += plantLabelOffsetPx([plant], viewport, options.plantContext)
+    screenPoint.y += plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
 
     const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
     const text = localizedName || abbreviateCanonical(plant.canonicalName)

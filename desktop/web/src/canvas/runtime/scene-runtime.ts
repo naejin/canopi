@@ -292,10 +292,12 @@ export class SceneCanvasRuntime {
           refreshCanvasColorCache(container)
         }
         this._chrome.refreshTheme()
+        this._construction.inspection.refresh()
         this._invalidate('scene')
       },
       onLocale: () => {
         this._interaction?.refreshTranslations()
+        this._construction.inspection.refresh()
         this._invalidate('scene')
       },
       onChromeOverlay: () => {

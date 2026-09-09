@@ -121,6 +121,7 @@ function makeSession(): CanvasDocumentSurface {
   let loaded = false;
   return {
     initializeViewport: vi.fn(),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
     hideCanvasChrome: vi.fn(),
@@ -162,6 +163,7 @@ function makeSettledSceneSession(
 
   return {
     initializeViewport: vi.fn(),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
     hideCanvasChrome: vi.fn(),
@@ -204,6 +206,7 @@ function makePostFinalizerFailureSession(): CanvasDocumentSurface {
   let retainedFinalizer: (() => void) | null = null;
   return {
     initializeViewport: vi.fn(),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
     hideCanvasChrome: vi.fn(),
@@ -240,6 +243,7 @@ function makePreFinalizerFailureSession(): CanvasDocumentSurface {
   let settling = false;
   return {
     initializeViewport: vi.fn(),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
     hideCanvasChrome: vi.fn(),
@@ -808,6 +812,7 @@ describe("document session transition", () => {
     let retainedFinalizer: (() => void) | null = null;
     const session: CanvasDocumentSurface = {
       initializeViewport: vi.fn(),
+      attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
@@ -879,6 +884,7 @@ describe("document session transition", () => {
     });
     const session: CanvasDocumentSurface = {
       initializeViewport: vi.fn(),
+      attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
@@ -946,6 +952,7 @@ describe("document session transition", () => {
     let retainedFinalizer: (() => void) | null = null;
     const session: CanvasDocumentSurface = {
       initializeViewport: vi.fn(),
+      attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),

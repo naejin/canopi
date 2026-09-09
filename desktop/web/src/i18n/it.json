@@ -110,6 +110,20 @@
     "plantDbCorrupt": "Database piante corrotto. Reinstalla o rigenera con prepare-db.py. La ricerca piante non è disponibile."
   },
   "canvas": {
+    "inspection": {
+      "title": "Lente di ispezione",
+      "close": "Chiudi lente",
+      "hold": "Blocca posizione",
+      "follow": "Segui puntatore",
+      "held": "Posizione fissa",
+      "following": "Segue il puntatore",
+      "nearby": "Piante più vicine",
+      "hint": "Passa il puntatore o porta il focus su un nome per individuare la pianta. Attivalo per centrare la tela.",
+      "empty": "Nessuna pianta visibile in questo progetto.",
+      "unavailable": "Anteprima non disponibile. Puoi continuare a usare l’elenco delle piante.",
+      "locate": "Centra su {{name}}",
+      "distance": "A {{distance}} m dal centro della lente"
+    },
     "emptyWelcome": "Inizia il tuo design",
     "emptyNewDesign": "Nuovo design",
     "emptyOpenDesign": "Apri design",

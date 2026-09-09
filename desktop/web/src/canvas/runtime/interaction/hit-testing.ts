@@ -1,3 +1,4 @@
+import { getCanvasDetailLayout } from '../automatic-detail'
 import { rectsIntersect, type SimpleRect } from '../../operations'
 import { getAnnotationVisualWorldCorners, getRevealedAnnotationId, isPointInAnnotationPresentation } from '../annotation-layout'
 import {
@@ -38,6 +39,7 @@ export function hitTestTopLevel(
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   selection: SceneDesignObjectSelection = [],
+  hoverTarget: SceneDesignObjectTarget | null = null,
 ): TopLevelTarget | null {
   return hitTestTopLevelWithLayerFilter(
     scene,
@@ -47,6 +49,7 @@ export function hitTestTopLevel(
     getPlantContext,
     isLayerInteractive,
     getRevealedAnnotationId(selection),
+    hoverTarget?.kind === 'annotation' ? hoverTarget.id : null,
   )
 }
 
@@ -57,6 +60,7 @@ export function hitTestVisibleTopLevel(
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   selection: SceneDesignObjectSelection = [],
+  hoverTarget: SceneDesignObjectTarget | null = null,
 ): TopLevelTarget | null {
   return hitTestTopLevelWithLayerFilter(
     scene,
@@ -66,6 +70,7 @@ export function hitTestVisibleTopLevel(
     getPlantContext,
     isLayerVisible,
     getRevealedAnnotationId(selection),
+    hoverTarget?.kind === 'annotation' ? hoverTarget.id : null,
   )
 }
 
@@ -77,8 +82,11 @@ function hitTestTopLevelWithLayerFilter(
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   isLayerHitEligible: (scene: ScenePersistedState, layerName: string) => boolean,
   revealedAnnotationId: string | null,
+  hoveredAnnotationId: string | null,
 ): TopLevelTarget | null {
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
+  const detail = getCanvasDetailLayout(scene, viewportScale)
+  const plantContext = { ...plantPresentationContext(getPlantContext, viewportScale, speciesCache), plants: scene.plants }
 
   for (let i = scene.groups.length - 1; i >= 0; i -= 1) {
     const group = scene.groups[i]!
@@ -86,7 +94,7 @@ function hitTestTopLevelWithLayerFilter(
     if (!isGroupLayerHitEligible(scene, group, isLayerHitEligible, members)) continue
     for (const member of members) {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
-      if (plant && hitTestPlant(plant, point, plantPresentationContext(getPlantContext, viewportScale, speciesCache))) {
+      if (plant && hitTestPlant(plant, point, plantContext)) {
         return { kind: 'group', id: group.id }
       }
       const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.name === member.id) : null
@@ -94,7 +102,7 @@ function hitTestTopLevelWithLayerFilter(
       const annotation = member.kind === 'annotation'
         ? scene.annotations.find((entry) => entry.id === member.id)
         : null
-      if (annotation && hitAnnotation(annotation, point, viewportScale)) return { kind: 'group', id: group.id }
+      if (annotation && hitAnnotation(annotation, point, viewportScale, false, detail.annotationIds.has(annotation.id))) return { kind: 'group', id: group.id }
     }
   }
 
@@ -102,17 +110,23 @@ function hitTestTopLevelWithLayerFilter(
     const annotation = scene.annotations[i]!
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerHitEligible(scene, 'annotations')) continue
-    if (hitAnnotation(annotation, point, viewportScale, annotation.id === revealedAnnotationId)) return { kind: 'annotation', id: annotation.id }
+    const revealed = annotation.id === revealedAnnotationId || annotation.id === hoveredAnnotationId
+    if (hitAnnotation(annotation, point, viewportScale, revealed, detail.annotationIds.has(annotation.id))) return { kind: 'annotation', id: annotation.id }
   }
 
+  let closestPlant: ScenePlantEntity | null = null
+  let closestDistance = Infinity
   for (let i = scene.plants.length - 1; i >= 0; i -= 1) {
     const plant = scene.plants[i]!
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) continue
     if (!isLayerHitEligible(scene, 'plants')) continue
-    if (hitTestPlant(plant, point, plantPresentationContext(getPlantContext, viewportScale, speciesCache))) {
-      return { kind: 'plant', id: plant.id }
+    const distance = (plant.position.x - point.x) ** 2 + (plant.position.y - point.y) ** 2
+    if (distance < closestDistance && hitTestPlant(plant, point, plantContext)) {
+      closestPlant = plant
+      closestDistance = distance
     }
   }
+  if (closestPlant) return { kind: 'plant', id: closestPlant.id }
 
   for (let i = scene.measurementGuides.length - 1; i >= 0; i -= 1) {
     const guide = scene.measurementGuides[i]!
@@ -153,7 +167,10 @@ export function queryRectTopLevel(
   selection: SceneDesignObjectSelection = [],
 ): TopLevelTarget[] {
   const targets: TopLevelTarget[] = []
+  const baseContext = getPlantContext
+  getPlantContext = (scale) => ({ ...baseContext(scale), plants: scene.plants })
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
+  const detail = getCanvasDetailLayout(scene, viewportScale)
 
   for (const group of scene.groups) {
     const members = resolveSceneObjectGroupMembers(scene, group)
@@ -166,7 +183,7 @@ export function queryRectTopLevel(
       const annotation = member.kind === 'annotation'
         ? scene.annotations.find((entry) => entry.id === member.id)
         : null
-      return annotation ? annotationIntersectsRect(annotation, rect, viewportScale) : false
+      return annotation ? annotationIntersectsRect(annotation, rect, viewportScale, false, detail.annotationIds.has(annotation.id)) : false
     })
     if (hit) targets.push({ kind: 'group', id: group.id })
   }
@@ -195,7 +212,7 @@ export function queryRectTopLevel(
   for (const annotation of scene.annotations) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerInteractive(scene, 'annotations')) continue
-    if (annotationIntersectsRect(annotation, rect, viewportScale, annotation.id === getRevealedAnnotationId(selection))) {
+    if (annotationIntersectsRect(annotation, rect, viewportScale, annotation.id === getRevealedAnnotationId(selection), detail.annotationIds.has(annotation.id))) {
       targets.push({ kind: 'annotation', id: annotation.id })
     }
   }
@@ -476,8 +493,8 @@ function pointsBounds(points: readonly ScenePoint[]): SimpleRect {
   }
 }
 
-function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, viewportScale: number, revealText = false): boolean {
-  return isPointInAnnotationPresentation(annotation, point, viewportScale, revealText)
+function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, viewportScale: number, revealText = false, textAllowed = true): boolean {
+  return isPointInAnnotationPresentation(annotation, point, viewportScale, revealText, textAllowed)
 }
 
 function annotationIntersectsRect(
@@ -485,8 +502,9 @@ function annotationIntersectsRect(
   rect: SimpleRect,
   viewportScale: number,
   revealText = false,
+  textAllowed = true,
 ): boolean {
-  return polygonIntersectsRect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText), rect)
+  return polygonIntersectsRect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed), rect)
 }
 
 function isLayerInteractive(scene: ScenePersistedState, layerName: string): boolean {

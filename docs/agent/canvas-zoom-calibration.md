@@ -1,8 +1,10 @@
 # Canvas zoom calibration
 
+This is the historical calibration record. [Automatic Detail](dense-canvas.md) now caps Plant footprints by local spacing, admits text by available space, uses compact crowded-note markers, and limits stack counts to coincident positions. The 1.5m synthetic dense bed below does not represent the later 0.27m median orchard reference. Camera calibration, input policy and text raster density remain current; historical screenshots and performance figures describe the revisions named below.
+
 Calibration for `canopi-ms7l`, under PRD `canopi-fido`. The selected values are now implemented. The final integrated evidence below records `canopi-lpdp` acceptance and the rendering corrections found during visual comparison.
 
-## Selected defaults
+## Defaults selected in the original calibration
 
 | Presentation | Default | Reason |
 | --- | --- | --- |
@@ -49,7 +51,7 @@ Wheel input is normalized and consumed by the canvas owner. Plain vertical scrol
 Original production navigation check (`canopi-84un`, before the `canopi-ojtj` input-policy correction): the real SceneCanvasRuntime in headless Chrome with software WebGL enabled started at (100,0), scale 8, reference 20 in a 1000×800 viewport. A browser wheel event (24,−40) panned to (76,40) at scale 8; Ctrl+wheel (0,−120) at pointer (300,250) zoomed to scale 10.169993 while preserving the pointer anchor. Each published one viewport revision; device pixel ratio and browser page scale stayed at 1. The runtime was destroyed after the check. These are browser-generated input events, not physical device measurements. The correction's regression coverage dispatches WheelEvents through the mounted Scene Interaction listener and real CameraController, checking unmodified zoom in/out and pointer anchoring, pixel/line/page units, Shift pan, and modifier precedence.
 
 
-## Final integrated verification
+## Verification of the original integrated change
 
 Text clarity correction (`canopi-sgvr`): after automatic Pixi selection was restored, the same `Inter, sans-serif` text appeared softer than Canvas2D because native-density text textures were filtered at fractional screen positions. Real renderer comparisons at DPR 1, 1.5, and 2 verified that two texture samples per device pixel restore sharp edges without changing fonts or glyph dimensions. The sample included 12/16/24px multiline Latin, accented, and Japanese text, pinned names, and 15-degree rotation in dark mode. A 0.1→8→14→20→63.75→1000→20 px/m sweep retained fixed font sizes and texture resolution, with the established overview opacity intact. These checks used headless Chrome with SwiftShader, not native GPU/WebView measurements. Pixi supports setting [text resolution independently of renderer resolution](https://pixijs.com/8.x/guides/components/scene-objects/text/canvas#text-resolution).
 
@@ -68,7 +70,7 @@ The production comparison uses actual renderer instances and `SceneRuntimePresen
 
 ### Retained sizes and corrected rendering
 
-No blanket resizing was justified. Retain the symbolic Plant radius curve and dot fallback, 8px note marker, 1.5px note stroke, existing Zone/selection/hover/lock stroke hierarchy, stack badge radius, and editing handle sizes. Physical dimensions and measurement visibility do not change.
+At that stage no blanket resizing was justified. The implementation retained the symbolic Plant radius curve and dot fallback, 8px note marker, 1.5px note stroke, existing Zone/selection/hover/lock stroke hierarchy, stack badge radius, and editing handle sizes. Physical dimensions and measurement visibility do not change.
 
 The actual backend comparison revealed defects that simulated opacity alone could not expose:
 

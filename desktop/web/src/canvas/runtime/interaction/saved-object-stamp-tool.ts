@@ -345,6 +345,12 @@ function appendPlantSymbolCommands(
 ): void {
   const center = camera.worldToScreen(entry.plant.position)
   const radius = entry.radiusWorld * camera.viewport.scale
+  if (entry.lod === 'dot') {
+    const circle = createSvgElement('circle')
+    setSvgAttributes(circle, { cx: center.x, cy: center.y, r: radius, fill: entry.color })
+    group.appendChild(circle)
+    return
+  }
 
   for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
     switch (command.kind) {

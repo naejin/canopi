@@ -110,6 +110,20 @@
     "plantDbCorrupt": "植物数据库已损坏。请重新安装或使用 prepare-db.py 重新生成。植物搜索不可用。"
   },
   "canvas": {
+    "inspection": {
+      "title": "检查放大镜",
+      "close": "关闭放大镜",
+      "hold": "固定位置",
+      "follow": "跟随指针",
+      "held": "位置已固定",
+      "following": "跟随指针",
+      "nearby": "最近的植物",
+      "hint": "悬停或聚焦名称以查找植物。激活名称可将画布居中到该植物。",
+      "empty": "此设计中没有可见的植物。",
+      "unavailable": "预览不可用。您仍可使用植物列表。",
+      "locate": "居中到{{name}}",
+      "distance": "距放大镜中心 {{distance}} 米"
+    },
     "emptyWelcome": "开始您的设计",
     "emptyNewDesign": "新建设计",
     "emptyOpenDesign": "打开设计",

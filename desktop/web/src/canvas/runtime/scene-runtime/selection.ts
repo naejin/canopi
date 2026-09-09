@@ -1,3 +1,4 @@
+import { getCanvasDetailLayout } from '../automatic-detail'
 import { getAnnotationVisualWorldBounds, getRevealedAnnotationId } from '../annotation-layout'
 import type { SceneBounds } from '../camera'
 import {
@@ -246,7 +247,7 @@ export function getTargetBounds(
     ? persisted.plants.find((entry) => entry.id === target.id)
     : null
   if (plant) {
-    const bounds = getPlantWorldBounds(plant, options.plantContext)
+    const bounds = getPlantWorldBounds(plant, { ...options.plantContext, plants: persisted.plants })
     return {
       minX: bounds.x,
       minY: bounds.y,
@@ -275,6 +276,7 @@ export function getTargetBounds(
   if (annotation) {
     const bounds = getAnnotationVisualWorldBounds(
       annotation, options.annotationViewportScale, annotation.id === options.revealedAnnotationId,
+      getCanvasDetailLayout(persisted, options.annotationViewportScale).annotationIds.has(annotation.id),
     )
     return {
       minX: bounds.x,

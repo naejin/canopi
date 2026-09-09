@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { lazy, Suspense } from 'preact/compat'
 import {
   designSessionStore,
   type DesignSessionStore,
@@ -13,16 +12,12 @@ import {
   ensureCanvasRuntimeLifecycleAvailable,
 } from '../canvas/runtime/lifecycle-owner'
 import { ZoomControls } from '../components/canvas/ZoomControls'
+import { InspectionLens } from '../components/canvas/InspectionLens'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
 import { createBrowserCanvasRuntimeHost } from './browser-canvas-runtime'
 import { WebCanvasToolbar } from './WebCanvasToolbar'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
-
-const DensityPrototype = import.meta.env.DEV
-  && new URLSearchParams(window.location.search).get('prototype') === 'density'
-  ? lazy(() => import('../components/canvas/prototype-density/DensityPrototype').then((module) => ({ default: module.DensityPrototype })))
-  : null
 
 interface WebCanvasWorkspaceProps {
   readonly controller?: BrowserDesignSessionController
@@ -169,7 +164,7 @@ export function WebCanvasWorkspace({
               data-testid="web-canvas-runtime-host"
             />
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
-            {hasDesign && DensityPrototype && <Suspense fallback={null}><DensityPrototype hostRef={containerRef} /></Suspense>}
+            {hasDesign && <InspectionLens canvasRef={containerRef} />}
             {!hasDesign && (
               <div className={panelStyles.canvasEmptyState}>
                 <WebWelcomeScreen controller={controller} />

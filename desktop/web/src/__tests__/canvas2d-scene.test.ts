@@ -7,6 +7,52 @@ import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 describe('createCanvas2DSceneRenderer', () => {
+  it('renders crowded position marks as solid dots without outlines exceeding their footprints', () => {
+    const ctx = createMockCanvasContext()
+    renderCanvas2DSceneSnapshot(ctx as unknown as CanvasRenderingContext2D, createRendererSnapshot({
+      plants: [createPlant({ id: 'a', position: { x: 0, y: 0 } }), createPlant({ id: 'b', position: { x: .27, y: 0 } })],
+      viewport: { x: 0, y: 0, scale: 10 },
+    }), { widthPx: 400, heightPx: 300 })
+    expect(ctx.fill).toHaveBeenCalledTimes(2)
+    expect(ctx.stroke).not.toHaveBeenCalled()
+  })
+
+  it('keeps short measurement lines quiet and reveals their distance on inspection or closer zoom', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
+    const snapshot = createRendererSnapshot({
+      measurementGuides: [{ kind: 'measurement-guide', id: 'gap', start: { x: 0, y: 0 }, end: { x: .8, y: 0 }, locked: false }],
+      viewport: { x: 0, y: 0, scale: 20 },
+    })
+    renderer.renderScene(snapshot)
+    expect(canvas.texts).toHaveLength(0)
+    renderer.renderScene({ ...snapshot, hoverTarget: { kind: 'measurement-guide', id: 'gap', state: 'hover' } })
+    expect(canvas.texts.map((entry) => entry.text)).toEqual(['80 cm'])
+    renderer.renderScene(snapshot)
+    canvas.clearDraws()
+    renderer.setViewport({ x: 10, y: 20, scale: 400 })
+    expect(canvas.texts.map((entry) => entry.text)).toEqual(['80 cm'])
+    renderer.dispose()
+  })
+
+  it('replaces crowded note text with its marker and restores text on hover and a spacious viewport', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(1.5)
+    const snapshot = createRendererSnapshot({
+      plants: [createPlant({ position: { x: 10, y: 20 } })],
+      annotations: [{ kind: 'annotation', id: 'note', annotationType: 'text', position: { x: 0, y: 20 },
+        text: 'A long note over the plant', fontSize: 16, rotationDeg: 0, locked: false }],
+      viewport: { x: 0, y: 0, scale: 20 },
+    })
+    renderer.renderScene(snapshot)
+    expect(canvas.texts.some((entry) => entry.text === 'A long note over the plant')).toBe(false)
+    renderer.renderScene({ ...snapshot, hoverTarget: { kind: 'annotation', id: 'note', state: 'hover' } })
+    expect(canvas.texts.some((entry) => entry.text === 'A long note over the plant')).toBe(true)
+    renderer.renderScene(snapshot)
+    canvas.clearDraws()
+    renderer.setViewport({ x: 15, y: 30, scale: 400 })
+    expect(canvas.texts.some((entry) => entry.text === 'A long note over the plant')).toBe(true)
+    renderer.dispose()
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -61,7 +107,7 @@ describe('createCanvas2DSceneRenderer', () => {
         createPlant({ id: 'triangle', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
       ],
       plantSpeciesSymbols: { 'Pyrus communis': 'triangle' },
-      viewport: { x: 0, y: 0, scale: 8 },
+      viewport: { x: 0, y: 0, scale: 20 },
     })
 
     renderer.renderScene(snapshot)
@@ -220,6 +266,7 @@ describe('createCanvas2DSceneRenderer', () => {
     const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
 
     renderer.renderScene(createRendererSnapshot({
+      selectedTargets: [{ kind: 'measurement-guide', id: 'guide-1' }],
       measurementGuides: [{
         kind: 'measurement-guide',
         id: 'guide-1',
@@ -333,7 +380,7 @@ describe('createCanvas2DSceneRenderer', () => {
         createPlant({ id: 'shrub', symbol: 'shrub', position: { x: 10, y: 10 } }),
         createPlant({ id: 'groundcover', symbol: 'groundcover', position: { x: 30, y: 10 } }),
       ],
-      viewport: { x: 0, y: 0, scale: 8 },
+      viewport: { x: 0, y: 0, scale: 20 },
     }))
 
     expect(ctx.bezierCurveTo).toHaveBeenCalled()

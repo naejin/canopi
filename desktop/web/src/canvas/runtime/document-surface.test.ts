@@ -23,6 +23,7 @@ function createTestDocumentSurface(
     ...renderingOverrides,
   } as Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
   return createSceneCanvasDocumentSurface({
+    inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
     documents,
     camera: new CameraController(),
     chrome: {
@@ -71,6 +72,7 @@ describe('Scene Canvas document surface lifecycle', () => {
   it('continues destroying every owner after interaction disposal fails', () => {
     const calls: string[] = []
     const surface = createSceneCanvasDocumentSurface({
+    inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
       documents: {
         loadDocument: vi.fn(),
         replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {

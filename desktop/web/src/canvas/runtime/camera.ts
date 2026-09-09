@@ -247,7 +247,7 @@ export function computeSceneBounds(
   }
 
   for (const plant of scene.plants) {
-    const bounds = getPlantWorldBounds(plant, plantBoundsContext(basePlantContext, annotationViewportScale))
+    const bounds = getPlantWorldBounds(plant, { ...plantBoundsContext(basePlantContext, annotationViewportScale), plants: scene.plants })
     includePoint({ x: bounds.x, y: bounds.y })
     includePoint({ x: bounds.x + bounds.width, y: bounds.y + bounds.height })
   }

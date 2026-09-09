@@ -556,6 +556,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._deps.getSpeciesCache(),
       this._deps.getPlantPresentationContext,
       this._deps.getSelection(),
+      this._deps.getSceneStore().session.hoveredTarget,
     )
     this._deps.setHoveredTarget(hit)
     this._syncLockedObjectAffordance(hit, screen, this._deps.getSceneStore().persisted)
@@ -860,6 +861,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       speciesCache,
       getPlantContext,
       this._deps.getSelection(),
+      this._deps.getSceneStore().session.hoveredTarget,
     )
     if (visibleHit && isContextMenuTargetStructurallyBlocked(scene, visibleHit)) {
       return disabledContextMenuSelection()
@@ -871,6 +873,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       speciesCache,
       getPlantContext,
       this._deps.getSelection(),
+      this._deps.getSceneStore().session.hoveredTarget,
     )
     if (!hit) return visibleHit ? disabledContextMenuSelection() : null
     if (isContextMenuTargetStructurallyBlocked(scene, hit)) return disabledContextMenuSelection()

@@ -29,6 +29,7 @@ export const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
   [{ x: -2, y: -1 }, { x: 2, y: -1 }],
   [{ x: -2, y: 1 }, { x: 1, y: 1 }],
 ]
+const COMPACT_MARKER_PATHS = [ANNOTATION_MARKER_PATHS[0]!.map(({ x, y }) => ({ x: x / 2, y: y / 2 }))]
 
 export function getRevealedAnnotationId(selection: SceneDesignObjectSelection): string | null {
   return selection.length === 1 && selection[0]?.kind === 'annotation' ? selection[0].id : null
@@ -38,19 +39,24 @@ export function getAnnotationPresentation(
   annotation: SceneAnnotationEntity,
   viewport: SceneViewportState,
   revealText = false,
+  textAllowed = true,
 ) {
-  const textOpacity = revealText ? 1 : getCanvasTextOpacity(viewport.scale)
+  const textOpacity = revealText ? 1 : textAllowed ? getCanvasTextOpacity(viewport.scale) : 0
   const textFrame = getAnnotationScreenFrame(annotation, viewport)
   const markerOwnsGeometry = textOpacity < 0.5
+  const compact = !textAllowed && getCanvasTextOpacity(viewport.scale) > 0
+  const markerSize = compact ? 4 : ANNOTATION_MARKER_SIZE_PX
   return {
     textOpacity,
-    markerOpacity: 1 - textOpacity,
+    markerOpacity: (1 - textOpacity) * (compact ? 0.5 : 1),
+    markerPaths: compact ? COMPACT_MARKER_PATHS : ANNOTATION_MARKER_PATHS,
+    markerStrokePx: compact ? 1 : ANNOTATION_MARKER_STROKE_PX,
     markerOwnsGeometry,
     textFrame,
     frame: markerOwnsGeometry ? {
-      origin: { x: textFrame.origin.x - 4, y: textFrame.origin.y - 4 },
-      widthPx: ANNOTATION_MARKER_SIZE_PX,
-      heightPx: ANNOTATION_MARKER_SIZE_PX,
+      origin: { x: textFrame.origin.x - markerSize / 2, y: textFrame.origin.y - markerSize / 2 },
+      widthPx: markerSize,
+      heightPx: markerSize,
       lineHeightPx: 0,
       rotationDeg: 0,
     } : textFrame,
@@ -62,8 +68,9 @@ export function getAnnotationVisualWorldCorners(
   viewportScale: number,
   revealText = false,
   paddingPx: { x: number; y: number } = { x: 0, y: 0 },
+  textAllowed = true,
 ): ScenePoint[] {
-  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, revealText)
+  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, revealText, textAllowed)
   const safeScale = Math.max(viewportScale, 0.001)
   return rotatedRectCorners({
     origin: { x: frame.origin.x / safeScale, y: frame.origin.y / safeScale },
@@ -79,8 +86,9 @@ export function getAnnotationVisualWorldBounds(
   annotation: SceneAnnotationEntity,
   viewportScale: number,
   revealText = false,
+  textAllowed = true,
 ): AnnotationWorldBounds {
-  return boundsForPoints(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText))
+  return boundsForPoints(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed))
 }
 
 export function isPointInAnnotationPresentation(
@@ -88,12 +96,14 @@ export function isPointInAnnotationPresentation(
   point: ScenePoint,
   viewportScale: number,
   revealText = false,
+  textAllowed = true,
 ): boolean {
-  if (revealText || getCanvasTextOpacity(viewportScale) >= 0.5) {
+  if (revealText || (textAllowed && getCanvasTextOpacity(viewportScale) >= 0.5)) {
     return isPointInAnnotationText(annotation, point, viewportScale)
   }
-  // Four CSS pixels of pointer allowance around the visible 8px marker.
-  const radius = (ANNOTATION_MARKER_SIZE_PX / 2 + 4) / Math.max(viewportScale, 0.001)
+  // Pointer allowance follows the visible marker, including crowded notes.
+  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, false, textAllowed)
+  const radius = (frame.widthPx / 2 + 4) / Math.max(viewportScale, 0.001)
   return Math.abs(point.x - annotation.position.x) <= radius + HIT_EPSILON
     && Math.abs(point.y - annotation.position.y) <= radius + HIT_EPSILON
 }

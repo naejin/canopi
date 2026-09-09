@@ -44,6 +44,34 @@ function getPlantContext(viewportScale: number): PlantPresentationContext {
 }
 
 describe('scene hit testing', () => {
+  it('keeps a crowded annotation discoverable without letting its hidden text steal a plant hit at working zoom', () => {
+    const scene = createScene()
+    scene.annotations = [{ kind: 'annotation', id: 'note', annotationType: 'text',
+      position: { x: 0, y: 20 }, text: 'A long note over the plant', fontSize: 16, rotationDeg: null, locked: false }]
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 20, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'plant-1' })
+    expect(hitTestTopLevel(scene, { x: 0, y: 20 }, 20, new Map(), getPlantContext))
+      .toEqual({ kind: 'annotation', id: 'note' })
+    expect(queryRectTopLevel(scene, { x: 5, y: 20, width: .1, height: .1 }, 20, new Map(), getPlantContext))
+      .toEqual([])
+    expect(hitTestTopLevel(scene, { x: 5, y: 20 }, 20, new Map(), getPlantContext, [], { kind: 'annotation', id: 'note' }))
+      .toEqual({ kind: 'annotation', id: 'note' })
+    expect(hitTestVisibleTopLevel(scene, { x: 5, y: 20 }, 20, new Map(), getPlantContext, [], { kind: 'annotation', id: 'note' }))
+      .toEqual({ kind: 'annotation', id: 'note' })
+  })
+
+  it('chooses the closest visible plant when dense position marks share pointer padding', () => {
+    const scene = createScene()
+    scene.plants = [
+      { ...scene.plants[0]!, id: 'a', position: { x: 0, y: 0 } },
+      { ...scene.plants[0]!, id: 'b', position: { x: .27, y: 0 } },
+    ]
+    expect(hitTestTopLevel(scene, { x: 0, y: 0 }, 10, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'a' })
+    expect(queryRectTopLevel(scene, { x: -.3, y: 0, width: .01, height: .01 }, 10, new Map(), getPlantContext))
+      .toEqual([])
+  })
+
   it('hits the overview note marker without letting hidden text steal a plant hit', () => {
     const scene = createScene()
     scene.annotations = [{ kind: 'annotation', id: 'note', annotationType: 'text',

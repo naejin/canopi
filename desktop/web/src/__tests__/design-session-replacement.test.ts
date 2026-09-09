@@ -711,6 +711,7 @@ function makeCanvas(events: string[]): CanvasDocumentSurface {
   let loaded = false;
   return {
     initializeViewport: vi.fn(),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(() => events.push("canvas.show-chrome")),
     hideCanvasChrome: vi.fn(() => events.push("canvas.hide-chrome")),

@@ -1,4 +1,5 @@
-import { getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
+import { getAnnotationPresentation } from '../annotation-layout'
+import { getCanvasDetailLayout, getCanvasPlantNameLabels, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
@@ -45,6 +46,7 @@ export interface Canvas2DSceneSnapshotRenderOptions {
   readonly dpr?: number
   readonly background?: string | null
   readonly underlay?: ((ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number) => void) | null
+  readonly showPlantNames?: boolean
 }
 
 export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
@@ -166,8 +168,10 @@ export function renderCanvas2DSceneSnapshot(
   renderZones(ctx, snapshot)
   renderMeasurementGuides(ctx, snapshot, dpr)
   renderPlants(ctx, snapshot, dpr)
-  renderPinnedPlantNameLabels(ctx, snapshot, dpr)
-  renderSelectionLabels(ctx, snapshot, dpr)
+  if (options.showPlantNames !== false) {
+    renderPinnedPlantNameLabels(ctx, snapshot, dpr)
+    renderSelectionLabels(ctx, snapshot, dpr)
+  }
   renderAnnotations(ctx, snapshot, dpr)
 }
 
@@ -197,8 +201,8 @@ function renderMeasurementGuides(
     )
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     ctx.strokeStyle = interactionVisual?.color ?? guideColor
-    ctx.lineWidth = (interactionVisual?.widthPx ?? 1.5) / viewportScale
-    ctx.globalAlpha = (interactionVisual?.alpha ?? 1) * layer.opacity
+    ctx.lineWidth = (interactionVisual?.widthPx ?? .8) / viewportScale
+    ctx.globalAlpha = (interactionVisual?.alpha ?? .25) * layer.opacity
     ctx.setLineDash([dashWorld, gapWorld])
 
     ctx.beginPath()
@@ -221,6 +225,7 @@ function renderMeasurementGuides(
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   for (const guide of snapshot.scene.measurementGuides) {
+    if (!isMeasurementLabelVisible(snapshot, guide.id)) continue
     const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
     if (!presentation) continue
     const interactionState = resolveInteractionState(
@@ -377,7 +382,7 @@ function renderPlants(
       snapshot.viewport.scale,
     )
 
-    if (selected && renderedSymbol !== 'round') {
+    if (selected && (renderedSymbol !== 'round' || entry.lod === 'dot')) {
       ctx.beginPath()
       ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld, 0, Math.PI * 2)
       ctx.globalAlpha = layer.opacity
@@ -422,6 +427,14 @@ function drawPlantSymbolGlyph(
   const x = entry.plant.position.x
   const y = entry.plant.position.y
   const r = entry.radiusWorld
+  if (entry.lod === 'dot') {
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fillStyle = fillColor
+    ctx.globalAlpha = opacity
+    ctx.fill()
+    return
+  }
   const lineWidth = Math.max(worldLineWidth, 1.6 / Math.max(viewportScale, 0.001))
 
   ctx.fillStyle = fillColor
@@ -559,7 +572,10 @@ function renderAnnotations(
       false,
       hoverStateForTarget(snapshot, 'annotation', annotation.id),
     )
-    drawAnnotationText(ctx, annotation, snapshot.viewport, interactionState, layer.opacity, dpr, annotation.id === snapshot.revealedAnnotationId)
+    const reveal = annotation.id === snapshot.revealedAnnotationId
+      || (snapshot.hoverTarget?.kind === 'annotation' && snapshot.hoverTarget.id === annotation.id)
+    drawAnnotationText(ctx, annotation, snapshot.viewport, interactionState, layer.opacity, dpr, reveal,
+      getCanvasDetailLayout(snapshot.scene, snapshot.viewport.scale).annotationIds.has(annotation.id))
   }
 }
 
@@ -571,8 +587,9 @@ function drawAnnotationText(
   opacity: number,
   dpr: number,
   revealText: boolean,
+  textAllowed: boolean,
 ): void {
-  const { frame, textFrame, textOpacity, markerOpacity } = getAnnotationPresentation(annotation, viewport, revealText)
+  const { frame, textFrame, textOpacity, markerOpacity, markerPaths, markerStrokePx } = getAnnotationPresentation(annotation, viewport, revealText, textAllowed)
   const lines = annotation.text.split('\n')
 
   ctx.save()
@@ -580,9 +597,9 @@ function drawAnnotationText(
   if (markerOpacity > 0) {
     ctx.strokeStyle = getAnnotationTextColor()
     ctx.globalAlpha = opacity * markerOpacity
-    ctx.lineWidth = ANNOTATION_MARKER_STROKE_PX
+    ctx.lineWidth = markerStrokePx
     ctx.beginPath()
-    for (const path of ANNOTATION_MARKER_PATHS) {
+    for (const path of markerPaths) {
       path.forEach((point, index) => {
         const x = textFrame.origin.x + point.x
         const y = textFrame.origin.y + point.y
@@ -642,7 +659,7 @@ function renderPinnedPlantNameLabels(
   snapshot: SceneRendererSnapshot,
   dpr: number,
 ): void {
-  const labels = snapshot.pinnedPlantNameLabels
+  const labels = getCanvasPlantNameLabels(snapshot)
   if (labels.length === 0) return
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return

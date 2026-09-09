@@ -121,6 +121,7 @@ function createCommandSurface() {
 function createDocumentSurface() {
   return {
     initializeViewport: () => {},
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: () => {},
     showCanvasChrome: () => {},
     hideCanvasChrome: () => {},

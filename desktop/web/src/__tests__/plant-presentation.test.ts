@@ -36,6 +36,38 @@ function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntit
 }
 
 describe('plant presentation service', () => {
+  it.each([10, 20, 40, 100, 200, 400])('keeps dense positions distinct and authored presentation intact at %s px/m', (scale) => {
+    const plants = Array.from({ length: 2200 }, (_, index) => createPlant({
+      id: String(index), position: { x: (index % 40) * .14, y: Math.floor(index / 40) * .27 },
+      color: '#c44230', symbol: 'square',
+    }))
+    const before = JSON.stringify(plants)
+    const presentation = buildPlantPresentationSnapshot(plants, {
+      viewport: createViewport({ scale }), speciesCache: new Map(),
+    }, new Set())
+    expect(presentation.stackBadges).toHaveLength(0)
+    expect(presentation.entries).toHaveLength(2200)
+    for (const entry of presentation.entries) {
+      expect(entry.radiusScreenPx * 2).toBeLessThan(.14 * scale)
+      expect(entry.color).toBe('#C44230')
+      expect(entry.symbol).toBe('square')
+    }
+    expect(JSON.stringify(plants)).toBe(before)
+  })
+
+  it('separates position marks in a planting spaced 27 cm apart at 50 percent zoom', () => {
+    const plants = [
+      createPlant({ id: 'a', position: { x: 0, y: 0 } }),
+      createPlant({ id: 'b', position: { x: .27, y: 0 } }),
+    ]
+    const entries = buildPlantPresentationEntries(plants, {
+      viewport: createViewport({ scale: 10 }), speciesCache: new Map(),
+    }, new Set())
+    expect(entries[0]!.radiusScreenPx).toBeCloseTo(1.134, 3)
+    expect(entries[0]!.radiusScreenPx + entries[1]!.radiusScreenPx).toBeLessThan(2.7)
+    expect(plants.map((plant) => plant.position)).toEqual([{ x: 0, y: 0 }, { x: .27, y: 0 }])
+  })
+
   it('sizes default Plant Size Mode dots with a smooth absolute-scale Visual Footprint curve', () => {
     const expectedRadiiByScale = new Map([
       [1, 2.22],
@@ -136,11 +168,12 @@ describe('plant presentation service', () => {
     expect(hitBounds.bounds.height).toBeCloseTo(expectedHitRadius * 2, 5)
   })
 
-  it('clusters stack badges transitively and anchors them to the highest-priority member', () => {
+  it('reserves stack badges for coincident centres and anchors them to the highest-priority member', () => {
     const snapshot = buildPlantPresentationSnapshot([
       createPlant({ id: 'default', position: { x: 0, y: 0 } }),
-      createPlant({ id: 'colored', position: { x: 0.375, y: 0 }, color: '#C44230' }),
-      createPlant({ id: 'selected', position: { x: 0.75, y: 0 } }),
+      createPlant({ id: 'colored', position: { x: 0, y: 0 }, color: '#C44230' }),
+      createPlant({ id: 'selected', position: { x: 0, y: 0 } }),
+      createPlant({ id: 'nearby', position: { x: .27, y: 0 } }),
     ], {
       viewport: createViewport({ scale: 8 }),
       speciesCache: new Map(),

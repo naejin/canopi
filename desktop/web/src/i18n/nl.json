@@ -110,6 +110,20 @@
     "plantDbCorrupt": "Plantendatabase is beschadigd. Herinstalleer of genereer opnieuw met prepare-db.py. Planten zoeken is niet beschikbaar."
   },
   "canvas": {
+    "inspection": {
+      "title": "Inspectieloupe",
+      "close": "Loupe sluiten",
+      "hold": "Vastzetten",
+      "follow": "Aanwijzer volgen",
+      "held": "Positie vastgezet",
+      "following": "Volgt de aanwijzer",
+      "nearby": "Dichtstbijzijnde planten",
+      "hint": "Wijs een naam aan of geef deze focus om de plant te vinden. Activeer de naam om het canvas te centreren.",
+      "empty": "Geen zichtbare planten in dit ontwerp.",
+      "unavailable": "Het voorbeeld is niet beschikbaar. Je kunt de plantenlijst blijven gebruiken.",
+      "locate": "Centreren op {{name}}",
+      "distance": "{{distance}} m van het midden van de loupe"
+    },
     "emptyWelcome": "Begin je ontwerp",
     "emptyNewDesign": "Nieuw ontwerp",
     "emptyOpenDesign": "Ontwerp openen",

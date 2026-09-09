@@ -277,7 +277,7 @@ describe('createPixiSceneRenderer', () => {
         createPlant({ id: 'triangle', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
       ],
       plantSpeciesSymbols: { 'Pyrus communis': 'triangle' },
-      viewport: { x: 0, y: 0, scale: 8 },
+      viewport: { x: 0, y: 0, scale: 20 },
     })
 
     renderer.renderScene(snapshot)
@@ -336,7 +336,7 @@ describe('createPixiSceneRenderer', () => {
         createPlant({ id: 'shrub', symbol: 'shrub', position: { x: 10, y: 10 } }),
         createPlant({ id: 'groundcover', symbol: 'groundcover', position: { x: 30, y: 10 } }),
       ],
-      viewport: { x: 0, y: 0, scale: 8 },
+      viewport: { x: 0, y: 0, scale: 20 },
     }))
 
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.bezierCurveTo.mock.calls.length > 0)).toBe(true)
@@ -402,7 +402,7 @@ describe('createPixiSceneRenderer', () => {
       graphics.moveTo.mock.calls.some(([x, y]) => x === 40 && y === 10)
       && graphics.lineTo.mock.calls.some(([x, y]) => x === 10 && y === 40),
     )
-    expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.75 })
+    expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.4, alpha: .25 })
     const label = pixi.__pixiMockState.texts.find((text) => text.text === '42 m')
     const expectedLabelPoint = {
       x: 50 - MEASUREMENT_GUIDE_LABEL_OFFSET_PX * Math.SQRT1_2,
@@ -851,12 +851,12 @@ describe('createPixiSceneRenderer', () => {
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
     const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
     expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.125 })
-    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.6 })
+    expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.6 })
+    expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
     renderer.renderScene(createTestSceneRendererSnapshot({
       scene: snapshot.scene,

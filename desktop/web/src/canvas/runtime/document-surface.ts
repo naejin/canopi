@@ -15,8 +15,11 @@ import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coord
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
 import { runCanvasRuntimeCleanups } from './cleanup'
+import type { CanvasInspectionHandle } from '../inspection'
+import type { SceneCanvasInspectionOwner } from './inspection-lens'
 
 interface SceneCanvasDocumentSurfaceOptions {
+  readonly inspection: Pick<SceneCanvasInspectionOwner, 'mount' | 'reset' | 'dispose'>
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
@@ -45,6 +48,10 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
 
   constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
+
+  attachInspectionTo(element: HTMLElement): CanvasInspectionHandle {
+    return this.options.inspection.mount(element)
+  }
 
   initializeViewport(): void {
     const container = this.options.rendering.container
@@ -84,6 +91,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this._documentState = 'settling'
     this.options.documents.loadDocument(file)
     this._documentState = 'loaded'
+    this.options.inspection.reset()
   }
 
   replaceDocument(
@@ -96,6 +104,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     try {
       const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
       this._documentState = 'loaded'
+      this.options.inspection.reset()
       return receipt
     } catch (error) {
       if (error instanceof CanvasDocumentReplacementNotAdmittedError) {
@@ -126,6 +135,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
 
   destroy(): void {
     runCanvasRuntimeCleanups([
+      () => this.options.inspection.dispose(),
       () => this.options.disposeRuntime(),
       () => this.options.clearHoveredEntity(),
       () => this.options.disposeInteraction(),

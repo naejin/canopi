@@ -1,0 +1,41 @@
+.launcher, .panel { position: absolute; right: var(--space-3); z-index: 20; }
+.launcher { top: var(--space-7); display: flex; align-items: center; gap: var(--space-2); }
+.launcher, .panel button {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+.launcher:hover, .panel button:hover { background: var(--color-control-hover); }
+.launcher:focus-visible, .panel button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.panel {
+  top: 64px;
+  width: min(300px, calc(100% - 40px));
+  max-height: calc(100% - 80px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  overflow: auto;
+}
+.header, .controls { display: flex; align-items: center; gap: var(--space-2); }
+.header h2 { flex: 1; margin: 0; font-size: var(--text-base); font-weight: 600; }
+.header button { padding: 0; width: var(--control-size-sm); height: var(--control-size-sm); font-size: var(--text-lg); }
+.controls { font-size: var(--text-xs); }
+.controls span { color: var(--color-text-muted); }
+.controls span:last-child { margin-left: auto; }
+.preview { width: 100%; height: 220px; flex-shrink: 0; background: var(--canvas-bg); border: 1px solid var(--color-border); overflow: hidden; }
+.preview[data-unavailable='true'] { display: none; }
+.panel h3 { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.panel p { margin: 0; font-size: var(--text-xs); color: var(--color-text-muted); }
+.plants { list-style: none; margin: 0; padding: 0; }
+.plants button { display: flex; align-items: center; width: 100%; gap: var(--space-2); text-align: left; border: 0; border-top: 1px solid var(--color-border); border-radius: 0; padding: var(--space-2) 0; }
+.number { width: 18px; color: var(--color-text-muted); font-size: var(--text-xs); }
+.name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.name small { display: block; font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-1); }
+@media (max-height: 650px) { .preview { height: 140px; } }

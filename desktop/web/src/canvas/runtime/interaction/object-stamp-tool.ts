@@ -111,6 +111,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
       context.getSpeciesCache(),
       context.getPlantPresentationContext,
       context.getSceneStore().session.selectedTargets,
+      context.getSceneStore().session.hoveredTarget,
     )
     if (!hit || isSceneDesignObjectLocked(scene, hit)) return
 

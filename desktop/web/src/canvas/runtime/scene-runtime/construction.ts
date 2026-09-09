@@ -7,6 +7,7 @@ import { CameraController } from '../camera'
 import { createSceneCanvasCommandSurface } from '../command-surface'
 import { createSceneCanvasDocumentSurface } from '../document-surface'
 import { createSceneCanvasQuerySurface } from '../query-surface'
+import { SceneCanvasInspectionOwner } from '../inspection-lens'
 import { RendererHost } from '../renderers'
 import { createCanvas2DSceneRenderer } from '../renderers/canvas2d-scene'
 import { createPixiSceneRenderer } from '../renderers/pixi-scene'
@@ -98,6 +99,7 @@ export interface SceneRuntimeConstruction {
   ) => void
   readonly rendering: SceneRuntimeRenderScheduler
   readonly presentation: SceneRuntimePresentationController
+  readonly inspection: SceneCanvasInspectionOwner
   readonly chrome: SceneRuntimeChromeCoordinator
   readonly appAdapter: CanvasRuntimeAppAdapter
   readonly commandSurface: CanvasCommandSurface
@@ -181,7 +183,14 @@ export function createSceneRuntimeConstruction(
     syncCanvasSignalsFromDocument: (file) =>
       syncCanvasSignalsFromDocument(file, appAdapter.settings.layerProjections),
   })
+  const inspection = new SceneCanvasInspectionOwner({
+    camera, revision,
+    getSnapshot: () => presentation.buildRendererSnapshot(),
+    setHoveredTarget: callbacks.setHoveredTarget,
+    invalidateViewport: () => callbacks.invalidate('viewport'),
+  })
   const documentSurface = createSceneCanvasDocumentSurface({
+    inspection,
     documents,
     camera,
     chrome,
@@ -256,6 +265,7 @@ export function createSceneRuntimeConstruction(
   })
 
   return {
+    inspection,
     sceneState: sceneStore,
     sceneSession: sceneStore,
     camera,

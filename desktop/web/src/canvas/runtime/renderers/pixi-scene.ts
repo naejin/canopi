@@ -2,8 +2,6 @@ import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
 import {
   getAnnotationVisualWorldCorners,
   getAnnotationPresentation,
-  ANNOTATION_MARKER_PATHS,
-  ANNOTATION_MARKER_STROKE_PX,
   worldToScreen,
 } from '../annotation-layout'
 import {
@@ -26,6 +24,7 @@ import {
   PLANT_SYMBOL_RECIPES,
 } from '../plant-symbol-recipes'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
+import { getCanvasDetailLayout, getCanvasPlantNameLabels, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
@@ -296,7 +295,7 @@ function syncMeasurementGuides(
     text.position.set(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
     text.rotation = presentation.labelRotationRad
     text.anchor.set(0.5, 0.5)
-    text.visible = true
+    text.visible = isMeasurementLabelVisible(snapshot, guide.id)
   }
 
   for (const [guideId, graphics] of graphicsById) {
@@ -334,8 +333,8 @@ function drawMeasurementGuide(
   const interactionState = resolveInteractionState(selected, false, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
   const color = toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0)
-  const strokeWidth = screenPxToWorldPx(interactionVisual?.widthPx ?? 1.5, viewportScale)
-  const strokeAlpha = (interactionVisual?.alpha ?? 1) * cssColorAlpha(interactionVisual?.color ?? getAnnotationTextColor())
+  const strokeWidth = screenPxToWorldPx(interactionVisual?.widthPx ?? .8, viewportScale)
+  const strokeAlpha = (interactionVisual?.alpha ?? .25) * cssColorAlpha(interactionVisual?.color ?? getAnnotationTextColor())
   graphics.clear()
   drawDashedMeasurementGuideLine(
     graphics,
@@ -648,7 +647,7 @@ function drawPlant(
     strokeWidthPx,
     renderedSymbol === 'round' && selected ? cssColorAlpha(interactionVisual?.color ?? entry.color) : 1,
   )
-  if (selected && renderedSymbol !== 'round') {
+  if (selected && (renderedSymbol !== 'round' || entry.lod === 'dot')) {
     graphics.circle(x, y, r)
       .stroke({
         color: selectedStrokeColor,
@@ -683,6 +682,10 @@ function drawPlantSymbolGlyph(
   const x = entry.screenPoint.x
   const y = entry.screenPoint.y
   const r = entry.radiusScreenPx
+  if (entry.lod === 'dot') {
+    graphics.circle(x, y, r).fill({ color: fillColor, alpha: 1 })
+    return
+  }
   const lineWidth = Math.max(lineWidthPx, 1.6)
 
   for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
@@ -855,7 +858,9 @@ function syncAnnotations(
       textLayer.addChild(text)
     }
     const revealText = annotation.id === snapshot.revealedAnnotationId
-    const { textOpacity, markerOpacity } = getAnnotationPresentation(annotation, snapshot.viewport, revealText)
+      || (snapshot.hoverTarget?.kind === 'annotation' && snapshot.hoverTarget.id === annotation.id)
+    const textAllowed = getCanvasDetailLayout(snapshot.scene, snapshot.viewport.scale).annotationIds.has(annotation.id)
+    const { textOpacity, markerOpacity } = getAnnotationPresentation(annotation, snapshot.viewport, revealText, textAllowed)
     drawAnnotationText(text, annotation, snapshot.viewport)
     text.alpha = textOpacity
     text.visible = textOpacity > 0
@@ -873,7 +878,7 @@ function syncAnnotations(
         annotationHighlightById.set(annotation.id, nextHighlight)
         highlightLayer.addChild(nextHighlight)
       }
-      drawAnnotationDecoration(nextHighlight, annotation, snapshot.viewport, interactionState, revealText)
+      drawAnnotationDecoration(nextHighlight, annotation, snapshot.viewport, interactionState, revealText, textAllowed)
       nextHighlight.visible = true
     } else if (reconcileRemoved) {
       if (highlight) {
@@ -925,12 +930,13 @@ function drawAnnotationDecoration(
   viewport: SceneRendererSnapshot['viewport'],
   state: CanvasInteractionVisualState | null,
   revealText: boolean,
+  textAllowed: boolean,
 ): void {
-  const { markerOpacity } = getAnnotationPresentation(annotation, viewport, revealText)
+  const { markerOpacity, markerPaths, markerStrokePx } = getAnnotationPresentation(annotation, viewport, revealText, textAllowed)
   const origin = worldToScreen(annotation.position, viewport)
   graphics.clear()
   if (markerOpacity > 0) {
-    for (const path of ANNOTATION_MARKER_PATHS) {
+    for (const path of markerPaths) {
       path.forEach((point, index) => {
         const x = origin.x + point.x
         const y = origin.y + point.y
@@ -939,10 +945,10 @@ function drawAnnotationDecoration(
       })
     }
     graphics.stroke({ color: toPixiColor(getAnnotationTextColor(), 0),
-      width: ANNOTATION_MARKER_STROKE_PX, alpha: markerOpacity })
+      width: markerStrokePx, alpha: markerOpacity })
   }
   if (state) {
-    const corners = getAnnotationVisualWorldCorners(annotation, viewport.scale, revealText, { x: 4, y: 2 })
+    const corners = getAnnotationVisualWorldCorners(annotation, viewport.scale, revealText, { x: 4, y: 2 }, textAllowed)
       .map((point) => worldToScreen(point, viewport))
     const visual = getCanvasInteractionStrokeVisual(state)
     drawClosedZonePath(graphics, corners).stroke({
@@ -998,7 +1004,7 @@ function syncPinnedPlantNameLabels(
   const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
   layer.visible = plantLayer.visible
   layer.alpha = plantLayer.opacity
-  const labels = snapshot.pinnedPlantNameLabels
+  const labels = getCanvasPlantNameLabels(snapshot)
   const nextPlantIds = new Set(labels.map((label) => label.plantId))
 
   if (plantLayer.visible) {

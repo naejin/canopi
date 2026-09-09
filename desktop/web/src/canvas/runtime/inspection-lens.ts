@@ -1,0 +1,167 @@
+import { effect, signal } from '@preact/signals'
+import type { CanvasInspectionHandle, CanvasInspectionState, InspectionPoint } from '../inspection'
+import type { CanvasQueryRevision } from './runtime'
+import type { CameraController } from './camera'
+import type { SceneRendererSnapshot } from './renderers/scene-types'
+import type { SceneDesignObjectTarget } from './scene'
+import { renderCanvas2DSceneSnapshot } from './renderers/canvas2d-scene'
+import { getSceneLayerStyle } from './scene-visuals'
+import { runCanvasRuntimeCleanups } from './cleanup'
+
+interface InspectionOwnerOptions {
+  readonly camera: CameraController
+  readonly revision: CanvasQueryRevision
+  getSnapshot(): SceneRendererSnapshot
+  setHoveredTarget(target: SceneDesignObjectTarget | null): void
+  invalidateViewport(): void
+}
+
+export class SceneCanvasInspectionOwner {
+  private readonly views = new Set<{ reset(): void; refresh(): void; dispose(): void }>()
+  private disposed = false
+  constructor(private readonly options: InspectionOwnerOptions) {}
+  mount(container: HTMLElement): CanvasInspectionHandle {
+    if (this.disposed) throw new Error('Cannot attach an inspection view to a disposed Canvas.')
+    const state = signal<CanvasInspectionState | null>(null)
+    const canvas = document.createElement('canvas')
+    canvas.style.width = '100%'; canvas.style.height = '100%'
+    canvas.setAttribute('aria-hidden', 'true')
+    let ctx: CanvasRenderingContext2D | null = null
+    try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
+    container.appendChild(canvas)
+    let point: InspectionPoint | null = null
+    let held = false
+    let highlightedId: string | null = null
+    let frame: number | null = null
+    let released = false
+    const options = this.options
+
+    function schedule() {
+      if (!released && frame === null) frame = requestAnimationFrame(paint)
+    }
+    function paint() {
+      frame = null
+      if (released) return
+      const snapshot = options.getSnapshot()
+      const camera = options.camera.snapshot.peek()
+      const centre = point ?? {
+        x: (camera.screenSize.width / 2 - camera.viewport.x) / camera.viewport.scale,
+        y: (camera.screenSize.height / 2 - camera.viewport.y) / camera.viewport.scale,
+      }
+      const scale = Math.max(140, camera.viewport.scale)
+      const layer = getSceneLayerStyle(snapshot.scene, 'plants')
+      const visible = layer.visible && layer.opacity > 0 ? snapshot.scene.plants : []
+      const nearby = visible.map((plant) => ({ plant, distanceM: Math.hypot(plant.position.x - centre.x, plant.position.y - centre.y) }))
+        .sort((a, b) => a.distanceM - b.distanceM || a.plant.id.localeCompare(b.plant.id)).slice(0, 7)
+      const width = Math.max(1, container.clientWidth || 280), height = Math.max(1, container.clientHeight || 220)
+      if (ctx) {
+        const dpr = Math.max(window.devicePixelRatio || 1, 1)
+        canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
+        const plants = visible.filter((plant) => Math.abs(plant.position.x - centre.x) * scale <= width / 2 + 20
+          && Math.abs(plant.position.y - centre.y) * scale <= height / 2 + 20)
+        const lensSnapshot: SceneRendererSnapshot = {
+          ...snapshot,
+          scene: { ...snapshot.scene, plants, annotations: [], measurementGuides: [], groups: [] },
+          viewport: { x: width / 2 - centre.x * scale, y: height / 2 - centre.y * scale, scale },
+          selectedPlantIds: new Set(), selectedZoneIds: new Set(), selectedAnnotationIds: new Set(), selectedMeasurementGuideIds: new Set(),
+          highlightedPlantIds: new Set(), highlightedZoneIds: new Set(), hoveredCanonicalName: null,
+          hoverTarget: highlightedId ? { kind: 'plant', id: highlightedId, state: 'hover' } : null,
+          revealedAnnotationId: null, selectionLabelPlantIds: new Set(), pinnedPlantNameLabels: [], selectionLabels: [],
+        }
+        try {
+          renderCanvas2DSceneSnapshot(ctx, lensSnapshot, { widthPx: width, heightPx: height, dpr, showPlantNames: false })
+        } catch (error) {
+          console.error('Canvas inspection preview unavailable:', error)
+          ctx = null
+        }
+      }
+      state.value = {
+        point: centre, held, zoomPercent: Math.round(scale / camera.referenceScale * 100), previewAvailable: ctx !== null,
+        plants: nearby.map(({ plant, distanceM }) => ({ id: plant.id,
+          name: snapshot.localizedCommonNames.get(plant.canonicalName) || plant.commonName || plant.canonicalName,
+          position: { ...plant.position }, distanceM })),
+      }
+    }
+    function clearHighlight() {
+      const previous = highlightedId
+      highlightedId = null
+      if (!previous) return
+      const target = options.getSnapshot().hoverTarget
+      if (target?.kind === 'plant' && target.id === previous) options.setHoveredTarget(null)
+    }
+    let unsubscribe: (() => void) | undefined
+    let observer: ResizeObserver | null = null
+    const owned = {
+      refresh: schedule,
+      reset: () => { if (!released) { point = null; held = false; clearHighlight(); schedule() } },
+      dispose: () => {
+        if (released) return
+        released = true
+        this.views.delete(owned)
+        runCanvasRuntimeCleanups([
+          () => { if (frame !== null) cancelAnimationFrame(frame); frame = null },
+          () => unsubscribe?.(),
+          () => observer?.disconnect(),
+          () => canvas.remove(),
+          () => { state.value = null },
+          clearHighlight,
+        ], 'Unable to release the inspection lens.')
+      },
+    }
+    try {
+      unsubscribe = effect(() => {
+        void options.revision.scene.value
+        void options.revision.plantNames.value
+        void options.camera.snapshot.value
+        schedule()
+      })
+      observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+      observer?.observe(container)
+    } catch (error) {
+      owned.dispose()
+      throw error
+    }
+    this.views.add(owned)
+    return {
+      state,
+      inspect: (next) => {
+        if (released || held || !Number.isFinite(next.x) || !Number.isFinite(next.y)) return
+        if (point?.x === next.x && point.y === next.y) return
+        point = { ...next }; schedule()
+      },
+      setHeld: (next) => {
+        if (released || held === next) return
+        if (next) point = state.peek()?.point ?? point
+        held = next; schedule()
+      },
+      highlightPlant: (id) => {
+        if (released || id === highlightedId) return
+        clearHighlight()
+        if (id && state.peek()?.plants.some((plant) => plant.id === id)) {
+          highlightedId = id; options.setHoveredTarget({ kind: 'plant', id })
+        }
+        schedule()
+      },
+      focusPlant: (id) => {
+        if (released) return
+        const snapshot = options.getSnapshot()
+        const layer = getSceneLayerStyle(snapshot.scene, 'plants')
+        if (!layer.visible || layer.opacity === 0) return
+        const plant = snapshot.scene.plants.find((entry) => entry.id === id)
+        if (!plant) return
+        point = { ...plant.position }; held = true
+        const camera = options.camera.snapshot.peek()
+        options.camera.panBy({ x: camera.screenSize.width / 2 - camera.viewport.x - point.x * camera.viewport.scale,
+          y: camera.screenSize.height / 2 - camera.viewport.y - point.y * camera.viewport.scale })
+        options.invalidateViewport(); schedule()
+      },
+      dispose: owned.dispose,
+    }
+  }
+  reset(): void { for (const view of this.views) view.reset() }
+  refresh(): void { for (const view of this.views) view.refresh() }
+  dispose(): void {
+    this.disposed = true
+    runCanvasRuntimeCleanups([...this.views].map(view => () => view.dispose()), 'Unable to release Canvas inspection views.')
+  }
+}
