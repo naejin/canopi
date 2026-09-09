@@ -2,7 +2,16 @@ import type { CanvasPrintSnapshot, PrintBounds, PrintPlant } from '../../canvas/
 import type { GlyphOutline, TextLine } from './text'
 export type PdfPaper = 'A4' | 'Letter'
 export type PdfOrientation = 'auto' | 'portrait' | 'landscape'
-export interface PdfSetup { readonly paper: PdfPaper; readonly orientation: PdfOrientation; readonly layers: readonly string[] }
+export const PDF_SCALES = [20, 50, 100, 200, 500, 1000] as const
+export type PdfScale = typeof PDF_SCALES[number]
+export interface PdfAreaSelection { readonly kind: 'zone'; readonly name: string }
+export interface PdfSetup {
+  readonly paper: PdfPaper
+  readonly orientation: PdfOrientation
+  readonly layers: readonly string[]
+  readonly areas?: readonly PdfAreaSelection[]
+  readonly detailScale?: PdfScale
+}
 export interface PdfInput { readonly name: string; readonly locale: string; readonly canvas: CanvasPrintSnapshot; readonly commonNames: Readonly<Record<string, string>> }
 export interface PdfLabels { readonly overview: string; readonly plants: string; readonly actualSize: string; readonly page: string }
 export type PdfMatrix = readonly [number, number, number, number, number, number]
@@ -16,7 +25,12 @@ export interface PdfPage {
   readonly number: number
   readonly width: number
   readonly height: number
-  readonly kind: 'overview'
+  readonly kind: 'overview' | 'detail'
+  readonly id: string
+  readonly areaKey?: string
+  readonly areaName?: string
+  readonly tile?: { readonly row: number; readonly column: number; readonly rows: number; readonly columns: number }
+  readonly neighbors?: Readonly<Partial<Record<'left' | 'right' | 'top' | 'bottom', number>>>
   readonly frame: PrintBounds
   readonly ground: PrintBounds
   readonly pointsPerMeter: number

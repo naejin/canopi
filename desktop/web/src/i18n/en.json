@@ -926,7 +926,8 @@
       "unsupported-text": "Some characters are not supported by the print fonts. Edit the text in the design and try again.",
       "text-too-wide": "Some text cannot fit at a readable size. Edit the text in the design and try again.",
       "delivery-failed": "Could not save the PDF. Refresh the preview and try again.",
-      "selection-missing": "Some selected layers or zones no longer exist. Review the print selections before exporting."
+      "selection-missing": "Some selected layers or zones no longer exist. Review the print selections before exporting.",
+      "coverage-too-large": "This setup exceeds the 200-page limit. Select fewer areas or a smaller drawing scale."
     }
   }
 }

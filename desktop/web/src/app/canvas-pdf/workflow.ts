@@ -25,6 +25,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   const defaults = (): PdfSetup => ({ paper: 'A4', orientation: 'auto', layers: [] })
   const setup = signal<PdfSetup>(defaults())
   const availableLayers = signal<readonly string[]>([])
+  const availableZones = signal<readonly string[]>([])
   let identity: object | null = null
   let capture: PdfCapture | null = null
   let controller: AbortController | null = null
@@ -34,7 +35,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function synchronize(nextIdentity: object) {
     if (identity !== null && identity !== nextIdentity) {
       stop(); identity = null; capture = null
-      batch(() => { open.value = false; state.value = IDLE; setup.value = defaults(); availableLayers.value = [] })
+      batch(() => { open.value = false; state.value = IDLE; setup.value = defaults(); availableLayers.value = []; availableZones.value = [] })
     } else if (open.peek() && capture && !capture.isCurrent()) {
       stop(); capture = null; state.value = { status: 'error', error: 'stale', result: null }
     }
@@ -52,8 +53,10 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       setup.value = { paper: 'A4', orientation: 'auto', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
     }
     availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
+    availableZones.value = next.input.canvas.zones.map((zone) => zone.name)
     capture = next
-    if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))) {
+    if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))
+      || (setup.peek().areas ?? []).some((area) => !availableZones.peek().includes(area.name))) {
       state.value = { status: 'error', error: 'selection-missing', result: null }; return
     }
     const abort = new AbortController(); controller = abort
@@ -78,7 +81,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } catch (error) {
       if (!current()) return
       const message = error instanceof Error ? error.message : ''
-      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout'].includes(message) ? message : 'prepare-failed', result: null }
+      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'selection-missing', 'coverage-too-large'].includes(message) ? message : 'prepare-failed', result: null }
     } finally {
       if (controller === abort) controller = null
     }
@@ -86,7 +89,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function show(): void { if (disposed) return; open.value = true; void rebuild() }
   function close(): void {
     if (state.peek().status === 'delivering') return
-    stop(); capture = null; batch(() => { open.value = false; state.value = IDLE; availableLayers.value = [] })
+    stop(); capture = null; batch(() => { open.value = false; state.value = IDLE; availableLayers.value = []; availableZones.value = [] })
   }
   function configure(value: Partial<PdfSetup>): void {
     if (disposed || state.peek().status === 'delivering') return
@@ -96,6 +99,10 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function selectLayer(name: string, selected: boolean): void {
     const layers = setup.peek().layers.filter((layer) => layer !== name)
     configure({ layers: selected ? [...layers, name] : layers })
+  }
+  function selectZone(name: string, selected: boolean): void {
+    const areas = (setup.peek().areas ?? []).filter((area) => area.name !== name)
+    configure({ areas: selected ? [...areas, { kind: 'zone', name }] : areas })
   }
   async function save(): Promise<void> {
     const snapshot = state.peek(), source = capture
@@ -112,7 +119,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       state.value = { ...snapshot, status: 'error', error: 'delivery-failed' }
     } finally { if (controller === abort) controller = null }
   }
-  function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = [] }
-  return { open, state, setup, availableLayers, show, close, rebuild, configure, selectLayer, save, synchronize, dispose }
+  function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = []; availableZones.value = [] }
+  return { open, state, setup, availableLayers, availableZones, show, close, rebuild, configure, selectLayer, selectZone, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>

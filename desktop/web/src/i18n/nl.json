@@ -926,7 +926,8 @@
       "unsupported-text": "De afdruklettertypen ondersteunen sommige tekens niet. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "text-too-wide": "Sommige tekst past niet op leesbare grootte. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "delivery-failed": "De PDF kon niet worden opgeslagen. Vernieuw het voorbeeld en probeer opnieuw.",
-      "selection-missing": "Sommige geselecteerde lagen of zones bestaan niet meer. Controleer de afdrukselectie voordat je exporteert."
+      "selection-missing": "Sommige geselecteerde lagen of zones bestaan niet meer. Controleer de afdrukselectie voordat je exporteert.",
+      "coverage-too-large": "Deze selectie overschrijdt de limiet van 200 pagina’s. Selecteer minder gebieden of een kleinere tekenschaal."
     }
   }
 }

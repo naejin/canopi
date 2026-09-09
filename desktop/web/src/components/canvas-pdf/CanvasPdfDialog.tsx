@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canvasPdf } from '../../app/canvas-pdf/live'
 import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
-import type { PdfOrientation, PdfPaper } from '../../app/canvas-pdf/types'
+import { PDF_SCALES, type PdfScale, type PdfOrientation, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
 import { PdfPagePreview } from './PdfPagePreview'
@@ -18,9 +18,12 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
   const state = workflow.state.value
   const setup = workflow.setup.value
   const plan = state.result?.plan
-  const page = plan?.pages[Math.min(index, plan.pages.length - 1)]
+  const currentIndex = Math.min(index, Math.max(0, (plan?.pages.length ?? 1) - 1))
+  const page = plan?.pages[currentIndex]
   const delivering = state.status === 'delivering'
   const layers = Array.from(new Set([...workflow.availableLayers.value, ...setup.layers]))
+  const selectedZones = (setup.areas ?? []).map((area) => area.name)
+  const zones = Array.from(new Set([...workflow.availableZones.value, ...selectedZones]))
   useEffect(() => {
     const previous = document.activeElement
     root.current?.querySelector<HTMLButtonElement>('button')?.focus()
@@ -68,6 +71,20 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
               <span>{t(`canvas.layers.${name}`, { defaultValue: name })}</span>
             </label>)}
           </fieldset>
+          <fieldset disabled={delivering}>
+            <legend>{t('pdf.zones')}</legend>
+            {zones.map((name) => <label key={name} className={styles.check}>
+              <input type="checkbox" checked={selectedZones.includes(name)} onChange={(event) => workflow.selectZone(name, event.currentTarget.checked)} />
+              <span>{name}</span>
+            </label>)}
+            {!zones.length && <p>{t('pdf.noZones')}</p>}
+          </fieldset>
+          {selectedZones.length > 0 && <fieldset disabled={delivering}>
+            <legend>{t('pdf.scale')}</legend>
+            <Dropdown<PdfScale> ariaLabel={t('pdf.scale')} trigger={`1:${setup.detailScale ?? 100}`} value={setup.detailScale ?? 100}
+              items={PDF_SCALES.map((value) => ({ value, label: `1:${value}` }))}
+              onChange={(detailScale) => workflow.configure({ detailScale })} preserveOverlays />
+          </fieldset>}
           <button type="button" disabled={delivering} onClick={() => void workflow.rebuild()}>{t('pdf.refresh')}</button>
           {state.error && <p role="alert" className={styles.notice}>{t(`pdf.errors.${state.error}`)}</p>}
           {plan?.blocked === 'empty' && <p role="status">{t('pdf.empty')}</p>}
@@ -76,9 +93,9 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
         </aside>
         <div className={styles.preview}>
           <div className={styles.previewTools}>
-            <button type="button" aria-label={t('pdf.previous')} disabled={!page || index === 0} onClick={() => setIndex(Math.max(0, index - 1))}>‹</button>
+            <button type="button" aria-label={t('pdf.previous')} disabled={!page || currentIndex === 0} onClick={() => setIndex(Math.max(0, currentIndex - 1))}>‹</button>
             <span>{page ? t('pdf.pageCount', { page: page.number, count: plan!.pages.length }) : t('pdf.overview')}</span>
-            <button type="button" aria-label={t('pdf.next')} disabled={!page || index >= plan!.pages.length - 1} onClick={() => setIndex(index + 1)}>›</button>
+            <button type="button" aria-label={t('pdf.next')} disabled={!page || currentIndex >= plan!.pages.length - 1} onClick={() => setIndex(currentIndex + 1)}>›</button>
             <Dropdown<number> ariaLabel={t('pdf.zoom')} trigger={zoom ? `${zoom}%` : t('pdf.fit')} value={zoom}
               items={[{ value: 0, label: t('pdf.fit') }, ...[75, 100, 150, 200].map((value) => ({ value, label: `${value}%` }))]}
               onChange={setZoom} preserveOverlays />

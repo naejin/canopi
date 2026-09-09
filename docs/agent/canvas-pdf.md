@@ -23,3 +23,11 @@ Canvas PDF exports are derived files. The Design Session and canvas retain owner
 Run TypeScript, focused `canvas-pdf-*` and `canvas-print-snapshot` tests, runtime settled-read coverage, and both builds. Shell or shared runtime changes require the full frontend suite. Native delivery changes require Rust formatting, Clippy, workspace check/tests and the native command policy guard. Real font tests need `npm run prepare:pdf-fonts` first when invoking Vitest directly.
 
 The [native foundation evidence](../canvas-pdf-native-verification.md) covers the isolated chosen encoder in desktop WebViews. Production app delivery and physical paper readability are separate checks; do not describe encoder fixtures or screen inspection as printer testing. Physical layout defaults remain provisional until the tracked print review is performed.
+
+## Detail coverage
+
+Zone selections use their current exact names as identity. Their latest geometry is read on rebuild, even if the Zones print layer is excluded; renaming/removing a selected Zone requires explicit selection review. Each selected Zone is covered by rectangular sheets at the common real-world scale, including nearby printable content and overlap. `coverage.ts` tiles ground coordinates without fitting or stretching the physical drawing frame. Automatic orientation minimizes detail-sheet count per selected area; overview orientation maximizes its fitted coverage.
+
+Detail pages have page-specific species legends. The overview becomes a navigation sheet with all printable content and every detail sheet's complete ground coverage, without a duplicated species legend. Page numbering, neighbor references, and overview outlines are assembled from page identities after page planning. Keep numbering after any future continuation-page insertion.
+
+Provisional detail defaults are 1:100, 10 mm physical overlap, and 5 mm physical Zone context padding at the chosen scale. Both paper sizes retain the 42 mm legend column, 10 mm margins, 10 pt legend text, 3 mm nominal plant symbols and 0.25 mm geometry strokes. A setup is currently limited to 200 total pages including the overview; reject excessive coverage before allocating sheets. Resource/default validation remains tracked separately from implementing the coverage rules.
