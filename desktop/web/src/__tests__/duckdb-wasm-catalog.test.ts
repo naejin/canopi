@@ -737,6 +737,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
             slug: 'malus-domestica',
             canonical_name: 'Malus domestica',
             common_name: 'Apple',
+            localized_common_name: 'Apple',
             climate_zones: '["Temperate"]',
             habit: 'Tree',
             growth_form: 'Tree',
@@ -1098,7 +1099,7 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     expect(searchSql).toContain('WHEN matched_names.species_id IS NOT NULL THEN 3')
     expect(searchSql).toContain('matched_names.match_tier')
     expect(searchSql).toContain('s.normalized_canonical_name')
-    expect(searchSql).toContain('s.normalized_common_name')
+    expect(searchSql).not.toContain('s.normalized_common_name')
     expect(searchSql).not.toContain('LOWER(s.canonical_name)')
     expect(searchSql).not.toContain("LOWER(COALESCE(s.common_name, ''))")
     expect(searchSql).toContain('s.canonical_name,')
@@ -1392,8 +1393,8 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
 
     await expect(reader.getSpeciesDetail('Malus domestica', 'fr')).resolves.toMatchObject({
       canonical_name: 'Malus domestica',
-      common_name: 'Apple',
-      common_names: ['Apple'],
+      common_name: null,
+      common_names: [],
       image: null,
     })
   })

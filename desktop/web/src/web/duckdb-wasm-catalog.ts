@@ -896,7 +896,6 @@ function searchPredicateSql(searchText: NormalizedSearchText): string {
   return `
     (
        ${nameMatchCondition('s.normalized_canonical_name', searchText)}
-       OR ${nameMatchCondition("COALESCE(s.normalized_common_name, '')", searchText)}
        OR EXISTS (
          SELECT 1
          FROM locale_names search_names
@@ -1157,7 +1156,7 @@ function speciesProjectionToListItem(
   favoriteNames: ReadonlySet<string>,
 ): SpeciesListItem {
   const row = projection.row
-  const commonName = projection.localizedCommonName ?? row.common_name
+  const commonName = projection.localizedCommonName
   return {
     canonical_name: row.canonical_name,
     slug: row.slug,
@@ -1189,8 +1188,8 @@ function speciesProjectionToDetail(
   const row = projection.row
   const commonNames = localizedCommonNames.length > 0
     ? [...localizedCommonNames]
-    : compact([projection.localizedCommonName ?? row.common_name])
-  const commonName = commonNames[0] ?? row.common_name
+    : compact([projection.localizedCommonName])
+  const commonName = commonNames[0] ?? null
   return {
     canonical_name: row.canonical_name,
     common_name: commonName,

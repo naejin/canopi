@@ -14,9 +14,35 @@ import { validWebCatalogManifest } from './fixtures/web-catalog-manifest'
 
 const SPECIES_PARQUET = "read_parquet('species/species-0000.parquet')"
 const FRENCH_NAMES_PARQUET = "read_parquet('names/names-fr.parquet')"
+const ENGLISH_NAMES_PARQUET = "read_parquet('names/names-en.parquet')"
 const IMAGES_PARQUET = "read_parquet('images/images-0000.parquet')"
 
 describe('DuckDB-WASM Species Catalog executable SQL', () => {
+  it.each(['apple', 'pear'])('does not match another locale\'s source Common Name: %s', async (text) => {
+    const duckdb = await createExecutableDuckDb()
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://catalog.example.test/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => duckdb,
+    })
+
+    try {
+      const result = await reader.searchSpecies({
+        text,
+        filters: createEmptySpeciesFilter(),
+        cursor: null,
+        limit: 10,
+        sort: 'Relevance',
+        locale: 'fr',
+        include_total: true,
+      }, new Set())
+
+      expect(result).toMatchObject({ items: [], total_estimate: 0, next_cursor: null })
+    } finally {
+      await reader.dispose()
+    }
+  })
+
   it('executes detail hydration and locale-name ordering in real DuckDB-WASM', async () => {
     const duckdb = await createExecutableDuckDb()
     const reader = createDuckDbReducedSpeciesCatalogReader({
@@ -65,6 +91,106 @@ describe('DuckDB-WASM Species Catalog executable SQL', () => {
       await reader.dispose()
     }
   })
+
+  it('keeps detail Common Names empty when the selected locale has none', async () => {
+    const duckdb = await createExecutableDuckDb()
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://catalog.example.test/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => duckdb,
+    })
+
+    try {
+      await expect(reader.getSpeciesDetail('Pyrus communis', 'fr')).resolves.toMatchObject({
+        canonical_name: 'Pyrus communis',
+        common_name: null,
+        common_names: [],
+      })
+    } finally {
+      await reader.dispose()
+    }
+  })
+
+  it('uses Canonical Name fallback for search and saved-list rows without local names', async () => {
+    const duckdb = await createExecutableDuckDb()
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://catalog.example.test/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => duckdb,
+    })
+
+    try {
+      const favorites = new Set(['Pyrus communis'])
+      const request = {
+        text: 'pyrus',
+        filters: createEmptySpeciesFilter(),
+        cursor: null,
+        limit: 10,
+        sort: 'Relevance' as const,
+        locale: 'fr',
+        include_total: true,
+      }
+      const result = await reader.searchSpecies(request, favorites)
+      const savedItems = await reader.listSpeciesByCanonicalNames(['Pyrus communis'], 'fr', favorites)
+      const expectedItem = {
+        canonical_name: 'Pyrus communis',
+        common_name: null,
+        matched_common_name: null,
+        is_name_fallback: true,
+        is_favorite: true,
+      }
+
+      expect(result).toMatchObject({ items: [expectedItem], total_estimate: 1, next_cursor: null })
+      expect(savedItems).toMatchObject([expectedItem])
+    } finally {
+      await reader.dispose()
+    }
+  })
+
+  it.each([
+    { locale: 'en', text: 'pear', canonicalName: 'Pyrus communis', commonName: 'Pear', matchedName: 'Pear' },
+    { locale: 'fr', text: 'arbre', canonicalName: 'Prunus armeniaca', commonName: 'Arbre fruitier', matchedName: 'Arbre fruitier' },
+    { locale: 'fr', text: 'zz', canonicalName: 'Malus domestica', commonName: 'A', matchedName: 'zz' },
+  ])('preserves $locale primary and alternate Common Name matches for $text', async ({
+    locale, text, canonicalName, commonName, matchedName,
+  }) => {
+    const duckdb = await createExecutableDuckDb()
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://catalog.example.test/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => duckdb,
+    })
+
+    try {
+      const result = await reader.searchSpecies({
+        text,
+        filters: createEmptySpeciesFilter(),
+        cursor: null,
+        limit: 10,
+        sort: 'Relevance',
+        locale,
+        include_total: true,
+      }, new Set())
+
+      expect(result).toMatchObject({
+        items: [{
+          canonical_name: canonicalName,
+          common_name: commonName,
+          matched_common_name: matchedName,
+          is_name_fallback: false,
+        }],
+        total_estimate: 1,
+        next_cursor: null,
+      })
+      await expect(reader.getSpeciesDetail(canonicalName, locale)).resolves.toMatchObject({
+        canonical_name: canonicalName,
+        common_name: commonName,
+        common_names: expect.arrayContaining([matchedName]),
+      })
+    } finally {
+      await reader.dispose()
+    }
+  })
 })
 
 async function createExecutableDuckDb() {
@@ -98,6 +224,7 @@ function withInlineCatalogFixtures(sql: string): string {
   return sql
     .split(SPECIES_PARQUET).join(SPECIES_VALUES)
     .split(FRENCH_NAMES_PARQUET).join(FRENCH_NAME_VALUES)
+    .split(ENGLISH_NAMES_PARQUET).join(ENGLISH_NAME_VALUES)
     .split(IMAGES_PARQUET).join(IMAGE_VALUES)
 }
 
@@ -122,6 +249,18 @@ const SPECIES_VALUES = `(
       'Apricot'::VARCHAR,
       'prunus armeniaca'::VARCHAR,
       'apricot'::VARCHAR,
+      '["Temperate"]'::VARCHAR,
+      'Tree'::VARCHAR,
+      'Tree'::VARCHAR,
+      '["Perennial"]'::VARCHAR
+    ),
+    (
+      'species-pear'::VARCHAR,
+      'pyrus-communis'::VARCHAR,
+      'Pyrus communis'::VARCHAR,
+      'Pear'::VARCHAR,
+      'pyrus communis'::VARCHAR,
+      'pear'::VARCHAR,
       '["Temperate"]'::VARCHAR,
       'Tree'::VARCHAR,
       'Tree'::VARCHAR,
@@ -182,6 +321,13 @@ const FRENCH_NAME_VALUES = `(
     is_primary,
     display_order
   )
+)`
+
+const ENGLISH_NAME_VALUES = `(
+  SELECT * FROM (VALUES
+    ('species-apple'::VARCHAR, 'en'::VARCHAR, 'Apple'::VARCHAR, 'apple'::VARCHAR, 'true'::VARCHAR, '0'::VARCHAR),
+    ('species-pear'::VARCHAR, 'en'::VARCHAR, 'Pear'::VARCHAR, 'pear'::VARCHAR, 'true'::VARCHAR, '0'::VARCHAR)
+  ) AS fixture(species_id, language, common_name, normalized_name, is_primary, display_order)
 )`
 
 const IMAGE_VALUES = `(

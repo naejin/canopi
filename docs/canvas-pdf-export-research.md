@@ -49,7 +49,7 @@ No PDF-generation package is currently declared in [the frontend manifest](../de
 
 **Recommendation.** Package versioned, licensed font assets with the static app, load the required families on demand, and subset embedded PDF fonts where supported. Font coverage must follow actual text as well as UI locale: an English Design can contain Japanese Annotations. Validate mixed scripts, accents, multiplication signs, long names, line breaking, and language-appropriate CJK glyphs. Use the same font bytes and metrics for preview and PDF. A missing glyph or failed font load needs a visible error or verified fallback, never a silent missing-name box. Keep the accepted local Common Name/full Canonical Name fallback and Species identity rules.
 
-**Existing dependency:** open bead `canopi-qj4w` tracks a cross-locale Common Name fallback in the [Web Species Catalog adapter](../desktop/web/src/web/duckdb-wasm-catalog.ts). Resolve or explicitly isolate that source before claiming PDF naming parity. The prior audit established the issue by source inspection; this research did not reproduce it at runtime.
+**Naming dependency:** `canopi-qj4w` corrects the cross-locale Common Name fallback in the [Web Species Catalog adapter](../desktop/web/src/web/duckdb-wasm-catalog.ts). Its executable DuckDB-WASM regressions cover source-only queries, absent local names, Canonical Name fallback, and selected-language primary/alternate names. Preserve this behavior when consuming the projection for PDF legends. The original research identified the issue by source inspection; the executable reproduction and correction belong to the subsequent fix.
 
 ### Physical scale, raster density, and print controls
 
