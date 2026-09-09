@@ -2,6 +2,14 @@
 
 Recorded 2026-09-09, beginning with `canopi-urxb` and extended for the revisions below. The user-approved implementation is integrated on `main`, including automatic area fitting and the page workspace. Physical-default approval and outstanding packaged-app checks remain open in `canopi-h0q3`, followed by the release audit in `canopi-1zbj`. Software approval does not establish printer or outdoor field-user evidence.
 
+## Mainline verification
+
+The [production native matrix](https://github.com/naejin/canopi/actions/runs/34376541459) passes at `b307a454` on Linux WebKitGTK, Apple Silicon and Intel WKWebView, and Windows WebView2. All four outputs have the same two-page mixed sample, physical plan and extracted text. Independent Poppler checks pass vector content, embedded Unicode fonts, both 50 mm calibration bars and all eight required preview comparisons. Image residuals are 0.0039–0.0136 against the unchanged 0.25 bound. Exact runtime versions and measurements are in the `nativePipeline` section of the [workspace evidence](canvas-pdf-workspace-validation-data.json).
+
+`canopi-g0bc` corrects the native probe's obsolete three-preview assumption after automatic fitting reduced this sample to two pages. Hosts now admit one to three images, and production verification fails if any expected preview is missing. The historical encoder verifier retains its three-page reference checks. Local WebKitGTK runs additionally pass one-page multilingual and three-page legend samples. Three focused verifier tests cover required native images and intentionally optional browser stress previews; a missing image from a real native result also fails verification.
+
+The integrated checkout passes TypeScript, all 2,154 frontend tests, both edition builds, the Web boundary scan, generated-binding checks, Rust formatting, strict Clippy, workspace check/tests and the native command policy guard. Housekeeping updates documentation, tracker handoffs and CI ownership; the production export behavior remains the approved workspace. The native matrix tests the production pipeline in owned WebView hosts, not the packaged Tauri save dialog or physical printing. Those checks remain in `canopi-h0q3`.
+
 ## Print workspace update
 
 `canopi-cd7x.2` replaces the modal controls with the full-window page workspace: visible page thumbnails, one Add page flow, print-only dragging and keyboard framing, per-page zoom/Fit/orientation, temporary text inspection, automatic refresh and explicit legend-page actions. The PRD, ADR 0024 and current user/agent guides describe this behavior. Historical sections below retain the measurements for their own revisions.
@@ -14,7 +22,7 @@ The 50-page / 10,000-Plant sample generated in 1.86 seconds in the recorded Chro
 
 TypeScript, both edition builds, the Web boundary scan, the production harness build and the full frontend suite (230 files / 2,154 tests) pass. Focused coverage also checks cancelled/foreign-pointer gestures, full-area Fit after movement, Zone click versus drag, open Line Zone hit targets, automatic-refresh cancellation, retained missing selections, continuation reflow navigation, and focus restoration. SVG focus uses native lowercase `tabindex`.
 
-[Compact workspace evidence](canvas-pdf-workspace-validation-data.json) records browser outcomes, sample measurements and independent PDF/image checks. Temporary files are under ignored `.tmp/pdf-workspace-review/`. No runtime dependency, Rust code, or cross-language contract changed. The desktop WebView matrix below was not rerun for this workspace revision. Packaged-app and physical paper review remain tracked in `canopi-h0q3`; none of these browser or PDF checks supplies printer measurements.
+[Compact workspace evidence](canvas-pdf-workspace-validation-data.json) records browser outcomes, sample measurements and independent PDF/image checks. Temporary files are under ignored `.tmp/pdf-workspace-review/`. No runtime dependency, Rust code, or cross-language contract changed in the workspace revision. Its initial verification covered browsers; the later mainline verification above also covers the current production pipeline in desktop WebViews. Packaged-app and physical paper review remain tracked in `canopi-h0q3`; none of these browser or PDF checks supplies printer measurements.
 
 ## Automatic page fitting update
 

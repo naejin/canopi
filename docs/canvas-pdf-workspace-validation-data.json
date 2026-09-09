@@ -448,5 +448,156 @@
         "previewComparisons": []
       }
     }
-  ]
+  ],
+  "nativePipeline": {
+    "date": "2026-09-09",
+    "revision": "b307a454ed7b8c8600d99f84f768f332c072a70f",
+    "bead": "canopi-g0bc",
+    "workflowRun": "https://github.com/naejin/canopi/actions/runs/34376541459",
+    "fixture": "mixed",
+    "scope": "Current production capture, worker, fonts, page plan, SVG preview and fixed-path native delivery in real desktop WebViews. This does not exercise the packaged Tauri application, its save dialog or physical printing.",
+    "platforms": [
+      {
+        "platform": "linux",
+        "runtime": {
+          "host": "GTK3 WebKitGTK 4.1",
+          "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+          "engine": "2.52.6",
+          "delivery": "Native fixed-path binary write; no save dialog"
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "d40dff08dd85eaaf792cb4a4b1a0c99bd846daea13dfdc351aff38dc298596c8",
+          "pages": 2,
+          "bytes": 16849,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "7f17b2026769e0fa0b815aec4b56ad44347a0cb0f5137374f79d2f484e728589",
+          "planSha256": "f0976be61585c3e3385a9473a90f16e5144206e71c20b43e6203cb1730071912",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.5350639279082463,
+              "neighborhoodDifference": 0.005523149022469416,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 0.9122446452378652,
+              "neighborhoodDifference": 0.009914950952793449,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "platform": "macos-arm64",
+        "runtime": {
+          "delivery": "Native fixed-path binary write; no save dialog",
+          "engine": "19618.3.11.11.5",
+          "host": "WKWebView",
+          "os": "Version 14.8.9 (Build 23J631)"
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "009aeb4935ec8686c0f2b8d63b0b8baa062ec3ead2f30d83c0444cec01482f9d",
+          "pages": 2,
+          "bytes": 16849,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "7f17b2026769e0fa0b815aec4b56ad44347a0cb0f5137374f79d2f484e728589",
+          "planSha256": "f0976be61585c3e3385a9473a90f16e5144206e71c20b43e6203cb1730071912",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.5090201878071638,
+              "neighborhoodDifference": 0.004877973812920469,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 0.9288442379174465,
+              "neighborhoodDifference": 0.008685482848476629,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "platform": "macos-intel",
+        "runtime": {
+          "delivery": "Native fixed-path binary write; no save dialog",
+          "engine": "20621.3.11.11.3",
+          "host": "WKWebView",
+          "os": "Version 15.7.9 (Build 24G830)"
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "fd16232568554e6be0b735df09d1ac854d2222f32a42fea40e58de81b6a71a31",
+          "pages": 2,
+          "bytes": 16849,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "7f17b2026769e0fa0b815aec4b56ad44347a0cb0f5137374f79d2f484e728589",
+          "planSha256": "f0976be61585c3e3385a9473a90f16e5144206e71c20b43e6203cb1730071912",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.4740565975002193,
+              "neighborhoodDifference": 0.0048496014720516185,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 1.1032416286078313,
+              "neighborhoodDifference": 0.008724199271953911,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "platform": "windows",
+        "runtime": {
+          "host": "WinForms WebView2",
+          "os": "Microsoft Windows NT 10.0.26100.0",
+          "engine": "152.0.4191.66",
+          "sdk": "1.0.2903.40",
+          "delivery": "Native fixed-path binary write; no save dialog"
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "9f33692a840cb4741aff8f4ca4226f6dd84f7fad2b260e88f432d427582b3b5d",
+          "pages": 2,
+          "bytes": 16849,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "7f17b2026769e0fa0b815aec4b56ad44347a0cb0f5137374f79d2f484e728589",
+          "planSha256": "f0976be61585c3e3385a9473a90f16e5144206e71c20b43e6203cb1730071912",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.1264797579602888,
+              "neighborhoodDifference": 0.0039047434120754454,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 1.0031502164720945,
+              "neighborhoodDifference": 0.013546610584006214,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      }
+    ]
+  }
 }
