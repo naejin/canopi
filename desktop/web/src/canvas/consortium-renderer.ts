@@ -1,3 +1,4 @@
+import { chartLabelColor } from './chart-label-color'
 import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 import {
   CONSORTIUM_STRATA,
@@ -123,7 +124,6 @@ export function renderConsortium(
   const textColor = theme.text
   const textMutedColor = theme.textMuted
   const primaryColor = theme.primary
-  const primaryContrastColor = theme.primaryContrast
   const fontSans = theme.fontSans
 
   const contentWidth = width - LABEL_WIDTH
@@ -257,8 +257,8 @@ export function renderConsortium(
 
     // Label inside bar
     if (barW > 50) {
-      ctx.globalAlpha = 0.95
-      ctx.fillStyle = primaryContrastColor
+      ctx.globalAlpha = 1
+      ctx.fillStyle = chartLabelColor(bar.color, stratumToRow(bar.stratum) % 2 === 0 ? surfaceColor : surfaceMuted, isHovered ? 1 : 0.85)
       ctx.font = `600 11px ${fontSans}`
       ctx.beginPath()
       ctx.rect(x + 4, barY, barW - 8, barH)
@@ -268,8 +268,8 @@ export function renderConsortium(
         : bar.commonName
       ctx.fillText(label, x + 7, barY + barH / 2 + 3.5)
     } else if (barW > 20) {
-      ctx.globalAlpha = 0.9
-      ctx.fillStyle = primaryContrastColor
+      ctx.globalAlpha = 1
+      ctx.fillStyle = chartLabelColor(bar.color, stratumToRow(bar.stratum) % 2 === 0 ? surfaceColor : surfaceMuted, isHovered ? 1 : 0.85)
       ctx.font = `600 11px ${fontSans}`
       ctx.textAlign = 'center'
       ctx.fillText(`${bar.count}`, x + barW / 2, barY + barH / 2 + 3)

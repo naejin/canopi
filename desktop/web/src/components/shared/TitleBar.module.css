@@ -155,6 +155,7 @@
 }
 
 .themeBtn:hover {
+  background: var(--color-control-hover);
   color: var(--color-text);
 }
 

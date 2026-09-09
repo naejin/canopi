@@ -6,7 +6,6 @@
   background: var(--panel-gradient);
   border-left: 1px solid var(--color-border);
   padding: var(--space-2) 0;
-  gap: var(--space-1);
   flex-shrink: 0;
   position: relative;
   z-index: 20;
@@ -16,7 +15,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  width: calc(100% - 2 * var(--space-1));
+  margin: 0 var(--space-1);
+  border-radius: var(--radius-md);
   height: var(--control-size-xl);
   border: none;
   background: transparent;
@@ -40,12 +41,12 @@
 .button[aria-pressed="true"]::before {
   content: '';
   position: absolute;
-  right: 0;
+  right: -4px;
   top: 8px;
   bottom: 8px;
   width: 2px;
   background: var(--color-accent);
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  border-radius: var(--radius-xs) 0 0 var(--radius-xs);
 }
 
 .button:focus-visible {
@@ -74,10 +75,11 @@
 }
 
 .divider {
-  width: var(--icon-size-lg);
+  width: calc(100% - 2 * var(--space-2));
   height: 1px;
   background: var(--color-border);
-  margin: var(--space-1) auto;
+  margin: var(--space-0-75) auto;
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

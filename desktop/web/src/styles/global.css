@@ -109,7 +109,8 @@
 
   /* Layout — compact */
   --title-bar-height: 36px;
-  --panel-bar-width: 36px;
+  --chrome-rail-width: 44px;
+  --panel-bar-width: var(--chrome-rail-width);
   --panel-width: 280px;
   --control-size-xs: 20px;
   --control-size-sm: 24px;
@@ -155,7 +156,7 @@
   --canvas-annotation-surface: #F8F4ED;
   --canvas-zone-stroke: #2D5F3F;
   --canvas-zone-fill: rgba(45, 95, 63, 0.1);
-  --canvas-toolbar-width: 38px;
+  --canvas-toolbar-width: var(--chrome-rail-width);
 }
 
 /* ============================================

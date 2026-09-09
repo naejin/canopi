@@ -1,5 +1,4 @@
 .toolbar {
-  --canvas-toolbar-width: 44px;
   width: var(--canvas-toolbar-width);
   min-width: var(--canvas-toolbar-width);
   display: flex;
@@ -97,8 +96,8 @@
 }
 
 .toolIcon {
-  width: 20px;
-  height: 20px;
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
   flex-shrink: 0;
 }
 

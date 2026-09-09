@@ -1,3 +1,4 @@
+import { chartLabelColor } from './chart-label-color'
 import { dateToX, niceInterval, formatDateLabel } from './timeline-math'
 import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 import {
@@ -66,7 +67,6 @@ export function renderTimeline(
   const textMutedColor = theme.textMuted
   const primaryColor = theme.primary
   const dangerColor = cssVar('--color-danger') || '#B5432A'
-  const primaryContrastColor = theme.primaryContrast
   const fontSans = theme.fontSans
 
   const chartLeft = TIMELINE_LABEL_SIDEBAR_WIDTH
@@ -213,7 +213,7 @@ export function renderTimeline(
       // Label inside bar
       if (barW > 40) {
         ctx.save()
-        ctx.fillStyle = primaryContrastColor
+        ctx.fillStyle = chartLabelColor(baseColor, surfaceColor, action.id === hoveredId ? 0.9 : 0.8)
         ctx.font = `600 11px ${fontSans}`
         ctx.beginPath()
         ctx.rect(x1 + 2, barY, barW - 4, barH)

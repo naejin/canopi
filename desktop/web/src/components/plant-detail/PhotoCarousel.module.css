@@ -51,7 +51,8 @@
 
 .placeholder {
   width: 100%;
-  aspect-ratio: 3 / 2;
+  min-height: var(--control-size-window);
+  padding: var(--space-3);
   display: flex;
   align-items: center;
   justify-content: center;
