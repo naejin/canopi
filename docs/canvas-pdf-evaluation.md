@@ -1,8 +1,8 @@
 # Canvas PDF encoder evaluation
 
-2026-09-09 · `canopi-4nzq` · decision pending in `canopi-orpp`.
+2026-09-09 · `canopi-4nzq` · foundation selected in `canopi-orpp` following the user’s instruction to complete the feature.
 
-**Recommendation for review:** use PDFKit 0.20.2 with Fontkit 2.0.4, embedded Noto fonts, vector PDF text/geometry, and a preview driven by the same shaping and physical page plan. This is evaluation evidence, not a selected production dependency or a shipped export feature. [ADR 0024](adr/0024-shared-canvas-pdf-export.md) remains the scope authority.
+**Selected foundation:** use PDFKit 0.20.2 with Fontkit 2.0.4, embedded Noto fonts, vector PDF text/geometry, and a preview driven by the same shaping and physical page plan. This evidence supports the selected foundation; the export feature is being implemented. [ADR 0024](adr/0024-shared-canvas-pdf-export.md) remains the scope authority.
 
 ## Inspectable samples
 
@@ -72,11 +72,11 @@ Production should keep shared generation separate from compile-time edition deli
 
 The initial encoder comparison did **not** exercise desktop WebViews. The user subsequently approved a [native WebView gate](canvas-pdf-native-verification.md), tracked by `canopi-cd7x.1`, before the foundation decision and substantial export UI work; Linux WebKitGTK, both macOS architectures and Windows WebView2 now pass that isolated fixture gate. Firefox, Safari, physical printers, offline/slow-network acquisition, low-memory devices, and large Design cancellation remain untested. Unicode line breaking in the fixture is deliberately limited; complete wrapping, unsupported text, fonts and resource lifetime must be verified in the implementation slices. These obligations remain in `canopi-w4p3`, `canopi-urxb`, `canopi-h0q3` and `canopi-1zbj`; this evaluation does not close the cross-platform release gates.
 
-## Concrete proposals for canopi-orpp
+## Resolved choices in canopi-orpp
 
-These are review proposals, not accepted product behavior:
+The user delegated completion of the feature after reviewing the native evidence. The implementation adopts these reviewed choices; physical defaults remain provisional until paper review:
 
-| Pending choice | Recommendation |
+| Choice | Resolution |
 | --- | --- |
 | Foundation | PDFKit 0.20.2 + Fontkit 2.0.4; the pinned Noto reference families, acquired by text coverage; vector PDF output and a shared shaped preview. Keep physical defaults provisional. |
 | Empty output | Show a clear empty-preview explanation and disable export when there is neither printable content nor valid selected detail coverage. An intentionally selected blank Print Area may still print with its scale/navigation; an overview-only blank page may not. |
@@ -84,6 +84,6 @@ These are review proposals, not accepted product behavior:
 | Exportable Design content | Plants and pinned names, Zone geometry and authored fills, Annotation text, and persistent Measurement Guides with distances, through their selected Design Layers. Group members render once. Screen grid, rulers, axis guides, selections, handles, lock cues, hover, and all maps remain absent. Selection-only derived Zone measurements need a separate explicit rule if ever requested. |
 | One Species, several authored appearances | One Species heading/name with every distinct symbol/colour sample used on that page, wrapping samples or continuing the entry as needed. Preserve every authored appearance and full naming/overflow rules. Never choose a representative appearance that hides the others. |
 
-The accepted default of visible exportable Layers, full Canonical Name fallback, unchanged Design presentation, complete legends and no map export applies throughout. The current source model and runtime query surfaces informed these proposals; they have not been implemented.
+The accepted default of visible exportable Layers, full Canonical Name fallback, unchanged Design presentation, complete legends and no map export applies throughout. The current source model and runtime query surfaces informed these choices; implementation is tracked in the delivery beads.
 
 Reproduction and operating boundaries are in the [agent evaluation guide](agent/canvas-pdf-evaluation.md).

@@ -2,7 +2,7 @@
 
 2026-09-09 · `canopi-cd7x.1` · prerequisite of `canopi-orpp`.
 
-The user approved checking the recommended PDFKit foundation in actual desktop WebViews before investing in export UI. This gate extends the [encoder evaluation](canvas-pdf-evaluation.md); it does not select the production library, physical defaults or pending preview rules. [ADR 0024](adr/0024-shared-canvas-pdf-export.md) remains the accepted scope.
+The user approved checking the recommended PDFKit foundation in actual desktop WebViews before investing in export UI. This gate extends the [encoder evaluation](canvas-pdf-evaluation.md); it supplies compatibility evidence for the subsequent foundation choice; physical defaults still require paper review. [ADR 0024](adr/0024-shared-canvas-pdf-export.md) remains the accepted scope.
 
 ## Verified evidence
 
@@ -29,4 +29,4 @@ Byte equality is useful evidence for this deterministic fixture. Product parity 
 
 The native probes serve the fixture over loopback HTTP in real WebView engines. They establish encoder, font shaping, Canvas2D preview and native byte-write compatibility in the recorded environments. They do not establish behavior inside the final Canopi Tauri shell, its asset routing/CSP, save dialogs, cancellation/overwrite/error handling or document-session lifecycle. Those checks stay in the overview and release slices. Web Edition Firefox/Safari delivery, minimum supported runtime versions, resource limits, large Designs and physical printer scaling also remain unverified. Windows CI uses a Windows Server runner, so consumer Windows coverage remains part of integrated release validation.
 
-Reproduction, dependencies and lifecycle ownership are documented in the [agent guide](agent/canvas-pdf-evaluation.md). The [workflow](../.github/workflows/pdf-native-probe.yml) retains raw native PDFs, reports and preview PNGs for independent verification. The native engine gate is complete. The foundation and remaining preview-rule choices stay pending in `canopi-orpp`; these runtime passes do not make those product decisions.
+Reproduction, dependencies and lifecycle ownership are documented in the [agent guide](agent/canvas-pdf-evaluation.md). The [workflow](../.github/workflows/pdf-native-probe.yml) retains raw native PDFs, reports and preview PNGs for independent verification. The native engine gate is complete. The subsequent `canopi-orpp` decision adopts the reviewed foundation and preview rules under the user’s instruction to complete the feature. Physical readability is a separate validation gate.

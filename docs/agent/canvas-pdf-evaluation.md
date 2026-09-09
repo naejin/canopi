@@ -1,6 +1,6 @@
 # Canvas PDF evaluation tooling
 
-`scripts/pdf-evaluation/` is an isolated technical fixture for `canopi-4nzq`, not production export code. Its package and lockfile contain only evaluation dependencies. Do not import it from `desktop/web`, add its fonts to the app, or infer a selected stack from its existence. The human decision is `canopi-orpp`; the [evidence brief](../canvas-pdf-evaluation.md) records the recommendation. The [native verification record](../canvas-pdf-native-verification.md) tracks the pre-UI platform gate `canopi-cd7x.1`.
+`scripts/pdf-evaluation/` is an isolated technical fixture for `canopi-4nzq`, not production export code. Its package and lockfile contain only evaluation dependencies. Do not import it from `desktop/web`, add its fonts to the app, or use it as production code. The selected foundation is recorded in `canopi-orpp` and ADR 0024; the [evidence brief](../canvas-pdf-evaluation.md) records the recommendation. The [native verification record](../canvas-pdf-native-verification.md) tracks the pre-UI platform gate `canopi-cd7x.1`.
 
 Run from `scripts/pdf-evaluation/`:
 
