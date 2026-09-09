@@ -222,11 +222,11 @@ The visible on-screen presence of a design object or its readable presentation a
 _Avoid_: Object scale, canvas scale, display size
 
 **Automatic Detail**:
-The Canvas presentation that reveals plant symbols, names, annotations and measurements as local screen space allows. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
+The presentation that reveals plant symbols, names, annotations and measurements as available space allows. On the Canvas this uses screen space; a Canvas PDF uses physical page space and preserves authored text through readable detail coverage or explicit retention. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
 _Avoid_: Display by mode, canopy sizing, automatic design editing
 
 **Inspection Lens**:
-A temporary magnified view of a small part of the Canvas, with nearby plant names for identification while the surrounding Design remains in view. Holding the lens fixes its inspection location; it does not pin plant names or create a Design Object.
+A temporary magnified view of a small part of the Canvas, with plant names beside their positions inside the frame while the surrounding Design remains in view. Its magnification adapts to planting density, and the frame can be expanded. Holding the lens fixes its inspection location; it does not pin plant names or create a Design Object.
 _Avoid_: Planting strip, Print Area, second Design
 
 **Plant Drag Distance Guide**:

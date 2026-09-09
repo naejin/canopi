@@ -8,6 +8,13 @@ const bytes = new Map<PdfFontId, Uint8Array>([
   ['kr', readFileSync('public/pdf-fonts/NotoSansCJKkr-Regular.otf')],
 ])
 describe('PDF shared shaping', () => {
+  it('reports ink bounds including accents and descenders for print coverage', () => {
+    const text = createPdfTextEngine(bytes, 'fr')
+    const plain = text.line('E', 10), accented = text.line('É', 10), descender = text.line('g', 10)
+    expect(accented.ink!.y).toBeLessThan(plain.ink!.y)
+    expect(descender.ink!.y + descender.ink!.height).toBeGreaterThan(0)
+    expect(text.line(' ', 10).ink).toBeNull()
+  })
   it('preserves mixed scripts, full long names and combining accents while wrapping at a fixed readable size', () => {
     const text = createPdfTextEngine(bytes, 'fr')
     const source = 'Érable Яблоня 庭園 정원 ローズマリー Rosmarinus officinalis var. angustifolius e\u0301'

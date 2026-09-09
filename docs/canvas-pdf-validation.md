@@ -104,11 +104,27 @@ Every browser fixture reports zero remaining export workers after teardown. Focu
 
 ## Paper review still required
 
-The user has been given the nursery, orchard and complete-legend PDFs for review. Print them at 100% / actual size on ordinary colour and monochrome printers. Record printer model, paper, driver/viewer settings, measured 50 mm bar length, indoor/outdoor readability, identification of nearby plants using the page's legend, continuation use and navigation between selected detail areas. Regenerate the samples from the current layout before reviewing; the original pack predates automatic page fitting. The dense sample represents nursery spacing; the large overview deliberately shows why detailed coverage is needed.
+The user has been given the nursery, orchard and complete-legend PDFs for review. Print them at 100% / actual size on ordinary colour and monochrome printers. Record printer model, paper, driver/viewer settings, measured 50 mm bar length, indoor/outdoor readability, identification of nearby plants using the page's legend, continuation use and navigation between selected detail areas. Regenerate the samples from the current layout before reviewing; the original pack predates automatic page fitting and spacing-aware marks/text coverage. The dense sample represents nursery spacing; the large overview deliberately shows why detailed coverage is needed.
 
-Current physical values are provisional: A4; automatic full-area fit with independent canvas zoom and page orientation; 10 pt legend text with 13 pt line spacing; 3 mm nominal plant symbols; 0.25 mm geometry strokes; 42 mm legend column; 10 mm margins; and 3 mm Zone context. Fixed detail-scale defaults and overlapping-sheet pagination were replaced in `canopi-c4vf`. The final decision must preserve complete names, authored symbols/colours and honest physical scales. No printer settings, measurements or field-user approval should be inferred from these screen or PDF checks.
+Current physical values are provisional: A4; automatic full-area fit with independent canvas zoom and page orientation; 10 pt legend text with 13 pt line spacing; 3 mm nominal legend symbols with spacing-aware canvas marks; 0.25 mm geometry strokes; 42 mm legend column; 10 mm margins; and 3 mm Zone context. Fixed detail-scale defaults and overlapping-sheet pagination were replaced in `canopi-c4vf`. The final decision must preserve complete names, authored symbols/colours and honest physical scales. No printer settings, measurements or field-user approval should be inferred from these screen or PDF checks.
 
 The pending decision and resulting default application remain in `canopi-h0q3` and `canopi-1zbj`. The epic stays open until those requirements and its completion audit are satisfied.
+
+## Readability update (2026-09-09)
+
+`canopi-y6ur` adds paper-spacing-aware marks and complete text coverage/retention,
+alongside names directly inside the Inspection Lens. TypeScript, 235 frontend test
+files / 2,189 tests, and both edition builds passed. The tests cover clipped and
+rotated text, pinned names, distances, changed retention content, stale previews,
+hidden Layers, long names, coincident plants, and lens resource cleanup.
+
+Browser review used the private 2,201-plant orchard. The production Web build showed
+ten names for ten positions in the inspected dense patch and passed expansion,
+keyboard activation and Escape/focus return. A real Print Area gesture produced a
+two-page PDF through the shared worker and browser download; Poppler rendered it
+independently. The Scene snapshot and source-file hashes remained unchanged. These
+local artifacts remain outside Git. Packaged native and physical paper review remain
+tracked in `canopi-h0q3`; the earlier native matrix below predates this update.
 
 ## Completion evidence for the original implementation
 

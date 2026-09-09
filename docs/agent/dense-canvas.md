@@ -35,8 +35,8 @@ and development route have been removed.
   plus 16px and its label is clear of occupied space. Hover and selection reveal
   the distance with the established interaction emphasis.
 - Existing Zone geometry/fills, explicit hover/selection/lock cues, and editing
-  handles remain. PDF uses its own print projection: automatic screen names and
-  the lens are not printed; authored text, pins, and distances remain printable.
+  handles remain. PDF uses physical spacing for marks and checks complete text coverage;
+  see [Canvas PDF](canvas-pdf.md). Automatic screen names and the lens are not printed.
 
 At 50%, the real orchard's median 0.27m nearest spacing projects to only 2.7px.
 Every name cannot fit there. Automatic Detail keeps positions readable; the lens
@@ -44,12 +44,12 @@ provides local identification without repeatedly changing the main camera.
 
 ## Ownership and interaction
 
-`plant-spacing.ts` caches a spatial tree and nearest distances on immutable Scene
-plant arrays. `plant-presentation.ts` owns the shared footprint and exact-centre
+`canvas/plant-spacing.ts` caches a spatial tree and nearest distances on immutable
+positioned-plant arrays, shared by Canvas, lens and PDF projection. `plant-presentation.ts` owns the shared footprint and exact-centre
 stack policy. Pass the complete Scene plant context into geometry queries.
 
 `automatic-detail.ts` owns collision admission in pan-independent CSS coordinates;
-`label-collision.ts` buckets rectangles and bounds cell enumeration for large text.
+`canvas/label-collision.ts` buckets rectangles and bounds cell enumeration for large text.
 The layout cache holds two scales per immutable Scene. Both native renderers use
 the same decisions on scene and viewport updates. No renderer writes Scene data.
 
@@ -62,13 +62,26 @@ release the resources. Locale/theme updates refresh mounted views.
 
 The shared `InspectionLens` component opens from the Canvas corner. Moving the
 pointer inspects its world location; Hold freezes that location, and Follow resumes.
-Main Canvas clicks retain normal editing behavior. The preview uses the existing
-Canvas2D snapshot renderer at at least 700%, with nearby plant names in a separate
-seven-entry list. Hover/focus matches an entry to its position; activation centres
-the main camera without changing zoom or selection. Escape inside the panel closes
-it and returns focus to its launcher. Names remain usable if 2D preview creation
-fails. The preview shows plants and Zones; it does not duplicate the basemap or
-crowded note/measurement text.
+Main Canvas clicks retain normal editing behavior. `inspection-layout.ts` selects a
+local scale from the nearest distinct planting separation and places full localized
+names inside the frame, with short connectors to their exact plant positions. The
+layout reserves plant footprints and wraps long names at grapheme boundaries; it
+never forces overlapping labels. The name/plant count exposes remaining crowding.
+The scale is independent of the main camera; plus/minus adjust local magnification,
+and Expand gives the frame more space. Hover/focus highlights the matching position;
+activation centres and holds only the lens. No separate plant list remains.
+
+The owner publishes the frame dimensions, all visible plant positions and admitted
+name rectangles through `canvas/inspection.ts`. The component renders accessible
+name buttons and connector SVGs over the existing Canvas2D snapshot preview, using
+the same measured 12px type and 16px line height. The preview shows plants and Zones;
+it excludes basemaps, crowded notes and measurements. A failed 2D preview retains
+position dots and names in the frame. Escape closes the panel and returns focus to
+its launcher. Hidden plant Layers cannot enter the lens. Neither lens interaction
+nor expansion changes the Design or the main camera.
+
+The accepted reading prototype (`canopi-j0hd`, decision `canopi-n29c`) is retired.
+Use the production lens and PDF workspace in either edition for further review.
 
 ## Verification and privacy
 

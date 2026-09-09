@@ -117,12 +117,15 @@
       "follow": "跟随指针",
       "held": "位置已固定",
       "following": "跟随指针",
-      "nearby": "最近的植物",
-      "hint": "悬停或聚焦名称以查找植物。激活名称可将画布居中到该植物。",
-      "empty": "此设计中没有可见的植物。",
-      "unavailable": "预览不可用。您仍可使用植物列表。",
-      "locate": "居中到{{name}}",
-      "distance": "距放大镜中心 {{distance}} 米"
+      "hint": "悬停或聚焦名称可突出显示植物。激活名称可将放大镜移至该植物。",
+      "empty": "此视图中没有植物。请移动指针或扩大查看范围。",
+      "unavailable": "预览不可用。名称仍显示在植物所在位置。",
+      "locate": "将放大镜移至{{name}}",
+      "expand": "扩大放大镜",
+      "compact": "缩小放大镜",
+      "widen": "扩大查看范围",
+      "magnify": "放大查看",
+      "namesCount": "{{shown}} 个名称 · {{total}} 株植物"
     },
     "emptyWelcome": "开始您的设计",
     "emptyNewDesign": "新建设计",
@@ -953,6 +956,9 @@
     "removeLegendPages": "移除图例页",
     "legendNeedsPages": "植物列表需要更多空间。添加关联的图例页以包含所有植物。",
     "retry": "重试",
-    "cancel": "取消"
+    "cancel": "取消",
+    "textNeedsDetail": "{{count}} 项文字需要清晰的打印位置。请添加相应的详图页，或将文字保留在总览页。",
+    "keepText": "在总览页保留文字",
+    "addDetail": "添加详图页"
   }
 }

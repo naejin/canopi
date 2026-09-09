@@ -187,7 +187,6 @@ export function createSceneRuntimeConstruction(
     camera, revision,
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
-    invalidateViewport: () => callbacks.invalidate('viewport'),
   })
   const documentSurface = createSceneCanvasDocumentSurface({
     inspection,

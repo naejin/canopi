@@ -6,7 +6,9 @@ declare module 'fontkit' {
     hasGlyphForCodePoint(code: number): boolean
     layout(text: string): {
       readonly advanceWidth: number
-      readonly glyphs: readonly { readonly id: number; readonly path: { toSVG(): string } }[]
+      readonly glyphs: readonly { readonly id: number; readonly path: { toSVG(): string }; readonly bbox: {
+        readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number
+      } }[]
       readonly positions: readonly { readonly xAdvance: number; readonly xOffset: number; readonly yOffset: number }[]
     }
   }

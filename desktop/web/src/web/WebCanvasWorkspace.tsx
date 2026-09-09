@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { lazy, Suspense } from 'preact/compat'
 import {
   designSessionStore,
   type DesignSessionStore,
@@ -19,10 +18,6 @@ import { browserDesignSessionController, type BrowserDesignSessionController } f
 import { createBrowserCanvasRuntimeHost } from './browser-canvas-runtime'
 import { WebCanvasToolbar } from './WebCanvasToolbar'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
-
-const ReadingPrototype = import.meta.env.DEV && new URLSearchParams(window.location.search).get('prototype') === 'readability'
-  ? lazy(() => import('../components/canvas/prototype-reading/ReadingPrototype').then(module => ({ default: module.ReadingPrototype })))
-  : null
 
 interface WebCanvasWorkspaceProps {
   readonly controller?: BrowserDesignSessionController
@@ -169,9 +164,7 @@ export function WebCanvasWorkspace({
               data-testid="web-canvas-runtime-host"
             />
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
-            {hasDesign && (ReadingPrototype
-              ? <Suspense fallback={null}><ReadingPrototype /></Suspense>
-              : <InspectionLens canvasRef={containerRef} />)}
+            {hasDesign && <InspectionLens canvasRef={containerRef} />}
             {!hasDesign && (
               <div className={panelStyles.canvasEmptyState}>
                 <WebWelcomeScreen controller={controller} />

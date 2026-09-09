@@ -34,9 +34,42 @@ Zone selections use their current exact names as identity. Their latest geometry
 
 Detail pages have page-specific Species legends. The overview becomes a navigation sheet without a duplicated legend when details exist. Page numbering, coverage outlines and legend links are assembled after continuation insertion. Continuations inherit their source orientation unless individually overridden; `legend.ts` reflows their columns without shrinking or losing names and authored appearances, including an entry spanning different orientations.
 
-Both paper sizes retain the provisional 42 mm legend column, 10 mm margins, 10 pt legend text, 3 mm nominal plant symbols and 0.25 mm geometry strokes. A setup is limited to 200 total pages including overview and continuations. Physical paper review and resource/default approval remain tracked separately.
+Both paper sizes retain the provisional 42 mm legend column, 10 mm margins, 10 pt legend text, 3 mm nominal legend symbols and 0.25 mm geometry strokes. Canvas marks are capped by 42% of nearest distinct planting spacing, with a provisional 0.35 mm radius floor; round marks below 0.8 mm radius are solid, and symbol strokes retain at least 0.12 mm on paper. Authored colours and non-round recipes remain unchanged. A setup is limited to 200 total pages including overview and continuations. Physical paper review and resource/default approval remain tracked separately.
 
 Print Areas are named temporary rectangles in the PDF workflow and never create Zones. `PdfPageEditor` owns pointer capture, caches the SVG bounds at gesture start, previews movement through local SVG CSS variables, and commits one ground-space displacement or Print Area on completion. Escape, lost capture, pointer cancellation, mode/plan change and unmount cancel without changing setup. Pointer identity and release ordering are guarded. Arrow keys provide framing without dragging. Coordinates account for SVG fit whitespace. Blank Designs get an unexportable overview for drawing; explicit Print Areas provide printable fitted coverage. Print choices remain session-only and never dirty the Design.
+
+## Text readability and retention
+
+`canvas-text.ts` creates authored Annotation, Pinned Plant Name and Measurement
+Guide text using the same shaped lines that are printed. `text.ts` includes actual
+Fontkit glyph ink bounds, including offsets, accents and descenders. Rotated line
+bounds receive 0.5 mm reading clearance. A readable text item fits completely inside
+the page frame, clears other printed text and plant marks, and (for a distance) has
+enough line length. Collision checks are symmetric: later overlapping text cannot
+certify an earlier item as readable. These are layout checks, not a physical-print
+readability approval.
+
+Detail pages retain full text. The navigation overview defers a text item only when
+at least one detail page prints it readably; deferred Annotations leave a quiet
+anchor mark. Uncovered overview text remains printed. Crowded or partly clipped
+text without a readable detail home yields `text-needs-detail` and no exportable
+bytes until the user adds suitable detail coverage or chooses Keep text on overview.
+The same review applies to an overview used alone. Explicit manual cropping may
+exclude objects entirely; it does not certify partly clipped text as readable.
+
+`PdfSetup.retainedTextKeys` records consent for each reviewed text value and authored
+placement, never a blanket bypass. Changes to text, its position/rotation/size,
+localized plant names, or measurement endpoints require a new choice when still
+crowded. Removing or reframing details recomputes coverage. `retainCrowdedText()`
+accepts only current prepared results; stale previews and in-flight rebuilds cannot
+grant consent. Retention survives preview closure within the same Design Session
+and resets with replacement. Both choices leave Scene state and `.canopi` untouched.
+
+`canvas/plant-spacing.ts` and `canvas/label-collision.ts` are pure shared spatial
+utilities. PDF layout does not depend on interactive renderers or runtime state.
+`print-style.ts` holds provisional physical dimensions. `plant-marks.ts` controls
+canvas mark radius; legend samples retain nominal dimensions. Preview and encoder
+replay the same complete page operations after the readability decision.
 
 ## Print workspace
 

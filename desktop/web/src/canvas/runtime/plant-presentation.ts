@@ -13,7 +13,7 @@ import {
   type SceneViewportState,
 } from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
-import { nearestPlantSpacing } from './plant-spacing'
+import { nearestPlantSpacing } from '../plant-spacing'
 
 export const STACK_BADGE_RADIUS_PX = 7
 export const STACK_BADGE_GAP_PX = 2

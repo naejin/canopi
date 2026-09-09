@@ -142,6 +142,12 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     configure({ views: { ...views, [id]: { ...views[id], ...value, ...(value.offset ? { offset: { ...value.offset } } : {}) } } })
   }
   function fitPage(id: string): void { setPageView(id, { zoom: 100, offset: { x: 0, y: 0 } }) }
+  function retainCrowdedText(): void {
+    if (!capture?.isCurrent() || !['ready', 'saved', 'downloaded'].includes(state.peek().status)) return
+    const issues = state.peek().result?.plan.textIssues
+    if (!issues?.length) return
+    configure({ retainedTextKeys: [...new Set([...(setup.peek().retainedTextKeys ?? []), ...issues.map(item => item.key)])] })
+  }
   async function save(): Promise<void> {
     const snapshot = state.peek(), source = capture
     if (!source || !source.isCurrent() || !['ready', 'saved', 'downloaded', 'error'].includes(snapshot.status) || !snapshot.result?.bytes || snapshot.result.plan.blocked) return
@@ -158,7 +164,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } finally { if (controller === abort) controller = null }
   }
   function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = []; availableZones.value = []; zoneShapes.value = [] }
-  return { open, state, setup, availableLayers, availableZones, zoneShapes, show, close, rebuild, configure, selectLayer, selectZone, addPrintArea, removeArea, setPageView, fitPage, save, synchronize, dispose }
+  return { open, state, setup, availableLayers, availableZones, zoneShapes, show, close, rebuild, configure, selectLayer, selectZone, addPrintArea, removeArea, setPageView, fitPage, retainCrowdedText, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>
 

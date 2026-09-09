@@ -117,12 +117,15 @@
       "follow": "Follow pointer",
       "held": "Held in place",
       "following": "Following pointer",
-      "nearby": "Closest plants",
-      "hint": "Hover or focus a name to find its plant. Activate it to centre the canvas.",
-      "empty": "No visible plants in this design.",
-      "unavailable": "The preview is unavailable. You can still use the plant list.",
-      "locate": "Centre on {{name}}",
-      "distance": "{{distance}} m from lens centre"
+      "hint": "Hover or focus a name to highlight its plant. Activate it to centre the lens.",
+      "empty": "No plants in this view. Move the pointer or widen the lens.",
+      "unavailable": "Preview unavailable. Names remain at their plant positions.",
+      "locate": "Centre lens on {{name}}",
+      "expand": "Expand lens",
+      "compact": "Compact lens",
+      "widen": "Widen lens",
+      "magnify": "Magnify lens",
+      "namesCount": "{{shown}} names · {{total}} plants"
     },
     "emptyWelcome": "Start your design",
     "emptyNewDesign": "New Design",
@@ -953,6 +956,9 @@
     "removeLegendPages": "Remove legend pages",
     "legendNeedsPages": "The plant list needs more room. Add linked legend pages to include every plant.",
     "retry": "Try again",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "textNeedsDetail": "{{count}} text items need a readable place to print. Add a focused detail page or keep them on the overview.",
+    "keepText": "Keep text on overview",
+    "addDetail": "Add detail page"
   }
 }

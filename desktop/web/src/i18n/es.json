@@ -117,12 +117,15 @@
       "follow": "Seguir el puntero",
       "held": "Posición fija",
       "following": "Sigue el puntero",
-      "nearby": "Plantas más cercanas",
-      "hint": "Pasa el puntero o enfoca un nombre para localizar la planta. Actívalo para centrar el lienzo.",
-      "empty": "No hay plantas visibles en este diseño.",
-      "unavailable": "La vista previa no está disponible. Puedes seguir usando la lista de plantas.",
-      "locate": "Centrar en {{name}}",
-      "distance": "A {{distance}} m del centro de la lupa"
+      "hint": "Pasa el cursor o enfoca un nombre para resaltar su planta. Actívalo para centrar la lupa.",
+      "empty": "No hay plantas en esta vista. Mueve el cursor o amplía el área de la lupa.",
+      "unavailable": "Vista previa no disponible. Los nombres permanecen en las posiciones de las plantas.",
+      "locate": "Centrar la lupa en {{name}}",
+      "expand": "Ampliar lupa",
+      "compact": "Reducir lupa",
+      "widen": "Ampliar área",
+      "magnify": "Acercar lupa",
+      "namesCount": "{{shown}} nombres · {{total}} plantas"
     },
     "emptyWelcome": "Comienza tu diseño",
     "emptyNewDesign": "Nuevo diseño",
@@ -953,6 +956,9 @@
     "removeLegendPages": "Quitar páginas de leyenda",
     "legendNeedsPages": "La lista de plantas necesita más espacio. Añade páginas de leyenda vinculadas para incluir todas las plantas.",
     "retry": "Reintentar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "textNeedsDetail": "{{count}} textos necesitan un espacio legible para imprimir. Añade una página de detalle específica o consérvalos en la vista general.",
+    "keepText": "Conservar textos en la vista general",
+    "addDetail": "Añadir página de detalle"
   }
 }

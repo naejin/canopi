@@ -117,12 +117,15 @@
       "follow": "Segui puntatore",
       "held": "Posizione fissa",
       "following": "Segue il puntatore",
-      "nearby": "Piante più vicine",
-      "hint": "Passa il puntatore o porta il focus su un nome per individuare la pianta. Attivalo per centrare la tela.",
-      "empty": "Nessuna pianta visibile in questo progetto.",
-      "unavailable": "Anteprima non disponibile. Puoi continuare a usare l’elenco delle piante.",
-      "locate": "Centra su {{name}}",
-      "distance": "A {{distance}} m dal centro della lente"
+      "hint": "Passa sul nome o selezionalo con la tastiera per evidenziare la pianta. Attivalo per centrare la lente.",
+      "empty": "Nessuna pianta in questa vista. Sposta il puntatore o allarga la vista della lente.",
+      "unavailable": "Anteprima non disponibile. I nomi restano nelle posizioni delle piante.",
+      "locate": "Centra la lente su {{name}}",
+      "expand": "Espandi lente",
+      "compact": "Riduci lente",
+      "widen": "Allarga vista",
+      "magnify": "Ingrandisci nella lente",
+      "namesCount": "{{shown}} nomi · {{total}} piante"
     },
     "emptyWelcome": "Inizia il tuo design",
     "emptyNewDesign": "Nuovo design",
@@ -953,6 +956,9 @@
     "removeLegendPages": "Rimuovi pagine di legenda",
     "legendNeedsPages": "L’elenco delle piante richiede più spazio. Aggiungi pagine di legenda collegate per includere tutte le piante.",
     "retry": "Riprova",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "textNeedsDetail": "{{count}} testi richiedono uno spazio leggibile per la stampa. Aggiungi una pagina di dettaglio mirata o mantienili nella panoramica.",
+    "keepText": "Mantieni testi nella panoramica",
+    "addDetail": "Aggiungi pagina di dettaglio"
   }
 }

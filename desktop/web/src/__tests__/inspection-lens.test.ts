@@ -7,6 +7,56 @@ import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapsh
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('Inspection Lens ownership', () => {
+  it('clears identification and hover when the Plants Layer becomes hidden', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    let snapshot = createTestSceneRendererSnapshot({ scene: { layers: [{ kind: 'layer', name: 'plants', visible: true, opacity: 1, locked: false }], plants: [{
+      kind: 'plant', id: 'mint', canonicalName: 'Mentha spicata', commonName: 'Menthe verte', position: { x: 0, y: 0 },
+      color: null, stratum: null, canopySpreadM: null, rotationDeg: null, scale: null, notes: null,
+      plantedDate: null, quantity: null, locked: false,
+    }] } })
+    const revision = { scene: signal(0), plantNames: signal(0) }, setHoveredTarget = vi.fn(target => { snapshot = { ...snapshot, hoverTarget: target } })
+    const owner = new SceneCanvasInspectionOwner({ camera: new CameraController(), revision, getSnapshot: () => snapshot, setHoveredTarget })
+    const view = owner.mount(document.createElement('div'))
+    view.inspect({ x: 0, y: 0 }); vi.advanceTimersByTime(20)
+    view.highlightPlant('mint'); vi.advanceTimersByTime(20)
+    snapshot = { ...snapshot, scene: { ...snapshot.scene, layers: snapshot.scene.layers.map(layer => layer.name === 'plants' ? { ...layer, visible: false } : layer) } }
+    revision.scene.value++; vi.advanceTimersByTime(20)
+    expect(view.state.value?.plants).toEqual([])
+    expect(setHoveredTarget).toHaveBeenLastCalledWith(null)
+    owner.dispose()
+  })
+  it('lays out dense plant names inside the inspection frame without overlaps', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: Array.from({ length: 12 }, (_, i) => ({
+      kind: 'plant', id: String(i), canonicalName: 'Mentha spicata', commonName: 'Menthe verte',
+      position: { x: (i % 4) * .2, y: Math.floor(i / 4) * .2 }, color: null, stratum: null,
+      canopySpreadM: null, rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null, locked: false,
+    })) } })
+    const camera = new CameraController()
+    camera.initialize({ width: 800, height: 600 })
+    const owner = new SceneCanvasInspectionOwner({ camera, revision: { scene: signal(0), plantNames: signal(0) },
+      getSnapshot: () => snapshot, setHoveredTarget() {} })
+    const container = document.createElement('div')
+    Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
+    const view = owner.mount(container)
+    view.inspect({ x: .3, y: .2 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value?.frame).toEqual({ width: 430, height: 390 })
+    expect(view.state.value!.zoomPercent).toBeGreaterThan(700)
+    const boxes = view.state.value!.plants.flatMap(plant => plant.label ? [plant.label] : [])
+    expect(boxes.length).toBeGreaterThan(4)
+    for (const [i, box] of boxes.entries()) {
+      expect(box.x).toBeGreaterThanOrEqual(0)
+      expect(box.y).toBeGreaterThanOrEqual(0)
+      expect(box.x + box.width).toBeLessThanOrEqual(430)
+      expect(box.y + box.height).toBeLessThanOrEqual(390)
+      for (const other of boxes.slice(i + 1)) expect(box.x < other.x + other.width && box.x + box.width > other.x
+        && box.y < other.y + other.height && box.y + box.height > other.y).toBe(false)
+    }
+    owner.dispose()
+  })
   it('rolls back its canvas and scheduled work if attachment fails', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
@@ -18,7 +68,7 @@ describe('Inspection Lens ownership', () => {
     const camera = new CameraController()
     const getSnapshot = vi.fn(() => createTestSceneRendererSnapshot())
     const owner = new SceneCanvasInspectionOwner({ camera, revision: { scene: signal(0), plantNames: signal(0) },
-      getSnapshot, setHoveredTarget() {}, invalidateViewport() {} })
+      getSnapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     try {
       expect(() => owner.mount(container)).toThrow('attachment failed')
@@ -41,7 +91,7 @@ describe('Inspection Lens ownership', () => {
     const camera = new CameraController()
     camera.initialize({ width: 800, height: 600 })
     const owner = new SceneCanvasInspectionOwner({ camera, revision: { scene: signal(0), plantNames: signal(0) },
-      getSnapshot: () => snapshot, setHoveredTarget() {}, invalidateViewport() {} })
+      getSnapshot: () => snapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     const view = owner.mount(container)
     view.inspect({ x: 1, y: 2 })
@@ -51,12 +101,19 @@ describe('Inspection Lens ownership', () => {
     view.inspect({ x: 5, y: 6 })
     vi.advanceTimersByTime(20)
     expect(view.state.value?.point).toEqual({ x: 1, y: 2 })
+    const viewport = { ...camera.snapshot.peek().viewport }
+    const lensZoom = view.state.value!.zoomPercent
+    view.zoomBy(1.25)
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.zoomPercent).toBeGreaterThan(lensZoom)
+    expect(camera.snapshot.peek().viewport).toEqual(viewport)
     expect(JSON.stringify(snapshot.scene)).toBe(before)
     const scale = camera.snapshot.peek().viewport.scale
     view.focusPlant('mint')
     vi.advanceTimersByTime(20)
     expect(camera.snapshot.peek().viewport.scale).toBe(scale)
-    expect(camera.worldToScreen({ x: 1, y: 2 })).toEqual({ x: 400, y: 300 })
+    expect(camera.snapshot.peek().viewport).toEqual(viewport)
+    expect(view.state.value?.point).toEqual({ x: 1, y: 2 })
     owner.reset()
     vi.advanceTimersByTime(20)
     expect(view.state.value?.held).toBe(false)

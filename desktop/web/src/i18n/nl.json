@@ -117,12 +117,15 @@
       "follow": "Aanwijzer volgen",
       "held": "Positie vastgezet",
       "following": "Volgt de aanwijzer",
-      "nearby": "Dichtstbijzijnde planten",
-      "hint": "Wijs een naam aan of geef deze focus om de plant te vinden. Activeer de naam om het canvas te centreren.",
-      "empty": "Geen zichtbare planten in dit ontwerp.",
-      "unavailable": "Het voorbeeld is niet beschikbaar. Je kunt de plantenlijst blijven gebruiken.",
-      "locate": "Centreren op {{name}}",
-      "distance": "{{distance}} m van het midden van de loupe"
+      "hint": "Wijs een naam aan of geef deze focus om de plant te markeren. Activeer de naam om de loep te centreren.",
+      "empty": "Geen planten in deze weergave. Verplaats de aanwijzer of vergroot het zichtgebied.",
+      "unavailable": "Voorbeeld niet beschikbaar. Namen blijven op de plantposities staan.",
+      "locate": "Loep centreren op {{name}}",
+      "expand": "Loep uitbreiden",
+      "compact": "Loep verkleinen",
+      "widen": "Zichtgebied vergroten",
+      "magnify": "Inzoomen in loep",
+      "namesCount": "{{shown}} namen · {{total}} planten"
     },
     "emptyWelcome": "Begin je ontwerp",
     "emptyNewDesign": "Nieuw ontwerp",
@@ -953,6 +956,9 @@
     "removeLegendPages": "Legendapagina’s verwijderen",
     "legendNeedsPages": "De plantenlijst heeft meer ruimte nodig. Voeg gekoppelde legendapagina’s toe om alle planten op te nemen.",
     "retry": "Opnieuw proberen",
-    "cancel": "Annuleren"
+    "cancel": "Annuleren",
+    "textNeedsDetail": "{{count}} teksten hebben een leesbare plek nodig op papier. Voeg een gerichte detailpagina toe of behoud ze op het overzicht.",
+    "keepText": "Tekst op overzicht behouden",
+    "addDetail": "Detailpagina toevoegen"
   }
 }

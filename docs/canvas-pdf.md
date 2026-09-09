@@ -14,7 +14,9 @@ Drag the drawing within the paper to adjust its printed position. With the paper
 
 **Automatic / Portrait / Landscape** applies to the selected page only, including legend pages. Changing orientation retains that page's zoom and manual displacement. **Inspect text** temporarily enlarges the paper on screen; scroll to read it, then choose **Done inspecting** or press Escape. Inspection never changes the printed scale.
 
-Each canvas sheet has a narrow plant legend covering the plants visible in its current framing, using the current language's common name when available, otherwise the full botanical name. Plant symbols and colours stay as authored. Annotations and pinned plant names remain visible regardless of canvas zoom. If several species share an appearance, the preview warns you; return to the Design to edit it or export as shown.
+Detail pages have a narrow plant legend covering the plants visible in their current framing, using the current language's common name when available, otherwise the full botanical name. An overview used alone also has a legend; with details, it becomes a navigation sheet. Plant marks adapt to nearby spacing on paper while retaining their authored symbols and colours. If several species share an appearance, the preview warns you; return to the Design to edit it or export as shown.
+
+The overview moves annotations, pinned plant names and distances to detail pages only when they fit there completely without collisions. When text has no readable detail home, choose **Add detail page** or **Keep text on overview** before saving. Full text remains visible while you decide. Moving or removing a detail page rechecks coverage; changing previously retained text or its placement may require a new choice. These print choices never edit your Design.
 
 When a plant list needs more room, choose **Add legend pages**. The linked pages appear under their source thumbnail and preserve complete names and appearances. Export stays unavailable while a legend overflows. **Remove legend pages** withdraws that consent for the current setup; adjust the framing or accept continuations again before exporting if they are still needed.
 

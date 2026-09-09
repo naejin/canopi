@@ -117,12 +117,15 @@
       "follow": "Zeiger folgen",
       "held": "Position festgehalten",
       "following": "Folgt dem Zeiger",
-      "nearby": "Nächstgelegene Pflanzen",
-      "hint": "Zeige auf einen Namen oder fokussiere ihn, um die Pflanze zu finden. Aktiviere ihn, um die Zeichenfläche zu zentrieren.",
-      "empty": "Keine sichtbaren Pflanzen in diesem Entwurf.",
-      "unavailable": "Die Vorschau ist nicht verfügbar. Die Pflanzenliste bleibt nutzbar.",
-      "locate": "Auf {{name}} zentrieren",
-      "distance": "{{distance}} m vom Lupenmittelpunkt"
+      "hint": "Zeigen Sie auf einen Namen oder fokussieren Sie ihn, um die Pflanze hervorzuheben. Aktivieren zentriert die Lupe.",
+      "empty": "Keine Pflanzen in dieser Ansicht. Bewegen Sie den Zeiger oder erweitern Sie den Ausschnitt.",
+      "unavailable": "Vorschau nicht verfügbar. Namen bleiben an den Pflanzenpositionen.",
+      "locate": "Lupe auf {{name}} zentrieren",
+      "expand": "Lupe vergrößern",
+      "compact": "Lupe verkleinern",
+      "widen": "Ausschnitt erweitern",
+      "magnify": "Lupe heranzoomen",
+      "namesCount": "{{shown}} Namen · {{total}} Pflanzen"
     },
     "emptyWelcome": "Starten Sie Ihren Entwurf",
     "emptyNewDesign": "Neuer Entwurf",
@@ -953,6 +956,9 @@
     "removeLegendPages": "Legendenseiten entfernen",
     "legendNeedsPages": "Die Pflanzenliste braucht mehr Platz. Füge verknüpfte Legendenseiten hinzu, damit alle Pflanzen enthalten sind.",
     "retry": "Erneut versuchen",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "textNeedsDetail": "{{count}} Texte benötigen einen lesbaren Druckbereich. Fügen Sie eine passende Detailseite hinzu oder behalten Sie die Texte in der Übersicht.",
+    "keepText": "Texte in der Übersicht behalten",
+    "addDetail": "Detailseite hinzufügen"
   }
 }

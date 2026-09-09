@@ -22,6 +22,26 @@ function fixture(plants: PrintPlant[] = []) {
   return { workflow, prepare, save, resolveNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
+  it('accepts text retention only from a current prepared result and clears it on replacement', async () => {
+    vi.useFakeTimers()
+    const { workflow, capture, setCanvas, prepare, replace } = fixture()
+    prepare.mockResolvedValue({ bytes: null, plan: { pages: [], outlines: {}, blocked: 'text-needs-detail',
+      textIssues: [{ key: 'reviewed text', kind: 'annotation' }] } })
+    try {
+      workflow.show(); await Promise.resolve()
+      setCanvas({ ...capture.input.canvas })
+      workflow.retainCrowdedText()
+      expect(workflow.setup.value.retainedTextKeys).toBeUndefined()
+      workflow.synchronize(capture.identity)
+      workflow.retainCrowdedText()
+      expect(workflow.setup.value.retainedTextKeys).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(150)
+      workflow.retainCrowdedText()
+      expect(workflow.setup.value.retainedTextKeys).toEqual(['reviewed text'])
+      replace()
+      expect(workflow.setup.value.retainedTextKeys).toBeUndefined()
+    } finally { workflow.dispose(); vi.useRealTimers() }
+  })
   it('refreshes changed content automatically, coalesces revisions, and cancels refresh on close', async () => {
     vi.useFakeTimers()
     const { workflow, capture, setCanvas, prepare, save } = fixture()

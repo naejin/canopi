@@ -117,12 +117,15 @@
       "follow": "Seguir o ponteiro",
       "held": "Posição fixa",
       "following": "Segue o ponteiro",
-      "nearby": "Plantas mais próximas",
-      "hint": "Passe o ponteiro ou foque um nome para localizar a planta. Ative-o para centrar a tela.",
-      "empty": "Não há plantas visíveis neste design.",
-      "unavailable": "A pré-visualização está indisponível. A lista de plantas continua acessível.",
-      "locate": "Centrar em {{name}}",
-      "distance": "A {{distance}} m do centro da lupa"
+      "hint": "Passe o cursor ou foque um nome para destacar a planta. Ative-o para centrar a lupa.",
+      "empty": "Não há plantas nesta vista. Mova o ponteiro ou amplie a área da lupa.",
+      "unavailable": "Pré-visualização indisponível. Os nomes mantêm as posições das plantas.",
+      "locate": "Centrar a lupa em {{name}}",
+      "expand": "Expandir lupa",
+      "compact": "Reduzir lupa",
+      "widen": "Ampliar área",
+      "magnify": "Aproximar lupa",
+      "namesCount": "{{shown}} nomes · {{total}} plantas"
     },
     "emptyWelcome": "Comece seu design",
     "emptyNewDesign": "Novo design",
@@ -953,6 +956,9 @@
     "removeLegendPages": "Remover páginas de legenda",
     "legendNeedsPages": "A lista de plantas precisa de mais espaço. Adicione páginas de legenda ligadas para incluir todas as plantas.",
     "retry": "Tentar novamente",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "textNeedsDetail": "{{count}} textos precisam de um espaço legível para impressão. Adicione uma página de detalhe específica ou mantenha-os na vista geral.",
+    "keepText": "Manter textos na vista geral",
+    "addDetail": "Adicionar página de detalhe"
   }
 }

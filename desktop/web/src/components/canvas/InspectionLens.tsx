@@ -4,7 +4,6 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import type { CanvasInspectionHandle } from '../../canvas/inspection'
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
-import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import styles from './InspectionLens.module.css'
 
@@ -37,6 +36,8 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
   canvasRef: RefObject<HTMLDivElement>
   onClose(): void
 }) {
+  const [highlighted, setHighlighted] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
   const preview = useRef<HTMLDivElement>(null)
   const close = useRef<HTMLButtonElement>(null)
   const handle = useSignal<CanvasInspectionHandle | null>(null)
@@ -76,11 +77,12 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     }
   })
   const state = handle.value?.state.value
-  const number = new Intl.NumberFormat(locale.value, { maximumFractionDigits: 2 })
-  return <section id={id} className={styles.panel} aria-label={t('canvas.inspection.title')}
+  return <section id={id} className={styles.panel} data-expanded={expanded} aria-label={t('canvas.inspection.title')}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }}>
     <div className={styles.header}>
       <h2>{t('canvas.inspection.title')}</h2>
+      <button type="button" aria-label={t(expanded ? 'canvas.inspection.compact' : 'canvas.inspection.expand')}
+        aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? '↙' : '↗'}</button>
       <button ref={close} type="button" onClick={onClose} aria-label={t('canvas.inspection.close')}>×</button>
     </div>
     <div className={styles.controls}>
@@ -89,21 +91,34 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
       <span role="status">{t(state?.held ? 'canvas.inspection.held' : 'canvas.inspection.following')}</span>
       {state && <span>{state.zoomPercent}%</span>}
     </div>
-    <div className={styles.preview} ref={preview} data-unavailable={failed.value || state?.previewAvailable === false} />
+    <div className={styles.preview} data-inspection-frame>
+      <div ref={preview} className={styles.artwork} />
+      {state && <svg className={styles.connectors} viewBox={`0 0 ${state.frame.width} ${state.frame.height}`} aria-hidden="true">
+        {state.plants.map(plant => <g key={plant.id} data-active={highlighted === plant.id}>
+          {!state.previewAvailable && <circle cx={plant.screenPosition.x} cy={plant.screenPosition.y} r="4" fill="var(--color-text-muted)" />}
+          {plant.label && <line x1={plant.screenPosition.x} y1={plant.screenPosition.y}
+            x2={Math.max(plant.label.x, Math.min(plant.label.x + plant.label.width, plant.screenPosition.x))}
+            y2={Math.max(plant.label.y, Math.min(plant.label.y + plant.label.height, plant.screenPosition.y))} />}
+          {highlighted === plant.id && <circle cx={plant.screenPosition.x} cy={plant.screenPosition.y} r="11" fill="none" stroke="var(--color-primary)" stroke-width="2" />}
+        </g>)}
+      </svg>}
+      {state?.plants.map(plant => plant.label && <button key={plant.id} type="button" data-plant-id={plant.id}
+        className={styles.plantName} style={{ left: plant.label.x, top: plant.label.y, width: plant.label.width, height: plant.label.height }}
+        aria-label={t('canvas.inspection.locate', { name: plant.name })}
+        onMouseEnter={() => { setHighlighted(plant.id); handle.value?.highlightPlant(plant.id) }}
+        onMouseLeave={() => { setHighlighted(null); handle.value?.highlightPlant(null) }}
+        onFocus={() => { setHighlighted(plant.id); handle.value?.highlightPlant(plant.id) }}
+        onBlur={() => { setHighlighted(null); handle.value?.highlightPlant(null) }}
+        onClick={() => handle.value?.focusPlant(plant.id)}>{plant.label.lines.map((line, i) => <span key={i}>{line}</span>)}</button>)}
+
+    </div>
     {(failed.value || state?.previewAvailable === false) && <p role="status">{t('canvas.inspection.unavailable')}</p>}
-    <h3>{t('canvas.inspection.nearby')}</h3>
     <p>{t('canvas.inspection.hint')}</p>
-    <ol className={styles.plants} onMouseLeave={() => handle.value?.highlightPlant(null)}>
-      {state?.plants.map((plant, index) => <li key={plant.id}>
-        <button type="button" data-plant-id={plant.id} title={t('canvas.inspection.locate', { name: plant.name })}
-          onMouseEnter={() => handle.value?.highlightPlant(plant.id)} onFocus={() => handle.value?.highlightPlant(plant.id)}
-          onBlur={() => handle.value?.highlightPlant(null)} onClick={() => handle.value?.focusPlant(plant.id)}>
-          <span className={styles.number}>{index + 1}</span>
-          <span className={styles.name}>{plant.name}<small>{t('canvas.inspection.distance', { distance: number.format(plant.distanceM) })}</small></span>
-          <span aria-hidden="true">↗</span>
-        </button>
-      </li>)}
-    </ol>
+    <div className={styles.controls}>
+      <span role="status">{t('canvas.inspection.namesCount', { shown: state?.plants.filter(plant => plant.label).length ?? 0, total: state?.plants.length ?? 0 })}</span>
+      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.widen')} onClick={() => handle.value?.zoomBy(1 / 1.25)}>−</button>
+      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.magnify')} onClick={() => handle.value?.zoomBy(1.25)}>+</button>
+    </div>
     {state?.plants.length === 0 && <p>{t('canvas.inspection.empty')}</p>}
   </section>
 }

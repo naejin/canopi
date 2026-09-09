@@ -1,6 +1,7 @@
 import type { CanvasPrintSnapshot, PrintBounds } from '../../canvas/print'
 import { PdfTextError, type PdfTextEngine } from './text'
 import { MM, PRINT, fitOverview, drawCanvas, identifyPlants, ambiguousSpecies, textOp, pathOp, rectPath } from './page-drawing'
+import { canvasText, readableCanvasText } from './canvas-text'
 import { planLegend } from './legend'
 import { fitArea, zoomCoverage, moveCoverage } from './coverage'
 import { pdfAreaKey } from './types'
@@ -28,7 +29,7 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
       const coverage = moveCoverage(zoomCoverage(fitted, setup.views?.overview?.zoom), setup.views?.overview?.offset)
       const visible = canvasInFrame(selected, coverage.ground, coverage.pointsPerMeter, geometry.frame, text)
       overviews.push(canvasPage({ ...selected, canvas: visible }, geometry, text, labels, { id: 'overview', kind: 'overview', title: labels.overview,
-        ...coverage, navigation: details.length > 0 }, setup))
+        ...coverage, navigation: details.length > 0 }, setup, new Set(details.flatMap(page => page.readableTextKeys ?? []))))
     } catch (failure) { error = failure }
   }
   if (!overviews.length) throw error
@@ -62,7 +63,9 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
   const picker = pickerFits[0]!
   const pickerPage = canvasPage(selected, picker.geometry, text, labels, { id: 'overview', kind: 'overview', title: labels.overview,
     ground: picker.ground, pointsPerMeter: picker.pointsPerMeter, navigation: true }, setup)[0]!
-  return { pages: finalized, pickerPage: { ...pickerPage, number: 1 }, hasLegendOverflow: finalized.some((page) => page.overflow || page.kind === 'legend'), outlines: text.outlines, blocked: empty ? 'empty' : finalized.some((page) => page.overflow) ? 'legend-overflow' : null }
+  const textIssues = finalized[0]?.textIssues ?? []
+  return { pages: finalized, pickerPage: { ...pickerPage, number: 1 }, hasLegendOverflow: finalized.some((page) => page.overflow || page.kind === 'legend'),
+    textIssues, outlines: text.outlines, blocked: empty ? 'empty' : finalized.some((page) => page.overflow) ? 'legend-overflow' : textIssues.length ? 'text-needs-detail' : null }
 }
 
 function pageGeometry(paper: 'A4' | 'Letter', orientation: 'portrait' | 'landscape', legend = true): Geometry {
@@ -93,7 +96,7 @@ function detailPages(source: PdfInput, selected: PdfInput, setup: PdfSetup, text
   return result
 }
 function canvasPage(input: PdfInput, geometry: Geometry, text: PdfTextEngine, labels: PdfLabels,
-  options: { id: string; kind: 'overview' | 'detail'; title: string; ground: PrintBounds; pointsPerMeter: number; navigation?: boolean }, setup: PdfSetup): PdfPage[] {
+  options: { id: string; kind: 'overview' | 'detail'; title: string; ground: PrintBounds; pointsPerMeter: number; navigation?: boolean }, setup: PdfSetup, deferred: ReadonlySet<string> = new Set()): PdfPage[] {
   const { width, height, frame } = geometry, { ground, pointsPerMeter } = options
   const legend = options.navigation ? [] : identifyPlants(input.canvas.plants, input.commonNames, input.locale)
   const operations: PdfOperation[] = []
@@ -101,7 +104,12 @@ function canvasPage(input: PdfInput, geometry: Geometry, text: PdfTextEngine, la
   const titleLines = text.wrap(`${input.name} · ${options.title}`, 12, width - 2 * PRINT.margin - 35 * MM)
   if (titleLines.length > 2) throw new PdfTextError('text-too-wide')
   titleLines.forEach((line, i) => operations.push(textOp(line, PRINT.margin, 12 * MM + i * 15, 12)))
-  drawCanvas(input, frame, ground, pointsPerMeter, text, operations)
+  const items = canvasText(input, frame, ground, pointsPerMeter, text)
+  const readableTextKeys = [...readableCanvasText(items.filter(item => !deferred.has(item.key)), input, frame, ground, pointsPerMeter)]
+  const retained = new Set(setup.retainedTextKeys)
+  const textIssues = options.kind === 'overview' ? items.filter(item => !deferred.has(item.key) && !readableTextKeys.includes(item.key)
+    && !retained.has(item.key)).map(({ key, kind }) => ({ key, kind })) : []
+  drawCanvas(input, frame, ground, pointsPerMeter, text, operations, items, deferred)
   operations.push(pathOp(rectPath(frame), PRINT.ink, null, PRINT.stroke))
   let overflow = false
   let legendLink: PrintBounds | undefined
@@ -138,7 +146,7 @@ function canvasPage(input: PdfInput, geometry: Geometry, text: PdfTextEngine, la
   if (footerLines.length > 2) throw new PdfTextError('text-too-wide')
   footerLines.forEach((line, i) => operations.push(textOp(line, PRINT.margin + 55 * MM, height - (9 - i * 4) * MM, 9)))
   return [{ id: options.id, kind: options.kind, number: 0, width, height, frame, ground, pointsPerMeter, operations, legend, overflow,
-    ambiguousSpecies: ambiguousSpecies(legend), legendLink, continuationIds: continuations.map((page) => page.id) }, ...continuations]
+    ambiguousSpecies: ambiguousSpecies(legend), readableTextKeys, textIssues, legendLink, continuationIds: continuations.map((page) => page.id) }, ...continuations]
 }
 
 function canvasInFrame(input: PdfInput, ground: PrintBounds, scale: number, frame: PrintBounds, text: PdfTextEngine): CanvasPrintSnapshot {

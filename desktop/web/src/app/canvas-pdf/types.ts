@@ -19,6 +19,8 @@ export interface PdfSetup {
   readonly areas?: readonly PdfAreaSelection[]
   readonly views?: Readonly<Record<string, PdfPageView>>
   readonly continuations?: boolean
+  /** Explicit retention of the reviewed text content and authored placement. */
+  readonly retainedTextKeys?: readonly string[]
 }
 export interface PdfInput { readonly name: string; readonly locale: string; readonly canvas: CanvasPrintSnapshot; readonly commonNames: Readonly<Record<string, string>> }
 export interface PdfLabels { readonly overview: string; readonly plants: string; readonly actualSize: string; readonly page: string; readonly continued: string; readonly legendFor: string }
@@ -29,6 +31,7 @@ export type PdfOperation =
   | { readonly kind: 'clip'; readonly bounds: PrintBounds }
   | { readonly kind: 'unclip' }
 export interface PdfLegendEntry { readonly canonicalName: string; readonly name: string; readonly appearances: readonly PrintPlant[] }
+export interface PdfTextIssue { readonly key: string; readonly kind: 'annotation' | 'pin' | 'distance' }
 export interface PdfPage {
   readonly number: number
   readonly width: number
@@ -45,6 +48,8 @@ export interface PdfPage {
   readonly pointsPerMeter: number
   readonly operations: readonly PdfOperation[]
   readonly legend: readonly PdfLegendEntry[]
+  readonly readableTextKeys?: readonly string[]
+  readonly textIssues?: readonly PdfTextIssue[]
   readonly overflow: boolean
   readonly ambiguousSpecies: readonly string[]
 }
@@ -52,8 +57,9 @@ export interface PdfPlan {
   /** Fitted navigation surface for adding areas; never encoded as a PDF page. */
   readonly pickerPage?: PdfPage
   readonly hasLegendOverflow?: boolean
+  readonly textIssues?: readonly PdfTextIssue[]
   readonly pages: readonly PdfPage[]
   readonly outlines: Record<string, GlyphOutline>
-  readonly blocked: 'empty' | 'legend-overflow' | null
+  readonly blocked: 'empty' | 'legend-overflow' | 'text-needs-detail' | null
 }
 export interface PreparedPdf { readonly plan: PdfPlan; readonly bytes: Uint8Array | null }

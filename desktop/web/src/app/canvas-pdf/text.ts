@@ -1,5 +1,6 @@
 import { create, type Font } from 'fontkit'
 import assets from './font-assets.json'
+import { textGraphemes } from '../../utils/text-graphemes'
 
 export type PdfFontId = 'latin' | 'sc' | 'jp' | 'kr'
 export interface TextRun {
@@ -8,7 +9,12 @@ export interface TextRun {
   readonly width: number
   readonly glyphs: readonly { readonly key: string; readonly x: number; readonly y: number }[]
 }
-export interface TextLine { readonly runs: readonly TextRun[]; readonly width: number }
+export interface TextLine {
+  readonly runs: readonly TextRun[]
+  readonly width: number
+  /** Actual shaped ink relative to the baseline, in PDF points; whitespace has no ink. */
+  readonly ink: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null
+}
 export interface GlyphOutline { readonly path: string; readonly unitsPerEm: number }
 export interface PdfTextEngine {
   readonly outlines: Record<string, GlyphOutline>
@@ -72,6 +78,7 @@ export function createPdfTextEngine(bytes: ReadonlyMap<PdfFontId, Uint8Array>, l
       if (last?.font === id) last.text += char
       else parts.push({ font: id, text: char })
     }
+    let runOrigin = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     const runs = parts.map((part): TextRun => {
       const font = fonts.get(part.font)!
       const layout = font.layout(part.text)
@@ -81,12 +88,21 @@ export function createPdfTextEngine(bytes: ReadonlyMap<PdfFontId, Uint8Array>, l
         const key = `${part.font}:${glyph.id}`
         outlines[key] ??= { path: glyph.path.toSVG(), unitsPerEm: font.unitsPerEm }
         const item = { key, x: (x + position.xOffset) * size / font.unitsPerEm, y: -position.yOffset * size / font.unitsPerEm }
+        const box = glyph.bbox, unit = size / font.unitsPerEm
+        if (box.maxX > box.minX && box.maxY > box.minY) {
+          minX = Math.min(minX, runOrigin + item.x + box.minX * unit)
+          maxX = Math.max(maxX, runOrigin + item.x + box.maxX * unit)
+          minY = Math.min(minY, item.y - box.maxY * unit)
+          maxY = Math.max(maxY, item.y - box.minY * unit)
+        }
         x += position.xAdvance
         return item
       })
-      return { ...part, width: layout.advanceWidth * size / font.unitsPerEm, glyphs }
+      const width = layout.advanceWidth * size / font.unitsPerEm
+      runOrigin += width
+      return { ...part, width, glyphs }
     })
-    const result = { runs, width: runs.reduce((sum, run) => sum + run.width, 0) }
+    const result = { runs, width: runOrigin, ink: Number.isFinite(minX) ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY } : null }
     cache.set(key, result)
     return result
   }
@@ -100,7 +116,7 @@ export function createPdfTextEngine(bytes: ReadonlyMap<PdfFontId, Uint8Array>, l
         if (current.trim()) { result.push(line(current.trimEnd(), size)); current = '' }
         if (!word.trim()) continue
         if (line(word, size).width <= width) { current = word; continue }
-        for (const cluster of graphemes(word)) {
+        for (const cluster of textGraphemes(word)) {
           if (line(current + cluster, size).width > width) {
             if (!current) throw new PdfTextError('text-too-wide')
             result.push(line(current, size)); current = ''
@@ -114,14 +130,4 @@ export function createPdfTextEngine(bytes: ReadonlyMap<PdfFontId, Uint8Array>, l
     return result
   }
   return { outlines, line, wrap }
-}
-
-function graphemes(text: string): string[] {
-  const segments: string[] = []
-  for (const char of text.normalize('NFC')) {
-    const previous = segments[segments.length - 1]
-    if (previous !== undefined && (/\p{Mark}|[\u200d\ufe0f]/u.test(char) || previous.endsWith('\u200d'))) segments[segments.length - 1] += char
-    else segments.push(char)
-  }
-  return segments
 }

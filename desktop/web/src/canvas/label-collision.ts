@@ -18,11 +18,11 @@ export class LabelCollisionIndex {
     }
   }
 
-  overlaps(rect: LabelBounds): boolean {
+  overlaps(rect: LabelBounds, except?: LabelBounds): boolean {
+    const overlaps = (other: LabelBounds) => other !== except && intersects(rect, other)
     const keys = this.keys(rect)
-    if (!keys) return this.all.some((other) => intersects(rect, other))
-    return this.large.some((other) => intersects(rect, other))
-      || keys.some((key) => this.cells.get(key)?.some((other) => intersects(rect, other)))
+    if (!keys) return this.all.some(overlaps)
+    return this.large.some(overlaps) || keys.some((key) => this.cells.get(key)?.some(overlaps))
   }
 
   private keys(rect: LabelBounds): string[] | null {

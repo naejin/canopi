@@ -6,6 +6,7 @@ import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
 import { renderCanvas2DSceneSnapshot } from './renderers/canvas2d-scene'
 import { getSceneLayerStyle } from './scene-visuals'
+import { inspectionLayout } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
 
 interface InspectionOwnerOptions {
@@ -13,7 +14,6 @@ interface InspectionOwnerOptions {
   readonly revision: CanvasQueryRevision
   getSnapshot(): SceneRendererSnapshot
   setHoveredTarget(target: SceneDesignObjectTarget | null): void
-  invalidateViewport(): void
 }
 
 export class SceneCanvasInspectionOwner {
@@ -31,6 +31,7 @@ export class SceneCanvasInspectionOwner {
     container.appendChild(canvas)
     let point: InspectionPoint | null = null
     let held = false
+    let magnification = 1
     let highlightedId: string | null = null
     let frame: number | null = null
     let released = false
@@ -48,12 +49,14 @@ export class SceneCanvasInspectionOwner {
         x: (camera.screenSize.width / 2 - camera.viewport.x) / camera.viewport.scale,
         y: (camera.screenSize.height / 2 - camera.viewport.y) / camera.viewport.scale,
       }
-      const scale = Math.max(140, camera.viewport.scale)
       const layer = getSceneLayerStyle(snapshot.scene, 'plants')
       const visible = layer.visible && layer.opacity > 0 ? snapshot.scene.plants : []
-      const nearby = visible.map((plant) => ({ plant, distanceM: Math.hypot(plant.position.x - centre.x, plant.position.y - centre.y) }))
-        .sort((a, b) => a.distanceM - b.distanceM || a.plant.id.localeCompare(b.plant.id)).slice(0, 7)
-      const width = Math.max(1, container.clientWidth || 280), height = Math.max(1, container.clientHeight || 220)
+      const width = Math.max(1, container.clientWidth || 430), height = Math.max(1, container.clientHeight || 390)
+      if (ctx) ctx.font = `600 12px ${getComputedStyle(container).fontFamily || 'sans-serif'}`
+      const layout = inspectionLayout(visible, centre, { width, height }, snapshot.localizedCommonNames,
+        value => ctx ? ctx.measureText(value).width : Array.from(value).length * 12, magnification)
+      const { scale } = layout
+      if (highlightedId && !layout.plants.some(plant => plant.id === highlightedId)) clearHighlight()
       if (ctx) {
         const dpr = Math.max(window.devicePixelRatio || 1, 1)
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
@@ -77,9 +80,7 @@ export class SceneCanvasInspectionOwner {
       }
       state.value = {
         point: centre, held, zoomPercent: Math.round(scale / camera.referenceScale * 100), previewAvailable: ctx !== null,
-        plants: nearby.map(({ plant, distanceM }) => ({ id: plant.id,
-          name: snapshot.localizedCommonNames.get(plant.canonicalName) || plant.commonName || plant.canonicalName,
-          position: { ...plant.position }, distanceM })),
+        frame: { width, height }, plants: layout.plants,
       }
     }
     function clearHighlight() {
@@ -93,7 +94,7 @@ export class SceneCanvasInspectionOwner {
     let observer: ResizeObserver | null = null
     const owned = {
       refresh: schedule,
-      reset: () => { if (!released) { point = null; held = false; clearHighlight(); schedule() } },
+      reset: () => { if (!released) { point = null; held = false; magnification = 1; clearHighlight(); schedule() } },
       dispose: () => {
         if (released) return
         released = true
@@ -102,6 +103,7 @@ export class SceneCanvasInspectionOwner {
           () => { if (frame !== null) cancelAnimationFrame(frame); frame = null },
           () => unsubscribe?.(),
           () => observer?.disconnect(),
+          () => document.fonts?.removeEventListener('loadingdone', schedule),
           () => canvas.remove(),
           () => { state.value = null },
           clearHighlight,
@@ -115,6 +117,7 @@ export class SceneCanvasInspectionOwner {
         void options.camera.snapshot.value
         schedule()
       })
+      document.fonts?.addEventListener('loadingdone', schedule)
       observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
       observer?.observe(container)
     } catch (error) {
@@ -134,6 +137,11 @@ export class SceneCanvasInspectionOwner {
         if (next) point = state.peek()?.point ?? point
         held = next; schedule()
       },
+      zoomBy: (factor) => {
+        if (released || !Number.isFinite(factor) || factor <= 0) return
+        magnification = Math.max(.5, Math.min(3, magnification * factor))
+        schedule()
+      },
       highlightPlant: (id) => {
         if (released || id === highlightedId) return
         clearHighlight()
@@ -150,10 +158,7 @@ export class SceneCanvasInspectionOwner {
         const plant = snapshot.scene.plants.find((entry) => entry.id === id)
         if (!plant) return
         point = { ...plant.position }; held = true
-        const camera = options.camera.snapshot.peek()
-        options.camera.panBy({ x: camera.screenSize.width / 2 - camera.viewport.x - point.x * camera.viewport.scale,
-          y: camera.screenSize.height / 2 - camera.viewport.y - point.y * camera.viewport.scale })
-        options.invalidateViewport(); schedule()
+        schedule()
       },
       dispose: owned.dispose,
     }

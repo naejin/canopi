@@ -8,6 +8,34 @@ import { readFileSync } from 'node:fs'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 
+it('offers a detail page or explicit text retention before exporting a crowded overview', async () => {
+  const container = document.createElement('div'); document.body.append(container)
+  const canvas = { layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
+    annotations: ['Water weekly', 'Protect from wind'].map((text, i) => ({ id: String(i), text, position: { x: 0, y: 0 }, fontSize: 14, rotation: 0 })) }
+  const text = createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
+  const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
+    prepare: async ({ input, setup, labels }) => {
+      const plan = buildPdfPlan(input, setup, text, labels)
+      return { plan, bytes: plan.blocked ? null : new Uint8Array([1]) }
+    }, resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
+    labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Legend for' }),
+    namePrintArea: number => `Area ${number}`, fontBaseUrl: () => '' })
+  try {
+    await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
+    const button = (name: string) => Array.from(container.querySelectorAll('button')).find(node => node.textContent === name || node.getAttribute('aria-label') === name)!
+    expect(button('Save PDF').disabled).toBe(true)
+    expect(button('Add detail page')).toBeDefined()
+    expect(button('Keep text on overview')).toBeDefined()
+    await act(async () => button('Add detail page').click())
+    expect(container.querySelector('input[type="search"]')).not.toBeNull()
+    await act(async () => button('Keep text on overview').click())
+    expect(workflow.state.value.result?.plan.blocked).toBeNull()
+    expect(button('Save PDF').disabled).toBe(false)
+    await act(async () => { workflow.close(); workflow.show() })
+    expect(workflow.setup.value.retainedTextKeys).toHaveLength(2)
+  } finally { render(null, container); workflow.dispose(); container.remove() }
+})
+
 it('keeps keyboard commands inside the preview and returns focus when it closes', async () => {
   const launch = document.createElement('button'), container = document.createElement('div')
   document.body.append(launch, container); launch.focus()
