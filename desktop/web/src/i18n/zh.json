@@ -925,7 +925,8 @@
       "prepare-timeout": "PDF 准备时间过长。请减少详细区域后重试。",
       "unsupported-text": "打印字体不支持某些字符。请在设计中修改文本后重试。",
       "text-too-wide": "某些文本无法以可读字号放入页面。请在设计中修改文本后重试。",
-      "delivery-failed": "无法保存 PDF。请刷新预览后重试。"
+      "delivery-failed": "无法保存 PDF。请刷新预览后重试。",
+      "selection-missing": "部分所选图层或区域已不存在。请检查打印选项后再导出。"
     }
   }
 }

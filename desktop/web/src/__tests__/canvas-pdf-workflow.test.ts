@@ -1,4 +1,4 @@
-import type { PrintPlant } from '../canvas/print'
+import type { CanvasPrintSnapshot, PrintPlant } from '../canvas/print'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 import { describe, expect, it, vi } from 'vitest'
 import { createPdfWorkflow, type PdfCapture } from '../app/canvas-pdf/workflow'
@@ -13,9 +13,10 @@ function fixture(plants: PrintPlant[] = []) {
   const prepare = vi.fn<(input: PdfPreparation, signal: AbortSignal) => Promise<PreparedPdf>>(async () => result)
   const save = vi.fn(async () => 'saved' as const)
   const resolveNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<Record<string, string>> => ({}))
-  const workflow = createPdfWorkflow({ capture: () => capture, prepare, resolveNames,
+  let currentCanvas = capture.input.canvas
+  const workflow = createPdfWorkflow({ capture: () => ({ ...capture, input: { ...capture.input, canvas: currentCanvas } }), prepare, resolveNames,
     delivery: { save, dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page' }), fontBaseUrl: () => 'https://test/fonts/' })
-  return { workflow, prepare, save, resolveNames, capture, replace: () => { current = false; workflow.synchronize({}) } }
+  return { workflow, prepare, save, resolveNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
   it('prepares and delivers derived bytes without including map layers', async () => {
@@ -28,6 +29,31 @@ describe('PDF workflow lifetime', () => {
     expect(workflow.state.value.status).toBe('saved')
     await workflow.save()
     expect(save).toHaveBeenCalledTimes(2)
+    workflow.dispose()
+  })
+  it('retains independent choices across close/edit/reopen and flags missing selections', async () => {
+    const { workflow, prepare, capture, setCanvas, replace } = fixture()
+    workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    expect(workflow.availableLayers.value).toEqual(['plants'])
+    workflow.configure({ paper: 'Letter', layers: [] })
+    workflow.close()
+    setCanvas({ ...capture.input.canvas, layers: [{ name: 'plants', visible: true, opacity: 1 }, { name: 'annotations', visible: true, opacity: 1 }] })
+    workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    expect(workflow.setup.value).toEqual({ paper: 'Letter', orientation: 'auto', layers: [] })
+    workflow.configure({ layers: ['plants'] }); workflow.close()
+    setCanvas({ ...capture.input.canvas, layers: [{ name: 'annotations', visible: true, opacity: 1 }] })
+    prepare.mockClear()
+    workflow.show()
+    expect(workflow.state.value.error).toBe('selection-missing')
+    expect(workflow.setup.value.layers).toEqual(['plants'])
+    expect(prepare).not.toHaveBeenCalled()
+    workflow.configure({ layers: ['annotations'] })
+    await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    expect(prepare.mock.calls[0]![0].setup.layers).toEqual(['annotations'])
+    expect(capture.input.canvas.layers[0]!.visible).toBe(true)
+    replace()
+    expect(workflow.setup.value.layers).toEqual([])
+    expect(workflow.availableLayers.value).toEqual([])
     workflow.dispose()
   })
   it('keeps full canonical names when the catalog is unavailable', async () => {

@@ -925,7 +925,8 @@
       "prepare-timeout": "La preparación tardó demasiado. Reduzca el área de detalle e inténtelo de nuevo.",
       "unsupported-text": "Las fuentes de impresión no admiten algunos caracteres. Edite el texto del diseño e inténtelo de nuevo.",
       "text-too-wide": "Parte del texto no cabe a un tamaño legible. Edite el texto del diseño e inténtelo de nuevo.",
-      "delivery-failed": "No se pudo guardar el PDF. Actualice la vista previa e inténtelo de nuevo."
+      "delivery-failed": "No se pudo guardar el PDF. Actualice la vista previa e inténtelo de nuevo.",
+      "selection-missing": "Algunas capas o zonas seleccionadas ya no existen. Revisa la selección antes de exportar."
     }
   }
 }

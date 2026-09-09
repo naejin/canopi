@@ -925,7 +925,8 @@
       "prepare-timeout": "La préparation du PDF a pris trop de temps. Réduisez la couverture détaillée et réessayez.",
       "unsupported-text": "Certains caractères ne sont pas pris en charge par les polices d’impression. Modifiez le texte dans le design et réessayez.",
       "text-too-wide": "Certains textes ne tiennent pas à une taille lisible. Modifiez le texte dans le design et réessayez.",
-      "delivery-failed": "Impossible d’enregistrer le PDF. Actualisez l’aperçu et réessayez."
+      "delivery-failed": "Impossible d’enregistrer le PDF. Actualisez l’aperçu et réessayez.",
+      "selection-missing": "Certains calques ou zones sélectionnés n’existent plus. Vérifiez les sélections avant d’exporter."
     }
   }
 }

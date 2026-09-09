@@ -925,7 +925,8 @@
       "prepare-timeout": "Die Vorbereitung dauerte zu lange. Verkleinern Sie den Detailbereich und versuchen Sie es erneut.",
       "unsupported-text": "Die Druckschriften unterstützen einige Zeichen nicht. Bearbeiten Sie den Text im Entwurf und versuchen Sie es erneut.",
       "text-too-wide": "Einige Texte passen nicht in lesbarer Größe. Bearbeiten Sie den Text im Entwurf und versuchen Sie es erneut.",
-      "delivery-failed": "Das PDF konnte nicht gespeichert werden. Aktualisieren Sie die Vorschau und versuchen Sie es erneut."
+      "delivery-failed": "Das PDF konnte nicht gespeichert werden. Aktualisieren Sie die Vorschau und versuchen Sie es erneut.",
+      "selection-missing": "Einige ausgewählte Ebenen oder Zonen sind nicht mehr vorhanden. Prüfen Sie die Druckauswahl vor dem Export."
     }
   }
 }

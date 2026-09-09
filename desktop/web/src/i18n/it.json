@@ -925,7 +925,8 @@
       "prepare-timeout": "La preparazione richiede troppo tempo. Riduci l’area dei dettagli e riprova.",
       "unsupported-text": "Alcuni caratteri non sono supportati dai font di stampa. Modifica il testo nel progetto e riprova.",
       "text-too-wide": "Parte del testo non entra a una dimensione leggibile. Modifica il testo nel progetto e riprova.",
-      "delivery-failed": "Impossibile salvare il PDF. Aggiorna l’anteprima e riprova."
+      "delivery-failed": "Impossibile salvare il PDF. Aggiorna l’anteprima e riprova.",
+      "selection-missing": "Alcuni livelli o zone selezionati non esistono più. Controlla la selezione prima di esportare."
     }
   }
 }

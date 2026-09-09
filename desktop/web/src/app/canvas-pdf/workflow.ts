@@ -22,7 +22,9 @@ const EXPORTABLE = new Set(['plants', 'zones', 'annotations', 'measurement-guide
 export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   const open = signal(false)
   const state = signal<PdfWorkflowState>(IDLE)
-  const setup = signal<PdfSetup>({ paper: 'A4', orientation: 'auto', layers: [] })
+  const defaults = (): PdfSetup => ({ paper: 'A4', orientation: 'auto', layers: [] })
+  const setup = signal<PdfSetup>(defaults())
+  const availableLayers = signal<readonly string[]>([])
   let identity: object | null = null
   let capture: PdfCapture | null = null
   let controller: AbortController | null = null
@@ -32,7 +34,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function synchronize(nextIdentity: object) {
     if (identity !== null && identity !== nextIdentity) {
       stop(); identity = null; capture = null
-      batch(() => { open.value = false; state.value = IDLE })
+      batch(() => { open.value = false; state.value = IDLE; setup.value = defaults(); availableLayers.value = [] })
     } else if (open.peek() && capture && !capture.isCurrent()) {
       stop(); capture = null; state.value = { status: 'error', error: 'stale', result: null }
     }
@@ -49,7 +51,11 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       identity = next.identity
       setup.value = { paper: 'A4', orientation: 'auto', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
     }
+    availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
     capture = next
+    if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))) {
+      state.value = { status: 'error', error: 'selection-missing', result: null }; return
+    }
     const abort = new AbortController(); controller = abort
     const ticket = generation
     state.value = { status: 'preparing', error: null, result: null }
@@ -80,12 +86,16 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function show(): void { if (disposed) return; open.value = true; void rebuild() }
   function close(): void {
     if (state.peek().status === 'delivering') return
-    stop(); capture = null; batch(() => { open.value = false; state.value = IDLE })
+    stop(); capture = null; batch(() => { open.value = false; state.value = IDLE; availableLayers.value = [] })
   }
   function configure(value: Partial<PdfSetup>): void {
     if (disposed || state.peek().status === 'delivering') return
     setup.value = { ...setup.peek(), ...value }
     void rebuild()
+  }
+  function selectLayer(name: string, selected: boolean): void {
+    const layers = setup.peek().layers.filter((layer) => layer !== name)
+    configure({ layers: selected ? [...layers, name] : layers })
   }
   async function save(): Promise<void> {
     const snapshot = state.peek(), source = capture
@@ -102,7 +112,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       state.value = { ...snapshot, status: 'error', error: 'delivery-failed' }
     } finally { if (controller === abort) controller = null }
   }
-  function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null }
-  return { open, state, setup, show, close, rebuild, configure, save, synchronize, dispose }
+  function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = [] }
+  return { open, state, setup, availableLayers, show, close, rebuild, configure, selectLayer, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>

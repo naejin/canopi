@@ -925,7 +925,8 @@
       "prepare-timeout": "A preparação demorou demais. Reduza a área de detalhes e tente novamente.",
       "unsupported-text": "As fontes de impressão não suportam alguns caracteres. Edite o texto no projeto e tente novamente.",
       "text-too-wide": "Alguns textos não cabem em tamanho legível. Edite o texto no projeto e tente novamente.",
-      "delivery-failed": "Não foi possível salvar o PDF. Atualize a prévia e tente novamente."
+      "delivery-failed": "Não foi possível salvar o PDF. Atualize a prévia e tente novamente.",
+      "selection-missing": "Algumas camadas ou zonas selecionadas já não existem. Reveja a seleção antes de exportar."
     }
   }
 }

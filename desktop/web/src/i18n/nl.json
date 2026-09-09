@@ -925,7 +925,8 @@
       "prepare-timeout": "Het voorbereiden duurde te lang. Verklein het detailgebied en probeer opnieuw.",
       "unsupported-text": "De afdruklettertypen ondersteunen sommige tekens niet. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "text-too-wide": "Sommige tekst past niet op leesbare grootte. Bewerk de tekst in het ontwerp en probeer opnieuw.",
-      "delivery-failed": "De PDF kon niet worden opgeslagen. Vernieuw het voorbeeld en probeer opnieuw."
+      "delivery-failed": "De PDF kon niet worden opgeslagen. Vernieuw het voorbeeld en probeer opnieuw.",
+      "selection-missing": "Sommige geselecteerde lagen of zones bestaan niet meer. Controleer de afdrukselectie voordat je exporteert."
     }
   }
 }

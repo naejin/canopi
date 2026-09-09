@@ -20,6 +20,7 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
   const plan = state.result?.plan
   const page = plan?.pages[Math.min(index, plan.pages.length - 1)]
   const delivering = state.status === 'delivering'
+  const layers = Array.from(new Set([...workflow.availableLayers.value, ...setup.layers]))
   useEffect(() => {
     const previous = document.activeElement
     root.current?.querySelector<HTMLButtonElement>('button')?.focus()
@@ -59,6 +60,13 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
             <Dropdown<PdfOrientation> ariaLabel={t('pdf.orientation')} trigger={t(`pdf.${setup.orientation}`)} value={setup.orientation}
               items={(['auto', 'portrait', 'landscape'] as const).map((value) => ({ value, label: t(`pdf.${value}`) }))}
               onChange={(orientation) => workflow.configure({ orientation })} preserveOverlays />
+          </fieldset>
+          <fieldset disabled={delivering}>
+            <legend>{t('pdf.layers')}</legend>
+            {layers.map((name) => <label key={name} className={styles.check}>
+              <input type="checkbox" checked={setup.layers.includes(name)} onChange={(event) => workflow.selectLayer(name, event.currentTarget.checked)} />
+              <span>{t(`canvas.layers.${name}`, { defaultValue: name })}</span>
+            </label>)}
           </fieldset>
           <button type="button" disabled={delivering} onClick={() => void workflow.rebuild()}>{t('pdf.refresh')}</button>
           {state.error && <p role="alert" className={styles.notice}>{t(`pdf.errors.${state.error}`)}</p>}
