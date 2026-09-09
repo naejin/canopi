@@ -125,20 +125,20 @@ Automate page dimensions, all six scales, coverage/overlap, Layer selection, Spe
 
 ## Implications for Issue Breakdown
 
-The following delivery breakdown is proposed for PRD `canopi-cd7x` and awaits user review; child beads have not been created. Feature slices include UI, shared layout, preview, PDF delivery, and behavior tests. AFK means agent execution after dependencies close; HITL requires human judgment or physical validation. All proposed slices are P2.
+The following delivery breakdown was approved for PRD `canopi-cd7x`; its ten child beads are tracked in bd, which is authoritative for current status and dependencies. Feature slices include UI, shared layout, preview, PDF delivery, and behavior tests. AFK means agent execution after dependencies close; HITL requires human judgment or physical validation. All slices are P2.
 
-| Order | Proposed slice | Type / mode | Blocked by | PRD stories |
-| --- | --- | --- | --- | --- |
-| 1 | Evaluate multilingual PDF output with the candidate encoders and font assets | task / AFK | None | 1, 9, 10, 14, 15, 18 |
-| 2 | Choose the PDF foundation and settle preview edge-case rules | decision / HITL | 1 | 1, 3, 9, 13, 15, 16 |
-| 3 | Preview and export an overview with authored presentation and readable localized legends | feature / AFK | 2, `canopi-qj4w` | 1, 2, 6, 9, 10, 12, 14, 15, 16, 17 |
-| 4 | Select print Layers and retain setup while editing the Design | feature / AFK | 3 | 3, 13 |
-| 5 | Export selected Zones as scaled detail sheets with overlap and navigation | feature / AFK | 4 | 2, 4, 6, 7, 8, 9 |
-| 6 | Draw Print Areas and override individual area scales | feature / AFK | 5 | 5, 7, 8, 13 |
-| 7 | Export complete legends with explicit continuation pages and final references | feature / AFK | 5 | 9, 11, 12 |
-| 8 | Validate export recovery, resources, and representative output | task / AFK | 6, 7 | 1, 10, 11, 13, 15, 16, 17, 18 |
-| 9 | Validate field prints and actual platform evidence, then choose release defaults | decision / HITL | 8 | 1, 6, 7, 9, 14, 15, 18 |
-| 10 | Apply validated defaults and complete combined PDF release checks | task / AFK | 9 | All |
+| Order | Bead | Slice | Type / mode | Blocked by | PRD stories |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `canopi-4nzq` | Evaluate multilingual PDF output with the candidate encoders and font assets | task / AFK | None | 1, 9, 10, 14, 15, 18 |
+| 2 | `canopi-orpp` | Choose the PDF foundation and settle preview edge-case rules | decision / HITL | 1 | 1, 3, 9, 13, 15, 16 |
+| 3 | `canopi-w4p3` | Preview and export an overview with authored presentation and readable localized legends | feature / AFK | 2, `canopi-qj4w` | 1, 2, 6, 9, 10, 12, 14, 15, 16, 17 |
+| 4 | `canopi-hikf` | Select print Layers and retain setup while editing the Design | feature / AFK | 3 | 3, 13 |
+| 5 | `canopi-e9br` | Export selected Zones as scaled detail sheets with overlap and navigation | feature / AFK | 4 | 2, 4, 6, 7, 8, 9 |
+| 6 | `canopi-25m9` | Draw Print Areas and override individual area scales | feature / AFK | 5 | 5, 7, 8, 13 |
+| 7 | `canopi-zvbk` | Export complete legends with explicit continuation pages and final references | feature / AFK | 5 | 9, 11, 12 |
+| 8 | `canopi-urxb` | Validate export recovery, resources, and representative output | task / AFK | 6, 7 | 1, 10, 11, 13, 15, 16, 17, 18 |
+| 9 | `canopi-h0q3` | Validate field prints and actual platform evidence, then choose release defaults | decision / HITL | 8 | 1, 6, 7, 9, 14, 15, 18 |
+| 10 | `canopi-1zbj` | Apply validated defaults and complete combined PDF release checks | task / AFK | 9 | All |
 
 Slice 3 already includes session guards, cancellation/error outcomes, map exclusion, and blocking unresolved legend overflow. Later validation extends coverage and measures resource behavior; it does not defer those invariants. Slice 7 adds the explicit continuation option. Physical dimensions remain evaluation parameters until the paper review; early slices are delivery increments and do not reduce the full v1 release contract.
 
@@ -165,4 +165,4 @@ Deferred map questions: provider plan, retained/shared PDF rights, attribution, 
 
 ## Recommended Next Skill
 
-The **to-prd** step is recorded as epic `canopi-cd7x`. Continue **to-issues** by reviewing the proposed breakdown above before creating child beads. Preserve the encoder, font, interaction, and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.
+The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Follow the requested execution order: fix `canopi-qj4w`, fix `canopi-90wm`, then begin the PDF evaluation in `canopi-4nzq`. Preserve the encoder, font, interaction, and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.

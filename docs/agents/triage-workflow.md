@@ -26,10 +26,11 @@ Use bd `type` for category: `bug`, `feature`, `task`, `epic`, `chore`, or `decis
 
 ## Applying A Role
 
-For open roles, remove conflicting state labels, restore `status=open`, then add the new label:
+For open roles, remove conflicting state labels, restore `status=open`, then add the new label in a separate call. Removing and adding the same label in one `bd update` can leave it absent; always verify the resulting labels.
 
 ```bash
-bd update <id> --status open --remove-label needs-triage --remove-label needs-info --remove-label ready-for-agent --remove-label ready-for-human --remove-label wontfix --add-label <role>
+bd update <id> --status open --remove-label needs-triage --remove-label needs-info --remove-label ready-for-agent --remove-label ready-for-human --remove-label wontfix
+bd update <id> --add-label <role>
 ```
 
 For `wontfix`, remove the open-state labels, optionally add `wontfix`, then close the bead with a reason:
