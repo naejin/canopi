@@ -8,13 +8,11 @@ const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin',
 const empty: PdfInput = { name: 'Empty design', locale: 'en', commonNames: {}, canvas: { layers: [], plants: [], zones: [], annotations: [], measurements: [] } }
 const setup: PdfSetup = { paper: 'A4', layers: [] }
 describe('Temporary Print Areas', () => {
-  it('provides a fitted area picker including hidden Zones without changing the printed overview', () => {
+  it('fits the drawing overview to printable content without hidden Zones or manual overview framing', () => {
     const input: PdfInput = { ...empty, canvas: { ...empty.canvas, zones: [{ name: 'Far bed', bounds: { x: 100, y: 200, width: 30, height: 10 }, path: 'M100 200 H130 V210 H100 Z', fill: null }] } }
     const plan = buildPdfPlan(input, { ...setup, views: { overview: { zoom: 200, offset: { x: -100, y: 0 } } } }, text(), labels)
-    expect(plan.pickerPage!.ground.x).toBeLessThanOrEqual(100)
-    expect(plan.pickerPage!.ground.x + plan.pickerPage!.ground.width).toBeGreaterThanOrEqual(130)
-    expect(plan.pickerPage!.ground.y).toBeLessThanOrEqual(200)
-    expect(plan.pickerPage!.ground.y + plan.pickerPage!.ground.height).toBeGreaterThanOrEqual(210)
+    const blank = buildPdfPlan(empty, setup, text(), labels)
+    expect(plan.pickerPage!.ground).toEqual(blank.pickerPage!.ground)
     expect(plan.pages).toHaveLength(1)
     expect(plan.pages[0]!.ground.x).toBeLessThan(-100)
     expect(plan.blocked).toBe('empty')
@@ -24,7 +22,7 @@ describe('Temporary Print Areas', () => {
       { id: 'a', canonicalName: 'Apple', position: { x: 5, y: 5 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false },
       { id: 'b', canonicalName: 'Pear', position: { x: 25, y: 5 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false },
     ] } }
-    const options: PdfSetup = { ...setup, layers: ['plants'], areas: [{ kind: 'rectangle', id: 'one', name: 'Area', bounds: { x: 0, y: 0, width: 10, height: 10 } }] }
+    const options: PdfSetup = { ...setup, layers: ['plants'], areas: [{ id: 'one', name: 'Area', bounds: { x: 0, y: 0, width: 10, height: 10 } }] }
     const before = structuredClone(input)
     const fitted = buildPdfPlan(input, options, text(), labels).pages[1]!
     const moved = buildPdfPlan(input, { ...options, views: { 'area:one': { offset: { x: 20, y: 0 } } } }, text(), labels).pages[1]!
@@ -35,7 +33,7 @@ describe('Temporary Print Areas', () => {
     expect(input).toEqual(before)
   })
   it('fits an exact square in portrait without cropping or splitting it', () => {
-    const plan = buildPdfPlan(empty, { ...setup, areas: [{ kind: 'rectangle', id: 'square', name: 'Square', bounds: { x: 10, y: 20, width: 100, height: 100 } }] }, text(), labels)
+    const plan = buildPdfPlan(empty, { ...setup, areas: [{ id: 'square', name: 'Square', bounds: { x: 10, y: 20, width: 100, height: 100 } }] }, text(), labels)
     const pages = plan.pages.filter((page) => page.kind === 'detail')
     expect(pages).toHaveLength(1)
     expect(pages[0]!.width).toBeLessThan(pages[0]!.height)
@@ -49,7 +47,7 @@ describe('Temporary Print Areas', () => {
     expect(blank.blocked).toBe('empty')
     expect(blank.pages).toHaveLength(1)
     const before = structuredClone(empty)
-    const plan = buildPdfPlan(empty, { ...setup, areas: [{ kind: 'rectangle', id: 'one', name: 'Print area 1', bounds: { x: 1, y: 2, width: 5, height: 5 } }] }, text(), labels)
+    const plan = buildPdfPlan(empty, { ...setup, areas: [{ id: 'one', name: 'Print area 1', bounds: { x: 1, y: 2, width: 5, height: 5 } }] }, text(), labels)
     expect(plan.blocked).toBeNull()
     expect(plan.pages).toHaveLength(2)
     expect(plan.pages[1]!.ground.width).toBeCloseTo(5, 8)
@@ -57,11 +55,11 @@ describe('Temporary Print Areas', () => {
     expect(plan.pages[1]!.ground.x + plan.pages[1]!.ground.width).toBeGreaterThanOrEqual(6)
     expect(empty).toEqual(before)
   })
-  it('keeps custom zoom and orientation independent across Zones and Print Areas', () => {
+  it('keeps custom zoom and orientation independent across Print Areas', () => {
     const input = { ...empty, canvas: { ...empty.canvas, zones: [{ name: 'Bed', bounds: { x: 0, y: 0, width: 2, height: 2 }, path: 'M0 0 H2 V2 H0 Z', fill: null }] } }
-    const options: PdfSetup = { ...setup, views: { 'zone:Bed': { zoom: 80, orientation: 'landscape' } }, areas: [
-      { kind: 'zone', name: 'Bed' },
-      { kind: 'rectangle', id: 'field', name: 'Field', bounds: { x: 5, y: 5, width: 10, height: 10 } },
+    const options: PdfSetup = { ...setup, views: { 'area:bed': { zoom: 80, orientation: 'landscape' } }, areas: [
+      { id: 'bed', name: 'Bed', bounds: { x: 0, y: 0, width: 2, height: 2 } },
+      { id: 'field', name: 'Field', bounds: { x: 5, y: 5, width: 10, height: 10 } },
     ] }
     const before = structuredClone(input)
     const first = buildPdfPlan(input, options, text(), labels)
@@ -76,7 +74,7 @@ describe('Temporary Print Areas', () => {
   })
   it.each(['A4', 'Letter'] as const)('fits wide, tall, and tiny areas on %s with the closest automatic orientation', (paper) => {
     for (const [width, height, landscape] of [[100, 20, true], [10, 50, false], [.002, .0004, true]] as const) {
-      const area = { kind: 'rectangle' as const, id: 'one', name: 'Area', bounds: { x: -40, y: 20, width, height } }
+      const area = { id: 'one', name: 'Area', bounds: { x: -40, y: 20, width, height } }
       const plan = buildPdfPlan(empty, { ...setup, paper, areas: [area] }, text(), labels)
       const page = plan.pages[1]!
       expect(plan.pages).toHaveLength(2)
@@ -88,6 +86,6 @@ describe('Temporary Print Areas', () => {
     }
   })
   it.each([0, -1, NaN, Infinity, 1001])('rejects invalid page zoom %s before drawing', (zoom) => {
-    expect(() => buildPdfPlan(empty, { ...setup, views: { 'area:one': { zoom } }, areas: [{ kind: 'rectangle', id: 'one', name: 'Area', bounds: { x: 0, y: 0, width: 1, height: 1 } }] }, text(), labels)).toThrow('invalid-page-view')
+    expect(() => buildPdfPlan(empty, { ...setup, views: { 'area:one': { zoom } }, areas: [{ id: 'one', name: 'Area', bounds: { x: 0, y: 0, width: 1, height: 1 } }] }, text(), labels)).toThrow('invalid-page-view')
   })
 })

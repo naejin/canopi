@@ -922,7 +922,6 @@
     "legendFor": "Pflanzenliste für Seite",
     "pageCount": "Seite {{page}} von {{count}}",
     "areaName": "Druckbereich {{number}}",
-    "noZones": "Dieser Entwurf hat keine Zonen. Zeichnen Sie einen Druckbereich für Detailseiten.",
     "errors": {
       "canvas-busy": "Beende die aktuelle Zeichenflächenbearbeitung. Die Vorschau wird automatisch aktualisiert.",
       "prepare-failed": "Das PDF konnte nicht vorbereitet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
@@ -930,7 +929,7 @@
       "unsupported-text": "Die Druckschriften unterstützen einige Zeichen nicht. Bearbeiten Sie den Text im Entwurf und versuchen Sie es erneut.",
       "text-too-wide": "Einige Texte passen nicht in lesbarer Größe. Bearbeiten Sie den Text im Entwurf und versuchen Sie es erneut.",
       "delivery-failed": "Das PDF konnte nicht gespeichert werden. Versuche es erneut.",
-      "selection-missing": "Einige ausgewählte Ebenen oder Zonen sind nicht mehr vorhanden. Prüfen Sie die Druckauswahl vor dem Export.",
+      "selection-missing": "Einige ausgewählte Ebenen sind nicht mehr vorhanden. Prüfe die Druckebenen vor dem Export.",
       "coverage-too-large": "Diese Auswahl überschreitet die Grenze von 200 Seiten. Wählen Sie weniger Bereiche oder reduzieren Sie die Legenden-Folgeseiten.",
       "invalid-page-view": "Wählen Sie einen gültigen Zoom und eine gültige Ausrichtung für diese Seite."
     },
@@ -939,10 +938,7 @@
     "viewPage": "Seite anzeigen",
     "backToDesign": "Zurück zum Entwurf",
     "addPage": "Seite hinzufügen",
-    "addHint": "Klicke auf eine Zone oder zeichne einen Bereich auf der Übersicht.",
-    "chooseZone": "Oder eine Zone wählen",
-    "searchZones": "Zonen suchen",
-    "noMatchingZones": "Keine passenden Zonen.",
+    "addHint": "Ziehe ein Rechteck um den Bereich, den du drucken möchtest.",
     "frameHint": "Ziehe die Zeichnung, um den Ausschnitt anzupassen. Auch die Pfeiltasten verschieben sie; Einpassen zeigt wieder den ganzen Bereich.",
     "overviewHint": "Klicke auf einen nummerierten Bereich, um seine Seite zu öffnen. Ziehe, um die Übersicht anzupassen.",
     "inspect": "Text prüfen",

@@ -117,24 +117,22 @@ describe('PDF workflow lifetime', () => {
     expect(workflow.availableLayers.value).toEqual([])
     workflow.dispose()
   })
-  it('retains selected Zones after resizing and requires review after a Zone is renamed', async () => {
+  it('retains independent Print Areas when Zones are resized, renamed or removed', async () => {
     const { workflow, prepare, capture, setCanvas } = fixture()
     const zone = { name: 'Orchard', bounds: { x: 0, y: 0, width: 10, height: 10 }, path: 'M0 0 H10 V10 H0 Z', fill: null }
     setCanvas({ ...capture.input.canvas, zones: [zone] })
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(workflow.setup.value.areas ?? []).toEqual([])
-    expect(workflow.setup.value.views).toBeUndefined()
-    workflow.selectZone('Orchard', true); workflow.setPageView('zone:Orchard', { zoom: 75, orientation: 'landscape' }); workflow.close()
-    setCanvas({ ...capture.input.canvas, zones: [{ ...zone, bounds: { ...zone.bounds, width: 20 } }] })
-    workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
-    expect(prepare.mock.lastCall![0].input.canvas.zones[0]!.bounds.width).toBe(20)
-    expect(prepare.mock.lastCall![0].setup.views?.['zone:Orchard']).toEqual({ zoom: 75, orientation: 'landscape' })
-    workflow.close(); setCanvas({ ...capture.input.canvas, zones: [{ ...zone, name: 'Renamed' }] })
-    workflow.show()
-    expect(workflow.state.value.error).toBe('selection-missing')
-    expect(workflow.setup.value.areas).toEqual([{ kind: 'zone', name: 'Orchard' }])
-    workflow.selectZone('Orchard', false); workflow.selectZone('Renamed', true)
-    await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    workflow.addPrintArea({ x: 1, y: 2, width: 3, height: 4 })
+    workflow.setPageView('area:1', { zoom: 75, orientation: 'landscape' })
+    for (const zones of [[{ ...zone, bounds: { ...zone.bounds, width: 20 } }], [{ ...zone, name: 'Renamed' }], []]) {
+      workflow.close(); setCanvas({ ...capture.input.canvas, zones })
+      workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(workflow.state.value.error).toBeNull()
+      expect(prepare.mock.lastCall![0].input.canvas.zones).toEqual(zones)
+      expect(prepare.mock.lastCall![0].setup.areas).toEqual([{ id: '1', name: 'Print area 1', bounds: { x: 1, y: 2, width: 3, height: 4 } }])
+      expect(prepare.mock.lastCall![0].setup.views?.['area:1']).toEqual({ zoom: 75, orientation: 'landscape' })
+    }
     workflow.dispose()
   })
   it('owns Print Areas and individual page views only for the current session', async () => {
@@ -147,8 +145,8 @@ describe('PDF workflow lifetime', () => {
     workflow.close(); workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(prepare.mock.lastCall![0].setup.areas).toEqual([
-      { kind: 'rectangle', id: '1', name: 'Print area 1', bounds: { x: 1, y: 2, width: 4, height: 5 } },
-      { kind: 'rectangle', id: '2', name: 'Print area 2', bounds: { x: 10, y: 20, width: 3, height: 6 } },
+      { id: '1', name: 'Print area 1', bounds: { x: 1, y: 2, width: 4, height: 5 } },
+      { id: '2', name: 'Print area 2', bounds: { x: 10, y: 20, width: 3, height: 6 } },
     ])
     expect(prepare.mock.lastCall![0].setup.views).toEqual({ 'area:1': { zoom: 125.5, orientation: 'portrait' }, 'area:2': { zoom: 80, orientation: 'landscape' } })
     expect(capture.input.canvas.zones).toEqual([])

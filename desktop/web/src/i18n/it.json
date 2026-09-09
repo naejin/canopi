@@ -922,7 +922,6 @@
     "legendFor": "Elenco delle piante della pagina",
     "pageCount": "Pagina {{page}} di {{count}}",
     "areaName": "Area di stampa {{number}}",
-    "noZones": "Questo progetto non ha zone. Disegna un’area di stampa per aggiungere pagine di dettaglio.",
     "errors": {
       "canvas-busy": "Termina la modifica della tela. L’anteprima si aggiornerà automaticamente.",
       "prepare-failed": "Impossibile preparare il PDF. Controlla la connessione e riprova.",
@@ -930,7 +929,7 @@
       "unsupported-text": "Alcuni caratteri non sono supportati dai font di stampa. Modifica il testo nel progetto e riprova.",
       "text-too-wide": "Parte del testo non entra a una dimensione leggibile. Modifica il testo nel progetto e riprova.",
       "delivery-failed": "Impossibile salvare il PDF. Prova a salvarlo di nuovo.",
-      "selection-missing": "Alcuni livelli o zone selezionati non esistono più. Controlla la selezione prima di esportare.",
+      "selection-missing": "Alcuni livelli selezionati non esistono più. Controlla i livelli di stampa prima di esportare.",
       "coverage-too-large": "La selezione supera il limite di 200 pagine. Seleziona meno aree o riduci le pagine di continuazione della legenda.",
       "invalid-page-view": "Scegli uno zoom e un orientamento validi per questa pagina."
     },
@@ -939,10 +938,7 @@
     "viewPage": "Mostra pagina",
     "backToDesign": "Torna al progetto",
     "addPage": "Aggiungi pagina",
-    "addHint": "Fai clic su una zona o disegna un’area nella panoramica.",
-    "chooseZone": "Oppure scegli una zona",
-    "searchZones": "Cerca zone",
-    "noMatchingZones": "Nessuna zona corrispondente.",
+    "addHint": "Trascina per disegnare un rettangolo attorno all’area da stampare.",
     "frameHint": "Trascina il disegno per inquadrarlo. Puoi usare anche le frecce; Adatta ripristina l’intera area.",
     "overviewHint": "Fai clic su un’area numerata per aprirne la pagina. Trascina per regolare la panoramica.",
     "inspect": "Esamina testo",

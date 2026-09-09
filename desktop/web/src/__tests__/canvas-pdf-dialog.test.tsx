@@ -27,7 +27,8 @@ it('offers a detail page or explicit text retention before exporting a crowded o
     expect(button('Add detail page')).toBeDefined()
     expect(button('Keep text on overview')).toBeDefined()
     await act(async () => button('Add detail page').click())
-    expect(container.querySelector('input[type="search"]')).not.toBeNull()
+    expect(container.querySelector('input[type="search"]')).toBeNull()
+    expect(container.querySelector('#pdf-editor-hint')!.textContent).toBe('Drag a rectangle around the area to print.')
     await act(async () => button('Keep text on overview').click())
     expect(workflow.state.value.result?.plan.blocked).toBeNull()
     expect(button('Save PDF').disabled).toBe(false)
@@ -104,7 +105,7 @@ it('offers explicit continuation consent and retains the choice through preview 
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
 
-it('opens newly selected and drawn pages and edits their zoom and orientation independently', async () => {
+it('creates detail pages only by drawing and edits their zoom and orientation independently', async () => {
   const container = document.createElement('div'); document.body.append(container)
   const canvas = { layers: [{ name: 'zones', visible: true, opacity: 1 }], plants: [], annotations: [], measurements: [], zones: [
     { name: 'Wide bed', bounds: { x: 0, y: 0, width: 30, height: 5 }, path: 'M0 0 H30 V5 H0 Z', fill: null },
@@ -120,56 +121,55 @@ it('opens newly selected and drawn pages and edits their zoom and orientation in
   const zoom = () => container.querySelector<HTMLInputElement>('input[type="number"]')!
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
-    await act(async () => { button('Add page').click() })
-    await act(async () => { button('Wide bed').click() })
+    const draw = async (width: number, height: number) => {
+      await act(async () => { button('Add page').click() })
+      expect(container.querySelector('input[type="search"]')).toBeNull()
+      expect(button('Wide bed')).toBeUndefined()
+      const overview = workflow.state.value.result!.plan.pickerPage!, svg = container.querySelector<SVGSVGElement>('[data-pdf-editor]')!
+      vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, overview.width, overview.height))
+      let captured = false
+      svg.setPointerCapture = () => { captured = true }; svg.hasPointerCapture = () => captured; svg.releasePointerCapture = () => { captured = false }
+      const pointer = async (type: string, x: number, y: number, target: Element = svg) => {
+        const event = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true })
+        Object.defineProperty(event, 'pointerId', { value: 1 })
+        await act(async () => { target.dispatchEvent(event) })
+      }
+      // Authored Zone artwork remains printable, but clicking it creates no page.
+      const artwork = svg.querySelector('path[d="M0 0 H30 V5 H0 Z"]')!
+      expect(artwork).not.toBeNull()
+      const count = workflow.setup.value.areas?.length ?? 0
+      await pointer('pointerdown', overview.frame.x + 20, overview.frame.y + 20, artwork)
+      await pointer('pointerup', overview.frame.x + 20, overview.frame.y + 20)
+      expect(workflow.setup.value.areas?.length ?? 0).toBe(count)
+      await pointer('pointerdown', overview.frame.x + 20, overview.frame.y + 20, artwork)
+      await pointer('pointerup', overview.frame.x + 20 + width, overview.frame.y + 20 + height)
+      expect(workflow.setup.value.areas).toHaveLength(count + 1)
+    }
+    await draw(200, 50)
     expect(container.querySelector('svg[data-pdf-page="2"]')).not.toBeNull()
     expect(container.querySelector('[data-pdf-editor]')!.getAttribute('viewBox')!.split(' ').map(Number)[2]).toBeGreaterThan(700)
     expect(zoom().value).toBe('100')
     await act(async () => { zoom().value = '137.5'; zoom().dispatchEvent(new Event('input', { bubbles: true })); zoom().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
-    expect(workflow.setup.value.views?.['zone:Wide%20bed']?.zoom).toBe(137.5)
+    expect(workflow.setup.value.views?.['area:1']?.zoom).toBe(137.5)
     await act(async () => { button('Portrait').click() })
-    expect(workflow.setup.value.views?.['zone:Wide%20bed']?.orientation).toBe('portrait')
-    await act(async () => { button('Add page').click() })
-    await act(async () => { button('Tall bed').click() })
+    expect(workflow.setup.value.views?.['area:1']?.orientation).toBe('portrait')
+    await draw(50, 200)
     expect(container.querySelector('svg[data-pdf-page="3"]')).not.toBeNull()
     expect(zoom().value).toBe('100')
-    await act(async () => { button('View page: Wide bed').click() })
+    const area = workflow.setup.value.areas![1]!
+    const page = workflow.state.value.result!.plan.pages[2]!
+    expect(page.width).toBeLessThan(page.height)
+    expect(page.ground.x).toBeLessThanOrEqual(area.bounds.x)
+    expect(page.ground.x + page.ground.width).toBeGreaterThanOrEqual(area.bounds.x + area.bounds.width)
+    expect(page.ground.y).toBeLessThanOrEqual(area.bounds.y)
+    expect(page.ground.y + page.ground.height).toBeGreaterThanOrEqual(area.bounds.y + area.bounds.height)
+    await act(async () => { button('View page: Print area 1').click() })
     expect(zoom().value).toBe('137.5')
     await act(async () => { zoom().value = ''; zoom().dispatchEvent(new Event('input', { bubbles: true })) })
     await act(async () => { zoom().dispatchEvent(new FocusEvent('blur')) })
     expect(zoom().value).toBe('137.5')
     await act(async () => { button('Fit').click() })
-    expect(workflow.setup.value.views?.['zone:Wide%20bed']).toEqual({ zoom: 100, orientation: 'portrait', offset: { x: 0, y: 0 } })
-    await act(async () => { button('Add page').click() })
-    const overview = workflow.state.value.result!.plan.pickerPage!, svg = container.querySelector<SVGSVGElement>('[data-pdf-editor]')!
-    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, overview.width, overview.height))
-    let captured = false
-    svg.setPointerCapture = () => { captured = true }; svg.hasPointerCapture = () => captured; svg.releasePointerCapture = () => { captured = false }
-    const pointer = async (type: string, x: number, y: number) => {
-      const event = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true })
-      Object.defineProperty(event, 'pointerId', { value: 1 })
-      await act(async () => { svg.dispatchEvent(event) })
-    }
-    await pointer('pointerdown', overview.frame.x + 20, overview.frame.y + 20)
-    await pointer('pointerup', overview.frame.x + 220, overview.frame.y + 70)
-    expect(container.querySelector('svg[data-pdf-page="4"]')).not.toBeNull()
-    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('viewBox')!.split(' ').map(Number)[2]).toBeGreaterThan(700)
-    expect(zoom().value).toBe('100')
-    const area = workflow.setup.value.areas!.find((area) => area.kind === 'rectangle')!
-    if (area.kind !== 'rectangle') throw new Error('Missing Print Area')
-    const page = workflow.state.value.result!.plan.pages[3]!
-    expect(page.ground.x).toBeLessThanOrEqual(area.bounds.x)
-    expect(page.ground.x + page.ground.width).toBeGreaterThanOrEqual(area.bounds.x + area.bounds.width)
-    expect(page.ground.y).toBeLessThanOrEqual(area.bounds.y)
-    expect(page.ground.y + page.ground.height).toBeGreaterThanOrEqual(area.bounds.y + area.bounds.height)
-    await act(async () => { button('Add page').click() })
-    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!
-    await act(async () => {
-      search.value = 'Wide'; search.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await act(async () => { search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
-    expect(workflow.setup.value.areas).toHaveLength(3)
-    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('2')
+    expect(workflow.setup.value.views?.['area:1']).toEqual({ zoom: 100, orientation: 'portrait', offset: { x: 0, y: 0 } })
     const retained = workflow.setup.peek()
     await act(async () => { button('Add page').click() })
     await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })

@@ -1,6 +1,25 @@
 # Canvas PDF production validation
 
-Recorded 2026-09-09, beginning with `canopi-urxb` and extended for the revisions below. The user-approved implementation is integrated on `main`, including automatic area fitting and the page workspace. Physical-default approval and outstanding packaged-app checks remain open in `canopi-h0q3`, followed by the release audit in `canopi-1zbj`. Software approval does not establish printer or outdoor field-user evidence.
+Recorded 2026-09-09, beginning with `canopi-urxb` and extended for the revisions below. The original user-approved implementation was integrated on `main`, including automatic area fitting and the page workspace. Subsequent sections record later revisions; each platform or visual result applies to its recorded baseline. Physical-default approval and outstanding packaged-app checks remain open in `canopi-h0q3`, followed by the release audit in `canopi-1zbj`. Software approval does not establish printer or outdoor field-user evidence.
+
+Earlier Zone-selection interaction results below are historical. Current detail pages are created only by drawing Print Areas; authored Zone geometry remains printable.
+
+## Drawn Print Areas update
+
+`canopi-nv6f` removes Zone-based page creation, its search and hit targets, name-linked
+coverage and context padding. Detail pages now use independent drawn rectangles.
+Regression coverage verifies drawing over Zone artwork, ignoring clicks, retaining
+Print Areas through Zone edits, excluding hidden Zones from the drawing overview,
+and preserving full-area fit, page orientation, zoom, cancellation and text coverage.
+
+TypeScript, all 2,189 tests in 235 frontend files, both edition builds and the
+production validation harness build pass. The built Web Edition runner passes in
+Chrome 150.0.7871.46 on Linux, including drawing, retained setup, immediate zoom and
+orientation changes, keyboard framing, inspection, overview navigation, removal and
+the 860 × 700 workspace. Both actual PDF downloads pass Poppler inspection and
+contain all 90 fixture Species names. Artifacts remain ignored under
+`.tmp/pdf-drawn-review/chrome/`. Native delivery and physical printers were not
+retested for this removal; the outstanding review remains in `canopi-h0q3`.
 
 ## Mainline verification
 
@@ -106,7 +125,7 @@ Every browser fixture reports zero remaining export workers after teardown. Focu
 
 The user has been given the nursery, orchard and complete-legend PDFs for review. Print them at 100% / actual size on ordinary colour and monochrome printers. Record printer model, paper, driver/viewer settings, measured 50 mm bar length, indoor/outdoor readability, identification of nearby plants using the page's legend, continuation use and navigation between selected detail areas. Regenerate the samples from the current layout before reviewing; the original pack predates automatic page fitting and spacing-aware marks/text coverage. The dense sample represents nursery spacing; the large overview deliberately shows why detailed coverage is needed.
 
-Current physical values are provisional: A4; automatic full-area fit with independent canvas zoom and page orientation; 10 pt legend text with 13 pt line spacing; 3 mm nominal legend symbols with spacing-aware canvas marks; 0.25 mm geometry strokes; 42 mm legend column; 10 mm margins; and 3 mm Zone context. Fixed detail-scale defaults and overlapping-sheet pagination were replaced in `canopi-c4vf`. The final decision must preserve complete names, authored symbols/colours and honest physical scales. No printer settings, measurements or field-user approval should be inferred from these screen or PDF checks.
+Current physical values are provisional: A4; automatic full-area fit with independent canvas zoom and page orientation; 10 pt legend text with 13 pt line spacing; 3 mm nominal legend symbols with spacing-aware canvas marks; 0.25 mm geometry strokes; 42 mm legend column; 10 mm margins; and no added padding for drawn Print Areas. Zone-based detail creation and its 3 mm context padding were removed in `canopi-nv6f`. Fixed detail-scale defaults and overlapping-sheet pagination were replaced in `canopi-c4vf`. The final decision must preserve complete names, authored symbols/colours and honest physical scales. No printer settings, measurements or field-user approval should be inferred from these screen or PDF checks.
 
 The pending decision and resulting default application remain in `canopi-h0q3` and `canopi-1zbj`. The epic stays open until those requirements and its completion audit are satisfied.
 

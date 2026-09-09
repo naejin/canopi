@@ -9,14 +9,12 @@ export interface PdfPageView {
   /** Ground-space displacement from the fitted centre, in metres. */
   readonly offset?: { readonly x: number; readonly y: number }
 }
-export type PdfAreaSelection =
-  | { readonly kind: 'zone'; readonly name: string }
-  | { readonly kind: 'rectangle'; readonly id: string; readonly name: string; readonly bounds: PrintBounds }
-export function pdfAreaKey(area: PdfAreaSelection): string { return area.kind === 'zone' ? `zone:${encodeURIComponent(area.name)}` : `area:${area.id}` }
+export interface PdfPrintArea { readonly id: string; readonly name: string; readonly bounds: PrintBounds }
+export function pdfAreaKey(area: PdfPrintArea): string { return `area:${area.id}` }
 export interface PdfSetup {
   readonly paper: PdfPaper
   readonly layers: readonly string[]
-  readonly areas?: readonly PdfAreaSelection[]
+  readonly areas?: readonly PdfPrintArea[]
   readonly views?: Readonly<Record<string, PdfPageView>>
   readonly continuations?: boolean
   /** Explicit retention of the reviewed text content and authored placement. */

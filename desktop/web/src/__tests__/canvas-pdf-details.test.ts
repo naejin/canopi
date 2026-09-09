@@ -14,9 +14,9 @@ function garden(): PdfInput {
     annotations: [], measurements: [],
   } }
 }
-const setup: PdfSetup = { paper: 'A4', layers: ['plants', 'zones'], areas: [{ kind: 'zone', name: 'Orchard' }] }
-describe('Fitted Zone detail pages', () => {
-  it('fits a large Zone completely on one landscape detail page by default', () => {
+const setup: PdfSetup = { paper: 'A4', layers: ['plants', 'zones'], areas: [{ id: 'orchard', name: 'Orchard', bounds: { x: 0, y: 0, width: 30, height: 20 } }] }
+describe('Fitted Print Area detail pages', () => {
+  it('fits a large Print Area completely on one landscape detail page by default', () => {
     const plan = buildPdfPlan(garden(), setup, text(), labels)
     const details = plan.pages.filter((page) => page.kind === 'detail')
     expect(details).toHaveLength(1)
@@ -30,7 +30,7 @@ describe('Fitted Zone detail pages', () => {
     expect(page.ground.height).toBeLessThan(23)
   })
   it('keeps the overview around detail coverage and updates only the visible species legend when zoom changes', () => {
-    const plan = buildPdfPlan(garden(), { ...setup, views: { 'zone:Orchard': { zoom: 90 } } }, text(), labels)
+    const plan = buildPdfPlan(garden(), { ...setup, views: { 'area:orchard': { zoom: 90 } } }, text(), labels)
     const [overview, page] = plan.pages
     expect(plan.pages).toHaveLength(2)
     expect(overview!.legend).toEqual([])
@@ -40,8 +40,8 @@ describe('Fitted Zone detail pages', () => {
     expect(overview!.ground.x + overview!.ground.width).toBeGreaterThan(page!.ground.x + page!.ground.width)
     expect(overview!.ground.y + overview!.ground.height).toBeGreaterThan(page!.ground.y + page!.ground.height)
   })
-  it('refits an individual Zone when its orientation changes without changing the overview setting', () => {
-    const plan = buildPdfPlan(garden(), { ...setup, views: { overview: { orientation: 'landscape' }, 'zone:Orchard': { orientation: 'portrait' } } }, text(), labels)
+  it('refits an individual Print Area when its orientation changes without changing the overview setting', () => {
+    const plan = buildPdfPlan(garden(), { ...setup, views: { overview: { orientation: 'landscape' }, 'area:orchard': { orientation: 'portrait' } } }, text(), labels)
     expect(plan.pages).toHaveLength(2)
     expect(plan.pages[0]!.width).toBeGreaterThan(plan.pages[0]!.height)
     const page = plan.pages[1]!

@@ -922,7 +922,6 @@
     "legendFor": "Plant list for page",
     "pageCount": "Page {{page}} of {{count}}",
     "areaName": "Print area {{number}}",
-    "noZones": "This design has no zones. Draw a print area to add detail pages.",
     "errors": {
       "canvas-busy": "Finish the current canvas edit. The preview will update automatically.",
       "prepare-failed": "Could not prepare the PDF. Check your connection and try again.",
@@ -930,7 +929,7 @@
       "unsupported-text": "Some characters are not supported by the print fonts. Edit the text in the design and try again.",
       "text-too-wide": "Some text cannot fit at a readable size. Edit the text in the design and try again.",
       "delivery-failed": "Could not save the PDF. Try saving again.",
-      "selection-missing": "Some selected layers or zones no longer exist. Review the print selections before exporting.",
+      "selection-missing": "Some selected layers no longer exist. Review Print layers before exporting.",
       "coverage-too-large": "This setup exceeds the 200-page limit. Select fewer areas or reduce the number of legend continuation pages.",
       "invalid-page-view": "Choose a valid zoom and orientation for this page."
     },
@@ -939,10 +938,7 @@
     "viewPage": "View page",
     "backToDesign": "Back to design",
     "addPage": "Add page",
-    "addHint": "Click a zone or draw an area on the overview.",
-    "chooseZone": "Or choose a zone",
-    "searchZones": "Search zones",
-    "noMatchingZones": "No matching zones.",
+    "addHint": "Drag a rectangle around the area to print.",
     "frameHint": "Drag the drawing to frame it. Arrow keys also move it; Fit restores the whole area.",
     "overviewHint": "Click a numbered area to open its page. Drag to adjust the overview.",
     "inspect": "Inspect text",

@@ -922,7 +922,6 @@
     "legendFor": "植物列表对应页面",
     "pageCount": "第 {{page}} 页，共 {{count}} 页",
     "areaName": "打印区域 {{number}}",
-    "noZones": "此设计没有分区。请绘制打印区域以添加详细页面。",
     "errors": {
       "canvas-busy": "请完成当前画布编辑，预览将自动更新。",
       "prepare-failed": "无法准备 PDF。请检查网络连接后重试。",
@@ -930,7 +929,7 @@
       "unsupported-text": "打印字体不支持某些字符。请在设计中修改文本后重试。",
       "text-too-wide": "某些文本无法以可读字号放入页面。请在设计中修改文本后重试。",
       "delivery-failed": "无法保存 PDF，请重试保存。",
-      "selection-missing": "部分所选图层或区域已不存在。请检查打印选项后再导出。",
+      "selection-missing": "部分所选图层已不存在。请检查打印图层后再导出。",
       "coverage-too-large": "当前设置超过了200页的限制。请选择更少的区域或减少图例续页数量。",
       "invalid-page-view": "请为此页面选择有效的缩放值和方向。"
     },
@@ -939,10 +938,7 @@
     "viewPage": "查看页面",
     "backToDesign": "返回设计",
     "addPage": "添加页面",
-    "addHint": "在总览中点击区域或拖动画出打印范围。",
-    "chooseZone": "或选择区域",
-    "searchZones": "搜索区域",
-    "noMatchingZones": "没有匹配的区域。",
+    "addHint": "拖动绘制矩形，框住所需的打印范围。",
     "frameHint": "拖动图形调整打印范围，也可使用方向键；点击适合页面可恢复完整范围。",
     "overviewHint": "点击带编号的范围打开对应页面，拖动可调整总览。",
     "inspect": "查看文字",

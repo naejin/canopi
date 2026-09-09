@@ -922,7 +922,6 @@
     "legendFor": "Liste des plantes de la page",
     "pageCount": "Page {{page}} sur {{count}}",
     "areaName": "Aire d’impression {{number}}",
-    "noZones": "Ce design ne contient pas de zones. Dessinez une aire d’impression pour ajouter des pages détaillées.",
     "errors": {
       "canvas-busy": "Terminez la modification du canevas. L’aperçu se mettra à jour automatiquement.",
       "prepare-failed": "Impossible de préparer le PDF. Vérifiez votre connexion et réessayez.",
@@ -930,7 +929,7 @@
       "unsupported-text": "Certains caractères ne sont pas pris en charge par les polices d’impression. Modifiez le texte dans le design et réessayez.",
       "text-too-wide": "Certains textes ne tiennent pas à une taille lisible. Modifiez le texte dans le design et réessayez.",
       "delivery-failed": "Impossible d’enregistrer le PDF. Réessayez l’enregistrement.",
-      "selection-missing": "Certains calques ou zones sélectionnés n’existent plus. Vérifiez les sélections avant d’exporter.",
+      "selection-missing": "Certains calques sélectionnés n’existent plus. Vérifiez les calques à imprimer avant d’exporter.",
       "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Sélectionnez moins de zones ou réduisez le nombre de pages de légende.",
       "invalid-page-view": "Choisissez un zoom et une orientation valides pour cette page."
     },
@@ -939,10 +938,7 @@
     "viewPage": "Voir la page",
     "backToDesign": "Retour au design",
     "addPage": "Ajouter une page",
-    "addHint": "Cliquez sur une zone ou tracez une surface sur la vue d’ensemble.",
-    "chooseZone": "Ou choisir une zone",
-    "searchZones": "Rechercher une zone",
-    "noMatchingZones": "Aucune zone correspondante.",
+    "addHint": "Tracez un rectangle autour de la surface à imprimer.",
     "frameHint": "Faites glisser le dessin pour le cadrer. Les flèches le déplacent aussi ; Ajuster rétablit la vue entière.",
     "overviewHint": "Cliquez sur une surface numérotée pour ouvrir sa page. Faites glisser pour cadrer la vue d’ensemble.",
     "inspect": "Examiner le texte",

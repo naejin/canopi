@@ -43,7 +43,7 @@ it('moves complete readable notes from the navigation overview to their detail p
   const plan = buildPdfPlan({ ...source, canvas: { ...source.canvas, annotations: [
     { id: 'care', position: { x: 2, y: 2 }, text: 'Water weekly', fontSize: 14, rotation: 0 },
   ] } }, { paper: 'A4', layers: ['plants', 'annotations'], areas: [
-    { kind: 'rectangle', id: 'care', name: 'Care area', bounds: { x: 0, y: 0, width: 6, height: 6 } },
+    { id: 'care', name: 'Care area', bounds: { x: 0, y: 0, width: 6, height: 6 } },
   ] }, text(), labels)
   expect(words(plan.pages[0]!)).not.toContain('Water weekly')
   expect(words(plan.pages.find(page => page.kind === 'detail')!)).toContain('Water weekly')
@@ -90,7 +90,7 @@ it.each([
   const plan = buildPdfPlan({ ...source, canvas: { ...source.canvas, annotations: [
     { id: 'care', text: 'Keep this complete note', fontSize: 14, ...note },
   ] } }, { paper: 'A4', layers: ['plants', 'annotations'], areas: [
-    { kind: 'rectangle', id: 'edge', name: 'Edge', bounds: { x: 2, y: 2, width: 1, height: 1 } },
+    { id: 'edge', name: 'Edge', bounds: { x: 2, y: 2, width: 1, height: 1 } },
   ] }, text(), labels)
   expect(words(plan.pages[0]!)).toContain('Keep this complete note')
   expect(plan.pages.find(page => page.kind === 'detail')!.readableTextKeys).toEqual([])
@@ -101,7 +101,7 @@ it('rechecks text after its readable detail page is removed or cropped', () => {
   const canvas = { ...source.canvas, annotations: ['Water weekly', 'Protect seedlings'].map((value, i) => ({
     id: String(i), text: value, position: { x: 1.5 + i * 1.5, y: 2 }, fontSize: 14, rotation: 0,
   })) }
-  const area = { kind: 'rectangle' as const, id: 'care', name: 'Care', bounds: { x: 0, y: 0, width: 6, height: 6 } }
+  const area = { id: 'care', name: 'Care', bounds: { x: 0, y: 0, width: 6, height: 6 } }
   const setup = { paper: 'A4' as const, layers: ['plants', 'annotations'], areas: [area] }
   const complete = buildPdfPlan({ ...source, canvas }, setup, text(), labels)
   expect(complete.blocked).toBeNull()
@@ -135,7 +135,7 @@ it('preserves pinned names and distances on a readable detail sheet', () => {
     ? { ...plant, pinnedName: true, position: { x: 2, y: 2 } } : plant),
     measurements: [{ id: 'spacing', start: { x: 1, y: 4 }, end: { x: 3, y: 4 } }] }
   const plan = buildPdfPlan({ ...source, canvas }, { paper: 'A4', layers: ['plants', 'measurement-guides'], areas: [
-    { kind: 'rectangle', id: 'care', name: 'Care', bounds: { x: 0, y: 0, width: 6, height: 6 } },
+    { id: 'care', name: 'Care', bounds: { x: 0, y: 0, width: 6, height: 6 } },
   ] }, text(), labels)
   const detail = plan.pages.find(page => page.kind === 'detail')!
   expect(canvasWords(detail)).toContain('Mentha spicata')

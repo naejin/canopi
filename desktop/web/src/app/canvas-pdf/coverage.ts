@@ -13,10 +13,10 @@ export function moveCoverage<T extends { ground: PrintBounds }>(fit: T, offset: 
 }
 
 /** At 100%, contain the entire requested extent. Explicit zoom keeps its centre. */
-export function fitArea(bounds: PrintBounds, frame: PrintBounds, padding: number, zoom = 100) {
+export function fitArea(bounds: PrintBounds, frame: PrintBounds, zoom = 100) {
   if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width < 0 || bounds.height < 0) throw new Error('invalid-page-view')
-  const pointsPerMeter = Math.min((frame.width - 2 * padding) / (bounds.width || .001),
-    (frame.height - 2 * padding) / (bounds.height || .001)) * pageZoom(zoom) / 100 / (1 + 1e-12)
+  const pointsPerMeter = Math.min(frame.width / (bounds.width || .001),
+    frame.height / (bounds.height || .001)) * pageZoom(zoom) / 100 / (1 + 1e-12)
   const width = frame.width / pointsPerMeter, height = frame.height / pointsPerMeter
   return { pointsPerMeter, ground: { x: bounds.x + (bounds.width - width) / 2, y: bounds.y + (bounds.height - height) / 2, width, height } }
 }

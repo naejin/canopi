@@ -17,7 +17,7 @@ export function printableCanvas(canvas: CanvasPrintSnapshot, layers: readonly st
 }
 export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels): PdfPlan {
   const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers) }
-  const details = detailPages(input, selected, setup, text, labels)
+  const details = detailPages(selected, setup, text, labels)
   const canvas = selected.canvas
   const empty = !details.length && !canvas.plants.length && !canvas.zones.length && !canvas.annotations.length && !canvas.measurements.length
   const overviews: PdfPage[][] = []
@@ -54,8 +54,8 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     operations.push(textOp(number, page.width - PRINT.margin - number.width, 12 * MM, 9))
     return { ...page, operations }
   })
-  // Picking coverage is independent of manual overview framing and Layer visibility.
-  const pickerExtents = [...input.canvas.zones.map((zone) => zone.bounds), ...details.filter((page) => page.kind === 'detail').map((page) => page.ground)]
+  // Drawing coverage is fitted independently of manual overview framing.
+  const pickerExtents = details.filter((page) => page.kind === 'detail').map((page) => page.ground)
   const pickerFits = orientations().map((orientation) => {
     const geometry = pageGeometry(setup.paper, orientation, false)
     return { geometry, ...fitOverview(selected, geometry.frame, text, pickerExtents.length ? pickerExtents : empty ? [{ x: -5, y: -5, width: 10, height: 10 }] : []) }
@@ -74,17 +74,16 @@ function pageGeometry(paper: 'A4' | 'Letter', orientation: 'portrait' | 'landsca
   return { width, height, frame: { x: PRINT.margin, y: PRINT.header,
     width: width - 2 * PRINT.margin - (legend ? PRINT.gutter + PRINT.legend : 0), height: height - PRINT.header - PRINT.footer } }
 }
-function detailPages(source: PdfInput, selected: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels): PdfPage[] {
+function detailPages(selected: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels): PdfPage[] {
   const result: PdfPage[] = []
   for (const area of setup.areas ?? []) {
-    const requested = area.kind === 'rectangle' ? area.bounds : source.canvas.zones.find((zone) => zone.name === area.name)?.bounds
-    if (!requested) throw new Error('selection-missing')
+    const requested = area.bounds
     const areaKey = pdfAreaKey(area), view = setup.views?.[areaKey]
     const choices = requested.width === requested.height && (!view?.orientation || view.orientation === 'auto')
       ? ['portrait'] as const : orientations(view)
     const candidates = choices.map((orientation) => {
       const geometry = pageGeometry(setup.paper, orientation)
-      return { geometry, ...fitArea(requested, geometry.frame, area.kind === 'zone' ? PRINT.context : 0, view?.zoom) }
+      return { geometry, ...fitArea(requested, geometry.frame, view?.zoom) }
     }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
     const { geometry, ground, pointsPerMeter } = moveCoverage(candidates[0]!, view?.offset)
     const visible = canvasInFrame(selected, ground, pointsPerMeter, geometry.frame, text)

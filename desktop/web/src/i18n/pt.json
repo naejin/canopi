@@ -922,7 +922,6 @@
     "legendFor": "Lista de plantas da página",
     "pageCount": "Página {{page}} de {{count}}",
     "areaName": "Área de impressão {{number}}",
-    "noZones": "Este projeto não tem zonas. Desenhe uma área de impressão para adicionar páginas de detalhes.",
     "errors": {
       "canvas-busy": "Conclua a edição da tela. A pré-visualização será atualizada automaticamente.",
       "prepare-failed": "Não foi possível preparar o PDF. Verifique a conexão e tente novamente.",
@@ -930,7 +929,7 @@
       "unsupported-text": "As fontes de impressão não suportam alguns caracteres. Edite o texto no projeto e tente novamente.",
       "text-too-wide": "Alguns textos não cabem em tamanho legível. Edite o texto no projeto e tente novamente.",
       "delivery-failed": "Não foi possível guardar o PDF. Tente guardar novamente.",
-      "selection-missing": "Algumas camadas ou zonas selecionadas já não existem. Reveja a seleção antes de exportar.",
+      "selection-missing": "Algumas camadas selecionadas já não existem. Reveja as camadas de impressão antes de exportar.",
       "coverage-too-large": "Esta seleção ultrapassa o limite de 200 páginas. Selecione menos áreas ou reduza as páginas de continuação da legenda.",
       "invalid-page-view": "Escolha um zoom e uma orientação válidos para esta página."
     },
@@ -939,10 +938,7 @@
     "viewPage": "Ver página",
     "backToDesign": "Voltar ao design",
     "addPage": "Adicionar página",
-    "addHint": "Clique numa zona ou desenhe uma área na visão geral.",
-    "chooseZone": "Ou escolha uma zona",
-    "searchZones": "Pesquisar zonas",
-    "noMatchingZones": "Nenhuma zona correspondente.",
+    "addHint": "Arraste para desenhar um retângulo à volta da área a imprimir.",
     "frameHint": "Arraste o desenho para o enquadrar. As setas também o movem; Ajustar repõe a área completa.",
     "overviewHint": "Clique numa área numerada para abrir a sua página. Arraste para ajustar a visão geral.",
     "inspect": "Examinar texto",

@@ -922,7 +922,6 @@
     "legendFor": "Lista de plantas de la página",
     "pageCount": "Página {{page}} de {{count}}",
     "areaName": "Área de impresión {{number}}",
-    "noZones": "Este diseño no tiene zonas. Dibuje un área de impresión para añadir páginas de detalle.",
     "errors": {
       "canvas-busy": "Termina la edición del lienzo. La vista previa se actualizará automáticamente.",
       "prepare-failed": "No se pudo preparar el PDF. Compruebe la conexión e inténtelo de nuevo.",
@@ -930,7 +929,7 @@
       "unsupported-text": "Las fuentes de impresión no admiten algunos caracteres. Edite el texto del diseño e inténtelo de nuevo.",
       "text-too-wide": "Parte del texto no cabe a un tamaño legible. Edite el texto del diseño e inténtelo de nuevo.",
       "delivery-failed": "No se pudo guardar el PDF. Intenta guardarlo de nuevo.",
-      "selection-missing": "Algunas capas o zonas seleccionadas ya no existen. Revisa la selección antes de exportar.",
+      "selection-missing": "Algunas capas seleccionadas ya no existen. Revisa las capas de impresión antes de exportar.",
       "coverage-too-large": "Esta selección supera el límite de 200 páginas. Selecciona menos áreas o reduce las páginas de continuación de la leyenda.",
       "invalid-page-view": "Elige un zoom y una orientación válidos para esta página."
     },
@@ -939,10 +938,7 @@
     "viewPage": "Ver página",
     "backToDesign": "Volver al diseño",
     "addPage": "Añadir página",
-    "addHint": "Haz clic en una zona o dibuja un área en la vista general.",
-    "chooseZone": "O elige una zona",
-    "searchZones": "Buscar zonas",
-    "noMatchingZones": "No hay zonas coincidentes.",
+    "addHint": "Arrastra para dibujar un rectángulo alrededor del área que quieres imprimir.",
     "frameHint": "Arrastra el dibujo para encuadrarlo. También puedes usar las flechas; Ajustar restaura el área completa.",
     "overviewHint": "Haz clic en un área numerada para abrir su página. Arrastra para ajustar la vista general.",
     "inspect": "Examinar texto",

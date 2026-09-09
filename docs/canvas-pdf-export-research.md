@@ -143,6 +143,8 @@ The following delivery breakdown was approved for PRD `canopi-cd7x`; its origina
 | 10 | `canopi-h0q3` | Validate field prints and actual platform evidence, then choose release defaults | decision / HITL | 9 | 1, 6, 7, 9, 14, 15, 18 |
 | 11 | `canopi-1zbj` | Apply validated defaults and complete combined PDF release checks | task / AFK | 10 | All |
 
+The breakdown above records the original delivery plan. Zone-based creation in slice 6 was subsequently retired by `canopi-nv6f`; current detail pages use drawn Print Areas only, as recorded in ADR 0024.
+
 Slice 4 already includes session guards, cancellation/error outcomes, map exclusion, and blocking unresolved legend overflow. Later validation extends coverage and measures resource behavior; it does not defer those invariants. Slice 8 adds the explicit continuation option. Physical dimensions remain evaluation parameters until the paper review; early slices are delivery increments and do not reduce the full v1 release contract.
 
 Keep module ownership explicit when implementation is later sliced. New dependencies and any new binary-save IPC need their own justification and repository gates. Do not revive the retired Rust report renderer. Defer map export beyond v1; provider, map-capture, and map-failure work must not become v1 dependencies. Interactive Web maps remain separate work.
@@ -161,10 +163,10 @@ The requested work order is PRD, reviewed delivery beads, `canopi-qj4w`, `canopi
 
 The encoder/font choice and empty-output, retained-selection and multiple-appearance rules were resolved by `canopi-orpp` and are recorded in ADR 0024. Production browser and native WebView measurements are recorded separately in the validation report; they do not establish paper readability or packaged-app save-dialog behavior.
 
-The remaining decision is `canopi-h0q3`: assess automatically fitted pages on paper, choose physical text/symbol/stroke dimensions, columns, margins and Zone context, and approve measured resource limits. Preset scales and overlap are retired. The 1/10/50-page stress fixtures remain measurement inputs rather than product limits.
+The remaining decision is `canopi-h0q3`: assess automatically fitted pages on paper, choose physical text/symbol/stroke dimensions, columns and margins, and approve measured resource limits. Preset scales, overlap, Zone-based page creation and Zone context padding are retired. Detail pages now use drawn Print Areas only. The 1/10/50-page stress fixtures remain measurement inputs rather than product limits.
 
 Deferred map questions: provider plan, retained/shared PDF rights, attribution, quotas, public credentials, actual image dimensions, CORS, and projection remain unverified. They are not v1 blockers.
 
 ## Current handoff
 
-The PRD and delivery breakdown are recorded in epic `canopi-cd7x`. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`), the foundation decision and the software delivery slices are complete. The approved implementation is integrated on `main`. Continue with the paper and remaining platform review in `canopi-h0q3`, then apply its validated settings and complete the release audit in `canopi-1zbj`. Consult the current guides and validation report when resuming; this research is evidence for the original choices, not an implementation backlog.
+The PRD and delivery breakdown are recorded in epic `canopi-cd7x`. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`), the foundation decision and the software delivery slices are complete. The original approved implementation was integrated on `main`; the current guides include subsequent readability and drawn-only detail-page revisions. Continue with the paper and remaining platform review in `canopi-h0q3`, then apply its validated settings and complete the release audit in `canopi-1zbj`. Consult the current guides and validation report when resuming; this research is evidence for the original choices, not an implementation backlog.

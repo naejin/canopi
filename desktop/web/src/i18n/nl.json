@@ -922,7 +922,6 @@
     "legendFor": "Plantenlijst voor pagina",
     "pageCount": "Pagina {{page}} van {{count}}",
     "areaName": "Afdrukgebied {{number}}",
-    "noZones": "Dit ontwerp heeft geen zones. Teken een afdrukgebied om detailpagina’s toe te voegen.",
     "errors": {
       "canvas-busy": "Rond de huidige canvasbewerking af. Het voorbeeld wordt automatisch bijgewerkt.",
       "prepare-failed": "De PDF kon niet worden voorbereid. Controleer uw verbinding en probeer opnieuw.",
@@ -930,7 +929,7 @@
       "unsupported-text": "De afdruklettertypen ondersteunen sommige tekens niet. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "text-too-wide": "Sommige tekst past niet op leesbare grootte. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "delivery-failed": "De PDF kon niet worden opgeslagen. Probeer opnieuw op te slaan.",
-      "selection-missing": "Sommige geselecteerde lagen of zones bestaan niet meer. Controleer de afdrukselectie voordat je exporteert.",
+      "selection-missing": "Sommige geselecteerde lagen bestaan niet meer. Controleer de afdruklagen voordat je exporteert.",
       "coverage-too-large": "Deze selectie overschrijdt de limiet van 200 pagina’s. Selecteer minder gebieden of verminder het aantal vervolgpagina’s voor de legenda.",
       "invalid-page-view": "Kies een geldige zoom en afdrukstand voor deze pagina."
     },
@@ -939,10 +938,7 @@
     "viewPage": "Pagina bekijken",
     "backToDesign": "Terug naar ontwerp",
     "addPage": "Pagina toevoegen",
-    "addHint": "Klik op een zone of teken een gebied op het overzicht.",
-    "chooseZone": "Of kies een zone",
-    "searchZones": "Zones zoeken",
-    "noMatchingZones": "Geen overeenkomende zones.",
+    "addHint": "Sleep een rechthoek rond het gebied dat je wilt afdrukken.",
     "frameHint": "Sleep de tekening om de uitsnede aan te passen. De pijltjestoetsen verplaatsen haar ook; Passend toont het hele gebied.",
     "overviewHint": "Klik op een genummerd gebied om de pagina te openen. Sleep om het overzicht aan te passen.",
     "inspect": "Tekst bekijken",

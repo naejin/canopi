@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canvasPdf } from '../../app/canvas-pdf/live'
 import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
-import { pdfAreaKey, type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
+import { type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
 import { PdfPageEditor } from './PdfPageEditor'
@@ -43,10 +43,9 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
     if (page && !adding && !preparing && page.id !== pageId) setPageId(page.id)
   }, [page, adding, preparing, pageId])
   function selectPage(id: string) { setPageId(id); setAdding(false); setInspecting(false) }
-  function beginAdd() { returnPage.current = pageId; setAdding(true); setInspecting(false); setPageId('overview') }
+  function beginAdd() { focusPage.current = 'overview'; returnPage.current = pageId; setAdding(true); setInspecting(false); setPageId('overview') }
   function openCreatedPage(id: string) { focusPage.current = id; selectPage(id) }
   function cancelAdd() { focusPage.current = returnPage.current; setAdding(false); setPageId(returnPage.current) }
-  function chooseZone(name: string) { workflow.selectZone(name, true); openCreatedPage(pdfAreaKey({ kind: 'zone', name })) }
   function keyDown(event: KeyboardEvent) {
     event.stopPropagation()
     if (event.key === 'Escape') {
@@ -82,13 +81,11 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
       </header>
       <div className={styles.body}>
         <aside className={styles.sidebar}>
-          {adding ? <AddPagePicker zones={workflow.availableZones.value} disabled={disabled} onChoose={chooseZone} onCancel={cancelAdd} />
-            : <>
-              <button type="button" className={styles.addPage} aria-label={t('pdf.addPage')} disabled={disabled || !plan?.pages.length}
-                onClick={beginAdd}>+ {t('pdf.addPage')}</button>
-              <PdfPageRail plan={plan} setup={setup} selected={pageId} disabled={delivering} onSelect={selectPage}
-                onHover={setHoveredPage} onRemove={(id) => { workflow.removeArea(id); if (pageId === id || page?.sourceId === id) selectPage('overview') }} />
-            </>}
+          {adding ? <button type="button" onClick={cancelAdd}>← {t('pdf.cancel')}</button>
+            : <button type="button" className={styles.addPage} aria-label={t('pdf.addPage')} disabled={disabled || !plan?.pages.length}
+              onClick={beginAdd}>+ {t('pdf.addPage')}</button>}
+          <PdfPageRail plan={plan} setup={setup} selected={pageId} disabled={delivering} onSelect={selectPage}
+            onHover={setHoveredPage} onRemove={(id) => { workflow.removeArea(id); if (pageId === id || page?.sourceId === id) selectPage('overview') }} />
           {setup.continuations && <button type="button" disabled={delivering} className={styles.legendAction}
             onClick={() => { if (page?.kind === 'legend') selectPage(page.sourceId!); workflow.configure({ continuations: false }) }}>{t('pdf.removeLegendPages')}</button>}
         </aside>
@@ -101,7 +98,7 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
           <p id="pdf-editor-hint" className={styles.editorHint}>{t(adding ? 'pdf.addHint' : inspecting || page?.kind === 'legend' ? 'pdf.inspectHint' : page?.kind === 'overview' && (setup.areas?.length ?? 0) > 0 ? 'pdf.overviewHint' : 'pdf.frameHint')}</p>
           <div className={styles.paper} aria-busy={preparing}>
             {page && plan && <PdfPageEditor page={page} plan={plan} adding={adding} inspecting={inspecting} disabled={disabled}
-              zones={workflow.zoneShapes.value} highlightedPage={hoveredPage} onZone={chooseZone} onPage={selectPage}
+              highlightedPage={hoveredPage} onPage={selectPage}
               onPrintArea={(bounds) => { const id = workflow.addPrintArea(bounds); if (id) openCreatedPage(id) }}
               onMove={(delta) => {
                 const offset = setup.views?.[page.id]?.offset ?? { x: 0, y: 0 }
@@ -153,23 +150,5 @@ function LayerSettings({ workflow, disabled }: { readonly workflow: PdfWorkflow;
         <span>{t(`canvas.layers.${name}`, { defaultValue: name })}</span>
       </label>)}
     </fieldset>}
-  </div>
-}
-function AddPagePicker({ zones, disabled, onChoose, onCancel }: {
-  readonly zones: readonly string[]; readonly disabled: boolean; readonly onChoose: (name: string) => void; readonly onCancel: () => void
-}) {
-  const [search, setSearch] = useState('')
-  const input = useRef<HTMLInputElement>(null)
-  useEffect(() => { input.current?.focus() }, [])
-  const matches = zones.filter((name) => name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
-  return <div className={styles.addPicker}>
-    <button type="button" onClick={onCancel}>← {t('pdf.cancel')}</button>
-    <p>{t('pdf.addHint')}</p>
-    <label>{t('pdf.chooseZone')}<input ref={input} type="search" aria-label={t('pdf.searchZones')} placeholder={t('pdf.searchZones')} value={search}
-      onInput={(event) => setSearch(event.currentTarget.value)}
-      onKeyDown={(event) => { if (event.key === 'Enter' && matches.length === 1 && !disabled) { event.preventDefault(); onChoose(matches[0]!) } }} /></label>
-    <div className={styles.zoneResults}>{matches.map((name) => <button type="button" key={name} disabled={disabled} onClick={() => onChoose(name)}>{name}</button>)}
-      {!matches.length && <p>{t(zones.length ? 'pdf.noMatchingZones' : 'pdf.noZones')}</p>}
-    </div>
   </div>
 }

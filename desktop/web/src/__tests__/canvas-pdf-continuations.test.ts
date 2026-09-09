@@ -39,11 +39,11 @@ it('keeps automatic area fit while linking legends and later detail pages after 
     { name: 'Long bed', path: 'M0 0 H35 V5 H0 Z', fill: null, bounds: { x: 0, y: 0, width: 35, height: 5 } },
     { name: 'Long bed:legend:0', path: 'M100 0 H101 V1 H100 Z', fill: null, bounds: { x: 100, y: 0, width: 1, height: 1 } },
   ], plants: input.canvas.plants.map((plant, i) => ({ ...plant, position: { x: i < 30 ? 1 : 34, y: 2 } })) }
-  const detail: PdfSetup = { ...setup, continuations: true, areas: [{ kind: 'zone', name: 'Long bed' }, { kind: 'zone', name: 'Long bed:legend:0' }] }
+  const detail: PdfSetup = { ...setup, continuations: true, areas: [{ id: '1', name: 'Long bed', bounds: { x: 0, y: 0, width: 35, height: 5 } }, { id: '2', name: 'Long bed:legend:0', bounds: { x: 100, y: 0, width: 1, height: 1 } }] }
   const plan = buildPdfPlan({ ...input, canvas }, detail, engine(), labels)
   expect(plan.pages.map((page) => page.kind)).toEqual(['overview', 'detail', 'legend', 'detail'])
   expect(plan.pages[1]!.width).toBeGreaterThan(plan.pages[1]!.height)
-  expect(plan.pages[2]!.sourceId).toBe('zone:Long%20bed')
+  expect(plan.pages[2]!.sourceId).toBe('area:1')
   expect(plan.pages[2]!.operations.some((op) => op.kind === 'text' && op.line.runs.some((run) => run.text === 'Plant list for page 2'))).toBe(true)
   expect(plan.pages[3]!.number).toBe(4)
   expect(new Set(plan.pages.map((page) => page.id)).size).toBe(plan.pages.length)

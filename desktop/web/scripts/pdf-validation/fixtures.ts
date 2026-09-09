@@ -28,21 +28,21 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
     scene.plants.push({ kind: 'plant', id: `p${i}`, canonicalName, commonName: null, position: { x: i % side * spacing, y: Math.floor(i / side) * spacing },
       color, pinnedName: i < 2 && name !== 'dense', locked: false, stratum: null, canopySpreadM: null, rotationDeg: 0, scale: null, notes: null, plantedDate: null, quantity: 1 })
   }
-  if (name === 'dense') setup = { ...setup, areas: [{ kind: 'rectangle', id: 'bed', name: 'Nursery bed', bounds: { x: -.2, y: -.2, width: 2.2, height: 2.8 } }] }
+  if (name === 'dense') setup = { ...setup, areas: [{ id: 'bed', name: 'Nursery bed', bounds: { x: -.2, y: -.2, width: 2.2, height: 2.8 } }] }
   if (name === 'mixed' || name === 'map-excluded' || name === 'framing') {
     scene.zones.push({ kind: 'zone', name: 'Orchard', locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
       points: [{ x: -1, y: -1 }, { x: 29, y: -1 }, { x: 29, y: 19 }, { x: -1, y: 19 }] })
     scene.zones.push({ kind: 'zone', name: 'Access path', locked: false, zoneType: 'line', rotationDeg: 0, fillColor: null, notes: null,
       points: [{ x: -3, y: -3 }, { x: 28, y: -3 }, { x: 28, y: 18 }] })
-    setup = { ...setup, areas: [{ kind: 'zone', name: 'Orchard' }] }
+    setup = { ...setup, areas: [{ id: 'orchard', name: 'Orchard', bounds: { x: -1, y: -1, width: 30, height: 20 } }] }
   }
   if (name === 'framing') setup = { ...setup, views: {
     overview: { zoom: 90, offset: { x: -2, y: 1 } },
-    'zone:Orchard': { zoom: 125.5, orientation: 'portrait', offset: { x: 6, y: 3 } },
+    'area:orchard': { zoom: 125.5, orientation: 'portrait', offset: { x: 6, y: 3 } },
   } }
   if (name === 'stress-10' || name === 'stress-50') {
     const areas = name === 'stress-10' ? 9 : 49, columns = name === 'stress-10' ? 3 : 7
-    setup = { ...setup, views: { overview: { orientation: 'portrait' } }, areas: Array.from({ length: areas }, (_, i) => ({ kind: 'rectangle', id: String(i),
+    setup = { ...setup, views: { overview: { orientation: 'portrait' } }, areas: Array.from({ length: areas }, (_, i) => ({ id: String(i),
       name: `Plot ${i + 1}`, bounds: { x: i % columns * 150, y: Math.floor(i / columns) * 150, width: 100, height: 150 } })) }
   }
   if (name === 'multilingual') {

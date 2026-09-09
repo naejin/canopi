@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
-import type { PrintBounds, PrintPoint, PrintZone } from '../../canvas/print'
+import type { PrintBounds, PrintPoint } from '../../canvas/print'
 import type { PdfPage, PdfPlan } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { PdfPageArtwork } from './PdfPagePreview'
@@ -10,10 +10,8 @@ interface EditorProps {
   readonly adding?: boolean
   readonly disabled?: boolean
   readonly inspecting?: boolean
-  readonly zones?: readonly PrintZone[]
   readonly highlightedPage?: string | null
   readonly onPrintArea?: (bounds: PrintBounds) => void
-  readonly onZone?: (name: string) => void
   readonly onPage?: (id: string) => void
   /** Delta of the view centre in metres, committed once per completed gesture. */
   readonly onMove?: (delta: PrintPoint) => void
@@ -22,15 +20,13 @@ interface Gesture {
   readonly start: PrintPoint
   readonly pointerId: number
   readonly bounds: DOMRect
-  readonly zone?: string
   readonly pageId?: string
 }
-export function PdfPageEditor({ page, plan, adding = false, disabled = false, inspecting = false, zones = [], highlightedPage,
-  onPrintArea, onZone, onPage, onMove }: EditorProps) {
+export function PdfPageEditor({ page, plan, adding = false, disabled = false, inspecting = false, highlightedPage,
+  onPrintArea, onPage, onMove }: EditorProps) {
   const root = useRef<SVGSVGElement>(null)
   const drag = useRef<Gesture | null>(null)
   const [selection, setSelection] = useState<PrintBounds | null>(null)
-  const [hoveredZone, setHoveredZone] = useState<string | null>(null)
   const clipId = useId()
   const interactive = !disabled && !inspecting && page.kind !== 'legend'
   function cancel() {
@@ -39,7 +35,7 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     if (previous && root.current?.hasPointerCapture(previous.pointerId)) root.current.releasePointerCapture(previous.pointerId)
   }
   // A new plan, mode, or unmount cancels gestures against the old geometry.
-  useEffect(() => { cancel(); setHoveredZone(null); return cancel }, [page, adding, disabled, inspecting])
+  useEffect(() => { cancel(); return cancel }, [page, adding, disabled, inspecting])
   function point(event: PointerEvent, bounds: DOMRect): PrintPoint {
     const scale = Math.min(bounds.width / page.width, bounds.height / page.height)
     return { x: (event.clientX - bounds.left - (bounds.width - page.width * scale) / 2) / scale,
@@ -59,7 +55,7 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     event.preventDefault(); event.stopPropagation(); root.current!.focus()
     const target = event.target instanceof Element ? event.target : null
     drag.current = { start, bounds, pointerId: event.pointerId,
-      zone: target?.getAttribute('data-pdf-zone') ?? undefined, pageId: target?.getAttribute('data-pdf-target') ?? undefined }
+      pageId: target?.getAttribute('data-pdf-target') ?? undefined }
     root.current!.setPointerCapture(event.pointerId)
   }
   function pointerMove(event: PointerEvent) {
@@ -80,7 +76,7 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     const scale = Math.min(gesture.bounds.width / page.width, gesture.bounds.height / page.height)
     const moved = Math.hypot(end.x - gesture.start.x, end.y - gesture.start.y) * scale >= 4
     cancel()
-    if (!moved) { if (adding && gesture.zone) onZone?.(gesture.zone); else if (!adding && gesture.pageId) onPage?.(gesture.pageId); return }
+    if (!moved) { if (!adding && gesture.pageId) onPage?.(gesture.pageId); return }
     if (adding) {
       if (bounds.width < 2 || bounds.height < 2) return
       onPrintArea?.({ x: page.ground.x + (bounds.x - page.frame.x) / page.pointsPerMeter,
@@ -88,7 +84,6 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
         width: bounds.width / page.pointsPerMeter, height: bounds.height / page.pointsPerMeter })
     } else onMove?.({ x: (gesture.start.x - end.x) / page.pointsPerMeter, y: (gesture.start.y - end.y) / page.pointsPerMeter })
   }
-  const groundTransform = `translate(${page.frame.x - page.ground.x * page.pointsPerMeter} ${page.frame.y - page.ground.y * page.pointsPerMeter}) scale(${page.pointsPerMeter})`
   return <svg ref={root} xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${page.width} ${page.height}`}
     role="group" tabindex={0} aria-label={t('pdf.pageCount', { page: page.number, count: plan.pages.length })}
     aria-describedby="pdf-editor-hint" data-pdf-editor data-pdf-page={page.number}
@@ -106,10 +101,6 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     <PdfPageArtwork page={page} plan={plan} />
     <defs><clipPath id={clipId}><rect {...page.frame} /></clipPath></defs>
     <g clip-path={`url(#${clipId})`}>
-      {interactive && adding && zones.map((zone) => <path key={zone.name} d={zone.path} transform={groundTransform}
-        data-pdf-zone={zone.name} fill={/[zZ]\s*$/.test(zone.path) ? hoveredZone === zone.name ? 'var(--color-primary-bg)' : 'transparent' : 'none'}
-        stroke={hoveredZone === zone.name ? 'var(--color-primary)' : 'var(--color-border-strong)'} stroke-width={(hoveredZone === zone.name ? 2 : 1) / page.pointsPerMeter}
-        pointer-events={/[zZ]\s*$/.test(zone.path) ? 'all' : 'stroke'} onPointerEnter={() => { if (!drag.current) setHoveredZone(zone.name) }} onPointerLeave={() => setHoveredZone(null)}><title>{zone.name}</title></path>)}
       {!adding && page.kind === 'overview' && plan.pages.filter((detail) => detail.kind === 'detail').map((detail) => <rect key={detail.id}
         x={page.frame.x + (detail.ground.x - page.ground.x) * page.pointsPerMeter} y={page.frame.y + (detail.ground.y - page.ground.y) * page.pointsPerMeter}
         width={detail.ground.width * page.pointsPerMeter} height={detail.ground.height * page.pointsPerMeter} data-pdf-target={detail.id}
