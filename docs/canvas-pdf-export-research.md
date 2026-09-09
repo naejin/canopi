@@ -6,6 +6,8 @@ The agreed product scope follows [ADR 0024](adr/0024-shared-canvas-pdf-export.md
 
 Scope revision, 2026-09-09: retain print-layer selection but remove map export from v1. Provider research below is preserved for later work; provider selection, map acquisition/alignment, and map-failure handling no longer gate the first release. Interactive Web maps remain a separate plan.
 
+This is historical research against the baseline above. Its candidate presets, overlap and suggested implementation work are superseded by the accepted automatic fitting and page workspace. The [user guide](canvas-pdf.md), [implementation guide](agent/canvas-pdf.md) and [production validation report](canvas-pdf-validation.md) describe the integrated feature and remaining release checks.
+
 ## Research Questions
 
 | Question | Downstream decision |
@@ -31,7 +33,7 @@ Prefer vector text, symbols, Zone geometry, and navigation on the agreed white b
 
 ### PDF engine comparison
 
-No PDF-generation package is currently declared in [the frontend manifest](../desktop/web/package.json).
+At the research baseline, no PDF-generation package was declared in the frontend manifest. The integrated feature now pins PDFKit and Fontkit; see the implementation guide for the selected versions and assets.
 
 | Candidate | Source-backed capability | Implication for Canopi |
 | --- | --- | --- |
@@ -66,7 +68,7 @@ Calculated examples, not print-test results:
 | 1:500 | 1 mm | 72.5 m |
 | 1:1000 | 0.5 mm | 145 m |
 
-The illustrative 145 mm column comes from A4 portrait with 10 mm margins, a 40 mm legend, and a 5 mm gutter. Allowing another 20 mm vertically for page information leaves 257 mm of canvas height. These dimensions are experiment inputs, not defaults. The calculation supports the six presets but cannot establish a universally readable default.
+The illustrative 145 mm column comes from A4 portrait with 10 mm margins, a 40 mm legend, and a 5 mm gutter. Allowing another 20 mm vertically for page information leaves 257 mm of canvas height. These dimensions are experiment inputs, not defaults. The calculation informed the original six candidate presets but cannot establish a universally readable default; automatic fitting and numeric page zoom have since replaced those presets.
 
 [Adobe distinguishes Actual size from Fit](https://helpx.adobe.com/uk/acrobat/desktop/print-documents/set-up-and-print-pdfs/page-size.html): Fit changes the printed scale. Recommend a concise actual-size instruction and a measurable calibration segment in the validation samples. A browser bitmap's [96-dpi metadata](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toBlob) must not determine PDF placement.
 
@@ -155,15 +157,14 @@ The requested work order is PRD, reviewed delivery beads, `canopi-qj4w`, `canopi
 - Retaining Design Layer selection adds no map-provider dependency. The export overrides remain separate from saved canvas visibility.
 - Provider comparisons remain evidence for deferred map work only. No provider or spend is needed or approved for v1 by this brief.
 
-## Open Questions
+## Resolution and remaining questions
 
-1. Which encoder/font combination passes actual WebView and multilingual tests, at what bundle and memory cost?
-2. Which default detail scale, paper default, font sizes, marker/stroke sizes, column width, margins, overlap, and Zone padding survive paper review?
-3. Which production page/object/resource limits follow from measured performance? The stress-fixture sizes above are not user-facing limits.
-4. The PRD should settle small remaining interaction cases: empty printable extent, removed/renamed Zones or Layers in a retained setup, and how one Species with multiple authored appearances is represented in its legend. None justifies reopening the overall scope.
+The encoder/font choice and empty-output, retained-selection and multiple-appearance rules were resolved by `canopi-orpp` and are recorded in ADR 0024. Production browser and native WebView measurements are recorded separately in the validation report; they do not establish paper readability or packaged-app save-dialog behavior.
+
+The remaining decision is `canopi-h0q3`: assess automatically fitted pages on paper, choose physical text/symbol/stroke dimensions, columns, margins and Zone context, and approve measured resource limits. Preset scales and overlap are retired. The 1/10/50-page stress fixtures remain measurement inputs rather than product limits.
 
 Deferred map questions: provider plan, retained/shared PDF rights, attribution, quotas, public credentials, actual image dimensions, CORS, and projection remain unverified. They are not v1 blockers.
 
-## Recommended Next Skill
+## Current handoff
 
-The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`) are complete. The `canopi-4nzq` [evaluation evidence](canvas-pdf-evaluation.md) supports the pending foundation and interaction decision in `canopi-orpp`. The approved `canopi-cd7x.1` native WebView gate has also passed all three desktop engines. The user then delegated completion, and `canopi-orpp` resolved the foundation and preview rules. Continue through the implementation slices; keep physical print review explicit. Preserve the font, interaction, platform and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.
+The PRD and delivery breakdown are recorded in epic `canopi-cd7x`. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`), the foundation decision and the software delivery slices are complete. The approved implementation is integrated on `main`. Continue with the paper and remaining platform review in `canopi-h0q3`, then apply its validated settings and complete the release audit in `canopi-1zbj`. Consult the current guides and validation report when resuming; this research is evidence for the original choices, not an implementation backlog.

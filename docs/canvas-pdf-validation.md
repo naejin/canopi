@@ -1,6 +1,6 @@
 # Canvas PDF production validation
 
-Recorded 2026-09-09 for `canopi-urxb`. The implementation is available on the stacked PDF branches. Release-default approval remains open in `canopi-h0q3`, followed by `canopi-1zbj`. No actual printer or outdoor field-user review has been performed by the agent.
+Recorded 2026-09-09, beginning with `canopi-urxb` and extended for the revisions below. The user-approved implementation is integrated on `main`, including automatic area fitting and the page workspace. Physical-default approval and outstanding packaged-app checks remain open in `canopi-h0q3`, followed by the release audit in `canopi-1zbj`. Software approval does not establish printer or outdoor field-user evidence.
 
 ## Print workspace update
 

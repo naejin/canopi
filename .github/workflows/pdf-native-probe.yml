@@ -2,11 +2,6 @@ name: PDF native WebView probe
 
 on:
   workflow_dispatch:
-  push:
-    branches: [test/pdf-desktop-webviews]
-    paths:
-      - 'scripts/pdf-evaluation/**'
-      - '.github/workflows/pdf-native-probe.yml'
 
 permissions:
   contents: read

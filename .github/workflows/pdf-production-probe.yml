@@ -3,11 +3,27 @@ name: PDF production WebView probe
 on:
   workflow_dispatch:
   push:
-    branches: [test/pdf-production-validation]
+    branches: [main]
     paths:
       - 'desktop/web/src/app/canvas-pdf/**'
       - 'desktop/web/src/components/canvas-pdf/**'
+      - 'desktop/web/src/canvas/**'
+      - 'desktop/web/package*.json'
+      - 'desktop/web/scripts/prepare-pdf-fonts.mjs'
       - 'desktop/web/scripts/pdf-validation/**'
+      - 'scripts/pdf-evaluation/native/**'
+      - 'scripts/pdf-evaluation/run_native.py'
+      - '.github/workflows/pdf-production-probe.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'desktop/web/src/app/canvas-pdf/**'
+      - 'desktop/web/src/components/canvas-pdf/**'
+      - 'desktop/web/src/canvas/**'
+      - 'desktop/web/package*.json'
+      - 'desktop/web/scripts/prepare-pdf-fonts.mjs'
+      - 'desktop/web/scripts/pdf-validation/**'
+      - 'scripts/pdf-evaluation/native/**'
       - 'scripts/pdf-evaluation/run_native.py'
       - '.github/workflows/pdf-production-probe.yml'
 

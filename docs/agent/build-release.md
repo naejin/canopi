@@ -59,6 +59,8 @@ cargo build --release
 
 Dev, frontend builds, and tests run `npm run prepare:pdf-fonts`. It verifies or downloads pinned Noto fonts and licenses into ignored `desktop/web/public/pdf-fonts/`; both edition builds include those assets. See the [Canvas PDF guide](canvas-pdf.md) for ownership, version pins, and runtime loading. First preparation requires upstream access; valid cached assets are reused. `npm run build:pdf-validation` builds an isolated test host that imports the production capture, worker, encoder, and SVG preview. Its assets go to ignored `dist-pdf-validation/` and are not a shipped app entry point. The production PDF WebView workflow runs that host in all desktop engines; it tests loopback/CSP/worker behavior and fixed-path native delivery, not the Tauri save dialog.
 
+The [production PDF workflow](../../.github/workflows/pdf-production-probe.yml) runs on `main` pushes and pull requests affecting PDF code, canvas input, frontend dependencies, font preparation or its validation host. Keep push and pull-request path filters aligned when those inputs move. It can also be dispatched manually. The [historical encoder probe](../../.github/workflows/pdf-native-probe.yml) is manual-only; preserve its fixed comparison fixture rather than making it follow production layout changes.
+
 ## Bundled DB
 
 - `CANOPI_SKIP_BUNDLED_DB=1` is checked in `desktop/build.rs`.
