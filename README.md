@@ -29,7 +29,7 @@ Canopi combines a Species Catalog with an interactive canvas for designing agroe
 
 **Desktop Location** -- MapLibre-powered Location editing, geocoding search, and a canvas basemap with terrain overlays.
 
-**File format** -- `.canopi` JSON documents with autosave and dirty tracking. Desktop saves files; Web Edition keeps browser drafts and downloads portable `.canopi` files. Canvas PDF sharing and printing is [planned](docs/adr/0024-shared-canvas-pdf-export.md).
+**File format** -- `.canopi` JSON documents with autosave and dirty tracking. Desktop saves files; Web Edition keeps browser drafts and downloads portable `.canopi` files. [Canvas PDF](docs/canvas-pdf.md) exports an overview and optional scaled detail sheets with complete plant legends on desktop and Web.
 
 **Field notebook aesthetic** -- Parchment, ink, and ochre palette. Light and dark themes.
 

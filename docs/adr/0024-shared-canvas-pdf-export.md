@@ -4,7 +4,7 @@ status: accepted
 
 # Shared Canvas PDF export on desktop and Web
 
-Canopi will offer Canvas PDF export for sharing and field printing on Linux, macOS, Windows, and Web Edition through shared browser-compatible print layout and PDF generation, with edition-specific file saving or downloading. Small Designs fit on one page; larger or denser Designs can use an overview plus numbered detail pages focused on selected Zones or Print Areas when needed to preserve paper readability, including a plant-identification legend. The first release focuses on the canvas; Timeline, Budget, and Consortium PDF sections are deferred to later work.
+Canopi offers Canvas PDF export for sharing and field printing on Linux, macOS, Windows, and Web Edition through shared browser-compatible print layout and PDF generation, with edition-specific file saving or downloading. Small Designs fit on one page; larger or denser Designs can use an overview plus numbered detail pages focused on selected Zones or Print Areas when needed to preserve paper readability, including a plant-identification legend. The first release focuses on the canvas; Timeline, Budget, and Consortium PDF sections are deferred to later work.
 
 Users choose which Design Layers appear in the Canvas PDF through print-specific selection. A new print setup initially selects the exportable Design Layers currently visible on the canvas; users can then change that selection independently in the export preview. These export choices do not change the Design's saved Layer visibility. The v1 selector contains no basemap or terrain options.
 
