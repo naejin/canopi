@@ -26,22 +26,8 @@ export function SelectIcon({ className }: IconProps) {
 
 export function HandIcon({ className }: IconProps) {
   return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M8 3.5C8 2.67 8.67 2 9.5 2C10.33 2 11 2.67 11 3.5V9H11.5C11.5 9 11.5 7.5 11.5 6.5C11.5 5.67 12.17 5 13 5C13.83 5 14.5 5.67 14.5 6.5V9H15C15 9 15 8 15 7.5C15 6.67 15.67 6 16.5 6C17.33 6 18 6.67 18 7.5V12C18 15.31 15.31 18 12 18H10C7.79 18 6 16.21 6 14V9V3.5C6 2.67 6.67 2 7.5 2C8.33 2 9 2.67 9 3.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M7 10V5a1.5 1.5 0 0 1 3 0v5-6a1.5 1.5 0 0 1 3 0v6-4a1.5 1.5 0 0 1 3 0v5-2a1.5 1.5 0 0 1 3 0v4c0 4-2.5 6-6 6h-1c-2 0-3.4-1-4.5-2.5L3.5 12a1.5 1.5 0 0 1 2.3-1.9L7 11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 -1)" />
     </svg>
   )
 }
@@ -274,77 +260,24 @@ export function TextIcon({ className }: IconProps) {
 
 export function GridIcon({ className }: IconProps) {
   return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      {/* 3×3 grid */}
-      <rect x="2" y="2" width="16" height="16" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="8" y1="2" x2="8" y2="18" stroke="currentColor" strokeWidth="1" />
-      <line x1="12" y1="2" x2="12" y2="18" stroke="currentColor" strokeWidth="1" />
-      <line x1="2" y1="8" x2="18" y2="8" stroke="currentColor" strokeWidth="1" />
-      <line x1="2" y1="12" x2="18" y2="12" stroke="currentColor" strokeWidth="1" />
+    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="3" y="3" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.5" /><path d="M8 3v14m4-14v14M3 8h14M3 12h14" stroke="currentColor" strokeWidth="1" />
     </svg>
   )
 }
 
 export function SnapIcon({ className }: IconProps) {
   return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      {/* Magnet shape */}
-      <path
-        d="M5 4C5 4 3 4 3 7V12C3 15.31 5.69 18 9 18H11C14.31 18 17 15.31 17 12V7C17 4 15 4 15 4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line x1="5" y1="4" x2="5" y2="9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="15" y1="4" x2="15" y2="9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      {/* Gap in middle to suggest poles */}
-      <line x1="8" y1="2" x2="12" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M4 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4Z M4 8h4m4 0h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
 export function RulerIcon({ className }: IconProps) {
   return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      {/* Diagonal ruler */}
-      <rect
-        x="2.5"
-        y="8"
-        width="15"
-        height="4"
-        rx="1"
-        transform="rotate(-45 2.5 8)"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      {/* Tick marks along the ruler diagonal */}
-      <line x1="5" y1="10.5" x2="6.5" y2="9" stroke="currentColor" strokeWidth="1" />
-      <line x1="8" y1="13.5" x2="9.5" y2="12" stroke="currentColor" strokeWidth="1" />
-      <line x1="11" y1="10.5" x2="13" y2="8.5" stroke="currentColor" strokeWidth="1" />
+    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="m3 12 9-9 5 5-9 9Z M6 9l2 2m1-5 2 2m1-5 2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -439,12 +372,8 @@ export function ObjectStampIcon({ className }: IconProps) {
 
 export function SpacingIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
-      <circle cx="3" cy="10" r="2" fill="currentColor" opacity="0.6" />
-      <circle cx="7.5" cy="10" r="2" fill="currentColor" opacity="0.8" />
-      <circle cx="12.5" cy="10" r="2" fill="currentColor" opacity="0.8" />
-      <circle cx="17" cy="10" r="2" fill="currentColor" opacity="0.6" />
+    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M4 10h12" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" /><circle cx="3.5" cy="10" r="2" stroke="currentColor" strokeWidth="1.5" /><circle cx="16.5" cy="10" r="2" stroke="currentColor" strokeWidth="1.5" /><path d="m8 5-2-2m0 0 2-2M6 3h8m-2-2 2 2-2 2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" transform="translate(0 2)" />
     </svg>
   )
 }

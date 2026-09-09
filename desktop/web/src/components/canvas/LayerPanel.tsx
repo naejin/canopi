@@ -109,15 +109,19 @@ export function LayerPanel() {
                   type="button"
                   className={styles.toggleBtn}
                   aria-label={`${t('canvas.layers.visibility')}: ${row.label}`}
+                  aria-pressed={row.visible}
                   onClick={() => {
                     setCanvasLayerPresentationVisibility(row.id, !row.visible)
                   }}
                 >
                   <EyeIcon open={row.visible} />
+                  <ButtonTooltip label={`${t('canvas.layers.visibility')}: ${row.label}`} side="left" />
                 </button>
                 <button
                   type="button"
                   className={styles.layerName}
+                  aria-current={row.active ? 'true' : undefined}
+                  title={row.label}
                   onClick={() => setCanvasLayerPresentationActiveLayer(row.id)}
                 >
                   {row.label}
@@ -265,13 +269,17 @@ function OpacitySlider({ row, disabled }: { row: CanvasLayerPresentationRow; dis
   const opacity = Math.round(row.opacity * 100)
   return (
     <div className={styles.controlRow}>
-      <span className={styles.controlLabel}>{t('canvas.layers.opacity')}</span>
+      <span className={styles.controlLabel}>
+        {t('canvas.layers.opacity')}
+        <output className={styles.opacityValue}>{opacity}%</output>
+      </span>
       <input
         type="range"
         className={styles.mapSlider}
         min="0"
         max="100"
         value={opacity}
+        aria-label={`${t('canvas.layers.opacity')}: ${row.label}`}
         disabled={disabled}
         onInput={(event) => {
           setCanvasLayerPresentationOpacity(row.id, Number((event.target as HTMLInputElement).value) / 100)

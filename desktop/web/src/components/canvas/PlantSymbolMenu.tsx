@@ -8,6 +8,7 @@ import {
 } from '../../canvas/runtime/scene'
 import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
+import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
 import styles from './PlantSymbolMenu.module.css'
 
 interface PlantSymbolMenuProps {
@@ -28,6 +29,7 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
   const querySurface = currentCanvasQuerySurface.value
   void querySurface?.revision.plantNames.value
   const menuOpen = plantSymbolMenuOpen.value
+  const menuRef = useAppearancePopover(menuOpen, buttonRef)
   const context = querySurface?.getSelectedPlantSymbolContext() ?? {
     plantIds: [],
     singleSpeciesCanonicalName: null,
@@ -102,21 +104,29 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
 
   return (
     <div
+      ref={menuRef}
       className={styles.menu}
       role="dialog"
       aria-label={t('canvas.plantSymbol.label')}
       data-preserve-overlays="true"
+      onKeyDown={(event) => navigateAppearanceChoices(event, 5)}
     >
       <div className={styles.header}>
         <div className={styles.headerText}>
           <div className={styles.sectionLabel}>{t('canvas.plantSymbol.label')}</div>
-          <div className={styles.title}>{selectionSummary}</div>
+          <div className={styles.title}>
+            {selectionSummary}
+            {singleSpeciesLabel && (
+              <span className={styles.selectionCount} aria-label={t('canvas.plantSymbol.selectedCount', { count: context.plantIds.length })}>
+                {context.plantIds.length}
+              </span>
+            )}
+          </div>
           {context.singleSpeciesCommonName && context.singleSpeciesCanonicalName && (
             <div className={styles.subtitle}>
               <em>{context.singleSpeciesCanonicalName}</em>
             </div>
           )}
-          <div className={styles.status}>{statusText}</div>
         </div>
         <button
           type="button"
@@ -134,6 +144,10 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
         aria-label={t('canvas.plantSymbol.preview')}
       >
         <PlantSymbolGlyph symbol={activeSymbol} className={styles.previewGlyph} />
+        <div className={styles.previewText}>
+          <strong>{symbolLabel(activeSymbol)}</strong>
+          <span className={styles.status}>{statusText}</span>
+        </div>
       </div>
 
       <SymbolGrid symbols={HABIT_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
@@ -174,10 +188,13 @@ function SymbolGrid({
             className={`${styles.symbolButton}${active ? ` ${styles.symbolButtonActive}` : ''}`}
             aria-label={label}
             aria-selected={active}
+            role="option"
+            tabIndex={active ? 0 : -1}
             title={label}
             onClick={() => onSelect(symbol)}
           >
             <PlantSymbolGlyph symbol={symbol} className={styles.symbolGlyph} />
+            <span className={styles.symbolLabel}>{label}</span>
           </button>
         )
       })}

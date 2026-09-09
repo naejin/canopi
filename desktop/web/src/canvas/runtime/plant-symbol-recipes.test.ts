@@ -40,7 +40,7 @@ describe('plant symbol recipes', () => {
     ])
     expect(PLANT_SYMBOL_RECIPES.tree).toEqual([
       { kind: 'circle', cx: 0, cy: -0.25, radius: 0.78, fill: true, stroke: true },
-      { kind: 'lines', strokeWidth: 0.22, segments: [[0, 0.47, 0, 0.98]] },
+      { kind: 'lines', strokeWidth: 0.2, segments: [[0, -0.28, 0, 0.98], [-0.35, -0.12, 0, 0.2], [0, 0.05, 0.32, -0.3]] },
     ])
     expect(PLANT_SYMBOL_RECIPES.shrub).toEqual([
       {
@@ -75,26 +75,33 @@ describe('plant symbol recipes', () => {
       { kind: 'lines', strokeWidth: 0.22, segments: [[-0.88, 0.56, 0.88, 0.56]] },
     ])
     expect(PLANT_SYMBOL_RECIPES.herbaceous).toEqual([
+      { kind: 'lines', strokeWidth: 0.18, segments: [[0, 0.95, 0, -0.85]] },
       {
-        kind: 'lines',
-        strokeWidth: 0.24,
+        kind: 'curvePath', start: [0, 0.3],
         segments: [
-          [0, 0.95, 0, -0.84],
-          [0, 0.15, -0.74, -0.32],
-          [0, -0.13, 0.74, -0.57],
+          { kind: 'cubic', control1: [-0.65, 0.3], control2: [-0.86, -0.1], to: [-0.85, -0.58] },
+          { kind: 'cubic', control1: [-0.3, -0.58], control2: [0, -0.25], to: [0, 0.3] },
         ],
+        closed: true, fill: true, stroke: true,
+      },
+      {
+        kind: 'curvePath', start: [0, -0.05],
+        segments: [
+          { kind: 'cubic', control1: [0.05, -0.65], control2: [0.4, -0.85], to: [0.85, -0.85] },
+          { kind: 'cubic', control1: [0.85, -0.28], control2: [0.52, -0.02], to: [0, -0.05] },
+        ],
+        closed: true, fill: true, stroke: true,
       },
     ])
     expect(PLANT_SYMBOL_RECIPES.climber).toEqual([
+      { kind: 'lines', strokeWidth: 0.12, segments: [[0.5, -0.94, 0.5, 0.94]] },
       {
-        kind: 'lines',
-        strokeWidth: 0.24,
+        kind: 'curvePath', start: [-0.32, 0.92],
         segments: [
-          [-0.36, 0.88, 0.25, 0.35],
-          [0.25, 0.35, -0.22, -0.14],
-          [-0.22, -0.14, 0.27, -0.63],
-          [0.27, -0.63, -0.04, -0.9],
+          { kind: 'cubic', control1: [0.8, 0.55], control2: [0.7, 0.16], to: [-0.12, -0.08] },
+          { kind: 'cubic', control1: [-0.85, -0.3], control2: [-0.6, -0.75], to: [0.34, -0.92] },
         ],
+        closed: false, fill: false, stroke: true, strokeWidth: 0.22,
       },
     ])
     expect(PLANT_SYMBOL_RECIPES.groundcover).toEqual([

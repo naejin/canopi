@@ -22,6 +22,7 @@ describe('PlantColorMenu', () => {
   const buttonRef = { current: null as HTMLButtonElement | null }
 
   beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
@@ -51,6 +52,7 @@ describe('PlantColorMenu', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     render(null, container)
     container.remove()
     selectedObjectIds.value = new Set()
@@ -278,12 +280,24 @@ describe('PlantColorMenu', () => {
 
     const input = container.querySelector('input[placeholder="#C44230"]') as HTMLInputElement
     await act(async () => {
+      input.value = 'invalid'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    const applyActions = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(button =>
+      button.textContent?.includes('Set color') || button.textContent?.includes('Set for all'),
+    )
+    expect(applyActions).toHaveLength(2)
+    expect(applyActions.every(button => button.disabled)).toBe(true)
+    await act(async () => {
       input.value = '#123ABC'
       input.dispatchEvent(new Event('input', { bubbles: true }))
       await Promise.resolve()
     })
 
     const customSwatch = container.querySelector('button[aria-label="Custom color"]') as HTMLButtonElement
+    expect(input.getAttribute('aria-invalid')).toBe('false')
     expect(customSwatch).not.toBeNull()
     expect(customSwatch.disabled).toBe(false)
 

@@ -1,4 +1,5 @@
 .toolbar {
+  --canvas-toolbar-width: 44px;
   width: var(--canvas-toolbar-width);
   min-width: var(--canvas-toolbar-width);
   display: flex;
@@ -11,7 +12,9 @@
 }
 
 .toolButton {
-  width: 100%;
+  width: calc(100% - 2 * var(--space-1));
+  margin: 0 var(--space-1);
+  border-radius: var(--radius-md);
   height: var(--control-size-xl);
   display: flex;
   align-items: center;
@@ -55,7 +58,7 @@
 .toolButton[aria-checked="true"]::before {
   content: '';
   position: absolute;
-  left: 0;
+  left: -4px;
   top: 8px;
   bottom: 8px;
   width: 2px;
@@ -80,7 +83,7 @@
 .toolButton[aria-pressed="true"]::before {
   content: '';
   position: absolute;
-  left: 0;
+  left: -4px;
   top: 8px;
   bottom: 8px;
   width: 2px;
@@ -94,8 +97,8 @@
 }
 
 .toolIcon {
-  width: var(--icon-size-md);
-  height: var(--icon-size-md);
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 

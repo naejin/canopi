@@ -22,6 +22,7 @@ describe('PlantSymbolMenu', () => {
   const buttonRef = { current: null as HTMLButtonElement | null }
 
   beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
@@ -49,6 +50,7 @@ describe('PlantSymbolMenu', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     render(null, container)
     container.remove()
     selectedObjectIds.value = new Set()
@@ -56,7 +58,7 @@ describe('PlantSymbolMenu', () => {
     setCurrentCanvasSession(null)
   })
 
-  it('applies an icon-only symbol choice to the current plant selection', async () => {
+  it('applies a labeled symbol choice to the current plant selection', async () => {
     getSelectedPlantSymbolContext.mockReturnValue({
       plantIds: ['plant-1', 'plant-2'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -76,7 +78,7 @@ describe('PlantSymbolMenu', () => {
     const triangleButton = container.querySelector<HTMLButtonElement>('button[aria-label="Triangle"]')
     expect(triangleButton).not.toBeNull()
     expect(triangleButton?.title).toBe('Triangle')
-    expect(triangleButton?.textContent).toBe('')
+    expect(triangleButton?.textContent).toBe('Triangle')
 
     await act(async () => {
       triangleButton?.click()
@@ -114,12 +116,12 @@ describe('PlantSymbolMenu', () => {
     })
 
     const symbolRows = container.querySelectorAll('[role="listbox"]')
-    expect(symbolRows[0]?.textContent).toBe('')
+    expect(symbolRows[0]?.textContent).toContain('Groundcover')
     expect(symbolRows[0]?.querySelector('button[aria-label="Groundcover"]')).toBeTruthy()
     expect(symbolRows[1]?.querySelector('button[aria-label="Wave"]')).toBeTruthy()
 
     const waveButton = symbolRows[1]?.querySelector<HTMLButtonElement>('button[aria-label="Wave"]')
-    expect(waveButton?.textContent).toBe('')
+    expect(waveButton?.textContent).toBe('Wave')
 
     await act(async () => {
       waveButton?.click()
@@ -178,8 +180,8 @@ describe('PlantSymbolMenu', () => {
     const menuRule = css.match(/\.menu\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
     const gridRule = css.match(/\.grid\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
 
-    expect(menuRule).toContain('width: calc(5 * var(--symbol-size) + 4 * var(--space-2) + 2 * var(--space-3));')
-    expect(gridRule).toContain('grid-template-columns: repeat(5, var(--symbol-size));')
+    expect(menuRule).toContain('width: 360px;')
+    expect(gridRule).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));')
   })
 
   it('updates the selected plant name when localized plant names refresh', async () => {

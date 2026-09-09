@@ -18,6 +18,8 @@ import {
   type HslColor,
 } from '../../canvas/plant-colors'
 import { t } from '../../i18n'
+import { PlantSymbolGlyph } from './PlantSymbolGlyph'
+import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
 import styles from './PlantColorMenu.module.css'
 
 interface PlantColorMenuProps {
@@ -51,6 +53,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   void querySurface?.revision.plantNames.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value
+  const menuRef = useAppearancePopover(menuOpen, buttonRef)
   const context = querySurface?.getSelectedPlantColorContext() ?? {
     plantIds: [],
     singleSpeciesCanonicalName: null,
@@ -213,18 +216,30 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   const squareCursorLeft = `${pickerColor.s}%`
   const squareCursorTop = `${100 - pickerColor.l}%`
   const hueCursorTop = `${(pickerColor.h / 360) * 100}%`
+  const effectiveSymbol = querySurface?.getSelectedPlantSymbolContext().sharedEffectiveSymbol
+  const previewSymbol = !effectiveSymbol || effectiveSymbol === 'mixed' ? 'round' : effectiveSymbol
+  const paletteHasActiveColor = PLANT_COLOR_PALETTE.some(entry => normalizeHexColor(entry.hex) === normalizedActiveColor)
 
   return (
     <div
+      ref={menuRef}
       className={styles.menu}
       role="dialog"
       aria-label={t('canvas.plantColor.label')}
       data-preserve-overlays="true"
+      onKeyDown={(event) => navigateAppearanceChoices(event, 6)}
     >
       <div className={styles.header}>
         <div className={styles.headerText}>
           <div className={styles.sectionLabel}>{t('canvas.plantColor.label')}</div>
-          <div className={styles.title}>{selectionSummary}</div>
+          <div className={styles.title}>
+            {selectionSummary}
+            {singleSpeciesLabel && (
+              <span className={styles.selectionCount} aria-label={t('canvas.plantColor.selectedCount', { count: context.plantIds.length })}>
+                {context.plantIds.length}
+              </span>
+            )}
+          </div>
           {context.singleSpeciesCommonName && context.singleSpeciesCanonicalName && (
             <div className={styles.subtitle}>
               <em>{context.singleSpeciesCanonicalName}</em>
@@ -239,6 +254,16 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
         >
           ×
         </button>
+      </div>
+
+      <div className={styles.preview} aria-label={t('canvas.plantColor.preview')}>
+        <span className={styles.previewGlyph} style={{ color: previewColor }}>
+          <PlantSymbolGlyph symbol={previewSymbol} />
+        </span>
+        <div className={styles.previewText}>
+          <strong>{normalizedActiveColor ?? customInput}</strong>
+          <span>{t('canvas.plantColor.preview')}</span>
+        </div>
       </div>
 
       {context.suggestedColor && context.sharedCurrentColor !== 'mixed' && (
@@ -259,6 +284,9 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
               style={{ backgroundColor: color.hex }}
               aria-label={color.name}
               aria-selected={active}
+              role="option"
+              tabIndex={active || (color === PLANT_COLOR_PALETTE[0] && !paletteHasActiveColor) ? 0 : -1}
+              title={color.name}
               onClick={() => {
                 syncPickerFromHex(color.hex, { markCustom: false })
               }}
@@ -361,6 +389,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
               }}
               placeholder="#C44230"
               aria-label={t('canvas.plantColor.customHex')}
+              aria-invalid={!normalizedActiveColor}
               spellcheck={false}
             />
           </div>
