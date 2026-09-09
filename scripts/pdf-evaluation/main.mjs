@@ -145,7 +145,7 @@ document.getElementById('generate').addEventListener('click', async () => {
   finally { button.disabled = false; }
 });
 document.getElementById('download').addEventListener('click', () => download(current.blob, `${current.report.candidate}.pdf`));
-window.evaluation = { run, report: () => current?.report, downloadReport: () => download(new Blob([JSON.stringify(current.report, null, 2)], { type: 'application/json' }), `${current.report.candidate}.json`), activeUrls: () => urls.size };
+window.evaluation = { run, report: () => current?.report, bytes: () => current.blob.arrayBuffer(), downloadReport: () => download(new Blob([JSON.stringify(current.report, null, 2)], { type: 'application/json' }), `${current.report.candidate}.json`), activeUrls: () => urls.size };
 window.addEventListener('pagehide', () => {
   disposeFonts();
   for (const timer of timers) clearTimeout(timer);

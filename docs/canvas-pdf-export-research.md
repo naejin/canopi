@@ -125,22 +125,23 @@ Automate page dimensions, all six scales, coverage/overlap, Layer selection, Spe
 
 ## Implications for Issue Breakdown
 
-The following delivery breakdown was approved for PRD `canopi-cd7x`; its ten child beads are tracked in bd, which is authoritative for current status and dependencies. Feature slices include UI, shared layout, preview, PDF delivery, and behavior tests. AFK means agent execution after dependencies close; HITL requires human judgment or physical validation. All slices are P2.
+The following delivery breakdown was approved for PRD `canopi-cd7x`; its original ten slices plus the approved native verification gate are tracked in bd, which is authoritative for current status and dependencies. Feature slices include UI, shared layout, preview, PDF delivery, and behavior tests. AFK means agent execution after dependencies close; HITL requires human judgment or physical validation. All slices are P2.
 
 | Order | Bead | Slice | Type / mode | Blocked by | PRD stories |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `canopi-4nzq` | Evaluate multilingual PDF output with the candidate encoders and font assets | task / AFK | None | 1, 9, 10, 14, 15, 18 |
-| 2 | `canopi-orpp` | Choose the PDF foundation and settle preview edge-case rules | decision / HITL | 1 | 1, 3, 9, 13, 15, 16 |
-| 3 | `canopi-w4p3` | Preview and export an overview with authored presentation and readable localized legends | feature / AFK | 2, `canopi-qj4w` | 1, 2, 6, 9, 10, 12, 14, 15, 16, 17 |
-| 4 | `canopi-hikf` | Select print Layers and retain setup while editing the Design | feature / AFK | 3 | 3, 13 |
-| 5 | `canopi-e9br` | Export selected Zones as scaled detail sheets with overlap and navigation | feature / AFK | 4 | 2, 4, 6, 7, 8, 9 |
-| 6 | `canopi-25m9` | Draw Print Areas and override individual area scales | feature / AFK | 5 | 5, 7, 8, 13 |
-| 7 | `canopi-zvbk` | Export complete legends with explicit continuation pages and final references | feature / AFK | 5 | 9, 11, 12 |
-| 8 | `canopi-urxb` | Validate export recovery, resources, and representative output | task / AFK | 6, 7 | 1, 10, 11, 13, 15, 16, 17, 18 |
-| 9 | `canopi-h0q3` | Validate field prints and actual platform evidence, then choose release defaults | decision / HITL | 8 | 1, 6, 7, 9, 14, 15, 18 |
-| 10 | `canopi-1zbj` | Apply validated defaults and complete combined PDF release checks | task / AFK | 9 | All |
+| 2 | `canopi-cd7x.1` | Verify the pinned fixture in actual desktop WebViews before export UI | task / AFK | 1 | 1, 9, 10, 14, 15, 18 |
+| 3 | `canopi-orpp` | Choose the PDF foundation and settle preview edge-case rules | decision / HITL | 1, 2 | 1, 3, 9, 13, 15, 16 |
+| 4 | `canopi-w4p3` | Preview and export an overview with authored presentation and readable localized legends | feature / AFK | 3, `canopi-qj4w` | 1, 2, 6, 9, 10, 12, 14, 15, 16, 17 |
+| 5 | `canopi-hikf` | Select print Layers and retain setup while editing the Design | feature / AFK | 4 | 3, 13 |
+| 6 | `canopi-e9br` | Export selected Zones as scaled detail sheets with overlap and navigation | feature / AFK | 5 | 2, 4, 6, 7, 8, 9 |
+| 7 | `canopi-25m9` | Draw Print Areas and override individual area scales | feature / AFK | 6 | 5, 7, 8, 13 |
+| 8 | `canopi-zvbk` | Export complete legends with explicit continuation pages and final references | feature / AFK | 6 | 9, 11, 12 |
+| 9 | `canopi-urxb` | Validate export recovery, resources, and representative output | task / AFK | 7, 8 | 1, 10, 11, 13, 15, 16, 17, 18 |
+| 10 | `canopi-h0q3` | Validate field prints and actual platform evidence, then choose release defaults | decision / HITL | 9 | 1, 6, 7, 9, 14, 15, 18 |
+| 11 | `canopi-1zbj` | Apply validated defaults and complete combined PDF release checks | task / AFK | 10 | All |
 
-Slice 3 already includes session guards, cancellation/error outcomes, map exclusion, and blocking unresolved legend overflow. Later validation extends coverage and measures resource behavior; it does not defer those invariants. Slice 7 adds the explicit continuation option. Physical dimensions remain evaluation parameters until the paper review; early slices are delivery increments and do not reduce the full v1 release contract.
+Slice 4 already includes session guards, cancellation/error outcomes, map exclusion, and blocking unresolved legend overflow. Later validation extends coverage and measures resource behavior; it does not defer those invariants. Slice 8 adds the explicit continuation option. Physical dimensions remain evaluation parameters until the paper review; early slices are delivery increments and do not reduce the full v1 release contract.
 
 Keep module ownership explicit when implementation is later sliced. New dependencies and any new binary-save IPC need their own justification and repository gates. Do not revive the retired Rust report renderer. Defer map export beyond v1; provider, map-capture, and map-failure work must not become v1 dependencies. Interactive Web maps remain separate work.
 
@@ -148,7 +149,7 @@ The requested work order is PRD, reviewed delivery beads, `canopi-qj4w`, `canopi
 
 ## Updated Assumptions
 
-- The initial research judged shared browser-compatible generation feasible from documented capabilities. The later `canopi-4nzq` evaluation now demonstrates it in Linux Chromium, with the other browser/WebView and physical-print checks still pending.
+- The initial research judged shared browser-compatible generation feasible from documented capabilities. The later `canopi-4nzq` evaluation now demonstrates it in Linux Chromium, with [native engine verification](canvas-pdf-native-verification.md) now scheduled before the foundation decision. Integrated browser/WebView and physical-print checks remain release obligations.
 - Existing scene logic is reusable input; screen snapshots and CSS font fallbacks are insufficient export contracts. Geographic projection and map acquisition are outside v1.
 - PDFKit is a stronger browser candidate than older packaging advice suggests. Library choice remains provisional.
 - Retaining Design Layer selection adds no map-provider dependency. The export overrides remain separate from saved canvas visibility.
@@ -165,4 +166,4 @@ Deferred map questions: provider plan, retained/shared PDF rights, attribution, 
 
 ## Recommended Next Skill
 
-The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`) are complete. The `canopi-4nzq` [evaluation evidence](canvas-pdf-evaluation.md) is ready for the foundation and interaction decision in `canopi-orpp`. Preserve the font, interaction, platform and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.
+The **to-prd** and **to-issues** steps are recorded as epic `canopi-cd7x` and the child beads above. Both scheduled maintenance fixes (`canopi-qj4w` and `canopi-90wm`) are complete. The `canopi-4nzq` [evaluation evidence](canvas-pdf-evaluation.md) supports the pending foundation and interaction decision in `canopi-orpp`. The user approved completing `canopi-cd7x.1` native WebView evidence before that decision and substantial export UI work; this ordering does not accept the outstanding preview edge-case proposals. Preserve the font, interaction, platform and readability choices as explicit validation gates; keep map-provider work deferred. Return to grill-with-docs only if validation requires another scope change.

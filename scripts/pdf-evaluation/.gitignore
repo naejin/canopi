@@ -1,5 +1,7 @@
-node_modules/
+node_modules
 dist/
 public/fonts/
 output/
 __pycache__/
+native/windows/bin/
+native/windows/obj/

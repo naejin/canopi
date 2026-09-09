@@ -25,9 +25,9 @@ def normalized(text):
     return ''.join(unicodedata.normalize('NFC', text).split())
 
 
-def inspect(candidate):
-    pdf = OUTPUT / f'{candidate}.pdf'
-    report = json.loads((OUTPUT / f'{candidate}.json').read_text())
+def inspect(candidate, output=OUTPUT):
+    pdf = output / f'{candidate}.pdf'
+    report = json.loads((output / f'{candidate}.json').read_text())
     data = pdf.read_bytes()
     assert hashlib.sha256(data).hexdigest() == report['sha256'], 'Downloaded bytes changed'
     info, info_errors = command('pdfinfo', '-f', '1', '-l', '3', str(pdf))
@@ -72,9 +72,10 @@ def inspect(candidate):
     expected_width = next(m['pdfWidth'] for m in report['measurements'] if m['text'] == 'ローズマリー')
     assert all(abs(w - expected_width) < .01 for w in actual_widths), 'PDF text width differs from encoder measurement'
     errors = '\n'.join(filter(None, [info_errors, text_errors, font_errors, bbox_errors]))
-    (OUTPUT / f'{candidate}-fonts.txt').write_text(fonts + errors)
-    (OUTPUT / f'{candidate}-text.txt').write_text(text)
-    (OUTPUT / f'{candidate}-bbox.html').write_text(bbox)
+    (output / f'{candidate}-fonts.txt').write_text(fonts + errors)
+    (output / f'{candidate}-text.txt').write_text(text)
+    (output / f'{candidate}-bbox.html').write_text(bbox)
+    heap_samples = [s[key] for s in report['samples'] for key in ['heapBefore', 'heapAfter'] if s[key] is not None]
     summary = {
         'bytes': len(data), 'pages': len(sizes), 'calibrationMm': lines,
         'extraction': 'pass', 'embeddedFonts': fonts,
@@ -84,7 +85,7 @@ def inspect(candidate):
         'maxShapedPreviewWidthDeltaPt': max(abs(m['previewWidth'] - m['pdfWidth']) for m in report['measurements']),
         'coldGenerationMs': report['samples'][0]['generationMs'],
         'warmMedianMs': statistics.median(s['generationMs'] for s in report['samples'][1:]) if len(report['samples']) > 1 else None,
-        'observedHeapBeforeAfterBytes': [min(s['heapBefore'] for s in report['samples']), max(s['heapAfter'] for s in report['samples'])],
+        'observedHeapBeforeAfterBytes': [min(heap_samples), max(heap_samples)] if heap_samples else None,
     }
     if candidate == 'pdfkit':
         assert summary['fontReaderPass'], 'Recommended candidate must pass independent font inspection'
@@ -92,9 +93,10 @@ def inspect(candidate):
     return summary
 
 
-summaries = {candidate: inspect(candidate) for candidate in ['pdfkit', 'pdf-lib']}
-first = json.loads((OUTPUT / 'pdfkit.json').read_text())['fixture']
-second = json.loads((OUTPUT / 'pdf-lib.json').read_text())['fixture']
-assert first == second, 'Candidates must use exactly the same page plan'
-(OUTPUT / 'inspection.json').write_text(json.dumps(summaries, ensure_ascii=False, indent=2) + '\n')
-print(json.dumps(summaries, ensure_ascii=False, indent=2))
+if __name__ == '__main__':
+    summaries = {candidate: inspect(candidate) for candidate in ['pdfkit', 'pdf-lib']}
+    first = json.loads((OUTPUT / 'pdfkit.json').read_text())['fixture']
+    second = json.loads((OUTPUT / 'pdf-lib.json').read_text())['fixture']
+    assert first == second, 'Candidates must use exactly the same page plan'
+    (OUTPUT / 'inspection.json').write_text(json.dumps(summaries, ensure_ascii=False, indent=2) + '\n')
+    print(json.dumps(summaries, ensure_ascii=False, indent=2))
