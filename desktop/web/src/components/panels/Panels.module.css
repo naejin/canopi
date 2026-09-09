@@ -76,7 +76,7 @@
 }
 
 .basemapFeedback[data-tone="ready"] .basemapFeedbackDot {
-  background: var(--color-success);
+  background: var(--color-primary);
 }
 
 .basemapFeedback[data-tone="warning"] .basemapFeedbackDot {

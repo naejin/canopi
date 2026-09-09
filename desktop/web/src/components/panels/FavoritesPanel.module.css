@@ -429,16 +429,16 @@
 }
 
 .savedStampIconButtonSuccess {
-  color: var(--color-success);
-  background: var(--color-success-bg);
-  border-color: var(--color-success);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
 }
 
 .savedStampIconButtonSuccess:hover,
 .savedStampIconButtonSuccess:focus-visible {
-  color: var(--color-success);
-  background: var(--color-success-bg);
-  border-color: var(--color-success);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
 }
 
 .savedStampIconButtonDanger {

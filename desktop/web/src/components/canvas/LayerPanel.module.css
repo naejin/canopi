@@ -167,8 +167,8 @@
 }
 
 .locationCard[data-has-location="true"] {
-  border-color: var(--color-success);
-  background: var(--color-success-bg);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .locationCard[data-has-location="false"] {
@@ -185,7 +185,7 @@
 }
 
 .locationCard[data-has-location="true"] .locationCardLabel {
-  color: var(--color-success);
+  color: var(--color-text);
 }
 
 .locationCard[data-has-location="false"] .locationCardLabel {
