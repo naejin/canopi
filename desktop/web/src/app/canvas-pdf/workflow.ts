@@ -1,6 +1,6 @@
 import { batch, signal } from '@preact/signals'
 import type { PrintBounds } from '../../canvas/print'
-import { pdfAreaKey, type PdfScale } from './types'
+import { PDF_ZOOM, pdfAreaKey, type PdfPageView } from './types'
 import type { PdfPreparation } from './prepare'
 import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf } from './types'
 export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
@@ -25,7 +25,7 @@ const EXPORTABLE = new Set(['plants', 'zones', 'annotations', 'measurement-guide
 export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   const open = signal(false)
   const state = signal<PdfWorkflowState>(IDLE)
-  const defaults = (): PdfSetup => ({ paper: 'A4', orientation: 'auto', layers: [] })
+  const defaults = (): PdfSetup => ({ paper: 'A4', layers: [] })
   const setup = signal<PdfSetup>(defaults())
   const availableLayers = signal<readonly string[]>([])
   const availableZones = signal<readonly string[]>([])
@@ -55,7 +55,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     if (identity !== next.identity) {
       identity = next.identity
       nextAreaId = 0
-      setup.value = { paper: 'A4', orientation: 'auto', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
+      setup.value = { paper: 'A4', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
     }
     availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
     availableZones.value = next.input.canvas.zones.map((zone) => zone.name)
@@ -86,7 +86,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } catch (error) {
       if (!current()) return
       const message = error instanceof Error ? error.message : ''
-      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'selection-missing', 'coverage-too-large'].includes(message) ? message : 'prepare-failed', result: null }
+      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'selection-missing', 'coverage-too-large', 'invalid-page-view'].includes(message) ? message : 'prepare-failed', result: null }
     } finally {
       if (controller === abort) controller = null
     }
@@ -106,18 +106,28 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     configure({ layers: selected ? [...layers, name] : layers })
   }
   function selectZone(name: string, selected: boolean): void {
+    if (!selected) { removeArea(pdfAreaKey({ kind: 'zone', name })); return }
     const areas = (setup.peek().areas ?? []).filter((area) => area.kind !== 'zone' || area.name !== name)
     configure({ areas: selected ? [...areas, { kind: 'zone', name }] : areas })
   }
-  function addPrintArea(bounds: PrintBounds): void {
+  function addPrintArea(bounds: PrintBounds): string | undefined {
     if (!open.peek() || disposed || state.peek().status === 'delivering') return
     if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return
     const number = ++nextAreaId
     configure({ areas: [...setup.peek().areas ?? [], { kind: 'rectangle', id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds } }] })
+    return `area:${number}`
   }
-  function removeArea(key: string): void { configure({ areas: (setup.peek().areas ?? []).filter((area) => pdfAreaKey(area) !== key) }) }
-  function setAreaScale(key: string, scale: PdfScale | undefined): void {
-    configure({ areas: (setup.peek().areas ?? []).map((area) => pdfAreaKey(area) === key ? { ...area, scale } : area) })
+  function removeArea(key: string): void {
+    const views = Object.fromEntries(Object.entries(setup.peek().views ?? {}).filter(([id]) => id !== key && !id.startsWith(`${key}:legend:`)))
+    configure({ areas: (setup.peek().areas ?? []).filter((area) => pdfAreaKey(area) !== key), views })
+  }
+  function setPageView(id: string, value: PdfPageView): void {
+    if (value.zoom !== undefined && (!Number.isFinite(value.zoom) || value.zoom < PDF_ZOOM.min || value.zoom > PDF_ZOOM.max)) return
+    if (value.orientation !== undefined && !['auto', 'portrait', 'landscape'].includes(value.orientation)) return
+    const views = setup.peek().views ?? {}
+    if ((value.zoom === undefined || value.zoom === (views[id]?.zoom ?? 100))
+      && (value.orientation === undefined || value.orientation === (views[id]?.orientation ?? 'auto'))) return
+    configure({ views: { ...views, [id]: { ...views[id], ...value } } })
   }
   async function save(): Promise<void> {
     const snapshot = state.peek(), source = capture
@@ -135,7 +145,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } finally { if (controller === abort) controller = null }
   }
   function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = []; availableZones.value = [] }
-  return { open, state, setup, availableLayers, availableZones, show, close, rebuild, configure, selectLayer, selectZone, addPrintArea, removeArea, setAreaScale, save, synchronize, dispose }
+  return { open, state, setup, availableLayers, availableZones, show, close, rebuild, configure, selectLayer, selectZone, addPrintArea, removeArea, setPageView, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>
 

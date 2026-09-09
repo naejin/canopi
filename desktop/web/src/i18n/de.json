@@ -906,7 +906,6 @@
     "layers": "Druckebenen",
     "zones": "Zonen",
     "details": "Detailseiten",
-    "scale": "Detailmaßstab",
     "drawArea": "Druckbereich zeichnen",
     "drawHint": "Ziehen Sie ein Rechteck in der Übersicht, um den Druckbereich zu wählen.",
     "removeArea": "Druckbereich entfernen",
@@ -929,9 +928,14 @@
       "text-too-wide": "Einige Texte passen nicht in lesbarer Größe. Bearbeiten Sie den Text im Entwurf und versuchen Sie es erneut.",
       "delivery-failed": "Das PDF konnte nicht gespeichert werden. Aktualisieren Sie die Vorschau und versuchen Sie es erneut.",
       "selection-missing": "Einige ausgewählte Ebenen oder Zonen sind nicht mehr vorhanden. Prüfen Sie die Druckauswahl vor dem Export.",
-      "coverage-too-large": "Diese Auswahl überschreitet das Limit von 200 Seiten. Wählen Sie weniger Bereiche oder einen kleineren Zeichnungsmaßstab."
+      "coverage-too-large": "Diese Auswahl überschreitet die Grenze von 200 Seiten. Wählen Sie weniger Bereiche oder reduzieren Sie die Legenden-Folgeseiten.",
+      "invalid-page-view": "Wählen Sie einen gültigen Zoom und eine gültige Ausrichtung für diese Seite."
     },
     "printAreas": "Druckbereiche",
-    "commonScale": "Standard"
+    "pageSettings": "Diese Seite",
+    "canvasZoom": "Zeichenflächenzoom (%)",
+    "zoomHint": "100 % zeigt den gesamten Bereich. Höhere Werte vergrößern die Ansicht und können sie beschneiden.",
+    "resetFit": "Einpassung zurücksetzen",
+    "viewPage": "Seite anzeigen"
   }
 }

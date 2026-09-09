@@ -906,7 +906,6 @@
     "layers": "Calques à imprimer",
     "zones": "Zones",
     "details": "Pages détaillées",
-    "scale": "Échelle des détails",
     "drawArea": "Dessiner une aire d’impression",
     "drawHint": "Tracez un rectangle sur la vue d’ensemble pour choisir l’aire à imprimer.",
     "removeArea": "Supprimer l’aire d’impression",
@@ -929,9 +928,14 @@
       "text-too-wide": "Certains textes ne tiennent pas à une taille lisible. Modifiez le texte dans le design et réessayez.",
       "delivery-failed": "Impossible d’enregistrer le PDF. Actualisez l’aperçu et réessayez.",
       "selection-missing": "Certains calques ou zones sélectionnés n’existent plus. Vérifiez les sélections avant d’exporter.",
-      "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Sélectionnez moins de zones ou une échelle de dessin plus petite."
+      "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Sélectionnez moins de zones ou réduisez le nombre de pages de légende.",
+      "invalid-page-view": "Choisissez un zoom et une orientation valides pour cette page."
     },
     "printAreas": "Zones d’impression",
-    "commonScale": "Par défaut"
+    "pageSettings": "Cette page",
+    "canvasZoom": "Zoom du canevas (%)",
+    "zoomHint": "100 % affiche toute la zone. Une valeur supérieure agrandit la vue et peut la recadrer.",
+    "resetFit": "Réinitialiser le cadrage",
+    "viewPage": "Voir la page"
   }
 }

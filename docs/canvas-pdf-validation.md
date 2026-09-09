@@ -2,6 +2,16 @@
 
 Recorded 2026-09-09 for `canopi-urxb`. The implementation is available on the stacked PDF branches. Release-default approval remains open in `canopi-h0q3`, followed by `canopi-1zbj`. No actual printer or outdoor field-user review has been performed by the agent.
 
+## Automatic page fitting update
+
+`canopi-c4vf` replaces the original preset scales and forced tiling with full-area fit, numeric canvas zoom and independent page orientation. The original measurements below remain historical; their page counts, scale defaults and print pack do not describe this revised layout.
+
+The current production harness generated all eight samples in Chrome on Linux: dense nursery 2 pages, mixed orchard 2, complete legends 3, multilingual 1, map-excluded 2, and the 1/10/50-page stress fixtures. Independent Poppler inspection passed complete text, embedded Unicode fonts, vector output, final numbering and one exact 50 mm calibration bar per canvas page. The five preview comparisons passed with mean neighbourhood residuals of 0.0112–0.0781 against the unchanged 0.25 bound. Mixed and map-excluded plans remain identical. Artifacts are in ignored `.tmp/pdf-fit-review/chrome/`.
+
+A real built-Web-Edition flow in Chrome 150 verified automatic landscape for a wide Zone, portrait for a square Zone, independent 125.5% zoom and portrait override, retained settings after closing/reopening, and automatic 100% fit after drawing a Print Area. A real four-page PDF download has the expected three portrait pages and one landscape page. Layout/UI regressions also cover both paper sizes, complete selected-area containment, decimal zoom, explicit cropping, invalid inputs, stable page identity and complete legends across individually oriented continuation pages.
+
+TypeScript, the full frontend suite (230 files / 2,148 tests), both edition builds and the production validation build pass. No Rust code or cross-language contracts changed. The native matrix recorded below was not rerun for this layout revision; packaged-app and physical paper review remain tracked in `canopi-h0q3`.
+
 ## Reproduce the samples
 
 From `desktop/web`, run `npm run build:pdf-validation`, then serve `dist-pdf-validation/` on loopback. The harness imports the production Scene capture, worker, font loader, page planner, PDF encoder and SVG preview. It is an isolated validation entry point, not part of either shipped edition.
@@ -19,9 +29,9 @@ The native runner accepts `--fixture desktop/web/dist-pdf-validation --script de
 
 For the built Web Edition, serve `dist-web/` with the Web Vite preview command, then run `run-web-edition.py` against `http://127.0.0.1:4173/app/web.html`. It imports a portable Design, confirms that overflowing legends block export until explicitly accepted, requests two real PDF downloads, closes and reopens the preview, and confirms retained setup and renewed blocking when continuations are declined.
 
-Local review artifacts are in ignored `.tmp/canopi-pdf-review/`. `chrome-final/` contains corrected preview images and the current paper samples. PDFs from the earlier `chrome/` run are also valid: the subsequent SVG preview correction did not change PDF contents or physical defaults. Generated PDF metadata contains creation time; fixtures, physical page-plan hashes and extracted text are deterministic.
+Local review artifacts are in ignored `.tmp/canopi-pdf-review/`. `chrome-final/` contains corrected preview images and the original paper samples, which predate automatic page fitting. PDFs from the earlier `chrome/` run are also valid: the subsequent SVG preview correction did not change PDF contents or physical defaults. Generated PDF metadata contains creation time; fixtures, physical page-plan hashes and extracted text are deterministic.
 
-## Representative output
+## Representative output before automatic page fitting
 
 | Sample | Plants | Pages | PDF bytes | Purpose |
 | --- | ---: | ---: | ---: | --- |
@@ -38,7 +48,7 @@ All eight fixtures have identical physical-plan hashes and extracted PDF text in
 
 Image comparisons exposed a Preact-specific bug that ordinary page-plan tests could not catch: camelCase SVG stroke/clipping attributes were ineffective. Native SVG spellings now preserve stroke widths and clipping. The regression has a focused rendered-SVG test and an independent Poppler-versus-preview image gate. Comparisons allow one pixel for renderer antialiasing; corrected samples measure 0.010–0.078 mean residual per colour channel, against a 0.25 limit. All four faulty original previews fail that gate (0.445–22.312). Raw image differences are also recorded; raw averages alone penalized dense but correct text.
 
-## Runtime evidence
+## Runtime evidence for the original layout
 
 The first production matrix, [run 34353834513](https://github.com/naejin/canopi/actions/runs/34353834513), passed generation, native fixed-path byte delivery, page-plan equality and independent PDF checks on all four hosts. The corrected-preview [run 34355476818](https://github.com/naejin/canopi/actions/runs/34355476818) passed all four hosts and the independent image/PDF verification job. Three preview pages per native host match the corresponding Poppler-rendered pages within the recorded antialiasing allowance.
 
@@ -54,7 +64,7 @@ The first production matrix, [run 34353834513](https://github.com/naejin/canopi/
 
 The native probe uses real OS WebViews in small owned windows served over loopback with a restrictive CSP. It exercises the production modules and a fixed-path native bridge. It does **not** launch the packaged Canopi Tauri application, its asset custom scheme, or its native save dialog. Manual packaged-app checks for destination choice, cancel, overwrite, and error/retry remain part of the human gate, as do actual Safari/Edge app checks where required. The earlier [native foundation evidence](canvas-pdf-native-verification.md) separately covers embedded mixed-script fonts in the chosen encoder on all desktop engines.
 
-## Resource measurements and recovery
+## Resource measurements and recovery for the original layout
 
 The corrected-preview Chrome run measured these generation times and aggregate renderer RSS, sampled every 25 ms on Linux. Renderer RSS includes worker threads, shared memory, the loaded test page and prior runtime allocations; it is not a retained-heap or leak measurement. Browser validation and builds shared the machine, so these are observed runs, not performance promises.
 
@@ -72,13 +82,13 @@ Every browser fixture reports zero remaining export workers after teardown. Focu
 
 ## Paper review still required
 
-The user has been given the nursery, orchard and complete-legend PDFs for review. Print them at 100% / actual size on ordinary colour and monochrome printers. Record printer model, paper, driver/viewer settings, measured 50 mm bar length, indoor/outdoor readability, identification of nearby plants using the page's legend, continuation use and navigation across adjoining sheets. The dense sample represents nursery spacing; the large overview deliberately shows why detailed coverage is needed.
+The user has been given the nursery, orchard and complete-legend PDFs for review. Print them at 100% / actual size on ordinary colour and monochrome printers. Record printer model, paper, driver/viewer settings, measured 50 mm bar length, indoor/outdoor readability, identification of nearby plants using the page's legend, continuation use and navigation between selected detail areas. Regenerate the samples from the current layout before reviewing; the original pack predates automatic page fitting. The dense sample represents nursery spacing; the large overview deliberately shows why detailed coverage is needed.
 
-Current physical values are provisional: A4; common detail scale 1:100; 10 pt legend text with 13 pt line spacing; 3 mm nominal plant symbols; 0.25 mm geometry strokes; 42 mm legend column; 10 mm margins and overlap; 5 mm Zone context at the chosen scale. The final decision must preserve complete names, authored symbols/colours and honest physical scales. No printer settings, measurements or field-user approval should be inferred from these screen or PDF checks.
+Current physical values are provisional: A4; automatic full-area fit with independent canvas zoom and page orientation; 10 pt legend text with 13 pt line spacing; 3 mm nominal plant symbols; 0.25 mm geometry strokes; 42 mm legend column; 10 mm margins; and 3 mm Zone context. Fixed detail-scale defaults and overlapping-sheet pagination were replaced in `canopi-c4vf`. The final decision must preserve complete names, authored symbols/colours and honest physical scales. No printer settings, measurements or field-user approval should be inferred from these screen or PDF checks.
 
 The pending decision and resulting default application remain in `canopi-h0q3` and `canopi-1zbj`. The epic stays open until those requirements and its completion audit are satisfied.
 
-## Completion evidence
+## Completion evidence for the original implementation
 
 The combined checkout includes both prerequisite fixes and all six PDF implementation/validation beads. `canopi-urxb` records the technical completion. [Compact measured data](canvas-pdf-validation-data.json) preserves browser timings, resource samples, file/plan/text hashes, image comparisons, actual runtime versions and native CI results beyond temporary artifact retention.
 

@@ -906,7 +906,6 @@
     "layers": "打印图层",
     "zones": "分区",
     "details": "详细页面",
-    "scale": "详细比例",
     "drawArea": "绘制打印区域",
     "drawHint": "在总览上拖动矩形，选择要打印的区域。",
     "removeArea": "删除打印区域",
@@ -929,9 +928,14 @@
       "text-too-wide": "某些文本无法以可读字号放入页面。请在设计中修改文本后重试。",
       "delivery-failed": "无法保存 PDF。请刷新预览后重试。",
       "selection-missing": "部分所选图层或区域已不存在。请检查打印选项后再导出。",
-      "coverage-too-large": "当前设置超过了200页的限制。请选择更少的区域或更小的绘图比例。"
+      "coverage-too-large": "当前设置超过了200页的限制。请选择更少的区域或减少图例续页数量。",
+      "invalid-page-view": "请为此页面选择有效的缩放值和方向。"
     },
     "printAreas": "打印区域",
-    "commonScale": "默认"
+    "pageSettings": "当前页面",
+    "canvasZoom": "画布缩放 (%)",
+    "zoomHint": "100% 显示整个区域。更大的值会放大视图，并可能裁剪区域。",
+    "resetFit": "重置适配",
+    "viewPage": "查看页面"
   }
 }

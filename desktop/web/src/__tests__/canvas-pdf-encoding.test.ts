@@ -15,7 +15,7 @@ it('encodes the shared mixed-script overview as vector PDF bytes with embedded f
     layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
     annotations: [{ id: 'name', position: { x: 0, y: 0 }, text: 'ローズマリー AVATAR office', fontSize: 16, rotation: 0 }],
   } }
-  const plan = buildPdfPlan(input, { paper: 'Letter', orientation: 'landscape', layers: ['annotations'] }, createPdfTextEngine(fonts, 'ja'),
+  const plan = buildPdfPlan(input, { paper: 'Letter', views: { overview: { orientation: 'landscape' } }, layers: ['annotations'] }, createPdfTextEngine(fonts, 'ja'),
     { overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' })
   const bytes = await encodePdf(plan, fonts, input.name)
   const pdf = new TextDecoder().decode(bytes)
@@ -37,7 +37,7 @@ it('loads every regional font needed when mixed-script names wrap onto different
       input: { name: 'Field garden · 庭園 정원', locale: 'en', commonNames: {}, canvas: {
         layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
         annotations: [{ id: 'note', position: { x: 0, y: 0 }, text: 'Érable Яблоня ローズマリー 정원', fontSize: 16, rotation: 0 }],
-      } }, setup: { paper: 'A4', orientation: 'auto', layers: ['annotations'] },
+      } }, setup: { paper: 'A4', layers: ['annotations'] },
       labels: { overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }, fontBaseUrl: 'https://app.test/fonts/',
     })
     expect(result.plan.blocked).toBeNull()

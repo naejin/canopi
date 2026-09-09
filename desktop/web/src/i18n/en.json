@@ -906,7 +906,6 @@
     "layers": "Print layers",
     "zones": "Zones",
     "details": "Detail pages",
-    "scale": "Detail scale",
     "drawArea": "Draw a print area",
     "drawHint": "Drag a rectangle on the overview to choose the area to print.",
     "removeArea": "Remove print area",
@@ -929,9 +928,14 @@
       "text-too-wide": "Some text cannot fit at a readable size. Edit the text in the design and try again.",
       "delivery-failed": "Could not save the PDF. Refresh the preview and try again.",
       "selection-missing": "Some selected layers or zones no longer exist. Review the print selections before exporting.",
-      "coverage-too-large": "This setup exceeds the 200-page limit. Select fewer areas or a smaller drawing scale."
+      "coverage-too-large": "This setup exceeds the 200-page limit. Select fewer areas or reduce the number of legend continuation pages.",
+      "invalid-page-view": "Choose a valid zoom and orientation for this page."
     },
     "printAreas": "Print areas",
-    "commonScale": "Default"
+    "pageSettings": "This page",
+    "canvasZoom": "Canvas zoom (%)",
+    "zoomHint": "100% fits the whole area. Higher values zoom in and may crop it.",
+    "resetFit": "Reset fit",
+    "viewPage": "View page"
   }
 }

@@ -15,7 +15,7 @@ void (async () => {
     let binary = ''
     for (const byte of window.pdfValidation.bytes()) binary += String.fromCharCode(byte)
     const previews = []
-    for (let i = 0; i < 3; i++) previews.push(await window.pdfValidation.png(i))
+    for (let i = 0; i < Math.min(3, report.pages); i++) previews.push(await window.pdfValidation.png(i))
     send({ report, pdf: btoa(binary), previews })
   } catch (error) { send({ error: String(error), stack: error?.stack }) }
 })()

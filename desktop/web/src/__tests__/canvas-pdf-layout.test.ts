@@ -17,21 +17,25 @@ function input(): PdfInput {
   } }
 }
 describe('Canvas PDF page plan', () => {
+  it('updates the overview legend to match an explicit canvas zoom crop', () => {
+    const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'landscape', zoom: 300 } }, layers: ['plants'] }, text(), labels)
+    expect(plan.pages[0]!.legend.map((entry) => entry.canonicalName)).toEqual(['Rosmarinus officinalis var. angustifolius'])
+  })
   it('excludes distant deselected content from extent and legends without changing visibility', () => {
     const design = input()
     const canvas = { ...design.canvas, layers: [...design.canvas.layers, { name: 'annotations', visible: false, opacity: 1 }],
       annotations: [{ id: 'far', position: { x: 10_000, y: 10_000 }, text: 'Distant note', fontSize: 16, rotation: 0 }] }
     const before = structuredClone(canvas)
-    const plants = buildPdfPlan({ ...design, canvas }, { paper: 'A4', orientation: 'portrait', layers: ['plants'] }, text(), labels)
+    const plants = buildPdfPlan({ ...design, canvas }, { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'] }, text(), labels)
     expect(plants.pages[0]!.ground.width).toBeLessThan(100)
     expect(plants.pages[0]!.legend).toHaveLength(2)
-    const notes = buildPdfPlan({ ...design, canvas }, { paper: 'A4', orientation: 'portrait', layers: ['annotations'] }, text(), labels)
+    const notes = buildPdfPlan({ ...design, canvas }, { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['annotations'] }, text(), labels)
     expect(notes.pages[0]!.legend).toEqual([])
     expect(notes.pages[0]!.ground.x).toBeGreaterThan(9_000)
     expect(canvas).toEqual(before)
   })
   it('fits authored content on A4 with complete species identity, common-name fallback and every appearance', () => {
-    const plan = buildPdfPlan(input(), { paper: 'A4', orientation: 'portrait', layers: ['plants'] }, text(), labels)
+    const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'] }, text(), labels)
     expect(plan.blocked).toBeNull()
     expect(plan.pages).toHaveLength(1)
     const page = plan.pages[0]!

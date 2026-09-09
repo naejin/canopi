@@ -23,7 +23,7 @@ async function run(name: FixtureName) {
     bytes: result.bytes.byteLength, planBytes: new TextEncoder().encode(content).length, generationMs,
     planSha256: Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join(''),
     userAgent: navigator.userAgent, pageSizes: result.plan.pages.map((page) => [page.width, page.height]),
-    legends: result.plan.pages.map((page) => ({ number: page.number, kind: page.kind, sourceId: page.sourceId, neighbors: page.neighbors,
+    legends: result.plan.pages.map((page) => ({ number: page.number, kind: page.kind, sourceId: page.sourceId,
       names: page.legend.map((entry) => entry.name), scale: page.pointsPerMeter })),
   }
   reportElement.textContent = JSON.stringify(report, null, 2)

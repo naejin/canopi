@@ -906,7 +906,6 @@
     "layers": "Capas para imprimir",
     "zones": "Zonas",
     "details": "Páginas de detalle",
-    "scale": "Escala del detalle",
     "drawArea": "Dibujar un área de impresión",
     "drawHint": "Arrastre un rectángulo sobre la vista general para elegir el área que desea imprimir.",
     "removeArea": "Eliminar área de impresión",
@@ -929,9 +928,14 @@
       "text-too-wide": "Parte del texto no cabe a un tamaño legible. Edite el texto del diseño e inténtelo de nuevo.",
       "delivery-failed": "No se pudo guardar el PDF. Actualice la vista previa e inténtelo de nuevo.",
       "selection-missing": "Algunas capas o zonas seleccionadas ya no existen. Revisa la selección antes de exportar.",
-      "coverage-too-large": "Esta selección supera el límite de 200 páginas. Selecciona menos áreas o una escala de dibujo menor."
+      "coverage-too-large": "Esta selección supera el límite de 200 páginas. Selecciona menos áreas o reduce las páginas de continuación de la leyenda.",
+      "invalid-page-view": "Elige un zoom y una orientación válidos para esta página."
     },
     "printAreas": "Áreas de impresión",
-    "commonScale": "Predeterminada"
+    "pageSettings": "Esta página",
+    "canvasZoom": "Zoom del lienzo (%)",
+    "zoomHint": "El 100 % muestra toda el área. Los valores superiores amplían la vista y pueden recortarla.",
+    "resetFit": "Restablecer ajuste",
+    "viewPage": "Ver página"
   }
 }

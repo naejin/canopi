@@ -906,7 +906,6 @@
     "layers": "Camadas para imprimir",
     "zones": "Zonas",
     "details": "Páginas de detalhes",
-    "scale": "Escala dos detalhes",
     "drawArea": "Desenhar área de impressão",
     "drawHint": "Arraste um retângulo na visão geral para escolher a área a imprimir.",
     "removeArea": "Remover área de impressão",
@@ -929,9 +928,14 @@
       "text-too-wide": "Alguns textos não cabem em tamanho legível. Edite o texto no projeto e tente novamente.",
       "delivery-failed": "Não foi possível salvar o PDF. Atualize a prévia e tente novamente.",
       "selection-missing": "Algumas camadas ou zonas selecionadas já não existem. Reveja a seleção antes de exportar.",
-      "coverage-too-large": "Esta seleção ultrapassa o limite de 200 páginas. Selecione menos áreas ou uma escala de desenho menor."
+      "coverage-too-large": "Esta seleção ultrapassa o limite de 200 páginas. Selecione menos áreas ou reduza as páginas de continuação da legenda.",
+      "invalid-page-view": "Escolha um zoom e uma orientação válidos para esta página."
     },
     "printAreas": "Áreas de impressão",
-    "commonScale": "Padrão"
+    "pageSettings": "Esta página",
+    "canvasZoom": "Zoom da tela (%)",
+    "zoomHint": "100% mostra toda a área. Valores maiores ampliam a vista e podem cortá-la.",
+    "resetFit": "Redefinir ajuste",
+    "viewPage": "Ver página"
   }
 }

@@ -39,7 +39,7 @@ describe('PDF workflow lifetime', () => {
     workflow.close()
     setCanvas({ ...capture.input.canvas, layers: [{ name: 'plants', visible: true, opacity: 1 }, { name: 'annotations', visible: true, opacity: 1 }] })
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
-    expect(workflow.setup.value).toEqual({ paper: 'Letter', orientation: 'auto', layers: [] })
+    expect(workflow.setup.value).toEqual({ paper: 'Letter', layers: [] })
     workflow.configure({ layers: ['plants'] }); workflow.close()
     setCanvas({ ...capture.input.canvas, layers: [{ name: 'annotations', visible: true, opacity: 1 }] })
     prepare.mockClear()
@@ -62,11 +62,12 @@ describe('PDF workflow lifetime', () => {
     setCanvas({ ...capture.input.canvas, zones: [zone] })
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(workflow.setup.value.areas ?? []).toEqual([])
-    workflow.selectZone('Orchard', true); workflow.configure({ detailScale: 50 }); workflow.close()
+    expect(workflow.setup.value.views).toBeUndefined()
+    workflow.selectZone('Orchard', true); workflow.setPageView('zone:Orchard', { zoom: 75, orientation: 'landscape' }); workflow.close()
     setCanvas({ ...capture.input.canvas, zones: [{ ...zone, bounds: { ...zone.bounds, width: 20 } }] })
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(prepare.mock.lastCall![0].input.canvas.zones[0]!.bounds.width).toBe(20)
-    expect(prepare.mock.lastCall![0].setup.detailScale).toBe(50)
+    expect(prepare.mock.lastCall![0].setup.views?.['zone:Orchard']).toEqual({ zoom: 75, orientation: 'landscape' })
     workflow.close(); setCanvas({ ...capture.input.canvas, zones: [{ ...zone, name: 'Renamed' }] })
     workflow.show()
     expect(workflow.state.value.error).toBe('selection-missing')
@@ -75,24 +76,41 @@ describe('PDF workflow lifetime', () => {
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     workflow.dispose()
   })
-  it('owns Print Areas and individual scale overrides only for the current session', async () => {
+  it('owns Print Areas and individual page views only for the current session', async () => {
     const { workflow, prepare, capture, replace } = fixture()
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     const bounds = { x: 1, y: 2, width: 4, height: 5 }
     workflow.addPrintArea(bounds); bounds.width = 99
     workflow.addPrintArea({ x: 10, y: 20, width: 3, height: 6 })
-    workflow.setAreaScale('area:1', 20); workflow.setAreaScale('area:2', 500)
+    workflow.setPageView('area:1', { zoom: 125.5, orientation: 'portrait' }); workflow.setPageView('area:2', { zoom: 80, orientation: 'landscape' })
     workflow.close(); workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(prepare.mock.lastCall![0].setup.areas).toEqual([
-      { kind: 'rectangle', id: '1', name: 'Print area 1', bounds: { x: 1, y: 2, width: 4, height: 5 }, scale: 20 },
-      { kind: 'rectangle', id: '2', name: 'Print area 2', bounds: { x: 10, y: 20, width: 3, height: 6 }, scale: 500 },
+      { kind: 'rectangle', id: '1', name: 'Print area 1', bounds: { x: 1, y: 2, width: 4, height: 5 } },
+      { kind: 'rectangle', id: '2', name: 'Print area 2', bounds: { x: 10, y: 20, width: 3, height: 6 } },
     ])
+    expect(prepare.mock.lastCall![0].setup.views).toEqual({ 'area:1': { zoom: 125.5, orientation: 'portrait' }, 'area:2': { zoom: 80, orientation: 'landscape' } })
     expect(capture.input.canvas.zones).toEqual([])
     workflow.removeArea('area:1')
-    expect(workflow.setup.value.areas?.map((area) => area.scale)).toEqual([500])
+    expect(workflow.setup.value.views).toEqual({ 'area:2': { zoom: 80, orientation: 'landscape' } })
     replace()
     expect(workflow.setup.value.areas ?? []).toEqual([])
+    expect(workflow.setup.value.views).toBeUndefined()
+    workflow.dispose()
+  })
+  it('ignores invalid zoom edits and aborts superseded page preparations', async () => {
+    const { workflow, prepare } = fixture()
+    workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    workflow.setPageView('overview', { zoom: 75 })
+    const before = workflow.setup.peek()
+    for (const zoom of [NaN, Infinity, 0, -1, 1001]) workflow.setPageView('overview', { zoom })
+    expect(workflow.setup.peek()).toBe(before)
+    prepare.mockImplementation(() => new Promise(() => {}))
+    workflow.setPageView('overview', { zoom: 120 })
+    const previous = prepare.mock.lastCall![1]
+    workflow.setPageView('overview', { orientation: 'landscape' })
+    expect(previous.aborted).toBe(true)
+    expect(workflow.setup.value.views?.overview).toEqual({ zoom: 120, orientation: 'landscape' })
     workflow.dispose()
   })
   it('keeps full canonical names when the catalog is unavailable', async () => {

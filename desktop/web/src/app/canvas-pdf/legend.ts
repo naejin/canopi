@@ -9,7 +9,7 @@ interface LegendPlan { operations: PdfOperation[]; overflow: boolean; continuati
 
 // Keep an entry together when it fits an empty column. A name or set of authored
 // appearances longer than a whole column may continue, always at the same size.
-export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBounds, continuationFrame: PrintBounds,
+export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBounds, continuationFrame: (index: number) => PrintBounds,
   text: PdfTextEngine, labels: PdfLabels, allow: boolean, opacity: number): LegendPlan {
   const rows = (entry: PdfLegendEntry, width: number): Row[] => {
     const single = entry.appearances.length === 1
@@ -48,32 +48,47 @@ export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBoun
   if (!overflow || !allow) return { operations, overflow, continuations: [] }
 
   const continuations: LegendBody[] = []
-  const width = (continuationFrame.width - PRINT.gutter) / 2
-  const bottom = continuationFrame.y + continuationFrame.height
+  let frame: PrintBounds, width: number, bottom: number
   let columnIndex = 0
   let body: LegendBody
   const nextPage = () => {
     if (continuations.length >= 199) throw new Error('coverage-too-large')
+    frame = continuationFrame(continuations.length)
+    width = (frame.width - PRINT.gutter) / 2; bottom = frame.y + frame.height
     body = { operations: [], entries: [] }; continuations.push(body)
-    columnIndex = 0; y = continuationFrame.y
+    columnIndex = 0; y = frame.y
   }
   const nextColumn = () => {
-    if (columnIndex === 0) { columnIndex = 1; y = continuationFrame.y }
+    if (columnIndex === 0) { columnIndex = 1; y = frame.y }
     else nextPage()
   }
   nextPage()
   for (const entry of entries.slice(count)) {
-    const entryRows = rows(entry, width)
-    if (y > continuationFrame.y && y + entryRows.length * PRINT.line + 6 > bottom) nextColumn()
+    let entryRows = rows(entry, width!)
+    if (y > frame!.y && y + entryRows.length * PRINT.line + 6 > bottom!) {
+      nextColumn(); entryRows = rows(entry, width!)
+    }
     for (let i = 0; i < entryRows.length; i++) {
-      if (y + PRINT.line > bottom) {
+      if (y + PRINT.line > bottom!) {
         nextColumn()
-        for (const line of text.wrap(labels.continued, PRINT.text, width)) {
-          draw({ line, indent: 0 }, continuationFrame.x + columnIndex * (width + PRINT.gutter), y, body!.operations); y += PRINT.line
+        for (const line of text.wrap(labels.continued, PRINT.text, width!)) {
+          draw({ line, indent: 0 }, frame!.x + columnIndex * (width! + PRINT.gutter), y, body!.operations); y += PRINT.line
         }
       }
+      // A single long entry may cross a page whose orientation was overridden.
+      // Rewrap any remaining wide row without losing text or authored samples.
+      const row = entryRows[i]!
+      if (row.line && row.line.width + row.indent > width!) {
+        const lines = text.wrap(row.line.runs.map((run) => run.text).join(''), PRINT.text, width! - row.indent)
+        entryRows.splice(i, 1, ...lines.map((line, index) => ({ line, indent: row.indent, ...(index === 0 ? { samples: row.samples } : {}) })))
+      } else if (!row.line && row.samples && row.samples.length * 3 * PRINT.marker > width!) {
+        const count = Math.max(1, Math.floor(width! / (3 * PRINT.marker)))
+        const split: Row[] = []
+        for (let j = 0; j < row.samples.length; j += count) split.push({ samples: row.samples.slice(j, j + count), indent: 0 })
+        entryRows.splice(i, 1, ...split)
+      }
       if (!body!.entries.includes(entry)) body!.entries.push(entry)
-      draw(entryRows[i]!, continuationFrame.x + columnIndex * (width + PRINT.gutter), y, body!.operations)
+      draw(entryRows[i]!, frame!.x + columnIndex * (width! + PRINT.gutter), y, body!.operations)
       y += PRINT.line
     }
     y += 6

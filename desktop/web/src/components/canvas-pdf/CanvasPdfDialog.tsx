@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canvasPdf } from '../../app/canvas-pdf/live'
 import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
-import { PDF_SCALES, pdfAreaKey, type PdfAreaSelection, type PdfScale, type PdfOrientation, type PdfPaper } from '../../app/canvas-pdf/types'
+import { PDF_ZOOM, pdfAreaKey, type PdfPage, type PdfPlan, type PdfOrientation, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
 import { PdfPagePreview } from './PdfPagePreview'
@@ -13,13 +13,15 @@ export function CanvasPdfDialog({ workflow = canvasPdf }: { readonly workflow?: 
 }
 function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
   const root = useRef<HTMLElement>(null)
-  const [index, setIndex] = useState(0)
+  const [pageId, setPageId] = useState('overview')
+  const lastPlan = useRef<PdfPlan>()
   const [zoom, setZoom] = useState(0)
   const [drawing, setDrawing] = useState(false)
   const state = workflow.state.value
   const setup = workflow.setup.value
-  const plan = state.result?.plan
-  const currentIndex = Math.min(index, Math.max(0, (plan?.pages.length ?? 1) - 1))
+  if (state.result) lastPlan.current = state.result.plan
+  const plan = state.result?.plan ?? (state.status === 'preparing' ? lastPlan.current : undefined)
+  const currentIndex = Math.max(0, plan?.pages.findIndex((page) => page.id === pageId) ?? 0)
   const page = plan?.pages[currentIndex]
   const delivering = state.status === 'delivering'
   const layers = Array.from(new Set([...workflow.availableLayers.value, ...setup.layers]))
@@ -60,12 +62,7 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
               items={[{ value: 'A4', label: 'A4' }, { value: 'Letter', label: 'US Letter' }]}
               onChange={(paper) => workflow.configure({ paper })} preserveOverlays />
           </fieldset>
-          <fieldset disabled={delivering}>
-            <legend>{t('pdf.orientation')}</legend>
-            <Dropdown<PdfOrientation> ariaLabel={t('pdf.orientation')} trigger={t(`pdf.${setup.orientation}`)} value={setup.orientation}
-              items={(['auto', 'portrait', 'landscape'] as const).map((value) => ({ value, label: t(`pdf.${value}`) }))}
-              onChange={(orientation) => workflow.configure({ orientation })} preserveOverlays />
-          </fieldset>
+          {page && <PageControls key={page.id} page={page} workflow={workflow} disabled={delivering} />}
           <fieldset disabled={delivering}>
             <legend>{t('pdf.layers')}</legend>
             {layers.map((name) => <label key={name} className={styles.check}>
@@ -79,10 +76,10 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
               const area = (setup.areas ?? []).find((area) => area.kind === 'zone' && area.name === name)
               return <div key={name} className={styles.areaRow}>
                 <label className={styles.check}>
-                  <input type="checkbox" checked={!!area} onChange={(event) => workflow.selectZone(name, event.currentTarget.checked)} />
+                  <input type="checkbox" checked={!!area} onChange={(event) => { workflow.selectZone(name, event.currentTarget.checked); if (event.currentTarget.checked) { setDrawing(false); setPageId(pdfAreaKey({ kind: 'zone', name })) } }} />
                   <span>{name}</span>
                 </label>
-                {area && <AreaScale area={area} workflow={workflow} />}
+                {area && <button type="button" aria-label={`${t('pdf.viewPage')}: ${name}`} onClick={() => { setDrawing(false); setPageId(pdfAreaKey(area)) }}>↗</button>}
               </div>
             })}
             {!zones.length && <p>{t('pdf.noZones')}</p>}
@@ -90,19 +87,12 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
           <fieldset disabled={delivering}>
             <legend>{t('pdf.printAreas')}</legend>
             {(setup.areas ?? []).filter((area) => area.kind === 'rectangle').map((area) => <div key={pdfAreaKey(area)} className={styles.areaRow}>
-              <span className={styles.areaName}>{area.name}</span>
-              <AreaScale area={area} workflow={workflow} />
+              <button type="button" className={styles.areaName} aria-label={`${t('pdf.viewPage')}: ${area.name}`} onClick={() => { setDrawing(false); setPageId(pdfAreaKey(area)) }}>{area.name}</button>
               <button type="button" aria-label={`${t('pdf.removeArea')}: ${area.name}`} onClick={() => workflow.removeArea(pdfAreaKey(area))}>×</button>
             </div>)}
-            <button type="button" aria-pressed={drawing} disabled={!plan?.pages.length} onClick={() => { setIndex(0); setDrawing(!drawing) }}>{t('pdf.drawArea')}</button>
+            <button type="button" aria-pressed={drawing} disabled={!plan?.pages.length || state.status === 'preparing'} onClick={() => { setPageId('overview'); setDrawing(!drawing) }}>{t('pdf.drawArea')}</button>
             {drawing && <p role="status">{t('pdf.drawHint')}</p>}
           </fieldset>
-          {(setup.areas?.length ?? 0) > 0 && <fieldset disabled={delivering}>
-            <legend>{t('pdf.scale')}</legend>
-            <Dropdown<PdfScale> ariaLabel={t('pdf.scale')} trigger={`1:${setup.detailScale ?? 100}`} value={setup.detailScale ?? 100}
-              items={PDF_SCALES.map((value) => ({ value, label: `1:${value}` }))}
-              onChange={(detailScale) => workflow.configure({ detailScale })} preserveOverlays />
-          </fieldset>}
           {(plan?.hasLegendOverflow || setup.continuations) && <label className={styles.check}>
             <input type="checkbox" checked={setup.continuations ?? false} disabled={delivering}
               onChange={(event) => workflow.configure({ continuations: event.currentTarget.checked })} />
@@ -116,15 +106,15 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
         </aside>
         <div className={styles.preview}>
           <div className={styles.previewTools}>
-            <button type="button" aria-label={t('pdf.previous')} disabled={!page || currentIndex === 0} onClick={() => { setDrawing(false); setIndex(Math.max(0, currentIndex - 1)) }}>‹</button>
+            <button type="button" aria-label={t('pdf.previous')} disabled={!page || currentIndex === 0} onClick={() => { setDrawing(false); setPageId(plan!.pages[currentIndex - 1]!.id) }}>‹</button>
             <span>{page ? t('pdf.pageCount', { page: page.number, count: plan!.pages.length }) : t('pdf.overview')}</span>
-            <button type="button" aria-label={t('pdf.next')} disabled={!page || currentIndex >= plan!.pages.length - 1} onClick={() => { setDrawing(false); setIndex(currentIndex + 1) }}>›</button>
+            <button type="button" aria-label={t('pdf.next')} disabled={!page || currentIndex >= plan!.pages.length - 1} onClick={() => { setDrawing(false); setPageId(plan!.pages[currentIndex + 1]!.id) }}>›</button>
             <Dropdown<number> ariaLabel={t('pdf.zoom')} trigger={zoom ? `${zoom}%` : t('pdf.fit')} value={zoom}
               items={[{ value: 0, label: t('pdf.fit') }, ...[75, 100, 150, 200].map((value) => ({ value, label: `${value}%` }))]}
               onChange={setZoom} preserveOverlays />
           </div>
           <div className={styles.paper} aria-busy={state.status === 'preparing'}>
-            {page && plan ? <PdfPagePreview page={page} plan={plan} zoom={zoom} drawing={drawing} onPrintArea={(bounds) => { setDrawing(false); workflow.addPrintArea(bounds) }} /> : state.status === 'preparing' ? <p role="status">{t('pdf.preparing')}</p> : null}
+            {page && plan ? <PdfPagePreview page={page} plan={plan} zoom={zoom} drawing={drawing && state.status !== 'preparing'} onPrintArea={(bounds) => { setDrawing(false); const id = workflow.addPrintArea(bounds); if (id) setPageId(id) }} /> : state.status === 'preparing' ? <p role="status">{t('pdf.preparing')}</p> : null}
           </div>
         </div>
       </div>
@@ -137,9 +127,32 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
   </div>
 }
 
-function AreaScale({ area, workflow }: { readonly area: PdfAreaSelection; readonly workflow: PdfWorkflow }) {
-  return <Dropdown<PdfScale | 'common'> ariaLabel={`${t('pdf.scale')}: ${area.name}`} value={area.scale ?? 'common'}
-    trigger={area.scale ? `1:${area.scale}` : t('pdf.commonScale')}
-    items={[{ value: 'common', label: `${t('pdf.commonScale')} (1:${workflow.setup.value.detailScale ?? 100})` }, ...PDF_SCALES.map((value) => ({ value, label: `1:${value}` }))]}
-    onChange={(value) => workflow.setAreaScale(pdfAreaKey(area), value === 'common' ? undefined : value)} preserveOverlays />
+function PageControls({ page, workflow, disabled }: { readonly page: PdfPage; readonly workflow: PdfWorkflow; readonly disabled: boolean }) {
+  const view = workflow.setup.value.views?.[page.id]
+  const orientation = view?.orientation ?? 'auto'
+  const zoom = view?.zoom ?? 100
+  const [draft, setDraft] = useState(String(zoom))
+  useEffect(() => { setDraft(String(zoom)) }, [zoom])
+  function commit(input: HTMLInputElement) {
+    if (!input.validity.valid || !Number.isFinite(input.valueAsNumber)) { setDraft(String(zoom)); return }
+    workflow.setPageView(page.id, { zoom: input.valueAsNumber })
+  }
+  return <fieldset disabled={disabled} className={styles.pageControls}>
+    <legend>{t('pdf.pageSettings')} · {page.areaName ?? (page.kind === 'overview' ? t('pdf.overview') : `${t('pdf.pageLabel')} ${page.number}`)}</legend>
+    <span>{t('pdf.orientation')}</span>
+    <Dropdown<PdfOrientation> ariaLabel={t('pdf.orientation')}
+      trigger={orientation === 'auto' ? `${t('pdf.auto')} (${t(page.width > page.height ? 'pdf.landscape' : 'pdf.portrait')})` : t(`pdf.${orientation}`)} value={orientation}
+      items={(['auto', 'portrait', 'landscape'] as const).map((value) => ({ value, label: t(`pdf.${value}`) }))}
+      onChange={(orientation) => workflow.setPageView(page.id, { orientation })} preserveOverlays />
+    {page.kind !== 'legend' && <>
+      <label className={styles.zoomLabel}>
+        <span>{t('pdf.canvasZoom')}</span>
+        <input type="number" min={PDF_ZOOM.min} max={PDF_ZOOM.max} step="any" required value={draft}
+          onInput={(event) => setDraft(event.currentTarget.value)} onBlur={(event) => commit(event.currentTarget)}
+          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commit(event.currentTarget) } }} />
+      </label>
+      <button type="button" onClick={() => { setDraft('100'); workflow.setPageView(page.id, { zoom: 100 }) }}>{t('pdf.resetFit')}</button>
+      <p>{t('pdf.zoomHint')}</p>
+    </>}
+  </fieldset>
 }

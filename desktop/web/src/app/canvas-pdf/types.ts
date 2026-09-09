@@ -2,18 +2,17 @@ import type { CanvasPrintSnapshot, PrintBounds, PrintPlant } from '../../canvas/
 import type { GlyphOutline, TextLine } from './text'
 export type PdfPaper = 'A4' | 'Letter'
 export type PdfOrientation = 'auto' | 'portrait' | 'landscape'
-export const PDF_SCALES = [20, 50, 100, 200, 500, 1000] as const
-export type PdfScale = typeof PDF_SCALES[number]
+export const PDF_ZOOM = { min: 1, max: 1000 } as const
+export interface PdfPageView { readonly zoom?: number; readonly orientation?: PdfOrientation }
 export type PdfAreaSelection =
-  | { readonly kind: 'zone'; readonly name: string; readonly scale?: PdfScale }
-  | { readonly kind: 'rectangle'; readonly id: string; readonly name: string; readonly bounds: PrintBounds; readonly scale?: PdfScale }
-export function pdfAreaKey(area: PdfAreaSelection): string { return area.kind === 'zone' ? `zone:${area.name}` : `area:${area.id}` }
+  | { readonly kind: 'zone'; readonly name: string }
+  | { readonly kind: 'rectangle'; readonly id: string; readonly name: string; readonly bounds: PrintBounds }
+export function pdfAreaKey(area: PdfAreaSelection): string { return area.kind === 'zone' ? `zone:${encodeURIComponent(area.name)}` : `area:${area.id}` }
 export interface PdfSetup {
   readonly paper: PdfPaper
-  readonly orientation: PdfOrientation
   readonly layers: readonly string[]
   readonly areas?: readonly PdfAreaSelection[]
-  readonly detailScale?: PdfScale
+  readonly views?: Readonly<Record<string, PdfPageView>>
   readonly continuations?: boolean
 }
 export interface PdfInput { readonly name: string; readonly locale: string; readonly canvas: CanvasPrintSnapshot; readonly commonNames: Readonly<Record<string, string>> }
@@ -36,8 +35,6 @@ export interface PdfPage {
   readonly legendLink?: PrintBounds
   readonly areaKey?: string
   readonly areaName?: string
-  readonly tile?: { readonly row: number; readonly column: number; readonly rows: number; readonly columns: number }
-  readonly neighbors?: Readonly<Partial<Record<'left' | 'right' | 'top' | 'bottom', number>>>
   readonly frame: PrintBounds
   readonly ground: PrintBounds
   readonly pointsPerMeter: number

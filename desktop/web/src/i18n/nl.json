@@ -906,7 +906,6 @@
     "layers": "Afdruklagen",
     "zones": "Zones",
     "details": "Detailpagina’s",
-    "scale": "Detailschaal",
     "drawArea": "Afdrukgebied tekenen",
     "drawHint": "Sleep een rechthoek op het overzicht om het afdrukgebied te kiezen.",
     "removeArea": "Afdrukgebied verwijderen",
@@ -929,9 +928,14 @@
       "text-too-wide": "Sommige tekst past niet op leesbare grootte. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "delivery-failed": "De PDF kon niet worden opgeslagen. Vernieuw het voorbeeld en probeer opnieuw.",
       "selection-missing": "Sommige geselecteerde lagen of zones bestaan niet meer. Controleer de afdrukselectie voordat je exporteert.",
-      "coverage-too-large": "Deze selectie overschrijdt de limiet van 200 pagina’s. Selecteer minder gebieden of een kleinere tekenschaal."
+      "coverage-too-large": "Deze selectie overschrijdt de limiet van 200 pagina’s. Selecteer minder gebieden of verminder het aantal vervolgpagina’s voor de legenda.",
+      "invalid-page-view": "Kies een geldige zoom en afdrukstand voor deze pagina."
     },
     "printAreas": "Afdrukgebieden",
-    "commonScale": "Standaard"
+    "pageSettings": "Deze pagina",
+    "canvasZoom": "Canvaszoom (%)",
+    "zoomHint": "100% toont het hele gebied. Hogere waarden vergroten de weergave en kunnen deze bijsnijden.",
+    "resetFit": "Passend maken",
+    "viewPage": "Pagina bekijken"
   }
 }

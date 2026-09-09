@@ -15,7 +15,7 @@ const species = [
 ] as const
 export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> {
   const scene = createDefaultScenePersistedState()
-  let setup: PdfSetup = { paper: 'A4', orientation: 'auto', layers: ['plants', 'zones', 'annotations', 'measurement-guides'], continuations: true, detailScale: 100 }
+  let setup: PdfSetup = { paper: 'A4', layers: ['plants', 'zones', 'annotations', 'measurement-guides'], continuations: true }
   const count = name === 'dense' ? 320 : name === 'legends' ? 100 : name.startsWith('stress') ? (name === 'stress-50' ? 10_000 : name === 'stress-10' ? 900 : 100) : 120
   const commonNames: Record<string, string> = {}
   const side = name === 'dense' ? 16 : Math.ceil(Math.sqrt(count))
@@ -28,7 +28,7 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
     scene.plants.push({ kind: 'plant', id: `p${i}`, canonicalName, commonName: null, position: { x: i % side * spacing, y: Math.floor(i / side) * spacing },
       color, pinnedName: i < 2 && name !== 'dense', locked: false, stratum: null, canopySpreadM: null, rotationDeg: 0, scale: null, notes: null, plantedDate: null, quantity: 1 })
   }
-  if (name === 'dense') setup = { ...setup, detailScale: 20, areas: [{ kind: 'rectangle', id: 'bed', name: 'Nursery bed', bounds: { x: -.2, y: -.2, width: 2.2, height: 2.8 } }] }
+  if (name === 'dense') setup = { ...setup, areas: [{ kind: 'rectangle', id: 'bed', name: 'Nursery bed', bounds: { x: -.2, y: -.2, width: 2.2, height: 2.8 } }] }
   if (name === 'mixed' || name === 'map-excluded') {
     scene.zones.push({ kind: 'zone', name: 'Orchard', locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
       points: [{ x: -1, y: -1 }, { x: 29, y: -1 }, { x: 29, y: 19 }, { x: -1, y: 19 }] })
@@ -38,7 +38,7 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
   }
   if (name === 'stress-10' || name === 'stress-50') {
     const areas = name === 'stress-10' ? 9 : 49, columns = name === 'stress-10' ? 3 : 7
-    setup = { ...setup, orientation: 'portrait', detailScale: 1000, areas: Array.from({ length: areas }, (_, i) => ({ kind: 'rectangle', id: String(i),
+    setup = { ...setup, views: { overview: { orientation: 'portrait' } }, areas: Array.from({ length: areas }, (_, i) => ({ kind: 'rectangle', id: String(i),
       name: `Plot ${i + 1}`, bounds: { x: i % columns * 150, y: Math.floor(i / columns) * 150, width: 100, height: 150 } })) }
   }
   if (name === 'multilingual') {

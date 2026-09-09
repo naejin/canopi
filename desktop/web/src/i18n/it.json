@@ -906,7 +906,6 @@
     "layers": "Livelli da stampare",
     "zones": "Zone",
     "details": "Pagine di dettaglio",
-    "scale": "Scala dei dettagli",
     "drawArea": "Disegna un’area di stampa",
     "drawHint": "Trascina un rettangolo sulla panoramica per scegliere l’area da stampare.",
     "removeArea": "Rimuovi area di stampa",
@@ -929,9 +928,14 @@
       "text-too-wide": "Parte del testo non entra a una dimensione leggibile. Modifica il testo nel progetto e riprova.",
       "delivery-failed": "Impossibile salvare il PDF. Aggiorna l’anteprima e riprova.",
       "selection-missing": "Alcuni livelli o zone selezionati non esistono più. Controlla la selezione prima di esportare.",
-      "coverage-too-large": "La selezione supera il limite di 200 pagine. Seleziona meno aree o una scala di disegno più piccola."
+      "coverage-too-large": "La selezione supera il limite di 200 pagine. Seleziona meno aree o riduci le pagine di continuazione della legenda.",
+      "invalid-page-view": "Scegli uno zoom e un orientamento validi per questa pagina."
     },
     "printAreas": "Aree di stampa",
-    "commonScale": "Predefinita"
+    "pageSettings": "Questa pagina",
+    "canvasZoom": "Zoom della tavola (%)",
+    "zoomHint": "Il 100% mostra tutta l’area. Valori superiori ingrandiscono la vista e possono ritagliarla.",
+    "resetFit": "Ripristina adattamento",
+    "viewPage": "Mostra pagina"
   }
 }

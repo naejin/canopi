@@ -2,12 +2,12 @@ import type { CanvasPrintSnapshot, PrintBounds } from '../../canvas/print'
 import { PdfTextError, type PdfTextEngine } from './text'
 import { MM, PRINT, fitOverview, drawCanvas, identifyPlants, ambiguousSpecies, textOp, pathOp, rectPath } from './page-drawing'
 import { planLegend } from './legend'
-import { tileCoverage } from './coverage'
+import { fitArea, zoomCoverage } from './coverage'
 import { pdfAreaKey } from './types'
-import type { PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup } from './types'
+import type { PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup, PdfPageView } from './types'
 
 type Geometry = Pick<PdfPage, 'width' | 'height' | 'frame'>
-const orientations = (setup: PdfSetup) => setup.orientation === 'auto' ? ['portrait', 'landscape'] as const : [setup.orientation]
+const orientations = (view: PdfPageView = {}) => !view.orientation || view.orientation === 'auto' ? ['portrait', 'landscape'] as const : [view.orientation]
 
 export function printableCanvas(canvas: CanvasPrintSnapshot, layers: readonly string[]): CanvasPrintSnapshot {
   const selected = (name: string) => layers.includes(name) && (canvas.layers.find((l) => l.name === name)?.opacity ?? 1) > 0
@@ -21,12 +21,14 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
   const empty = !details.length && !canvas.plants.length && !canvas.zones.length && !canvas.annotations.length && !canvas.measurements.length
   const overviews: PdfPage[][] = []
   let error: unknown
-  for (const orientation of orientations(setup)) {
+  for (const orientation of orientations(setup.views?.overview)) {
     try {
       const geometry = pageGeometry(setup.paper, orientation, details.length === 0)
       const fitted = fitOverview(selected, geometry.frame, text, empty ? [{ x: -5, y: -5, width: 10, height: 10 }] : details.filter((page) => page.kind === 'detail').map((page) => page.ground))
-      overviews.push(canvasPage(selected, geometry, text, labels, { id: 'overview', kind: 'overview', title: labels.overview,
-        ...fitted, navigation: details.length > 0 }, setup.continuations ?? false))
+      const coverage = zoomCoverage(fitted, setup.views?.overview?.zoom)
+      const visible = canvasInFrame(selected, coverage.ground, coverage.pointsPerMeter, geometry.frame, text)
+      overviews.push(canvasPage({ ...selected, canvas: visible }, geometry, text, labels, { id: 'overview', kind: 'overview', title: labels.overview,
+        ...coverage, navigation: details.length > 0 }, setup))
     } catch (failure) { error = failure }
   }
   if (!overviews.length) throw error
@@ -36,17 +38,6 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
   const byId = new Map(pages.map((page) => [page.id, page]))
   const finalized = pages.map((page): PdfPage => {
     const operations = [...page.operations]
-    const neighbors: Partial<Record<'left' | 'right' | 'top' | 'bottom', number>> = {}
-    if (page.tile) {
-      for (const [edge, row, column] of [
-        ['left', page.tile.row, page.tile.column - 1], ['right', page.tile.row, page.tile.column + 1],
-        ['top', page.tile.row - 1, page.tile.column], ['bottom', page.tile.row + 1, page.tile.column],
-      ] as const) {
-        const neighbor = byId.get(`${page.areaKey}:${row}:${column}`)
-        if (neighbor) neighbors[edge] = neighbor.number
-      }
-      drawNeighbors(page, neighbors, text, labels, operations)
-    }
     if (page.kind === 'overview' && details.length) drawNavigation(page, pages.filter((p) => p.kind === 'detail'), text, operations)
     if (page.sourceId) {
       const source = byId.get(page.sourceId)!
@@ -60,7 +51,7 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     }
     const number = text.line(`${labels.page} ${page.number} / ${pages.length}`, 9)
     operations.push(textOp(number, page.width - PRINT.margin - number.width, 12 * MM, 9))
-    return { ...page, operations, ...(page.kind === 'detail' ? { neighbors } : {}) }
+    return { ...page, operations }
   })
   return { pages: finalized, hasLegendOverflow: finalized.some((page) => page.overflow || page.kind === 'legend'), outlines: text.outlines, blocked: empty ? 'empty' : finalized.some((page) => page.overflow) ? 'legend-overflow' : null }
 }
@@ -76,36 +67,24 @@ function detailPages(source: PdfInput, selected: PdfInput, setup: PdfSetup, text
   for (const area of setup.areas ?? []) {
     const requested = area.kind === 'rectangle' ? area.bounds : source.canvas.zones.find((zone) => zone.name === area.name)?.bounds
     if (!requested) throw new Error('selection-missing')
-    const scale = 1000 * MM / (area.scale ?? setup.detailScale ?? 100)
-    const context = area.kind === 'zone' ? PRINT.context / scale : 0
-    const bounds = { x: requested.x - context, y: requested.y - context, width: requested.width + 2 * context, height: requested.height + 2 * context }
-    const candidates: PdfPage[][] = []
-    let error: unknown
-    const areaKey = pdfAreaKey(area)
-    for (const orientation of orientations(setup)) {
-      try {
-        const geometry = pageGeometry(setup.paper, orientation)
-        const sheets = tileCoverage(bounds, geometry.frame.width / scale, geometry.frame.height / scale, PRINT.overlap / scale)
-        const pages: PdfPage[] = []
-        for (const sheet of sheets) {
-          const visible = canvasInFrame(selected, sheet.ground, scale, geometry.frame, text)
-          const [canvas, ...continuations] = canvasPage({ ...selected, canvas: visible }, geometry, text, labels,
-            { id: `${areaKey}:${sheet.row}:${sheet.column}`, kind: 'detail', title: area.name, ground: sheet.ground, pointsPerMeter: scale }, setup.continuations ?? false)
-          pages.push({ ...canvas!, areaKey, areaName: area.name,
-            tile: { row: sheet.row, column: sheet.column, rows: sheet.rows, columns: sheet.columns } }, ...continuations)
-          if (result.length + pages.length > 199) throw new Error('coverage-too-large')
-        }
-        candidates.push(pages)
-      } catch (failure) { error = failure }
-    }
-    candidates.sort((a, b) => Number(a.some((p) => p.overflow)) - Number(b.some((p) => p.overflow)) || a.length - b.length)
-    if (!candidates.length) throw error
-    result.push(...candidates[0]!)
+    const areaKey = pdfAreaKey(area), view = setup.views?.[areaKey]
+    const choices = requested.width === requested.height && (!view?.orientation || view.orientation === 'auto')
+      ? ['portrait'] as const : orientations(view)
+    const candidates = choices.map((orientation) => {
+      const geometry = pageGeometry(setup.paper, orientation)
+      return { geometry, ...fitArea(requested, geometry.frame, area.kind === 'zone' ? PRINT.context : 0, view?.zoom) }
+    }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
+    const { geometry, ground, pointsPerMeter } = candidates[0]!
+    const visible = canvasInFrame(selected, ground, pointsPerMeter, geometry.frame, text)
+    const [canvas, ...continuations] = canvasPage({ ...selected, canvas: visible }, geometry, text, labels,
+      { id: areaKey, kind: 'detail', title: area.name, ground, pointsPerMeter }, setup)
+    result.push({ ...canvas!, areaKey, areaName: area.name }, ...continuations)
+    if (result.length > 199) throw new Error('coverage-too-large')
   }
   return result
 }
 function canvasPage(input: PdfInput, geometry: Geometry, text: PdfTextEngine, labels: PdfLabels,
-  options: { id: string; kind: 'overview' | 'detail'; title: string; ground: PrintBounds; pointsPerMeter: number; navigation?: boolean }, allowContinuations: boolean): PdfPage[] {
+  options: { id: string; kind: 'overview' | 'detail'; title: string; ground: PrintBounds; pointsPerMeter: number; navigation?: boolean }, setup: PdfSetup): PdfPage[] {
   const { width, height, frame } = geometry, { ground, pointsPerMeter } = options
   const legend = options.navigation ? [] : identifyPlants(input.canvas.plants, input.commonNames, input.locale)
   const operations: PdfOperation[] = []
@@ -123,15 +102,21 @@ function canvasPage(input: PdfInput, geometry: Geometry, text: PdfTextEngine, la
     const heading = text.wrap(labels.plants, PRINT.text, PRINT.legend)
     heading.forEach((line, i) => operations.push(textOp(line, legendX, frame.y + PRINT.text + i * PRINT.line, PRINT.text)))
     const top = frame.y + (heading.length + 1) * PRINT.line
-    const continuationFrame = { x: PRINT.margin, y: PRINT.header, width: width - 2 * PRINT.margin, height: frame.height }
+    const continuationGeometry = (index: number) => {
+      const orientation = setup.views?.[`${options.id}:legend:${index}`]?.orientation
+      return pageGeometry(setup.paper, !orientation || orientation === 'auto' ? (width > height ? 'landscape' : 'portrait') : orientation, false)
+    }
     const planned = planLegend(legend, { x: legendX, y: top, width: PRINT.legend, height: frame.y + frame.height - top },
-      continuationFrame, text, labels, allowContinuations, input.canvas.layers.find((layer) => layer.name === 'plants')?.opacity ?? 1)
+      (index) => continuationGeometry(index).frame, text, labels, setup.continuations ?? false, input.canvas.layers.find((layer) => layer.name === 'plants')?.opacity ?? 1)
     operations.push(...planned.operations)
     overflow = planned.overflow; legendLink = planned.link
     for (const [index, body] of planned.continuations.entries()) {
+      const sheet = continuationGeometry(index)
+      const heading = text.wrap(`${input.name} · ${options.title}`, 12, sheet.width - 2 * PRINT.margin - 35 * MM)
+      if (heading.length > 2) throw new PdfTextError('text-too-wide')
       continuations.push({ id: `${options.id}:legend:${index}`, sourceId: options.id, kind: 'legend', number: 0,
-        width, height, frame: continuationFrame, ground: { x: 0, y: 0, width: 0, height: 0 }, pointsPerMeter: 0,
-        operations: [...titleLines.map((line, i) => textOp(line, PRINT.margin, 12 * MM + i * 15, 12)), ...body.operations],
+        ...sheet, ground: { x: 0, y: 0, width: 0, height: 0 }, pointsPerMeter: 0,
+        operations: [...heading.map((line, i) => textOp(line, PRINT.margin, 12 * MM + i * 15, 12)), ...body.operations],
         legend: body.entries, overflow: false, ambiguousSpecies: ambiguousSpecies(legend) })
     }
   }
@@ -139,7 +124,7 @@ function canvasPage(input: PdfInput, geometry: Geometry, text: PdfTextEngine, la
   operations.push(pathOp(`M${PRINT.margin} ${scaleY} h${50 * MM} M${PRINT.margin} ${scaleY - 2} v4 M${PRINT.margin + 50 * MM} ${scaleY - 2} v4`, PRINT.ink, null, PRINT.stroke))
   const distance = new Intl.NumberFormat(input.locale, { maximumSignificantDigits: 5 }).format(50 * MM / pointsPerMeter)
   addText(`50 mm · ${distance} m`, PRINT.margin, height - 5 * MM, 9)
-  const footer = `${labels.actualSize} · ${options.kind === 'overview' ? '~' : ''}1:${Math.round(1000 * MM / pointsPerMeter)}`
+  const footer = `${labels.actualSize} · ~1:${new Intl.NumberFormat(input.locale, { maximumSignificantDigits: 4 }).format(1000 * MM / pointsPerMeter)}`
   const footerLines = text.wrap(footer, 9, width - 2 * PRINT.margin - 55 * MM)
   if (footerLines.length > 2) throw new PdfTextError('text-too-wide')
   footerLines.forEach((line, i) => operations.push(textOp(line, PRINT.margin + 55 * MM, height - (9 - i * 4) * MM, 9)))
@@ -161,18 +146,6 @@ function canvasInFrame(input: PdfInput, ground: PrintBounds, scale: number, fram
     return intersects({ x: plant.position.x - radius, y: plant.position.y - radius, width: right + radius, height: bottom + radius })
   })
   return { ...input.canvas, plants, zones: input.canvas.zones.filter((zone) => intersects(zone.bounds)) }
-}
-function drawNeighbors(page: PdfPage, neighbors: NonNullable<PdfPage['neighbors']>, text: PdfTextEngine, labels: PdfLabels, operations: PdfOperation[]): void {
-  const { frame } = page
-  for (const edge of ['left', 'right', 'top', 'bottom'] as const) {
-    const number = neighbors[edge]
-    if (!number) continue
-    const line = text.line(`${labels.page} ${number}`, 9)
-    const vertical = edge === 'left' || edge === 'right'
-    const x = edge === 'left' ? frame.x - 3 * MM : edge === 'right' ? frame.x + frame.width + 3 * MM : frame.x + (frame.width - line.width) / 2
-    const y = edge === 'top' ? frame.y - 3 * MM : edge === 'bottom' ? frame.y + frame.height + 4 * MM : frame.y + (frame.height + line.width) / 2
-    operations.push(textOp(line, x, y, 9, vertical ? -90 : 0))
-  }
 }
 function drawNavigation(overview: PdfPage, details: readonly PdfPage[], text: PdfTextEngine, operations: PdfOperation[]): void {
   const { frame, ground, pointsPerMeter: scale } = overview

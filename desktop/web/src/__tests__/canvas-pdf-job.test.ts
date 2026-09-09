@@ -14,7 +14,7 @@ vi.mock('../app/canvas-pdf/worker?worker&inline', () => ({ default: class extend
 import { preparePdfJob } from '../app/canvas-pdf/job'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 const input: PdfPreparation = { input: { name: 'Garden', locale: 'en', commonNames: {}, canvas: { plants: [], zones: [], annotations: [], measurements: [], layers: [] } },
-  setup: { paper: 'A4', orientation: 'auto', layers: [] }, fontBaseUrl: 'https://app.test/fonts/',
+  setup: { paper: 'A4', layers: [] }, fontBaseUrl: 'https://app.test/fonts/',
   labels: { overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' } }
 afterEach(() => { workers.instances.length = 0; vi.useRealTimers() })
 it.each(['success', 'font failure', 'worker failure', 'cancel', 'timeout'] as const)('releases its worker, deadline and abort listener after %s', async (outcome) => {
