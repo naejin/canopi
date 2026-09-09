@@ -1,8 +1,10 @@
 # Canvas PDF encoder evaluation
 
+Historical encoder comparison. Its candidate dimensions and downstream work describe the evaluation baseline, not current release status. See the [approved feature and validation record](canvas-pdf-validation.md) and [implementation guide](agent/canvas-pdf.md) for current behavior.
+
 2026-09-09 · `canopi-4nzq` · foundation selected in `canopi-orpp` following the user’s instruction to complete the feature.
 
-**Selected foundation:** use PDFKit 0.20.2 with Fontkit 2.0.4, embedded Noto fonts, vector PDF text/geometry, and a preview driven by the same shaping and physical page plan. This evidence supports the selected foundation; the export feature is being implemented. [ADR 0024](adr/0024-shared-canvas-pdf-export.md) remains the scope authority.
+**Selected foundation:** use PDFKit 0.20.2 with Fontkit 2.0.4, embedded Noto fonts, vector PDF text/geometry, and a preview driven by the same shaping and physical page plan. This historical evidence supports the foundation used by the completed export feature. [ADR 0024](adr/0024-shared-canvas-pdf-export.md) remains the scope authority.
 
 ## Inspectable samples
 
@@ -13,7 +15,7 @@
 
 The synthetic garden uses the existing zoom-calibration corpus's 6 × 6 grid and 4 m spacing. This isolated fixture uses simple circle, square and triangle markers; it does not claim to exercise every production Plant Symbol or the Canvas Runtime. Both encoders receive exactly the same derived page plan. It includes Latin accents, Cyrillic, Simplified Chinese, Japanese, Korean, a long Canonical Name, mixed scripts, combining accents, ligatures, multiplication signs and square metres. No real user Design is used.
 
-All geometry is **provisional**: A4 portrait; 10 mm margins; a 145 mm detail canvas, 40 mm legend and 5 mm gutter; 10 pt legend text; 2.6 mm markers; 0.25 mm strokes; 1:100 detail scale; 1 m ground overlap. A 50 mm calibration line appears on every sheet. These inputs do not select the final paper, scale, typography, overlap or resource limits. Letter, landscape, dense/large Designs and physical paper review remain downstream work.
+The historical fixture geometry is: A4 portrait; 10 mm margins; a 145 mm detail canvas, 40 mm legend and 5 mm gutter; 10 pt legend text; 2.6 mm markers; 0.25 mm strokes; 1:100 detail scale; 1 m ground overlap. A 50 mm calibration line appears on every sheet. These inputs do not select the final paper, scale, typography, overlap or resource limits. Current paper sizes, fitting and approved defaults are documented in the implementation guide.
 
 ## Results
 
@@ -58,32 +60,25 @@ The exact upstream revisions and SHA-256 values are pinned in [fonts.json](../sc
 
 All four files total **49,907,420 bytes** before transport compression. PDF subsetting reduces document size, not these source download costs. The Latin file is a deliberately pinned static reference from the archived Noto distribution, not a claim that it is the latest Noto Sans release. Any font upgrade or source-subsetting step must repeat the same checks. The regional CJK files preserve a route to language-appropriate glyphs; this fixture is not native-speaker verification of every regional form.
 
-Recommendation: keep font assets in the static edition package, acquire only the families needed by actual text, cache them for the export lifetime, and retain their licenses. Latin-only output should not fetch CJK files. Locale helps choose regional Han forms; Kana/Hangul and mixed-script Annotations also matter. Further source sharding/WOFF evaluation and memory limits belong to the already planned resource work in `canopi-urxb`, with final asset choices recorded at the decision gate. No system-font fallback should silently alter names or metrics.
+Recommendation: keep font assets in the static edition package, acquire only the families needed by actual text, cache them for the export lifetime, and retain their licenses. Latin-only output should not fetch CJK files. Locale helps choose regional Han forms; Kana/Hangul and mixed-script Annotations also matter. The production asset and resource policy is recorded in the implementation guide; this comparison did not evaluate source sharding/WOFF. No system-font fallback should silently alter names or metrics.
 
 The source-font glyph guard initially rejected generated left/right arrow characters absent from the Latin reference font. The fixture now uses plain Next/Previous navigation text. All final fixture code points pass; U+10FFFF is correctly rejected by every reference font. A simulated missing Japanese font returned an explicit HTTP 404 error, kept download disabled, published no report, and removed all loaded preview fonts and object URLs. This is a bounded fixture check; production must apply its own explicit unsupported-text/error policy.
 
 PDFKit, both Fontkit packages, pdf-lib and Vite report MIT licenses in the pinned packages. The font sources carry SIL OFL 1.1; the fetcher retains the upstream license text. [PDFKit's browser API](https://pdfkit.org/docs/getting_started.html), [pdf-lib custom font API](https://pdf-lib.js.org/docs/api/classes/pdfdocument#embedfont), [Noto CJK formats](https://github.com/notofonts/noto-cjk/blob/Sans2.004/Sans/README.md) and the [pinned font license](https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/LICENSE) support the evaluated integration paths.
 
-## Delivery and remaining platform evidence
+## Delivery and subsequent adoption
 
-Both candidates produced `application/pdf` Blobs and downloaded through a local browser anchor. SHA-256 checks prove the downloaded bytes match the generated bytes. Temporary anchors were removed and object URLs revoked; no URL remained after the cleanup delay. The evaluation never imports Design persistence, storage or save-acknowledgement code.
+Both candidates produced PDF Blobs whose downloaded hashes matched the generated
+bytes. The fixture cleaned up temporary anchors, URLs and preview fonts. These
+checks evaluated the encoders, not Design Session or native save behavior.
 
-At the evaluation baseline, the native PDF export command accepted a PNG snapshot and a native layout; it could not deliver shared PDF bytes unchanged. The integrated feature now has compile-time edition delivery adapters: a native save dialog with executor-backed binary write, and a browser Blob download. Cancellation and I/O errors remain separate from Design save state. This isolated evaluation added no native command; current delivery ownership is described in the [implementation guide](agent/canvas-pdf.md).
+Decision `canopi-orpp` adopted PDFKit and shared Fontkit shaping after the
+[native foundation probe](canvas-pdf-native-verification.md) passed on Linux,
+both macOS architectures and Windows. The current feature, approved defaults and
+production evidence live in [ADR 0024](adr/0024-shared-canvas-pdf-export.md), the
+[implementation guide](agent/canvas-pdf.md) and [validation record](canvas-pdf-validation.md).
+The former native snapshot-PDF command is retired; production delivery saves shared
+PDF bytes without re-rendering. This historical fixture remains isolated and does
+not define current layout, resource limits or release work.
 
-The initial encoder comparison did **not** exercise desktop WebViews. The subsequent [native WebView gate](canvas-pdf-native-verification.md), tracked by `canopi-cd7x.1`, passed Linux WebKitGTK, both macOS architectures and Windows WebView2 before the foundation decision. The later [production validation report](canvas-pdf-validation.md) records integrated browser/native-host, text, resource and failure-path evidence, including the revised workspace. This fixture's limited line breaking and delivery checks remain historical. Physical prints, packaged Tauri save-dialog behavior and the report's remaining platform checks belong to `canopi-h0q3`, followed by `canopi-1zbj`; this evaluation does not close those release gates.
-
-## Resolved choices in canopi-orpp
-
-The user delegated completion of the feature after reviewing the native evidence. The implementation adopts these reviewed choices; physical defaults remain provisional until paper review:
-
-| Choice | Resolution |
-| --- | --- |
-| Foundation | PDFKit 0.20.2 + Fontkit 2.0.4; the pinned Noto reference families, acquired by text coverage; vector PDF output and a shared shaped preview. Keep physical defaults provisional. |
-| Empty output | Show a clear empty-preview explanation and disable export when there is neither printable content nor valid selected detail coverage. An intentionally selected blank Print Area may still print with its scale/navigation; an overview-only blank page may not. |
-| Changed retained setup | Preserve valid choices and temporary Print Areas. Flag removed/unresolvable selected Layers and require review before export; do not silently reset or substitute them. Recompute current artwork and names. The later drawn-only scope in ADR 0024 retires Zone-based coverage and its identity review; Print Areas retain independent session IDs and bounds. |
-| Exportable Design content | Plants and pinned names, Zone geometry and authored fills, Annotation text, and persistent Measurement Guides with distances, through their selected Design Layers. Group members render once. Screen grid, rulers, axis guides, selections, handles, lock cues, hover, and all maps remain absent. Selection-only derived Zone measurements need a separate explicit rule if ever requested. |
-| One Species, several authored appearances | One Species heading/name with every distinct symbol/colour sample used on that page, wrapping samples or continuing the entry as needed. Preserve every authored appearance and full naming/overflow rules. Never choose a representative appearance that hides the others. |
-
-The accepted default of visible exportable Layers, full Canonical Name fallback, unchanged Design presentation, complete legends and no map export applies throughout. The current source model and runtime query surfaces informed these choices; implementation is tracked in the delivery beads.
-
-Reproduction and operating boundaries are in the [agent evaluation guide](agent/canvas-pdf-evaluation.md).
+Reproduce this fixed comparison using the [agent evaluation guide](agent/canvas-pdf-evaluation.md).

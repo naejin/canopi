@@ -4,51 +4,98 @@ status: accepted
 
 # Shared Canvas PDF export on desktop and Web
 
-Canopi offers Canvas PDF export for sharing and field printing on Linux, macOS, Windows, and Web Edition through shared browser-compatible print layout and PDF generation, with edition-specific file saving or downloading. Small Designs fit on one page; larger or denser Designs can use an overview plus numbered detail pages focused on drawn Print Areas when needed to preserve paper readability, including a plant-identification legend. The first release focuses on the canvas; Timeline, Budget, and Consortium PDF sections are deferred to later work.
+Canvas PDF is a derived, printable view of a Design, available on Linux, macOS,
+Windows and Web Edition. One browser-compatible layout and encoder serve every
+edition; only saving or downloading varies. This avoids platform-dependent names,
+geometry and rendering, while keeping `.canopi` as the editable source of truth.
+The completed feature and its current defaults were reviewed and approved by the
+user on 2026-09-10. See the [validation record](../canvas-pdf-validation.md).
 
-Users choose which Design Layers appear in the Canvas PDF through print-specific selection. A new print setup initially selects the exportable Design Layers currently visible on the canvas; users can then change that selection independently in the export preview. These export choices do not change the Design's saved Layer visibility. The v1 selector contains no basemap or terrain options.
+## Scope and ownership
 
-The first release omits all map backgrounds, including street basemaps, satellite imagery, terrain contours, and hillshade, even when they are visible on the interactive canvas. Map export is deferred to later work so provider requirements, map acquisition, geographic alignment, and map-failure handling do not delay readable Design output. The PDF export path does not require a saved Location or fetch map assets. This is a release deferral, not a permanent exclusion. Interactive Web maps remain separate work under [ADR 0013](0013-web-edition-map-scope.md) and are not a prerequisite for Canvas PDF v1.
+Users select printable Design Layers independently of saved visibility. A new setup
+uses the currently visible printable Layers and an overview only. Printable content
+includes Plants, Pinned Plant Names, authored Zones, Annotations and persistent
+Measurement Guides; group members appear once. Interactive decorations and map
+backgrounds are excluded. Location is not required and export fetches no map assets.
 
-A new print setup starts with the overview only. A page-centred print workspace provides thumbnails, a single Add page flow for drawing rectangular Print Areas, and an always-visible export action with the resulting page count. The overview links to detail pages through their numbered coverage outlines. Each detail page focuses on one drawn Print Area. Zone-based page creation is retired to keep one predictable way to define coverage and avoid coupling print pages to changing Design geometry or Zone names. Authored Zones remain printable content on their selected Layer.
+Print setup is temporary Design Session state. It survives preview closure and
+editing, rebuilds from current content, and is discarded when the Design closes or
+is replaced. Missing selected Layers require explicit review. Source changes cancel
+superseded work and invalidate exportable bytes immediately. Export never changes
+Design content, undo history, dirty state, save acknowledgement or persistent settings.
 
-At its default fit (100% canvas zoom and no manual displacement), the overview fits the combined extent of printable objects on selected print Layers and the ground coverage of all selected detail sheets, including content outside the current canvas view. Objects on excluded Layers do not enlarge that extent or add empty space that shrinks the printable plan. Selected detail-sheet coverage remains included even where it extends beyond printable objects, so the overview can show every detail sheet in context. Canvas pan and zoom do not determine the overview extent.
+## Coverage and readability
 
-Print Areas belong to the export setup and do not create or modify the Design's spatial features. Their coverage remains independent of Zone creation, resizing, renaming or removal. Adding a page uses a separate overview fitted to printable content and existing detail coverage; it preserves the user's printed overview framing. Hidden Zone geometry does not enlarge that drawing surface.
+A4 and US Letter use a white print style independent of app theme. The overview
+fits selected printable content and all detail coverage, independently of interactive
+pan/zoom. Detail pages come only from drawn rectangular Print Areas. Each area fits
+completely on one page at its default zoom; automatic orientation maximizes the
+usable drawing scale beside the legend, with portrait for exact squares. This
+replaces fixed scale presets, forced tiling and Zone-based page creation: coverage
+should fit naturally and remain independent of changing Zone names or geometry.
 
-The print setup lasts for the current Design Session. Closing the preview to edit the Design preserves the selected Layers, Print Areas, individual page zoom, framing and orientation, and other print options. Reopening the preview rebuilds the output from the latest Design using that setup. An open preview refreshes automatically when its source changes, invalidating exportable bytes immediately and cancelling superseded work. Closing or replacing the Design discards the setup; the next Design starts with the defaults above. Print setup is temporary session state, not `.canopi` content or persistent settings, and changing it does not mark the Design dirty.
+Each canvas page has independent numeric zoom and framing; each page, including
+legend continuations, has an orientation override. Explicit zoom or movement may
+crop. Fit restores full coverage and centring. Adding a Print Area uses its own
+fitted overview without changing the printed overview's framing. Screen inspection
+never changes printed scale. Canvas pages carry a calibrated scale bar and an
+approximate ratio; the overview identifies detail coverage using final page numbers.
+An empty overview cannot export, but an explicitly drawn blank area can.
 
-The first release uses a fixed print style: white page and canvas backgrounds with dark legend and navigation text, independent of the app's light or dark theme, to support paper readability and limit background ink use. Authored Plant Colors and Plant Symbols remain unchanged. This print style does not alter the Design or app theme.
+Automatic Detail adapts plant marks to physical planting spacing while preserving
+authored colours and symbol recipes. Detail pages retain full text. An overview
+may defer Annotation text, Pinned Plant Names and distances only when a detail page
+shows that text completely without collisions. Otherwise the user must add detail
+coverage or explicitly keep the crowded text. Retention applies to the reviewed
+content and placement, and must be reconsidered when either changes.
 
-The first release supports A4 and US Letter paper. Drawing a Print Area creates one canvas detail page fitted around the entire requested extent, with a little extra context allowed and no automatic cropping or splitting. Automatic orientation chooses the largest drawing scale that fits the area into the usable canvas column beside the legend. An exact square uses portrait. This replaces the initial fixed-scale presets and overlapping-sheet pagination: users expect a newly requested area to fit naturally on its own page.
+A narrow, compact legend identifies the Species visible in each canvas page's final
+framing. An overview used alone has the same legend; with details it becomes a
+navigation sheet. Each Species shows one full name: selected-language Common Name,
+otherwise Canonical Name. Canonical Name remains identity when common names coincide.
+Every authored appearance is included. Samples sit beside the name when space permits,
+otherwise below it; fine separators group wrapped entries without shrinking text or
+widening the sidebar. No layout setting or per-Plant species codes are added.
 
-Each canvas page has an independent numeric zoom: 100% is its fitted scale and lower values include more surroundings. Users can drag the drawing within the paper or use arrow keys to adjust only the printed view. Explicit movement or zoom above 100% may crop the selected area. Fit restores 100% zoom and the original centre together. Temporary text inspection only magnifies the page on screen. Neither framing nor inspection edits Design geometry. Users can override portrait/landscape independently on every page, including the overview and legend continuations. Changing a canvas page's orientation refits its area at the retained zoom and manual displacement; other pages keep their choices. Continuations default to their source page's orientation and reflow when individually overridden.
+Overflow blocks export until the user adjusts coverage or explicitly adds linked
+legend pages. Continuations preserve complete names and samples, inherit source
+orientation unless overridden, and participate in final page numbering. Different
+Species sharing an appearance trigger a non-blocking notice across the complete
+source legend. Canopi never substitutes symbols or colours, even only in the PDF;
+users can return to the Design to edit presentation themselves.
 
-All canvas pages include a physical scale bar and an approximate ratio reflecting the actual fitted drawing. Printing at actual size preserves the scale bar's calibration. The overview marks each detail page's final coverage and page number; legend continuation consent and complete Species identity remain required.
+## Shared foundation
 
-Canvas PDF applies Automatic Detail using physical page space. Plant marks shrink with nearby planting separation while preserving authored colours and symbol recipes; legends retain full-size identification samples. A navigation overview defers Annotation text, Pinned Plant Names and Measurement Guide distances to detail pages only when the complete text fits there without colliding with other text or plant marks. Detail pages retain full authored text. Crowded overview text without a readable detail home requires an explicit Add detail page or Keep text choice before export; it is never silently discarded. Retention applies to the reviewed text and is reconsidered when its content or placement changes. The same check applies to a crowded overview used alone. Print readability changes neither the Design nor its text and pinning choices.
+PDFKit generates vectors and embeds Noto fonts. Fontkit shaping supplies one physical
+page plan for SVG preview and PDF encoding; system fonts and screenshot rendering do
+not determine layout. The [encoder evaluation](../canvas-pdf-evaluation.md) rejected
+the tested pdf-lib/font combination because independent rendering lost CJK text.
+[Native foundation evidence](../canvas-pdf-native-verification.md) established the
+chosen pipeline in all three desktop WebView engines. Versions, resource limits,
+module ownership and regression commands belong in the [implementation guide](../agent/canvas-pdf.md).
 
-Each detail page uses a wide canvas column beside a narrower plant-identification legend column with readable text. The legend is limited to the Species shown on that page, reflecting the Plant Symbols and colours used there. Each entry shows the Common Name in the selected language when available; otherwise it shows the full Canonical Name. Only one name is shown, to conserve column space. Compact rows retain the narrow sidebar and readable name/sample sizes; authored samples sit beside the name when space permits, otherwise below it. Fine separators associate wrapped names and samples with their Species. This automatic layout preserves canvas space without adding a layout setting. Detail-page fitting accounts for the legend column's space before choosing its drawing scale and orientation. Export does not add a species code beside every Plant by default, to avoid clutter in dense plantings.
+The static Web bundle uses [compile-time edition adapters](0021-web-edition-compile-time-adapters.md)
+for delivery. Native delivery writes the already prepared PDF bytes through the
+Native Operation Executor; it does not render the Design again. The retired native
+snapshot-PDF command, Cairo PDF renderer and macOS/Windows PDF stubs are removed.
+The structured Design Report and Rust `printpdf` renderer remain retired as well.
 
-When no detail pages are selected, the overview uses the same canvas-and-legend layout and naming policy as detail pages. At the default fit, all printable objects on selected print Layers fit into the available canvas column. The legend always covers the Species visible at the chosen zoom and framing. When detail pages are included, the overview serves as a navigation page: numbered outlines show the coverage of each detail sheet, labelled with that sheet's page number. Species legends belong to the detail sheets and any linked continuation pages.
+## Supersession and deferred work
 
-If a Species list cannot fit its legend column at a readable size, the export preview offers clearly linked legend continuation pages through an explicit Add legend pages action, grouped under their source page in the workspace. The narrow column remains the normal layout; continuation pages are offered only for overflow and are not added automatically. Each continuation identifies the overview or detail page whose legend it continues. Added pages count in the preview's total, and overview navigation and legend links use the resulting page numbers.
+This decision revises the PDF restriction in [ADR 0011](0011-remove-design-report-export-and-display-modes.md)
+and supersedes [ADR 0019](0019-web-edition-canopi-export-only.md), adding Canvas PDF
+alongside Web `.canopi` download. ADR 0011's plant-presentation decisions remain in
+force. Timeline, Budget and Consortium PDF sections, all map backgrounds, and
+persistent print setup remain outside this release. Other Web export formats,
+Diagnostic Bundles, native file management and Saved Object Stamp portability still
+require their own scope decisions.
 
-Unresolved legend overflow blocks PDF export. If users decline continuation pages, they must adjust the print setup until every legend fits completely at a readable size. The exporter must not truncate the Species list or shrink text below a readable size to force it to fit.
-
-The shared foundation uses vector PDF generation with PDFKit and embedded Noto fonts. Preview and PDF consume the same physical page plan and shaped glyph metrics; system-font substitution must not change names or layout. The [encoder evaluation](../canvas-pdf-evaluation.md) rejected the tested pdf-lib/font combination because its embedded CJK fonts failed independent rendering. The [native verification](../canvas-pdf-native-verification.md) establishes compatibility of the chosen foundation in all three desktop WebView engines. Exact dependency versions, font assets and operating details belong in the implementation guide.
-
-An empty overview cannot be exported. An explicitly selected blank Print Area may produce scaled detail coverage and navigation. Retained setup preserves resolvable choices and flags removed or renamed selected Layers for review; it never guesses identity from list position or silently drops requested coverage. Printable content comprises Plants and Pinned Plant Names, authored Zone geometry/fills, Annotation text, and persistent Measurement Guides with distances. Group members render once. Screen grids, rulers, axis guides, selections, handles, hover and derived selection-only Zone Measurements are excluded. When one Species has several authored appearances on a page, its single legend entry includes every distinct symbol/colour sample, with wrapping or explicit continuation as needed.
-
-**Consequences**:
-Including Web Edition in the first release makes consistent print output a shared capability and accepts the additional browser testing, memory, and asset-loading work. Layout and PDF generation must work within the [static Web bundle](0012-web-edition-static-app-bundle.md), while saving and downloading follow the [compile-time platform adapter boundary](0021-web-edition-compile-time-adapters.md). Canvas PDF is derived from the Design's existing authorities and does not become another editable Design model or replace `.canopi` persistence.
-
-Canvas PDF preserves the Design's chosen Plant Symbols and Plant Colors, including when different Species share the same appearance. The exporter must not automatically substitute symbols or colours to distinguish Species, even only in the PDF. For each overview or detail page with a plant-identification legend, the export preview flags distinct Species in that page's canvas view that share identical Plant Symbols and Plant Colors, including Species whose legend entries continue on another page. This ambiguity notice does not itself block export and makes no automatic changes; users can return to the Design to edit plant presentation themselves or proceed with export.
-
-This decision revises the restriction on new PDF export in [ADR 0011](0011-remove-design-report-export-and-display-modes.md) and supersedes [ADR 0019](0019-web-edition-canopi-export-only.md) by adding Canvas PDF alongside `.canopi` download in Web Edition. The previous structured Design Report implementation and its Rust `printpdf` choice remain retired; ADR 0011's plant-presentation decisions remain in force. PNG, SVG, CSV, Diagnostic Bundle export, and native file-management flows remain outside the approved Web export scope; Saved Object Stamp portability still requires its own decision. Timeline, Budget, and Consortium PDF sections are release deferrals, not permanent exclusions.
-
-When map export is resumed, printed basemaps must retain required attribution and use a provider-compatible export path. Current interactive tile use does not establish suitability for print coverage and resolution. The agreed map-failure policy belongs to that deferred work: pause and require an explicit Retry or Export without map choice, preserving selected pages and physical scales and leaving the Design unchanged. These provider and failure-handling requirements do not gate v1. Local PDF generation does not imply an [offline-first Web app](0022-web-edition-not-offline-first.md).
-
-Physical paper review must validate text and symbol readability and inform column widths and margins, and assess the readability of automatically fitted pages. Selected implementation choices and provisional dimensions live in the [Canvas PDF guide](../agent/canvas-pdf.md). Map-source and map-rendering validation belong to the deferred map work.
-
-The [Canvas PDF research brief](../canvas-pdf-export-research.md) compares technical options and proposes a print-validation plan. Its recommendations inform later planning without changing the accepted decisions above.
+Map export is a deferral, not a permanent exclusion. Future work must resolve
+provider-compatible acquisition, geographic alignment and printed attribution;
+interactive tile access does not establish print suitability. A failed map export
+must offer explicit Retry or Export without map while preserving pages, scales and
+Design state. Interactive Web maps remain separate under [ADR 0013](0013-web-edition-map-scope.md).
+Local PDF generation does not imply an [offline-first Web app](0022-web-edition-not-offline-first.md).
+The dated [research brief](../canvas-pdf-export-research.md) preserves candidate
+approaches and deferred map research, not current implementation instructions.

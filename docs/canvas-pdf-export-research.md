@@ -6,7 +6,7 @@ The agreed product scope follows [ADR 0024](adr/0024-shared-canvas-pdf-export.md
 
 Scope revision, 2026-09-09: retain print-layer selection but remove map export from v1. Provider research below is preserved for later work; provider selection, map acquisition/alignment, and map-failure handling no longer gate the first release. Interactive Web maps remain a separate plan.
 
-This is historical research against the baseline above. Its candidate presets, overlap and suggested implementation work are superseded by the accepted automatic fitting and page workspace. The [user guide](canvas-pdf.md), [implementation guide](agent/canvas-pdf.md) and [production validation report](canvas-pdf-validation.md) describe the integrated feature and remaining release checks.
+This is historical research against the baseline above. Its candidate presets, overlap and suggested implementation work are superseded by the accepted automatic fitting and page workspace. The [user guide](canvas-pdf.md), [implementation guide](agent/canvas-pdf.md) and [production validation report](canvas-pdf-validation.md) describe the approved feature and its validation record.
 
 ## Research Questions
 

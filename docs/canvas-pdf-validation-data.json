@@ -966,5 +966,357 @@
     "rustWorkspaceCheck": "passed",
     "rustWorkspaceTests": "passed; two existing manual Species Search harnesses ignored",
     "nativePolicyTests": 13
+  },
+  "releaseAudit": {
+    "date": "2026-09-10",
+    "approval": "User reviewed and approved the complete feature and existing defaults; no numerical printer measurements supplied.",
+    "frontendBaseline": "936d4f01037b4f2f7ebb3215f9a2c2de7b28b240",
+    "nativeRun": "https://github.com/naejin/canopi/actions/runs/34410345648",
+    "scope": "Current production frontend pipeline in owned native WebView hosts; fixed-path delivery, not packaged Tauri save dialogs. Housekeeping removes only the obsolete snapshot-PDF backend and updates docs/comments.",
+    "qualityGates": {
+      "frontendFiles": 235,
+      "frontendTests": 2192,
+      "rustPassed": 307,
+      "rustIgnoredManualHarnesses": 2,
+      "nativeCommandPolicyTests": 13,
+      "typeScript": true,
+      "generatedBindingCheck": true,
+      "desktopBuild": true,
+      "webBuildAndBoundaryScan": true,
+      "rustFormatting": true,
+      "strictClippy": true,
+      "rustWorkspaceCheck": true
+    },
+    "nativeHosts": [
+      {
+        "platform": "linux",
+        "runtime": {
+          "host": "GTK3 WebKitGTK 4.1",
+          "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+          "engine": "2.52.6",
+          "delivery": "Native fixed-path binary write; no save dialog"
+        },
+        "report": {
+          "fixture": "mixed",
+          "pages": 2,
+          "plants": 120,
+          "bytes": 16914,
+          "planBytes": 232848,
+          "generationMs": 296,
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+          "pageSizes": [
+            [
+              841.8897637795277,
+              595.2755905511812
+            ],
+            [
+              841.8897637795277,
+              595.2755905511812
+            ]
+          ],
+          "legends": [
+            {
+              "number": 1,
+              "kind": "overview",
+              "names": [],
+              "scale": 20.201840967052483
+            },
+            {
+              "number": 2,
+              "kind": "detail",
+              "names": [
+                "Apple",
+                "Blackcurrant",
+                "Chives",
+                "Comfrey",
+                "Grape vine",
+                "Hazel",
+                "Lavender",
+                "Lemon balm",
+                "Pear",
+                "Rosemary",
+                "Thyme",
+                "Wild strawberry"
+              ],
+              "scale": 21.7322834645452
+            }
+          ]
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "458c1da1c4c8033c2400fa4fa5e51552c7f03beabfa66fa6fee060dd5e749660",
+          "pages": 2,
+          "bytes": 16914,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "06a87c41bb4ab6ff129f855b69da9848918da00c5da7c596c911c81f54a4fbd4",
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.5643583698553336,
+              "neighborhoodDifference": 0.0052435632468242925,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 1.1369792973530675,
+              "neighborhoodDifference": 0.0103807302153904,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "platform": "macos-arm64",
+        "runtime": {
+          "delivery": "Native fixed-path binary write; no save dialog",
+          "engine": "19618.3.11.11.5",
+          "host": "WKWebView",
+          "os": "Version 14.8.9 (Build 23J631)"
+        },
+        "report": {
+          "bytes": 16914,
+          "fixture": "mixed",
+          "generationMs": 694,
+          "legends": [
+            {
+              "kind": "overview",
+              "names": [],
+              "number": 1,
+              "scale": 20.201840967052483
+            },
+            {
+              "kind": "detail",
+              "names": [
+                "Apple",
+                "Blackcurrant",
+                "Chives",
+                "Comfrey",
+                "Grape vine",
+                "Hazel",
+                "Lavender",
+                "Lemon balm",
+                "Pear",
+                "Rosemary",
+                "Thyme",
+                "Wild strawberry"
+              ],
+              "number": 2,
+              "scale": 21.7322834645452
+            }
+          ],
+          "pages": 2,
+          "pageSizes": [
+            [
+              841.8897637795277,
+              595.2755905511812
+            ],
+            [
+              841.8897637795277,
+              595.2755905511812
+            ]
+          ],
+          "planBytes": 232848,
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "plants": 120,
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "76673a18b73d678a2a94ec3cb7d08f714aa15786df9a1b2781be60e11db0745a",
+          "pages": 2,
+          "bytes": 16914,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "06a87c41bb4ab6ff129f855b69da9848918da00c5da7c596c911c81f54a4fbd4",
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.5125507709740313,
+              "neighborhoodDifference": 0.004563218156406667,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 1.1416057621859943,
+              "neighborhoodDifference": 0.009030384117163582,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "platform": "macos-intel",
+        "runtime": {
+          "delivery": "Native fixed-path binary write; no save dialog",
+          "engine": "20621.3.11.11.3",
+          "host": "WKWebView",
+          "os": "Version 15.7.9 (Build 24G830)"
+        },
+        "report": {
+          "bytes": 16914,
+          "fixture": "mixed",
+          "generationMs": 461,
+          "legends": [
+            {
+              "kind": "overview",
+              "names": [],
+              "number": 1,
+              "scale": 20.201840967052483
+            },
+            {
+              "kind": "detail",
+              "names": [
+                "Apple",
+                "Blackcurrant",
+                "Chives",
+                "Comfrey",
+                "Grape vine",
+                "Hazel",
+                "Lavender",
+                "Lemon balm",
+                "Pear",
+                "Rosemary",
+                "Thyme",
+                "Wild strawberry"
+              ],
+              "number": 2,
+              "scale": 21.7322834645452
+            }
+          ],
+          "pages": 2,
+          "pageSizes": [
+            [
+              841.8897637795277,
+              595.2755905511812
+            ],
+            [
+              841.8897637795277,
+              595.2755905511812
+            ]
+          ],
+          "planBytes": 232848,
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "plants": 120,
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "1a98add2d0644be352fb9ca8db75db41733ec8db1649e5f13a5af662aa4a74f5",
+          "pages": 2,
+          "bytes": 16914,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "06a87c41bb4ab6ff129f855b69da9848918da00c5da7c596c911c81f54a4fbd4",
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.5716178470299331,
+              "neighborhoodDifference": 0.004576813236406324,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 1.109616538946801,
+              "neighborhoodDifference": 0.009066736178901795,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "platform": "windows",
+        "runtime": {
+          "host": "WinForms WebView2",
+          "os": "Microsoft Windows NT 10.0.26100.0",
+          "engine": "152.0.4191.66",
+          "sdk": "1.0.2903.40",
+          "delivery": "Native fixed-path binary write; no save dialog"
+        },
+        "report": {
+          "fixture": "mixed",
+          "pages": 2,
+          "plants": 120,
+          "bytes": 16914,
+          "planBytes": 232848,
+          "generationMs": 271.3999999999942,
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 Edg/152.0.0.0",
+          "pageSizes": [
+            [
+              841.8897637795277,
+              595.2755905511812
+            ],
+            [
+              841.8897637795277,
+              595.2755905511812
+            ]
+          ],
+          "legends": [
+            {
+              "number": 1,
+              "kind": "overview",
+              "names": [],
+              "scale": 20.201840967052483
+            },
+            {
+              "number": 2,
+              "kind": "detail",
+              "names": [
+                "Apple",
+                "Blackcurrant",
+                "Chives",
+                "Comfrey",
+                "Grape vine",
+                "Hazel",
+                "Lavender",
+                "Lemon balm",
+                "Pear",
+                "Rosemary",
+                "Thyme",
+                "Wild strawberry"
+              ],
+              "scale": 21.7322834645452
+            }
+          ]
+        },
+        "verification": {
+          "file": "pdfkit.pdf",
+          "sha256": "8aadeb84b5dbbd047399d07db49db07707b987b79beb170ef280f518bd6eb97e",
+          "pages": 2,
+          "bytes": 16914,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "06a87c41bb4ab6ff129f855b69da9848918da00c5da7c596c911c81f54a4fbd4",
+          "planSha256": "f235a961a9152cead447fe7b5250dbd5384d9130d12a7da21505628bd0f10766",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 1.4303451643039304,
+              "neighborhoodDifference": 0.0038134199399038355,
+              "maximumAllowed": 0.25
+            },
+            {
+              "page": 2,
+              "meanChannelDifference": 1.1162193146483734,
+              "neighborhoodDifference": 0.011781023455355089,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      }
+    ]
   }
 }

@@ -13,18 +13,6 @@ pub struct CanvasSnapshot {
     pub png_data: Vec<u8>,
 }
 
-/// Print/PDF layout parameters.
-#[derive(Debug)]
-pub struct PrintLayout {
-    pub page_width_mm: f32,
-    pub page_height_mm: f32,
-    pub margin_mm: f32,
-    pub title: String,
-    pub scale_text: String,
-    pub include_legend: bool,
-    pub include_plant_schedule: bool,
-}
-
 // ── Error type ──────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
@@ -32,7 +20,7 @@ pub enum PlatformError {
     /// Feature not available on this platform.
     #[allow(dead_code)]
     NotImplemented,
-    /// Export (PNG/PDF) failed.
+    /// PNG export failed.
     ExportFailed(String),
 }
 
@@ -53,13 +41,6 @@ pub trait Platform: Send + Sync {
     /// Export canvas snapshot as PNG at given DPI (72, 150, 300).
     /// 72 DPI = 1x (pass-through), higher DPI scales up.
     fn export_png(&self, snapshot: &CanvasSnapshot, dpi: u32) -> Result<Vec<u8>, PlatformError>;
-
-    /// Export design as PDF with layout metadata.
-    fn export_pdf(
-        &self,
-        snapshot: &CanvasSnapshot,
-        layout: &PrintLayout,
-    ) -> Result<Vec<u8>, PlatformError>;
 }
 
 // ── Stub (all platforms, fallback) ──────────────────────────────────────────
@@ -70,14 +51,6 @@ pub struct StubPlatform;
 
 impl Platform for StubPlatform {
     fn export_png(&self, _snapshot: &CanvasSnapshot, _dpi: u32) -> Result<Vec<u8>, PlatformError> {
-        Err(PlatformError::NotImplemented)
-    }
-
-    fn export_pdf(
-        &self,
-        _snapshot: &CanvasSnapshot,
-        _layout: &PrintLayout,
-    ) -> Result<Vec<u8>, PlatformError> {
         Err(PlatformError::NotImplemented)
     }
 }
@@ -99,28 +72,6 @@ mod linux_impl {
                 snapshot.width,
                 snapshot.height,
                 dpi,
-            )
-            .map_err(PlatformError::ExportFailed)
-        }
-
-        fn export_pdf(
-            &self,
-            snapshot: &CanvasSnapshot,
-            layout: &PrintLayout,
-        ) -> Result<Vec<u8>, PlatformError> {
-            lib_c::pdf_export::render_pdf(
-                &snapshot.png_data,
-                snapshot.width,
-                snapshot.height,
-                lib_c::pdf_export::PdfPageLayout {
-                    page_width_mm: layout.page_width_mm,
-                    page_height_mm: layout.page_height_mm,
-                    margin_mm: layout.margin_mm,
-                    title: &layout.title,
-                    scale_text: &layout.scale_text,
-                    include_legend: layout.include_legend,
-                    include_plant_schedule: layout.include_plant_schedule,
-                },
             )
             .map_err(PlatformError::ExportFailed)
         }
@@ -147,26 +98,6 @@ mod macos_impl {
             )
             .map_err(PlatformError::ExportFailed)
         }
-
-        fn export_pdf(
-            &self,
-            snapshot: &CanvasSnapshot,
-            layout: &PrintLayout,
-        ) -> Result<Vec<u8>, PlatformError> {
-            lib_swift::pdf_export::render_pdf(
-                &snapshot.png_data,
-                snapshot.width,
-                snapshot.height,
-                layout.page_width_mm,
-                layout.page_height_mm,
-                layout.margin_mm,
-                &layout.title,
-                &layout.scale_text,
-                layout.include_legend,
-                layout.include_plant_schedule,
-            )
-            .map_err(PlatformError::ExportFailed)
-        }
     }
 }
 
@@ -187,26 +118,6 @@ mod windows_impl {
                 snapshot.width,
                 snapshot.height,
                 dpi,
-            )
-            .map_err(PlatformError::ExportFailed)
-        }
-
-        fn export_pdf(
-            &self,
-            snapshot: &CanvasSnapshot,
-            layout: &PrintLayout,
-        ) -> Result<Vec<u8>, PlatformError> {
-            lib_cpp::pdf_export::render_pdf(
-                &snapshot.png_data,
-                snapshot.width,
-                snapshot.height,
-                layout.page_width_mm,
-                layout.page_height_mm,
-                layout.margin_mm,
-                &layout.title,
-                &layout.scale_text,
-                layout.include_legend,
-                layout.include_plant_schedule,
             )
             .map_err(PlatformError::ExportFailed)
         }

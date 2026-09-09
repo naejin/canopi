@@ -42,7 +42,7 @@ async fn export_file_with_executor(
 }
 
 // ---------------------------------------------------------------------------
-// Native platform export commands (PNG at DPI, PDF with layout)
+// Native PNG export at DPI
 // ---------------------------------------------------------------------------
 
 /// Export a canvas snapshot as PNG at the specified DPI.
@@ -91,96 +91,9 @@ async fn export_native_png_with_executor(
         .await
 }
 
-/// Export a canvas snapshot as PDF with the given layout.
-///
-/// `snapshot_base64`: base64-encoded PNG data captured by the frontend renderer
-/// `width`, `height`: logical canvas dimensions in pixels
-/// Layout fields: page dimensions in mm, margins, title, etc.
-/// `path`: destination file path (chosen by frontend dialog)
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Tauri IPC currently exposes PDF export as flat named arguments"
-)]
-#[tauri::command]
-pub async fn export_native_pdf(
-    executor: State<'_, NativeOperationExecutor>,
-    snapshot_base64: String,
-    width: u32,
-    height: u32,
-    page_width_mm: f32,
-    page_height_mm: f32,
-    margin_mm: f32,
-    title: String,
-    scale_text: String,
-    include_legend: bool,
-    include_plant_schedule: bool,
-    path: String,
-) -> Result<String, String> {
-    export_native_pdf_with_executor(
-        executor.inner(),
-        snapshot_base64,
-        width,
-        height,
-        page_width_mm,
-        page_height_mm,
-        margin_mm,
-        title,
-        scale_text,
-        include_legend,
-        include_plant_schedule,
-        path,
-    )
-    .await
-}
-
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Helper keeps the same flat export shape as IPC"
-)]
-async fn export_native_pdf_with_executor(
-    executor: &NativeOperationExecutor,
-    snapshot_base64: String,
-    width: u32,
-    height: u32,
-    page_width_mm: f32,
-    page_height_mm: f32,
-    margin_mm: f32,
-    title: String,
-    scale_text: String,
-    include_legend: bool,
-    include_plant_schedule: bool,
-    path: String,
-) -> Result<String, String> {
-    executor
-        .run(
-            NativeOperationClass::Local,
-            "native PDF export",
-            move || {
-                let platform = platform::native_platform();
-                crate::services::export::export_native_pdf(
-                    &platform,
-                    snapshot_base64,
-                    width,
-                    height,
-                    page_width_mm,
-                    page_height_mm,
-                    margin_mm,
-                    title,
-                    scale_text,
-                    include_legend,
-                    include_plant_schedule,
-                    path,
-                )
-            },
-        )
-        .await
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        export_file_with_executor, export_native_pdf_with_executor, export_native_png_with_executor,
-    };
+    use super::{export_file_with_executor, export_native_png_with_executor};
     use crate::native_operation::{
         NativeOperationClass, NativeOperationClassLimits, NativeOperationExecutor,
         NativeOperationLimits,
@@ -339,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn executor_backed_native_exports_preserve_decode_errors() {
+    fn executor_backed_native_png_preserves_decode_errors() {
         let temp_dir = TempTestDir::new("native-errors");
         let executor = local_test_executor(2, 2);
 
@@ -353,22 +266,5 @@ mod tests {
         ))
         .unwrap_err();
         assert!(png_err.contains("Failed to decode base64 snapshot"));
-
-        let pdf_err = tauri::async_runtime::block_on(export_native_pdf_with_executor(
-            &executor,
-            "***".to_string(),
-            100,
-            100,
-            210.0,
-            297.0,
-            10.0,
-            "Bad".to_string(),
-            "1:1".to_string(),
-            false,
-            false,
-            temp_dir.file("bad.pdf").display().to_string(),
-        ))
-        .unwrap_err();
-        assert!(pdf_err.contains("Failed to decode base64 snapshot"));
     }
 }

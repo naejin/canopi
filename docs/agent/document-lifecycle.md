@@ -120,7 +120,7 @@ Canvas PDF is a non-mutating derived export; see the [Canvas PDF guide](canvas-p
 - [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) defines Canvas PDF scope; the [Canvas PDF guide](canvas-pdf.md) owns implementation and validation guidance for its shared pipeline and desktop/Web delivery.
 - Canvas PDF is derived output. Capture settled canvas state through the query role without requesting or acknowledging Design persistence. Export must not clear dirty state, change Scene content/history, or modify the Design to make it printable.
 - Print setup belongs to the current opaque Design Session identity. It survives preview closure and editing, rebuilds from current content on reopen, and is discarded on replacement. Keep it out of `.canopi` and persistent settings.
-- All map backgrounds and Timeline/Budget/Consortium PDF sections remain deferred. The old structured Design Report and Rust `printpdf` implementation stay retired under ADR 0011; legacy native snapshot services do not serve the shared Canvas PDF workflow.
+- All map backgrounds and Timeline/Budget/Consortium PDF sections remain deferred. The old structured Design Report and Rust `printpdf` implementation stay retired under ADR 0011; the native snapshot-PDF command/renderers are also removed. PNG snapshot export remains separate.
 
 ## Adding Document Fields
 

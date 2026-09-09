@@ -57,6 +57,8 @@ cargo build --release
 
 ## PDF Font Assets
 
+Canvas PDF uses shared frontend rendering and native byte delivery; platform crates retain PNG export only. The obsolete Cairo PDF feature and macOS/Windows PDF stubs are removed.
+
 Dev, frontend builds, and tests run `npm run prepare:pdf-fonts`. It verifies or downloads pinned Noto fonts and licenses into ignored `desktop/web/public/pdf-fonts/`; both edition builds include those assets. See the [Canvas PDF guide](canvas-pdf.md) for ownership, version pins, and runtime loading. First preparation requires upstream access; valid cached assets are reused. `npm run build:pdf-validation` builds an isolated test host that imports the production capture, worker, encoder, and SVG preview. Its assets go to ignored `dist-pdf-validation/` and are not a shipped app entry point. The production PDF WebView workflow runs that host in all desktop engines; it tests loopback/CSP/worker behavior and fixed-path native delivery, not the Tauri save dialog.
 
 The [production PDF workflow](../../.github/workflows/pdf-production-probe.yml) runs on `main` pushes and pull requests affecting PDF code, canvas input, frontend dependencies, font preparation or its validation host. Keep push and pull-request path filters aligned when those inputs move. It can also be dispatched manually. The [historical encoder probe](../../.github/workflows/pdf-native-probe.yml) is manual-only; preserve its fixed comparison fixture rather than making it follow production layout changes.
@@ -132,7 +134,7 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 
 - Platform trait lives in `desktop/src/platform/mod.rs`, not `common-types`.
 - Lib crates export marker structs; `platform/mod.rs` implements the trait through conditional modules.
-- The current platform trait exposes native PNG/PDF snapshot export. [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) defines the implemented shared Canvas PDF pipeline; the older OS-specific snapshot renderers do not participate in the Canvas PDF command. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
+- The platform trait exposes native PNG snapshot export only. [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) defines the shared Canvas PDF pipeline and executor-backed byte delivery; no OS-specific PDF renderer remains. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
 - macOS and Windows platform code is stubbed behind `#[cfg(target_os = "...")]`.
 - CI validates platform compilation on actual platforms.
 
@@ -151,8 +153,8 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 
 ## Linux Native
 
-- Linux native code uses Cairo PNG/PDF.
-- Cairo deps use `cairo-rs` with `png` and `pdf` features.
+- Linux native snapshot export uses Cairo PNG; Canvas PDF rendering is shared frontend code.
+- Cairo deps use `cairo-rs` with the `png` feature.
 - Linux system deps include GTK/WebKitGTK, librsvg, and patchelf.
 - Linux desktop startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` in process before Tauri/WebKitGTK initializes. Keep `cargo tauri dev` as the normal local command; do not move this workaround into shell-only launch instructions or release wrappers.
 - Do not add `libappindicator3-dev`.

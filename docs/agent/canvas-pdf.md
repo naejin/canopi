@@ -15,14 +15,14 @@ Canvas PDF exports are derived files. The Design Session and canvas retain owner
 
 - Runtime dependencies are pinned to PDFKit 0.20.2 and Fontkit 2.0.4 after the [encoder evaluation](../canvas-pdf-evaluation.md). The browser-specific declarations describe only the used pinned surface; the legacy Node typings do not describe its named browser export accurately.
 - `font-assets.json` pins Noto Sans 2.008 Latin and Noto Sans CJK 2.004 SC/JP/KR files by upstream URL and SHA-256. `npm run prepare:pdf-fonts` materializes ignored `public/pdf-fonts/` assets and licenses. Dev, builds, and the full test command run this prerequisite. Cached valid files work without upstream access; build packaging includes all four fonts (about 50 MB total). Runtime loads only required fonts from its own edition base URL and verifies their bytes.
-- `#canvas-pdf-platform` is a compile-time edition alias. Browser delivery clicks a prepared PDF Blob URL during the initiating gesture and reports a download request, then releases the URL. Native delivery uses the dialog and executor-backed `save_canvas_pdf` command; the service validates the payload and writes the exact bytes through operation-owned temporary-file replacement. This path has no `.canopi` backup or persistence acknowledgement.
+- `#canvas-pdf-platform` is a compile-time edition alias. Browser delivery clicks a prepared PDF Blob URL during the initiating gesture and reports a download request, then releases the URL. Native delivery uses the dialog and executor-backed `save_canvas_pdf` command; the service validates the payload and writes the exact bytes through operation-owned temporary-file replacement. This path has no `.canopi` backup or persistence acknowledgement. `save_canvas_pdf` is the only PDF delivery command; native snapshot-PDF rendering and platform PDF stubs are retired.
 - Tauri CSP permits same-app font fetches and blob workers. Keep browser and native assets on the same shared pipeline. `npm run build:web` still enforces the browser boundary and per-asset hosting limits.
 
 ## Verification
 
 Run TypeScript, focused `canvas-pdf-*` and `canvas-print-snapshot` tests, runtime settled-read coverage, and both builds. Shell or shared runtime changes require the full frontend suite. Native delivery changes require Rust formatting, Clippy, workspace check/tests and the native command policy guard. Real font tests need `npm run prepare:pdf-fonts` first when invoking Vitest directly.
 
-The [native foundation evidence](../canvas-pdf-native-verification.md) covers the isolated chosen encoder in desktop WebViews. The [production validation report](../canvas-pdf-validation.md) and compact data record the current worker, browser delivery and native-host evidence. Packaged Tauri delivery and physical paper readability are separate checks; do not describe encoder fixtures or screen inspection as printer testing. Physical layout defaults remain provisional until the tracked print review is performed.
+The [native foundation evidence](../canvas-pdf-native-verification.md) covers the isolated chosen encoder in desktop WebViews. The [production validation report](../canvas-pdf-validation.md) and compact data record the current worker, browser delivery and native-host evidence. Packaged Tauri delivery and physical paper readability are separate checks; do not describe encoder fixtures or screen inspection as printer testing. The user approved the completed feature and current defaults on 2026-09-10; the validation record distinguishes that approval from dated automated evidence.
 
 ## Detail coverage
 
@@ -34,7 +34,7 @@ The [native foundation evidence](../canvas-pdf-native-verification.md) covers th
 
 Detail pages have page-specific Species legends. The overview becomes a navigation sheet without a duplicated legend when details exist. Page numbering, coverage outlines and legend links are assembled after continuation insertion. Continuations inherit their source orientation unless individually overridden; `legend.ts` reflows their columns without shrinking or losing names and authored appearances, including an entry spanning different orientations.
 
-Both paper sizes retain the provisional 42 mm legend column, 10 mm margins, 10 pt legend text, 3 mm nominal legend symbols and 0.25 mm geometry strokes. Canvas marks are capped by 42% of nearest distinct planting spacing, with a provisional 0.35 mm radius floor; round marks below 0.8 mm radius are solid, and symbol strokes retain at least 0.12 mm on paper. Authored colours and non-round recipes remain unchanged. A setup is limited to 200 total pages including overview and continuations. Physical paper review and resource/default approval remain tracked separately.
+Both paper sizes retain the approved 42 mm legend column, 10 mm margins, 10 pt legend text, 3 mm nominal legend symbols and 0.25 mm geometry strokes. Canvas marks are capped by 42% of nearest distinct planting spacing, with a 0.35 mm radius floor; round marks below 0.8 mm radius are solid, and symbol strokes retain at least 0.12 mm on paper. Authored colours and non-round recipes remain unchanged. A setup is limited to 200 total pages including overview and continuations. The job deadline is 120 seconds, font/name waits are bounded at 30 seconds, and native PDF delivery admits at most 64 MiB. These are engineering bounds, not performance promises for every device.
 
 Print Areas are named temporary rectangles in the PDF workflow and never create Zones. `PdfPageEditor` owns pointer capture, caches the SVG bounds at gesture start, previews movement through local SVG CSS variables, and commits one ground-space displacement or Print Area on completion. Escape, lost capture, pointer cancellation, mode/plan change and unmount cancel without changing setup. Pointer identity and release ordering are guarded. Arrow keys provide framing without dragging. Coordinates account for SVG fit whitespace. Blank Designs get an unexportable overview for drawing; explicit Print Areas provide printable fitted coverage. Print choices remain session-only and never dirty the Design.
 
@@ -67,7 +67,7 @@ and resets with replacement. Both choices leave Scene state and `.canopi` untouc
 
 `canvas/plant-spacing.ts` and `canvas/label-collision.ts` are pure shared spatial
 utilities. PDF layout does not depend on interactive renderers or runtime state.
-`print-style.ts` holds provisional physical dimensions. `plant-marks.ts` controls
+`print-style.ts` holds approved physical dimensions. `plant-marks.ts` controls
 canvas mark radius; legend samples retain nominal dimensions. Preview and encoder
 replay the same complete page operations after the readability decision.
 
@@ -87,8 +87,7 @@ and a 1 mm sample/name gutter. Samples sit beside the first name line when their
 combined width and gutter consume at most one third of the column. Otherwise all
 samples wrap beneath the full-width name. Entries have a 2 pt trailing gap with a
 fine neutral separator; wrapped names and appearance sets remain grouped.
-These dimensions live in `print-style.ts` and remain provisional for field review.
-The accepted compact comparison prototype and its development toggle are retired.
+These approved dimensions live in `print-style.ts`.
 
 `legend.ts` lays out full selected-language names (canonical fallback) and every authored appearance at the shared readable size. The source sheet keeps an ordered prefix in its narrow column. Overflow blocks output until the user explicitly chooses Add legend pages or changes setup. Remove legend pages withdraws the setup-wide continuation consent. The rail groups continuations by source ID, and selection falls back to the source if reflow removes the current continuation. Accepted continuations use two columns, retain complete entries where they fit, and can continue an exceptionally long entry without shrinking it. Source and continuation links resolve final page identities. Ambiguity always considers the complete source legend, including entries on continuations, and never changes authored presentation.
 
