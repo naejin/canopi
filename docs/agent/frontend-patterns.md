@@ -190,6 +190,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - `role="dialog"` elements should focus the first interactive element after mount.
 - Floating element positioning should be synchronous; avoid post-render rAF corrections that visibly snap.
 - Use `Dropdown.tsx` and `utils/floating-position.ts` for viewport-aware dropdown behavior.
+- Preact SVG attributes use native spellings such as `stroke-width` and `clip-path`. React-style camelCase can be emitted as an ineffective attribute; verify actual SVG rendering when physical widths or clipping matter.
 - Do not use raw `white`, `black`, or raw `rgba()` in CSS Modules. Use tokens.
 - Use only font weights `400` and `600`.
 - Use spacing, font-size, radius, control-size, slider, and transition tokens. Add a shared token when a visual value belongs to one of those design scales; do not hide a raw scale value behind arithmetic or a scoped custom property. Keep unavoidable structural geometry or deliberately off-scale component behavior as a narrow, reviewed policy exception.

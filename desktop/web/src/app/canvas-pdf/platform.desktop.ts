@@ -6,6 +6,7 @@ export const resolvePdfNames = (names: readonly string[], locale: string) => get
 export function createPdfDelivery(): PdfDelivery {
   return {
     async save(bytes, name, signal) {
+      if (signal.aborted) return 'cancelled'
       const path = await save({ defaultPath: `${safeName(name)}.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
       if (!path || signal.aborted) return 'cancelled'
       await invoke('save_canvas_pdf', { data: Array.from(bytes), path: /\.pdf$/i.test(path) ? path : `${path}.pdf` })

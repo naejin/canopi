@@ -19,3 +19,8 @@ it('does not write when the dialog is cancelled or the captured session becomes 
   expect(await delivery.save(new Uint8Array([1]), 'Garden', abort.signal)).toBe('cancelled')
   expect(invoke).not.toHaveBeenCalled()
 })
+it('does not open a native destination dialog after cancellation', async () => {
+  expect(await createPdfDelivery().save(new Uint8Array([1]), 'Garden', AbortSignal.abort())).toBe('cancelled')
+  expect(save).not.toHaveBeenCalled()
+  expect(invoke).not.toHaveBeenCalled()
+})

@@ -73,13 +73,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils python3-pil
       - uses: actions/download-artifact@v4
         with:
           pattern: pdf-production-*
           path: production-results
       - name: Independently verify geometry, text and identical page plans
-        run: python3 desktop/web/scripts/pdf-validation/verify.py production-results/*/pdfkit.pdf
+        run: /usr/bin/python3 desktop/web/scripts/pdf-validation/verify.py production-results/*/pdfkit.pdf
       - uses: actions/upload-artifact@v4
         if: always()
         with:

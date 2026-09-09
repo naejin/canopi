@@ -66,8 +66,8 @@ export function PdfPagePreview({ page, plan, zoom = 0, drawing = false, onPrintA
       }
       if (op.kind === 'unclip') { clip = undefined; continue }
       if (op.kind === 'path') {
-        content.push(<g key={index} clipPath={clip}><path d={op.d} transform={`matrix(${op.matrix.join(' ')})`}
-          fill={op.fill ?? 'none'} stroke={op.stroke ?? 'none'} strokeWidth={op.width} opacity={op.opacity} strokeLinecap="round" strokeLinejoin="round" /></g>)
+        content.push(<g key={index} clip-path={clip}><path d={op.d} transform={`matrix(${op.matrix.join(' ')})`}
+          fill={op.fill ?? 'none'} stroke={op.stroke ?? 'none'} stroke-width={op.width} opacity={op.opacity} stroke-linecap="round" stroke-linejoin="round" /></g>)
       } else {
         let x = 0
         const runs = op.line.runs.map((run, runIndex) => {
@@ -78,7 +78,7 @@ export function PdfPagePreview({ page, plan, zoom = 0, drawing = false, onPrintA
             return <path key={glyphIndex} d={outline.path} transform={`translate(${glyph.x} ${glyph.y}) scale(${scale} ${-scale})`} />
           })}</g>
         })
-        content.push(<g key={index} clipPath={clip}><g transform={`translate(${op.x} ${op.y}) rotate(${op.rotation})`} opacity={op.opacity} fill="#24211c">{runs}</g></g>)
+        content.push(<g key={index} clip-path={clip}><g transform={`translate(${op.x} ${op.y}) rotate(${op.rotation})`} opacity={op.opacity} fill="#24211c">{runs}</g></g>)
       }
     }
     return <><defs>{clips}</defs><rect width={page.width} height={page.height} fill="#ffffff" />{content}</>
@@ -92,6 +92,6 @@ export function PdfPagePreview({ page, plan, zoom = 0, drawing = false, onPrintA
     <desc>{page.legend.map((entry) => entry.name).join('; ')}</desc>
     {artwork}
     {selection && <rect data-print-area-draft x={selection.x} y={selection.y} width={selection.width} height={selection.height}
-      fill="var(--color-primary-bg)" stroke="var(--color-primary)" strokeWidth="1" strokeDasharray="4 2" />}
+      fill="var(--color-primary-bg)" stroke="var(--color-primary)" stroke-width="1" stroke-dasharray="4 2" />}
   </svg>
 }
