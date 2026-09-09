@@ -911,6 +911,8 @@
     "drawHint": "在总览上拖动矩形，选择要打印的区域。",
     "removeArea": "删除打印区域",
     "continuations": "允许图例续页",
+    "continued": "续页",
+    "legendFor": "植物列表对应页面",
     "previous": "上一页",
     "next": "下一页",
     "zoom": "预览缩放",

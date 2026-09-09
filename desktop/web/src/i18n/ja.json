@@ -911,6 +911,8 @@
     "drawHint": "全体図で長方形をドラッグして、印刷範囲を選んでください。",
     "removeArea": "印刷範囲を削除",
     "continuations": "凡例の続きのページを許可",
+    "continued": "続き",
+    "legendFor": "植物リストの参照ページ",
     "previous": "前のページ",
     "next": "次のページ",
     "zoom": "プレビューの倍率",

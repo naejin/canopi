@@ -14,9 +14,10 @@ export interface PdfSetup {
   readonly layers: readonly string[]
   readonly areas?: readonly PdfAreaSelection[]
   readonly detailScale?: PdfScale
+  readonly continuations?: boolean
 }
 export interface PdfInput { readonly name: string; readonly locale: string; readonly canvas: CanvasPrintSnapshot; readonly commonNames: Readonly<Record<string, string>> }
-export interface PdfLabels { readonly overview: string; readonly plants: string; readonly actualSize: string; readonly page: string }
+export interface PdfLabels { readonly overview: string; readonly plants: string; readonly actualSize: string; readonly page: string; readonly continued: string; readonly legendFor: string }
 export type PdfMatrix = readonly [number, number, number, number, number, number]
 export type PdfOperation =
   | { readonly kind: 'path'; readonly d: string; readonly matrix: PdfMatrix; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly opacity: number }
@@ -28,8 +29,11 @@ export interface PdfPage {
   readonly number: number
   readonly width: number
   readonly height: number
-  readonly kind: 'overview' | 'detail'
+  readonly kind: 'overview' | 'detail' | 'legend'
   readonly id: string
+  readonly sourceId?: string
+  readonly continuationIds?: readonly string[]
+  readonly legendLink?: PrintBounds
   readonly areaKey?: string
   readonly areaName?: string
   readonly tile?: { readonly row: number; readonly column: number; readonly rows: number; readonly columns: number }
@@ -42,5 +46,5 @@ export interface PdfPage {
   readonly overflow: boolean
   readonly ambiguousSpecies: readonly string[]
 }
-export interface PdfPlan { readonly pages: readonly PdfPage[]; readonly outlines: Record<string, GlyphOutline>; readonly blocked: 'empty' | 'legend-overflow' | null }
+export interface PdfPlan { readonly hasLegendOverflow?: boolean; readonly pages: readonly PdfPage[]; readonly outlines: Record<string, GlyphOutline>; readonly blocked: 'empty' | 'legend-overflow' | null }
 export interface PreparedPdf { readonly plan: PdfPlan; readonly bytes: Uint8Array | null }

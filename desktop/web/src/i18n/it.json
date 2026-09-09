@@ -911,6 +911,8 @@
     "drawHint": "Trascina un rettangolo sulla panoramica per scegliere l’area da stampare.",
     "removeArea": "Rimuovi area di stampa",
     "continuations": "Consenti pagine di continuazione della legenda",
+    "continued": "Continua",
+    "legendFor": "Elenco delle piante della pagina",
     "previous": "Pagina precedente",
     "next": "Pagina successiva",
     "zoom": "Zoom anteprima",

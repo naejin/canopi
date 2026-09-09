@@ -911,6 +911,8 @@
     "drawHint": "Ziehen Sie ein Rechteck in der Übersicht, um den Druckbereich zu wählen.",
     "removeArea": "Druckbereich entfernen",
     "continuations": "Fortsetzungsseiten für die Legende erlauben",
+    "continued": "Fortsetzung",
+    "legendFor": "Pflanzenliste für Seite",
     "previous": "Vorherige Seite",
     "next": "Nächste Seite",
     "zoom": "Vorschauzoom",

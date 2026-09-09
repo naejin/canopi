@@ -103,6 +103,11 @@ function DialogContent({ workflow }: { readonly workflow: PdfWorkflow }) {
               items={PDF_SCALES.map((value) => ({ value, label: `1:${value}` }))}
               onChange={(detailScale) => workflow.configure({ detailScale })} preserveOverlays />
           </fieldset>}
+          {(plan?.hasLegendOverflow || setup.continuations) && <label className={styles.check}>
+            <input type="checkbox" checked={setup.continuations ?? false} disabled={delivering}
+              onChange={(event) => workflow.configure({ continuations: event.currentTarget.checked })} />
+            <span>{t('pdf.continuations')}</span>
+          </label>}
           <button type="button" disabled={delivering} onClick={() => void workflow.rebuild()}>{t('pdf.refresh')}</button>
           {state.error && <p role="alert" className={styles.notice}>{t(`pdf.errors.${state.error}`)}</p>}
           {plan?.blocked === 'empty' && <p role="status">{t('pdf.empty')}</p>}

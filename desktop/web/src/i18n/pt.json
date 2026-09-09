@@ -911,6 +911,8 @@
     "drawHint": "Arraste um retângulo na visão geral para escolher a área a imprimir.",
     "removeArea": "Remover área de impressão",
     "continuations": "Permitir páginas de continuação da legenda",
+    "continued": "Continuação",
+    "legendFor": "Lista de plantas da página",
     "previous": "Página anterior",
     "next": "Próxima página",
     "zoom": "Zoom da prévia",

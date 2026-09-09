@@ -911,6 +911,8 @@
     "drawHint": "Sleep een rechthoek op het overzicht om het afdrukgebied te kiezen.",
     "removeArea": "Afdrukgebied verwijderen",
     "continuations": "Vervolgpagina’s voor de legenda toestaan",
+    "continued": "Vervolg",
+    "legendFor": "Plantenlijst voor pagina",
     "previous": "Vorige pagina",
     "next": "Volgende pagina",
     "zoom": "Voorbeeldzoom",

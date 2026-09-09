@@ -33,7 +33,7 @@ it('offers only printable layers and sends checkbox changes to the export setup'
   const canvas = { layers: [{ name: 'plants', visible: true, opacity: 1 }, { name: 'annotations', visible: false, opacity: 1 }, { name: 'base', visible: true, opacity: 1 }], plants: [], zones: [], annotations: [], measurements: [] }
   const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true,
     input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }), prepare, resolveNames: async () => ({}),
-    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
+    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
     const boxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
@@ -43,5 +43,33 @@ it('offers only printable layers and sends checkbox changes to the export setup'
     await act(async () => { boxes[0]!.click(); boxes[1]!.click() })
     expect(workflow.setup.value.layers).toEqual(['annotations'])
     expect(canvas.layers.map((layer) => layer.visible)).toEqual([true, false, true])
+  } finally { render(null, container); workflow.dispose(); container.remove() }
+})
+
+it('offers explicit continuation consent and retains the choice through preview closure', async () => {
+  const container = document.createElement('div'); document.body.append(container)
+  const canvas = { layers: [], plants: [], zones: [], annotations: [], measurements: [] }
+  const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true,
+    input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
+    prepare: async ({ setup }) => ({ bytes: setup.continuations ? new Uint8Array([1]) : null,
+      plan: { pages: [], outlines: {}, hasLegendOverflow: true, blocked: setup.continuations ? null : 'legend-overflow' } }),
+    resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
+    labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }),
+    namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
+  try {
+    await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
+    const checkbox = () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+    const save = () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save PDF')!
+    expect(checkbox()).not.toBeNull()
+    expect(checkbox().checked).toBe(false)
+    expect(save().disabled).toBe(true)
+    await act(async () => { checkbox().click() })
+    expect(workflow.setup.value.continuations).toBe(true)
+    expect(save().disabled).toBe(false)
+    await act(async () => { workflow.close() })
+    await act(async () => { workflow.show() })
+    expect(checkbox().checked).toBe(true)
+    await act(async () => { checkbox().click() })
+    expect(save().disabled).toBe(true)
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })

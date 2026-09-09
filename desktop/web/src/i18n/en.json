@@ -911,6 +911,8 @@
     "drawHint": "Drag a rectangle on the overview to choose the area to print.",
     "removeArea": "Remove print area",
     "continuations": "Allow legend continuation pages",
+    "continued": "Continued",
+    "legendFor": "Plant list for page",
     "previous": "Previous page",
     "next": "Next page",
     "zoom": "Preview zoom",

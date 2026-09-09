@@ -911,6 +911,8 @@
     "drawHint": "Tracez un rectangle sur la vue d’ensemble pour choisir l’aire à imprimer.",
     "removeArea": "Supprimer l’aire d’impression",
     "continuations": "Autoriser les pages de suite de légende",
+    "continued": "Suite",
+    "legendFor": "Liste des plantes de la page",
     "previous": "Page précédente",
     "next": "Page suivante",
     "zoom": "Zoom de l’aperçu",

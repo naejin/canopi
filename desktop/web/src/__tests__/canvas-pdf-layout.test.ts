@@ -4,7 +4,7 @@ import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const labels: PdfLabels = { overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size', page: 'Page' }
+const labels: PdfLabels = { overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }
 const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', fill: true, stroke: true, strokeWidth: .14 }]
 function input(): PdfInput {
   return { name: 'Field garden', locale: 'en', commonNames: { 'Malus domestica': 'Apple' }, canvas: {
