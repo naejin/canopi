@@ -1,0 +1,970 @@
+{
+  "recorded": "2026-09-09",
+  "productionCodeCommit": "02d99331",
+  "browserSamples": {
+    "chrome": [
+      {
+        "fixture": "dense",
+        "browserVersion": "150.0.7871.46",
+        "pages": 2,
+        "plants": 320,
+        "bytes": 21265,
+        "planBytes": 359794,
+        "generationMs": 296.8999999910593,
+        "memory": {
+          "rendererBeforeKiB": 182160,
+          "rendererPeakKiB": 232160,
+          "rendererAfterKiB": 228528,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "dense.pdf",
+          "sha256": "3b3870b61b0e69348ddd7067f41105c48970cddea499b86bfbca1d741e5e2664",
+          "pages": 2,
+          "bytes": 21265,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "5319463a3ac73cd23a903afcbe5b23e1c2a6eaf051df69dc7b22b4ffae7fa760",
+          "planSha256": "c9b1f0353023cd72384eacca5e911af54a1098f4b419f2788b286c0d474cd8ba",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.6619946878702627,
+              "neighborhoodDifference": 0.010265467580610697,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "legends",
+        "browserVersion": "150.0.7871.46",
+        "pages": 3,
+        "plants": 100,
+        "bytes": 17865,
+        "planBytes": 368430,
+        "generationMs": 415.29999999701977,
+        "memory": {
+          "rendererBeforeKiB": 260508,
+          "rendererPeakKiB": 275296,
+          "rendererAfterKiB": 268564,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "legends.pdf",
+          "sha256": "69e71c35dccd46d78f0dcf4623c2a91d66bcc62a510413da4e6a070edfd5457d",
+          "pages": 3,
+          "bytes": 17865,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "1df78f8f930af91c185765b1d9a451811db034a5a73f46b8e48fb127eeee2b76",
+          "planSha256": "be91a6023698fa75da7e3ec3cb7567862ba308f6d010bc09ce0e901b627e97a0",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 2.48965872507113,
+              "neighborhoodDifference": 0.07805585627281424,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "map-excluded",
+        "browserVersion": "150.0.7871.46",
+        "pages": 4,
+        "plants": 120,
+        "bytes": 20168,
+        "planBytes": 199582,
+        "generationMs": 270.3999999910593,
+        "memory": {
+          "rendererBeforeKiB": 353288,
+          "rendererPeakKiB": 362964,
+          "rendererAfterKiB": 351900,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "map-excluded.pdf",
+          "sha256": "91cbbea2695118701fbedd9d4bd7b6f57bada8d262a5cb1782b0da02ba0efada",
+          "pages": 4,
+          "bytes": 20168,
+          "canvasPages": 4,
+          "exact50mmBars": 4,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+          "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.7138232704619992,
+              "neighborhoodDifference": 0.011468336615362971,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "mixed",
+        "browserVersion": "150.0.7871.46",
+        "pages": 4,
+        "plants": 120,
+        "bytes": 20168,
+        "planBytes": 199582,
+        "generationMs": 245.19999998807907,
+        "memory": {
+          "rendererBeforeKiB": 251128,
+          "rendererPeakKiB": 263944,
+          "rendererAfterKiB": 255892,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "mixed.pdf",
+          "sha256": "db901bdb59baebcab083eed4723c3c9409ee83f57cbde8de89ae46e16fe0d4c9",
+          "pages": 4,
+          "bytes": 20168,
+          "canvasPages": 4,
+          "exact50mmBars": 4,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+          "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.7138232704619992,
+              "neighborhoodDifference": 0.011468336615362971,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "multilingual",
+        "browserVersion": "150.0.7871.46",
+        "pages": 1,
+        "plants": 120,
+        "bytes": 102049,
+        "planBytes": 107543,
+        "generationMs": 1333.199999988079,
+        "memory": {
+          "rendererBeforeKiB": 287232,
+          "rendererPeakKiB": 400988,
+          "rendererAfterKiB": 339252,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "multilingual.pdf",
+          "sha256": "ce5784a96039fccba9acf12602cac09fa536287f8de86e274544a8bcfbe8dcd5",
+          "pages": 1,
+          "bytes": 102049,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "07c4508d1c43e72fccbcb6602575317ea03dac82073797bd8c22aff7642ab2ed",
+          "planSha256": "9501f3f15823cfec0ecf460cc8e959410e8739c7a37df7717546fee7808f56c6",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 0.7125261225029016,
+              "neighborhoodDifference": 0.017071578391743412,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "stress-1",
+        "browserVersion": "150.0.7871.46",
+        "pages": 1,
+        "plants": 100,
+        "bytes": 12923,
+        "planBytes": 88121,
+        "generationMs": 367.90000000596046,
+        "memory": {
+          "rendererBeforeKiB": 358816,
+          "rendererPeakKiB": 366220,
+          "rendererAfterKiB": 358480,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-1.pdf",
+          "sha256": "cabdcc2c4351628ef49fc736fca63769b25ab90b3c18715e81db6edf53049e90",
+          "pages": 1,
+          "bytes": 12923,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "f85fb867fa6027068969038304f19bf2dd99738139cf2c4dc3daa29643853971",
+          "planSha256": "2df4e8fc33670c3fac4f0bb5c43e4e60ff7b27aa35bf5eee59c4ede004fadf22",
+          "previewComparisons": []
+        }
+      },
+      {
+        "fixture": "stress-10",
+        "browserVersion": "150.0.7871.46",
+        "pages": 10,
+        "plants": 900,
+        "bytes": 56821,
+        "planBytes": 1328556,
+        "generationMs": 567.5,
+        "memory": {
+          "rendererBeforeKiB": 361984,
+          "rendererPeakKiB": 374564,
+          "rendererAfterKiB": 367464,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-10.pdf",
+          "sha256": "04f9d9996f9cef4e081a1d2d4c7c97fdb76b67c67261a040e6d788a682b881d5",
+          "pages": 10,
+          "bytes": 56821,
+          "canvasPages": 10,
+          "exact50mmBars": 10,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "f4be725bf30225baf8db76a82b0e06ff56fb8d9fa12bc394030801945f252088",
+          "planSha256": "d192ee7f34441d53dc3f715f63ed9274a2588ebef08860c519b0082cfbca0320",
+          "previewComparisons": []
+        }
+      },
+      {
+        "fixture": "stress-50",
+        "browserVersion": "150.0.7871.46",
+        "pages": 50,
+        "plants": 10000,
+        "bytes": 485285,
+        "planBytes": 14365296,
+        "generationMs": 2045.1000000089407,
+        "memory": {
+          "rendererBeforeKiB": 363700,
+          "rendererPeakKiB": 565288,
+          "rendererAfterKiB": 526996,
+          "samplePeriodMs": 25,
+          "pids": [
+            1543142,
+            1543143
+          ]
+        },
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-50.pdf",
+          "sha256": "373b6732a358e813615ef17b3b643f4d7009b7d51bd6b471dd83095b595cca5e",
+          "pages": 50,
+          "bytes": 485285,
+          "canvasPages": 50,
+          "exact50mmBars": 50,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "db73735f8385040401766093ed9cc9b5c4a4dc6697f3e760032768bff7f86473",
+          "planSha256": "88ffc5c43e160c2e27f8db7bbe4b9155817071ab2e887537e2e6c9b33449b467",
+          "previewComparisons": []
+        }
+      }
+    ],
+    "firefox": [
+      {
+        "fixture": "dense",
+        "browserVersion": "146.0.1",
+        "pages": 2,
+        "plants": 320,
+        "bytes": 21265,
+        "planBytes": 359794,
+        "generationMs": 705,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "dense.pdf",
+          "sha256": "1d4f3e2bed9062b4c5d1fffb23e27a3ab9243a9000ec50ccc6644b826c4d469d",
+          "pages": 2,
+          "bytes": 21265,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "5319463a3ac73cd23a903afcbe5b23e1c2a6eaf051df69dc7b22b4ffae7fa760",
+          "planSha256": "c9b1f0353023cd72384eacca5e911af54a1098f4b419f2788b286c0d474cd8ba",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.6621276832180855,
+              "neighborhoodDifference": 0.011507348584057641,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "legends",
+        "browserVersion": "146.0.1",
+        "pages": 3,
+        "plants": 100,
+        "bytes": 17865,
+        "planBytes": 368430,
+        "generationMs": 702,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "legends.pdf",
+          "sha256": "804d1498d3385359724197142d7befde3a8719abaeab8b5caa6d70b15066f782",
+          "pages": 3,
+          "bytes": 17865,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "1df78f8f930af91c185765b1d9a451811db034a5a73f46b8e48fb127eeee2b76",
+          "planSha256": "be91a6023698fa75da7e3ec3cb7567862ba308f6d010bc09ce0e901b627e97a0",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 2.493543666953641,
+              "neighborhoodDifference": 0.0798592731892905,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "map-excluded",
+        "browserVersion": "146.0.1",
+        "pages": 4,
+        "plants": 120,
+        "bytes": 20168,
+        "planBytes": 199582,
+        "generationMs": 381,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "map-excluded.pdf",
+          "sha256": "8b6bc18e5aace570ca809eac97dea5e97e4c3a74aaa394044828deca459ff741",
+          "pages": 4,
+          "bytes": 20168,
+          "canvasPages": 4,
+          "exact50mmBars": 4,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+          "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.7366432033318585,
+              "neighborhoodDifference": 0.011802007165789339,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "mixed",
+        "browserVersion": "146.0.1",
+        "pages": 4,
+        "plants": 120,
+        "bytes": 20168,
+        "planBytes": 199582,
+        "generationMs": 832,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "mixed.pdf",
+          "sha256": "3ce1a308f236539018d1521b501ba9af874e5e0adf4a924a0879185d4db57870",
+          "pages": 4,
+          "bytes": 20168,
+          "canvasPages": 4,
+          "exact50mmBars": 4,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+          "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.7366432033318585,
+              "neighborhoodDifference": 0.011802007165789339,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "multilingual",
+        "browserVersion": "146.0.1",
+        "pages": 1,
+        "plants": 120,
+        "bytes": 102049,
+        "planBytes": 107543,
+        "generationMs": 1139,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "multilingual.pdf",
+          "sha256": "590224102f30db5fd291f9f99d62c594508fc4faf0a980f2e24fcca429d74cd3",
+          "pages": 1,
+          "bytes": 102049,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "07c4508d1c43e72fccbcb6602575317ea03dac82073797bd8c22aff7642ab2ed",
+          "planSha256": "9501f3f15823cfec0ecf460cc8e959410e8739c7a37df7717546fee7808f56c6",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 0.7076629259508502,
+              "neighborhoodDifference": 0.017855955398680155,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "stress-1",
+        "browserVersion": "146.0.1",
+        "pages": 1,
+        "plants": 100,
+        "bytes": 12923,
+        "planBytes": 88121,
+        "generationMs": 336,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-1.pdf",
+          "sha256": "effa346e27aad82b9c2c61ecea15691f3843d66aeb0cf37525330ee99f4a5caa",
+          "pages": 1,
+          "bytes": 12923,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "f85fb867fa6027068969038304f19bf2dd99738139cf2c4dc3daa29643853971",
+          "planSha256": "2df4e8fc33670c3fac4f0bb5c43e4e60ff7b27aa35bf5eee59c4ede004fadf22",
+          "previewComparisons": []
+        }
+      },
+      {
+        "fixture": "stress-10",
+        "browserVersion": "146.0.1",
+        "pages": 10,
+        "plants": 900,
+        "bytes": 56821,
+        "planBytes": 1328556,
+        "generationMs": 621,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-10.pdf",
+          "sha256": "85af9caf9ef84477164c69e7c6381b37f7da6ab8e00c32ea77ea45c5de04e0d5",
+          "pages": 10,
+          "bytes": 56821,
+          "canvasPages": 10,
+          "exact50mmBars": 10,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "f4be725bf30225baf8db76a82b0e06ff56fb8d9fa12bc394030801945f252088",
+          "planSha256": "d192ee7f34441d53dc3f715f63ed9274a2588ebef08860c519b0082cfbca0320",
+          "previewComparisons": []
+        }
+      },
+      {
+        "fixture": "stress-50",
+        "browserVersion": "146.0.1",
+        "pages": 50,
+        "plants": 10000,
+        "bytes": 485285,
+        "planBytes": 14365296,
+        "generationMs": 2641,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-50.pdf",
+          "sha256": "8dae1751fcf823895f09455b99db198f228bb0d4995fd7cae4e935bcf2cb5fab",
+          "pages": 50,
+          "bytes": 485285,
+          "canvasPages": 50,
+          "exact50mmBars": 50,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "db73735f8385040401766093ed9cc9b5c4a4dc6697f3e760032768bff7f86473",
+          "planSha256": "88ffc5c43e160c2e27f8db7bbe4b9155817071ab2e887537e2e6c9b33449b467",
+          "previewComparisons": []
+        }
+      }
+    ],
+    "webkit": [
+      {
+        "fixture": "dense",
+        "browserVersion": "26.0",
+        "pages": 2,
+        "plants": 320,
+        "bytes": 21265,
+        "planBytes": 359794,
+        "generationMs": 688,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "dense.pdf",
+          "sha256": "a4a94870c58a6fec694b4326306f66e1e36de3d46dc031d1904127e71db4c7a8",
+          "pages": 2,
+          "bytes": 21265,
+          "canvasPages": 2,
+          "exact50mmBars": 2,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "5319463a3ac73cd23a903afcbe5b23e1c2a6eaf051df69dc7b22b4ffae7fa760",
+          "planSha256": "c9b1f0353023cd72384eacca5e911af54a1098f4b419f2788b286c0d474cd8ba",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.8257255561200468,
+              "neighborhoodDifference": 0.014483784468330409,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "legends",
+        "browserVersion": "26.0",
+        "pages": 3,
+        "plants": 100,
+        "bytes": 17865,
+        "planBytes": 368430,
+        "generationMs": 1082,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "legends.pdf",
+          "sha256": "0473742c0c103d892b57f9010e0f08bcbe3739bc061c927463beb2759c912342",
+          "pages": 3,
+          "bytes": 17865,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "1df78f8f930af91c185765b1d9a451811db034a5a73f46b8e48fb127eeee2b76",
+          "planSha256": "be91a6023698fa75da7e3ec3cb7567862ba308f6d010bc09ce0e901b627e97a0",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 2.9467593023596037,
+              "neighborhoodDifference": 0.11773191507094416,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "map-excluded",
+        "browserVersion": "26.0",
+        "pages": 4,
+        "plants": 120,
+        "bytes": 20168,
+        "planBytes": 199582,
+        "generationMs": 371,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "map-excluded.pdf",
+          "sha256": "7c44cbb325df2a21abebccde83a20dfac59666b2d843d74c7ebc228af027433e",
+          "pages": 4,
+          "bytes": 20168,
+          "canvasPages": 4,
+          "exact50mmBars": 4,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+          "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.9071281664345158,
+              "neighborhoodDifference": 0.016517726654366075,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "mixed",
+        "browserVersion": "26.0",
+        "pages": 4,
+        "plants": 120,
+        "bytes": 20168,
+        "planBytes": 199582,
+        "generationMs": 621,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "mixed.pdf",
+          "sha256": "dc6cdf9e6f5e53e33282f7a88ee4ae830eefb866f50850f95dfa690fba4e6d8b",
+          "pages": 4,
+          "bytes": 20168,
+          "canvasPages": 4,
+          "exact50mmBars": 4,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+          "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+          "previewComparisons": [
+            {
+              "page": 2,
+              "meanChannelDifference": 0.9071281664345158,
+              "neighborhoodDifference": 0.016517726654366075,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "multilingual",
+        "browserVersion": "26.0",
+        "pages": 1,
+        "plants": 120,
+        "bytes": 102049,
+        "planBytes": 107543,
+        "generationMs": 1534,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "multilingual.pdf",
+          "sha256": "85beff566a092690a015074c80f9d1e2393e64e992e34d9cc5c7fadd69184c17",
+          "pages": 1,
+          "bytes": 102049,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "07c4508d1c43e72fccbcb6602575317ea03dac82073797bd8c22aff7642ab2ed",
+          "planSha256": "9501f3f15823cfec0ecf460cc8e959410e8739c7a37df7717546fee7808f56c6",
+          "previewComparisons": [
+            {
+              "page": 1,
+              "meanChannelDifference": 0.8399758598666441,
+              "neighborhoodDifference": 0.022909187525509245,
+              "maximumAllowed": 0.25
+            }
+          ]
+        }
+      },
+      {
+        "fixture": "stress-1",
+        "browserVersion": "26.0",
+        "pages": 1,
+        "plants": 100,
+        "bytes": 12923,
+        "planBytes": 88121,
+        "generationMs": 284,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-1.pdf",
+          "sha256": "3eae77a9bae668e68b8a86b9e70fd2b8934f31aadd1eb72069cdef34d0575617",
+          "pages": 1,
+          "bytes": 12923,
+          "canvasPages": 1,
+          "exact50mmBars": 1,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "f85fb867fa6027068969038304f19bf2dd99738139cf2c4dc3daa29643853971",
+          "planSha256": "2df4e8fc33670c3fac4f0bb5c43e4e60ff7b27aa35bf5eee59c4ede004fadf22",
+          "previewComparisons": []
+        }
+      },
+      {
+        "fixture": "stress-10",
+        "browserVersion": "26.0",
+        "pages": 10,
+        "plants": 900,
+        "bytes": 56821,
+        "planBytes": 1328556,
+        "generationMs": 560,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-10.pdf",
+          "sha256": "45a17f72e8d0f9a12f93671557c6102df13eb1a26c58a50d3020710fbaac92e7",
+          "pages": 10,
+          "bytes": 56821,
+          "canvasPages": 10,
+          "exact50mmBars": 10,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "f4be725bf30225baf8db76a82b0e06ff56fb8d9fa12bc394030801945f252088",
+          "planSha256": "d192ee7f34441d53dc3f715f63ed9274a2588ebef08860c519b0082cfbca0320",
+          "previewComparisons": []
+        }
+      },
+      {
+        "fixture": "stress-50",
+        "browserVersion": "26.0",
+        "pages": 50,
+        "plants": 10000,
+        "bytes": 485285,
+        "planBytes": 14365296,
+        "generationMs": 2596,
+        "memory": null,
+        "activeWorkersAfterClear": 0,
+        "verification": {
+          "file": "stress-50.pdf",
+          "sha256": "48fc82ddbdb18d0c905b1e64ac1ce3934a61a96fdfb8bfd979078632adb72cd7",
+          "pages": 50,
+          "bytes": 485285,
+          "canvasPages": 50,
+          "exact50mmBars": 50,
+          "embeddedUnicodeFonts": true,
+          "vectorCanvas": true,
+          "textSha256": "db73735f8385040401766093ed9cc9b5c4a4dc6697f3e760032768bff7f86473",
+          "planSha256": "88ffc5c43e160c2e27f8db7bbe4b9155817071ab2e887537e2e6c9b33449b467",
+          "previewComparisons": []
+        }
+      }
+    ]
+  },
+  "webEditionFlows": {
+    "chrome": {
+      "browser": "chromium",
+      "version": "150.0.7871.46",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+      "fileImport": true,
+      "explicitContinuationChoice": true,
+      "repeatedDownloads": 2,
+      "retainedSetup": true
+    },
+    "firefox": {
+      "browser": "firefox",
+      "version": "146.0.1",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0",
+      "fileImport": true,
+      "explicitContinuationChoice": true,
+      "repeatedDownloads": 2,
+      "retainedSetup": true
+    },
+    "webkit": {
+      "browser": "webkit",
+      "version": "26.0",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+      "fileImport": true,
+      "explicitContinuationChoice": true,
+      "repeatedDownloads": 2,
+      "retainedSetup": true
+    }
+  },
+  "nativeRun": "https://github.com/naejin/canopi/actions/runs/34355476818",
+  "nativeHosts": [
+    {
+      "runtime": {
+        "host": "GTK3 WebKitGTK 4.1",
+        "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "engine": "2.52.6",
+        "delivery": "Native fixed-path binary write; no save dialog"
+      },
+      "report": {
+        "file": "pdfkit.pdf",
+        "sha256": "339592d4b4dea509d54f14176faffe2dfd25d052d7aae8f96872657e5e9ed48a",
+        "pages": 4,
+        "bytes": 20168,
+        "canvasPages": 4,
+        "exact50mmBars": 4,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+        "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 1.7851525175871572,
+            "neighborhoodDifference": 0.006002523365066023,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 2,
+            "meanChannelDifference": 0.8660633406598993,
+            "neighborhoodDifference": 0.012848237235328174,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 3,
+            "meanChannelDifference": 0.8848744982011642,
+            "neighborhoodDifference": 0.012731496874461554,
+            "maximumAllowed": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "runtime": {
+        "delivery": "Native fixed-path binary write; no save dialog",
+        "engine": "19618.3.11.11.5",
+        "host": "WKWebView",
+        "os": "Version 14.8.9 (Build 23J631)"
+      },
+      "report": {
+        "file": "pdfkit.pdf",
+        "sha256": "79bc3a8d117c010a2bc5c55132cc593edcf2abd1434ee499bfe52a369e123167",
+        "pages": 4,
+        "bytes": 20168,
+        "canvasPages": 4,
+        "exact50mmBars": 4,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+        "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 1.7788219390307949,
+            "neighborhoodDifference": 0.005416457198993846,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 2,
+            "meanChannelDifference": 0.9091331451892479,
+            "neighborhoodDifference": 0.011360167065800482,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 3,
+            "meanChannelDifference": 0.9383081868685123,
+            "neighborhoodDifference": 0.011368146786669848,
+            "maximumAllowed": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "runtime": {
+        "delivery": "Native fixed-path binary write; no save dialog",
+        "engine": "20621.3.11.11.3",
+        "host": "WKWebView",
+        "os": "Version 15.7.9 (Build 24G830)"
+      },
+      "report": {
+        "file": "pdfkit.pdf",
+        "sha256": "0cd5c4c22ff1067f8e32c505bcb951cd51ddcdc333be21a6c46de5f0ef5d0f24",
+        "pages": 4,
+        "bytes": 20168,
+        "canvasPages": 4,
+        "exact50mmBars": 4,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+        "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 1.847577578402974,
+            "neighborhoodDifference": 0.005367396692908127,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 2,
+            "meanChannelDifference": 0.998493310481777,
+            "neighborhoodDifference": 0.011347754166670361,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 3,
+            "meanChannelDifference": 1.0086535639649992,
+            "neighborhoodDifference": 0.011331794724931633,
+            "maximumAllowed": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "runtime": {
+        "host": "WinForms WebView2",
+        "os": "Microsoft Windows NT 10.0.26100.0",
+        "engine": "151.0.4129.101",
+        "sdk": "1.0.2903.40",
+        "delivery": "Native fixed-path binary write; no save dialog"
+      },
+      "report": {
+        "file": "pdfkit.pdf",
+        "sha256": "32af9627f37cad11bbd8d46d4fc72208f9974926867eac18688e054031170fb1",
+        "pages": 4,
+        "bytes": 20168,
+        "canvasPages": 4,
+        "exact50mmBars": 4,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "12e3cd3e7a70c7071b7ae222c64a60b3f7f6450c9af95c8bd119b27208ea5486",
+        "planSha256": "0a90ad5a2970b6870ceeea75f8d5615855e2c7bee66c0ab23a261f8d7e9252b9",
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 1.60679127444122,
+            "neighborhoodDifference": 0.004675229793795146,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 2,
+            "meanChannelDifference": 0.7138232704619992,
+            "neighborhoodDifference": 0.011468336615362971,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 3,
+            "meanChannelDifference": 0.6990637423058498,
+            "neighborhoodDifference": 0.011390017132756253,
+            "maximumAllowed": 0.25
+          }
+        ]
+      }
+    }
+  ],
+  "qualityGates": {
+    "frontendFiles": 230,
+    "frontendTests": 2140,
+    "typescript": "passed",
+    "desktopBuild": "passed",
+    "webBuildAndBoundary": "passed",
+    "rustFmt": "passed",
+    "rustClippyDenyWarnings": "passed",
+    "rustWorkspaceCheck": "passed",
+    "rustWorkspaceTests": "passed; two existing manual Species Search harnesses ignored",
+    "nativePolicyTests": 13
+  }
+}

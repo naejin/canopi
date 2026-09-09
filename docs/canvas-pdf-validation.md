@@ -40,7 +40,7 @@ Image comparisons exposed a Preact-specific bug that ordinary page-plan tests co
 
 ## Runtime evidence
 
-The first production matrix, [run 34353834513](https://github.com/naejin/canopi/actions/runs/34353834513), passed generation, native fixed-path byte delivery, page-plan equality and independent PDF checks on all four hosts. The corrected-preview matrix adds image verification; its final result is recorded with the completion evidence below.
+The first production matrix, [run 34353834513](https://github.com/naejin/canopi/actions/runs/34353834513), passed generation, native fixed-path byte delivery, page-plan equality and independent PDF checks on all four hosts. The corrected-preview [run 34355476818](https://github.com/naejin/canopi/actions/runs/34355476818) passed all four hosts and the independent image/PDF verification job. Three preview pages per native host match the corresponding Poppler-rendered pages within the recorded antialiasing allowance.
 
 | Runtime | Actual version | Coverage |
 | --- | --- | --- |
@@ -77,3 +77,9 @@ The user has been given the nursery, orchard and complete-legend PDFs for review
 Current physical values are provisional: A4; common detail scale 1:100; 10 pt legend text with 13 pt line spacing; 3 mm nominal plant symbols; 0.25 mm geometry strokes; 42 mm legend column; 10 mm margins and overlap; 5 mm Zone context at the chosen scale. The final decision must preserve complete names, authored symbols/colours and honest physical scales. No printer settings, measurements or field-user approval should be inferred from these screen or PDF checks.
 
 The pending decision and resulting default application remain in `canopi-h0q3` and `canopi-1zbj`. The epic stays open until those requirements and its completion audit are satisfied.
+
+## Completion evidence
+
+The combined checkout includes both prerequisite fixes and all six PDF implementation/validation beads. `canopi-urxb` records the technical completion. [Compact measured data](canvas-pdf-validation-data.json) preserves browser timings, resource samples, file/plan/text hashes, image comparisons, actual runtime versions and native CI results beyond temporary artifact retention.
+
+Quality gates pass: 230 frontend test files / 2,140 tests; TypeScript; desktop and Web builds; Web boundary scan; Rust formatting, Clippy with warnings denied, workspace check and workspace tests; and all 13 native command-policy tests. Two pre-existing manual Species Search benchmark/relevance harnesses remain ignored in the ordinary Rust suite. Docs-only follow-up edits used link/diff checks and did not repeat code tests.
