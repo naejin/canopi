@@ -928,6 +928,8 @@
       "delivery-failed": "无法保存 PDF。请刷新预览后重试。",
       "selection-missing": "部分所选图层或区域已不存在。请检查打印选项后再导出。",
       "coverage-too-large": "当前设置超过了200页的限制。请选择更少的区域或更小的绘图比例。"
-    }
+    },
+    "printAreas": "打印区域",
+    "commonScale": "通用"
   }
 }

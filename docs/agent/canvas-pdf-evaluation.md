@@ -1,6 +1,6 @@
 # Canvas PDF evaluation tooling
 
-`scripts/pdf-evaluation/` is an isolated technical fixture for `canopi-4nzq`, not production export code. Its package and lockfile contain only evaluation dependencies. Do not import it from `desktop/web`, add its fonts to the app, or use it as production code. The selected foundation is recorded in `canopi-orpp` and ADR 0024; the [evidence brief](../canvas-pdf-evaluation.md) records the recommendation. The [native verification record](../canvas-pdf-native-verification.md) tracks the pre-UI platform gate `canopi-cd7x.1`.
+`scripts/pdf-evaluation/` is an isolated technical fixture for `canopi-4nzq`, not production export code. Its package and lockfile contain only evaluation dependencies. Do not import this historical fixture from `desktop/web` or change it to track production behavior. The app owns its selected font manifest, assets and encoder under the [Canvas PDF guide](canvas-pdf.md). The selected foundation is recorded in `canopi-orpp` and ADR 0024; the [evidence brief](../canvas-pdf-evaluation.md) records the recommendation. The [native verification record](../canvas-pdf-native-verification.md) tracks the pre-UI platform gate `canopi-cd7x.1`.
 
 Run from `scripts/pdf-evaluation/`:
 
@@ -11,7 +11,7 @@ npm run build
 npm run serve
 ```
 
-The font command fetches pinned public upstream bytes and licenses into ignored `public/fonts/`, checks SHA-256, and fails on network or integrity errors. `dist/`, `node_modules/`, `output/` and Python caches stay local. Dependencies are required because the app has no shared PDF encoder, and this bead compares two real encoders and their font engines. Vite exercises the existing build system without changing the app manifest.
+The font command fetches pinned public upstream bytes and licenses into ignored `public/fonts/`, checks SHA-256, and fails on network or integrity errors. `dist/`, `node_modules/`, `output/` and Python caches stay local. This isolated package retains the two compared encoders and their font engines for reproducibility. Its dependency graph is separate from the selected production pipeline.
 
 Open the printed localhost URL in a browser. Generate each candidate and use Download sample PDF. For the accompanying JSON, call `window.evaluation.downloadReport()` in DevTools after generation. Place the downloaded `pdfkit.pdf`, `pdfkit.json`, `pdf-lib.pdf`, and `pdf-lib.json` under `output/`, then run:
 

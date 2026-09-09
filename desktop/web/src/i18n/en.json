@@ -928,6 +928,8 @@
       "delivery-failed": "Could not save the PDF. Refresh the preview and try again.",
       "selection-missing": "Some selected layers or zones no longer exist. Review the print selections before exporting.",
       "coverage-too-large": "This setup exceeds the 200-page limit. Select fewer areas or a smaller drawing scale."
-    }
+    },
+    "printAreas": "Print areas",
+    "commonScale": "Common"
   }
 }

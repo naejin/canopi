@@ -1,4 +1,6 @@
 import { batch, signal } from '@preact/signals'
+import type { PrintBounds } from '../../canvas/print'
+import { pdfAreaKey, type PdfScale } from './types'
 import type { PdfPreparation } from './prepare'
 import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf } from './types'
 export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
@@ -11,6 +13,7 @@ export interface PdfWorkflowDependencies {
   readonly delivery: PdfDelivery
   labels(): PdfLabels
   fontBaseUrl(): string
+  namePrintArea(number: number): string
 }
 export interface PdfWorkflowState {
   readonly status: 'idle' | 'preparing' | 'ready' | 'error' | 'delivering' | 'saved' | 'downloaded'
@@ -26,6 +29,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   const setup = signal<PdfSetup>(defaults())
   const availableLayers = signal<readonly string[]>([])
   const availableZones = signal<readonly string[]>([])
+  let nextAreaId = 0
   let identity: object | null = null
   let capture: PdfCapture | null = null
   let controller: AbortController | null = null
@@ -34,7 +38,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function stop() { generation++; controller?.abort(); controller = null }
   function synchronize(nextIdentity: object) {
     if (identity !== null && identity !== nextIdentity) {
-      stop(); identity = null; capture = null
+      stop(); identity = null; capture = null; nextAreaId = 0
       batch(() => { open.value = false; state.value = IDLE; setup.value = defaults(); availableLayers.value = []; availableZones.value = [] })
     } else if (open.peek() && capture && !capture.isCurrent()) {
       stop(); capture = null; state.value = { status: 'error', error: 'stale', result: null }
@@ -50,13 +54,14 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     if (!next) { state.value = { status: 'error', error: 'canvas-busy', result: null }; return }
     if (identity !== next.identity) {
       identity = next.identity
+      nextAreaId = 0
       setup.value = { paper: 'A4', orientation: 'auto', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
     }
     availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
     availableZones.value = next.input.canvas.zones.map((zone) => zone.name)
     capture = next
     if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))
-      || (setup.peek().areas ?? []).some((area) => !availableZones.peek().includes(area.name))) {
+      || (setup.peek().areas ?? []).some((area) => area.kind === 'zone' && !availableZones.peek().includes(area.name))) {
       state.value = { status: 'error', error: 'selection-missing', result: null }; return
     }
     const abort = new AbortController(); controller = abort
@@ -101,8 +106,18 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     configure({ layers: selected ? [...layers, name] : layers })
   }
   function selectZone(name: string, selected: boolean): void {
-    const areas = (setup.peek().areas ?? []).filter((area) => area.name !== name)
+    const areas = (setup.peek().areas ?? []).filter((area) => area.kind !== 'zone' || area.name !== name)
     configure({ areas: selected ? [...areas, { kind: 'zone', name }] : areas })
+  }
+  function addPrintArea(bounds: PrintBounds): void {
+    if (!open.peek() || disposed || state.peek().status === 'delivering') return
+    if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return
+    const number = ++nextAreaId
+    configure({ areas: [...setup.peek().areas ?? [], { kind: 'rectangle', id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds } }] })
+  }
+  function removeArea(key: string): void { configure({ areas: (setup.peek().areas ?? []).filter((area) => pdfAreaKey(area) !== key) }) }
+  function setAreaScale(key: string, scale: PdfScale | undefined): void {
+    configure({ areas: (setup.peek().areas ?? []).map((area) => pdfAreaKey(area) === key ? { ...area, scale } : area) })
   }
   async function save(): Promise<void> {
     const snapshot = state.peek(), source = capture
@@ -120,6 +135,6 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } finally { if (controller === abort) controller = null }
   }
   function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = []; availableZones.value = [] }
-  return { open, state, setup, availableLayers, availableZones, show, close, rebuild, configure, selectLayer, selectZone, save, synchronize, dispose }
+  return { open, state, setup, availableLayers, availableZones, show, close, rebuild, configure, selectLayer, selectZone, addPrintArea, removeArea, setAreaScale, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>

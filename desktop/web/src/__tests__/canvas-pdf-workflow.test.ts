@@ -15,7 +15,7 @@ function fixture(plants: PrintPlant[] = []) {
   const resolveNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<Record<string, string>> => ({}))
   let currentCanvas = capture.input.canvas
   const workflow = createPdfWorkflow({ capture: () => ({ ...capture, input: { ...capture.input, canvas: currentCanvas } }), prepare, resolveNames,
-    delivery: { save, dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page' }), fontBaseUrl: () => 'https://test/fonts/' })
+    delivery: { save, dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
   return { workflow, prepare, save, resolveNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
@@ -73,6 +73,26 @@ describe('PDF workflow lifetime', () => {
     expect(workflow.setup.value.areas).toEqual([{ kind: 'zone', name: 'Orchard' }])
     workflow.selectZone('Orchard', false); workflow.selectZone('Renamed', true)
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    workflow.dispose()
+  })
+  it('owns Print Areas and individual scale overrides only for the current session', async () => {
+    const { workflow, prepare, capture, replace } = fixture()
+    workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    const bounds = { x: 1, y: 2, width: 4, height: 5 }
+    workflow.addPrintArea(bounds); bounds.width = 99
+    workflow.addPrintArea({ x: 10, y: 20, width: 3, height: 6 })
+    workflow.setAreaScale('area:1', 20); workflow.setAreaScale('area:2', 500)
+    workflow.close(); workflow.show()
+    await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    expect(prepare.mock.lastCall![0].setup.areas).toEqual([
+      { kind: 'rectangle', id: '1', name: 'Print area 1', bounds: { x: 1, y: 2, width: 4, height: 5 }, scale: 20 },
+      { kind: 'rectangle', id: '2', name: 'Print area 2', bounds: { x: 10, y: 20, width: 3, height: 6 }, scale: 500 },
+    ])
+    expect(capture.input.canvas.zones).toEqual([])
+    workflow.removeArea('area:1')
+    expect(workflow.setup.value.areas?.map((area) => area.scale)).toEqual([500])
+    replace()
+    expect(workflow.setup.value.areas ?? []).toEqual([])
     workflow.dispose()
   })
   it('keeps full canonical names when the catalog is unavailable', async () => {

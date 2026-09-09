@@ -29,3 +29,7 @@
 
 .check { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--text-sm); cursor: pointer; }
 .check input { accent-color: var(--color-primary); }
+
+.areaRow { display: flex; align-items: center; gap: var(--space-1); margin-bottom: var(--space-1); font-size: var(--text-sm); }
+.areaRow .check, .areaName { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.areaRow button { font-size: var(--text-xs); padding-inline: var(--space-2); }

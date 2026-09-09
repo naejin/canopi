@@ -4,7 +4,10 @@ export type PdfPaper = 'A4' | 'Letter'
 export type PdfOrientation = 'auto' | 'portrait' | 'landscape'
 export const PDF_SCALES = [20, 50, 100, 200, 500, 1000] as const
 export type PdfScale = typeof PDF_SCALES[number]
-export interface PdfAreaSelection { readonly kind: 'zone'; readonly name: string }
+export type PdfAreaSelection =
+  | { readonly kind: 'zone'; readonly name: string; readonly scale?: PdfScale }
+  | { readonly kind: 'rectangle'; readonly id: string; readonly name: string; readonly bounds: PrintBounds; readonly scale?: PdfScale }
+export function pdfAreaKey(area: PdfAreaSelection): string { return area.kind === 'zone' ? `zone:${area.name}` : `area:${area.id}` }
 export interface PdfSetup {
   readonly paper: PdfPaper
   readonly orientation: PdfOrientation

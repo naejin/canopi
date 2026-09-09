@@ -928,6 +928,8 @@
       "delivery-failed": "Impossible d’enregistrer le PDF. Actualisez l’aperçu et réessayez.",
       "selection-missing": "Certains calques ou zones sélectionnés n’existent plus. Vérifiez les sélections avant d’exporter.",
       "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Sélectionnez moins de zones ou une échelle de dessin plus petite."
-    }
+    },
+    "printAreas": "Zones d’impression",
+    "commonScale": "Commune"
   }
 }

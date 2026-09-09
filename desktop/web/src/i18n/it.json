@@ -928,6 +928,8 @@
       "delivery-failed": "Impossibile salvare il PDF. Aggiorna l’anteprima e riprova.",
       "selection-missing": "Alcuni livelli o zone selezionati non esistono più. Controlla la selezione prima di esportare.",
       "coverage-too-large": "La selezione supera il limite di 200 pagine. Seleziona meno aree o una scala di disegno più piccola."
-    }
+    },
+    "printAreas": "Aree di stampa",
+    "commonScale": "Comune"
   }
 }

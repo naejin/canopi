@@ -1,6 +1,7 @@
 import type { CanvasPrintSnapshot, PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
 import { PdfTextError, type PdfTextEngine, type TextLine } from './text'
 import { tileCoverage } from './coverage'
+import { pdfAreaKey } from './types'
 import type { PdfInput, PdfLabels, PdfLegendEntry, PdfOperation, PdfPage, PdfPlan, PdfSetup } from './types'
 
 export const MM = 72 / 25.4
@@ -20,15 +21,13 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
   const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers) }
   const details = detailPages(input, selected, setup, text, labels)
   const canvas = selected.canvas
-  if (!details.length && !canvas.plants.length && !canvas.zones.length && !canvas.annotations.length && !canvas.measurements.length) {
-    return { pages: [], outlines: text.outlines, blocked: 'empty' }
-  }
+  const empty = !details.length && !canvas.plants.length && !canvas.zones.length && !canvas.annotations.length && !canvas.measurements.length
   const overviews: PdfPage[] = []
   let error: unknown
   for (const orientation of orientations(setup)) {
     try {
       const geometry = pageGeometry(setup.paper, orientation, details.length === 0)
-      const fitted = fitOverview(selected, geometry.frame, text, details.map((page) => page.ground))
+      const fitted = fitOverview(selected, geometry.frame, text, empty ? [{ x: -5, y: -5, width: 10, height: 10 }] : details.map((page) => page.ground))
       overviews.push(canvasPage(selected, geometry, text, labels, { id: 'overview', kind: 'overview', title: labels.overview,
         ...fitted, navigation: details.length > 0 }))
     } catch (failure) { error = failure }
@@ -55,7 +54,7 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     operations.push(textOp(number, page.width - PRINT.margin - number.width, 12 * MM, 9))
     return { ...page, operations, ...(page.kind === 'detail' ? { neighbors } : {}) }
   })
-  return { pages: finalized, outlines: text.outlines, blocked: finalized.some((page) => page.overflow) ? 'legend-overflow' : null }
+  return { pages: finalized, outlines: text.outlines, blocked: empty ? 'empty' : finalized.some((page) => page.overflow) ? 'legend-overflow' : null }
 }
 
 function pageGeometry(paper: 'A4' | 'Letter', orientation: 'portrait' | 'landscape', legend = true): Geometry {
@@ -67,11 +66,11 @@ function pageGeometry(paper: 'A4' | 'Letter', orientation: 'portrait' | 'landsca
 function detailPages(source: PdfInput, selected: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels): PdfPage[] {
   const result: PdfPage[] = []
   for (const area of setup.areas ?? []) {
-    const zone = source.canvas.zones.find((zone) => zone.name === area.name)
-    if (!zone) throw new Error('selection-missing')
-    const scale = 1000 * MM / (setup.detailScale ?? 100)
-    const context = PRINT.context / scale
-    const bounds = { x: zone.bounds.x - context, y: zone.bounds.y - context, width: zone.bounds.width + 2 * context, height: zone.bounds.height + 2 * context }
+    const requested = area.kind === 'rectangle' ? area.bounds : source.canvas.zones.find((zone) => zone.name === area.name)?.bounds
+    if (!requested) throw new Error('selection-missing')
+    const scale = 1000 * MM / (area.scale ?? setup.detailScale ?? 100)
+    const context = area.kind === 'zone' ? PRINT.context / scale : 0
+    const bounds = { x: requested.x - context, y: requested.y - context, width: requested.width + 2 * context, height: requested.height + 2 * context }
     const candidates: { geometry: Geometry; sheets: ReturnType<typeof tileCoverage> }[] = []
     let error: unknown
     for (const orientation of orientations(setup)) {
@@ -84,7 +83,7 @@ function detailPages(source: PdfInput, selected: PdfInput, setup: PdfSetup, text
     const chosen = candidates[0]
     if (!chosen) throw error
     if (result.length + chosen.sheets.length > 199) throw new Error('coverage-too-large')
-    const areaKey = `zone:${area.name}`
+    const areaKey = pdfAreaKey(area)
     for (const sheet of chosen.sheets) {
       const visible = canvasInFrame(selected, sheet.ground, scale, chosen.geometry.frame, text)
       result.push({ ...canvasPage({ ...selected, canvas: visible }, chosen.geometry, text, labels,

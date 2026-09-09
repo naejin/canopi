@@ -9,7 +9,7 @@ it('keeps keyboard commands inside the preview and returns focus when it closes'
   const launch = document.createElement('button'), container = document.createElement('div')
   document.body.append(launch, container); launch.focus()
   const workflow = createPdfWorkflow({ capture: () => null, prepare: vi.fn(), resolveNames: vi.fn(),
-    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: vi.fn(), fontBaseUrl: () => '' })
+    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: vi.fn(), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   const globalKey = vi.fn()
   window.addEventListener('keydown', globalKey)
   try {
@@ -33,7 +33,7 @@ it('offers only printable layers and sends checkbox changes to the export setup'
   const canvas = { layers: [{ name: 'plants', visible: true, opacity: 1 }, { name: 'annotations', visible: false, opacity: 1 }, { name: 'base', visible: true, opacity: 1 }], plants: [], zones: [], annotations: [], measurements: [] }
   const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true,
     input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }), prepare, resolveNames: async () => ({}),
-    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page' }), fontBaseUrl: () => '' })
+    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
     const boxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')

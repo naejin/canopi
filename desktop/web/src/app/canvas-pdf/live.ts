@@ -28,6 +28,7 @@ export const canvasPdf = createPdfWorkflow({
   prepare: async (input, signal) => (await import('./job')).preparePdfJob(input, signal),
   delivery: createPdfDelivery(),
   labels: () => ({ overview: t('pdf.overview'), plants: t('pdf.plants'), actualSize: t('pdf.actualSize'), page: t('pdf.pageLabel') }),
+  namePrintArea: (number) => t('pdf.areaName', { number }),
   fontBaseUrl: () => new URL(`${import.meta.env.BASE_URL}pdf-fonts/`, document.baseURI).href,
 })
 const disposeObservation = effect(() => {

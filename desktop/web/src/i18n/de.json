@@ -928,6 +928,8 @@
       "delivery-failed": "Das PDF konnte nicht gespeichert werden. Aktualisieren Sie die Vorschau und versuchen Sie es erneut.",
       "selection-missing": "Einige ausgewählte Ebenen oder Zonen sind nicht mehr vorhanden. Prüfen Sie die Druckauswahl vor dem Export.",
       "coverage-too-large": "Diese Auswahl überschreitet das Limit von 200 Seiten. Wählen Sie weniger Bereiche oder einen kleineren Zeichnungsmaßstab."
-    }
+    },
+    "printAreas": "Druckbereiche",
+    "commonScale": "Standard"
   }
 }

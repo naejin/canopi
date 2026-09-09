@@ -928,6 +928,8 @@
       "delivery-failed": "Não foi possível salvar o PDF. Atualize a prévia e tente novamente.",
       "selection-missing": "Algumas camadas ou zonas selecionadas já não existem. Reveja a seleção antes de exportar.",
       "coverage-too-large": "Esta seleção ultrapassa o limite de 200 páginas. Selecione menos áreas ou uma escala de desenho menor."
-    }
+    },
+    "printAreas": "Áreas de impressão",
+    "commonScale": "Comum"
   }
 }
