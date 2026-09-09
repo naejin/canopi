@@ -14,11 +14,52 @@ function fixture(plants: PrintPlant[] = []) {
   const save = vi.fn(async () => 'saved' as const)
   const resolveNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<Record<string, string>> => ({}))
   let currentCanvas = capture.input.canvas
-  const workflow = createPdfWorkflow({ capture: () => ({ ...capture, input: { ...capture.input, canvas: currentCanvas } }), prepare, resolveNames,
+  const workflow = createPdfWorkflow({ capture: () => {
+    const canvas = currentCanvas
+    return { ...capture, input: { ...capture.input, canvas }, isCurrent: () => current && canvas === currentCanvas }
+  }, prepare, resolveNames,
     delivery: { save, dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
   return { workflow, prepare, save, resolveNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
+  it('refreshes changed content automatically, coalesces revisions, and cancels refresh on close', async () => {
+    vi.useFakeTimers()
+    const { workflow, capture, setCanvas, prepare, save } = fixture()
+    try {
+      workflow.show(); await Promise.resolve()
+      workflow.setPageView('overview', { offset: { x: 5, y: 3 }, zoom: 120 })
+      await Promise.resolve()
+      prepare.mockClear()
+      setCanvas({ ...capture.input.canvas, annotations: [] })
+      workflow.synchronize(capture.identity)
+      expect(workflow.state.value.result).toBeNull()
+      await workflow.save(); expect(save).not.toHaveBeenCalled()
+      workflow.synchronize(capture.identity)
+      await vi.advanceTimersByTimeAsync(150)
+      expect(prepare).toHaveBeenCalledOnce()
+      expect(workflow.state.value.status).toBe('ready')
+      expect(prepare.mock.lastCall![0].setup.views?.overview).toEqual({ offset: { x: 5, y: 3 }, zoom: 120 })
+      setCanvas({ ...capture.input.canvas }); workflow.synchronize(capture.identity)
+      workflow.close(); await vi.advanceTimersByTimeAsync(150)
+      expect(prepare).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { workflow.dispose(); vi.useRealTimers() }
+  })
+  it('owns framing values and restores zoom and centre together while retaining orientation', async () => {
+    const { workflow, prepare } = fixture()
+    workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    const offset = { x: 10, y: -5 }
+    workflow.setPageView('overview', { offset, zoom: 125, orientation: 'portrait' })
+    offset.x = 500
+    expect(workflow.setup.value.views?.overview?.offset?.x).toBe(10)
+    const before = workflow.setup.peek()
+    workflow.setPageView('overview', { offset: { x: NaN, y: 0 } })
+    expect(workflow.setup.peek()).toBe(before)
+    workflow.fitPage('overview')
+    await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    expect(prepare.mock.lastCall![0].setup.views?.overview).toEqual({ offset: { x: 0, y: 0 }, zoom: 100, orientation: 'portrait' })
+    workflow.dispose()
+  })
   it('prepares and delivers derived bytes without including map layers', async () => {
     const { workflow, prepare, save } = fixture()
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))

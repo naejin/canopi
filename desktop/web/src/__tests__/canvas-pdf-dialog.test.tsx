@@ -39,6 +39,7 @@ it('offers only printable layers and sends checkbox changes to the export setup'
     delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
+    await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Print layers"]')!.click() })
     const boxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
     expect(boxes).toHaveLength(2)
     expect(boxes[0]!.checked).toBe(true)
@@ -61,19 +62,17 @@ it('offers explicit continuation consent and retains the choice through preview 
     namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
-    const checkbox = () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!
-    const save = () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save PDF')!
-    expect(checkbox()).not.toBeNull()
-    expect(checkbox().checked).toBe(false)
-    expect(save().disabled).toBe(true)
-    await act(async () => { checkbox().click() })
+    const button = (name: string) => Array.from(container.querySelectorAll('button')).find((node) => node.getAttribute('aria-label') === name || node.textContent === name)!
+    expect(button('Add legend pages')).toBeDefined()
+    expect(button('Save PDF').disabled).toBe(true)
+    await act(async () => { button('Add legend pages').click() })
     expect(workflow.setup.value.continuations).toBe(true)
-    expect(save().disabled).toBe(false)
+    expect(button('Save PDF').disabled).toBe(false)
     await act(async () => { workflow.close() })
     await act(async () => { workflow.show() })
-    expect(checkbox().checked).toBe(true)
-    await act(async () => { checkbox().click() })
-    expect(save().disabled).toBe(true)
+    expect(button('Remove legend pages')).toBeDefined()
+    await act(async () => { button('Remove legend pages').click() })
+    expect(button('Save PDF').disabled).toBe(true)
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
 
@@ -90,20 +89,20 @@ it('opens newly selected and drawn pages and edits their zoom and orientation in
     labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }),
     namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   const button = (name: string) => Array.from(container.querySelectorAll('button')).find((node) => node.getAttribute('aria-label') === name || node.textContent === name)!
-  const checkbox = (name: string) => Array.from(container.querySelectorAll('label')).find((node) => node.textContent === name)!.querySelector('input')!
   const zoom = () => container.querySelector<HTMLInputElement>('input[type="number"]')!
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
-    await act(async () => { checkbox('Wide bed').click() })
+    await act(async () => { button('Add page').click() })
+    await act(async () => { button('Wide bed').click() })
     expect(container.querySelector('svg[data-pdf-page="2"]')).not.toBeNull()
-    expect(button('Orientation').textContent).toContain('Landscape')
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('viewBox')!.split(' ').map(Number)[2]).toBeGreaterThan(700)
     expect(zoom().value).toBe('100')
     await act(async () => { zoom().value = '137.5'; zoom().dispatchEvent(new Event('input', { bubbles: true })); zoom().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
     expect(workflow.setup.value.views?.['zone:Wide%20bed']?.zoom).toBe(137.5)
-    await act(async () => { button('Orientation').click() })
     await act(async () => { button('Portrait').click() })
     expect(workflow.setup.value.views?.['zone:Wide%20bed']?.orientation).toBe('portrait')
-    await act(async () => { checkbox('Tall bed').click() })
+    await act(async () => { button('Add page').click() })
+    await act(async () => { button('Tall bed').click() })
     expect(container.querySelector('svg[data-pdf-page="3"]')).not.toBeNull()
     expect(zoom().value).toBe('100')
     await act(async () => { button('View page: Wide bed').click() })
@@ -111,10 +110,10 @@ it('opens newly selected and drawn pages and edits their zoom and orientation in
     await act(async () => { zoom().value = ''; zoom().dispatchEvent(new Event('input', { bubbles: true })) })
     await act(async () => { zoom().dispatchEvent(new FocusEvent('blur')) })
     expect(zoom().value).toBe('137.5')
-    await act(async () => { button('Reset fit').click() })
-    expect(workflow.setup.value.views?.['zone:Wide%20bed']).toEqual({ zoom: 100, orientation: 'portrait' })
-    await act(async () => { button('Draw a print area').click() })
-    const overview = workflow.state.value.result!.plan.pages[0]!, svg = container.querySelector('svg')!
+    await act(async () => { button('Fit').click() })
+    expect(workflow.setup.value.views?.['zone:Wide%20bed']).toEqual({ zoom: 100, orientation: 'portrait', offset: { x: 0, y: 0 } })
+    await act(async () => { button('Add page').click() })
+    const overview = workflow.state.value.result!.plan.pickerPage!, svg = container.querySelector<SVGSVGElement>('[data-pdf-editor]')!
     vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, overview.width, overview.height))
     let captured = false
     svg.setPointerCapture = () => { captured = true }; svg.hasPointerCapture = () => captured; svg.releasePointerCapture = () => { captured = false }
@@ -126,7 +125,7 @@ it('opens newly selected and drawn pages and edits their zoom and orientation in
     await pointer('pointerdown', overview.frame.x + 20, overview.frame.y + 20)
     await pointer('pointerup', overview.frame.x + 220, overview.frame.y + 70)
     expect(container.querySelector('svg[data-pdf-page="4"]')).not.toBeNull()
-    expect(button('Orientation').textContent).toContain('Landscape')
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('viewBox')!.split(' ').map(Number)[2]).toBeGreaterThan(700)
     expect(zoom().value).toBe('100')
     const area = workflow.setup.value.areas!.find((area) => area.kind === 'rectangle')!
     if (area.kind !== 'rectangle') throw new Error('Missing Print Area')
@@ -135,5 +134,52 @@ it('opens newly selected and drawn pages and edits their zoom and orientation in
     expect(page.ground.x + page.ground.width).toBeGreaterThanOrEqual(area.bounds.x + area.bounds.width)
     expect(page.ground.y).toBeLessThanOrEqual(area.bounds.y)
     expect(page.ground.y + page.ground.height).toBeGreaterThanOrEqual(area.bounds.y + area.bounds.height)
+    await act(async () => { button('Add page').click() })
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!
+    await act(async () => {
+      search.value = 'Wide'; search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(workflow.setup.value.areas).toHaveLength(3)
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('2')
+    const retained = workflow.setup.peek()
+    await act(async () => { button('Add page').click() })
+    await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(document.activeElement).toBe(container.querySelector('[data-pdf-editor]'))
+    expect(workflow.setup.peek()).toBe(retained)
+    await act(async () => { button('Inspect text').click() })
+    await act(async () => { button('Done inspecting').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('width')).toBe('100%')
+    expect(workflow.setup.peek()).toBe(retained)
+  } finally { render(null, container); workflow.dispose(); container.remove() }
+})
+
+it('returns to the source page when refreshed content no longer needs the selected legend continuation', async () => {
+  const container = document.createElement('div'); document.body.append(container)
+  const canvas = { layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
+    plants: Array.from({ length: 90 }, (_, i) => ({ id: String(i), canonicalName: 'Species ' + String(i).padStart(3, '0'),
+      position: { x: i % 10, y: Math.floor(i / 10) }, color: '#000000', symbol: 'round', mark: [], pinnedName: false })) }
+  const text = createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
+  const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
+    prepare: async ({ input, setup, labels }) => ({ bytes: new Uint8Array([1]), plan: buildPdfPlan(input, setup, text, labels) }),
+    resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
+    labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }),
+    namePrintArea: (number) => 'Print area ' + number, fontBaseUrl: () => '' })
+  try {
+    await act(async () => {
+      workflow.show(); workflow.configure({ continuations: true })
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      render(<CanvasPdfDialog workflow={workflow} />, container)
+    })
+    const continuation = container.querySelector<HTMLButtonElement>('button[aria-label^="View page: Plant list for page"]')!
+    expect(continuation).not.toBeNull()
+    await act(async () => { continuation.click() })
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('2')
+    await act(async () => {
+      workflow.selectLayer('plants', false)
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    })
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('1')
+    expect(container.querySelector('[aria-current="page"]')!.getAttribute('aria-label')).toBe('View page: Overview')
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })

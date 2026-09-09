@@ -18,6 +18,6 @@ it('emits native SVG clipping and stroke attributes so the physical drawing matc
     expect(path.getAttribute('stroke-linecap')).toBe('round')
     expect(path.getAttribute('stroke-linejoin')).toBe('round')
     const clipId = container.querySelector('clipPath')!.id
-    expect(path.parentElement!.getAttribute('clip-path')).toBe(`url(#${clipId})`)
+    expect(path.closest('[clip-path]')!.getAttribute('clip-path')).toBe(`url(#${clipId})`)
   } finally { render(null, container) }
 })

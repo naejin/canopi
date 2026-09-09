@@ -1,9 +1,15 @@
-import type { PrintBounds } from '../../canvas/print'
+import type { PrintBounds, PrintPoint } from '../../canvas/print'
 import { PDF_ZOOM } from './types'
 
 export function pageZoom(zoom = 100): number {
   if (!Number.isFinite(zoom) || zoom < PDF_ZOOM.min || zoom > PDF_ZOOM.max) throw new Error('invalid-page-view')
   return zoom
+}
+
+export function moveCoverage<T extends { ground: PrintBounds }>(fit: T, offset: PrintPoint = { x: 0, y: 0 }): T {
+  const x = fit.ground.x + offset.x, y = fit.ground.y + offset.y
+  if (![x, y, x + fit.ground.width, y + fit.ground.height].every(Number.isFinite)) throw new Error('invalid-page-view')
+  return { ...fit, ground: { ...fit.ground, x, y } }
 }
 
 /** At 100%, contain the entire requested extent. Explicit zoom keeps its centre. */

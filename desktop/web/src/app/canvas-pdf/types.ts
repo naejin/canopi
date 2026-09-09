@@ -3,7 +3,12 @@ import type { GlyphOutline, TextLine } from './text'
 export type PdfPaper = 'A4' | 'Letter'
 export type PdfOrientation = 'auto' | 'portrait' | 'landscape'
 export const PDF_ZOOM = { min: 1, max: 1000 } as const
-export interface PdfPageView { readonly zoom?: number; readonly orientation?: PdfOrientation }
+export interface PdfPageView {
+  readonly zoom?: number
+  readonly orientation?: PdfOrientation
+  /** Ground-space displacement from the fitted centre, in metres. */
+  readonly offset?: { readonly x: number; readonly y: number }
+}
 export type PdfAreaSelection =
   | { readonly kind: 'zone'; readonly name: string }
   | { readonly kind: 'rectangle'; readonly id: string; readonly name: string; readonly bounds: PrintBounds }
@@ -43,5 +48,12 @@ export interface PdfPage {
   readonly overflow: boolean
   readonly ambiguousSpecies: readonly string[]
 }
-export interface PdfPlan { readonly hasLegendOverflow?: boolean; readonly pages: readonly PdfPage[]; readonly outlines: Record<string, GlyphOutline>; readonly blocked: 'empty' | 'legend-overflow' | null }
+export interface PdfPlan {
+  /** Fitted navigation surface for adding areas; never encoded as a PDF page. */
+  readonly pickerPage?: PdfPage
+  readonly hasLegendOverflow?: boolean
+  readonly pages: readonly PdfPage[]
+  readonly outlines: Record<string, GlyphOutline>
+  readonly blocked: 'empty' | 'legend-overflow' | null
+}
 export interface PreparedPdf { readonly plan: PdfPlan; readonly bytes: Uint8Array | null }

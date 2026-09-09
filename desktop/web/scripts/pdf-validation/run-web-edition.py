@@ -39,26 +39,70 @@ async def main():
             await (await chooser.value).set_files({'name': 'garden.canopi', 'mimeType': 'application/json', 'buffer': json.dumps(design()).encode()})
             await page.get_by_role('button', name='File', exact=True).click()
             await page.get_by_text('Export to PDF', exact=True).click()
-            consent = page.get_by_role('checkbox', name='Allow legend continuation pages', exact=True)
+            consent = page.get_by_role('button', name='Add legend pages', exact=True)
+            withdraw = page.get_by_role('button', name='Remove legend pages', exact=True)
             save = page.get_by_role('button', name='Save PDF', exact=True)
             await expect(consent).to_be_visible(timeout=30_000)
-            await expect(consent).not_to_be_checked()
             await expect(save).to_be_disabled()
-            await consent.check()
+            await consent.click()
             await expect(save).to_be_enabled(timeout=30_000)
             for number in range(2):
                 async with page.expect_download() as download:
                     await save.click()
                 await (await download.value).save_as(args.output / f'export-{number + 1}.pdf')
                 await expect(page.get_by_text('PDF download requested.', exact=True)).to_be_visible()
-            await page.get_by_role('dialog').get_by_role('button', name='Close', exact=True).click()
+            await page.get_by_role('dialog').get_by_role('button', name='← Back to design', exact=True).click()
             await page.get_by_role('button', name='File', exact=True).click()
             await page.get_by_text('Export to PDF', exact=True).click()
-            await expect(consent).to_be_checked(timeout=30_000)
-            await consent.uncheck()
+            await expect(withdraw).to_be_visible(timeout=30_000)
+            await withdraw.click()
             await expect(save).to_be_disabled()
+            # Exercise the workspace through public UI and SVG coordinates.
+            await page.get_by_role('button', name='Add page', exact=True).click()
+            editor = page.locator('[data-pdf-editor]')
+            points = await editor.evaluate('''svg => {
+              const frame = svg.querySelector('clipPath rect');
+              const x = +frame.getAttribute('x'), y = +frame.getAttribute('y');
+              const w = +frame.getAttribute('width'), h = +frame.getAttribute('height');
+              return [[x + w * .2, y + h * .2], [x + w * .8, y + h * .65]].map(([x,y]) => {
+                const p = new DOMPoint(x,y).matrixTransform(svg.getScreenCTM());
+                return {x:p.x,y:p.y};
+              });
+            }''')
+            await page.mouse.move(**points[0])
+            await page.mouse.down()
+            await page.mouse.move(**points[1], steps=5)
+            await page.mouse.up()
+            await expect(page.get_by_role('button', name='View page: Print area 1', exact=True)).to_have_attribute('aria-current', 'page')
+            zoom = page.get_by_role('spinbutton', name='Canvas zoom (%)', exact=True)
+            await expect(zoom).to_have_value('100')
+            await zoom.fill('125.5')
+            # Blur must not swallow the immediately following orientation click.
+            await page.get_by_role('button', name='Portrait', exact=True).click()
+            await expect(zoom).to_have_value('125.5')
+            await expect(page.get_by_role('button', name='Portrait', exact=True)).to_have_attribute('aria-pressed', 'true')
+            await page.wait_for_function("document.querySelector('[data-pdf-editor]')?.parentElement?.getAttribute('aria-busy') === 'false'")
+            await editor.focus()
+            assert await editor.evaluate('svg => document.activeElement === svg')
+            await page.keyboard.press('ArrowRight')
+            await page.wait_for_function("document.querySelector('[data-pdf-editor]')?.parentElement?.getAttribute('aria-busy') === 'false'")
+            await page.get_by_role('button', name='Inspect text', exact=True).click()
+            assert await editor.get_attribute('width') != '100%'
+            await page.keyboard.press('Escape')
+            await expect(editor).to_have_attribute('width', '100%')
+            await page.get_by_role('button', name='Fit', exact=True).click()
+            await expect(zoom).to_have_value('100')
+            await page.get_by_role('button', name='View page: Overview', exact=True).click()
+            await page.locator('[data-pdf-target]').first.click()
+            await expect(page.get_by_role('button', name='View page: Print area 1', exact=True)).to_have_attribute('aria-current', 'page')
+            await page.set_viewport_size({'width': 860, 'height': 700})
+            await page.screenshot(path=args.output / 'workspace.png')
+            assert await page.evaluate('document.body.scrollWidth') == 860
+            await page.get_by_role('button', name='Remove page: Print area 1', exact=True).click()
+            await expect(page.get_by_role('button', name='View page: Overview', exact=True)).to_have_attribute('aria-current', 'page')
             report = {'browser': args.browser, 'version': browser.version, 'userAgent': await page.evaluate('navigator.userAgent'),
-                      'fileImport': True, 'explicitContinuationChoice': True, 'repeatedDownloads': 2, 'retainedSetup': True}
+                      'fileImport': True, 'explicitContinuationChoice': True, 'repeatedDownloads': 2, 'retainedSetup': True, 'drawnPage': True, 'zoomThenOrientation': True,
+                      'keyboardFraming': True, 'temporaryInspection': True, 'overviewNavigation': True, 'compactWorkspace': True, 'pageRemoval': True}
             (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
             print(json.dumps(report))
         finally:

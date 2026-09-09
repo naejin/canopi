@@ -8,6 +8,32 @@ const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin',
 const empty: PdfInput = { name: 'Empty design', locale: 'en', commonNames: {}, canvas: { layers: [], plants: [], zones: [], annotations: [], measurements: [] } }
 const setup: PdfSetup = { paper: 'A4', layers: [] }
 describe('Temporary Print Areas', () => {
+  it('provides a fitted area picker including hidden Zones without changing the printed overview', () => {
+    const input: PdfInput = { ...empty, canvas: { ...empty.canvas, zones: [{ name: 'Far bed', bounds: { x: 100, y: 200, width: 30, height: 10 }, path: 'M100 200 H130 V210 H100 Z', fill: null }] } }
+    const plan = buildPdfPlan(input, { ...setup, views: { overview: { zoom: 200, offset: { x: -100, y: 0 } } } }, text(), labels)
+    expect(plan.pickerPage!.ground.x).toBeLessThanOrEqual(100)
+    expect(plan.pickerPage!.ground.x + plan.pickerPage!.ground.width).toBeGreaterThanOrEqual(130)
+    expect(plan.pickerPage!.ground.y).toBeLessThanOrEqual(200)
+    expect(plan.pickerPage!.ground.y + plan.pickerPage!.ground.height).toBeGreaterThanOrEqual(210)
+    expect(plan.pages).toHaveLength(1)
+    expect(plan.pages[0]!.ground.x).toBeLessThan(-100)
+    expect(plan.blocked).toBe('empty')
+  })
+  it('moves only the printed coverage and identifies plants in the moved view', () => {
+    const input: PdfInput = { ...empty, canvas: { ...empty.canvas, plants: [
+      { id: 'a', canonicalName: 'Apple', position: { x: 5, y: 5 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false },
+      { id: 'b', canonicalName: 'Pear', position: { x: 25, y: 5 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false },
+    ] } }
+    const options: PdfSetup = { ...setup, layers: ['plants'], areas: [{ kind: 'rectangle', id: 'one', name: 'Area', bounds: { x: 0, y: 0, width: 10, height: 10 } }] }
+    const before = structuredClone(input)
+    const fitted = buildPdfPlan(input, options, text(), labels).pages[1]!
+    const moved = buildPdfPlan(input, { ...options, views: { 'area:one': { offset: { x: 20, y: 0 } } } }, text(), labels).pages[1]!
+    expect(moved.ground.x).toBeCloseTo(fitted.ground.x + 20)
+    expect(moved.pointsPerMeter).toBe(fitted.pointsPerMeter)
+    expect(fitted.legend.map((entry) => entry.name)).toEqual(['Apple'])
+    expect(moved.legend.map((entry) => entry.name)).toEqual(['Pear'])
+    expect(input).toEqual(before)
+  })
   it('fits an exact square in portrait without cropping or splitting it', () => {
     const plan = buildPdfPlan(empty, { ...setup, areas: [{ kind: 'rectangle', id: 'square', name: 'Square', bounds: { x: 10, y: 20, width: 100, height: 100 } }] }, text(), labels)
     const pages = plan.pages.filter((page) => page.kind === 'detail')

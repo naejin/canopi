@@ -45,7 +45,7 @@ async def main():
             context.on('request', lambda request: requests.append(request.url))
             cdp = await browser.new_browser_cdp_session() if args.browser == 'chromium' else None
             reports = []
-            for name in ['dense', 'mixed', 'legends', 'multilingual', 'map-excluded', 'stress-1', 'stress-10', 'stress-50']:
+            for name in ['dense', 'mixed', 'framing', 'legends', 'multilingual', 'map-excluded', 'stress-1', 'stress-10', 'stress-50']:
                 await page.goto(args.url)
                 await page.wait_for_function('!!window.pdfValidation')
                 requests.clear()

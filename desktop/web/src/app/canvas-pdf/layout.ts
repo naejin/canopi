@@ -2,7 +2,7 @@ import type { CanvasPrintSnapshot, PrintBounds } from '../../canvas/print'
 import { PdfTextError, type PdfTextEngine } from './text'
 import { MM, PRINT, fitOverview, drawCanvas, identifyPlants, ambiguousSpecies, textOp, pathOp, rectPath } from './page-drawing'
 import { planLegend } from './legend'
-import { fitArea, zoomCoverage } from './coverage'
+import { fitArea, zoomCoverage, moveCoverage } from './coverage'
 import { pdfAreaKey } from './types'
 import type { PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup, PdfPageView } from './types'
 
@@ -25,7 +25,7 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     try {
       const geometry = pageGeometry(setup.paper, orientation, details.length === 0)
       const fitted = fitOverview(selected, geometry.frame, text, empty ? [{ x: -5, y: -5, width: 10, height: 10 }] : details.filter((page) => page.kind === 'detail').map((page) => page.ground))
-      const coverage = zoomCoverage(fitted, setup.views?.overview?.zoom)
+      const coverage = moveCoverage(zoomCoverage(fitted, setup.views?.overview?.zoom), setup.views?.overview?.offset)
       const visible = canvasInFrame(selected, coverage.ground, coverage.pointsPerMeter, geometry.frame, text)
       overviews.push(canvasPage({ ...selected, canvas: visible }, geometry, text, labels, { id: 'overview', kind: 'overview', title: labels.overview,
         ...coverage, navigation: details.length > 0 }, setup))
@@ -53,7 +53,16 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     operations.push(textOp(number, page.width - PRINT.margin - number.width, 12 * MM, 9))
     return { ...page, operations }
   })
-  return { pages: finalized, hasLegendOverflow: finalized.some((page) => page.overflow || page.kind === 'legend'), outlines: text.outlines, blocked: empty ? 'empty' : finalized.some((page) => page.overflow) ? 'legend-overflow' : null }
+  // Picking coverage is independent of manual overview framing and Layer visibility.
+  const pickerExtents = [...input.canvas.zones.map((zone) => zone.bounds), ...details.filter((page) => page.kind === 'detail').map((page) => page.ground)]
+  const pickerFits = orientations().map((orientation) => {
+    const geometry = pageGeometry(setup.paper, orientation, false)
+    return { geometry, ...fitOverview(selected, geometry.frame, text, pickerExtents.length ? pickerExtents : empty ? [{ x: -5, y: -5, width: 10, height: 10 }] : []) }
+  }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
+  const picker = pickerFits[0]!
+  const pickerPage = canvasPage(selected, picker.geometry, text, labels, { id: 'overview', kind: 'overview', title: labels.overview,
+    ground: picker.ground, pointsPerMeter: picker.pointsPerMeter, navigation: true }, setup)[0]!
+  return { pages: finalized, pickerPage: { ...pickerPage, number: 1 }, hasLegendOverflow: finalized.some((page) => page.overflow || page.kind === 'legend'), outlines: text.outlines, blocked: empty ? 'empty' : finalized.some((page) => page.overflow) ? 'legend-overflow' : null }
 }
 
 function pageGeometry(paper: 'A4' | 'Letter', orientation: 'portrait' | 'landscape', legend = true): Geometry {
@@ -74,7 +83,7 @@ function detailPages(source: PdfInput, selected: PdfInput, setup: PdfSetup, text
       const geometry = pageGeometry(setup.paper, orientation)
       return { geometry, ...fitArea(requested, geometry.frame, area.kind === 'zone' ? PRINT.context : 0, view?.zoom) }
     }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
-    const { geometry, ground, pointsPerMeter } = candidates[0]!
+    const { geometry, ground, pointsPerMeter } = moveCoverage(candidates[0]!, view?.offset)
     const visible = canvasInFrame(selected, ground, pointsPerMeter, geometry.frame, text)
     const [canvas, ...continuations] = canvasPage({ ...selected, canvas: visible }, geometry, text, labels,
       { id: areaKey, kind: 'detail', title: area.name, ground, pointsPerMeter }, setup)

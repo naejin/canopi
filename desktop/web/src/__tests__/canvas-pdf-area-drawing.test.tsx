@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { expect, it, vi } from 'vitest'
-import { PdfPagePreview } from '../components/canvas-pdf/PdfPagePreview'
+import { PdfPageEditor } from '../components/canvas-pdf/PdfPageEditor'
 import type { PdfPage } from '../app/canvas-pdf/types'
 
 it('maps a drag through fitted-page whitespace into ground coordinates and cancels interrupted drags', async () => {
@@ -11,7 +11,7 @@ it('maps a drag through fitted-page whitespace into ground coordinates and cance
     pointsPerMeter: 10, operations: [], legend: [], ambiguousSpecies: [], overflow: false }
   const onPrintArea = vi.fn()
   try {
-    await act(async () => { render(<PdfPagePreview page={page} plan={{ pages: [page], outlines: {}, blocked: null }} drawing onPrintArea={onPrintArea} />, container) })
+    await act(async () => { render(<PdfPageEditor page={page} plan={{ pages: [page], outlines: {}, blocked: null }} adding onPrintArea={onPrintArea} />, container) })
     const svg = container.querySelector('svg')!
     vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1000, 1000))
     const captured = new Set<number>()
@@ -36,5 +36,64 @@ it('maps a drag through fitted-page whitespace into ground coordinates and cance
     expect(svg.querySelector('[data-print-area-draft]')).toBeNull()
     expect(onPrintArea).toHaveBeenCalledOnce()
     expect(captured.size).toBe(0)
+  } finally { render(null, container); container.remove() }
+})
+
+it('commits framing once, cancels lost capture and Escape, and distinguishes Zone clicks from area drags', async () => {
+  const container = document.createElement('div'); document.body.append(container)
+  const page: PdfPage = { id: 'overview', kind: 'overview', number: 1, width: 200, height: 100,
+    frame: { x: 20, y: 10, width: 160, height: 80 }, ground: { x: 100, y: 200, width: 16, height: 8 },
+    pointsPerMeter: 10, operations: [], legend: [], ambiguousSpecies: [], overflow: false }
+  const zone = { name: 'Bed', bounds: { x: 102, y: 202, width: 6, height: 3 }, path: 'M102 202 H108 V205 H102 Z', fill: null }
+  const onMove = vi.fn(), onZone = vi.fn(), onPrintArea = vi.fn()
+  const plan = { pages: [page], outlines: {}, blocked: null }
+  try {
+    await act(async () => { render(<PdfPageEditor page={page} plan={plan} onMove={onMove} />, container) })
+    const svg = container.querySelector('svg')!
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1000, 1000))
+    const captured = new Set<number>()
+    svg.setPointerCapture = (id) => { captured.add(id) }
+    svg.hasPointerCapture = (id) => captured.has(id)
+    svg.releasePointerCapture = (id) => {
+      captured.delete(id)
+      svg.dispatchEvent(new Event('lostpointercapture'))
+    }
+    const pointer = async (type: string, x: number, y: number, target: Element = svg, id = 7) => {
+      const event = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true })
+      Object.defineProperty(event, 'pointerId', { value: id })
+      await act(async () => { target.dispatchEvent(event) })
+    }
+    await pointer('pointerdown', 200, 400)
+    await pointer('pointermove', 500, 550)
+    expect(onMove).not.toHaveBeenCalled()
+    expect(svg.style.getPropertyValue('--pdf-drag-x')).toBe('60px')
+    await pointer('pointerup', 500, 550, svg, 8)
+    expect(onMove).not.toHaveBeenCalled()
+    await pointer('pointerup', 500, 550)
+    expect(onMove).toHaveBeenCalledExactlyOnceWith({ x: -6, y: -3 })
+    expect(captured.size).toBe(0)
+    await pointer('pointerdown', 200, 400)
+    await pointer('pointermove', 500, 550)
+    await act(async () => { svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    await pointer('pointerup', 500, 550)
+    expect(onMove).toHaveBeenCalledOnce()
+    expect(svg.style.getPropertyValue('--pdf-drag-x')).toBe('')
+    await act(async () => { svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
+    expect(onMove).toHaveBeenLastCalledWith({ x: -.5, y: 0 })
+    await act(async () => { render(<PdfPageEditor page={page} plan={plan} adding zones={[zone]} onZone={onZone} onPrintArea={onPrintArea} />, container) })
+    const target = svg.querySelector('[data-pdf-zone]')!
+    await pointer('pointerdown', 200, 400, target)
+    await pointer('pointerup', 201, 401)
+    expect(onZone).toHaveBeenCalledExactlyOnceWith('Bed')
+    await pointer('pointerdown', 200, 400, target)
+    await pointer('pointerup', 500, 550)
+    expect(onZone).toHaveBeenCalledOnce()
+    expect(onPrintArea).toHaveBeenCalledExactlyOnceWith({ x: 102, y: 202, width: 6, height: 3 })
+    await pointer('pointerdown', 200, 400, target)
+    await act(async () => { render(null, container) })
+    expect(captured.size).toBe(0)
+    await act(async () => { render(<PdfPageEditor page={page} plan={plan} adding zones={[{ ...zone, path: 'M102 202 L108 202 L108 205' }]} />, container) })
+    // An open Line Zone must not acquire an invisible filled triangle as a hit target.
+    expect(container.querySelector('[data-pdf-zone]')!.getAttribute('pointer-events')).toBe('stroke')
   } finally { render(null, container); container.remove() }
 })
