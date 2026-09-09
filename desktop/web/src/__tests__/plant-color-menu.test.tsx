@@ -52,12 +52,51 @@ describe('PlantColorMenu', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     render(null, container)
     container.remove()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
     setCurrentCanvasSession(null)
+  })
+
+  it.each(['cancel', 'blur', 'close', 'unmount'] as const)('releases an interrupted color drag on %s', async (end) => {
+    getSelectedPlantColorContext.mockReturnValue({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple',
+      sharedCurrentColor: '#C8A51E',
+      suggestedColor: null,
+      singleSpeciesDefaultColor: null,
+    })
+    await act(async () => render(<PlantColorMenu buttonRef={buttonRef} />, container))
+    const more = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('More colors'))!
+    await act(async () => more.click())
+    const square = container.querySelector<HTMLElement>('[aria-label="Saturation and lightness"]')!
+    vi.spyOn(square, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 100, 100))
+    const remove = vi.spyOn(document, 'removeEventListener')
+    const removeWindow = vi.spyOn(window, 'removeEventListener')
+    const pointer = (type: string, pointerId = 1) => {
+      const event = new MouseEvent(type, { bubbles: true, button: 0, clientX: 70, clientY: 20 })
+      Object.defineProperty(event, 'pointerId', { value: pointerId })
+      return event
+    }
+    await act(async () => { square.dispatchEvent(pointer('pointerdown')) })
+    // Another pointer ending must not cancel the owner's drag.
+    await act(async () => { document.dispatchEvent(pointer('pointerup', 2)) })
+    expect(remove).not.toHaveBeenCalledWith('pointermove', expect.any(Function))
+    await act(async () => {
+      if (end === 'cancel') document.dispatchEvent(pointer('pointercancel'))
+      else if (end === 'blur') window.dispatchEvent(new Event('blur'))
+      else if (end === 'close') plantColorMenuOpen.value = false
+      else render(null, container)
+    })
+    expect(remove).toHaveBeenCalledWith('pointermove', expect.any(Function))
+    expect(remove).toHaveBeenCalledWith('pointerup', expect.any(Function))
+    expect(remove).toHaveBeenCalledWith('pointercancel', expect.any(Function))
+    expect(removeWindow).toHaveBeenCalledWith('blur', expect.any(Function))
+    expect(setSelectedPlantColor).not.toHaveBeenCalled()
   })
 
   it('applies a selected palette color to the current plant selection', async () => {

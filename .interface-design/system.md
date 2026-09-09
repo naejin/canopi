@@ -38,7 +38,7 @@ brightest → canvas (#F6F2EA)  — the blank page
 darkest
 ```
 
-Horizontal bars (title bar, canvas bar) use `--color-bg`. Vertical panels (toolbar, layer panel, panel bar) use `--panel-gradient`. The canvas is its own lightest surface.
+The title bar uses `--color-bg`. Canvas and panel rails, the bottom canvas bar, and the Catalog, Notebook, Favorites, More Filters and Budget headers use `--panel-gradient`. The canvas is its own lightest surface. Controls share ochre active feedback and subtle hover fills across these surfaces.
 
 ### Color design rules
 
@@ -184,7 +184,9 @@ These sizes are tokenized and must be reused across retained surfaces.
 | Token | Value | Where used |
 |---------|------|------------|
 | `--title-bar-height` | 36px | App shell |
-| `--panel-bar-width` | 36px | Right edge |
+| `--chrome-rail-width` | 44px | Shared left/right rail width |
+| `--canvas-toolbar-width` | `var(--chrome-rail-width)` | Left edge |
+| `--panel-bar-width` | `var(--chrome-rail-width)` | Right edge |
 | `--panel-width` | 280px | Legacy generic sidebar defaults |
 | `--control-size-xs` | 20px | compact badges and close buttons |
 | `--control-size-sm` | 24px | zoom buttons, sliders, compact icon controls |
@@ -193,8 +195,8 @@ These sizes are tokenized and must be reused across retained surfaces.
 | `--control-size-xl` | 34px | toolbar and panel-bar buttons |
 | `--control-size-window` | 44px | window controls |
 | `--icon-size-sm` | 12px | inline action icons |
-| `--icon-size-md` | 16px | toolbar icons |
-| `--icon-size-lg` | 20px | panel-bar icons |
+| `--icon-size-md` | 16px | compact control icons |
+| `--icon-size-lg` | 20px | canvas and panel rail icons |
 | `--slider-thumb-size` | 12px | opacity, range, threshold sliders |
 | `--slider-track-size` | 2px | all sliders |
 
@@ -267,13 +269,13 @@ The rubber-band itself is a runtime-owned DOM preview. Selection is resolved and
 ## Layout
 
 ```
-[toolbar 38px] [───── canvas ─────] [panel?] [bar 36px]
+[toolbar 44px] [───── canvas ─────] [panel?] [bar 44px]
    left              center          slides in   right
    tools            workspace       side panel   navigation
 ```
 
-- **Left toolbar**: 38px, grouped command-graph tools, history actions, selected-Plant presentation actions, and Grid/Snap/Ruler toggles. Active: 2px ochre left bar.
-- **Right panel bar**: 36px, always visible for Canvas and Location workspaces. Primary commands switch workspace; side commands toggle sliding panels. Active: 2px ochre right bar.
+- **Left toolbar**: 44px, grouped command-graph tools, history actions, selected-Plant presentation actions, and Grid/Snap/Ruler toggles. Active: 2px ochre left bar.
+- **Right panel bar**: 44px, always visible for Canvas and Location workspaces. Primary commands switch workspace; side commands toggle sliding panels. Active: 2px ochre right bar.
 - **Right side panels**: Design Notebook, Species Catalog, and Favorites. They slide in between the workspace and panel bar. First-use width is `clamp(320px, 35vw, 90vw)` so the default remains proportional instead of stopping at a fixed pixel cap; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
 - **Title bar**: 36px. Logo and menu left, Design identity in the central drag region, language/theme controls and window buttons right.
 - **No activity bar** — merged into panel bar.
@@ -306,8 +308,8 @@ Earthy, not neon:
 - Buttons have warm shadow, subtle lift on hover
 
 ### Canvas Workspace
-- Toolbar left (38px): command-graph tool and action groups separated by dividers
-- Bottom canvas bar: bottom-panel launcher on the left and Zoom Controls on the right
+- Toolbar left (44px): command-graph tool and action groups separated by dividers
+- Bottom canvas bar: 34px (`--control-size-xl`), bottom-panel launcher on the left and Zoom Controls on the right. Text tabs retain their labels and share `--radius-md`, hover fill and ochre active feedback with the rails.
 - Scale bar bottom-left: uses `--color-text-muted` for subtlety
 - Zoom uses a fixed reference: 100% is 20 CSS pixels per design meter, independent of viewport size. Initial framing and Fit to content select their own scale; see [zoom calibration](../docs/agent/canvas-zoom-calibration.md).
 - Rulers: background `--canvas-ruler-bg` (close to canvas bg, no harsh L-frame)
@@ -327,8 +329,15 @@ Earthy, not neon:
 - Plant Spacing generated counts use normal text below the dense threshold and `--color-primary` with stronger weight above the threshold. Do not use danger/error colors for dense counts because dense Plant Spacing remains physically valid.
 - Plant Spacing should show generated-count feedback as one line, such as `128 generated`. Do not add a separate dense-warning sentence when the count crosses the threshold.
 
+### Appearance Pickers
+- Plant Color precedes Plant Symbol in the existing toolbar. Both dialogs are 360px wide, clamped to the viewport and scrollable when needed.
+- Symbol choices retain the five Plant Habit and five abstract IDs. Show labeled choices in neutral ink, ochre selection, and an effective-color preview; color previews use the effective symbol.
+- Opening moves focus into the dialog. Arrow keys preview choices; selection and species-default application remain explicit actions. Escape returns focus to the trigger.
+- Color drags belong to the open picker and end on pointer release/cancellation, window blur, closing the advanced controls, selection change or unmount.
+- Glyph artwork is maintained in `desktop/web/src/canvas/runtime/plant-symbol-recipes.ts`, shared with canvas and PDF. Historical previews are not the implementation authority.
+
 ### Panel Bar (right edge)
-- 36px wide, always visible when canvas is active
+- 44px wide via `--chrome-rail-width`, always visible for Canvas and Location
 - Commands come from the application command graph: Canvas/Location primary navigation plus Design Notebook, Species Catalog, and Favorites side panels
 - Active state: ochre right border + ochre icon color
 - Primary commands switch workspace; side commands toggle the corresponding panel
@@ -337,7 +346,7 @@ Earthy, not neon:
 - Search-first: full-width search input at top
 - Filter region: contains the always-visible `FilterStrip` rows and the `ActiveChips` strip. Natural height by default; in extreme small-height cases, the combined region scrolls vertically at `max-height: min(45vh, 360px)` so results never disappear entirely.
 - FilterStrip: always-visible compact controls below search. Filter rows come from the Species Catalog Filter catalog; do not hard-code the row list in component layout. Example rows may include Climate Zone, Sun, Habit, Life Cycle, Edibility, Woody, or N₂ Fixer depending on catalog metadata.
-- Each filter row: right-aligned label + control flex-1. Rows are 24px min-height, `height: auto`, and grow or shrink with the available width. Choice chips form a natural flex-wrapping ribbon rather than equal-width grid tracks. Filter choices remain visible without clipping or per-row scrolling.
+- Each filter row: left-aligned label in an 86px column (capped at 36% of the row) + control flex-1. Labels wrap at word boundaries, breaking long words only when necessary. Rows are 24px min-height, `height: auto`, and grow or shrink with the available width. Choice chips form a natural flex-wrapping ribbon rather than equal-width grid tracks. Filter choices remain visible without clipping or per-row scrolling.
 - "More filters ›" text link + badge count at bottom of the FilterStrip, 58px left indent
 - ActiveChips strip: horizontal wrap of dismissable `FilterChip` pills, 58px left indent matching controls. Shows all active filters from both strip and "More" panel. Border-top + border-bottom separation. It participates in the combined filter-region height cap rather than owning a separate scroll surface.
 - Terms: use `filter row` for always-visible controls, `filter choice` for an individual chip/option inside a row, and `filter category` only for More Filters drawer groups such as Climate & Soil or Growth.
@@ -393,8 +402,14 @@ Earthy, not neon:
 - Animation: chevron uses the shared transition token, `transition: transform var(--transition-normal)`
 - Used in: detail card sections, filter drawer sections
 
+### Design Notebook Header
+- The title/count and action group wrap into separate rows when the panel is narrow. Actions may wrap within their group; do not let them cover the title or hide commands.
+
+### Chart Labels
+- Timeline and Consortium labels choose black or white against the composited bar color, including bar opacity and alternating row backgrounds. Authored species colors remain unchanged. UI primary-button contrast is not suitable for these arbitrary bar colors.
+
 ### Favorites Panel
-- Header: section header pattern + ochre count badge (`--color-primary` bg, `--color-bg` text, `--radius-full`)
+- Header: section header pattern + ochre count badge (`--color-primary` bg, `--color-primary-contrast` text, `--radius-full`)
 - List: reuses `PlantRow` component. Clicking opens detail card inline (same `detailHidden`/`detailVisible` pattern as PlantDbPanel)
 - Empty state: star icon (`--color-primary`, 0.3 opacity), title + hint text, upper-third positioning (not dead-centered)
 - Background: `--color-bg`
@@ -404,7 +419,7 @@ Earthy, not neon:
 - Shimmer loading state: gradient between `--color-surface` and `--color-bg`
 - Nav arrows: transparent 32×48px hit targets, chevron character via `text-shadow`, visible on container hover (0.8 → 1.0 opacity)
 - Dot indicators: 8px, 6px gap, `--color-border` inactive, `--color-primary` active with `scale(1.15)`. Minimum size for interactive elements
-- Placeholder: subtle icon (`--color-border`, 0.6 opacity), same 3:2 aspect ratio
+- No-photo placeholder: compact subtle icon with `--space-3` padding and a `--control-size-window` minimum height. Loading and failed-image states retain the photo frame; loaded photos keep the 3:2 aspect ratio.
 - Desktop images use paths from the Rust image cache, converted through Tauri's asset protocol scoped to the app-data image-cache directory, with remote URL fallback. Web Edition loads a remote hero image from catalog metadata; it has no native image cache.
 
 ### Pinned Plant Name Legend

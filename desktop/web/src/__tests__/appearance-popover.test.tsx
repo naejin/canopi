@@ -30,15 +30,18 @@ describe('appearance popover', () => {
     document.body.append(buttonRef.current, host)
     function Picker() {
       const ref = useAppearancePopover(true, buttonRef)
-      return <div ref={ref} role="dialog" />
+      return <div ref={ref} role="dialog"><button>Close</button></div>
     }
     await act(() => render(<Picker />, host))
     const menu = host.querySelector<HTMLElement>('[role="dialog"]')!
+    expect(document.activeElement).toBe(menu.querySelector('button'))
+    buttonRef.current.focus()
     expect(menu.style.left).toBe('48px')
     expect(menu.style.top).toBe('412px')
     height = 500
     resize()
     expect(menu.style.top).toBe('212px')
+    expect(document.activeElement).toBe(buttonRef.current)
     await act(() => render(null, host))
     expect(disconnect).toHaveBeenCalledOnce()
     expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function))

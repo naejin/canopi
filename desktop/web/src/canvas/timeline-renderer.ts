@@ -1,4 +1,4 @@
-import { chartLabelColor } from './chart-label-color'
+import { chartLabelColor, compositeChartColor } from './chart-label-color'
 import { dateToX, niceInterval, formatDateLabel } from './timeline-math'
 import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 import {
@@ -139,6 +139,10 @@ export function renderTimeline(
     const rY = rowOffsets[rowIdx]!
     const rH = rowOffsets[rowIdx + 1]! - rowOffsets[rowIdx]!
 
+    const rowBackground = rowIdx % 2 === 1
+      ? compositeChartColor(borderColor, surfaceColor, 0.3)
+      : surfaceColor
+
     // Alternating row backgrounds
     if (rowIdx % 2 === 1) {
       ctx.fillStyle = borderColor
@@ -213,7 +217,7 @@ export function renderTimeline(
       // Label inside bar
       if (barW > 40) {
         ctx.save()
-        ctx.fillStyle = chartLabelColor(baseColor, surfaceColor, action.id === hoveredId ? 0.9 : 0.8)
+        ctx.fillStyle = chartLabelColor(baseColor, rowBackground, action.id === hoveredId ? 0.9 : 0.8)
         ctx.font = `600 11px ${fontSans}`
         ctx.beginPath()
         ctx.rect(x1 + 2, barY, barW - 4, barH)

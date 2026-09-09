@@ -1,7 +1,7 @@
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import {
   currentCanvasPlantPresentationCommandSurface,
   currentCanvasQuerySurface,
@@ -75,6 +75,9 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   const hasSelectedPlants = context.plantIds.length > 0
   const squareRef = useRef<HTMLDivElement>(null)
   const hueRef = useRef<HTMLDivElement>(null)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  useLayoutEffect(() => () => dragCleanupRef.current?.(), [menuOpen, advancedOpen, selectionKey])
 
   useEffect(() => {
     pickerColorRef.current = pickerColor
@@ -112,21 +115,33 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     ref: { current: HTMLElement | null },
     update: (nextEvent: PointerEvent, rect: DOMRect) => void,
   ): void {
+    if (event.button !== 0) return
     event.preventDefault()
     const rect = ref.current?.getBoundingClientRect()
     if (!rect) return
+    dragCleanupRef.current?.()
     update(event, rect)
 
     const handleMove = (nextEvent: PointerEvent) => {
+      if (nextEvent.pointerId !== event.pointerId) return
       update(nextEvent, rect)
     }
-    const handleUp = () => {
+    const cleanup = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
+      document.removeEventListener('pointercancel', handleUp)
+      window.removeEventListener('blur', cleanup)
+      dragCleanupRef.current = null
+    }
+    const handleUp = (nextEvent: PointerEvent) => {
+      if (nextEvent.pointerId === event.pointerId) cleanup()
     }
 
+    dragCleanupRef.current = cleanup
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
+    document.addEventListener('pointercancel', handleUp)
+    window.addEventListener('blur', cleanup)
   }
 
   useEffect(() => {

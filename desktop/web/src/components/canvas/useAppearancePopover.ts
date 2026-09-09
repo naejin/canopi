@@ -14,6 +14,7 @@ export function useAppearancePopover(open: boolean, buttonRef: { current: HTMLBu
       menu.style.top = `${Math.max(8, Math.min(anchor.top, window.innerHeight - bounds.height - 8))}px`
     }
     place()
+    menu.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]')?.focus({ preventScroll: true })
     const observer = new ResizeObserver(place)
     observer.observe(menu)
     window.addEventListener('resize', place)

@@ -299,4 +299,4 @@ The [Canvas PDF guide](canvas-pdf.md) describes settled print capture and the re
 
 ## Chart label contrast
 
-Timeline and Consortium labels choose black or white ink against the composited bar color through `chartLabelColor`. Do not use the UI primary-button contrast token on authored species colors: the dark theme can otherwise render dark text on dark bars. Keep bar opacity and chart background inputs consistent with rendering.
+Timeline and Consortium labels choose black or white ink against the composited bar color through `chartLabelColor`. Do not use the UI primary-button contrast token on authored species colors: the dark theme can otherwise render dark text on dark bars. Keep bar opacity and chart background inputs consistent with rendering. Timeline stripes first composite their CSS alpha and renderer opacity over the surface with `compositeChartColor`; contrast is calculated against that resulting row background.
