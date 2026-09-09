@@ -1,3 +1,4 @@
+import { CanvasPdfDialog } from './components/canvas-pdf/CanvasPdfDialog'
 import "./styles/global.css";
 import styles from "./App.module.css";
 import { t } from "./i18n";
@@ -170,6 +171,7 @@ export function App() {
         {(showCanvas || showLocation) && <PanelBar />}
       </div>
       <CommandPalette />
+      <CanvasPdfDialog />
       <AboutCanopiDialog />
       <ProblemReportDialog />
     </div>

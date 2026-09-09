@@ -28,6 +28,7 @@ function createQuerySurface() {
       referenceScale: 1,
       revision: 0,
     }),
+    capturePrintSnapshot: () => null,
     getSceneSnapshot: () => createDefaultScenePersistedState(),
     getSelection: () => [],
     getDesignObjectSelection: () => ({

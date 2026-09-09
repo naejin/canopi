@@ -22,6 +22,7 @@ interface BrowserSpeciesCatalogRuntimeOptions {
 }
 
 export interface BrowserSpeciesCatalogRuntime {
+  resolveCommonNames(names: readonly string[], locale: string): Promise<Record<string, string>>
   readonly workbench: SpeciesCatalogWorkbench
   dispose(): Promise<void>
 }
@@ -49,6 +50,10 @@ export function createBrowserSpeciesCatalogRuntime({
 
   return {
     workbench,
+    async resolveCommonNames(names, locale) {
+      const rows = await reader.listSpeciesByCanonicalNames(names, locale, new Set())
+      return Object.fromEntries(rows.filter((row) => row.common_name?.trim()).map((row) => [row.canonical_name, row.common_name!]))
+    },
     dispose(): Promise<void> {
       if (disposePromise) return disposePromise
       disposePromise = (async () => {

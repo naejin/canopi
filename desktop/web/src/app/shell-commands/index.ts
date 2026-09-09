@@ -7,6 +7,7 @@ export type ShellCommandIdByCapability = {
   readonly saveDesign: 'file.save'
   readonly saveDesignAs: 'file.saveAs'
   readonly downloadCanopi: 'file.downloadCanopi'
+  readonly exportCanvasPdf: 'file.exportCanvasPdf'
   readonly exitApp: 'file.exit'
   readonly navigateCanvas: 'nav.canvas'
   readonly navigateLocation: 'nav.location'
@@ -192,6 +193,10 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
     chromeLabelKey: 'webShell.downloadCanopi',
     palette: false,
     menu: { id: 'file', section: 1 },
+  },
+  {
+    capabilityId: 'exportCanvasPdf', id: 'file.exportCanvasPdf', family: 'file',
+    labelKey: 'pdf.title', chromeLabelKey: 'pdf.title', palette: true, menu: { id: 'file', section: 1 },
   },
   {
     capabilityId: 'exitApp',

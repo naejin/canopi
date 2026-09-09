@@ -1,3 +1,4 @@
+import { buildCanvasPrintSnapshot } from './print-snapshot'
 import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
@@ -40,6 +41,13 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
 
   get revision(): CanvasQueryRevision { return this.options.revision }
   get viewport(): CameraController['snapshot'] { return this.options.camera.snapshot }
+  capturePrintSnapshot() {
+    void this.options.settledReader.revision.value
+    return this.options.settledReader.readWhenSettled(() => buildCanvasPrintSnapshot(
+      this.options.sceneStore.persisted,
+      this.options.presentation.createPlantPresentationContext(1),
+    ), null)
+  }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSelection(): SceneDesignObjectTarget[] {
     return this.options.sceneStore.session.selectedTargets.map((target) => ({ ...target }))

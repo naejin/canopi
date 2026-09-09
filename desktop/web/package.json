@@ -19,7 +19,12 @@
     "gen:types": "cargo run -p bindings-gen",
     "check:web-catalog-artifact": "cd ../.. && python3 scripts/web_catalog_artifact_contract.py check",
     "check:types": "cargo run -p bindings-gen -- --check",
-    "prepare": "cd ../.. && husky desktop/web/.husky"
+    "prepare": "cd ../.. && husky desktop/web/.husky",
+    "prepare:pdf-fonts": "node scripts/prepare-pdf-fonts.mjs",
+    "predev": "npm run prepare:pdf-fonts",
+    "prebuild": "npm run prepare:pdf-fonts",
+    "prebuild:web": "npm run prepare:pdf-fonts",
+    "pretest": "npm run prepare:pdf-fonts"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.33.1-dev57.0",
@@ -27,9 +32,11 @@
     "@tanstack/virtual-core": "^3.13.23",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
+    "fontkit": "2.0.4",
     "i18next": "^24.0.0",
     "maplibre-contour": "^0.1.0",
     "maplibre-gl": "^5.21.1",
+    "pdfkit": "0.20.2",
     "pixi.js": "^8.17.1",
     "preact": "^10.25.0"
   },

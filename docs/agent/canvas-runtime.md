@@ -2,6 +2,8 @@
 
 Use this guide when changing canvas state, scene runtime, renderer behavior, hit testing, selection, presentation, history, Target projection, or Canvas2D tab renderers.
 
+The [Canvas PDF guide](canvas-pdf.md) describes settled print capture and the renderer-neutral output boundary.
+
 ## Public Seams
 
 - App code must not reach into renderer implementations or runtime internals.

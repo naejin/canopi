@@ -4,6 +4,21 @@ use crate::{
 };
 use tauri::State;
 
+#[tauri::command]
+pub async fn save_canvas_pdf(
+    executor: State<'_, NativeOperationExecutor>,
+    data: Vec<u8>,
+    path: String,
+) -> Result<(), String> {
+    executor
+        .run(
+            NativeOperationClass::Local,
+            "Canvas PDF delivery",
+            move || crate::services::export::save_canvas_pdf(data, path),
+        )
+        .await
+}
+
 /// Write `data` (UTF-8 text) to `path`. Used for SVG and CSV export.
 #[tauri::command]
 pub async fn export_file(

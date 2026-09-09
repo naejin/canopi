@@ -123,6 +123,7 @@ describe('Web Edition Browser App Shell', () => {
       'file.new',
       'file.openCanopi',
       'file.downloadCanopi',
+      'file.exportCanvasPdf',
     ])
     expect(container.textContent).toContain('Open .canopi')
     expect(container.textContent).toContain('Download .canopi')
@@ -169,6 +170,7 @@ describe('Web Edition Browser App Shell', () => {
       'file.new',
       'file.openCanopi',
       'file.downloadCanopi',
+      'file.exportCanvasPdf',
     ])
   })
 
@@ -184,6 +186,7 @@ describe('Web Edition Browser App Shell', () => {
       'file.new',
       'file.openCanopi',
       'file.downloadCanopi',
+      'file.exportCanvasPdf',
     ])
 
     await act(async () => {

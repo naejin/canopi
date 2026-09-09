@@ -1,3 +1,4 @@
+import type { CanvasPrintSnapshot } from '../print'
 import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
@@ -117,6 +118,7 @@ export interface CanvasCommandSurface {
 export interface CanvasQuerySurface {
   readonly revision: CanvasQueryRevision
   readonly viewport: ReadonlySignal<CameraViewportSnapshot>
+  capturePrintSnapshot(): CanvasPrintSnapshot | null
   getSceneSnapshot(): ScenePersistedState
   getSelection(): SceneDesignObjectTarget[]
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel

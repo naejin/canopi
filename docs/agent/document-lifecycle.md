@@ -2,6 +2,8 @@
 
 Use this guide when changing `.canopi` load/save, document replacement, dirty state, autosave, settings persistence, or app startup/shutdown.
 
+Canvas PDF is a non-mutating derived export; see the [Canvas PDF guide](canvas-pdf.md). The store exposes a read-only opaque `sessionIdentity` that changes on Design replacement, not edits, renames, or saves, so temporary consumers can discard predecessor state without borrowing persistence authority.
+
 ## Current Boundaries
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.

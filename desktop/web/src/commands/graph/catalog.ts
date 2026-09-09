@@ -1,3 +1,4 @@
+import { canvasPdf, canExportCanvasPdf } from '../../app/canvas-pdf/live'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   canvasCommandDefinitions,
@@ -70,6 +71,7 @@ type DesktopShellCapabilityId =
   | 'openDesign'
   | 'saveDesign'
   | 'saveDesignAs'
+  | 'exportCanvasPdf'
   | 'exitApp'
   | 'navigateCanvas'
   | 'navigateLocation'
@@ -231,6 +233,7 @@ function runAsyncCommand(label: string, action: () => Promise<unknown>): void {
 }
 
 export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
+  exportCanvasPdf: { execute: () => canvasPdf.show(), isExecutionDisabled: () => !canExportCanvasPdf(), isProjectionDisabled: () => !canExportCanvasPdf() },
   newDesign: {
     execute: () => runAsyncCommand('New design', newDesignAction),
   },

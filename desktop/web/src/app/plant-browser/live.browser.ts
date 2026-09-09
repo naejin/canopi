@@ -14,3 +14,5 @@ if (import.meta.hot) {
     }
   })
 }
+
+export const resolvePdfCommonNames = liveSpeciesCatalog.resolveCommonNames

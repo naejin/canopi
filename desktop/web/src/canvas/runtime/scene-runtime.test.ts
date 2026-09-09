@@ -836,6 +836,24 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('captures print content only after an edit settles without changing history or dirty state', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    const before = runtime.querySurface.getSceneSnapshot()
+    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(10)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    const active = sceneEdits.begin('interaction-drag')
+    active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
+    expect(runtime.querySurface.capturePrintSnapshot()).toBeNull()
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(30)
+    active.abort()
+    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(10)
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(before)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    runtime.destroy()
+  })
+
   it('retries a quarantined history replay through the public command surface', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))

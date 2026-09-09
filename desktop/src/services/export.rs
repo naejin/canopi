@@ -1,5 +1,21 @@
 use crate::platform::{CanvasSnapshot, Platform, PrintLayout};
 
+pub fn save_canvas_pdf(data: Vec<u8>, path: String) -> Result<(), String> {
+    // Bound the admitted binary payload independently of the frontend renderer.
+    if data.len() > 64 * 1024 * 1024 || !data.starts_with(b"%PDF-") || !data.ends_with(b"%%EOF\n") {
+        return Err("Invalid Canvas PDF output".to_string());
+    }
+    let target = std::path::Path::new(&path);
+    if !target
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+    {
+        return Err("Canvas PDF destination must have a .pdf extension".to_string());
+    }
+    crate::design::write_derived_file(target, &data)
+        .map_err(|error| format!("Could not save Canvas PDF: {error}"))
+}
+
 pub fn export_file(data: String, path: String) -> Result<String, String> {
     write_bytes_to_path(path, data.as_bytes(), "text")
 }
@@ -200,6 +216,41 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.root);
         }
+    }
+
+    #[test]
+    fn canvas_pdf_publishes_exact_bytes_and_replaces_only_the_requested_pdf() {
+        let temp = TempTestDir::new("shared-pdf");
+        let target = temp.file("plan.pdf");
+        let unrelated = temp.file("garden.canopi");
+        std::fs::write(&target, b"previous PDF").unwrap();
+        std::fs::write(&unrelated, b"editable design").unwrap();
+        let bytes = b"%PDF-1.7\n\0binary content\n%%EOF\n".to_vec();
+        super::save_canvas_pdf(bytes.clone(), target.display().to_string()).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), bytes);
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"editable design");
+        assert_eq!(std::fs::read_dir(&temp.root).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn canvas_pdf_invalid_payload_or_destination_preserves_existing_files() {
+        let temp = TempTestDir::new("shared-pdf-invalid");
+        let target = temp.file("plan.pdf");
+        std::fs::write(&target, b"original").unwrap();
+        assert!(
+            super::save_canvas_pdf(b"not a PDF".to_vec(), target.display().to_string()).is_err()
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), b"original");
+        let design = temp.file("garden.canopi");
+        std::fs::write(&design, b"design").unwrap();
+        let bytes = b"%PDF-1.7\n%%EOF\n".to_vec();
+        assert!(super::save_canvas_pdf(bytes.clone(), design.display().to_string()).is_err());
+        assert_eq!(std::fs::read(&design).unwrap(), b"design");
+        let directory = temp.file("directory.pdf");
+        std::fs::create_dir(&directory).unwrap();
+        assert!(super::save_canvas_pdf(bytes, directory.display().to_string()).is_err());
+        assert!(directory.is_dir());
+        assert_eq!(std::fs::read_dir(&temp.root).unwrap().count(), 3);
     }
 
     #[test]

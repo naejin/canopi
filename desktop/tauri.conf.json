@@ -26,7 +26,7 @@
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' asset: http://asset.localhost blob: data: https:",
-        "connect-src": "ipc: http://ipc.localhost https:",
+        "connect-src": "'self' ipc: http://ipc.localhost https:",
         "worker-src": "'self' blob:",
         "child-src": "'self' blob:",
         "font-src": "'self' data:"

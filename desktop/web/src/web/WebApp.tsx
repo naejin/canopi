@@ -1,3 +1,4 @@
+import { CanvasPdfDialog } from '../components/canvas-pdf/CanvasPdfDialog'
 import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
 import { useEffect, useMemo } from "preact/hooks";
@@ -58,6 +59,7 @@ export function WebApp({
       >
         {workspace ?? <WebWorkspace controller={controller} templatesEnabled={templatesEnabled} />}
       </BrowserAppShell>
+      <CanvasPdfDialog />
     </div>
   );
 }

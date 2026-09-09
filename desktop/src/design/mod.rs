@@ -17,6 +17,37 @@ type WriteAdmissionRegistry = Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>;
 static WRITE_ADMISSIONS: OnceLock<WriteAdmissionRegistry> = OnceLock::new();
 static NEXT_SIDECAR_ID: AtomicU64 = AtomicU64::new(0);
 
+/// Publish derived output with the same target admission and replacement safety
+/// as Design writes, without a Design backup or persistence acknowledgement.
+pub(crate) fn write_derived_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    with_write_admission(path, || {
+        let temporary = operation_sidecar_path(path, "export");
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        let result = (|| {
+            file.write_all(bytes)?;
+            file.sync_all()?;
+            drop(file);
+            atomic_replace(&temporary, path)
+        })();
+        if let Err(ref original) = result {
+            match std::fs::remove_file(&temporary) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(std::io::Error::other(format!(
+                        "Export failed: {original}; temporary cleanup also failed: {error}"
+                    )));
+                }
+            }
+        }
+        result
+    })
+}
+
 fn operation_sidecar_path(dest: &Path, role: &str) -> PathBuf {
     let parent = dest
         .parent()

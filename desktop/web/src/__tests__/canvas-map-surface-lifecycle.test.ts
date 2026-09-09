@@ -138,6 +138,7 @@ function createRuntime(
       referenceScale: 1,
       revision: 0,
     }),
+    capturePrintSnapshot: () => null,
     getSceneSnapshot: () => scene,
     getSelection: () => [],
     getDesignObjectSelection: () => ({

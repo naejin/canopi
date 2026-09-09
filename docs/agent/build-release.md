@@ -55,6 +55,10 @@ python3 scripts/species_catalog_contract.py verify-db --profile prepared desktop
 cargo build --release
 ```
 
+## PDF Font Assets
+
+Dev, frontend builds, and tests run `npm run prepare:pdf-fonts`. It verifies or downloads pinned Noto fonts and licenses into ignored `desktop/web/public/pdf-fonts/`; both edition builds include those assets. See the [Canvas PDF guide](canvas-pdf.md) for ownership, version pins, and runtime loading. First preparation requires upstream access; valid cached assets are reused.
+
 ## Bundled DB
 
 - `CANOPI_SKIP_BUNDLED_DB=1` is checked in `desktop/build.rs`.

@@ -61,3 +61,6 @@ desktop/web/dist-web-artifacts/
 .dolt/
 *.db
 .beads-credential-key
+
+# Pinned PDF font assets prepared for both edition packages
+desktop/web/public/pdf-fonts/

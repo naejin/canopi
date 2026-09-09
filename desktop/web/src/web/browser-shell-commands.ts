@@ -1,3 +1,4 @@
+import { canvasPdf, canExportCanvasPdf } from '../app/canvas-pdf/live'
 import { navigateTo, type Panel, type SidePanel } from '../app/shell/state'
 import { mutateSettingsProjection } from '../app/settings/projection'
 import {
@@ -13,6 +14,7 @@ type BrowserShellCapabilityId =
   | 'newDesign'
   | 'openCanopi'
   | 'downloadCanopi'
+  | 'exportCanvasPdf'
   | 'navigateCanvas'
   | 'navigateTemplates'
   | 'navigatePlantDatabase'
@@ -78,6 +80,7 @@ export function createBrowserShellCommandProjection({
   capabilities,
 }: BrowserShellProjectionInput): BrowserShellChromeProjection {
   const catalog = composeShellCommandCatalog({
+    exportCanvasPdf: { execute: () => canvasPdf.show(), isExecutionDisabled: () => !canExportCanvasPdf(), isProjectionDisabled: () => !canExportCanvasPdf() },
     newDesign: { execute: () => capabilities.newDesign() },
     openCanopi: { execute: () => capabilities.openCanopi() },
     downloadCanopi: {

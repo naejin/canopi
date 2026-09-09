@@ -30,6 +30,7 @@ export interface DesignSessionMetadataSnapshot {
 }
 
 export interface DesignSessionStore {
+  readonly sessionIdentity: ReadonlySignal<object>
   readonly currentDesign: ReadonlySignal<CanopiFile | null>
   readonly designPath: ReadonlySignal<string | null>
   readonly designName: ReadonlySignal<string>
@@ -146,6 +147,7 @@ function createDesignSessionStore(
     designDirty,
   }
 
+  const sessionIdentity = signal<object>(Object.freeze({}))
   let lifetime = Object.freeze({})
   let sessionGeneration = 0
   let detachedCanvasRevision = 0
@@ -269,6 +271,7 @@ function createDesignSessionStore(
   }
 
   const store = {
+    sessionIdentity,
     currentDesign: signals.currentDesign,
     designPath: signals.designPath,
     designName: signals.designName,
@@ -322,6 +325,7 @@ function createDesignSessionStore(
       invalidateActivePreview()
       committedDesign = file
       batch(() => {
+        sessionIdentity.value = Object.freeze({})
         signals.currentDesign.value = file
         committedDesignRevision.value += 1
         signals.persistenceDiverged.value = false
@@ -508,6 +512,7 @@ function createDesignSessionStore(
       activePreview = null
       committedDesign = state.file ?? null
       batch(() => {
+        sessionIdentity.value = Object.freeze({})
         signals.currentDesign.value = committedDesign
         signals.designPath.value = state.path ?? null
         signals.designName.value = state.name ?? state.file?.name ?? 'Untitled'
@@ -534,6 +539,7 @@ function createDesignSessionStore(
       }
       batch(() => {
         if (has('file')) {
+          sessionIdentity.value = Object.freeze({})
           signals.currentDesign.value = committedDesign
           committedDesignRevision.value += 1
         }

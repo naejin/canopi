@@ -17,6 +17,16 @@ import {
 } from "./support/design-session-edit";
 
 describe("Design Session replacement", () => {
+  it("changes the public session identity only when the Design is replaced", () => {
+    const store = createMemoryDesignSessionStore({ file: makeFile("Garden"), path: null, name: "Garden" });
+    const identity = store.sessionIdentity.value;
+    editDesignSessionForTest(store, (file) => ({ ...file, description: "Changed" }));
+    expect(store.isDesignDirty()).toBe(true);
+    expect(store.sessionIdentity.value).toBe(identity);
+    store.replaceCurrentDesignState(makeFile("Other"), null, "Other");
+    expect(store.sessionIdentity.value).not.toBe(identity);
+  });
+
   it("attaches the current Design without replacing identity or dirty baselines", () => {
     const events: string[] = [];
     const file = makeFile("Existing");

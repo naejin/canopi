@@ -1,3 +1,4 @@
+import { buildCanvasPrintSnapshot } from '../../canvas/runtime/print-snapshot'
 import { signal } from '@preact/signals'
 import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
 import {
@@ -56,6 +57,10 @@ export function createTestCanvasQuerySurface({
   return {
     revision,
     viewport: viewportSnapshot,
+    capturePrintSnapshot: () => {
+      void admissionRevision.value
+      return settled ? buildCanvasPrintSnapshot(scene, { viewport, speciesCache: new Map() }) : null
+    },
     getSceneSnapshot: () => scene,
     getSelection: () => currentSelection.map((target) => ({ ...target })),
     getDesignObjectSelection: () => ({

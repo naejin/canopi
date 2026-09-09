@@ -1,0 +1,30 @@
+import { afterEach, expect, it, vi } from 'vitest'
+vi.mock('../app/plant-browser/live.browser', () => ({ resolvePdfCommonNames: vi.fn() }))
+import { createPdfDelivery } from '../app/canvas-pdf/platform.browser'
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
+it('dispatches a browser download in the initiating gesture and releases every temporary URL', async () => {
+  vi.useFakeTimers()
+  const create = vi.fn(() => 'blob:pdf-output'), revoke = vi.fn()
+  vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: revoke })
+  let observed: HTMLAnchorElement | undefined
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { observed = this })
+  const delivery = createPdfDelivery()
+  const pending = delivery.save(new Uint8Array([1, 2]), 'Garden', new AbortController().signal)
+  expect(observed?.download).toBe('Garden.pdf')
+  expect(observed?.isConnected).toBe(false)
+  expect(await pending).toBe('downloaded')
+  expect(revoke).not.toHaveBeenCalled()
+  delivery.dispose()
+  expect(revoke).toHaveBeenCalledWith('blob:pdf-output')
+  expect(vi.getTimerCount()).toBe(0)
+})
+it('releases the URL and detached anchor when browser download dispatch fails', async () => {
+  const revoke = vi.fn()
+  vi.stubGlobal('URL', { createObjectURL: () => 'blob:failed-output', revokeObjectURL: revoke })
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { throw new Error('denied') })
+  const delivery = createPdfDelivery()
+  await expect(delivery.save(new Uint8Array([1]), 'Garden', new AbortController().signal)).rejects.toThrow('denied')
+  expect(revoke).toHaveBeenCalledWith('blob:failed-output')
+  expect(document.querySelector('a[download]')).toBeNull()
+  delivery.dispose()
+})

@@ -576,6 +576,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       referenceScale: 1,
       revision: 0,
     }),
+    capturePrintSnapshot: () => null,
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
     getSelection: vi.fn(() => []),
     getDesignObjectSelection: vi.fn(() => ({
