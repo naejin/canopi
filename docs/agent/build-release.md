@@ -57,7 +57,7 @@ cargo build --release
 
 ## PDF Font Assets
 
-Dev, frontend builds, and tests run `npm run prepare:pdf-fonts`. It verifies or downloads pinned Noto fonts and licenses into ignored `desktop/web/public/pdf-fonts/`; both edition builds include those assets. See the [Canvas PDF guide](canvas-pdf.md) for ownership, version pins, and runtime loading. First preparation requires upstream access; valid cached assets are reused.
+Dev, frontend builds, and tests run `npm run prepare:pdf-fonts`. It verifies or downloads pinned Noto fonts and licenses into ignored `desktop/web/public/pdf-fonts/`; both edition builds include those assets. See the [Canvas PDF guide](canvas-pdf.md) for ownership, version pins, and runtime loading. First preparation requires upstream access; valid cached assets are reused. `npm run build:pdf-validation` builds an isolated test host that imports the production capture, worker, encoder, and SVG preview. Its assets go to ignored `dist-pdf-validation/` and are not a shipped app entry point. The production PDF WebView workflow runs that host in all desktop engines; it tests loopback/CSP/worker behavior and fixed-path native delivery, not the Tauri save dialog.
 
 ## Bundled DB
 
@@ -130,7 +130,7 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 
 - Platform trait lives in `desktop/src/platform/mod.rs`, not `common-types`.
 - Lib crates export marker structs; `platform/mod.rs` implements the trait through conditional modules.
-- The current platform trait exposes native PNG/PDF snapshot export. [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) approves a future shared browser-compatible Canvas PDF pipeline; the existing OS-specific renderers do not define its architecture. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
+- The current platform trait exposes native PNG/PDF snapshot export. [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) defines the implemented shared Canvas PDF pipeline; the older OS-specific snapshot renderers do not participate in the Canvas PDF command. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
 - macOS and Windows platform code is stubbed behind `#[cfg(target_os = "...")]`.
 - CI validates platform compilation on actual platforms.
 

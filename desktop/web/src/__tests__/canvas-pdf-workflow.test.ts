@@ -125,3 +125,41 @@ describe('PDF workflow lifetime', () => {
     workflow.dispose()
   })
 })
+
+it('bounds an unavailable name lookup and releases its deadline when preview closes', async () => {
+  vi.useFakeTimers()
+  const { workflow, prepare, resolveNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+  resolveNames.mockImplementation(() => new Promise(() => {}))
+  try {
+    workflow.show()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(workflow.state.value.status).toBe('ready')
+    expect(prepare.mock.lastCall![0].input.commonNames).toEqual({})
+    workflow.close(); workflow.show()
+    expect(vi.getTimerCount()).toBe(1)
+    workflow.close()
+    await Promise.resolve()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(workflow.state.value.status).toBe('idle')
+  } finally { workflow.dispose(); vi.useRealTimers() }
+})
+
+it('recovers from encoding and delivery failures without rebuilding valid bytes for a delivery retry', async () => {
+  const { workflow, prepare, save, capture } = fixture()
+  const before = structuredClone(capture.input)
+  try {
+    prepare.mockRejectedValueOnce(new Error('encoding failed'))
+    workflow.show()
+    await vi.waitFor(() => expect(workflow.state.value.error).toBe('prepare-failed'))
+    await workflow.rebuild()
+    expect(workflow.state.value.status).toBe('ready')
+    save.mockRejectedValueOnce(new Error('disk full'))
+    await workflow.save()
+    expect(workflow.state.value.error).toBe('delivery-failed')
+    expect(workflow.state.value.result?.bytes).toBe(result.bytes)
+    await workflow.save()
+    expect(workflow.state.value.status).toBe('saved')
+    expect(prepare).toHaveBeenCalledTimes(2)
+    expect(capture.input).toEqual(before)
+  } finally { workflow.dispose() }
+})

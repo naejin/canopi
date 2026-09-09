@@ -64,3 +64,4 @@ desktop/web/dist-web-artifacts/
 
 # Pinned PDF font assets prepared for both edition packages
 desktop/web/public/pdf-fonts/
+desktop/web/dist-pdf-validation/

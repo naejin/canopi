@@ -5,6 +5,7 @@ self.onmessage = async (event: MessageEvent<PdfPreparation>) => {
     const result = await preparePdf(event.data)
     self.postMessage({ result }, { transfer: result.bytes ? [result.bytes.buffer] : [] })
   } catch (error) {
-    self.postMessage({ error: error instanceof PdfTextError ? error.kind : 'prepare-failed' })
+    self.postMessage({ error: error instanceof PdfTextError ? error.kind
+      : error instanceof Error && error.message === 'coverage-too-large' ? error.message : 'prepare-failed' })
   }
 }

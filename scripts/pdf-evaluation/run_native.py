@@ -1,4 +1,5 @@
 """Serve the built fixture on loopback and own one native probe process."""
+import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -8,9 +9,15 @@ import sys
 import threading
 
 ROOT = Path(__file__).resolve().parent
-output = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / 'output' / platform.system().lower()
+parser = argparse.ArgumentParser()
+parser.add_argument('output', nargs='?', type=Path, default=ROOT / 'output' / platform.system().lower())
+parser.add_argument('--fixture', type=Path, default=ROOT / 'dist')
+parser.add_argument('--script', type=Path, default=ROOT / 'native/run-fixture.js')
+args = parser.parse_args()
+output = args.output.resolve()
+fixture = args.fixture.resolve()
 assert not output.exists(), 'Use a fresh test output directory'
-assert (ROOT / 'dist/index.html').is_file(), 'Run npm run build first'
+assert (fixture / 'index.html').is_file(), 'Run npm run build first'
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -18,11 +25,11 @@ class QuietHandler(SimpleHTTPRequestHandler):
         pass
 
 
-server = ThreadingHTTPServer(('127.0.0.1', 0), partial(QuietHandler, directory=ROOT / 'dist'))
+server = ThreadingHTTPServer(('127.0.0.1', 0), partial(QuietHandler, directory=fixture))
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
 url = f'http://127.0.0.1:{server.server_port}/'
-arguments = [url, str(output), str(ROOT / 'native/run-fixture.js')]
+arguments = [url, str(output), str(args.script.resolve())]
 system = platform.system()
 try:
     if system == 'Linux':

@@ -78,7 +78,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       const names = Array.from(new Set(next.input.canvas.plants.map((plant) => plant.canonicalName)))
       // Catalog availability must not prevent printing existing Design content.
       // Missing localized names retain the full canonical identity.
-      const commonNames = names.length ? await deps.resolveNames(names, next.input.locale).catch(() => ({})) : {}
+      const commonNames = names.length ? await resolvePrintNames(deps.resolveNames, names, next.input.locale, abort.signal) : {}
       if (!current()) return
       const result = await deps.prepare({ input: { ...next.input, commonNames }, setup: setup.peek(), labels: deps.labels(), fontBaseUrl: deps.fontBaseUrl() }, abort.signal)
       if (!current()) return
@@ -138,3 +138,19 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   return { open, state, setup, availableLayers, availableZones, show, close, rebuild, configure, selectLayer, selectZone, addPrintArea, removeArea, setAreaScale, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>
+
+// The catalog reader is shared with the app. Stop waiting without disposing it;
+// a late answer must not keep an export job or its captured Design alive.
+function resolvePrintNames(resolveNames: PdfWorkflowDependencies['resolveNames'], names: readonly string[], locale: string,
+  signal: AbortSignal): Promise<Record<string, string>> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', abort) }
+    const finish = (value: Record<string, string>) => { if (settled) return; settled = true; cleanup(); resolve(value) }
+    const abort = () => { if (settled) return; settled = true; cleanup(); reject(new DOMException('Aborted', 'AbortError')) }
+    const timer = setTimeout(() => finish({}), 30_000)
+    signal.addEventListener('abort', abort, { once: true })
+    if (signal.aborted) { abort(); return }
+    try { void resolveNames(names, locale).then(finish, () => finish({})) } catch { finish({}) }
+  })
+}

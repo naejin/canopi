@@ -1,0 +1,89 @@
+name: PDF production WebView probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [test/pdf-production-validation]
+    paths:
+      - 'desktop/web/src/app/canvas-pdf/**'
+      - 'desktop/web/src/components/canvas-pdf/**'
+      - 'desktop/web/scripts/pdf-validation/**'
+      - 'scripts/pdf-evaluation/run_native.py'
+      - '.github/workflows/pdf-production-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: linux
+          - os: macos-14
+            label: macos-arm64
+          - os: macos-15-intel
+            label: macos-intel
+          - os: windows-latest
+            label: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        if: runner.os == 'Windows'
+        with:
+          dotnet-version: '8.0.x'
+      - name: Linux WebView and virtual display
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xvfb xauth
+      - name: Build production worker and preview with packaged fonts
+        working-directory: desktop/web
+        run: |
+          npm ci --ignore-scripts
+          npm run build:pdf-validation
+      - name: Run Linux WebKitGTK
+        if: runner.os == 'Linux'
+        run: xvfb-run -a /usr/bin/python3 scripts/pdf-evaluation/run_native.py production-results/${{ matrix.label }} --fixture desktop/web/dist-pdf-validation --script desktop/web/scripts/pdf-validation/run-native.js
+      - name: Run macOS or Windows WebView
+        if: runner.os != 'Linux'
+        run: python scripts/pdf-evaluation/run_native.py production-results/${{ matrix.label }} --fixture desktop/web/dist-pdf-validation --script desktop/web/scripts/pdf-validation/run-native.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-production-${{ matrix.label }}
+          path: production-results/${{ matrix.label }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  verify:
+    needs: native
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pdf-production-*
+          path: production-results
+      - name: Independently verify geometry, text and identical page plans
+        run: python3 desktop/web/scripts/pdf-validation/verify.py production-results/*/pdfkit.pdf
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-production-verification
+          path: production-results/**/*.verification.json
+          if-no-files-found: error
+          retention-days: 30
