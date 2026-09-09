@@ -81,6 +81,10 @@ The printed overview's interactive coverage targets derive from finalized detail
 
 ## Legend pagination
 
+A [temporary compact-legend comparison](pdf-legend-prototype.md) is available for
+review behind a development-only toggle. Its alternatives are proposals; the
+production rules below remain in force.
+
 `legend.ts` lays out full selected-language names (canonical fallback) and every authored appearance at the shared readable size. The source sheet keeps an ordered prefix in its narrow column. Overflow blocks output until the user explicitly chooses Add legend pages or changes setup. Remove legend pages withdraws the setup-wide continuation consent. The rail groups continuations by source ID, and selection falls back to the source if reflow removes the current continuation. Accepted continuations use two columns, retain complete entries where they fit, and can continue an exceptionally long entry without shrinking it. Source and continuation links resolve final page identities. Ambiguity always considers the complete source legend, including entries on continuations, and never changes authored presentation.
 
 ## Production sample runner
