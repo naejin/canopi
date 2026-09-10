@@ -54,6 +54,10 @@ JSON.stringify(trace)
 
 Save the returned JSON locally and open it in Perfetto. Traces record scene, viewport and resize durations; metadata includes the actual backend, backing dimensions, DPR and the WebGL renderer where available. Captures stop growing after 10,000 events and report dropped events. No scene payloads, labels, file paths or IPC arguments are recorded. Disposal unregisters each renderer; HMR clears the registry. The recorder is absent from production renderer wiring.
 
+For unattended native investigation on Linux, an isolated debug executable can expose WebKit's built-in HTTP inspector using `WEBKIT_INSPECTOR_HTTP_SERVER=127.0.0.1:9231`. Use a private `dbus-run-session` and temporary `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME` so the single-instance plugin and user app data stay separate. Profile a copied Design. The HTTP target page links to the native inspector; WebKit protocol clients route commands through `Target.sendMessageToTarget` to the frame target, rather than assuming Chromium's debugging protocol. Wait for canvas readiness before replaying input. Activate/raise the native window through the window manager before physical pointer automation.
+
+GPU strings may be generic: this Linux WebKit returned `Apple GPU` while `nvidia-smi pmon` attributed its process to a GTX 1080 Ti. Corroborate hardware with OS process attribution. Capture timing and CPU/heap separately, exclude setup, prefer short per-operation captures, and reject gestures whose expected state transitions did not occur. A second animation-frame callback is a frame-opportunity proxy, not GPU completion. See [native evidence and remaining cost](../native-canvas-performance.md).
+
 Use Web Inspector's CPU/allocations timelines to explain expensive spans. For WebGL commands and buffer/texture churn, load a locally installed Spector.js standalone bundle in a development session and capture this canvas. It works without porting a browser extension or forking Spector. Keep capture disabled during timing comparisons. Use CrabNebula or a native sampling profiler only when measurements point to IPC/native work.
 
 ## Rendering invariants

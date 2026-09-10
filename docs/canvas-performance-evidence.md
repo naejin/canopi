@@ -32,7 +32,7 @@ Pan graphics clears fell from 2,528 to 114 per update. Selection fell from 2,528
 
 ## Remaining measurement
 
-The actual hardware-accelerated Tauri/WebKitGTK session has not been profiled. Follow-up `canopi-74q9` tracks this validation. The optional Playwright WebKit run could not start: installed Playwright expected `webkit-2358`, while the cached browser was `webkit-2248`. Browser timings above establish renderer improvements, not a native end-to-end latency guarantee. Use the development trace adapter and native Web Inspector described in [the performance guide](agent/canvas-performance.md) to capture that final environment, especially remaining zoom and movement cost.
+The original browser investigation did not profile native hardware. That follow-up is now documented in [native Tauri profiling](native-canvas-performance.md), which completes `canopi-74q9` and identifies remaining snapshot/spacing work. The optional Playwright WebKit run could not start: installed Playwright expected `webkit-2358`, while the cached browser was `webkit-2248`. Browser timings above establish renderer improvements, not a native end-to-end latency guarantee. Use the development trace adapter and native Web Inspector described in [the performance guide](agent/canvas-performance.md) to capture that final environment, especially remaining zoom and movement cost.
 
 
 ## Canvas2D follow-up
@@ -58,4 +58,4 @@ Culling alone produced pixel-identical orchard screenshots at scales 10, 30 and 
 
 The forced-fallback pointer runner passed pan, wheel zoom, hover/selection, dragging, undo and teardown with `canvas2d` confirmed active. The full frontend suite passed 245 files and 2,251 tests; TypeScript checking and `npm run build:web` passed.
 
-Native follow-up `canopi-74q9` remains open. The running Tauri/WebKitGTK process was found, but it had no configured remote inspector endpoint. Its active canvas backend/GPU and complete input latency were not obtained. Native Web Inspector capture is still required; browser evidence must not close that task.
+At the end of this Canvas2D pass, native follow-up `canopi-74q9` was still open because the running app had no configured remote inspector endpoint. A subsequent isolated native launch enabled that endpoint; see [native profiling results](native-canvas-performance.md). Browser evidence alone was not used to close the task.
