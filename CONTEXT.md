@@ -235,7 +235,7 @@ The visible on-screen presence of a design object or its readable presentation a
 _Avoid_: Object scale, canvas scale, display size
 
 **Automatic Detail**:
-The presentation that reveals plant symbols, names, annotations and measurements as available space allows. On the Canvas this uses screen space; a Canvas PDF uses physical page space and preserves authored text through readable detail coverage or explicit retention. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
+The presentation that reveals plant symbols, names, annotations and measurements as available space allows. On the Canvas this uses screen space; a Canvas PDF uses physical page space, transparent plant references, aligned measurements and automatically paginated keys/notes to preserve authored text. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
 _Avoid_: Display by mode, canopy sizing, automatic design editing
 
 **Inspection Lens**:

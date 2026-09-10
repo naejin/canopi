@@ -22,6 +22,8 @@ declare module 'pdfkit' {
     on(event: 'error', callback: (error: Error) => void): this
     registerFont(name: string, bytes: Uint8Array): this
     addPage(options: { size: [number, number]; margin: number }): this
+    addNamedDestination(name: string, type: 'Fit' | 'FitR', ...coordinates: number[]): this
+    goTo(x: number, y: number, width: number, height: number, target: string): this
     save(): this
     restore(): this
     transform(a: number, b: number, c: number, d: number, e: number, f: number): this

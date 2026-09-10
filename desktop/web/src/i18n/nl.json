@@ -924,11 +924,8 @@
     "preparing": "Pagina’s voorbereiden…",
     "saved": "PDF opgeslagen.",
     "downloaded": "PDF-download aangevraagd.",
-    "ambiguous": "Sommige soorten hebben hetzelfde symbool en dezelfde kleur. Pas het ontwerp aan om ze te onderscheiden of exporteer zoals weergegeven.",
     "empty": "Geen afdrukbare inhoud. Kies lagen of voeg een afdrukgebied toe.",
     "layers": "Afdruklagen",
-    "continued": "Vervolg",
-    "legendFor": "Plantenlijst voor pagina",
     "pageCount": "Pagina {{page}} van {{count}}",
     "areaName": "Afdrukgebied {{number}}",
     "errors": {
@@ -939,7 +936,7 @@
       "text-too-wide": "Sommige tekst past niet op leesbare grootte. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "delivery-failed": "De PDF kon niet worden opgeslagen. Probeer opnieuw op te slaan.",
       "selection-missing": "Sommige geselecteerde lagen bestaan niet meer. Controleer de afdruklagen voordat je exporteert.",
-      "coverage-too-large": "Deze selectie overschrijdt de limiet van 200 pagina’s. Selecteer minder gebieden of verminder het aantal vervolgpagina’s voor de legenda.",
+      "coverage-too-large": "Deze indeling overschrijdt de limiet van 200 pagina’s. Druk minder afdrukgebieden of lagen af.",
       "invalid-page-view": "Kies een geldige zoom en afdrukstand voor deze pagina."
     },
     "canvasZoom": "Canvaszoom (%)",
@@ -957,14 +954,11 @@
     "zoomOut": "Uitzoomen",
     "pages": "Pagina’s",
     "removePage": "Pagina verwijderen",
-    "addLegendPages": "Legendapagina’s toevoegen",
-    "removeLegendPages": "Legendapagina’s verwijderen",
-    "legendNeedsPages": "De plantenlijst heeft meer ruimte nodig. Voeg gekoppelde legendapagina’s toe om alle planten op te nemen.",
     "retry": "Opnieuw proberen",
     "cancel": "Annuleren",
-    "textNeedsDetail": "{{count}} teksten hebben een leesbare plek nodig op papier. Voeg een gerichte detailpagina toe of behoud ze op het overzicht.",
-    "keepText": "Tekst op overzicht behouden",
-    "addDetail": "Detailpagina toevoegen"
+    "notes": "Notities en maten",
+    "observations": "Veldnotities",
+    "keyAndNotes": "Legenda en notities"
   },
   "speciesKey": {
     "title": "Soortensleutel",

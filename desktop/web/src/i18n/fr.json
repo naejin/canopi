@@ -924,11 +924,8 @@
     "preparing": "Préparation des pages…",
     "saved": "PDF enregistré.",
     "downloaded": "Téléchargement du PDF demandé.",
-    "ambiguous": "Certaines espèces partagent le même symbole et la même couleur. Modifiez le design pour les distinguer, ou exportez en l’état.",
     "empty": "Aucun contenu imprimable. Choisissez des calques ou ajoutez une aire d’impression.",
     "layers": "Calques à imprimer",
-    "continued": "Suite",
-    "legendFor": "Liste des plantes de la page",
     "pageCount": "Page {{page}} sur {{count}}",
     "areaName": "Aire d’impression {{number}}",
     "errors": {
@@ -939,7 +936,7 @@
       "text-too-wide": "Certains textes ne tiennent pas à une taille lisible. Modifiez le texte dans le design et réessayez.",
       "delivery-failed": "Impossible d’enregistrer le PDF. Réessayez l’enregistrement.",
       "selection-missing": "Certains calques sélectionnés n’existent plus. Vérifiez les calques à imprimer avant d’exporter.",
-      "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Sélectionnez moins de zones ou réduisez le nombre de pages de légende.",
+      "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Imprimez moins de zones de page ou de calques.",
       "invalid-page-view": "Choisissez un zoom et une orientation valides pour cette page."
     },
     "canvasZoom": "Zoom du canevas (%)",
@@ -957,14 +954,11 @@
     "zoomOut": "Réduire",
     "pages": "Pages",
     "removePage": "Supprimer la page",
-    "addLegendPages": "Ajouter des pages de légende",
-    "removeLegendPages": "Retirer les pages de légende",
-    "legendNeedsPages": "La liste des plantes manque de place. Ajoutez des pages de légende liées pour inclure toutes les plantes.",
     "retry": "Réessayer",
     "cancel": "Annuler",
-    "textNeedsDetail": "{{count}} textes nécessitent un emplacement lisible à imprimer. Ajoutez une page de détail ciblée ou conservez-les sur la vue générale.",
-    "keepText": "Garder les textes sur la vue générale",
-    "addDetail": "Ajouter une page de détail"
+    "notes": "Notes et mesures",
+    "observations": "Observations de terrain",
+    "keyAndNotes": "Clé et notes"
   },
   "speciesKey": {
     "title": "Clé des espèces",

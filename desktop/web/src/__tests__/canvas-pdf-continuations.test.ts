@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import { planLegend } from '../app/canvas-pdf/legend'
+import { fieldKey } from '../app/canvas-pdf/field-key'
+import { hits, outlineSegments } from '../app/canvas-pdf/field-geometry'
+import { MM } from '../app/canvas-pdf/print-style'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels, PdfSetup } from '../app/canvas-pdf/types'
-const labels: PdfLabels = { overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }
+const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }
 const engine = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 const setup: PdfSetup = { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'] }
 function garden(count = 90): PdfInput {
@@ -14,24 +16,18 @@ function garden(count = 90): PdfInput {
       color: '#234567', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', fill: true, stroke: false, strokeWidth: 0 }], pinnedName: false })),
   } }
 }
-it('requires explicit continuations and prints the entire source legend with linked pages', () => {
+it('automatically paginates a complete linked key without requesting consent', () => {
   const input = garden()
-  const blocked = buildPdfPlan(input, setup, engine(), labels)
-  expect(blocked.blocked).toBe('legend-overflow')
-  expect(blocked.pages).toHaveLength(1)
-  const plan = buildPdfPlan(input, { ...setup, continuations: true }, engine(), labels)
+  const plan = buildPdfPlan(input, setup, engine(), labels)
   expect(plan.blocked).toBeNull()
   expect(plan.pages.length).toBeGreaterThan(1)
-  expect(plan.hasLegendOverflow).toBe(true)
   expect(plan.pages[0]!.legend).toHaveLength(90)
-  expect(plan.pages[0]!.ambiguousSpecies).toHaveLength(90)
-  const rendered = plan.pages.flatMap((page) => page.operations.filter((op) => op.kind === 'text').flatMap((op) => op.line.runs.map((run) => run.text)))
+  const rendered = plan.pages.flatMap(page => page.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(run => run.text) : [])).join(' ')
   for (const plant of input.canvas.plants) expect(rendered).toContain(plant.canonicalName)
-  expect(rendered).toContain('Plant list for page 1')
-  for (const page of plan.pages.slice(1)) {
-    expect(page.kind).toBe('legend')
-    expect(page.sourceId).toBe('overview')
-  }
+  const destinations = new Set(plan.pages.flatMap(page => [`page:${page.id}`, ...page.destinations?.map(d => d.id) ?? []]))
+  for (const page of plan.pages) for (const link of page.links ?? []) expect(destinations.has(link.target)).toBe(true)
+  expect(new Set(plan.pages.flatMap(page => page.destinations?.map(d => d.id) ?? [])).size).toBe(plan.pages.reduce((n, p) => n + (p.destinations?.length ?? 0), 0))
+  for (const page of plan.pages.slice(1)) { expect(page.kind).toBe('legend'); expect(page.sourceId).toBe('overview') }
 })
 
 it('keeps automatic area fit while linking legends and later detail pages after pagination', () => {
@@ -40,22 +36,26 @@ it('keeps automatic area fit while linking legends and later detail pages after 
     { name: 'Long bed', path: 'M0 0 H35 V5 H0 Z', fill: null, bounds: { x: 0, y: 0, width: 35, height: 5 } },
     { name: 'Long bed:legend:0', path: 'M100 0 H101 V1 H100 Z', fill: null, bounds: { x: 100, y: 0, width: 1, height: 1 } },
   ], plants: input.canvas.plants.map((plant, i) => ({ ...plant, position: { x: i < 30 ? 1 : 34, y: 2 } })) }
-  const detail: PdfSetup = { ...setup, continuations: true, areas: [{ id: '1', name: 'Long bed', bounds: { x: 0, y: 0, width: 35, height: 5 } }, { id: '2', name: 'Long bed:legend:0', bounds: { x: 100, y: 0, width: 1, height: 1 } }] }
+  const detail: PdfSetup = { ...setup, areas: [{ id: '1', name: 'Long bed', bounds: { x: 0, y: 0, width: 35, height: 5 } }, { id: '2', name: 'Long bed:legend:0', bounds: { x: 100, y: 0, width: 1, height: 1 } }] }
   const plan = buildPdfPlan({ ...input, canvas }, detail, engine(), labels)
-  expect(plan.pages.map((page) => page.kind)).toEqual(['overview', 'detail', 'legend', 'detail'])
+  expect(plan.pages[0]!.kind).toBe('overview')
+  expect(plan.pages.filter(page => page.kind === 'detail')).toHaveLength(2)
+  expect(plan.pages.slice(2, -1).every(page => page.kind === 'legend')).toBe(true)
   expect(plan.pages[1]!.width).toBeGreaterThan(plan.pages[1]!.height)
   expect(plan.pages[2]!.sourceId).toBe('area:1')
-  expect(plan.pages[2]!.operations.some((op) => op.kind === 'text' && op.line.runs.some((run) => run.text === 'Plant list for page 2'))).toBe(true)
-  expect(plan.pages[3]!.number).toBe(4)
+  expect(plan.pages[2]!.operations.some((op) => op.kind === 'text' && op.line.runs.some((run) => run.text === '2 · Key and notes'))).toBe(true)
+  const lastDetail = plan.pages.at(-1)!
+  expect(lastDetail.kind).toBe('detail')
+  expect(lastDetail.number).toBe(plan.pages.length)
   expect(new Set(plan.pages.map((page) => page.id)).size).toBe(plan.pages.length)
   const overviewText = plan.pages[0]!.operations.flatMap((op) => op.kind === 'text' ? op.line.runs.map((run) => run.text) : [])
   expect(overviewText).toContain('2')
-  expect(overviewText).toContain('4')
+  expect(overviewText).toContain(String(lastDetail.number))
 })
 
 it('changes a legend page orientation independently and preserves the complete legend', () => {
   const input = garden(150)
-  const options: PdfSetup = { ...setup, continuations: true }
+  const options: PdfSetup = { ...setup }
   const before = buildPdfPlan(input, options, engine(), labels)
   const plan = buildPdfPlan(input, { ...options, views: { ...options.views, 'overview:legend:0': { orientation: 'landscape' } } }, engine(), labels)
   expect(plan.pages[0]!.width).toBe(before.pages[0]!.width)
@@ -73,7 +73,7 @@ it('preserves duplicate local names, mixed scripts and every appearance across e
   const text = createPdfTextEngine(new Map<PdfFontId, Uint8Array>([
     ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['sc', readFileSync('public/pdf-fonts/NotoSansCJKsc-Regular.otf')],
   ]), 'en')
-  const plan = buildPdfPlan(input, { ...setup, continuations: true, views: { ...setup.views, 'overview:legend:0': { orientation: 'landscape' } } }, text, labels)
+  const plan = buildPdfPlan(input, { ...setup, views: { ...setup.views, 'overview:legend:0': { orientation: 'landscape' } } }, text, labels)
   expect(plan.blocked).toBeNull()
   expect(plan.pages.length).toBeGreaterThan(2)
   const source = plan.pages[0]!
@@ -86,7 +86,7 @@ it('preserves duplicate local names, mixed scripts and every appearance across e
     }
   }
   const operations = plan.pages.flatMap((page) => page.operations)
-  const content = plan.pages.slice(1).flatMap((page) => page.operations.filter((op) => op.kind === 'text' && op.y >= page.frame.y && op.y <= page.frame.y + page.frame.height)
+  const content = plan.pages.slice(1).flatMap((page) => page.operations.filter((op) => op.kind === 'text' && op.size === 10 && op.y >= page.frame.y && op.y <= page.frame.y + page.frame.height)
     .flatMap((op) => op.kind === 'text' ? op.line.runs.map((run) => run.text) : [])).filter((value) => value !== 'Continued').join(' ').replace(/\s/g, '')
   expect(content).toContain(longName.replace(/\s/g, ''))
   expect(operations.filter((op) => op.kind === 'text' && op.size === 10).length).toBeGreaterThan(100)
@@ -94,44 +94,45 @@ it('preserves duplicate local names, mixed scripts and every appearance across e
   expect(samples.some((op) => op.fill === '#987654' && op.opacity === .7)).toBe(true)
 })
 
-it('fits forty short species names in the narrow sidebar without shrinking text', () => {
-  const input = garden(40)
+it('gives a short key readable full-width columns and retains every authored sample', () => {
+  const base = garden(40)
+  const first = base.canvas.plants[0]!
+  const appearances = Array.from({ length: 12 }, (_, i) => ({ ...first, id: `appearance${i}`, color: `#${String(i).padStart(6, '0')}` }))
+  const input = { ...base, canvas: { ...base.canvas, plants: [...base.canvas.plants.slice(1), ...appearances] } }
   const plan = buildPdfPlan(input, setup, engine(), labels)
   expect(plan.blocked).toBeNull()
-  expect(plan.pages).toHaveLength(1)
-  const names = plan.pages[0]!.operations.filter((op) => op.kind === 'text').filter((op) => op.size === 10)
-    .flatMap((op) => op.line.runs.map((run) => run.text))
+  const keys = plan.pages.filter(page => page.kind === 'legend')
+  const names = keys.flatMap(page => page.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(run => run.text) : [])).join(' ')
   for (const plant of input.canvas.plants) expect(names).toContain(plant.canonicalName)
+  const samples = keys.flatMap(page => page.operations.flatMap(op => op.kind === 'path' && op.fill ? [op] : []))
+  for (const appearance of appearances) expect(samples.some(sample => sample.fill === appearance.color && sample.opacity === .7)).toBe(true)
+  expect(plan.pages[0]!.legend.find(entry => entry.canonicalName === first.canonicalName)!.count).toBe(12)
 })
 
-it('keeps two authored samples beside a full name in a compact sidebar row', () => {
+it('reflows every appearance when an oversized key continues into narrower columns', () => {
   const plant = garden(1).canvas.plants[0]!
-  const appearances = [plant, { ...plant, color: '#987654' }]
-  const result = planLegend([{ canonicalName: plant.canonicalName, name: 'Apple', appearances }],
-    { x: 0, y: 0, width: 119, height: 15 }, () => ({ x: 0, y: 0, width: 500, height: 600 }), engine(), labels, false, .7)
-  expect(result.overflow).toBe(false)
-  expect(result.operations.filter((op) => op.kind === 'text').flatMap((op) => op.line.runs.map((run) => run.text))).toEqual(['Apple'])
-  const marks = result.operations.filter((op) => op.kind === 'path').filter((op) => op.fill)
-  expect(marks.map((op) => op.fill)).toEqual(['#234567', '#987654'])
-  for (const mark of marks) expect(mark.matrix[5]).toBe(7)
+  const appearances = Array.from({ length: 300 }, (_, i) => ({ ...plant, id: String(i), color: `#${String(i).padStart(6, '0')}` }))
+  const entry = { name: 'Mint', canonicalName: 'Mentha', reference: '01', count: appearances.length, appearances }
+  const pages = fieldKey({ pageReferences: [], operations: [], links: [], destinations: [], identifiedPlants: [], annotationIds: [], measurementIds: [], notes: [], legend: [entry] }, 'overview',
+    index => ({ width: (index ? 297 : 210) * MM, height: (index ? 210 : 297) * MM,
+      frame: { x: 10 * MM, y: 20 * MM, width: (index ? 277 : 190) * MM, height: 20 * MM } }), engine(), labels, 1)
+  expect(pages.length).toBeGreaterThan(1)
+  const samples = pages.flatMap(p => p.operations.filter(op => op.kind === 'path' && op.fill))
+  for (const appearance of appearances) expect(samples.filter(op => op.kind === 'path' && op.fill === appearance.color)).toHaveLength(1)
+  for (const page of pages) for (const op of page.operations) if (op.kind === 'path' && op.fill) {
+    expect(op.matrix[4] + op.matrix[0]).toBeLessThanOrEqual(page.frame.x + page.frame.width)
+    expect(op.matrix[5] + op.matrix[3]).toBeLessThanOrEqual(page.frame.y + page.frame.height)
+  }
 })
 
-it('places complete large appearance sets below their name and separates species within the frame', () => {
-  const plant = garden(1).canvas.plants[0]!
-  const appearances = Array.from({ length: 12 }, (_, i) => ({ ...plant, color: `#${String(i).padStart(6, '0')}` }))
-  const result = planLegend([
-    { canonicalName: 'Apple', name: 'Apple', appearances },
-    { canonicalName: 'Pear', name: 'Pear', appearances: [plant] },
-  ], { x: 0, y: 0, width: 119, height: 56 }, () => ({ x: 0, y: 0, width: 500, height: 600 }), engine(), labels, false, .7)
-  expect(result.overflow).toBe(false)
-  const paths = result.operations.filter((op) => op.kind === 'path')
-  expect(paths.filter((op) => op.fill).map((op) => op.fill)).toEqual([...appearances.map((plant) => plant.color), plant.color])
-  const rules = paths.filter((op) => !op.fill && op.stroke)
-  expect(rules.length).toBeGreaterThan(0)
-  const texts = result.operations.filter((op) => op.kind === 'text')
-  expect(texts.flatMap((op) => op.line.runs.map((run) => run.text))).toEqual(['Apple', 'Pear'])
-  for (const mark of paths.filter((op) => op.fill)) {
-    expect(mark.matrix[4] + mark.matrix[0]).toBeLessThanOrEqual(119)
-    expect(mark.matrix[5] + mark.matrix[3]).toBeLessThanOrEqual(56)
+it('keeps key name and note descenders clear of row separators', () => {
+  const base = garden(25)
+  const input = { ...base, commonNames: Object.fromEntries(base.canvas.plants.map(p => [p.canonicalName, 'Glycyrrhiza · gypsy'])) }
+  const pages = buildPdfPlan(input, setup, engine(), labels).pages.filter(p => p.kind === 'legend')
+  for (const page of pages) for (const op of page.operations) if (op.kind === 'text' && op.line.ink) {
+    const ink = { ...op.line.ink, x: op.x + op.line.ink.x, y: op.y + op.line.ink.y }
+    for (const rule of page.operations) if (rule.kind === 'path' && rule.stroke && !rule.fill) {
+      expect(outlineSegments(rule.d, p => p).some(s => hits(s, ink))).toBe(false)
+    }
   }
 })

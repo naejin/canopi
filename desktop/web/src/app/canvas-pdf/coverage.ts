@@ -12,13 +12,13 @@ export function moveCoverage<T extends { ground: PrintBounds }>(fit: T, offset: 
   return { ...fit, ground: { ...fit.ground, x, y } }
 }
 
-/** At 100%, contain the entire requested extent. Explicit zoom keeps its centre. */
+/** Preserve the exact ground rectangle and centre its physical frame. */
 export function fitArea(bounds: PrintBounds, frame: PrintBounds, zoom = 100) {
-  if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width < 0 || bounds.height < 0) throw new Error('invalid-page-view')
-  const pointsPerMeter = Math.min(frame.width / (bounds.width || .001),
-    frame.height / (bounds.height || .001)) * pageZoom(zoom) / 100 / (1 + 1e-12)
-  const width = frame.width / pointsPerMeter, height = frame.height / pointsPerMeter
-  return { pointsPerMeter, ground: { x: bounds.x + (bounds.width - width) / 2, y: bounds.y + (bounds.height - height) / 2, width, height } }
+  if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) throw new Error('invalid-page-view')
+  const fit = Math.min(frame.width / bounds.width, frame.height / bounds.height)
+  const fittedFrame = { x: frame.x + (frame.width - bounds.width * fit) / 2, y: frame.y + (frame.height - bounds.height * fit) / 2,
+    width: bounds.width * fit, height: bounds.height * fit }
+  return { frame: fittedFrame, ...zoomCoverage({ ground: bounds, pointsPerMeter: fit }, zoom) }
 }
 
 export function zoomCoverage(fit: { ground: PrintBounds; pointsPerMeter: number }, zoom = 100) {

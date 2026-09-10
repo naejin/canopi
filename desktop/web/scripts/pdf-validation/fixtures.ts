@@ -15,7 +15,7 @@ const species = [
 ] as const
 export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> {
   const scene = createDefaultScenePersistedState()
-  let setup: PdfSetup = { paper: 'A4', layers: ['plants', 'zones', 'annotations', 'measurement-guides'], continuations: true }
+  let setup: PdfSetup = { paper: 'A4', layers: ['plants', 'zones', 'annotations', 'measurement-guides'] }
   const count = name === 'dense' ? 320 : name === 'legends' ? 100 : name.startsWith('stress') ? (name === 'stress-50' ? 10_000 : name === 'stress-10' ? 900 : 100) : 120
   const commonNames: Record<string, string> = {}
   const side = name === 'dense' ? 16 : Math.ceil(Math.sqrt(count))
@@ -55,5 +55,5 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
   if (name === 'map-excluded') scene.layers.push({ kind: 'layer', name: 'satellite', visible: true, locked: false, opacity: 1 })
   return { input: { name: name === 'map-excluded' ? 'mixed' : name, locale: 'en', commonNames,
     canvas: buildCanvasPrintSnapshot(scene, { viewport: { x: 99, y: -99, scale: .001 }, speciesCache: new Map() }) }, setup,
-    labels: { overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' } }
+    labels: { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size' } }
 }

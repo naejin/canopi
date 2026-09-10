@@ -20,13 +20,20 @@ export async function encodePdf(plan: PdfPlan, fonts: ReadonlyMap<PdfFontId, Uin
   })
   for (const page of plan.pages) {
     doc.addPage({ size: [page.width, page.height], margin: 0 })
+    doc.addNamedDestination(`page:${page.id}`, 'Fit')
+    for (const destination of page.destinations ?? []) {
+      const b = destination.bounds
+      if (b) doc.addNamedDestination(destination.id, 'FitR', b.x, page.height - b.y - b.height, b.x + b.width, page.height - b.y)
+      else doc.addNamedDestination(destination.id, 'Fit')
+    }
+    for (const link of page.links ?? []) doc.goTo(link.bounds.x, link.bounds.y, link.bounds.width, link.bounds.height, link.target)
     doc.rect(0, 0, page.width, page.height).fill('#ffffff')
     for (const op of page.operations) {
       if (op.kind === 'clip') { doc.save().rect(op.bounds.x, op.bounds.y, op.bounds.width, op.bounds.height).clip(); continue }
       if (op.kind === 'unclip') { doc.restore(); continue }
       doc.save().opacity(op.opacity)
       if (op.kind === 'text') {
-        doc.translate(op.x, op.y).rotate(op.rotation).fillColor('#24211c')
+        doc.translate(op.x, op.y).rotate(op.rotation).fillColor(op.color ?? '#24211c')
         let x = 0
         for (const run of op.line.runs) {
           doc.font(run.font).fontSize(op.size).text(run.text, x, 0, { baseline: 'alphabetic', lineBreak: false, features: [] })

@@ -924,11 +924,8 @@
     "preparing": "Preparando páginas…",
     "saved": "PDF salvo.",
     "downloaded": "Download do PDF solicitado.",
-    "ambiguous": "Algumas espécies têm o mesmo símbolo e cor. Edite o projeto para distingui-las ou exporte como está.",
     "empty": "Nenhum conteúdo imprimível. Escolha camadas ou adicione uma área de impressão.",
     "layers": "Camadas para imprimir",
-    "continued": "Continuação",
-    "legendFor": "Lista de plantas da página",
     "pageCount": "Página {{page}} de {{count}}",
     "areaName": "Área de impressão {{number}}",
     "errors": {
@@ -939,7 +936,7 @@
       "text-too-wide": "Alguns textos não cabem em tamanho legível. Edite o texto no projeto e tente novamente.",
       "delivery-failed": "Não foi possível guardar o PDF. Tente guardar novamente.",
       "selection-missing": "Algumas camadas selecionadas já não existem. Reveja as camadas de impressão antes de exportar.",
-      "coverage-too-large": "Esta seleção ultrapassa o limite de 200 páginas. Selecione menos áreas ou reduza as páginas de continuação da legenda.",
+      "coverage-too-large": "Esta configuração excede o limite de 200 páginas. Imprima menos áreas ou camadas.",
       "invalid-page-view": "Escolha um zoom e uma orientação válidos para esta página."
     },
     "canvasZoom": "Zoom da tela (%)",
@@ -957,14 +954,11 @@
     "zoomOut": "Reduzir",
     "pages": "Páginas",
     "removePage": "Remover página",
-    "addLegendPages": "Adicionar páginas de legenda",
-    "removeLegendPages": "Remover páginas de legenda",
-    "legendNeedsPages": "A lista de plantas precisa de mais espaço. Adicione páginas de legenda ligadas para incluir todas as plantas.",
     "retry": "Tentar novamente",
     "cancel": "Cancelar",
-    "textNeedsDetail": "{{count}} textos precisam de um espaço legível para impressão. Adicione uma página de detalhe específica ou mantenha-os na vista geral.",
-    "keepText": "Manter textos na vista geral",
-    "addDetail": "Adicionar página de detalhe"
+    "notes": "Notas e medidas",
+    "observations": "Observações de campo",
+    "keyAndNotes": "Chave e notas"
   },
   "speciesKey": {
     "title": "Legenda de espécies",

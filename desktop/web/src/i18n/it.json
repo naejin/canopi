@@ -924,11 +924,8 @@
     "preparing": "Preparazione delle pagine…",
     "saved": "PDF salvato.",
     "downloaded": "Download del PDF richiesto.",
-    "ambiguous": "Alcune specie hanno lo stesso simbolo e colore. Modifica il progetto per distinguerle o esporta così com’è.",
     "empty": "Nessun contenuto stampabile. Scegli i livelli o aggiungi un’area di stampa.",
     "layers": "Livelli da stampare",
-    "continued": "Continua",
-    "legendFor": "Elenco delle piante della pagina",
     "pageCount": "Pagina {{page}} di {{count}}",
     "areaName": "Area di stampa {{number}}",
     "errors": {
@@ -939,7 +936,7 @@
       "text-too-wide": "Parte del testo non entra a una dimensione leggibile. Modifica il testo nel progetto e riprova.",
       "delivery-failed": "Impossibile salvare il PDF. Prova a salvarlo di nuovo.",
       "selection-missing": "Alcuni livelli selezionati non esistono più. Controlla i livelli di stampa prima di esportare.",
-      "coverage-too-large": "La selezione supera il limite di 200 pagine. Seleziona meno aree o riduci le pagine di continuazione della legenda.",
+      "coverage-too-large": "Questa configurazione supera il limite di 200 pagine. Stampa meno aree o livelli.",
       "invalid-page-view": "Scegli uno zoom e un orientamento validi per questa pagina."
     },
     "canvasZoom": "Zoom della tavola (%)",
@@ -957,14 +954,11 @@
     "zoomOut": "Riduci",
     "pages": "Pagine",
     "removePage": "Rimuovi pagina",
-    "addLegendPages": "Aggiungi pagine di legenda",
-    "removeLegendPages": "Rimuovi pagine di legenda",
-    "legendNeedsPages": "L’elenco delle piante richiede più spazio. Aggiungi pagine di legenda collegate per includere tutte le piante.",
     "retry": "Riprova",
     "cancel": "Annulla",
-    "textNeedsDetail": "{{count}} testi richiedono uno spazio leggibile per la stampa. Aggiungi una pagina di dettaglio mirata o mantienili nella panoramica.",
-    "keepText": "Mantieni testi nella panoramica",
-    "addDetail": "Aggiungi pagina di dettaglio"
+    "notes": "Note e misure",
+    "observations": "Osservazioni sul campo",
+    "keyAndNotes": "Legenda e note"
   },
   "speciesKey": {
     "title": "Legenda delle specie",

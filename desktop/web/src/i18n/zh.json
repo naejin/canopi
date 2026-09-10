@@ -924,11 +924,8 @@
     "preparing": "正在准备页面…",
     "saved": "PDF 已保存。",
     "downloaded": "已请求下载 PDF。",
-    "ambiguous": "某些物种使用相同的符号和颜色。您可以返回设计中修改以区分它们，也可以按当前样式导出。",
     "empty": "没有可打印的内容。请选择图层或添加打印区域。",
     "layers": "打印图层",
-    "continued": "续页",
-    "legendFor": "植物列表对应页面",
     "pageCount": "第 {{page}} 页，共 {{count}} 页",
     "areaName": "打印区域 {{number}}",
     "errors": {
@@ -939,7 +936,7 @@
       "text-too-wide": "某些文本无法以可读字号放入页面。请在设计中修改文本后重试。",
       "delivery-failed": "无法保存 PDF，请重试保存。",
       "selection-missing": "部分所选图层已不存在。请检查打印图层后再导出。",
-      "coverage-too-large": "当前设置超过了200页的限制。请选择更少的区域或减少图例续页数量。",
+      "coverage-too-large": "此设置超过200页上限。请减少打印区域或图层。",
       "invalid-page-view": "请为此页面选择有效的缩放值和方向。"
     },
     "canvasZoom": "画布缩放 (%)",
@@ -957,14 +954,11 @@
     "zoomOut": "缩小",
     "pages": "页面",
     "removePage": "移除页面",
-    "addLegendPages": "添加图例页",
-    "removeLegendPages": "移除图例页",
-    "legendNeedsPages": "植物列表需要更多空间。添加关联的图例页以包含所有植物。",
     "retry": "重试",
     "cancel": "取消",
-    "textNeedsDetail": "{{count}} 项文字需要清晰的打印位置。请添加相应的详图页，或将文字保留在总览页。",
-    "keepText": "在总览页保留文字",
-    "addDetail": "添加详图页"
+    "notes": "备注与尺寸",
+    "observations": "实地观察",
+    "keyAndNotes": "索引和备注"
   },
   "speciesKey": {
     "title": "物种图例",

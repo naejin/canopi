@@ -41,7 +41,6 @@
 .pageCaption > :first-child { color: var(--color-text-muted); }
 .workspace .removePage { position: absolute; top: var(--space-3); right: var(--space-3); min-height: var(--control-size-sm); width: var(--control-size-sm); padding: 0; }
 .pageRail .legendPages { margin: var(--space-2) 0 0 var(--space-4); border-left: 1px solid var(--color-border-strong); padding-left: var(--space-2); }
-.workspace .legendAction { font-size: var(--text-xs); }
 .workspace .addPage { border-style: dashed; }
 .layerControl { position: relative; }
 .layerPopover { position: absolute; z-index: 1; top: 100%; right: 0; width: var(--panel-width); box-sizing: border-box; padding: var(--space-3); margin: var(--space-2) 0 0; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface); }

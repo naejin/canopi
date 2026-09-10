@@ -39,13 +39,9 @@ async def main():
             await (await chooser.value).set_files({'name': 'garden.canopi', 'mimeType': 'application/json', 'buffer': json.dumps(design()).encode()})
             await page.get_by_role('button', name='File', exact=True).click()
             await page.get_by_text('Export to PDF', exact=True).click()
-            consent = page.get_by_role('button', name='Add legend pages', exact=True)
-            withdraw = page.get_by_role('button', name='Remove legend pages', exact=True)
             save = page.get_by_role('button', name='Save PDF', exact=True)
-            await expect(consent).to_be_visible(timeout=30_000)
-            await expect(save).to_be_disabled()
-            await consent.click()
             await expect(save).to_be_enabled(timeout=30_000)
+            await expect(page.get_by_role('button', name='Add legend pages', exact=True)).to_have_count(0)
             for number in range(2):
                 async with page.expect_download() as download:
                     await save.click()
@@ -54,9 +50,7 @@ async def main():
             await page.get_by_role('dialog').get_by_role('button', name='← Back to design', exact=True).click()
             await page.get_by_role('button', name='File', exact=True).click()
             await page.get_by_text('Export to PDF', exact=True).click()
-            await expect(withdraw).to_be_visible(timeout=30_000)
-            await withdraw.click()
-            await expect(save).to_be_disabled()
+            await expect(save).to_be_enabled(timeout=30_000)
             # Exercise the workspace through public UI and SVG coordinates.
             await page.get_by_role('button', name='Add page', exact=True).click()
             editor = page.locator('[data-pdf-editor]')
@@ -101,7 +95,7 @@ async def main():
             await page.get_by_role('button', name='Remove page: Print area 1', exact=True).click()
             await expect(page.get_by_role('button', name='View page: Overview', exact=True)).to_have_attribute('aria-current', 'page')
             report = {'browser': args.browser, 'version': browser.version, 'userAgent': await page.evaluate('navigator.userAgent'),
-                      'fileImport': True, 'explicitContinuationChoice': True, 'repeatedDownloads': 2, 'retainedSetup': True, 'drawnPage': True, 'zoomThenOrientation': True,
+                      'fileImport': True, 'automaticKeyPagination': True, 'repeatedDownloads': 2, 'retainedSetup': True, 'drawnPage': True, 'zoomThenOrientation': True,
                       'keyboardFraming': True, 'temporaryInspection': True, 'overviewNavigation': True, 'compactWorkspace': True, 'pageRemoval': True}
             (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
             print(json.dumps(report))

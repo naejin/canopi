@@ -19,6 +19,14 @@ export function PdfPageRail({ plan, setup, selected, disabled, onSelect, onRemov
       <span className={styles.pageCaption}><span>{page?.number ?? '·'}</span><span>{name}</span></span>
     </button>
   }
+  function keyPages(sourceId: string) {
+    const pages = plan?.pages.filter(page => page.sourceId === sourceId) ?? []
+    if (!pages.length) return null
+    const source = plan!.pages.find(page => page.id === sourceId)!
+    return <ol className={styles.legendPages}>{pages.map(page => <li key={page.id}>
+      {pageButton(page.id, `${source.number} · ${t('pdf.keyAndNotes')} · ${t('pdf.pageLabel')} ${page.number}`)}
+    </li>)}</ol>
+  }
   return <nav ref={root} className={styles.pageRail} aria-label={t('pdf.pages')}>
     <ol>{groups.map((group) => <li key={group.id} onPointerEnter={() => onHover(group.id)} onPointerLeave={() => onHover(null)}
       onFocusIn={() => onHover(group.id)} onFocusOut={() => onHover(null)}>
@@ -27,12 +35,8 @@ export function PdfPageRail({ plan, setup, selected, disabled, onSelect, onRemov
         {group.id !== 'overview' && <button type="button" disabled={disabled} className={styles.removePage}
           aria-label={`${t('pdf.removePage')}: ${group.name}`} onClick={() => onRemove(group.id)}>×</button>}
       </div>
-      {!!plan?.pages.some((page) => page.sourceId === group.id) && <ol className={styles.legendPages}>
-        {plan.pages.filter((page) => page.sourceId === group.id).map((page) => <li key={page.id}>
-          {pageButton(page.id, `${t('pdf.legendFor')} ${plan.pages.find((source) => source.id === group.id)?.number} · ${t('pdf.pageLabel')} ${page.number}`)}
-        </li>)}
-      </ol>}
-    </li>)}</ol>
+      {(group.id !== 'overview' || groups.length === 1) && keyPages(group.id)}
+    </li>)}{groups.length > 1 && !!plan?.pages.some(page => page.sourceId === 'overview') && <li>{keyPages('overview')}</li>}</ol>
   </nav>
 }
 function Thumbnail({ page, plan }: { readonly page: PdfPage; readonly plan: PdfPlan }) {

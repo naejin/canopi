@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 
-it('offers a detail page or explicit text retention before exporting a crowded overview', async () => {
+it('exports coincident notes with automatic keys and no readability confirmation', async () => {
   const container = document.createElement('div'); document.body.append(container)
   const canvas = { layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
     annotations: ['Water weekly', 'Protect from wind'].map((text, i) => ({ id: String(i), text, position: { x: 0, y: 0 }, fontSize: 14, rotation: 0 })) }
@@ -18,22 +18,18 @@ it('offers a detail page or explicit text retention before exporting a crowded o
       const plan = buildPdfPlan(input, setup, text, labels)
       return { plan, bytes: plan.blocked ? null : new Uint8Array([1]) }
     }, resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
-    labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Legend for' }),
+    labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }),
     namePrintArea: number => `Area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
     const button = (name: string) => Array.from(container.querySelectorAll('button')).find(node => node.textContent === name || node.getAttribute('aria-label') === name)!
-    expect(button('Save PDF').disabled).toBe(true)
-    expect(button('Add detail page')).toBeDefined()
-    expect(button('Keep text on overview')).toBeDefined()
-    await act(async () => button('Add detail page').click())
-    expect(container.querySelector('input[type="search"]')).toBeNull()
-    expect(container.querySelector('#pdf-editor-hint')!.textContent).toBe('Drag a rectangle around the area to print.')
-    await act(async () => button('Keep text on overview').click())
-    expect(workflow.state.value.result?.plan.blocked).toBeNull()
     expect(button('Save PDF').disabled).toBe(false)
+    expect(button('Add detail page')).toBeUndefined()
+    expect(button('Keep text on overview')).toBeUndefined()
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(workflow.state.value.result!.plan.pages.some(page => page.kind === 'legend')).toBe(true)
     await act(async () => { workflow.close(); workflow.show() })
-    expect(workflow.setup.value.retainedTextKeys).toHaveLength(2)
+    expect(button('Save PDF').disabled).toBe(false)
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
 
@@ -65,7 +61,7 @@ it('offers only printable layers and sends checkbox changes to the export setup'
   const canvas = { layers: [{ name: 'plants', visible: true, opacity: 1 }, { name: 'annotations', visible: false, opacity: 1 }, { name: 'base', visible: true, opacity: 1 }], plants: [], zones: [], annotations: [], measurements: [] }
   const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true,
     input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }), prepare, resolveNames: async () => ({}),
-    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
+    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
     await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Print layers"]')!.click() })
@@ -79,32 +75,6 @@ it('offers only printable layers and sends checkbox changes to the export setup'
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
 
-it('offers explicit continuation consent and retains the choice through preview closure', async () => {
-  const container = document.createElement('div'); document.body.append(container)
-  const canvas = { layers: [], plants: [], zones: [], annotations: [], measurements: [] }
-  const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true,
-    input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
-    prepare: async ({ setup }) => ({ bytes: setup.continuations ? new Uint8Array([1]) : null,
-      plan: { pages: [], outlines: {}, hasLegendOverflow: true, blocked: setup.continuations ? null : 'legend-overflow' } }),
-    resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
-    labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }),
-    namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
-  try {
-    await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
-    const button = (name: string) => Array.from(container.querySelectorAll('button')).find((node) => node.getAttribute('aria-label') === name || node.textContent === name)!
-    expect(button('Add legend pages')).toBeDefined()
-    expect(button('Save PDF').disabled).toBe(true)
-    await act(async () => { button('Add legend pages').click() })
-    expect(workflow.setup.value.continuations).toBe(true)
-    expect(button('Save PDF').disabled).toBe(false)
-    await act(async () => { workflow.close() })
-    await act(async () => { workflow.show() })
-    expect(button('Remove legend pages')).toBeDefined()
-    await act(async () => { button('Remove legend pages').click() })
-    expect(button('Save PDF').disabled).toBe(true)
-  } finally { render(null, container); workflow.dispose(); container.remove() }
-})
-
 it('creates detail pages only by drawing and edits their zoom and orientation independently', async () => {
   const container = document.createElement('div'); document.body.append(container)
   const canvas = { layers: [{ name: 'zones', visible: true, opacity: 1 }], plants: [], annotations: [], measurements: [], zones: [
@@ -115,7 +85,7 @@ it('creates detail pages only by drawing and edits their zoom and orientation in
   const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
     prepare: async ({ input, setup, labels }) => ({ bytes: new Uint8Array([1]), plan: buildPdfPlan(input, setup, text, labels) }),
     resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
-    labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }),
+    labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }),
     namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   const button = (name: string) => Array.from(container.querySelectorAll('button')).find((node) => node.getAttribute('aria-label') === name || node.textContent === name)!
   const zoom = () => container.querySelector<HTMLInputElement>('input[type="number"]')!
@@ -191,15 +161,15 @@ it('returns to the source page when refreshed content no longer needs the select
   const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
     prepare: async ({ input, setup, labels }) => ({ bytes: new Uint8Array([1]), plan: buildPdfPlan(input, setup, text, labels) }),
     resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
-    labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }),
+    labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }),
     namePrintArea: (number) => 'Print area ' + number, fontBaseUrl: () => '' })
   try {
     await act(async () => {
-      workflow.show(); workflow.configure({ continuations: true })
+      workflow.show()
       await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
       render(<CanvasPdfDialog workflow={workflow} />, container)
     })
-    const continuation = container.querySelector<HTMLButtonElement>('button[aria-label^="View page: Plant list for page"]')!
+    const continuation = container.querySelector<HTMLButtonElement>('button[aria-label^="View page: 1 · Key and notes"]')!
     expect(continuation).not.toBeNull()
     await act(async () => { continuation.click() })
     expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('2')

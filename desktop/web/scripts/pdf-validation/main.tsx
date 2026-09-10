@@ -1,29 +1,30 @@
 import { render } from 'preact'
 import { PdfPagePreview } from '../../src/components/canvas-pdf/PdfPagePreview'
 import { preparePdfJob } from '../../src/app/canvas-pdf/job'
-import type { PreparedPdf } from '../../src/app/canvas-pdf/types'
+import type { PdfInput, PdfSetup, PdfLabels, PreparedPdf } from '../../src/app/canvas-pdf/types'
 import { fixture, fixtureNames, type FixtureName } from './fixtures'
 
 let result: PreparedPdf | null = null
 let controller: AbortController | null = null
 const root = document.querySelector<HTMLDivElement>('#preview')!
 const reportElement = document.querySelector<HTMLPreElement>('#report')!
-async function run(name: FixtureName) {
+async function run(name: string, custom?: { input: PdfInput; setup: PdfSetup; labels: PdfLabels }) {
   controller?.abort(); render(null, root); result = null
   controller = new AbortController()
   performance.clearResourceTimings()
   const started = performance.now()
-  const input = fixture(name)
+  const input = custom ?? fixture(name as FixtureName)
   result = await preparePdfJob({ ...input, fontBaseUrl: new URL('./pdf-fonts/', location.href).href }, controller.signal)
   if (!result.bytes || result.plan.blocked) throw new Error(result.plan.blocked ?? 'Missing PDF')
   const generationMs = performance.now() - started
   const content = JSON.stringify(result.plan)
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content))
   const report = { fixture: name, pages: result.plan.pages.length, plants: input.input.canvas.plants.length,
-    bytes: result.bytes.byteLength, planBytes: new TextEncoder().encode(content).length, generationMs,
+    actualSizeLabel: input.labels.actualSize, bytes: result.bytes.byteLength, planBytes: new TextEncoder().encode(content).length, generationMs,
     planSha256: Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join(''),
     userAgent: navigator.userAgent, pageSizes: result.plan.pages.map((page) => [page.width, page.height]),
-    legends: result.plan.pages.map((page) => ({ number: page.number, kind: page.kind, sourceId: page.sourceId,
+    legends: result.plan.pages.map((page) => ({ number: page.number, kind: page.kind, sourceId: page.sourceId, id: page.id,
+      links: page.links, destinations: page.destinations, identifiedPlants: page.identifiedPlants,
       names: page.legend.map((entry) => entry.name), scale: page.pointsPerMeter })),
   }
   reportElement.textContent = JSON.stringify(report, null, 2)

@@ -34,6 +34,17 @@ class PreviewFilesTests(unittest.TestCase):
                 image.touch()
                 self.assertEqual(preview_files(pdf, pages), [(min(2, pages), image)])
 
+    def test_private_samples_require_every_page_preview(self):
+        with TemporaryDirectory() as directory:
+            pdf = Path(directory) / 'private.pdf'
+            expected = [(i, pdf.with_name(f'private-preview-{i}.png')) for i in range(1, 5)]
+            for _, path in expected:
+                path.touch()
+            self.assertEqual(preview_files(pdf, 4), expected)
+            expected[-1][1].unlink()
+            with self.assertRaisesRegex(AssertionError, 'Missing private preview'):
+                preview_files(pdf, 4)
+
 
 if __name__ == '__main__':
     unittest.main()

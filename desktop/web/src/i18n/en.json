@@ -924,11 +924,8 @@
     "preparing": "Preparing pages…",
     "saved": "PDF saved.",
     "downloaded": "PDF download requested.",
-    "ambiguous": "Some species share the same symbol and colour. You can edit the design to distinguish them, or export as shown.",
     "empty": "No printable content. Choose layers or add a print area.",
     "layers": "Print layers",
-    "continued": "Continued",
-    "legendFor": "Plant list for page",
     "pageCount": "Page {{page}} of {{count}}",
     "areaName": "Print area {{number}}",
     "errors": {
@@ -939,7 +936,7 @@
       "text-too-wide": "Some text cannot fit at a readable size. Edit the text in the design and try again.",
       "delivery-failed": "Could not save the PDF. Try saving again.",
       "selection-missing": "Some selected layers no longer exist. Review Print layers before exporting.",
-      "coverage-too-large": "This setup exceeds the 200-page limit. Select fewer areas or reduce the number of legend continuation pages.",
+      "coverage-too-large": "This setup exceeds the 200-page limit. Print fewer areas or layers.",
       "invalid-page-view": "Choose a valid zoom and orientation for this page."
     },
     "canvasZoom": "Canvas zoom (%)",
@@ -957,14 +954,11 @@
     "zoomOut": "Zoom out",
     "pages": "Pages",
     "removePage": "Remove page",
-    "addLegendPages": "Add legend pages",
-    "removeLegendPages": "Remove legend pages",
-    "legendNeedsPages": "The plant list needs more room. Add linked legend pages to include every plant.",
     "retry": "Try again",
     "cancel": "Cancel",
-    "textNeedsDetail": "{{count}} text items need a readable place to print. Add a focused detail page or keep them on the overview.",
-    "keepText": "Keep text on overview",
-    "addDetail": "Add detail page"
+    "notes": "Notes and measurements",
+    "observations": "Field observations",
+    "keyAndNotes": "Key and notes"
   },
   "speciesKey": {
     "title": "Species key",

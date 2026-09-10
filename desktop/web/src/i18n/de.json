@@ -924,11 +924,8 @@
     "preparing": "Seiten werden vorbereitet…",
     "saved": "PDF gespeichert.",
     "downloaded": "PDF-Download angefordert.",
-    "ambiguous": "Einige Arten haben dasselbe Symbol und dieselbe Farbe. Ändern Sie den Entwurf zur Unterscheidung oder exportieren Sie ihn wie dargestellt.",
     "empty": "Kein druckbarer Inhalt. Wählen Sie Ebenen oder fügen Sie einen Druckbereich hinzu.",
     "layers": "Druckebenen",
-    "continued": "Fortsetzung",
-    "legendFor": "Pflanzenliste für Seite",
     "pageCount": "Seite {{page}} von {{count}}",
     "areaName": "Druckbereich {{number}}",
     "errors": {
@@ -939,7 +936,7 @@
       "text-too-wide": "Einige Texte passen nicht in lesbarer Größe. Bearbeiten Sie den Text im Entwurf und versuchen Sie es erneut.",
       "delivery-failed": "Das PDF konnte nicht gespeichert werden. Versuche es erneut.",
       "selection-missing": "Einige ausgewählte Ebenen sind nicht mehr vorhanden. Prüfe die Druckebenen vor dem Export.",
-      "coverage-too-large": "Diese Auswahl überschreitet die Grenze von 200 Seiten. Wählen Sie weniger Bereiche oder reduzieren Sie die Legenden-Folgeseiten.",
+      "coverage-too-large": "Diese Konfiguration überschreitet 200 Seiten. Drucken Sie weniger Druckbereiche oder Ebenen.",
       "invalid-page-view": "Wählen Sie einen gültigen Zoom und eine gültige Ausrichtung für diese Seite."
     },
     "canvasZoom": "Zeichenflächenzoom (%)",
@@ -957,14 +954,11 @@
     "zoomOut": "Verkleinern",
     "pages": "Seiten",
     "removePage": "Seite entfernen",
-    "addLegendPages": "Legendenseiten hinzufügen",
-    "removeLegendPages": "Legendenseiten entfernen",
-    "legendNeedsPages": "Die Pflanzenliste braucht mehr Platz. Füge verknüpfte Legendenseiten hinzu, damit alle Pflanzen enthalten sind.",
     "retry": "Erneut versuchen",
     "cancel": "Abbrechen",
-    "textNeedsDetail": "{{count}} Texte benötigen einen lesbaren Druckbereich. Fügen Sie eine passende Detailseite hinzu oder behalten Sie die Texte in der Übersicht.",
-    "keepText": "Texte in der Übersicht behalten",
-    "addDetail": "Detailseite hinzufügen"
+    "notes": "Notizen und Maße",
+    "observations": "Beobachtungen vor Ort",
+    "keyAndNotes": "Legende und Notizen"
   },
   "speciesKey": {
     "title": "Artenschlüssel",

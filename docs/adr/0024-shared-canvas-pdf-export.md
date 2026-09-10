@@ -27,43 +27,40 @@ Design content, undo history, dirty state, save acknowledgement or persistent se
 
 ## Coverage and readability
 
-A4 and US Letter use a white print style independent of app theme. The overview
-fits selected printable content and all detail coverage, independently of interactive
-pan/zoom. Detail pages come only from drawn rectangular Print Areas. Each area fits
-completely on one page at its default zoom; automatic orientation maximizes the
-usable drawing scale beside the legend, with portrait for exact squares. This
-replaces fixed scale presets, forced tiling and Zone-based page creation: coverage
-should fit naturally and remain independent of changing Zone names or geometry.
+A4 and US Letter use a white print style independent of app theme. Each drawn Print
+Area fits its exact ground rectangle on one detail sheet at 100%, without widening
+coverage to the paper aspect ratio. Automatic orientation maximizes drawing scale;
+exact squares use portrait. Independent zoom/framing can crop; Fit restores complete
+coverage. Adding an area uses its own fitted overview, independent of printed framing.
+An explicitly drawn blank area is printable; an otherwise empty overview is not.
 
-Each canvas page has independent numeric zoom and framing; each page, including
-legend continuations, has an orientation override. Explicit zoom or movement may
-crop. Fit restores full coverage and centring. Adding a Print Area uses its own
-fitted overview without changing the printed overview's framing. Screen inspection
-never changes printed scale. Canvas pages carry a calibrated scale bar and an
-approximate ratio; the overview identifies detail coverage using final page numbers.
-An empty overview cannot export, but an explicitly drawn blank area can.
+The approved field layout assigns distinct roles to the pages. The overview shows
+the whole layout, final numbered detail outlines and a 50 mm calibration bar. Detail
+maps devote the sheet to planting positions, transparent identities and aligned
+measurements, with only a large source page number. Full-width keys and notes follow
+each detail automatically. There are no minimaps, running detail headers/footers,
+narrow legend sidebars, or consent gates for crowded text and overflowing legends.
 
-Automatic Detail adapts plant marks to physical planting spacing while preserving
-authored colours and symbol recipes. Detail pages retain full text. An overview
-may defer Annotation text, Pinned Plant Names and distances only when a detail page
-shows that text completely without collisions. Otherwise the user must add detail
-coverage or explicitly keep the crowded text. Retention applies to the reviewed
-content and placement, and must be reconsidered when either changes.
+Whole-Design numeric print references distinguish Species sharing an appearance.
+The existing Design letter code remains in the key and is never reassigned. Straight
+neighbouring planting runs may share brackets and counts; irregular placements stay
+individual, and long runs repeat references. Full common names appear on the map where
+they fit; complete common/canonical names, counts and all authored appearances remain
+in the key. Authored colours, symbols, opacity and plant positions are unchanged.
 
-A narrow, compact legend identifies the Species visible in each canvas page's final
-framing. An overview used alone has the same legend; with details it becomes a
-navigation sheet. Each Species shows one full name: selected-language Common Name,
-otherwise Canonical Name. Canonical Name remains identity when common names coincide.
-Every authored appearance is included. Samples sit beside the name when space permits,
-otherwise below it; fine separators group wrapped entries without shrinking text or
-widening the sidebar. No layout setting or per-Plant species codes are added.
+Measurement Guides preserve actual endpoint distance and alignment. Cropped guides
+retain full values in M entries and link to a complete detail when available. Numerical
+spacing notes stay by their anchor; other Annotation text moves to linked N entries.
+Coincident mixed placements use P location entries with complete membership. If a
+readable leader cannot be placed, coordinates and a digital location link retain the
+anchor. Uncovered overview notes and guides remain in an appendix. This preserves
+content without requiring the user to solve a label collision before exporting.
 
-Overflow blocks export until the user adjusts coverage or explicitly adds linked
-legend pages. Continuations preserve complete names and samples, inherit source
-orientation unless overridden, and participate in final page numbering. Different
-Species sharing an appearance trigger a non-blocking notice across the complete
-source legend. Canopi never substitutes symbols or colours, even only in the PDF;
-users can return to the Design to edit presentation themselves.
+Keys paginate at fixed readable type sizes with complete entry fragments across
+orientation overrides. Page numbers and named destinations resolve only after all
+pages exist. Screen inspection and PDF generation never modify the Design. The
+[implementation guide](../agent/canvas-pdf.md) records physical dimensions, spatial
+placement and engineering bounds; physical printer validation remains separate.
 
 ## Shared foundation
 

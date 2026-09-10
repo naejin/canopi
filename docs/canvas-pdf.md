@@ -14,12 +14,31 @@ Drag the drawing within the paper to adjust its printed position. With the paper
 
 **Automatic / Portrait / Landscape** applies to the selected page only, including legend pages. Changing orientation retains that page's zoom and manual displacement. **Inspect text** temporarily enlarges the paper on screen; scroll to read it, then choose **Done inspecting** or press Escape. Inspection never changes the printed scale.
 
-Detail pages have a narrow plant legend covering the plants visible in their current framing, using the current language's common name when available, otherwise the full botanical name. Compact rows put symbols beside their name when they fit, with subtle separators between species; longer names and additional symbols wrap without being shortened. An overview used alone also has a legend; with details, it becomes a navigation sheet. Plant marks adapt to nearby spacing on paper while retaining their authored symbols and colours. If several species share an appearance, the preview warns you; return to the Design to edit it or export as shown.
+Detail pages use almost the whole sheet for the Design, with just a large page number
+matching its outline on the overview. Each detail is followed by a complete **Key and
+notes** page; additional pages are added automatically when needed. There is no legend
+overflow or crowded-text confirmation before saving.
 
-The overview moves annotations, pinned plant names and distances to detail pages only when they fit there completely without collisions. When text has no readable detail home, choose **Add detail page** or **Keep text on overview** before saving. Full text remains visible while you decide. Moving or removing a detail page rechecks coverage; changing previously retained text or its placement may require a new choice. These print choices never edit your Design.
+Numeric references distinguish Species even when they share a symbol and colour.
+They stay consistent throughout the PDF. Straight runs can share a bracket, reference
+and plant count; long runs repeat the reference so it is easy to follow. Individual
+placements keep their own leaders. Names appear beside the drawing where space permits;
+the key always includes full common and botanical names, the Design's letter code,
+counts and every authored appearance. These print references do not change your Design.
 
-When a plant list needs more room, choose **Add legend pages**. The linked pages appear under their source thumbnail and preserve complete names and appearances. Export stays unavailable while a legend overflows. **Remove legend pages** withdraws that consent for the current setup; adjust the framing or accept continuations again before exporting if they are still needed.
+Aligned Measurement Guides show actual endpoint distances. A guide cut by the page
+edge keeps its full value in an M entry; an arrow points to another detail showing its
+complete length when available. Numerical spacing notes remain beside their anchor.
+Other notes use N references and complete text in the following key. Coincident mixed
+plants use a P location entry listing their Species and counts. Exceptionally crowded
+anchors retain coordinates in the key. PDF links connect entries to their map location.
+
+With detail pages, the overview stays focused on the whole Design and its numbered
+frames. Notes and measurements outside your detail areas are retained in an appendix.
+An overview used alone has plant references and a complete key of its own. Plant marks
+adapt to nearby spacing while retaining authored colours and symbols. Tiny marks become
+solid position dots. Spare key-page space provides lines for field observations.
 
 Choose **Back to design** to edit, then reopen Export to PDF to keep the current session's print choices. Open previews refresh automatically when source content changes. Print Areas keep their chosen bounds even if Zones are renamed, resized or removed. If a selected print Layer no longer exists, review **Print layers** before exporting. Opening another Design discards the old print setup. Generating or saving a PDF never changes the Design or marks it saved.
 
-Print at **100% / actual size**. Disable the printer dialog's fit-to-page scaling. The calibration bar measures 50 mm on every canvas page; its distance label states the corresponding ground distance. Each page has its own fitted physical scale; the displayed ratio is approximate. Canvas zoom and screen inspection are separate from the printer's 100% setting. Physical defaults still await the recorded [paper and field review](canvas-pdf-validation.md).
+Print at **100% / actual size**. Disable the printer dialog's fit-to-page scaling. The calibration bar on the overview measures 50 mm; its distance label states the corresponding ground distance. Each page has its own fitted physical scale; the displayed ratio is approximate. Canvas zoom and screen inspection are separate from the printer's 100% setting. See the [validation record](canvas-pdf-validation.md) for screen checks and the scope of physical testing.

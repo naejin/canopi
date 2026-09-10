@@ -2,7 +2,7 @@ import { create, type Font } from 'fontkit'
 import assets from './font-assets.json'
 import { textGraphemes } from '../../utils/text-graphemes'
 
-export type PdfFontId = 'latin' | 'sc' | 'jp' | 'kr'
+export type PdfFontId = 'latin' | 'strong' | 'sc' | 'jp' | 'kr'
 export interface TextRun {
   readonly text: string
   readonly font: PdfFontId
@@ -18,8 +18,8 @@ export interface TextLine {
 export interface GlyphOutline { readonly path: string; readonly unitsPerEm: number }
 export interface PdfTextEngine {
   readonly outlines: Record<string, GlyphOutline>
-  line(text: string, size: number): TextLine
-  wrap(text: string, size: number, width: number): TextLine[]
+  line(text: string, size: number, strong?: boolean): TextLine
+  wrap(text: string, size: number, width: number, strong?: boolean): TextLine[]
 }
 export class PdfTextError extends Error {
   constructor(readonly kind: 'unsupported-text' | 'text-too-wide', readonly character?: string) { super(kind) }
@@ -42,6 +42,7 @@ export async function loadPdfFonts(texts: readonly string[], locale: string, bas
     } finally { clearTimeout(timer) }
   }
   const latin = await load('latin')
+  await load('strong')
   const needed = new Set<PdfFontId>()
   for (const text of texts) {
     for (const char of text.replace(/[\n\r\t]/g, '')) {
@@ -63,15 +64,15 @@ export function createPdfTextEngine(bytes: ReadonlyMap<PdfFontId, Uint8Array>, l
   const outlines: Record<string, GlyphOutline> = {}
   const latin = fonts.get('latin')!
   const cache = new Map<string, TextLine>()
-  function line(raw: string, size: number): TextLine {
+  function line(raw: string, size: number, strong = false): TextLine {
     const text = raw.normalize('NFC').replace(/\t/g, '    ')
-    const key = `${size}:${text}`
+    const key = `${strong}:${size}:${text}`
     const previous = cache.get(key)
     if (previous) return previous
     const parts: { font: PdfFontId; text: string }[] = []
     for (const char of text) {
       const code = char.codePointAt(0)!
-      const id: PdfFontId = latin.hasGlyphForCodePoint(code) ? 'latin' : regionalFont(char, locale)
+      const id: PdfFontId = latin.hasGlyphForCodePoint(code) ? strong && fonts.has('strong') ? 'strong' : 'latin' : regionalFont(char, locale)
       const font = fonts.get(id)
       if (!font?.hasGlyphForCodePoint(code)) throw new PdfTextError('unsupported-text', char)
       const last = parts[parts.length - 1]
@@ -106,26 +107,26 @@ export function createPdfTextEngine(bytes: ReadonlyMap<PdfFontId, Uint8Array>, l
     cache.set(key, result)
     return result
   }
-  function wrap(text: string, size: number, width: number): TextLine[] {
+  function wrap(text: string, size: number, width: number, strong?: boolean): TextLine[] {
     const result: TextLine[] = []
     for (const paragraph of text.replace(/\r\n?/g, '\n').split('\n')) {
       let current = ''
       // Prefer word boundaries; long words/CJK can break between complete graphemes.
       for (const word of paragraph.split(/(\s+)/u).filter(Boolean)) {
-        if (line(current + word, size).width <= width) { current += word; continue }
-        if (current.trim()) { result.push(line(current.trimEnd(), size)); current = '' }
+        if (line(current + word, size, strong).width <= width) { current += word; continue }
+        if (current.trim()) { result.push(line(current.trimEnd(), size, strong)); current = '' }
         if (!word.trim()) continue
-        if (line(word, size).width <= width) { current = word; continue }
+        if (line(word, size, strong).width <= width) { current = word; continue }
         for (const cluster of textGraphemes(word)) {
-          if (line(current + cluster, size).width > width) {
+          if (line(current + cluster, size, strong).width > width) {
             if (!current) throw new PdfTextError('text-too-wide')
-            result.push(line(current, size)); current = ''
-            if (line(cluster, size).width > width) throw new PdfTextError('text-too-wide')
+            result.push(line(current, size, strong)); current = ''
+            if (line(cluster, size, strong).width > width) throw new PdfTextError('text-too-wide')
           }
           current += cluster
         }
       }
-      result.push(line(current.trimEnd(), size))
+      result.push(line(current.trimEnd(), size, strong))
     }
     return result
   }

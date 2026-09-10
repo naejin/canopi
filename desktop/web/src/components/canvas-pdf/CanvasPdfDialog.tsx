@@ -86,12 +86,10 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
               onClick={beginAdd}>+ {t('pdf.addPage')}</button>}
           <PdfPageRail plan={plan} setup={setup} selected={pageId} disabled={delivering} onSelect={selectPage}
             onHover={setHoveredPage} onRemove={(id) => { workflow.removeArea(id); if (pageId === id || page?.sourceId === id) selectPage('overview') }} />
-          {setup.continuations && <button type="button" disabled={delivering} className={styles.legendAction}
-            onClick={() => { if (page?.kind === 'legend') selectPage(page.sourceId!); workflow.configure({ continuations: false }) }}>{t('pdf.removeLegendPages')}</button>}
         </aside>
         <main className={styles.preview}>
           <div className={styles.previewHeading}>
-            <strong>{adding ? t('pdf.addPage') : page?.areaName ?? (page?.kind === 'legend' ? t('pdf.legendFor') + ' ' + plan?.pages.find((source) => source.id === page.sourceId)?.number : t('pdf.overview'))}</strong>
+            <strong>{adding ? t('pdf.addPage') : page?.areaName ?? (page?.kind === 'legend' ? plan?.pages.find((source) => source.id === page.sourceId)?.number + ' · ' + t('pdf.keyAndNotes') : t('pdf.overview'))}</strong>
             <span role="status">{preparing ? t('pdf.preparing') : page ? t('pdf.pageCount', { page: page.number, count: plan!.pages.length }) : ''}</span>
           </div>
           {page && !adding && <PdfPageToolbar key={page.id} page={page} workflow={workflow} disabled={delivering} inspecting={inspecting} onInspect={() => setInspecting(!inspecting)} />}
@@ -108,15 +106,6 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
           {state.error && <div role="alert" className={styles.notice}><span>{t(`pdf.errors.${state.error}`)}</span>
             {state.error !== 'selection-missing' && <button type="button" disabled={delivering} onClick={() => void (state.error === 'delivery-failed' ? workflow.save() : workflow.rebuild())}>{t('pdf.retry')}</button>}</div>}
           {plan?.blocked === 'empty' && <p role="status" className={styles.notice}>{t('pdf.empty')}</p>}
-          {!!plan?.textIssues?.length && <div role="alert" className={styles.notice}>
-            <span>{t('pdf.textNeedsDetail', { count: plan.textIssues.length })}</span>
-            <button type="button" disabled={disabled} onClick={beginAdd}>{t('pdf.addDetail')}</button>
-            <button type="button" disabled={disabled} onClick={() => { selectPage('overview'); workflow.retainCrowdedText() }}>{t('pdf.keepText')}</button>
-          </div>}
-          {plan?.blocked === 'legend-overflow' && <div role="alert" className={styles.notice}>
-            <span>{t('pdf.legendNeedsPages')}</span><button type="button" disabled={disabled} onClick={() => workflow.configure({ continuations: true })}>{t('pdf.addLegendPages')}</button>
-          </div>}
-          {page && page.ambiguousSpecies.length > 0 && <p className={styles.notice}>{t('pdf.ambiguous')}</p>}
         </main>
       </div>
       <footer className={styles.footer}>

@@ -18,29 +18,23 @@ function fixture(plants: PrintPlant[] = []) {
     const canvas = currentCanvas
     return { ...capture, input: { ...capture.input, canvas }, isCurrent: () => current && canvas === currentCanvas }
   }, prepare, resolveNames,
-    delivery: { save, dispose: vi.fn() }, labels: () => ({ overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
+    delivery: { save, dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
   return { workflow, prepare, save, resolveNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
-  it('accepts text retention only from a current prepared result and clears it on replacement', async () => {
-    vi.useFakeTimers()
-    const { workflow, capture, setCanvas, prepare, replace } = fixture()
-    prepare.mockResolvedValue({ bytes: null, plan: { pages: [], outlines: {}, blocked: 'text-needs-detail',
-      textIssues: [{ key: 'reviewed text', kind: 'annotation' }] } })
+  it('exports automatically prepared pages and clears temporary choices on Design replacement', async () => {
+    const { workflow, save, replace } = fixture()
     try {
-      workflow.show(); await Promise.resolve()
-      setCanvas({ ...capture.input.canvas })
-      workflow.retainCrowdedText()
-      expect(workflow.setup.value.retainedTextKeys).toBeUndefined()
-      workflow.synchronize(capture.identity)
-      workflow.retainCrowdedText()
-      expect(workflow.setup.value.retainedTextKeys).toBeUndefined()
-      await vi.advanceTimersByTimeAsync(150)
-      workflow.retainCrowdedText()
-      expect(workflow.setup.value.retainedTextKeys).toEqual(['reviewed text'])
+      workflow.show()
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      workflow.addPrintArea({ x: 0, y: 0, width: 5, height: 5 })
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      await workflow.save()
+      expect(save).toHaveBeenCalledOnce()
       replace()
-      expect(workflow.setup.value.retainedTextKeys).toBeUndefined()
-    } finally { workflow.dispose(); vi.useRealTimers() }
+      expect(workflow.setup.value.areas).toBeUndefined()
+      expect(workflow.state.value.result).toBeNull()
+    } finally { workflow.dispose() }
   })
   it('refreshes changed content automatically, coalesces revisions, and cancels refresh on close', async () => {
     vi.useFakeTimers()

@@ -8,7 +8,7 @@ it('maps a drag through fitted-page whitespace into ground coordinates and cance
   const container = document.createElement('div'); document.body.append(container)
   const page: PdfPage = { id: 'overview', kind: 'overview', number: 1, width: 200, height: 100,
     frame: { x: 20, y: 10, width: 160, height: 80 }, ground: { x: 100, y: 200, width: 16, height: 8 },
-    pointsPerMeter: 10, operations: [], legend: [], ambiguousSpecies: [], overflow: false }
+    pointsPerMeter: 10, operations: [], legend: [] }
   const onPrintArea = vi.fn()
   try {
     await act(async () => { render(<PdfPageEditor page={page} plan={{ pages: [page], outlines: {}, blocked: null }} adding onPrintArea={onPrintArea} />, container) })
@@ -43,7 +43,7 @@ it('commits framing once, cancels lost capture and Escape, and ignores clicks wh
   const container = document.createElement('div'); document.body.append(container)
   const page: PdfPage = { id: 'overview', kind: 'overview', number: 1, width: 200, height: 100,
     frame: { x: 20, y: 10, width: 160, height: 80 }, ground: { x: 100, y: 200, width: 16, height: 8 },
-    pointsPerMeter: 10, operations: [], legend: [], ambiguousSpecies: [], overflow: false }
+    pointsPerMeter: 10, operations: [], legend: [] }
   const onMove = vi.fn(), onPrintArea = vi.fn()
   const plan = { pages: [page], outlines: {}, blocked: null }
   try {

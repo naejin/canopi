@@ -1,64 +1,22 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import { drawSpeciesCodes } from '../app/canvas-pdf/species-codes'
-import { identifyPlants } from '../app/canvas-pdf/page-drawing'
+import { expect, it } from 'vitest'
+import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import type { PdfInput, PdfOperation } from '../app/canvas-pdf/types'
-
-const fonts = new Map<PdfFontId, Uint8Array>([
-  ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')],
-])
-const input: PdfInput = {
-  name: 'Garden',
-  locale: 'en',
-  commonNames: { 'Mentha spicata': 'Mint' },
-  canvas: {
-    layers: [{ name: 'plants', visible: true, opacity: 0.5 }],
-    zones: [],
-    annotations: [],
-    measurements: [],
-    plants: Array.from({ length: 10 }, (_, index) => ({
-      id: String(index),
-      canonicalName: 'Mentha spicata',
-      speciesCode: 'MSP',
-      position: { x: 5, y: 5 },
-      color: '#3E8E4E',
-      symbol: 'herb',
-      mark: [],
-      pinnedName: false,
-    })),
-  },
-}
-
-describe('printed Species key', () => {
-  it('uses the captured code alongside full species identity', () => {
-    expect(
-      identifyPlants(input.canvas.plants, input.commonNames, 'en'),
-    ).toEqual([
-      expect.objectContaining({
-        canonicalName: 'Mentha spicata',
-        name: 'Mint',
-        code: 'MSP',
-      }),
-    ])
-  })
-  it('prints a single readable code for coincident plants and respects layer opacity', () => {
-    const operations: PdfOperation[] = []
-    drawSpeciesCodes(
-      input,
-      { x: 0, y: 0, width: 300, height: 300 },
-      { x: 0, y: 0, width: 30, height: 30 },
-      10,
-      createPdfTextEngine(fonts, 'en'),
-      operations,
-      [],
-    )
-    expect(operations).toHaveLength(1)
-    expect(operations[0]).toMatchObject({ kind: 'text', opacity: 0.5 })
-    expect(
-      operations.flatMap((op) =>
-        op.kind === 'text' ? op.line.runs.map((run) => run.text) : [],
-      ),
-    ).toEqual(['MSP'])
-  })
+import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
+const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
+it('keeps numeric paper references consistent across frames, locale and layers without changing reserved Design codes', () => {
+  const input: PdfInput = { name: 'Garden', locale: 'en', commonNames: {}, canvas: { layers: [{ name: 'plants', visible: true, opacity: 1 }], annotations: [], measurements: [], zones: [],
+    plants: ['Same appearance A', 'Same appearance B'].map((name, i) => ({ id: String(i), canonicalName: name, speciesCode: ['APPLE', 'MSP'][i]!,
+      position: { x: i * 10, y: 0 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false })) } }
+  const before = structuredClone(input)
+  const areas = [0, 10].map((x, i) => ({ id: String(i), name: 'Area', bounds: { x: x - 1, y: -1, width: 2, height: 2 } }))
+  const first = buildPdfPlan(input, { paper: 'A4', layers: ['plants'], areas }, text(), labels)
+  const second = buildPdfPlan({ ...input, locale: 'fr', commonNames: { 'Same appearance A': 'Z', 'Same appearance B': 'A' } },
+    { paper: 'Letter', layers: ['plants'], areas: areas.slice(1) }, text(), labels)
+  expect(first.pages.filter(p => p.kind === 'detail').map(p => p.legend[0]!.reference)).toEqual(['01', '02'])
+  expect(second.pages.find(p => p.kind === 'detail')!.legend[0]!.reference).toBe('02')
+  const keyText = first.pages.filter(p => p.kind === 'legend').flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])).join(' ')
+  expect(keyText).toContain('APPLE'); expect(keyText).toContain('MSP')
+  expect(input).toEqual(before)
 })

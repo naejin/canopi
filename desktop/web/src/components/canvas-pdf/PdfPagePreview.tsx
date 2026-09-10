@@ -40,7 +40,7 @@ export function PdfPageArtwork({ page, plan }: { readonly page: PdfPage; readonl
             return <path key={glyphIndex} d={outline.path} transform={`translate(${glyph.x} ${glyph.y}) scale(${scale} ${-scale})`} />
           })}</g>
         })
-        content.push(<g key={index} clip-path={clip}><g style={clip ? { transform: 'translate(var(--pdf-drag-x, 0px), var(--pdf-drag-y, 0px))' } : undefined}><g transform={`translate(${op.x} ${op.y}) rotate(${op.rotation})`} opacity={op.opacity} fill="#24211c">{runs}</g></g></g>)
+        content.push(<g key={index} clip-path={clip}><g style={clip ? { transform: 'translate(var(--pdf-drag-x, 0px), var(--pdf-drag-y, 0px))' } : undefined}><g transform={`translate(${op.x} ${op.y}) rotate(${op.rotation})`} opacity={op.opacity} fill={op.color ?? '#24211c'}>{runs}</g></g></g>)
       }
     }
     return <><defs>{clips}</defs><rect width={page.width} height={page.height} fill="#ffffff" />{content}</>

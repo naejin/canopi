@@ -1,10 +1,8 @@
 import type { PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
-import { PdfTextError, type PdfTextEngine, type TextLine } from './text'
+import { PdfTextError, type TextLine } from './text'
 import type { PdfInput, PdfLegendEntry, PdfOperation } from './types'
 
 import { MM, PRINT } from './print-style'
-import { paperPlantRadius } from './plant-marks'
-import { canvasText, type CanvasText } from './canvas-text'
 export { MM, PRINT } from './print-style'
 const IDENTITY = [1, 0, 0, 1, 0, 0] as const
 export function identifyPlants(plants: readonly PrintPlant[], names: Readonly<Record<string, string>>, locale: string): PdfLegendEntry[] {
@@ -20,39 +18,15 @@ export function identifyPlants(plants: readonly PrintPlant[], names: Readonly<Re
   const collator = new Intl.Collator(locale)
   return Array.from(bySpecies.values()).sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.canonicalName, b.canonicalName))
 }
-export function ambiguousSpecies(legend: readonly PdfLegendEntry[]): string[] {
-  const keys = new Map<string, Set<string>>()
-  for (const entry of legend) for (const appearance of entry.appearances) {
-    const key = `${appearance.symbol}:${appearance.color.toLowerCase()}`
-    const species = keys.get(key) ?? new Set<string>(); species.add(entry.canonicalName); keys.set(key, species)
-  }
-  const ambiguous = new Set(Array.from(keys.values()).filter((s) => s.size > 1).flatMap((s) => Array.from(s)))
-  return legend.filter((entry) => ambiguous.has(entry.canonicalName)).map((entry) => entry.canonicalName)
-}
-
 interface ExtentAnchor { point: PrintPoint; left: number; top: number; right: number; bottom: number }
-export function fitOverview(input: PdfInput, frame: PrintBounds, text: PdfTextEngine, coverage: readonly PrintBounds[] = []): { ground: PrintBounds; pointsPerMeter: number } {
+export function fitOverview(input: PdfInput, frame: PrintBounds, coverage: readonly PrintBounds[] = []): { ground: PrintBounds; pointsPerMeter: number } {
   const anchors: ExtentAnchor[] = []
   const at = (point: PrintPoint, left = 0, top = 0, right = 0, bottom = 0) => anchors.push({ point, left, top, right, bottom })
   for (const bounds of coverage) { at(bounds); at({ x: bounds.x + bounds.width, y: bounds.y + bounds.height }) }
   for (const zone of input.canvas.zones) { at(zone.bounds); at({ x: zone.bounds.x + zone.bounds.width, y: zone.bounds.y + zone.bounds.height }) }
-  for (const guide of input.canvas.measurements) { at(guide.start); at(guide.end); at({ x: (guide.start.x + guide.end.x) / 2, y: (guide.start.y + guide.end.y) / 2 }, 0, -PRINT.line, 70, 0) }
-  for (const plant of input.canvas.plants) {
-    at(plant.position, -PRINT.marker, -PRINT.marker, PRINT.marker, PRINT.marker)
-    if (plant.pinnedName) {
-      const lines = text.wrap(input.commonNames[plant.canonicalName]?.trim() || plant.canonicalName, PRINT.text, frame.width * .8)
-      const width = Math.max(...lines.map((l) => l.width))
-      at(plant.position, 0, 0, width, PRINT.marker + lines.length * PRINT.line)
-    }
-  }
-  for (const annotation of input.canvas.annotations) {
-    const size = Math.max(PRINT.text, annotation.fontSize * .75)
-    const lines = text.wrap(annotation.text, size, frame.width * .8)
-    const width = Math.max(0, ...lines.map((l) => l.width)), height = lines.length * size * 1.3
-    const a = annotation.rotation * Math.PI / 180
-    const corners = [[0, -size], [width, -size], [width, height - size], [0, height - size]].map(([x, y]) => [x! * Math.cos(a) - y! * Math.sin(a), x! * Math.sin(a) + y! * Math.cos(a)])
-    at(annotation.position, Math.min(...corners.map((p) => p[0]!)), Math.min(...corners.map((p) => p[1]!)), Math.max(...corners.map((p) => p[0]!)), Math.max(...corners.map((p) => p[1]!)))
-  }
+  for (const guide of input.canvas.measurements) { at(guide.start); at(guide.end) }
+  for (const plant of input.canvas.plants) at(plant.position, -PRINT.marker, -PRINT.marker, PRINT.marker, PRINT.marker)
+  for (const annotation of input.canvas.annotations) at(annotation.position)
   const projected = (scale: number): PrintBounds => {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     for (const item of anchors) {
@@ -74,29 +48,6 @@ export function fitOverview(input: PdfInput, frame: PrintBounds, text: PdfTextEn
     y: (bounds.y - (frame.height - bounds.height) / 2) / low, width: frame.width / low, height: frame.height / low } }
 }
 
-export function drawCanvas(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, text: PdfTextEngine, operations: PdfOperation[], labels: readonly CanvasText[] = canvasText(input, frame, ground, scale, text), deferred: ReadonlySet<string> = new Set()): void {
-  const point = (p: PrintPoint) => ({ x: frame.x + (p.x - ground.x) * scale, y: frame.y + (p.y - ground.y) * scale })
-  const opacity = (name: string) => input.canvas.layers.find((l) => l.name === name)?.opacity ?? 1
-  operations.push({ kind: 'clip', bounds: frame })
-  for (const zone of input.canvas.zones) {
-    operations.push({ kind: 'path', d: zone.path, matrix: [scale, 0, 0, scale, frame.x - ground.x * scale, frame.y - ground.y * scale],
-      fill: zone.fill, stroke: PRINT.ink, width: PRINT.stroke / scale, opacity: opacity('zones') })
-  }
-  for (const plant of input.canvas.plants) {
-    const p = point(plant.position)
-    drawMark(plant, p.x, p.y, paperPlantRadius(input.canvas.plants, plant, scale), opacity('plants'), operations)
-  }
-  for (const guide of input.canvas.measurements) {
-    const a = point(guide.start), b = point(guide.end)
-    operations.push({ ...pathOp(`M${a.x} ${a.y} L${b.x} ${b.y}`, PRINT.ink, null, PRINT.stroke), opacity: opacity('measurement-guides') })
-  }
-  for (const item of labels) {
-    if (!deferred.has(item.key)) operations.push(...item.operations)
-    else if (item.kind === 'annotation') operations.push(pathOp(rectPath({ x: item.anchor.x - MM / 2, y: item.anchor.y - MM / 2, width: MM, height: MM }), null, PRINT.ink, 0))
-  }
-  operations.push({ kind: 'unclip' })
-}
-
 export function drawMark(plant: PrintPlant, x: number, y: number, radius: number, opacity: number, operations: PdfOperation[]): void {
   if (radius < .8 * MM) {
     operations.push({ kind: 'path', d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z',
@@ -109,7 +60,7 @@ export function drawMark(plant: PrintPlant, x: number, y: number, radius: number
     fill: mark.fill ? plant.color : null, stroke: mark.stroke ? plant.color : null,
     width: Math.max(mark.strokeWidth, .12 * MM / radius), opacity })
 }
-export function textOp(line: TextLine, x: number, y: number, size: number, rotation = 0, opacity = 1): PdfOperation {
+export function textOp(line: TextLine, x: number, y: number, size: number, rotation = 0, opacity = 1): Extract<PdfOperation, { kind: 'text' }> {
   return { kind: 'text', line, x, y, size, rotation, opacity }
 }
 export function pathOp(d: string, stroke: string | null, fill: string | null, width = PRINT.stroke): Extract<PdfOperation, { kind: 'path' }> {

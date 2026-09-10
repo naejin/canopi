@@ -4,7 +4,7 @@ import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const labels: PdfLabels = { overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }
+const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size' }
 const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', fill: true, stroke: true, strokeWidth: .14 }]
 function input(): PdfInput {
   return { name: 'Field garden', locale: 'en', commonNames: { 'Malus domestica': 'Apple' }, canvas: {
@@ -37,15 +37,15 @@ describe('Canvas PDF page plan', () => {
   it('fits authored content on A4 with complete species identity, common-name fallback and every appearance', () => {
     const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'] }, text(), labels)
     expect(plan.blocked).toBeNull()
-    expect(plan.pages).toHaveLength(1)
+    expect(plan.pages).toHaveLength(2)
     const page = plan.pages[0]!
     expect(page.width).toBeCloseTo(595.27559, 4)
     expect(page.height).toBeCloseTo(841.88976, 4)
     expect(page.legend.map((entry) => entry.name)).toEqual(['Apple', 'Rosmarinus officinalis var. angustifolius'])
     expect(page.legend[0]!.appearances).toHaveLength(2)
-    expect(page.ambiguousSpecies).toEqual(['Malus domestica', 'Rosmarinus officinalis var. angustifolius'])
+    expect(new Set(page.legend.map(entry => entry.reference)).size).toBe(2)
     expect(page.ground.x).toBeLessThan(0)
     expect(page.ground.x + page.ground.width).toBeGreaterThan(30)
-    expect(page.operations.filter((op) => op.kind === 'text').flatMap((op) => op.line.runs.map((run) => run.text))).toContain('Apple')
+    expect(plan.pages.flatMap(page => page.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(run => run.text) : [])).join(' ')).toContain('Apple')
   })
 })

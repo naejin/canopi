@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels, PdfSetup } from '../app/canvas-pdf/types'
-const labels: PdfLabels = { overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size', page: 'Page', continued: 'Continued', legendFor: 'Plant list for page' }
+const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 function garden(): PdfInput {
   return { name: 'Garden', locale: 'en', commonNames: {}, canvas: {
@@ -32,7 +32,7 @@ describe('Fitted Print Area detail pages', () => {
   it('keeps the overview around detail coverage and updates only the visible species legend when zoom changes', () => {
     const plan = buildPdfPlan(garden(), { ...setup, views: { 'area:orchard': { zoom: 90 } } }, text(), labels)
     const [overview, page] = plan.pages
-    expect(plan.pages).toHaveLength(2)
+    expect(plan.pages).toHaveLength(3)
     expect(overview!.legend).toEqual([])
     expect(page!.legend.map((entry) => entry.name)).toEqual(['Nearby', 'Overlap'])
     expect(overview!.ground.x).toBeLessThan(page!.ground.x)
@@ -42,14 +42,14 @@ describe('Fitted Print Area detail pages', () => {
   })
   it('refits an individual Print Area when its orientation changes without changing the overview setting', () => {
     const plan = buildPdfPlan(garden(), { ...setup, views: { overview: { orientation: 'landscape' }, 'area:orchard': { orientation: 'portrait' } } }, text(), labels)
-    expect(plan.pages).toHaveLength(2)
+    expect(plan.pages).toHaveLength(3)
     expect(plan.pages[0]!.width).toBeGreaterThan(plan.pages[0]!.height)
     const page = plan.pages[1]!
     expect(page.width).toBeLessThan(page.height)
-    expect(page.ground.x).toBeLessThan(0)
-    expect(page.ground.x + page.ground.width).toBeGreaterThan(30)
-    expect(page.ground.y).toBeLessThan(0)
-    expect(page.ground.y + page.ground.height).toBeGreaterThan(20)
+    expect(page.ground.x).toBe(0)
+    expect(page.ground.x + page.ground.width).toBe(30)
+    expect(page.ground.y).toBe(0)
+    expect(page.ground.y + page.ground.height).toBe(20)
     expect(page.ground.width * page.pointsPerMeter).toBeCloseTo(page.frame.width, 8)
     expect(page.ground.height * page.pointsPerMeter).toBeCloseTo(page.frame.height, 8)
   })
