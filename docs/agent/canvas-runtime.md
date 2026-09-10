@@ -113,6 +113,8 @@ The [Canvas PDF guide](canvas-pdf.md) describes settled print capture and the re
 
 ## Rendering Ownership
 
+- [Canvas performance](canvas-performance.md) documents retained geometry, frame-coalesced scheduling, local benchmarks, and optional native renderer trace capture.
+
 - `renderers/capabilities.ts` probes each incompatible context type (`2d`, `webgl`, `webgl2`) on an independent HTMLCanvasElement or OffscreenCanvas: creating a context locks that canvas to its type. Capability regression tests must model that lock and exercise automatic RendererHost selection with the real backend support predicates; injected capability booleans alone cannot verify detection. Context/constructor failures remain unsupported capabilities so fallback can proceed.
 - `RendererHost` owns backend lifecycle, capability probing, fallback, and pending backend initialization cancellation. It publishes the shared initialization Promise before invoking backend code, admits exactly one active or pending initialization, and rejects repeated or callback-reentrant initialization until disposal; `run()` joins the one pending initialization instead of selecting a second backend. The render scheduler publishes its container only after that exact initialization succeeds. Concurrent operations that fail on the same active backend join one runtime failover, dispose that backend once, and share the selected successor. A default retried operation quarantines every backend on which it fails and continues through the supported candidates until one succeeds or exhaustion leaves no active backend; queued work must join an already-admitted failover rather than execute on its fenced predecessor. Backend-failure observers are telemetry only: report their exceptions, but never let them interrupt fencing, disposal, or successor selection. Every `run()` revalidates both lifecycle epoch and backend identity after awaiting initial acquisition or failover, before invoking caller code and again after caller completion; stale success or failure cannot escape, record failure against, or trigger fallback in a reinitialized lifecycle. Disposal invalidates its lifecycle epoch synchronously and permits a new initialization even while the obsolete backend finishes cleanup; a backend instance returned by the older initialization must dispose itself and may never become active, publish a backend change, or trigger fallback after teardown. Backend-change publication is part of initialization settlement: recheck lifecycle currency after the callback, and roll back the installed backend when the callback throws or reentrantly disposes the host. Fire-and-forget render-scheduler invalidation and resize paths must terminate expected lifecycle-cancellation rejections during teardown and report other renderer failures.
 - Renderers are projections of scene state, never the source of truth.
@@ -130,7 +132,7 @@ The [Canvas PDF guide](canvas-pdf.md) describes settled print capture and the re
 - Use viewport invalidation for pan, zoom, and fit operations.
 - Use chrome invalidation for rulers, grid, and guide-only changes.
 - Do not route viewport-only work through the full scene render path.
-- `renderScene()` is for scene/presentation/selection rebuilds; `setViewport()` is for camera-only updates.
+- `renderScene()` refreshes scene/presentation/selection; `setViewport()` is for camera-only updates. Both retain unchanged Pixi geometry. `resize()` only changes backing dimensions and must be followed by a scene or viewport render.
 
 ## Text Visibility And Zoom
 

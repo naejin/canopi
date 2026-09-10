@@ -3,6 +3,7 @@ import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 import { detectRendererCapabilities } from '../canvas/runtime/renderers/capabilities'
+import { LabelCollisionIndex } from '../canvas/label-collision'
 
 vi.mock('pixi.js', () => {
   const state = {
@@ -31,6 +32,7 @@ vi.mock('pixi.js', () => {
   }
 
   class MockGraphics {
+    position = { set: vi.fn() }
     visible = true
     alpha = 1
     clear = vi.fn(() => this)
@@ -96,6 +98,129 @@ vi.mock('pixi.js', () => {
 })
 
 describe('createPixiSceneRenderer', () => {
+  it('translates admitted names during pan without rebuilding collision layout', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { texts: Array<{ text: string; position: { set: ReturnType<typeof vi.fn> } }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    const add = vi.spyOn(LabelCollisionIndex.prototype, 'add')
+    try {
+      renderer.renderScene(createTestSceneRendererSnapshot({ scene: { plants: [createPlant({ position: { x: 1, y: 1 } })] }, viewport: { x: 0, y: 0, scale: 100 } }))
+      const text = pixi.__pixiMockState.texts.find(t => t.text === 'Apple')!
+      expect(text).toBeDefined()
+      const [x, y] = text.position.set.mock.calls.at(-1)!
+      add.mockClear()
+      renderer.setViewport({ x: 10, y: 20, scale: 100 })
+      expect(add).not.toHaveBeenCalled()
+      expect(text.position.set).toHaveBeenLastCalledWith(x + 10, y + 20)
+      renderer.setViewport({ x: 10, y: 20, scale: 110 })
+      expect(add).toHaveBeenCalled()
+    } finally {
+      add.mockRestore()
+      renderer.dispose()
+    }
+  })
+  it('keeps world geometry warm during pan and refreshes screen-weight strokes on zoom', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphics: Array<{ clear: ReturnType<typeof vi.fn> }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
+      zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0, fillColor: '#eeeeee', notes: null,
+        points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }] }],
+      measurementGuides: [{ kind: 'measurement-guide', id: 'guide', locked: false, start: { x: 0, y: 0 }, end: { x: 2, y: 0 } }],
+    }, viewport: { x: 0, y: 0, scale: 30 } }))
+    const graphics = pixi.__pixiMockState.graphics
+    graphics.forEach(g => g.clear.mockClear())
+    renderer.setViewport({ x: 10, y: 20, scale: 30 })
+    graphics.forEach(g => expect(g.clear).not.toHaveBeenCalled())
+    renderer.setViewport({ x: 10, y: 20, scale: 60 })
+    graphics.forEach(g => expect(g.clear).toHaveBeenCalledOnce())
+    renderer.dispose()
+  })
+  it('skips offscreen plant paths and restores them with current appearance on re-entry', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphics: Array<{ visible: boolean; clear: ReturnType<typeof vi.fn>; bezierCurveTo: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn> }> }
+    }
+    const container = document.createElement('div')
+    Object.defineProperties(container, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
+    const renderer = await createPixiSceneRenderer().initialize({ container }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
+      createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } }),
+    ] }, viewport: { x: 0, y: 0, scale: 30 } })
+    renderer.renderScene(snapshot)
+    const plant = pixi.__pixiMockState.graphics[0]!
+    plant.clear.mockClear()
+    renderer.setViewport({ x: 10000, y: 0, scale: 60 })
+    expect(plant.visible).toBe(false)
+    expect(plant.clear).not.toHaveBeenCalled()
+    renderer.renderScene({ ...snapshot, viewport: { x: 10000, y: 0, scale: 60 },
+      scene: { ...snapshot.scene, plants: snapshot.scene.plants.map(p => ({ ...p, color: '#ff0000' })) },
+    })
+    renderer.setViewport({ x: 0, y: 0, scale: 60 })
+    expect(plant.visible).toBe(true)
+    expect(plant.clear).toHaveBeenCalledOnce()
+    expect(plant.fill).toHaveBeenLastCalledWith(expect.objectContaining({ color: 0xff0000 }))
+    renderer.dispose()
+  })
+  it('retains annotation text style during pan and updates it after an authored font change', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { texts: Array<{ style: unknown }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { annotations: [{
+      kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
+      position: { x: 1, y: 1 }, text: 'Orchard', fontSize: 16, rotationDeg: 0,
+    }] }, viewport: { x: 0, y: 0, scale: 30 } })
+    renderer.renderScene(snapshot)
+    const text = pixi.__pixiMockState.texts[0]!
+    const style = text.style
+    renderer.setViewport({ x: 10, y: 20, scale: 30 })
+    expect(text.style).toBe(style)
+    renderer.renderScene({ ...snapshot, scene: { ...snapshot.scene,
+      annotations: snapshot.scene.annotations.map(a => ({ ...a, fontSize: 20 })),
+    } })
+    expect(text.style).not.toBe(style)
+    renderer.dispose()
+  })
+  it('reuses botanical geometry on pan and selection of another plant, but refreshes zoom and colour', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphics: Array<{ clear: ReturnType<typeof vi.fn>; position: { set: ReturnType<typeof vi.fn> }; bezierCurveTo: ReturnType<typeof vi.fn> }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
+      createPlant({ id: 'a', symbol: 'shrub', position: { x: 1, y: 1 } }),
+      createPlant({ id: 'b', symbol: 'shrub', position: { x: 5, y: 1 } }),
+    ] }, viewport: { x: 0, y: 0, scale: 30 } })
+    renderer.renderScene(snapshot)
+    const plant = pixi.__pixiMockState.graphics.find(g => g.bezierCurveTo.mock.calls.length)!
+    plant.clear.mockClear()
+    renderer.setViewport({ x: 10, y: 20, scale: 30 })
+    expect(plant.clear).not.toHaveBeenCalled()
+    expect(plant.position.set).toHaveBeenLastCalledWith(40, 50)
+    renderer.renderScene({ ...snapshot, selectedPlantIds: new Set(['b']) })
+    expect(plant.clear).not.toHaveBeenCalled()
+    renderer.setViewport({ x: 0, y: 0, scale: 60 })
+    expect(plant.clear).toHaveBeenCalledOnce()
+    renderer.renderScene({ ...snapshot, scene: { ...snapshot.scene, plants: snapshot.scene.plants.map(p => ({ ...p, color: '#ff0000' })) } })
+    expect(plant.clear).toHaveBeenCalledTimes(2)
+    renderer.dispose()
+  })
   beforeEach(async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
@@ -227,7 +352,7 @@ describe('createPixiSceneRenderer', () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         apps: Array<{ init: ReturnType<typeof vi.fn> }>;
-        graphics: Array<{ circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn> }>;
+        graphics: Array<{ circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; position: { set: ReturnType<typeof vi.fn> } }>;
         texts: Array<{ text: string; style: { options: { fontSize: number } } }>;
       }
     }
@@ -239,8 +364,9 @@ describe('createPixiSceneRenderer', () => {
       plants: [createPlant({ id: 'a', symbol: 'round' }), createPlant({ id: 'b', symbol: 'round' })],
       viewport: { x: -9900, y: -9900, scale: 1000 },
     }))
-    const circles = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.circle.mock.calls)
-    expect(circles.some(([x, y, radius]) => x === 100 && y === 100 && radius > 4.8 && radius < 5.6)).toBe(true)
+    const glyph = pixi.__pixiMockState.graphics.find(graphics => graphics.circle.mock.calls.some(([x, y, radius]) => x === 0 && y === 0 && radius > 4.8 && radius < 5.6))!
+    expect(glyph).toBeDefined()
+    expect(glyph.position.set).toHaveBeenLastCalledWith(100, 100)
     expect(pixi.__pixiMockState.texts.find((text) => text.text === '2')?.style.options.fontSize).toBe(9)
     renderer.dispose()
   })
@@ -302,7 +428,7 @@ describe('createPixiSceneRenderer', () => {
     const snapshot = createRendererSnapshot({
       plants: [
         createPlant({ id: 'rosette', symbol: 'rosette', position: { x: 10, y: 10 } }),
-        createPlant({ id: 'conifer', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
+        createPlant({ id: 'conifer', canonicalName: 'Pyrus communis', position: { x: 15, y: 10 } }),
       ],
       plantSpeciesSymbols: { 'Pyrus communis': 'conifer' },
       viewport: { x: 0, y: 0, scale: 20 },

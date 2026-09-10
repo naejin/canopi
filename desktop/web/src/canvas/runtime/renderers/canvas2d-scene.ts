@@ -1,4 +1,5 @@
 import { speciesFocusOpacity } from '../species-key'
+import { instrumentSceneRenderer } from './profile'
 import { getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout, getCanvasPlantNameLabels, isMeasurementLabelVisible } from '../automatic-detail'
 import {
@@ -60,6 +61,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
     },
     initialize(context) {
       const canvas = document.createElement('canvas')
+      canvas.dataset.canopiRenderer = 'canvas2d'
       canvas.style.position = 'absolute'
       canvas.style.inset = '0'
       canvas.style.width = '100%'
@@ -89,7 +91,6 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         },
         resize(width, height) {
           resize(width, height)
-          redraw()
         },
         renderScene(nextSnapshot) {
           snapshot = nextSnapshot
@@ -140,7 +141,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         })
       }
 
-      return instance
+      return import.meta.env.DEV ? instrumentSceneRenderer(canvas, instance) : instance
     },
   }
 }

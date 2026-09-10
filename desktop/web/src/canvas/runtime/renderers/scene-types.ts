@@ -41,8 +41,9 @@ export interface SceneRendererContext {
 }
 
 export interface SceneRendererInstance extends RendererBackendInstance {
+  // Resize the backing surface only; the caller follows with a scene or viewport render.
   resize(width: number, height: number): void
-  // Full scene/content rebuild. Use this for scene, selection, or presentation changes.
+  // Full scene/content refresh. Retain unchanged graphics across selection/presentation changes.
   renderScene(snapshot: SceneRendererSnapshot): void
   // Camera-only update. Must not assume the runtime will provide a fresh scene snapshot.
   setViewport(viewport: SceneViewportState): void

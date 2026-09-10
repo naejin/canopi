@@ -53,7 +53,76 @@ function deferred<T>(): {
 
 describe('SceneRuntimeRenderScheduler', () => {
   afterEach(() => {
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
+  })
+
+  it('coalesces a burst of camera changes into one frame using the latest viewport', async () => {
+    let frame!: FrameRequestCallback
+    const request = vi.fn((callback: FrameRequestCallback) => { frame = callback; return 1 })
+    vi.stubGlobal('requestAnimationFrame', request)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const renderer = createRenderer('pixi')
+    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
+      backends: [{ id: 'pixi', initialize: async () => renderer }, createBackend('canvas2d')],
+    })
+    let viewport = { x: 0, y: 0, scale: 20 }
+    const scheduler = new SceneRuntimeRenderScheduler({
+      getRendererHost: () => host, getViewport: () => viewport,
+      prepareSceneRender: async () => ({ publish: () => createTestSceneRendererSnapshot() }),
+      renderChrome: vi.fn(),
+    })
+    await scheduler.initialize(document.createElement('div'))
+    for (let i = 0; i < 10; i++) {
+      viewport = { x: i, y: i, scale: 20 + i }
+      scheduler.invalidate('viewport')
+    }
+    expect(request).toHaveBeenCalledOnce()
+    expect(renderer.setViewport).not.toHaveBeenCalled()
+    frame(0)
+    await vi.waitFor(() => expect(renderer.setViewport).toHaveBeenCalledExactlyOnceWith(viewport))
+    scheduler.dispose()
+  })
+
+  it('does not resize an unchanged surface before every selection or scene render', async () => {
+    const renderer = createRenderer('pixi')
+    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
+      backends: [{ id: 'pixi', initialize: async () => renderer }, createBackend('canvas2d')],
+    })
+    const scheduler = createScheduler(host)
+    await scheduler.initialize(document.createElement('div'))
+    await scheduler.renderScene()
+    await scheduler.renderScene()
+    expect(renderer.resize).toHaveBeenCalledTimes(1)
+    expect(renderer.renderScene).toHaveBeenCalledTimes(2)
+    scheduler.dispose()
+  })
+
+  it('coalesces scene edits with camera events, and cancels the pending frame on disposal', async () => {
+    let frame!: FrameRequestCallback
+    const request = vi.fn((callback: FrameRequestCallback) => { frame = callback; return 7 })
+    const cancel = vi.fn()
+    vi.stubGlobal('requestAnimationFrame', request)
+    vi.stubGlobal('cancelAnimationFrame', cancel)
+    const renderer = createRenderer('pixi')
+    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
+      backends: [{ id: 'pixi', initialize: async () => renderer }, createBackend('canvas2d')],
+    })
+    const scheduler = createScheduler(host)
+    await scheduler.initialize(document.createElement('div'))
+    scheduler.invalidate('viewport')
+    scheduler.invalidate('scene')
+    scheduler.invalidate('scene')
+    scheduler.invalidate('viewport')
+    await Promise.resolve()
+    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledOnce()
+    frame(0)
+    await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledOnce())
+    expect(renderer.setViewport).not.toHaveBeenCalled()
+    scheduler.invalidate('scene')
+    scheduler.dispose()
+    expect(cancel).toHaveBeenCalledWith(7)
   })
 
   it('contains expected viewport cancellation when teardown overtakes invalidation', async () => {

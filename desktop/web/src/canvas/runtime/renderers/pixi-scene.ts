@@ -1,5 +1,6 @@
 import { speciesFocusOpacity } from '../species-key'
-import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
+import { instrumentSceneRenderer } from './profile'
+import { Application, Container, Graphics, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
 import {
   getAnnotationVisualWorldCorners,
   getAnnotationPresentation,
@@ -24,7 +25,7 @@ import {
   ROUND_PLANT_SYMBOL_RADIUS,
   tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
-import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
+import { computePinnedPlantNameLabels, computeSelectionLabels, type PlantNameLabel } from '../selection-labels'
 import { getCanvasDetailLayout, getCanvasPlantNameLabels, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   getAnnotationTextColor,
@@ -46,6 +47,7 @@ import { isSceneObjectGroupMemberTarget } from '../scene'
 const BACKGROUND_COLOR = 0x000000
 const ZONE_STROKE_PX = 2
 const PLANT_STROKE_PX = 1.5
+const graphicsKeys = new WeakMap<Graphics, string>()
 
 export function createPixiSceneRenderer(): SceneRendererDefinition {
   return {
@@ -73,6 +75,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       })
 
       const canvas = app.canvas as HTMLCanvasElement
+      canvas.dataset.canopiRenderer = 'pixi'
       canvas.style.position = 'absolute'
       canvas.style.inset = '0'
       canvas.style.width = '100%'
@@ -106,7 +109,9 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       app.stage.addChild(pinnedPlantNameLabelLayer)
       app.stage.addChild(selectionLabelLayer)
 
+      const viewSize = { width: context.container.clientWidth, height: context.container.clientHeight }
       let snapshot: SceneRendererSnapshot | null = null
+      let plantNameLabels: readonly PlantNameLabel[] = []
       const zoneGraphicsByName = new Map<string, Graphics>()
       const measurementGuideGraphicsById = new Map<string, Graphics>()
       const measurementGuideLabelById = new Map<string, Text>()
@@ -125,15 +130,13 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           canvas.remove()
         },
         resize(width, height) {
+          viewSize.width = width
+          viewSize.height = height
           app.renderer.resize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
-          if (snapshot) {
-            world.position.set(snapshot.viewport.x, snapshot.viewport.y)
-            world.scale.set(snapshot.viewport.scale)
-            app.render()
-          }
         },
         renderScene(nextSnapshot) {
           snapshot = nextSnapshot
+          plantNameLabels = getCanvasPlantNameLabels(nextSnapshot)
           syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
           syncMeasurementGuides(
             createText,
@@ -151,6 +154,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             plantGraphicsById,
             plantBadgeGraphicsById,
             plantBadgeTextById,
+            viewSize,
             nextSnapshot,
             true,
           )
@@ -163,7 +167,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             nextSnapshot,
             true,
           )
-          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot)
+          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot, plantNameLabels)
           syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
           world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
           world.scale.set(nextSnapshot.viewport.scale)
@@ -171,7 +175,16 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
         },
         setViewport(viewport) {
           if (!snapshot) return
-          const labels = computeSelectionLabels(
+          const previousViewport = snapshot.viewport
+          const panOnly = previousViewport.scale === viewport.scale
+          const translate = <T extends { screenPoint: ScenePoint }>(label: T): T => ({
+            ...label,
+            screenPoint: {
+              x: label.screenPoint.x + viewport.x - previousViewport.x,
+              y: label.screenPoint.y + viewport.y - previousViewport.y,
+            },
+          })
+          const labels = panOnly ? snapshot.selectionLabels.map(translate) : computeSelectionLabels(
             snapshot.scene.plants,
             snapshot.selectionLabelPlantIds,
             viewport,
@@ -184,7 +197,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
               },
             },
           )
-          const pinnedPlantNameLabels = computePinnedPlantNameLabels(
+          const pinnedPlantNameLabels = panOnly ? snapshot.pinnedPlantNameLabels.map(translate) : computePinnedPlantNameLabels(
             snapshot.scene.plants,
             viewport,
             snapshot.localizedCommonNames,
@@ -198,6 +211,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             },
           )
           snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
+          plantNameLabels = panOnly ? plantNameLabels.map(translate) : getCanvasPlantNameLabels(snapshot)
           syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
           syncMeasurementGuides(
             createText,
@@ -215,6 +229,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             plantGraphicsById,
             plantBadgeGraphicsById,
             plantBadgeTextById,
+            viewSize,
             snapshot,
             false,
           )
@@ -227,7 +242,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             snapshot,
             false,
           )
-          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot)
+          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot, plantNameLabels)
           syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, snapshot)
           world.position.set(viewport.x, viewport.y)
           world.scale.set(viewport.scale)
@@ -235,7 +250,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
         },
       }
 
-      return instance
+      return import.meta.env.DEV ? instrumentSceneRenderer(canvas, instance) : instance
     },
   }
 }
@@ -290,7 +305,7 @@ function syncMeasurementGuides(
       hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
     )
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-    text.style = new TextStyle({
+    setTextStyle(text, {
       fontFamily: 'Inter, sans-serif',
       fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
       fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
@@ -338,6 +353,7 @@ function drawMeasurementGuide(
   const color = toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0)
   const strokeWidth = screenPxToWorldPx(interactionVisual?.widthPx ?? .8, viewportScale)
   const strokeAlpha = (interactionVisual?.alpha ?? .25) * cssColorAlpha(interactionVisual?.color ?? getAnnotationTextColor())
+  if (reuseGeometry(graphics, [guide.start, guide.end, color, strokeWidth, strokeAlpha, viewportScale])) return
   graphics.clear()
   drawDashedMeasurementGuideLine(
     graphics,
@@ -454,6 +470,7 @@ function drawZone(
   )
   const strokeAlpha = (interactionVisual?.alpha ?? 1) * cssColorAlpha(interactionVisual?.color ?? visual.stroke)
 
+  if (reuseGeometry(graphics, [zone.zoneType, zone.points, zone.rotationDeg, fillColor, fillAlpha, strokeColor, strokeWidth, strokeAlpha])) return
   graphics.clear()
 
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
@@ -526,6 +543,7 @@ function syncPlants(
   plantGraphicsById: Map<string, Graphics>,
   plantBadgeGraphicsById: Map<string, Graphics>,
   plantBadgeTextById: Map<string, Text>,
+  viewSize: { width: number; height: number },
   snapshot: SceneRendererSnapshot,
   reconcileRemoved: boolean,
 ): void {
@@ -536,21 +554,38 @@ function syncPlants(
   overlay.alpha = layer.opacity
   if (!layer.visible) return
 
-  const entries = buildPlantPresentationEntries(snapshot.scene.plants, {
+  // Keep display order stable even when a previously unseen Plant enters the view.
+  const nextIds = new Set<string>()
+  for (const plant of snapshot.scene.plants) {
+    nextIds.add(plant.id)
+    let graphic = plantGraphicsById.get(plant.id)
+    if (!graphic) {
+      graphic = new Graphics()
+      plantGraphicsById.set(plant.id, graphic)
+      symbolLayer.addChild(graphic)
+    }
+    graphic.visible = false
+  }
+  for (const badge of plantBadgeGraphicsById.values()) badge.visible = false
+  for (const text of plantBadgeTextById.values()) text.visible = false
+  // Includes the largest symbolic footprint, interaction ring and stack badge.
+  const margin = 32
+  const visiblePlants = snapshot.scene.plants.filter(plant => {
+    if (viewSize.width <= 0 || viewSize.height <= 0) return true
+    const { x, y } = worldToScreen(plant.position, snapshot.viewport)
+    return x >= -margin && y >= -margin && x <= viewSize.width + margin && y <= viewSize.height + margin
+  })
+  const entries = buildPlantPresentationEntries(visiblePlants, {
+    plants: snapshot.scene.plants,
     viewport: snapshot.viewport,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,
   }, snapshot.selectedPlantIds)
   const layout = layoutPlantPresentation(entries, snapshot.viewport.scale)
-  const nextIds = new Set(entries.map((entry) => entry.plant.id))
 
   for (const entry of entries) {
-    const circle = plantGraphicsById.get(entry.plant.id) ?? new Graphics()
-    if (!plantGraphicsById.has(entry.plant.id)) {
-      plantGraphicsById.set(entry.plant.id, circle)
-      symbolLayer.addChild(circle)
-    }
+    const circle = plantGraphicsById.get(entry.plant.id)!
     drawPlant(
       circle,
       entry,
@@ -633,13 +668,19 @@ function drawPlant(
   const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
   const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const x = entry.screenPoint.x
-  const y = entry.screenPoint.y
+  graphics.position.set(entry.screenPoint.x, entry.screenPoint.y)
+  const x = 0
+  const y = 0
   const r = entry.radiusScreenPx
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
+  const geometryKey = JSON.stringify([
+    r, renderedSymbol, entry.lod, color, glyphOpacity, selected, interactionVisual,
+    getPlantSymbolEdgeColor(entry.color), getPlantSymbolEdgeWidth(r * 2),
+  ])
+  if (graphicsKeys.get(graphics) === geometryKey) return
   graphics.clear()
-  drawPlantSymbolGlyph(graphics, renderedSymbol, entry, glyphOpacity)
+  drawPlantSymbolGlyph(graphics, renderedSymbol, { ...entry, screenPoint: { x, y } }, glyphOpacity)
 
   if (selected) {
     graphics.circle(x, y, r)
@@ -658,6 +699,7 @@ function drawPlant(
         alpha: ringVisual.alpha * cssColorAlpha(ringVisual.color),
       })
   }
+  graphicsKeys.set(graphics, geometryKey)
 }
 
 function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
@@ -709,7 +751,7 @@ function drawStackBadgeText(
 ): void {
   const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
   badgeText.text = String(stackCount)
-  badgeText.style = new TextStyle({
+  setTextStyle(badgeText, {
     fontFamily: 'Inter, sans-serif',
     fontSize: 9,
     fill: toPixiColor(getStackBadgeTextColor(), 0),
@@ -801,7 +843,7 @@ function drawAnnotationText(
   viewport: SceneRendererSnapshot['viewport'],
 ): void {
   text.text = annotation.text
-  text.style = new TextStyle({
+  setTextStyle(text, {
     fontFamily: 'Inter, sans-serif',
     fontSize: annotation.fontSize,
     lineHeight: getAnnotationPresentation(annotation, viewport).textFrame.lineHeightPx,
@@ -864,7 +906,7 @@ function syncSelectionLabels(
       layer.addChild(text)
     }
     text.text = label.text
-    text.style = new TextStyle({
+    setTextStyle(text, {
       fontFamily: 'Inter, sans-serif',
       fontSize: 12,
       fontWeight: '600',
@@ -889,11 +931,11 @@ function syncPinnedPlantNameLabels(
   layer: Container,
   labelByPlantId: Map<string, Text>,
   snapshot: SceneRendererSnapshot,
+  labels: readonly PlantNameLabel[],
 ): void {
   const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
   layer.visible = plantLayer.visible
   layer.alpha = plantLayer.opacity
-  const labels = getCanvasPlantNameLabels(snapshot)
   const nextPlantIds = new Set(labels.map((label) => label.plantId))
 
   if (plantLayer.visible) {
@@ -905,7 +947,7 @@ function syncPinnedPlantNameLabels(
         layer.addChild(text)
       }
       text.text = label.text
-      text.style = new TextStyle({
+      setTextStyle(text, {
         fontFamily: 'Inter, sans-serif',
         fontSize: 12,
         fontWeight: '600',
@@ -980,4 +1022,20 @@ function hoverStateForTarget(
   return group?.members.some((member) => isSceneObjectGroupMemberTarget(member, { kind, id }))
     ? hoverTarget.state
     : null
+}
+
+const textStyleKeys = new WeakMap<Text, string>()
+
+function setTextStyle(text: Text, options: TextStyleOptions): void {
+  const key = JSON.stringify(options)
+  if (textStyleKeys.get(text) === key) return
+  text.style = new TextStyle(options)
+  textStyleKeys.set(text, key)
+}
+
+function reuseGeometry(graphics: Graphics, appearance: readonly unknown[]): boolean {
+  const key = JSON.stringify(appearance)
+  if (graphicsKeys.get(graphics) === key) return true
+  graphicsKeys.set(graphics, key)
+  return false
 }
