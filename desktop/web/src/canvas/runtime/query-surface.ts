@@ -43,10 +43,13 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   get viewport(): CameraController['snapshot'] { return this.options.camera.snapshot }
   capturePrintSnapshot() {
     void this.options.settledReader.revision.value
-    return this.options.settledReader.readWhenSettled(() => buildCanvasPrintSnapshot(
-      this.options.sceneStore.persisted,
-      this.options.presentation.createPlantPresentationContext(1),
-    ), null)
+    return this.options.settledReader.readWhenSettled(() => {
+      const scene = this.options.sceneStore.persisted
+      return buildCanvasPrintSnapshot(
+        scene,
+        this.options.presentation.createPlantPresentationContext(1, scene.plants),
+      )
+    }, null)
   }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
@@ -54,13 +57,22 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
     return this.options.sceneStore.session.selectedTargets.map((target) => ({ ...target }))
   }
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel {
+    const selectedTargets = this.options.sceneStore.session.selectedTargets
+    if (selectedTargets.length === 0) {
+      return {
+        editableTargets: [], lockedTargets: [], blockedTargets: [], bounds: null,
+        sameSpeciesReferenceCanonicalName: null,
+        plantNamePinning: { plantIds: [], allPinned: false },
+      }
+    }
     const viewportScale = this.options.camera.viewport.scale
+    const scene = this.options.sceneStore.persisted
     return getDesignObjectSelectionModel(
-      this.options.sceneStore.persisted,
-      this.options.sceneStore.session.selectedTargets,
+      scene,
+      selectedTargets,
       {
         annotationViewportScale: viewportScale,
-        plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),
+        plantContext: this.options.presentation.createPlantPresentationContext(viewportScale, scene.plants),
       },
     )
   }

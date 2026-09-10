@@ -87,3 +87,32 @@ Native event coalescing and received pointer-event counts varied, so the drag co
 The fresh-SceneStore-read regression failed before the fix and passed afterward without tree rebuilding. Regression coverage also verifies move/add/remove, metadata edits, hydration, defensive ownership, coincident centres, empty scenes and placement previews. Final validation: **246 frontend test files / 2,256 tests**, `npx tsc --noEmit`, and `git diff --check` passed. Rust gates were not required because only frontend geometry caching, tests and documentation changed. The canvas runtime agent guide now describes the cache and snapshot immutability contract.
 
 `canopi-u8am` tracks investigation of remaining repeated scene cloning. Temporary profiling scripts, copied Design, isolated app data, servers and baseline worktree are removed after verification.
+
+## Scene-query cloning follow-up (2026-09-11, canopi-u8am)
+
+Baseline `00fc06a9` already includes the spacing cache. Instrumenting the actual native `SceneStore.persisted` getter showed two defensive scene reads per selection query: one for the selection model and another inside `createPlantPresentationContext`. Four independently refreshed selection overlays amplified that cost during pan, including when nothing was selected. A three-round diagnostic of forty empty-selection queries recorded 80 scene reads per round, with 50–72 ms spent inside the cloning getter.
+
+The fix remains local to each synchronous query. Nonempty selection and settled print capture pass their existing snapshot's Plants into presentation context construction. Empty selection returns fresh empty results without reading persisted state. There is no cross-call cache, changed SceneStore authority, or snapshot retained across edits. Hover-path consolidation and shared overlay refresh caching were considered but were unnecessary to achieve this measured reduction.
+
+The same isolated Tauri/WebKitGTK window and copied 2,201-Plant Design were used before and after the change. The existing user app and Vite server were not instrumented or managed by this run; only the isolated window was instrumented. Five batches of forty queries measured the real query surface, with a temporary getter wrapper counting reads but without stack capture. A temporary internal selection fixture selected one Plant for the selected-query batches and restored the previous selection afterward.
+
+| Query batch (40 calls) | Baseline scene reads | Final scene reads | Baseline median batch time | Final median batch time |
+| --- | ---: | ---: | ---: | ---: |
+| Empty selection | 80 | 0 | 110 ms | below 1 ms |
+| One selected Plant | 80 | 40 | 89 ms | 73 ms |
+
+All five batch timings in milliseconds: empty baseline `155, 236, 110, 70, 75`, final `1, 0, 0, 0, 0`; selected baseline `89, 76, 108, 121, 83`, final `277, 77, 73, 69, 68`. The final selected run includes a substantial first-batch outlier; these are diagnostic timings, not stable frame-rate or input-latency thresholds.
+
+A separate matched XTest replay activated the isolated native window and sent twenty middle-button pan moves at 120 ms intervals, totaling 40 × 20 CSS pixels. Getter instrumentation recorded call stacks after timing the clone itself:
+
+| Pan capture | Baseline | Final |
+| --- | ---: | ---: |
+| Full scene clones | 464 | 120 |
+| Time inside scene-cloning getter | 488 ms | 145 ms |
+| Reads attributable to selection queries/presentation | 344 | 0 |
+
+This removes 74% of observed scene clones in this empty-selection pan. It does not mean every pan is 74% faster. The remaining capture includes 80 map-projection reads, 20 viewport-chrome reads, and 20 setup/hover/scene-render reads. `canopi-zr86` tracks that separate investigation; broader snapshot caching is not part of this change.
+
+Regression tests first failed for the duplicate selection read, empty-selection reads and duplicate print read, then passed. Additional checks exercise live-preview movement, abort and commit, viewport-dependent bounds, defensive ownership of returned results, and refusal of print capture during an active edit. The copied Design remained byte-identical to the original; temporary scripts and isolated app data are removed after recording the aggregate evidence.
+
+Final validation for `canopi-u8am`: **247 test files / 2,261 tests**, `npx tsc --noEmit`, `npm run build`, `npm run build:web` (including browser boundary checks), and `git diff --check` passed. The focused selection/presentation/interaction/print run passed 304 tests. Rust gates were not needed for this frontend-only read-path change. The canvas runtime agent guide documents operation-local snapshot reuse and its freshness boundary.
