@@ -4,8 +4,10 @@ import { readFile } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 
 const { values } = parseArgs({ options: {
+  backend: { type: 'string', default: 'auto' },
   file: { type: 'string' }, url: { type: 'string', default: 'http://127.0.0.1:1431/app/' },
 } })
+if (!['auto', 'canvas2d'].includes(values.backend)) throw new Error('Unknown backend')
 if (!values.file) throw new Error('Provide --file with a local design')
 const base = new URL(values.url)
 if (!['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) throw new Error('Use a local Vite server')
@@ -14,6 +16,15 @@ const { chromium } = require(process.env.CANOPI_PLAYWRIGHT_MODULE || 'playwright
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } })
+  if (values.backend === 'canvas2d') await page.addInitScript(() => {
+    // Exercise the production fallback by emulating unavailable WebGL contexts.
+    for (const prototype of [HTMLCanvasElement.prototype, ...(typeof OffscreenCanvas === 'undefined' ? [] : [OffscreenCanvas.prototype])]) {
+      const getContext = prototype.getContext
+      prototype.getContext = function(type, ...args) {
+        return ['webgl', 'webgl2', 'experimental-webgl'].includes(type) ? null : getContext.call(this, type, ...args)
+      }
+    }
+  })
   const entry = new URL('__canvas-interactions', base).href
   await page.route(entry, route => route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"><div id="scene" style="position:relative;width:1200px;height:800px"></div></body></html>' }))
   await page.goto(entry)
@@ -72,6 +83,7 @@ try {
   await settle()
   assert.deepEqual(await page.evaluate(id => window.__interactionRuntime.querySurface.getSceneSnapshot().plants.find(p => p.id === id).position, target.id), target.position)
   const backend = await page.locator('canvas[data-canopi-renderer]').first().getAttribute('data-canopi-renderer')
+  if (values.backend === 'canvas2d') assert.equal(backend, 'canvas2d')
   await page.evaluate(() => window.__interactionRuntime.destroy())
   assert.equal(await page.locator('canvas[data-canopi-renderer]').count(), 0)
   console.log(JSON.stringify({ backend, passed: ['pointer pan', 'wheel zoom', 'hover/select', 'pointer drag', 'undo', 'teardown'] }))

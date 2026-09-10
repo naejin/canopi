@@ -21,9 +21,10 @@ import {
   ROUND_PLANT_SYMBOL_RADIUS,
   tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
-import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
+import { computePinnedPlantNameLabels, computeSelectionLabels, type PlantNameLabel } from '../selection-labels'
 import type {
   SceneAnnotationEntity,
+  ScenePoint,
   PlantSymbolId,
   SceneViewportState,
   SceneZoneEntity,
@@ -72,6 +73,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
 
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
       let snapshot: SceneRendererSnapshot | null = null
+      let plantNameLabels: readonly PlantNameLabel[] = []
       let logicalWidth = Math.max(1, context.container.clientWidth)
       let logicalHeight = Math.max(1, context.container.clientHeight)
 
@@ -87,6 +89,8 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
       const instance: SceneRendererInstance = {
         id: 'canvas2d',
         dispose() {
+          snapshot = null
+          plantNameLabels = []
           canvas.remove()
         },
         resize(width, height) {
@@ -94,11 +98,21 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         },
         renderScene(nextSnapshot) {
           snapshot = nextSnapshot
+          plantNameLabels = getCanvasPlantNameLabels(nextSnapshot)
           redraw()
         },
         setViewport(viewport) {
           if (!snapshot) return
-          const labels = computeSelectionLabels(
+          const previousViewport = snapshot.viewport
+          const panOnly = previousViewport.scale === viewport.scale
+          const translate = <T extends { screenPoint: ScenePoint }>(label: T): T => ({
+            ...label,
+            screenPoint: {
+              x: label.screenPoint.x + viewport.x - previousViewport.x,
+              y: label.screenPoint.y + viewport.y - previousViewport.y,
+            },
+          })
+          const labels = panOnly ? snapshot.selectionLabels.map(translate) : computeSelectionLabels(
             snapshot.scene.plants,
             snapshot.selectionLabelPlantIds,
             viewport,
@@ -111,7 +125,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
               },
             },
           )
-          const pinnedPlantNameLabels = computePinnedPlantNameLabels(
+          const pinnedPlantNameLabels = panOnly ? snapshot.pinnedPlantNameLabels.map(translate) : computePinnedPlantNameLabels(
             snapshot.scene.plants,
             viewport,
             snapshot.localizedCommonNames,
@@ -125,6 +139,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
             },
           )
           snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
+          plantNameLabels = panOnly ? plantNameLabels.map(translate) : getCanvasPlantNameLabels(snapshot)
           redraw()
         },
       }
@@ -134,11 +149,11 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        renderCanvas2DSceneSnapshot(ctx, snapshot, {
+        renderSnapshot(ctx, snapshot, {
           widthPx: logicalWidth,
           heightPx: logicalHeight,
           dpr,
-        })
+        }, plantNameLabels)
       }
 
       return import.meta.env.DEV ? instrumentSceneRenderer(canvas, instance) : instance
@@ -150,6 +165,15 @@ export function renderCanvas2DSceneSnapshot(
   ctx: CanvasRenderingContext2D,
   snapshot: SceneRendererSnapshot,
   options: Canvas2DSceneSnapshotRenderOptions,
+): void {
+  renderSnapshot(ctx, snapshot, options, options.showPlantNames === false ? [] : getCanvasPlantNameLabels(snapshot))
+}
+
+function renderSnapshot(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SceneRendererSnapshot,
+  options: Canvas2DSceneSnapshotRenderOptions,
+  plantNameLabels: readonly PlantNameLabel[],
 ): void {
   const dpr = Math.max(options.dpr ?? 1, 1)
   const widthPx = Math.max(1, options.widthPx)
@@ -171,9 +195,9 @@ export function renderCanvas2DSceneSnapshot(
   applyViewport(ctx, snapshot.viewport)
   renderZones(ctx, snapshot)
   renderMeasurementGuides(ctx, snapshot, dpr)
-  renderPlants(ctx, snapshot, dpr)
+  renderPlants(ctx, snapshot, dpr, widthPx, heightPx)
   if (options.showPlantNames !== false) {
-    renderPinnedPlantNameLabels(ctx, snapshot, dpr)
+    renderPinnedPlantNameLabels(ctx, snapshot, dpr, plantNameLabels)
     renderSelectionLabels(ctx, snapshot, dpr)
   }
   renderAnnotations(ctx, snapshot, dpr)
@@ -343,11 +367,21 @@ function renderPlants(
   ctx: CanvasRenderingContext2D,
   snapshot: SceneRendererSnapshot,
   dpr: number,
+  widthPx: number,
+  heightPx: number,
 ): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return
 
-  const entries = buildPlantPresentationEntries(snapshot.scene.plants, {
+  // Symbolic footprints are bounded in CSS pixels; include rings and stack badges.
+  const margin = 32
+  const visiblePlants = snapshot.scene.plants.filter(plant => {
+    const x = plant.position.x * snapshot.viewport.scale + snapshot.viewport.x
+    const y = plant.position.y * snapshot.viewport.scale + snapshot.viewport.y
+    return x >= -margin && y >= -margin && x <= widthPx + margin && y <= heightPx + margin
+  })
+  const entries = buildPlantPresentationEntries(visiblePlants, {
+    plants: snapshot.scene.plants,
     viewport: snapshot.viewport,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
@@ -564,8 +598,8 @@ function renderPinnedPlantNameLabels(
   ctx: CanvasRenderingContext2D,
   snapshot: SceneRendererSnapshot,
   dpr: number,
+  labels: readonly PlantNameLabel[],
 ): void {
-  const labels = getCanvasPlantNameLabels(snapshot)
   if (labels.length === 0) return
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return

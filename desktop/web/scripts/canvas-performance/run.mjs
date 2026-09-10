@@ -9,9 +9,11 @@ const { values } = parseArgs({ options: {
   browser: { type: 'string', default: 'chromium' },
   dpr: { type: 'string', default: '1' }, headed: { type: 'boolean', default: false },
   screenshots: { type: 'string' },
+  backend: { type: 'string', default: 'auto' },
 } })
 const url = new URL(values.url)
 if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('Use a local Vite server')
+if (!['auto', 'pixi', 'canvas2d'].includes(values.backend)) throw new Error('Unknown backend')
 const dpr = Number(values.dpr)
 if (!(dpr >= 1 && dpr <= 3)) throw new Error('DPR must be between 1 and 3')
 const require = createRequire(import.meta.url)
@@ -27,7 +29,7 @@ try {
   await page.route(entry, route => route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"><div id="scene" style="position:relative;width:1200px;height:800px"></div></body></html>' }))
   await page.goto(entry)
   const file = values.file ? JSON.parse(await readFile(values.file, 'utf8')) : null
-  const result = await page.evaluate(async ({ file, base }) => {
+  const result = await page.evaluate(async ({ file, base, backend }) => {
     const source = name => new URL(`src/${name}`, base).href
     await import(source('styles/global.css'))
     const { refreshCanvasColorCache } = await import(source('canvas/theme-refresh.ts'))
@@ -46,10 +48,10 @@ try {
         scale: null, notes: null, plantedDate: null, quantity: 1,
       })),
     } }).scene
-    const host = new RendererHost({ backends: [createPixiSceneRenderer(), createCanvas2DSceneRenderer()] })
+    const host = new RendererHost({ backends: backend === 'canvas2d' ? [createCanvas2DSceneRenderer()] : backend === 'pixi' ? [createPixiSceneRenderer()] : [createPixiSceneRenderer(), createCanvas2DSceneRenderer()] })
     await host.initialize({ container: document.querySelector('#scene') })
     const canvas = document.querySelector('canvas')
-    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl')
+    const gl = host.snapshot.activeBackendId === 'canvas2d' ? null : canvas.getContext('webgl2') || canvas.getContext('webgl')
     const extension = gl?.getExtension('WEBGL_debug_renderer_info')
     const metadata = { backend: host.snapshot, gpu: extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : null,
       dpr: devicePixelRatio, width: 1200, height: 800, userAgent: navigator.userAgent,
@@ -59,10 +61,15 @@ try {
     const pixiUrl = pixiSource.match(/from ["']([^"']*pixi__js[^"']*)["']/)?.[1]
     if (!pixiUrl) throw new Error('Cannot locate the Vite Pixi module')
     const pixi = await import(new URL(pixiUrl, base).href)
-    let clears = 0, renders = 0
+    let clears = 0, renders = 0, drawCalls = 0
     const clear = pixi.Graphics.prototype.clear, render = pixi.Application.prototype.render
     pixi.Graphics.prototype.clear = function(...args) { clears++; return clear.apply(this, args) }
     pixi.Application.prototype.render = function(...args) { renders++; return render.apply(this, args) }
+    const canvasMethods = ['fill', 'stroke', 'fillText'].map(name => {
+      const original = CanvasRenderingContext2D.prototype[name]
+      CanvasRenderingContext2D.prototype[name] = function(...args) { drawCalls++; return original.apply(this, args) }
+      return [name, original]
+    })
     const traceEvents = [], results = []
     const samples = 30, warmup = 5
     try {
@@ -70,6 +77,7 @@ try {
         const origin = { x: 0, y: 0, scale: 30 }
         const cases = [
           ['pan', i => renderer.setViewport({ ...origin, x: i * 2 })],
+          ['pan-detail', i => renderer.setViewport({ ...origin, scale: 100, x: i * 2 })],
           ['zoom', i => renderer.setViewport({ ...origin, scale: 30 + 20 * Math.sin(i / 8) })],
           ['zoom-detail', i => renderer.setViewport({ ...origin, scale: 100 + 30 * Math.sin(i / 8) })],
           ['hover', i => {
@@ -95,16 +103,17 @@ try {
           const times = [], frames = []
           for (let i = 0; i < warmup + samples; i++) {
             await new Promise(requestAnimationFrame)
-            clears = 0; renders = 0
+            clears = 0; renders = 0; drawCalls = 0
             const start = performance.now()
             operation(i)
             const duration = performance.now() - start
             if (i < warmup) continue
-            times.push(duration); frames.push({ clears, renders })
+            times.push(duration); frames.push({ clears, renders, drawCalls })
             traceEvents.push({ name, cat: 'canopi.canvas', ph: 'X', pid: 1, tid: 1, ts: start * 1000, dur: duration * 1000 })
           }
           times.sort((a, b) => a - b)
           results.push({ operation: name, samples, medianMs: times[15], p95Ms: times[28],
+            canvasDrawCallsPerUpdate: frames.reduce((n, f) => n + f.drawCalls, 0) / samples,
             clearsPerUpdate: frames.reduce((n, f) => n + f.clears, 0) / samples,
             rendersPerUpdate: frames.reduce((n, f) => n + f.renders, 0) / samples })
         }
@@ -113,11 +122,12 @@ try {
         window.__benchmarkViewport = viewport => renderer.setViewport(viewport)
       })
     } finally {
+      for (const [name, original] of canvasMethods) CanvasRenderingContext2D.prototype[name] = original
       pixi.Graphics.prototype.clear = clear
       pixi.Application.prototype.render = render
     }
     return { metadata, results, traceEvents }
-  }, { file, base: url.href })
+  }, { file, base: url.href, backend: values.backend })
   result.revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   result.workingTreeDirty = Boolean(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim())
   result.note = 'Renderer/hit-test workload; excludes document transactions, IPC and GPU completion. Compare like-for-like browser/GPU/DPR and warm-up.'

@@ -33,3 +33,29 @@ Pan graphics clears fell from 2,528 to 114 per update. Selection fell from 2,528
 ## Remaining measurement
 
 The actual hardware-accelerated Tauri/WebKitGTK session has not been profiled. Follow-up `canopi-74q9` tracks this validation. The optional Playwright WebKit run could not start: installed Playwright expected `webkit-2358`, while the cached browser was `webkit-2248`. Browser timings above establish renderer improvements, not a native end-to-end latency guarantee. Use the development trace adapter and native Web Inspector described in [the performance guide](agent/canvas-performance.md) to capture that final environment, especially remaining zoom and movement cost.
+
+
+## Canvas2D follow-up
+
+Bead: `canopi-22na`. Baseline: `8bbebf70`. Updated implementation: `fix/canvas2d-performance`.
+
+The same orchard was measured with `--backend canvas2d` on Chrome 150 headless, 1200×800 CSS pixels and DPR 1. Both sides used the updated runner with five warm-up and 30 measured updates, including identical Canvas2D fill/stroke/fillText counters. The repeated baseline used a separate checkout/server; the updated run followed it serially. The development recorder was inactive. Canvas2D GPU acceleration was not established (`gpu: null`). These results are synchronous submission costs, not native frame times or a comparison of Canvas2D against hardware Pixi.
+
+| Operation | Baseline median / p95 (ms) | Updated median / p95 (ms) |
+|---|---:|---:|
+| Pan | 8.0 / 12.1 | 8.6 / 13.7 |
+| Detailed pan | 16.2 / 43.8 | 4.1 / 14.1 |
+| Zoom | 11.0 / 18.0 | 7.6 / 9.9 |
+| Detailed zoom | 15.8 / 22.3 | 11.4 / 19.1 |
+| Hover including hit testing | 10.5 / 15.4 | 9.6 / 11.9 |
+| Selection rendering | 10.5 / 16.5 | 8.4 / 10.1 |
+| Immutable plant movement rendering | 17.6 / 24.1 | 17.3 / 38.7 |
+| Scene entirely offscreen | 15.4 / 42.0 | 3.3 / 5.8 |
+
+Timing noise was substantial in exploratory runs: ordinary-pan medians ranged from 6.9 to 21.3 ms. Do not claim an ordinary-pan or movement improvement from these results. The repeated run supports detailed-pan and zoom improvements, while deterministic work counts establish the mechanism: detailed-pan drawing calls fell from 5,276 to about 1,250 (76%), and offscreen calls fell from 3,648 to 455 (88%). Ordinary-pan calls fell only from 3,648 to 3,628 because almost every plant fits in that viewport. The remaining offscreen submissions include Zones, Measurement Guides and Annotation decorations.
+
+Culling alone produced pixel-identical orchard screenshots at scales 10, 30 and 100; adding pan-label reuse preserved that exact equality. Regression tests exercise edge footprints, offscreen neighbour spacing, re-entry, fractional-DPR name translation and admission invalidation on zoom and localized-name refresh. Existing tests retain pinned names, selection, layer opacity, botanical symbols and guides. No symbol bitmap/Path2D cache or rendering dependency was added: the measured gain supports the smaller change, and further cache cost/invalidation complexity is not yet justified.
+
+The forced-fallback pointer runner passed pan, wheel zoom, hover/selection, dragging, undo and teardown with `canvas2d` confirmed active. The full frontend suite passed 245 files and 2,251 tests; TypeScript checking and `npm run build:web` passed.
+
+Native follow-up `canopi-74q9` remains open. The running Tauri/WebKitGTK process was found, but it had no configured remote inspector endpoint. Its active canvas backend/GPU and complete input latency were not obtained. Native Web Inspector capture is still required; browser evidence must not close that task.

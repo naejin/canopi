@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import * as automaticDetail from '../canvas/runtime/automatic-detail'
 import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
 import { createCanvas2DSceneRenderer, renderCanvas2DSceneSnapshot } from '../canvas/runtime/renderers/canvas2d-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
@@ -7,6 +8,62 @@ import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 describe('createCanvas2DSceneRenderer', () => {
+  it('skips distant plants but draws edge footprints and restores plants when panning back', async () => {
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(2)
+    const snapshot = createRendererSnapshot({
+      plants: [createPlant({ id: 'edge', position: { x: -.1, y: 1 } }),
+        createPlant({ id: 'far', position: { x: 1000, y: 1 } })],
+      viewport: { x: 0, y: 0, scale: 30 },
+    })
+    renderer.renderScene(snapshot)
+    expect(canvas.context.fill).toHaveBeenCalledTimes(1)
+    canvas.context.fill.mockClear()
+    renderer.setViewport({ x: -30000, y: 0, scale: 30 })
+    expect(canvas.context.fill).toHaveBeenCalledTimes(1)
+    canvas.context.fill.mockClear()
+    renderer.setViewport(snapshot.viewport)
+    expect(canvas.context.fill).toHaveBeenCalledTimes(1)
+    renderer.dispose()
+  })
+
+  it('retains offscreen neighbours when calculating an edge plant footprint', () => {
+    const ctx = createMockCanvasContext()
+    renderCanvas2DSceneSnapshot(ctx as unknown as CanvasRenderingContext2D, createRendererSnapshot({
+      plants: [createPlant({ id: 'edge', position: { x: -31 / 30, y: 1 } }),
+        createPlant({ id: 'neighbour', position: { x: -33 / 30, y: 1 } })],
+      viewport: { x: 0, y: 0, scale: 30 },
+    }), { widthPx: 400, heightPx: 300 })
+    expect(ctx.arc).toHaveBeenCalledTimes(1)
+    // Two CSS pixels between centres leaves a .84 CSS-pixel position mark.
+    expect(ctx.arc.mock.calls[0]?.[2]).toBeCloseTo(.028)
+  })
+
+  it('reuses admitted names during pans and refreshes them for zoom and scene changes', async () => {
+    const admission = vi.spyOn(automaticDetail, 'getCanvasPlantNameLabels')
+    const { canvas, renderer } = await initializeTransformTrackingRenderer(1.25)
+    const snapshot = createRendererSnapshot({
+      plants: [createPlant({ position: { x: 1, y: 1 } })],
+      viewport: { x: 0, y: 0, scale: 100 },
+    })
+    renderer.renderScene(snapshot)
+    const original = canvas.texts.find(entry => entry.text === 'Apple')!
+    expect(original).toBeDefined()
+    admission.mockClear()
+    canvas.clearDraws()
+    renderer.setViewport({ x: 12.5, y: -6.25, scale: 100 })
+    const translated = canvas.texts.find(entry => entry.text === 'Apple')!
+    expect(translated.originCss.x).toBeCloseTo(original.originCss.x + 12.5)
+    expect(translated.originCss.y).toBeCloseTo(original.originCss.y - 6.25)
+    expect(admission).not.toHaveBeenCalled()
+    renderer.setViewport({ x: 12.5, y: -6.25, scale: 150 })
+    expect(admission).toHaveBeenCalledTimes(1)
+    canvas.clearDraws()
+    renderer.renderScene({ ...snapshot, localizedCommonNames: new Map([['Malus domestica', 'Pommier']]) })
+    expect(admission).toHaveBeenCalledTimes(2)
+    expect(canvas.texts.some(entry => entry.text === 'Pommier')).toBe(true)
+    renderer.dispose()
+  })
+
   it('dims other species without changing authored color, layer opacity or selected identity', () => {
     const ctx = createMockCanvasContext()
     const alphas: number[] = []
@@ -119,7 +176,7 @@ describe('createCanvas2DSceneRenderer', () => {
     const snapshot = createRendererSnapshot({
       plants: [
         createPlant({ id: 'rosette', symbol: 'rosette', position: { x: 10, y: 10 } }),
-        createPlant({ id: 'conifer', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
+        createPlant({ id: 'conifer', canonicalName: 'Pyrus communis', position: { x: 15, y: 10 } }),
       ],
       plantSpeciesSymbols: { 'Pyrus communis': 'conifer' },
       viewport: { x: 0, y: 0, scale: 20 },
@@ -393,7 +450,7 @@ describe('createCanvas2DSceneRenderer', () => {
     renderer.renderScene(createRendererSnapshot({
       plants: [
         createPlant({ id: 'shrub', symbol: 'shrub', position: { x: 10, y: 10 } }),
-        createPlant({ id: 'groundcover', symbol: 'groundcover', position: { x: 30, y: 10 } }),
+        createPlant({ id: 'groundcover', symbol: 'groundcover', position: { x: 15, y: 10 } }),
       ],
       viewport: { x: 0, y: 0, scale: 20 },
     }))

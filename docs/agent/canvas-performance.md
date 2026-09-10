@@ -22,7 +22,7 @@ CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
   --file '/path/to/design.canopi' --output /tmp/canvas-trace.json
 ```
 
-Omit `--file` to generate a deterministic 2,200-plant botanical scene. Options include `--url`, `--browser chromium|webkit|firefox`, `--dpr 1|1.5|2`, `--headed`, and `--screenshots /tmp/canvas-comparison` (PNG files for scales 10, 30 and 100). Input files stay local and unchanged. Do not commit private fixtures or screenshots. Output contains aggregate counts, environment metadata and timing events, without design names or content.
+Omit `--file` to generate a deterministic 2,200-plant botanical scene. Options include `--backend auto|pixi|canvas2d` (default `auto`), `--url`, `--browser chromium|webkit|firefox`, `--dpr 1|1.5|2`, `--headed`, and `--screenshots /tmp/canvas-comparison` (PNG files for scales 10, 30 and 100). Explicit backend selection disables fallback in this benchmark, so comparisons cannot silently switch renderers. Canvas2D reports `canvasDrawCallsPerUpdate` for fill, stroke and text submissions; Pixi clear/render counters are zero for Canvas2D. `gpu: null` for Canvas2D means unknown, not software-only rendering. Input files stay local and unchanged. Do not commit private fixtures or screenshots. Output contains aggregate counts, environment metadata and timing events, without design names or content.
 
 Run the separate pointer smoke check against a design containing editable plants:
 
@@ -30,6 +30,8 @@ Run the separate pointer smoke check against a design containing editable plants
 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
   node scripts/canvas-performance/interactions.mjs --file '/path/to/design.canopi'
 ```
+
+Add `--backend canvas2d` to emulate unavailable WebGL on HTML and Offscreen canvases and assert that the production fallback is active. The default `auto` uses normal backend selection.
 
 This mounts the real SceneCanvasRuntime with its detached app adapter, exercises pointer pan, wheel zoom, selection, plant dragging, undo and teardown, and asserts their state transitions. It changes only the isolated in-memory scene. It is a correctness check rather than a native input-latency benchmark.
 
@@ -58,7 +60,8 @@ Use Web Inspector's CPU/allocations timelines to explain expensive spans. For We
 
 - Invalidation is frame-coalesced, with scene updates taking precedence over viewport updates. Explicit awaited scene renders remain immediate for document settlement. New scene invalidations fence older in-flight preparations immediately; teardown cancels the pending animation frame.
 - Resize changes backing dimensions only. Callers follow it with a scene or viewport update; resizing must not render an obsolete snapshot. RendererHost fallback instances receive their own size tracking.
-- Plant geometry uses CSS-pixel local origins and position transforms. Geometry cache keys include footprint, symbol/LOD, colour, interaction appearance, focus opacity and theme edge styling. Changes to those facts must invalidate geometry.
+- Canvas2D culls Plant drawing with the same CSS-pixel margin as Pixi while retaining all Plants for spacing. Its renderer instance retains admitted names across pure pans, recomputes them on zoom/full scene refresh, and releases them on disposal. The stateless snapshot renderer (also used by inspection) remains uncached.
+- Pixi Plant geometry uses CSS-pixel local origins and position transforms. Geometry cache keys include footprint, symbol/LOD, colour, interaction appearance, focus opacity and theme edge styling. Changes to those facts must invalidate geometry.
 - Plant culling includes a margin for interaction rings and stack badges. Spacing queries retain the full scene, including offscreen neighbours. Preserve display order and refresh hidden plants on re-entry.
 - Zone/Measurement Guide geometry is reusable during pans; zoom changes screen-weight strokes and dash spacing. Text styles are retained until their effective properties change. Pure pans translate admitted names; full scene and zoom updates recompute admission.
 - Keep performance assertions about work counts beside visual/state assertions. A faster renderer that drops selection, changes botanical appearance or publishes stale state is a regression.
