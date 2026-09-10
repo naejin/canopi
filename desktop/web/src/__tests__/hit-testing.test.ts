@@ -8,6 +8,7 @@ function createScene(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
     plantSpeciesSymbols: {},
+    plantSpeciesCodes: {},
     layers: [
       { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
       { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },

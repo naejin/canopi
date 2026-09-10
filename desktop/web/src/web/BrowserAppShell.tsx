@@ -1,3 +1,4 @@
+import { PanelIcon } from '../components/shared/PanelIcon'
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { mutateSettingsProjection } from "../app/settings/projection";
@@ -18,39 +19,6 @@ const LOCALE_ITEMS: DropdownItem<Locale>[] = LOCALES.map((code) => ({
   value: code,
   label: code.toUpperCase(),
 }));
-const PANEL_ICON_STROKE_WIDTH = 1.5;
-
-type BrowserPanel = NonNullable<BrowserShellProjectedCommand["panel"]>;
-
-const panelIcons: Partial<Record<BrowserPanel, () => preact.JSX.Element>> = {
-  "canvas": () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-    </svg>
-  ),
-  "templates": () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 6.5h18" />
-      <path d="M5 6.5v12" />
-      <path d="M19 6.5v12" />
-      <path d="M7 18.5h10" />
-      <path d="M8.5 10.5h7" />
-      <path d="M8.5 13.5h4" />
-    </svg>
-  ),
-  "plant-db": () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 17 3.5 19 2c1 2 2 4.5 2 8 0 5.5-4.78 10-10 10Z" />
-      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
-    </svg>
-  ),
-  "favorites": () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  ),
-};
-
 interface BrowserAppShellProps {
   readonly commandProjection: BrowserShellChromeProjection;
   readonly designIdentity?: BrowserShellDesignIdentity | null;
@@ -260,6 +228,8 @@ export function BrowserAppShell({
         <nav className={styles.panelBar} data-testid="web-panel-bar" aria-label={t("webShell.panels")}>
           {projection.panelBar.primary.map(renderPanelButton)}
           <div className={styles.panelDivider} aria-hidden="true" />
+          {projection.panelBar.design.map(renderPanelButton)}
+          <div className={styles.panelDivider} aria-hidden="true" />
           {projection.panelBar.side.map(renderPanelButton)}
         </nav>
       </div>
@@ -267,7 +237,6 @@ export function BrowserAppShell({
   );
 
   function renderPanelButton(command: BrowserShellProjectedCommand) {
-    const Icon = command.panel ? panelIcons[command.panel] : undefined;
     return (
       <button
         key={command.id}
@@ -275,13 +244,14 @@ export function BrowserAppShell({
         className={styles.panelButton}
         data-web-command-id={command.id}
         data-web-panelbar-command-id={command.id}
+        data-panel={command.panel}
         aria-label={command.label}
         aria-pressed={command.active}
         aria-disabled={command.disabled || undefined}
         disabled={command.disabled}
         onClick={() => command.action()}
       >
-        {Icon ? <Icon /> : command.label}
+        {command.panel ? <PanelIcon panel={command.panel} /> : command.label}
         <ButtonTooltip label={command.label} side="left" />
       </button>
     );

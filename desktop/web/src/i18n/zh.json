@@ -695,7 +695,8 @@
     "close": "关闭"
   },
   "sidebar": {
-    "resize": "调整侧边栏大小"
+    "resize": "调整侧边栏大小",
+    "close": "关闭面板"
   },
   "filters": {
     "sun": "光照",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} 项文字需要清晰的打印位置。请添加相应的详图页，或将文字保留在总览页。",
     "keepText": "在总览页保留文字",
     "addDetail": "添加详图页"
+  },
+  "speciesKey": {
+    "title": "物种图例",
+    "description": "查找此设计中已放置的物种。",
+    "search": "搜索名称或代码",
+    "showCodes": "在画布上显示代码",
+    "count": "{{count}} 个物种",
+    "clear": "清除聚焦",
+    "focus": "聚焦：{{code}}",
+    "noResults": "没有匹配的物种。",
+    "empty": "放置植物以创建物种图例。",
+    "detailHint": "放大后，空间允许时会显示代码。点击一行可突出显示该物种的植物。"
   }
 }

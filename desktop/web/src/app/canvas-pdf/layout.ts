@@ -1,3 +1,4 @@
+import { drawSpeciesCodes } from './species-codes'
 import type { CanvasPrintSnapshot, PrintBounds } from '../../canvas/print'
 import { PdfTextError, type PdfTextEngine } from './text'
 import { MM, PRINT, fitOverview, drawCanvas, identifyPlants, ambiguousSpecies, textOp, pathOp, rectPath } from './page-drawing'
@@ -109,6 +110,7 @@ function canvasPage(input: PdfInput, geometry: Geometry, text: PdfTextEngine, la
   const textIssues = options.kind === 'overview' ? items.filter(item => !deferred.has(item.key) && !readableTextKeys.includes(item.key)
     && !retained.has(item.key)).map(({ key, kind }) => ({ key, kind })) : []
   drawCanvas(input, frame, ground, pointsPerMeter, text, operations, items, deferred)
+  if (options.kind === 'detail') drawSpeciesCodes(input, frame, ground, pointsPerMeter, text, operations, items)
   operations.push(pathOp(rectPath(frame), PRINT.ink, null, PRINT.stroke))
   let overflow = false
   let legendLink: PrintBounds | undefined

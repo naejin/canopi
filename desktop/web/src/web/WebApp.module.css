@@ -8,17 +8,15 @@
 .workspaceWithSidebar {
   height: 100%;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
   overflow: hidden;
 }
 
-.workspaceWithSidebarOpen {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-}
+.workspaceWithSidebarOpen { min-width: 0; }
 
 .workspaceMain {
   display: flex;
+  flex: 1;
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -28,18 +26,16 @@
 .speciesSidebar {
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--color-border);
+  height: 100%;
   background: var(--color-surface);
 }
 
 @media (max-width: 860px) {
   .workspaceWithSidebarOpen {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(280px, 42vh);
+    flex-direction: column;
   }
 
   .speciesSidebar {
-    border-top: 1px solid var(--color-border);
-    border-left: 0;
+    min-height: 0;
   }
 }

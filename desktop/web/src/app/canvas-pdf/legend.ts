@@ -17,7 +17,7 @@ export function planLegend(entries: readonly PdfLegendEntry[], column: PrintBoun
     // Reserve at least two thirds of the column for the full name.
     const inline = sampleWidth + MM <= width / 3
     const indent = inline ? sampleWidth + MM : 0
-    const result: Row[] = text.wrap(entry.name, PRINT.text, width - indent).map((line, i) => ({ line, indent,
+    const result: Row[] = text.wrap(entry.code ? `${entry.code} · ${entry.name}` : entry.name, PRINT.text, width - indent).map((line, i) => ({ line, indent,
       ...(inline && i === 0 ? { samples: entry.appearances } : {}) }))
     if (!inline) {
       const count = Math.max(1, Math.floor((width + PRINT.legendSampleGap) / sampleStep))

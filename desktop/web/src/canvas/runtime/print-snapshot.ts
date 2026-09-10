@@ -12,7 +12,7 @@ export function buildCanvasPrintSnapshot(
     layers: scene.layers.map(({ name, visible, opacity }) => ({ name, visible, opacity })),
     plants: scene.plants.map((plant) => {
       const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
-      return { id: plant.id, canonicalName: plant.canonicalName, position: { ...plant.position },
+      return { id: plant.id, canonicalName: plant.canonicalName, speciesCode: scene.plantSpeciesCodes[plant.canonicalName], position: { ...plant.position },
         color: resolvePlantBaseColor(plant, context.speciesCache), symbol,
         mark: getPlantSymbolShapes(symbol, 24).map(markPath),
         smallMark: getPlantSymbolShapes(symbol, 12).map(markPath), pinnedName: plant.pinnedName === true }

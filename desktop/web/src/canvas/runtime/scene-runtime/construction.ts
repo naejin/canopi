@@ -1,3 +1,4 @@
+import type { SpeciesFocus } from '../species-key'
 import { signal, type Signal } from '@preact/signals'
 import {
   createDetachedCanvasRuntimeAppAdapter,
@@ -231,7 +232,21 @@ export function createSceneRuntimeConstruction(
     },
     invalidateScene: () => callbacks.invalidate('scene'),
   })
+  const updateSpeciesFocus = (change: Partial<SpeciesFocus>) => {
+    if (!runtimeActive) return
+    const current = sceneStore.session.speciesFocus
+    const next = { ...current, ...change }
+    if (change.canonicalName !== undefined && next.canonicalName !== null && !sceneStore.persisted.plants.some((plant) => plant.canonicalName === next.canonicalName)) return
+    if (current.canonicalName === next.canonicalName && current.showCodes === next.showCodes) return
+    sceneStore.updateSession((draft) => { draft.speciesFocus = next })
+    callbacks.incrementSceneRevision()
+    callbacks.invalidate('scene')
+  }
   const commandSurface = createSceneCanvasCommandSurface({
+    speciesFocus: {
+      focus: (canonicalName) => updateSpeciesFocus({ canonicalName }),
+      showCodes: (showCodes) => updateSpeciesFocus({ showCodes }),
+    },
     sceneStore,
     camera,
     history: sceneEdits,

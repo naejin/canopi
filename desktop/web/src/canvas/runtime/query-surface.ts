@@ -49,6 +49,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
     ), null)
   }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
+  getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getSelection(): SceneDesignObjectTarget[] {
     return this.options.sceneStore.session.selectedTargets.map((target) => ({ ...target }))
   }

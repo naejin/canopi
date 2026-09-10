@@ -19,6 +19,8 @@ type BrowserShellCapabilityId =
   | 'navigateTemplates'
   | 'navigatePlantDatabase'
   | 'navigateFavorites'
+  | 'navigateSpeciesKey'
+  | 'navigateLayers'
   | 'toggleTheme'
 
 type BrowserShellCommandId = ShellCommandIdForCapability<BrowserShellCapabilityId>
@@ -93,6 +95,8 @@ export function createBrowserShellCommandProjection({
       ? { navigateTemplates: { execute: () => capabilities.navigate('templates') } }
       : {}),
     navigatePlantDatabase: { execute: () => capabilities.navigate('plant-db') },
+    navigateSpeciesKey: { execute: () => capabilities.navigate('species-key'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'species-key' },
+    navigateLayers: { execute: () => capabilities.navigate('layers'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'layers' },
     navigateFavorites: { execute: () => capabilities.navigate('favorites') },
     toggleTheme: { execute: () => capabilities.toggleTheme() },
   })

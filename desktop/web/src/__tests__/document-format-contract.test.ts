@@ -110,6 +110,7 @@ describe('document format contract', () => {
       version: 202,
       plant_species_colors: { 'Canvas species': '#112233' },
       plant_species_symbols: { 'Canvas species': 'tree' },
+      plant_species_codes: { 'Canvas species': 'CSP' },
       layers: [{ name: 'plants', visible: true, locked: true, opacity: 0.8 }],
       plants: [{
         id: 'canvas-plant',

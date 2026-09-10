@@ -695,7 +695,8 @@
     "close": "Cerrar"
   },
   "sidebar": {
-    "resize": "Redimensionar panel"
+    "resize": "Redimensionar panel",
+    "close": "Cerrar panel"
   },
   "filters": {
     "sun": "Sol",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} textos necesitan un espacio legible para imprimir. Añade una página de detalle específica o consérvalos en la vista general.",
     "keepText": "Conservar textos en la vista general",
     "addDetail": "Añadir página de detalle"
+  },
+  "speciesKey": {
+    "title": "Clave de especies",
+    "description": "Encuentra las especies ya colocadas en este diseño.",
+    "search": "Buscar nombres o códigos",
+    "showCodes": "Mostrar códigos en el lienzo",
+    "count": "{{count}} especies",
+    "clear": "Quitar enfoque",
+    "focus": "Enfoque: {{code}}",
+    "noResults": "No hay especies coincidentes.",
+    "empty": "Coloca plantas para crear la clave de especies.",
+    "detailHint": "Los códigos aparecen al ampliar, si hay espacio. Pulsa una fila para localizar sus plantas."
   }
 }

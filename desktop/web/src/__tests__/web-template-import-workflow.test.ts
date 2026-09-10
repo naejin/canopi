@@ -86,6 +86,7 @@ function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
     north_bearing_deg: 0,
     plant_species_colors: {},
     plant_species_symbols: {},
+    plant_species_codes: {},
     layers: [],
     plants: [],
     zones: [],

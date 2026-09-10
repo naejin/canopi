@@ -160,6 +160,10 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Scene,
     },
     DesignFileField {
+        key: "plant_species_codes",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
         key: "plant_species_symbols",
         owner: DesignFileFieldOwner::Scene,
     },
@@ -232,6 +236,8 @@ pub struct CanopiFile {
     pub plant_species_colors: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub plant_species_symbols: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub plant_species_codes: std::collections::HashMap<String, String>,
     pub layers: Vec<Layer>,
     pub plants: Vec<PlacedPlant>,
     pub zones: Vec<Zone>,

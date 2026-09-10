@@ -120,6 +120,7 @@ export class SceneRuntimePresentationController {
 
     return {
       scene,
+      speciesFocus: session.speciesFocus,
       viewport,
       selectionLabelPlantIds,
       revealedAnnotationId: getRevealedAnnotationId(session.selectedTargets),

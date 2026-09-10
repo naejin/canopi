@@ -1,3 +1,6 @@
+import { SidePanelDock } from '../components/shared/SidePanelDock'
+import { SpeciesKeyPanel } from '../components/panels/SpeciesKeyPanel'
+import { WebLayersPanel } from './WebLayersPanel'
 import { CanvasPdfDialog } from '../components/canvas-pdf/CanvasPdfDialog'
 import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
@@ -89,16 +92,14 @@ function WebWorkspace({
       <div className={styles.workspaceMain}>
         <WebCanvasWorkspace controller={controller} />
       </div>
-      {currentSidePanel === "plant-db" && (
-        <aside className={styles.speciesSidebar} data-web-side-panel="plant-db">
-          <WebSpeciesCatalogPanel mode="catalog" />
-        </aside>
-      )}
-      {currentSidePanel === "favorites" && (
-        <aside className={styles.speciesSidebar} data-web-side-panel="favorites">
-          <WebSpeciesCatalogPanel mode="favorites" />
-        </aside>
-      )}
+      {currentSidePanel && <SidePanelDock responsive>
+        <div className={styles.speciesSidebar} data-web-side-panel={currentSidePanel}>
+          {currentSidePanel === 'species-key' && <SpeciesKeyPanel />}
+          {currentSidePanel === 'layers' && <WebLayersPanel />}
+          {currentSidePanel === 'plant-db' && <WebSpeciesCatalogPanel mode="catalog" />}
+          {currentSidePanel === 'favorites' && <WebSpeciesCatalogPanel mode="favorites" />}
+        </div>
+      </SidePanelDock>}
     </div>
   );
 }

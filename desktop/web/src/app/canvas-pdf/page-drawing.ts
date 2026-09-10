@@ -8,11 +8,11 @@ import { canvasText, type CanvasText } from './canvas-text'
 export { MM, PRINT } from './print-style'
 const IDENTITY = [1, 0, 0, 1, 0, 0] as const
 export function identifyPlants(plants: readonly PrintPlant[], names: Readonly<Record<string, string>>, locale: string): PdfLegendEntry[] {
-  const bySpecies = new Map<string, { canonicalName: string; name: string; appearances: PrintPlant[] }>()
+  const bySpecies = new Map<string, { canonicalName: string; name: string; code?: string; appearances: PrintPlant[] }>()
   for (const plant of plants) {
     let entry = bySpecies.get(plant.canonicalName)
     if (!entry) {
-      entry = { canonicalName: plant.canonicalName, name: names[plant.canonicalName]?.trim() || plant.canonicalName, appearances: [] }
+      entry = { canonicalName: plant.canonicalName, code: plant.speciesCode, name: names[plant.canonicalName]?.trim() || plant.canonicalName, appearances: [] }
       bySpecies.set(plant.canonicalName, entry)
     }
     if (!entry.appearances.some((a) => a.symbol === plant.symbol && a.color === plant.color)) entry.appearances.push(plant)

@@ -210,7 +210,7 @@ cargo build --release
 
 - Left: canvas toolbar with drawing tools, plant color and plant symbol actions, and grid/snap/ruler toggles.
 - Center: canvas workspace.
-- Right: `PanelBar` with Canvas/Location primary navigation and Design Notebook, Species Catalog, and Favorites side panels.
+- Right: `PanelBar` with Canvas/Location primary navigation and Species Key, Layers, Design Notebook, Species Catalog, and Favorites side panels in one resizable dock.
 - Bottom: bottom panel with Timeline, Budget, and Consortium tabs.
 - Title bar: logo, file name, lang/theme toggle, menu controls, and window controls.
 
@@ -226,7 +226,7 @@ cargo build --release
 ### Document Authority
 
 - The `.canopi` file has two authorities.
-- Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, Design Object locks, plant species colors, plant species symbols, and layers. Mutations flow through the canvas runtime.
+- Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, Design Object locks, plant species colors, plant species symbols, species code reservations, and layers. Mutations flow through the canvas runtime.
 - Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, and extra. Mutations flow through the Design Edit seam in `desktop/web/src/app/design-edit/`.
 - Save composition happens through the document-session/persistence seam and the canvas document surface. Neither authority should duplicate the other's data.
 - Panels that read canvas entities should use read-only runtime query surfaces, not mirrored signals, unless the guide documents an intentional mirror.

@@ -695,7 +695,8 @@
     "close": "Chiudi"
   },
   "sidebar": {
-    "resize": "Ridimensiona pannello"
+    "resize": "Ridimensiona pannello",
+    "close": "Chiudi pannello"
   },
   "filters": {
     "sun": "Sole",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} testi richiedono uno spazio leggibile per la stampa. Aggiungi una pagina di dettaglio mirata o mantienili nella panoramica.",
     "keepText": "Mantieni testi nella panoramica",
     "addDetail": "Aggiungi pagina di dettaglio"
+  },
+  "speciesKey": {
+    "title": "Legenda delle specie",
+    "description": "Trova le specie già inserite in questo progetto.",
+    "search": "Cerca nomi o codici",
+    "showCodes": "Mostra i codici sulla tela",
+    "count": "{{count}} specie",
+    "clear": "Rimuovi evidenziazione",
+    "focus": "In evidenza: {{code}}",
+    "noResults": "Nessuna specie corrispondente.",
+    "empty": "Inserisci piante per creare la legenda delle specie.",
+    "detailHint": "I codici appaiono ingrandendo, se c’è spazio. Premi una riga per individuare le sue piante."
   }
 }

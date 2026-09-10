@@ -1,27 +1,8 @@
+import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { t } from '../../i18n'
-import { runAppCommand } from '../../commands/registry'
-import {
-  type CanvasLayerPresentationDetail,
-  type CanvasLayerPresentationRow,
-  readCanvasLayerPresentation,
-  setCanvasLayerPresentationActiveLayer,
-  setCanvasLayerPresentationContourIntervalMeters,
-  setCanvasLayerPresentationLocked,
-  setCanvasLayerPresentationOpacity,
-  setCanvasLayerPresentationVisibility,
-  toggleCanvasLayerPresentationPanel,
-} from '../../app/canvas-layer-presentation/presentation'
+import type { CanvasLayerPresentationDetail, CanvasLayerPresentationRow } from '../../app/canvas-layer-presentation/presentation'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import styles from './LayerPanel.module.css'
-
-function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
-  const d = direction === 'left' ? 'M10 3L5 8L10 13' : 'M6 3L11 8L6 13'
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={d} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
 function EyeIcon({ open }: { open: boolean }) {
   return (
@@ -29,10 +10,10 @@ function EyeIcon({ open }: { open: boolean }) {
       <path
         d="M1.2 8C1.2 8 3.7 3.5 8 3.5C12.3 3.5 14.8 8 14.8 8C14.8 8 12.3 12.5 8 12.5C3.7 12.5 1.2 8 1.2 8Z"
         stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
+        stroke-width="1.3"
+        stroke-linejoin="round"
       />
-      {open ? <circle cx="8" cy="8" r="2.2" fill="currentColor" /> : <path d="M2 2L14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />}
+      {open ? <circle cx="8" cy="8" r="2.2" fill="currentColor" /> : <path d="M2 2L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />}
     </svg>
   )
 }
@@ -40,61 +21,43 @@ function EyeIcon({ open }: { open: boolean }) {
 function LockIcon({ locked }: { locked: boolean }) {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="4" y="7" width="8" height="6.2" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="4" y="7" width="8" height="6.2" rx="1.2" stroke="currentColor" stroke-width="1.3" />
       {locked ? (
         <path
           d="M5.8 7V5.4C5.8 4.1 6.8 3.1 8 3.1C9.2 3.1 10.2 4.1 10.2 5.4V7"
           stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
+          stroke-width="1.3"
+          stroke-linecap="round"
         />
       ) : (
         <path
           d="M5.8 7V5.4C5.8 4.1 6.8 3.1 8 3.1C9 3.1 9.8 3.8 10.1 4.7"
           stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
+          stroke-width="1.3"
+          stroke-linecap="round"
         />
       )}
-      <path d="M8 9.2V11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M8 9.2V11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
     </svg>
   )
 }
 
-export function LayerPanel() {
-  const presentation = readCanvasLayerPresentation()
+export interface LayerPanelActions {
+  active(id: string): void
+  visibility(id: string, visible: boolean): void
+  locked(id: string, locked: boolean): void
+  opacity(id: string, opacity: number): void
+  contourInterval?(meters: number): void
+  location?(): void
+}
 
-  if (!presentation.panelOpen) {
-    return (
-      <div className={styles.panelCollapsed}>
-        <button
-          type="button"
-          className={styles.collapseBtn}
-          aria-label={t('canvas.layers.layerPanel')}
-          onClick={toggleCanvasLayerPresentationPanel}
-        >
-          <ChevronIcon direction="left" />
-        </button>
-      </div>
-    )
-  }
+export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLayerPresentationRow[]; readonly actions: LayerPanelActions }) {
 
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
-      <div className={styles.header}>
-        <span className={styles.headerTitle}>{t('canvas.layers.layerPanel')}</span>
-        <button
-          type="button"
-          className={styles.collapseBtn}
-          aria-label={t('canvas.layers.collapse')}
-          onClick={toggleCanvasLayerPresentationPanel}
-        >
-          <ChevronIcon direction="right" />
-        </button>
-      </div>
-
+      <DockPanelHeader title={t('canvas.layers.layerPanel')} />
       <div role="list">
-        {presentation.rows.map((row) => {
+        {rows.map((row) => {
           const lockLabel = row.locked ? t('canvas.layers.unlockLayer') : t('canvas.layers.lockLayer')
           return (
             <div key={row.id}>
@@ -111,7 +74,7 @@ export function LayerPanel() {
                   aria-label={`${t('canvas.layers.visibility')}: ${row.label}`}
                   aria-pressed={row.visible}
                   onClick={() => {
-                    setCanvasLayerPresentationVisibility(row.id, !row.visible)
+                    actions.visibility(row.id, !row.visible)
                   }}
                 >
                   <EyeIcon open={row.visible} />
@@ -122,7 +85,7 @@ export function LayerPanel() {
                   className={styles.layerName}
                   aria-current={row.active ? 'true' : undefined}
                   title={row.label}
-                  onClick={() => setCanvasLayerPresentationActiveLayer(row.id)}
+                  onClick={() => actions.active(row.id)}
                 >
                   {row.label}
                 </button>
@@ -133,7 +96,7 @@ export function LayerPanel() {
                     aria-label={`${lockLabel}: ${row.label}`}
                     aria-pressed={row.locked}
                     onClick={() => {
-                      setCanvasLayerPresentationLocked(row.id, !row.locked)
+                      actions.locked(row.id, !row.locked)
                     }}
                   >
                     <LockIcon locked={row.locked} />
@@ -143,7 +106,7 @@ export function LayerPanel() {
                   <span className={styles.lockSlot} aria-hidden="true" />
                 )}
               </div>
-              {row.active && <LayerDetail row={row} />}
+              {row.active && <LayerDetail row={row} actions={actions} />}
             </div>
           )
         })}
@@ -152,32 +115,26 @@ export function LayerPanel() {
   )
 }
 
-function LayerDetail({ row }: { row: CanvasLayerPresentationRow }) {
+function LayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions }) {
   switch (row.detail.type) {
     case 'location-map':
-      return <LocationLayerDetail row={row} detail={row.detail} />
+      return <LocationLayerDetail row={row} detail={row.detail} actions={actions} />
     case 'contours':
-      return <ContourLayerDetail row={row} detail={row.detail} />
+      return <ContourLayerDetail row={row} detail={row.detail} actions={actions} />
     case 'hillshade':
-      return <HillshadeLayerDetail row={row} detail={row.detail} />
+      return <HillshadeLayerDetail row={row} detail={row.detail} actions={actions} />
     case 'scene':
-      return <SceneLayerDetail row={row} />
+      return <SceneLayerDetail row={row} actions={actions} />
   }
 }
 
-function openDesignLocationPanel(): void {
-  runAppCommand('nav.location')
+function DesignLocationButton({ actions }: { actions: LayerPanelActions }) {
+  if (!actions.location) return null
+  return <button type="button" className={styles.locationActionButton} onClick={actions.location}>{t('canvas.location.title')}</button>
 }
 
-function DesignLocationButton() {
-  return (
-    <button type="button" className={styles.locationActionButton} onClick={openDesignLocationPanel}>
-      {t('canvas.location.title')}
-    </button>
-  )
-}
-
-function LocationLayerDetail({ row, detail }: {
+function LocationLayerDetail({ row, detail, actions }: {
+  actions: LayerPanelActions
   row: CanvasLayerPresentationRow
   detail: Extract<CanvasLayerPresentationDetail, { type: 'location-map' }>
 }) {
@@ -189,16 +146,17 @@ function LocationLayerDetail({ row, detail }: {
             <span className={styles.locationCardLabel}>{t('canvas.location.current')}</span>
             <span className={styles.locationCardText}>{detail.locationSummary}</span>
           </div>
-          <OpacitySlider row={row} disabled={detail.opacityDisabled} />
+          <OpacitySlider actions={actions} row={row} disabled={detail.opacityDisabled} />
         </>
       ) : (
-        <DesignLocationButton />
+        <DesignLocationButton actions={actions} />
       )}
     </div>
   )
 }
 
-function ContourLayerDetail({ row, detail }: {
+function ContourLayerDetail({ row, detail, actions }: {
+  actions: LayerPanelActions
   row: CanvasLayerPresentationRow
   detail: Extract<CanvasLayerPresentationDetail, { type: 'contours' }>
 }) {
@@ -206,7 +164,7 @@ function ContourLayerDetail({ row, detail }: {
     <div className={styles.layerDetail}>
       {detail.hasLocation ? (
         <>
-          <OpacitySlider row={row} />
+          <OpacitySlider actions={actions} row={row} />
           <div className={styles.controlRow}>
             <span className={styles.controlLabel}>{t('canvas.terrain.contourInterval')}</span>
             <input
@@ -217,19 +175,20 @@ function ContourLayerDetail({ row, detail }: {
               value={String(detail.contourIntervalMeters)}
               aria-label={t('canvas.terrain.contourInterval')}
               onInput={(event) => {
-                setCanvasLayerPresentationContourIntervalMeters(Number((event.target as HTMLInputElement).value))
+                actions.contourInterval?.(Number((event.target as HTMLInputElement).value))
               }}
             />
           </div>
         </>
       ) : (
-        <DesignLocationButton />
+        <DesignLocationButton actions={actions} />
       )}
     </div>
   )
 }
 
-function HillshadeLayerDetail({ row, detail }: {
+function HillshadeLayerDetail({ row, detail, actions }: {
+  actions: LayerPanelActions
   row: CanvasLayerPresentationRow
   detail: Extract<CanvasLayerPresentationDetail, { type: 'hillshade' }>
 }) {
@@ -246,26 +205,26 @@ function HillshadeLayerDetail({ row, detail }: {
             value={Math.round(row.opacity * 100)}
             aria-label={t('canvas.terrain.hillshadeOpacity')}
             onInput={(event) => {
-              setCanvasLayerPresentationOpacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
+              actions.opacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
             }}
           />
         </div>
       ) : (
-        <DesignLocationButton />
+        <DesignLocationButton actions={actions} />
       )}
     </div>
   )
 }
 
-function SceneLayerDetail({ row }: { row: CanvasLayerPresentationRow }) {
+function SceneLayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions }) {
   return (
     <div className={styles.layerDetail}>
-      <OpacitySlider row={row} />
+      <OpacitySlider actions={actions} row={row} />
     </div>
   )
 }
 
-function OpacitySlider({ row, disabled }: { row: CanvasLayerPresentationRow; disabled?: boolean }) {
+function OpacitySlider({ row, disabled, actions }: { row: CanvasLayerPresentationRow; disabled?: boolean; actions: LayerPanelActions }) {
   const opacity = Math.round(row.opacity * 100)
   return (
     <div className={styles.controlRow}>
@@ -282,7 +241,7 @@ function OpacitySlider({ row, disabled }: { row: CanvasLayerPresentationRow; dis
         aria-label={`${t('canvas.layers.opacity')}: ${row.label}`}
         disabled={disabled}
         onInput={(event) => {
-          setCanvasLayerPresentationOpacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
+          actions.opacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
         }}
       />
     </div>

@@ -88,7 +88,7 @@ The app uses exactly two weights: **400** (regular) for reading, **600** (semibo
 
 ### Section Header Pattern
 
-The most-reused typographic pattern in the app. Used for panel headers, filter section titles, collapsible section toggles, layer panel header, and display control labels.
+The most-reused typographic pattern in the app. Used for panel headers, filter section titles, collapsible section toggles and display control labels. Species Key and Layers use the shared sentence-case dock title.
 
 ```css
 font-size: var(--text-xs);
@@ -275,8 +275,10 @@ The rubber-band itself is a runtime-owned DOM preview. Selection is resolved and
 ```
 
 - **Left toolbar**: 44px, grouped command-graph tools, history actions, selected-Plant presentation actions, and Grid/Snap/Ruler toggles. Active: 2px ochre left bar.
-- **Right panel bar**: 44px, always visible for Canvas and Location workspaces. Primary commands switch workspace; side commands toggle sliding panels. Active: 2px ochre right bar.
-- **Right side panels**: Design Notebook, Species Catalog, and Favorites. They slide in between the workspace and panel bar. First-use width is `clamp(320px, 35vw, 90vw)` so the default remains proportional instead of stopping at a fixed pixel cap; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
+- **Right panel bar**: 44px, always visible for Canvas and Location workspaces. Primary commands switch workspace; a separated Design group contains Species Key and Layers, followed by library side-panel commands. All side commands toggle the same dock. Active: 2px ochre right bar.
+- **Right side panels**: Species Key, Layers, Design Notebook, Species Catalog, and Favorites. They slide in between the workspace and panel bar. First-use width is `clamp(320px, 35vw, 90vw)` so the default remains proportional instead of stopping at a fixed pixel cap; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
+- **Species Key**: compact code–symbol–name–count rows, search above, optional canvas code toggle, and a quiet footer explaining focus. Codes use the mono token; full names remain readable. Active focus uses the existing ochre row edge and a clearable canvas chip below the ruler. Zoom-dependent code labels use canvas collision admission; no label flood at overview.
+- **Layers**: the same dock header, width, background and close control as Species Key. Preserve visibility, active-layer, locking and opacity controls. There is no secondary collapsed strip next to the canvas. Desktop also retains map and terrain controls. Web stacks the shared dock beneath the canvas on narrow screens.
 - **Title bar**: 36px. Logo and menu left, Design identity in the central drag region, language/theme controls and window buttons right.
 - **No activity bar** — merged into panel bar.
 - **No status bar** — lang/theme moved to title bar.

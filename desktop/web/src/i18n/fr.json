@@ -695,7 +695,8 @@
     "close": "Fermer"
   },
   "sidebar": {
-    "resize": "Redimensionner le panneau"
+    "resize": "Redimensionner le panneau",
+    "close": "Fermer le panneau"
   },
   "filters": {
     "sun": "Soleil",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} textes nécessitent un emplacement lisible à imprimer. Ajoutez une page de détail ciblée ou conservez-les sur la vue générale.",
     "keepText": "Garder les textes sur la vue générale",
     "addDetail": "Ajouter une page de détail"
+  },
+  "speciesKey": {
+    "title": "Clé des espèces",
+    "description": "Retrouvez les espèces déjà placées dans ce design.",
+    "search": "Rechercher un nom ou un code",
+    "showCodes": "Afficher les codes sur le canevas",
+    "count": "{{count}} espèces",
+    "clear": "Effacer le focus",
+    "focus": "Focus : {{code}}",
+    "noResults": "Aucune espèce correspondante.",
+    "empty": "Placez des plantes pour créer votre clé des espèces.",
+    "detailHint": "Les codes apparaissent en zoomant, si la place le permet. Cliquez sur une ligne pour repérer ses plantes."
   }
 }

@@ -238,9 +238,11 @@ describe('browser app data store', () => {
 
   it('does not retry a quota-blocked full-store copy on reads and keeps Settings writable through v1', () => {
     const storage = memoryStorage()
+    const legacyDraft = makeDesign({ name: 'x'.repeat(10_000) })
+    delete legacyDraft.plant_species_codes
     storage.values.set(V1_KEY, JSON.stringify({
       drafts: [{ id: 'large', name: 'Large', updatedAt: '2026-07-04T12:00:00.000Z' }],
-      draftFiles: { large: makeDesign({ name: 'x'.repeat(10_000) }) },
+      draftFiles: { large: legacyDraft },
       settings: { locale: 'fr' },
       favoriteSpecies: [],
       recentlyViewedSpecies: [],
@@ -259,6 +261,7 @@ describe('browser app data store', () => {
     })
     expect(storage.values.has(V2_KEYS.settings)).toBe(false)
     expect(store.loadSettings()).toEqual({ locale: 'de' })
+    expect(JSON.parse(storage.values.get(V1_KEY)!).draftFiles.large).not.toHaveProperty('plant_species_codes')
   })
 
   it('releases admitted progress when reservation quota rejects before falling back to v1', () => {
@@ -723,6 +726,7 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     north_bearing_deg: 0,
     plant_species_colors: {},
     plant_species_symbols: {},
+    plant_species_codes: {},
     layers: [],
     plants: [],
     zones: [],

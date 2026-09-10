@@ -7,6 +7,19 @@ beforeEach(() => {
 })
 
 describe('app navigation', () => {
+  it('uses one dock for Species key, Layers and the existing library panels', () => {
+    navigateTo('species-key')
+    expect(sidePanel.value).toBe('species-key')
+    navigateTo('layers')
+    expect(sidePanel.value).toBe('layers')
+    expect(activePanel.value).toBe('canvas')
+    navigateTo('plant-db')
+    expect(sidePanel.value).toBe('plant-db')
+    navigateTo('layers')
+    navigateTo('layers')
+    expect(sidePanel.value).toBe(null)
+  })
+
   it('opens the location shell as a full-screen panel', () => {
     navigateTo('location')
 

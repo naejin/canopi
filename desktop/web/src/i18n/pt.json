@@ -695,7 +695,8 @@
     "close": "Fechar"
   },
   "sidebar": {
-    "resize": "Redimensionar painel"
+    "resize": "Redimensionar painel",
+    "close": "Fechar painel"
   },
   "filters": {
     "sun": "Sol",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} textos precisam de um espaço legível para impressão. Adicione uma página de detalhe específica ou mantenha-os na vista geral.",
     "keepText": "Manter textos na vista geral",
     "addDetail": "Adicionar página de detalhe"
+  },
+  "speciesKey": {
+    "title": "Legenda de espécies",
+    "description": "Encontre as espécies já colocadas neste projeto.",
+    "search": "Pesquisar nomes ou códigos",
+    "showCodes": "Mostrar códigos na tela",
+    "count": "{{count}} espécies",
+    "clear": "Limpar foco",
+    "focus": "Foco: {{code}}",
+    "noResults": "Nenhuma espécie correspondente.",
+    "empty": "Coloque plantas para criar a legenda de espécies.",
+    "detailHint": "Os códigos aparecem ao ampliar, se houver espaço. Clique numa linha para localizar as suas plantas."
   }
 }

@@ -1,3 +1,4 @@
+import { speciesFocusOpacity } from '../species-key'
 import { getAnnotationPresentation } from '../annotation-layout'
 import { getCanvasDetailLayout, getCanvasPlantNameLabels, isMeasurementLabelVisible } from '../automatic-detail'
 import {
@@ -367,7 +368,7 @@ function renderPlants(
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     const renderedSymbol = resolveRenderedPlantSymbol(entry)
     const selectedStrokeColor = interactionVisual?.color ?? entry.color
-    drawPlantSymbolGlyph(ctx, renderedSymbol, entry, layer.opacity, snapshot.viewport.scale)
+    drawPlantSymbolGlyph(ctx, renderedSymbol, entry, layer.opacity * speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName), snapshot.viewport.scale)
 
     if (selected) {
       ctx.beginPath()

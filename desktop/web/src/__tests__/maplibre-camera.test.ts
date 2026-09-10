@@ -68,6 +68,7 @@ function createScene(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
     plantSpeciesSymbols: {},
+    plantSpeciesCodes: {},
     layers: [],
     plants: [
       {

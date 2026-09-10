@@ -1,3 +1,4 @@
+import { allocateSpeciesCodes } from '../species-key'
 import type {
   Annotation,
   CanopiFile,
@@ -34,6 +35,7 @@ export function hydrateScenePersistedState(file: CanopiFile): ScenePersistedStat
   return {
     plantSpeciesColors: { ...file.plant_species_colors },
     plantSpeciesSymbols: { ...(file.plant_species_symbols ?? {}) },
+    plantSpeciesCodes: allocateSpeciesCodes(file.plant_species_codes ?? {}, file.plants.map((plant) => plant.canonical_name)),
     layers: file.layers.map(hydrateLayerEntity),
     plants: file.plants.map(hydratePlantEntity),
     zones: file.zones.map(hydrateZoneEntity),
@@ -58,6 +60,7 @@ export function serializeScenePersistedState(
     north_bearing_deg: null,
     plant_species_colors: { ...state.plantSpeciesColors },
     plant_species_symbols: { ...state.plantSpeciesSymbols },
+    plant_species_codes: { ...state.plantSpeciesCodes },
     layers: state.layers.map(serializeLayerEntity),
     plants: state.plants.map(serializePlantEntity),
     zones: state.zones.map(serializeZoneEntity),
@@ -79,6 +82,7 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
     ...state,
     plantSpeciesColors: { ...state.plantSpeciesColors },
     plantSpeciesSymbols: { ...state.plantSpeciesSymbols },
+    plantSpeciesCodes: allocateSpeciesCodes(state.plantSpeciesCodes, state.plants.map((plant) => plant.canonicalName)),
     layers: state.layers.map(cloneLayerEntity),
     plants: state.plants.map(clonePlantEntity),
     zones: state.zones.map(cloneZoneEntity),
@@ -93,6 +97,7 @@ export function cloneSceneSessionState(state: SceneSessionState): SceneSessionSt
   return {
     ...state,
     selectedTargets: normalizeSceneDesignObjectTargets(state.selectedTargets),
+    speciesFocus: { ...state.speciesFocus },
     hoveredTarget: state.hoveredTarget
       ? cloneSceneDesignObjectTarget(state.hoveredTarget)
       : null,

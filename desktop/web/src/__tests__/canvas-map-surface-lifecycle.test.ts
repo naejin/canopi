@@ -138,6 +138,7 @@ function createRuntime(
       referenceScale: 1,
       revision: 0,
     }),
+    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
     getSceneSnapshot: () => scene,
     getSelection: () => [],

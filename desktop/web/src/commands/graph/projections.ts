@@ -85,6 +85,7 @@ export interface AppCommandGraphPanelCommand {
 
 export interface AppCommandGraphPanelProjection {
   readonly primary: AppCommandGraphPanelCommand[]
+  readonly design: AppCommandGraphPanelCommand[]
   readonly side: AppCommandGraphPanelCommand[]
 }
 
@@ -164,6 +165,7 @@ export const appCommandGraphPanelProjection = computed<AppCommandGraphPanelProje
 
   return {
     primary: shell.panelBar.primary.map(panelCommandProjection),
+    design: shell.panelBar.design.map(panelCommandProjection),
     side: shell.panelBar.side.map(panelCommandProjection),
   }
 })

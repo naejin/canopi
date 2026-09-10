@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { LayerPanel } from '../components/canvas/LayerPanel'
+import { LayersPanel as LayerPanel } from '../components/panels/LayersPanel'
 import {
   activeLayerName,
   contourIntervalMeters,
@@ -10,7 +10,6 @@ import {
   hillshadeVisible,
   layerLockState,
   layerOpacity,
-  layerPanelOpen,
   layerVisibility,
 } from '../app/canvas-settings/signals'
 import { basemapStyle } from '../app/settings/state'
@@ -91,7 +90,6 @@ describe('LayerPanel', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    layerPanelOpen.value = true
     activeLayerName.value = 'base'
     basemapStyle.value = 'street'
     layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
@@ -223,6 +221,7 @@ describe('LayerPanel', () => {
         scene: {
           plantSpeciesColors: {},
           plantSpeciesSymbols: {},
+    plantSpeciesCodes: {},
           layers: [
             { kind: 'layer', name: 'annotations', visible: true, locked: false, opacity: 1 },
             { kind: 'layer', name: 'plants', visible: true, locked: true, opacity: 1 },

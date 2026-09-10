@@ -667,6 +667,13 @@ export const CANOPI_FILE_SCHEMA = {
         "null"
       ]
     },
+    "plant_species_codes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "type": "object"
+    },
     "plant_species_colors": {
       "additionalProperties": {
         "type": "string"

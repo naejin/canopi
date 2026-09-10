@@ -69,6 +69,7 @@ export class SceneCanvasInspectionOwner {
           selectedPlantIds: new Set(), selectedZoneIds: new Set(), selectedAnnotationIds: new Set(), selectedMeasurementGuideIds: new Set(),
           highlightedPlantIds: new Set(), highlightedZoneIds: new Set(), hoveredCanonicalName: null,
           hoverTarget: highlightedId ? { kind: 'plant', id: highlightedId, state: 'hover' } : null,
+          speciesFocus: { canonicalName: null, showCodes: false },
           revealedAnnotationId: null, selectionLabelPlantIds: new Set(), pinnedPlantNameLabels: [], selectionLabels: [],
         }
         try {

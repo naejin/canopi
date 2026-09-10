@@ -76,6 +76,8 @@ type DesktopShellCapabilityId =
   | 'navigateCanvas'
   | 'navigateLocation'
   | 'navigatePlantDatabase'
+  | 'navigateSpeciesKey'
+  | 'navigateLayers'
   | 'navigateFavorites'
   | 'navigateDesignNotebook'
   | 'toggleTheme'
@@ -263,6 +265,14 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
     isProjectionDisabled: (state) =>
       !(state.activePanel === 'canvas' && state.sidePanel === 'plant-db')
         && !state.hasDesign,
+  },
+  navigateSpeciesKey: {
+    execute: () => navigateTo('species-key'),
+    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'species-key',
+  },
+  navigateLayers: {
+    execute: () => navigateTo('layers'),
+    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'layers',
   },
   navigateFavorites: {
     execute: () => switchPanel('favorites'),

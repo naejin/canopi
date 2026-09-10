@@ -11,9 +11,11 @@ import type { PlantNameLabel } from './selection-labels'
 
 export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): readonly PlantNameLabel[] {
   const { scene, viewport } = snapshot
+  const codes = snapshot.speciesFocus.showCodes
+  const minimumScale = codes ? 50 : 100
   const layer = getSceneLayerStyle(scene, 'plants')
   if (!layer.visible || layer.opacity === 0) return []
-  if (viewport.scale < 100 && snapshot.pinnedPlantNameLabels.length === 0) return []
+  if (viewport.scale < minimumScale && snapshot.pinnedPlantNameLabels.length === 0) return []
   const occupied = new LabelCollisionIndex()
   for (const rect of getCanvasDetailLayout(scene, viewport.scale).bounds) occupied.add(rect)
   for (const label of snapshot.selectionLabels) {
@@ -26,15 +28,17 @@ export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): reado
   const result: PlantNameLabel[] = []
   const context = { plants: scene.plants, viewport, speciesCache: snapshot.speciesCache }
   for (const plant of plants) {
+    if (snapshot.speciesFocus.canonicalName && plant.canonicalName !== snapshot.speciesFocus.canonicalName) continue
     const existing = pinned.get(plant.id)
     if (snapshot.selectionLabelPlantIds.has(plant.id) && !plant.pinnedName) continue
     const forced = snapshot.selectionLabelPlantIds.has(plant.id)
-    if (!existing && !plant.pinnedName && !forced && (viewport.scale < 100 || nearestPlantSpacing(scene.plants, plant.position) * viewport.scale < 35)) continue
+    if (!existing && !plant.pinnedName && !forced && (viewport.scale < minimumScale || (!codes && nearestPlantSpacing(scene.plants, plant.position) * viewport.scale < 35))) continue
     const opacity = forced ? 1 : existing?.opacity ?? getCanvasTextOpacity(viewport.scale)
     if (!opacity) continue
     const commonName = snapshot.localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
-    const text = existing?.text ?? (commonName || plant.canonicalName)
-    const fontStyle = existing?.fontStyle ?? (commonName ? 'normal' : 'italic')
+    const code = codes ? scene.plantSpeciesCodes[plant.canonicalName] : null
+    const text = existing?.text ?? code ?? (commonName || plant.canonicalName)
+    const fontStyle = existing?.fontStyle ?? (code || commonName ? 'normal' : 'italic')
     const radius = getPlantWorldBounds(plant, context).width * viewport.scale / 2
     const x = plant.position.x * viewport.scale, y = plant.position.y * viewport.scale
     const candidates = [nameBounds(text, x, y + radius + 4), nameBounds(text, x, y - radius - 20)]

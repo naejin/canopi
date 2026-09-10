@@ -1,3 +1,4 @@
+import type { SpeciesFocusCommands } from './species-key'
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
 import type {
@@ -31,6 +32,7 @@ type CommandInvalidationKind = 'scene' | 'viewport' | 'chrome'
 type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 interface SceneCanvasCommandSurfaceOptions {
+  readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
   readonly camera: Pick<CameraController, 'zoomIn' | 'zoomOut' | 'zoomToFit' | 'viewport'>
   readonly history: SceneHistoryCommands
@@ -93,6 +95,7 @@ export function createSceneCanvasCommandSurface(
 }
 
 class SceneCanvasCommandRole implements CanvasCommandSurface {
+  readonly speciesFocus: SpeciesFocusCommands
   readonly tools: CanvasToolCommandSurface
   readonly viewport: CanvasViewportCommandSurface
   readonly history: CanvasHistoryCommandSurface
@@ -119,6 +122,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       )
     })
 
+    this.speciesFocus = options.speciesFocus
     this.tools = {
       setTool: (name) => this.setTool(name),
     }

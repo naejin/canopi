@@ -28,7 +28,7 @@ export type PdfOperation =
   | { readonly kind: 'text'; readonly line: TextLine; readonly x: number; readonly y: number; readonly size: number; readonly rotation: number; readonly opacity: number }
   | { readonly kind: 'clip'; readonly bounds: PrintBounds }
   | { readonly kind: 'unclip' }
-export interface PdfLegendEntry { readonly canonicalName: string; readonly name: string; readonly appearances: readonly PrintPlant[] }
+export interface PdfLegendEntry { readonly code?: string; readonly canonicalName: string; readonly name: string; readonly appearances: readonly PrintPlant[] }
 export interface PdfTextIssue { readonly key: string; readonly kind: 'annotation' | 'pin' | 'distance' }
 export interface PdfPage {
   readonly number: number

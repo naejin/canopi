@@ -513,6 +513,7 @@ function fakeRuntimeHost(): {
 
 function fakeCommandSurface(): CanvasCommandSurface {
   return {
+    speciesFocus: { focus: () => {}, showCodes: () => {} },
     tools: { setTool: vi.fn() },
     viewport: {
       zoomIn: vi.fn(),
@@ -577,6 +578,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       referenceScale: 1,
       revision: 0,
     }),
+    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
     getSelection: vi.fn(() => []),

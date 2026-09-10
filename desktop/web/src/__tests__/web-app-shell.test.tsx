@@ -134,6 +134,8 @@ describe('Web Edition Browser App Shell', () => {
     expect(commandIds(container)).not.toContain('settings.theme')
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
+      'nav.speciesKey',
+      'nav.layers',
       'nav.plantDb',
       'nav.favorites',
     ])
@@ -232,12 +234,16 @@ describe('Web Edition Browser App Shell', () => {
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
       'nav.templates',
+      'nav.speciesKey',
+      'nav.layers',
       'nav.plantDb',
       'nav.favorites',
     ])
     expect(panelBarLabels(container)).toEqual([
       'Design Canvas',
       'World Map',
+      'Species key',
+      'Layers',
       'Plant Database',
       'Favorites',
     ])

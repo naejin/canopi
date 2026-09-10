@@ -36,7 +36,7 @@ export type BrowserAppDataWriteResult<T> = BrowserPartitionWriteResult<T>;
 
 interface LegacyBrowserAppDataDocument {
   readonly drafts: readonly BrowserDraftSummary[];
-  readonly draftFiles: Record<string, CanopiFile>;
+  readonly draftFiles: Record<string, unknown>;
   readonly settings: Record<string, unknown> | null;
   readonly favoriteSpecies: readonly string[];
   readonly recentlyViewedSpecies: readonly string[];
@@ -296,7 +296,7 @@ function draftsRecordFromLegacy(document: LegacyBrowserAppDataDocument): Browser
   return {
     version: RECORD_VERSION,
     drafts: document.drafts.map((draft) => ({ ...draft })),
-    draftFiles: { ...document.draftFiles },
+    draftFiles: decodeDraftFiles(document.draftFiles),
   };
 }
 
@@ -468,7 +468,11 @@ function emptyLegacyDocument(): LegacyBrowserAppDataDocument {
 
 function normalizeLegacyAppDataDocument(value: unknown): LegacyBrowserAppDataDocument {
   if (!isRecord(value)) return emptyLegacyDocument();
-  const draftFiles = decodeDraftFiles(value.draftFiles);
+  const decodedDraftFiles = decodeDraftFiles(value.draftFiles);
+  const rawDraftFiles = isRecord(value.draftFiles) ? value.draftFiles : {};
+  // Unrelated v1 partition writes must not grow Drafts by adding new schema
+  // defaults. Draft readers still receive fully decoded documents.
+  const draftFiles = Object.fromEntries(Object.keys(decodedDraftFiles).map((id) => [id, rawDraftFiles[id]]));
   const validDraftIds = new Set(Object.keys(draftFiles));
   return {
     drafts: Array.isArray(value.drafts)

@@ -57,6 +57,7 @@ export function createTestCanvasQuerySurface({
   return {
     revision,
     viewport: viewportSnapshot,
+    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => {
       void admissionRevision.value
       return settled ? buildCanvasPrintSnapshot(scene, { viewport, speciesCache: new Map() }) : null

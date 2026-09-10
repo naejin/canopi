@@ -39,6 +39,9 @@ export const currentCanvasSceneEditCommandSurface = computed<CanvasSceneEditComm
 export const currentCanvasPlantPresentationCommandSurface = computed<CanvasPlantPresentationCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value)?.plantPresentation ?? null,
 )
+export const currentCanvasSpeciesFocusCommands = computed(() =>
+  commandSurfaceFrom(currentCanvasSession.value)?.speciesFocus ?? null,
+)
 export const currentCanvasQuerySurface = computed<CanvasQuerySurface | null>(() =>
   querySurfaceFrom(currentCanvasSession.value),
 )

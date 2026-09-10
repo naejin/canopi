@@ -12,6 +12,7 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
       ? cloneSceneDesignObjectTarget(overrides.hoveredTarget)
       : null,
     documentRevision: overrides.documentRevision ?? 0,
+    speciesFocus: { canonicalName: null, showCodes: false, ...overrides.speciesFocus },
   }
 }
 
@@ -19,6 +20,7 @@ export function createDefaultScenePersistedState(_now: Date = new Date()): Scene
   return {
     plantSpeciesColors: {},
     plantSpeciesSymbols: {},
+    plantSpeciesCodes: {},
     layers: NEW_DESIGN_LAYER_DEFAULTS.map((layer) => ({
       kind: 'layer',
       ...layer,

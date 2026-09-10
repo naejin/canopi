@@ -15,6 +15,8 @@ export type ShellCommandIdByCapability = {
   readonly navigatePlantDatabase: 'nav.plantDb'
   readonly navigateDesignNotebook: 'nav.designNotebook'
   readonly navigateFavorites: 'nav.favorites'
+  readonly navigateSpeciesKey: 'nav.speciesKey'
+  readonly navigateLayers: 'nav.layers'
   readonly toggleTheme: 'view.toggleTheme'
 }
 
@@ -77,7 +79,7 @@ export interface ShellCommandCatalogEntry<
   }
   readonly panel?: {
     readonly panel: Panel
-    readonly group: 'primary' | 'side'
+    readonly group: 'primary' | 'design' | 'side'
     readonly order: number
   }
   execute(): void
@@ -110,6 +112,7 @@ export interface ShellPanelBarProjection<
   Id extends ShellCommandId = ShellCommandId,
 > {
   readonly primary: readonly ProjectedShellCommand<Id>[]
+  readonly design: readonly ProjectedShellCommand<Id>[]
   readonly side: readonly ProjectedShellCommand<Id>[]
 }
 
@@ -236,6 +239,16 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
     panel: { panel: 'templates', group: 'primary', order: 1 },
   },
   {
+    capabilityId: 'navigateSpeciesKey', id: 'nav.speciesKey', family: 'navigation',
+    labelKey: 'speciesKey.title', chromeLabelKey: 'speciesKey.title', palette: true,
+    panel: { panel: 'species-key', group: 'design', order: 0 },
+  },
+  {
+    capabilityId: 'navigateLayers', id: 'nav.layers', family: 'navigation',
+    labelKey: 'canvas.layers.layerPanel', chromeLabelKey: 'canvas.layers.layerPanel', palette: true,
+    panel: { panel: 'layers', group: 'design', order: 1 },
+  },
+  {
     capabilityId: 'navigatePlantDatabase',
     id: 'nav.plantDb',
     family: 'navigation',
@@ -330,7 +343,7 @@ export function projectShellCommandCatalog<Id extends ShellCommandId>(
   }
   const fileSections = [...fileSectionsById.values()]
   const fileItems = fileSections.flat()
-  const panelCommands = (group: 'primary' | 'side') => catalog
+  const panelCommands = (group: 'primary' | 'design' | 'side') => catalog
     .flatMap((command) => command.panel?.group === group
       ? [{ command, panel: command.panel }]
       : [])
@@ -349,6 +362,7 @@ export function projectShellCommandCatalog<Id extends ShellCommandId>(
       : [],
     panelBar: {
       primary: panelCommands('primary'),
+      design: panelCommands('design'),
       side: panelCommands('side'),
     },
   }
@@ -396,7 +410,7 @@ function isPanelCommandActive(
   panel: NonNullable<ShellCommandCatalogEntry['panel']>,
   state: ShellCommandState,
 ): boolean {
-  if (panel.group === 'side') {
+  if (panel.group !== 'primary') {
     return state.activePanel === 'canvas' && state.sidePanel === panel.panel
   }
   if (panel.panel === 'canvas') {

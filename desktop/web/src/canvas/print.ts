@@ -10,6 +10,7 @@ export interface PrintMarkPath {
 export interface PrintPlant {
   readonly id: string
   readonly canonicalName: string
+  readonly speciesCode?: string
   readonly position: PrintPoint
   readonly color: string
   readonly symbol: string

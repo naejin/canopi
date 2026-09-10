@@ -32,6 +32,7 @@ vi.mock('pixi.js', () => {
 
   class MockGraphics {
     visible = true
+    alpha = 1
     clear = vi.fn(() => this)
     circle = vi.fn(() => this)
     rect = vi.fn(() => this)
@@ -108,6 +109,31 @@ describe('createPixiSceneRenderer', () => {
     pixi.__pixiMockState.containers.length = 0
     pixi.__pixiMockState.graphics.length = 0
     pixi.__pixiMockState.texts.length = 0
+  })
+
+  it('restores full opacity after clearing Species focus, including camera-only updates', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphics: Array<{ alpha: number; circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }> }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
+      createPlant({ id: 'apple', position: { x: 0, y: 0 } }),
+      createPlant({ id: 'mint', canonicalName: 'Mentha spicata', position: { x: 3, y: 0 } }),
+    ] }, selectedTargets: [{ kind: 'plant', id: 'mint' }], speciesFocus: { canonicalName: 'Malus domestica', showCodes: false } })
+    renderer.renderScene(snapshot)
+    const marks = pixi.__pixiMockState.graphics.filter((graphic) => graphic.circle.mock.calls.length)
+    expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, .16])
+    const selectionOpacity = marks[1]!.stroke.mock.calls.at(-1)?.[0].alpha
+    expect(marks[1]!.alpha).toBe(1)
+    renderer.setViewport({ x: 10, y: 20, scale: 2 })
+    expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, .16])
+    renderer.renderScene({ ...snapshot, speciesFocus: { canonicalName: null, showCodes: false } })
+    expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, 1])
+    expect(marks[1]!.stroke.mock.calls.at(-1)?.[0].alpha).toBe(selectionOpacity)
+    renderer.dispose()
   })
 
   it.each([1, 1.5, 2])('rasterizes every text role at twice DPR %s without enlarging text during zoom', async (dpr) => {

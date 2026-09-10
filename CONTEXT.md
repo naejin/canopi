@@ -41,6 +41,15 @@ _Avoid_: Recent file, recent document, history item
 The desktop app-level workspace for finding, organizing, and switching between saved Designs. A design notebook stores organizing metadata and references to saved Design locations only; the saved `.canopi` Design remains the authority for design content and Design name, and switching to a notebook entry starts a different Design Session rather than merging designs.
 _Avoid_: File browser, recent list, project folder
 
+**Species Key**:
+The Design’s searchable index of placed Species. Each entry pairs a Species Code with names, authored appearances, and the number of placed Plants. It identifies existing Plants; the Species Catalog discovers Species for placement.
+
+**Species Code**:
+A short, unique reference for a Species within one Design, derived initially from its canonical name. A Design reserves assigned codes even when its last Plant of that Species is removed, so later additions do not rename existing references. Codes accompany the on-canvas key and printed detail sheets; they do not replace canonical Species identity.
+
+**Species Focus**:
+A temporary viewing state that keeps one Species prominent while dimming other Plants. It survives switching side panels, is visibly clearable on the Canvas, and resets for a different Design. Focus changes neither Plant selection nor saved content.
+
 **Browser Draft**:
 A Web Edition Design snapshot saved in the current browser profile to preserve active work for autosave and recovery. A browser draft is internal convenience state, not a visible workspace, portable `.canopi` file, Design Notebook entry, saved path reference, or cloud-synced library item.
 _Avoid_: Notebook entry, recent file, autosave backup

@@ -35,6 +35,7 @@ export type CanopiFile = {
 	north_bearing_deg: number | null,
 	plant_species_colors: { [key in string]: string },
 	plant_species_symbols?: { [key in string]: string },
+	plant_species_codes?: { [key in string]: string },
 	layers: Layer[],
 	plants: PlacedPlant[],
 	zones: Zone[],

@@ -1,3 +1,4 @@
+import { speciesFocusOpacity } from '../species-key'
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
 import {
   getAnnotationVisualWorldCorners,
@@ -556,6 +557,7 @@ function syncPlants(
       snapshot.hoveredCanonicalName,
       snapshot.highlightedPlantIds.has(entry.plant.id),
       hoverStateForTarget(snapshot, 'plant', entry.plant.id),
+      speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName),
     )
     circle.visible = true
 
@@ -624,6 +626,7 @@ function drawPlant(
   hoveredCanonicalName: string | null,
   highlighted: boolean,
   hoverState: SceneRendererHoverState | null,
+  glyphOpacity: number,
 ): void {
   const color = toPixiColor(entry.color, 0)
   const selected = entry.selected
@@ -636,7 +639,7 @@ function drawPlant(
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
   graphics.clear()
-  drawPlantSymbolGlyph(graphics, renderedSymbol, entry)
+  drawPlantSymbolGlyph(graphics, renderedSymbol, entry, glyphOpacity)
 
   if (selected) {
     graphics.circle(x, y, r)
@@ -661,20 +664,20 @@ function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolI
   return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
 }
 
-function drawPlantSymbolGlyph(graphics: Graphics, symbol: PlantSymbolId, entry: PlantPresentationEntry): void {
+function drawPlantSymbolGlyph(graphics: Graphics, symbol: PlantSymbolId, entry: PlantPresentationEntry, opacity: number): void {
   const { x, y } = entry.screenPoint
   const r = entry.radiusScreenPx
   const color = toPixiColor(entry.color, 0)
   if (entry.lod === 'dot' || symbol === 'round') {
-    graphics.circle(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color, alpha: 1 })
-    if (entry.lod !== 'dot') graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width: getPlantSymbolEdgeWidth(r * 2) })
+    graphics.circle(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color, alpha: opacity })
+    if (entry.lod !== 'dot') graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width: getPlantSymbolEdgeWidth(r * 2), alpha: opacity })
     return
   }
   const edge = toPixiColor(getPlantSymbolEdgeColor(entry.color), 0)
   const width = getPlantSymbolEdgeWidth(r * 2)
   for (const shape of getPlantSymbolShapes(symbol, r * 2)) {
     tracePlantSymbolContour(graphics, shape.outline, x, y, r)
-    graphics.stroke({ color: edge, width, join: 'round', cap: 'round' }).fill({ color, alpha: 1 })
+    graphics.stroke({ color: edge, width, alpha: opacity, join: 'round', cap: 'round' }).fill({ color, alpha: opacity })
     for (const hole of shape.holes ?? []) {
       tracePlantSymbolContour(graphics, hole, x, y, r)
       graphics.cut()

@@ -1,3 +1,4 @@
+import type { SpeciesFocus } from '../species-key'
 import type { RendererBackendDefinition, RendererBackendInstance } from './types'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
@@ -16,6 +17,7 @@ export type SceneRendererHoverTarget =
   | { kind: 'group'; id: string; state: SceneRendererHoverState }
 
 export interface SceneRendererSnapshot {
+  readonly speciesFocus: SpeciesFocus
   readonly scene: ScenePersistedState
   readonly viewport: SceneViewportState
   readonly revealedAnnotationId: string | null

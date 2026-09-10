@@ -713,11 +713,17 @@ const REQUIRED_IMPORT_POLICIES = [
     kind: 'require-imports',
     name: 'Panel resize surfaces delegate pointer lifecycle ownership',
     from: [
-      'src/app.tsx',
+      'src/components/shared/SidePanelDock.tsx',
       'src/components/canvas/BottomPanel.tsx',
       'src/components/panels/FavoritesPanel.tsx',
     ],
     targets: ['src/components/shared/usePointerResize.ts'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Desktop and Web share the resizable side dock',
+    from: ['src/app.tsx', 'src/web/WebApp.tsx'],
+    targets: ['src/components/shared/SidePanelDock.tsx'],
   },
   {
     kind: 'require-imports',

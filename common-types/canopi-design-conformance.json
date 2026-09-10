@@ -20,6 +20,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [],
       "plants": [],
       "zones": [],
@@ -42,6 +43,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [
         {
           "name": "plants",
@@ -71,6 +73,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [
         {
           "name": "measurement-guides",
@@ -100,6 +103,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [
         {
           "name": "measurement-guides",
@@ -229,6 +233,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [],
       "plants": [
         {
@@ -287,6 +292,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [],
       "plants": [
         {
@@ -393,6 +399,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [],
       "plants": [],
       "zones": [
@@ -432,6 +439,7 @@
       "north_bearing_deg": null,
       "plant_species_colors": {},
       "plant_species_symbols": {},
+      "plant_species_codes": {},
       "layers": [
         {
           "name": "measurement-guides",

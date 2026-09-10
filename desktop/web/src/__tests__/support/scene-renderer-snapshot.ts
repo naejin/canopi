@@ -7,6 +7,7 @@ import type {
 import { projectSceneSelectionEntityIds } from '../../canvas/runtime/scene-runtime/selection'
 
 export interface TestSceneRendererSnapshotOptions {
+  readonly speciesFocus?: SceneRendererSnapshot['speciesFocus']
   readonly scene?: Partial<ScenePersistedState>
   readonly viewport?: SceneRendererSnapshot['viewport']
   readonly selectedTargets?: SceneDesignObjectSelection
@@ -25,6 +26,7 @@ export function createTestSceneRendererSnapshot(
 ): SceneRendererSnapshot {
   const scene: ScenePersistedState = {
     plantSpeciesColors: options.scene?.plantSpeciesColors ?? {},
+    plantSpeciesCodes: options.scene?.plantSpeciesCodes ?? {},
     plantSpeciesSymbols: options.scene?.plantSpeciesSymbols ?? {},
     layers: options.scene?.layers ?? [],
     plants: options.scene?.plants ?? [],
@@ -46,6 +48,7 @@ export function createTestSceneRendererSnapshot(
     selectionLabelPlantIds: new Set(singleSelectedPlant ? [singleSelectedPlant.id] : []),
     revealedAnnotationId: getRevealedAnnotationId(selectedTargets),
     ...selectionProjection,
+    speciesFocus: options.speciesFocus ?? { canonicalName: null, showCodes: false },
     highlightedPlantIds: new Set(options.highlightedPlantIds ?? []),
     highlightedZoneIds: new Set(options.highlightedZoneIds ?? []),
     speciesCache: new Map(options.speciesCache ?? []),

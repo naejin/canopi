@@ -1,3 +1,4 @@
+import type { SpeciesFocus, SpeciesFocusCommands } from './species-key'
 import type { CanvasPrintSnapshot } from '../print'
 import type { CanvasInspectionHandle } from '../inspection'
 import type { ReadonlySignal } from '@preact/signals'
@@ -107,6 +108,7 @@ export interface CanvasPlantPresentationCommandSurface {
 }
 
 export interface CanvasCommandSurface {
+  readonly speciesFocus: SpeciesFocusCommands
   readonly tools: CanvasToolCommandSurface
   readonly viewport: CanvasViewportCommandSurface
   readonly history: CanvasHistoryCommandSurface
@@ -117,6 +119,7 @@ export interface CanvasCommandSurface {
 }
 
 export interface CanvasQuerySurface {
+  getSpeciesFocus(): SpeciesFocus
   readonly revision: CanvasQueryRevision
   readonly viewport: ReadonlySignal<CameraViewportSnapshot>
   capturePrintSnapshot(): CanvasPrintSnapshot | null

@@ -14,48 +14,9 @@
   overflow: hidden;
 }
 
-/* Resizable side panel (right side) */
-.sidePanel {
-  width: var(--side-panel-width);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--panel-gradient);
-  border-left: 1px solid var(--color-border);
-  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03);
-}
-
 .sidePanelLoading {
   flex: 1;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
     var(--panel-gradient);
-}
-
-/* Drag handle — doubles as the panel left border */
-.dragHandle {
-  width: 2px;
-  cursor: col-resize;
-  background: var(--color-border-strong);
-  flex-shrink: 0;
-  transition: background-color var(--transition-fast);
-  position: relative;
-}
-
-/* Wider hit target without visual width */
-.dragHandle::before {
-  content: '';
-  position: absolute;
-  inset: 0 -4px;
-}
-
-.dragHandle:hover {
-  background: var(--color-accent);
-  width: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dragHandle {
-    transition: none;
-  }
 }

@@ -1,63 +1,18 @@
 .panel {
-  width: 216px;
-  min-width: 216px;
+  min-width: 0;
+  height: 100%;
   background: var(--panel-gradient);
-  border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  flex-shrink: 0;
 }
 
-.panelCollapsed {
-  width: var(--control-size-md);
-  min-width: var(--control-size-md);
-  display: flex;
-  justify-content: center;
-  padding-top: var(--space-2);
-  background: var(--panel-gradient);
-  border-left: 1px solid var(--color-border);
-}
-
-.header {
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--color-surface-muted);
-}
-
-.headerTitle {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.collapseBtn {
-  width: var(--control-size-md);
-  height: var(--control-size-md);
-  border: 1px solid transparent;
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color var(--transition-fast);
-}
-
-.collapseBtn:hover,
 .toggleBtn:hover,
 .lockBtn:hover,
 .layerName:hover {
   background: var(--color-control-hover);
 }
 
-.collapseBtn:focus-visible,
 .toggleBtn:focus-visible,
 .lockBtn:focus-visible,
 .layerName:focus-visible,

@@ -1,3 +1,4 @@
+import type { SpeciesFocus } from '../species-key'
 import type {
   SceneConcreteDesignObjectTarget,
   SceneDesignObjectSelection,
@@ -86,6 +87,7 @@ export interface SceneGuide {
 export interface ScenePersistedState {
   plantSpeciesColors: Record<string, string>
   plantSpeciesSymbols: Record<string, string>
+  plantSpeciesCodes: Record<string, string>
   layers: SceneLayerEntity[]
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
@@ -102,6 +104,7 @@ export interface SceneViewportState {
 }
 
 export interface SceneSessionState {
+  speciesFocus: SpeciesFocus
   selectedTargets: SceneDesignObjectSelection
   hoveredTarget: SceneDesignObjectTarget | null
   documentRevision: number

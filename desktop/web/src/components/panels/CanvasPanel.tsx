@@ -1,3 +1,4 @@
+import { SpeciesFocusChip } from '../canvas/SpeciesFocusChip'
 import { useRef, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-document-session'
@@ -14,7 +15,6 @@ import {
 } from '../../maplibre/canvas-surface-state'
 import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
-import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
 import { getLocationNoticeReadModel, useSavedLocationPresentation } from '../../app/location'
@@ -139,6 +139,7 @@ export function CanvasPanel() {
             </div>
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
             {hasDesign && <InspectionLens canvasRef={containerRef} />}
+          {hasDesign && <SpeciesFocusChip />}
             {locationNotice.visible && (
               <div
                 className={styles.basemapFeedback}
@@ -158,7 +159,7 @@ export function CanvasPanel() {
             {!hasDesign && <WelcomeScreen />}
             {hasDesign && <DisplayLegend />}
           </div>
-          {hasDesign && <LayerPanel />}
+
         </div>
         {hasDesign && (
           <div className={styles.canvasBar}>

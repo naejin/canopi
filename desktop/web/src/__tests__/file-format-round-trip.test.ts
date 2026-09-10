@@ -14,6 +14,7 @@ const FIXTURE: CanopiFile = {
     'Quercus robur': '#228833',
     'Malus domestica': '#AA4422',
   },
+  plant_species_codes: { 'Malus domestica': 'MDO', 'Quercus robur': 'QRO' },
   plant_species_symbols: {
     'Quercus robur': 'tree',
     'Malus domestica': 'climber',

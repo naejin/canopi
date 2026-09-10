@@ -7,6 +7,21 @@ import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 describe('createCanvas2DSceneRenderer', () => {
+  it('dims other species without changing authored color, layer opacity or selected identity', () => {
+    const ctx = createMockCanvasContext()
+    const alphas: number[] = []
+    ctx.fill.mockImplementation(() => { alphas.push(ctx.globalAlpha) })
+    const snapshot = createTestSceneRendererSnapshot({
+      scene: { plants: [createPlant({ id: 'apple', position: { x: 0, y: 0 } }), createPlant({ id: 'mint', canonicalName: 'Mentha spicata', position: { x: 3, y: 0 } })],
+        layers: [{ kind: 'layer', name: 'plants', visible: true, opacity: .5, locked: false }] },
+      speciesFocus: { canonicalName: 'Malus domestica', showCodes: false },
+    })
+    renderCanvas2DSceneSnapshot(ctx as unknown as CanvasRenderingContext2D, snapshot, { widthPx: 400, heightPx: 300 })
+    expect(alphas).toEqual([.5, .08])
+    expect(snapshot.selectedPlantIds.size).toBe(0)
+    expect(snapshot.scene.layers[0]!.opacity).toBe(.5)
+  })
+
   it('renders crowded position marks as solid dots without outlines exceeding their footprints', () => {
     const ctx = createMockCanvasContext()
     renderCanvas2DSceneSnapshot(ctx as unknown as CanvasRenderingContext2D, createRendererSnapshot({
@@ -491,6 +506,7 @@ describe('createCanvas2DSceneRenderer', () => {
     } as never)
 
     const snapshot: SceneRendererSnapshot = {
+      speciesFocus: { canonicalName: null, showCodes: false },
       scene: {
         plants: [],
         zones: [],
@@ -508,6 +524,7 @@ describe('createCanvas2DSceneRenderer', () => {
         layers: [],
         plantSpeciesColors: {},
         plantSpeciesSymbols: {},
+    plantSpeciesCodes: {},
         measurementGuides: [],
         guides: [],
       },

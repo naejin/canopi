@@ -832,7 +832,8 @@
     "close": "Close"
   },
   "sidebar": {
-    "resize": "Resize sidebar"
+    "resize": "Resize sidebar",
+    "close": "Close panel"
   },
   "favorites": {
     "empty": "No favorites yet",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} text items need a readable place to print. Add a focused detail page or keep them on the overview.",
     "keepText": "Keep text on overview",
     "addDetail": "Add detail page"
+  },
+  "speciesKey": {
+    "title": "Species key",
+    "description": "Find species already placed in this Design.",
+    "search": "Search names or codes",
+    "showCodes": "Show codes on canvas",
+    "count": "{{count}} species",
+    "clear": "Clear focus",
+    "focus": "Focus: {{code}}",
+    "noResults": "No matching species.",
+    "empty": "Place plants to build your species key.",
+    "detailHint": "Codes appear as you zoom in, where space allows. Click a row to focus its plants."
   }
 }

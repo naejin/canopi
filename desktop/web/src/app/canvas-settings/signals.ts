@@ -15,7 +15,6 @@ export function createDefaultLayerVisibility(): Record<string, boolean> {
 
 export const layerVisibility = signal<Record<string, boolean>>(createDefaultLayerVisibility())
 
-export const layerPanelOpen = signal<boolean>(true)
 export const activeLayerName = signal<string>('zones')
 export const snapToGridEnabled = signal<boolean>(DEFAULT_SETTINGS.snap_to_grid)
 export const gridVisible = signal<boolean>(true)

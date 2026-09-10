@@ -1,4 +1,4 @@
-import { activeLayerName, contourIntervalMeters, hillshadeOpacity, hillshadeVisible, layerLockState, layerOpacity, layerPanelOpen, layerVisibility } from '../canvas-settings/signals'
+import { activeLayerName, contourIntervalMeters, hillshadeOpacity, hillshadeVisible, layerLockState, layerOpacity, layerVisibility } from '../canvas-settings/signals'
 import { readSavedLocationPresentation } from '../location'
 import { mutateSettingsProjection } from '../settings/projection'
 import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '../../canvas/session'
@@ -53,7 +53,6 @@ export interface CanvasLayerPresentationMapSurface {
 }
 
 export interface CanvasLayerPresentation {
-  readonly panelOpen: boolean
   readonly rows: readonly CanvasLayerPresentationRow[]
   readonly mapSurface: CanvasLayerPresentationMapSurface
   readonly hasVisibleMapLayer: boolean
@@ -132,15 +131,10 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
   const mapSurface = createCanvasLayerPresentationMapSurface(rows, visibility, opacities, hillshadeOn)
 
   return {
-    panelOpen: layerPanelOpen.value,
     rows,
     mapSurface,
     hasVisibleMapLayer: mapSurface.hasVisibleMapLayer,
   }
-}
-
-export function toggleCanvasLayerPresentationPanel(): void {
-  layerPanelOpen.value = !layerPanelOpen.value
 }
 
 export function setCanvasLayerPresentationActiveLayer(id: string): void {

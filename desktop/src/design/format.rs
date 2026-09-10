@@ -700,6 +700,7 @@ pub(crate) fn create_new_design(
         north_bearing_deg: NEW_DESIGN_NORTH_BEARING_DEG,
         plant_species_colors: std::collections::HashMap::new(),
         plant_species_symbols: std::collections::HashMap::new(),
+        plant_species_codes: std::collections::HashMap::new(),
         layers,
         plants: Vec::new(),
         zones: Vec::new(),

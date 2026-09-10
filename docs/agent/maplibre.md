@@ -49,7 +49,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Canopi has no app-managed offline tile downloader or cache on desktop or Web. MapLibre reads its configured live sources; do not reintroduce a parallel Tauri tile store without a product and cache/update decision.
 - Contours use `layerVisibility.contours` and `layerOpacity.contours`.
 - Hillshading uses `hillshadeVisible` and `hillshadeOpacity`.
-- Canvas Layer Presentation bridges scene/map/terrain layer asymmetry for `LayerPanel`, Canvas shell Location Notices, and Canvas Map Surface snapshots. Map readiness callers should consume its map-surface projection instead of recomputing base/contour/hillshade visibility.
+- Canvas Layer Presentation bridges scene/map/terrain layer asymmetry for the Desktop `LayersPanel` adapter, Canvas shell Location Notices, and Canvas Map Surface snapshots. Map readiness callers should consume its map-surface projection instead of recomputing base/contour/hillshade visibility.
 - Terrain paint-only changes, such as opacity and theme, should stay incremental through `maplibre/terrain-sync.ts`.
 - Rebuild terrain sources/layers only when source-shape inputs change.
 

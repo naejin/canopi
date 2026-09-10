@@ -1,3 +1,4 @@
+import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import { useEffect, useRef } from 'preact/hooks'
 import {
   designSessionStore,
@@ -165,6 +166,7 @@ export function WebCanvasWorkspace({
             />
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
             {hasDesign && <InspectionLens canvasRef={containerRef} />}
+          {hasDesign && <SpeciesFocusChip />}
             {!hasDesign && (
               <div className={panelStyles.canvasEmptyState}>
                 <WebWelcomeScreen controller={controller} />

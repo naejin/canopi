@@ -695,7 +695,8 @@
     "close": "Schließen"
   },
   "sidebar": {
-    "resize": "Seitenleiste anpassen"
+    "resize": "Seitenleiste anpassen",
+    "close": "Panel schließen"
   },
   "filters": {
     "sun": "Sonne",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} Texte benötigen einen lesbaren Druckbereich. Fügen Sie eine passende Detailseite hinzu oder behalten Sie die Texte in der Übersicht.",
     "keepText": "Texte in der Übersicht behalten",
     "addDetail": "Detailseite hinzufügen"
+  },
+  "speciesKey": {
+    "title": "Artenschlüssel",
+    "description": "Bereits in diesem Entwurf platzierte Arten finden.",
+    "search": "Namen oder Kürzel suchen",
+    "showCodes": "Kürzel auf der Zeichenfläche anzeigen",
+    "count": "{{count}} Arten",
+    "clear": "Fokus aufheben",
+    "focus": "Fokus: {{code}}",
+    "noResults": "Keine passenden Arten.",
+    "empty": "Platzieren Sie Pflanzen, um den Artenschlüssel zu erstellen.",
+    "detailHint": "Kürzel erscheinen beim Vergrößern, wenn Platz ist. Eine Zeile fokussiert ihre Pflanzen."
   }
 }

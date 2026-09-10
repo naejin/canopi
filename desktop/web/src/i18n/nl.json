@@ -695,7 +695,8 @@
     "close": "Sluiten"
   },
   "sidebar": {
-    "resize": "Zijbalk aanpassen"
+    "resize": "Zijbalk aanpassen",
+    "close": "Paneel sluiten"
   },
   "filters": {
     "sun": "Zon",
@@ -964,5 +965,17 @@
     "textNeedsDetail": "{{count}} teksten hebben een leesbare plek nodig op papier. Voeg een gerichte detailpagina toe of behoud ze op het overzicht.",
     "keepText": "Tekst op overzicht behouden",
     "addDetail": "Detailpagina toevoegen"
+  },
+  "speciesKey": {
+    "title": "Soortensleutel",
+    "description": "Vind soorten die al in dit ontwerp staan.",
+    "search": "Zoek namen of codes",
+    "showCodes": "Codes op het canvas tonen",
+    "count": "{{count}} soorten",
+    "clear": "Focus wissen",
+    "focus": "Focus: {{code}}",
+    "noResults": "Geen overeenkomende soorten.",
+    "empty": "Plaats planten om de soortensleutel te maken.",
+    "detailHint": "Codes verschijnen bij inzoomen, als er ruimte is. Klik op een rij om de planten te vinden."
   }
 }

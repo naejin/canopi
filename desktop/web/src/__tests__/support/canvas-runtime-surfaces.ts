@@ -30,6 +30,7 @@ export function createTestCanvasCommandSurface(
   overrides: DeepPartial<CanvasCommandSurface> = {},
 ): CanvasCommandSurface {
   const surface: CanvasCommandSurface = {
+    speciesFocus: { focus: () => {}, showCodes: () => {} },
     tools: {
       setTool: () => {},
     },
@@ -93,6 +94,7 @@ export function createTestCanvasCommandSurface(
         setCanvasTool(name)
       },
     },
+    speciesFocus: { ...surface.speciesFocus, ...overrides.speciesFocus },
     viewport: { ...surface.viewport, ...overrides.viewport },
     history: { ...surface.history, ...overrides.history },
     sceneEdits: { ...surface.sceneEdits, ...overrides.sceneEdits },

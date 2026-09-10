@@ -62,7 +62,7 @@ describe('PanelBar', () => {
 
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
       .map((icon) => icon.getAttribute('stroke-width') ?? icon.getAttribute('strokeWidth'))
-    expect(strokes).toEqual(['1.5', '1.5', '1.5', '1.5', '1.5'])
+    expect(strokes).toEqual(['1.5', '1.5', '1.5', '1.5', '1.5', '1.5', '1.5'])
   })
 
   it('orders the Design Notebook before plant-library panels', async () => {
@@ -73,6 +73,8 @@ describe('PanelBar', () => {
     expect(panelButtonLabels()).toEqual([
       'Design Canvas',
       'Design Location',
+      'Species key',
+      'Layers',
       'Design Notebook',
       'Plant Database',
       'Favorites',
@@ -105,6 +107,8 @@ describe('PanelBar', () => {
     expect(panelButton('Design Canvas').disabled).toBe(false)
     expect(panelButton('Design Canvas').getAttribute('aria-pressed')).toBe('true')
     expect(panelButton('Design Location').disabled).toBe(true)
+    expect(panelButton('Species key').disabled).toBe(true)
+    expect(panelButton('Layers').disabled).toBe(true)
     expect(panelButton('Plant Database').disabled).toBe(true)
     expect(panelButton('Design Notebook').disabled).toBe(false)
     expect(panelButton('Favorites').disabled).toBe(true)
