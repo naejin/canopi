@@ -107,7 +107,7 @@ export function discoverCssModuleFacts(root: string | URL): CssModuleFacts[] {
         declarations: parseCssDeclarations(path, readFileSync(filePath, 'utf8')),
       }
     })
-    .sort((left, right) => left.path.localeCompare(right.path))
+    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
 }
 
 function cssModulePathsUnder(directory: string): string[] {
