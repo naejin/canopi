@@ -1,12 +1,15 @@
 // @vitest-environment node
 
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
   createTypeScriptSourceGraph,
   parseTypeScriptSource,
 } from './support/architecture/source-facts'
-import { parseCssDeclarations } from './support/architecture/css-facts'
+import { discoverCssModuleFacts, parseCssDeclarations } from './support/architecture/css-facts'
 import {
   collectArchitecturePolicyViolations,
   collectCssPolicyViolations,
@@ -641,5 +644,31 @@ describe('CSS architecture source facts', () => {
       '[Spacing uses tokens] src/fixture.module.css:5 gap: 6px',
     ])
     expect(files[0]?.declarations[2]?.atRules).toEqual(['@media (min-width: 1px)'])
+  })
+})
+
+
+describe('CSS Module discovery', () => {
+  it('orders mixed-case sibling paths by code units and retains every declaration', () => {
+    const temporary = mkdtempSync(join(tmpdir(), 'canopi-css-order-'))
+    const root = join(temporary, 'src')
+    try {
+      for (const name of ['zebra', 'ZebraTools', 'alpha']) {
+        mkdirSync(join(root, name), { recursive: true })
+        writeFileSync(join(root, name, 'Style.module.css'), '.item { color: var(--ink); }')
+      }
+      writeFileSync(join(root, 'ignored.css'), '.ignored { color: red; }')
+      const files = discoverCssModuleFacts(root)
+      expect(files.map(file => file.path)).toEqual([
+        'src/ZebraTools/Style.module.css', 'src/alpha/Style.module.css', 'src/zebra/Style.module.css',
+      ])
+      expect(files.map(file => file.declarations.map(({ path, rule, property, value }) => ({ path, rule, property, value })))).toEqual([
+        [{ path: 'src/ZebraTools/Style.module.css', rule: '.item', property: 'color', value: 'var(--ink)' }],
+        [{ path: 'src/alpha/Style.module.css', rule: '.item', property: 'color', value: 'var(--ink)' }],
+        [{ path: 'src/zebra/Style.module.css', rule: '.item', property: 'color', value: 'var(--ink)' }],
+      ])
+    } finally {
+      rmSync(temporary, { recursive: true, force: true })
+    }
   })
 })
