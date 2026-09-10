@@ -7,7 +7,36 @@ sidebar legend and readability consent remain retired. The [user guide](canvas-p
 [ADR 0024](adr/0024-shared-canvas-pdf-export.md) and [agent guide](agent/canvas-pdf.md)
 describe the current behaviour.
 
-## Current field layout evidence
+## Narrow-strip correction (`canopi-dcxj`)
+
+The newer 19-page orchard export exposed a direction bias on page 16: a shallow
+horizontal bed with 189 plants had 68 identity groups labelled inside its crowded
+planting strip and four without placed labels. Rotating the same plants preserved
+inferred row groups while removing missing labels, isolating placement direction
+and target order as the cause.
+
+Narrow-sheet labels now search outward along the short axis, remain clear of the
+planting frame and are allocated in order along the long axis. The reproduction has
+166 nonempty identity groups covering all 189 plants, with none inside the strip.
+The other 18 page plans are identical to baseline `8fe09a71`; exact coverage, scale,
+all nine map/key pairs and the lightweight overview are preserved. The source PDF
+and Design were not modified.
+
+The production Chrome worker and PDF encoder generated all 19 pages. Poppler checks
+passed embedded Unicode fonts, vector artwork, page/key links and the 50 mm bar.
+All 19 SVG/PDF comparisons pass; the maximum residual is 0.106 against the unchanged
+0.25 limit. Worker cleanup leaves zero workers. Generation took 12.5 seconds while
+the full suite and builds ran concurrently; this is not an isolated performance
+benchmark. The compact data file records this run under `narrowStripRevision`.
+
+Four synthetic regressions cover horizontal, vertical and slightly tilted mixed
+strips, complete identities, unchanged coverage, non-overlapping ink and transparent
+labels. TypeScript, 92 focused PDF/snapshot tests, all 2,231 frontend tests across
+243 files, both edition builds, the Web boundary scan and the production probe
+build pass. No Rust or shared transport contract changed. Physical printing and a
+fresh packaged-native matrix were not performed.
+
+## Earlier four-area field layout evidence
 
 The private orchard contains 2,201 plants and 117 Species. Production validation uses
 the four exact rectangles from its supplied export: 371/410/323/263 plant placements

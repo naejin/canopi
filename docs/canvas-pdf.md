@@ -22,7 +22,8 @@ overflow or crowded-text confirmation before saving.
 Numeric references distinguish Species even when they share a symbol and colour.
 They stay consistent throughout the PDF. Straight runs can share a bracket, reference
 and plant count; long runs repeat the reference so it is easy to follow. Individual
-placements keep their own leaders. Names appear beside the drawing where space permits;
+placements keep their own leaders. On long, narrow sheets, references sit outside
+the planting strip and leaders run out toward the free paper space. Names appear beside the drawing where space permits;
 the key always includes full common and botanical names, the Design's letter code,
 counts and every authored appearance. These print references do not change your Design.
 

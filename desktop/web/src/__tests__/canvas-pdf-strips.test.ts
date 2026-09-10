@@ -1,0 +1,41 @@
+import { readFileSync } from 'node:fs'
+import { expect, it } from 'vitest'
+import { buildPdfPlan } from '../app/canvas-pdf/layout'
+import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
+import { overlaps } from '../app/canvas-pdf/field-geometry'
+import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
+const fonts = new Map<PdfFontId, Uint8Array>([
+  ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['strong', readFileSync('public/pdf-fonts/NotoSans-SemiBold.ttf')],
+])
+const labels: PdfLabels = { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+
+it.each([
+  { vertical: false, tilt: 0, rows: 3 },
+  { vertical: true, tilt: 0, rows: 3 },
+  { vertical: false, tilt: .015, rows: 4 },
+  { vertical: true, tilt: -.015, rows: 4 },
+])('keeps mixed strip identities clear of plants ($vertical, slope $tilt)', ({ vertical, tilt, rows }) => {
+  const point = (x: number, y: number) => vertical ? { x: y, y: x } : { x, y }
+  const input: PdfInput = { name: 'Mixed strip', locale: 'en', commonNames: {}, canvas: {
+    layers: [{ name: 'plants', visible: true, opacity: 1 }], annotations: [], zones: [], measurements: [],
+    plants: Array.from({ length: 30 * rows }, (_, i) => ({ id: String(i), canonicalName: `Species ${i % 7}`,
+      position: point((i % 30) * .35, Math.floor(i / 30) * .3 + (i % 30) * .35 * tilt), color: '#428063', symbol: 'round', mark: [], pinnedName: false })),
+  } }
+  const bounds = { ...point(-.2, -.4), width: vertical ? 1.7 : 10.6, height: vertical ? 10.6 : 1.7 }
+  const plan = buildPdfPlan(input, { paper: 'A4', layers: ['plants'], areas: [{ id: 'strip', name: 'Strip', bounds }] }, createPdfTextEngine(fonts, 'en'), labels)
+  const page = plan.pages.find(p => p.kind === 'detail')!
+  expect(plan.pages).toHaveLength(3)
+  expect(page.ground).toEqual(bounds)
+  expect(page.identifiedPlants!.flatMap(g => g.ids).sort()).toEqual(input.canvas.plants.map(p => p.id).sort())
+  expect(page.identifiedPlants!.every(g => g.bounds.width > 0)).toBe(true)
+  const inside = page.identifiedPlants!.filter(({ bounds: b }) => vertical
+    ? b.x + b.width / 2 > page.frame.x && b.x + b.width / 2 < page.frame.x + page.frame.width
+    : b.y + b.height / 2 > page.frame.y && b.y + b.height / 2 < page.frame.y + page.frame.height)
+  expect(inside.length).toBe(0)
+  const ink = page.operations.flatMap(op => op.kind === 'text' && op.line.ink
+    ? [{ ...op.line.ink, x: op.x + op.line.ink.x, y: op.y + op.line.ink.y }] : [])
+  for (const [i, bounds] of ink.entries()) {
+    expect(ink.slice(i + 1).some(other => overlaps(bounds, other))).toBe(false)
+  }
+  expect(page.operations.some(op => op.kind === 'path' && op.fill === '#ffffff')).toBe(false)
+})

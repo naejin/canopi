@@ -656,5 +656,197 @@
     7,
     8,
     9
-  ]
+  ],
+  "narrowStripRevision": {
+    "date": "2026-09-10",
+    "bead": "canopi-dcxj",
+    "baseline": "8fe09a71",
+    "sourcePdfSha256": "9c7d0e71765072ad9e948ddfeef1ba4ed388f487e705609771dd8efa32aaac99",
+    "sourceDesignSha256": "1102a954908f8dbbd44a4bf46b840b208c1c9fd1f4889b75752e26f659f8603c",
+    "browser": "150.0.7871.46",
+    "verification": {
+      "file": "private.pdf",
+      "sha256": "b63b16bc579c118647ec8d2367a9064798507636bd822b89a477408dcfb8af3d",
+      "pages": 19,
+      "bytes": 755650,
+      "canvasPages": 10,
+      "exact50mmBars": 1,
+      "embeddedUnicodeFonts": true,
+      "vectorCanvas": true,
+      "textSha256": "9d8c3b31e6c14f2a0b2a36d0f30e3a3ecc7e1f362c38906cb5fa1e1adbe3af89",
+      "planSha256": "d1cb932c1214a183c60ae464178bdab07ac853e132412a192a2b021403c283dd",
+      "previewComparisons": [
+        {
+          "page": 1,
+          "meanChannelDifference": 2.5417648246219904,
+          "neighborhoodDifference": 0.06377747573056561,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 2,
+          "meanChannelDifference": 2.8675904227981217,
+          "neighborhoodDifference": 0.06232368880625444,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 3,
+          "meanChannelDifference": 3.016150659494375,
+          "neighborhoodDifference": 0.07349973120162479,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 4,
+          "meanChannelDifference": 3.096061653096708,
+          "neighborhoodDifference": 0.06333208908796815,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 5,
+          "meanChannelDifference": 3.3872274814493655,
+          "neighborhoodDifference": 0.08053193410405615,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 6,
+          "meanChannelDifference": 2.5606912447980346,
+          "neighborhoodDifference": 0.051954484854342016,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 7,
+          "meanChannelDifference": 3.1133625745771414,
+          "neighborhoodDifference": 0.06967478499824299,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 8,
+          "meanChannelDifference": 3.2576273570839382,
+          "neighborhoodDifference": 0.070142928622579,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 9,
+          "meanChannelDifference": 4.130168753363674,
+          "neighborhoodDifference": 0.10596625996689302,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 10,
+          "meanChannelDifference": 2.7174168047601697,
+          "neighborhoodDifference": 0.05129098584131527,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 11,
+          "meanChannelDifference": 2.458002876837146,
+          "neighborhoodDifference": 0.057019243244649076,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 12,
+          "meanChannelDifference": 2.503740863589036,
+          "neighborhoodDifference": 0.045724096126673046,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 13,
+          "meanChannelDifference": 3.3319992422220626,
+          "neighborhoodDifference": 0.08263798932313347,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 14,
+          "meanChannelDifference": 2.800185720614604,
+          "neighborhoodDifference": 0.046882928924035124,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 15,
+          "meanChannelDifference": 3.82190001882623,
+          "neighborhoodDifference": 0.09783669767231544,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 16,
+          "meanChannelDifference": 1.7549170596679193,
+          "neighborhoodDifference": 0.027346207874093007,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 17,
+          "meanChannelDifference": 1.5209936111990359,
+          "neighborhoodDifference": 0.038191830716428204,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 18,
+          "meanChannelDifference": 2.0611704713680226,
+          "neighborhoodDifference": 0.04825514536834835,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 19,
+          "meanChannelDifference": 2.700165830421474,
+          "neighborhoodDifference": 0.06238043348799215,
+          "maximumAllowed": 0.25
+        }
+      ]
+    },
+    "workerGenerationMsUnderConcurrentQualityGates": 12534.5,
+    "activeWorkersAfterClear": 0,
+    "unchangedPagePlans": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      17,
+      18,
+      19
+    ],
+    "detailPlantCounts": [
+      301,
+      211,
+      256,
+      328,
+      263,
+      212,
+      207,
+      189,
+      234
+    ],
+    "page16": {
+      "plants": 189,
+      "identityGroups": 166,
+      "before": {
+        "unplaced": 4,
+        "insidePlantingStrip": 68
+      },
+      "after": {
+        "unplaced": 0,
+        "insidePlantingStrip": 0
+      }
+    },
+    "checks": {
+      "frontendFiles": 243,
+      "frontendTests": 2231,
+      "focusedPdfAndSnapshotTests": 92,
+      "typescript": true,
+      "nativeFrontendBuild": true,
+      "webBuildAndBoundaryScan": true,
+      "validationBuild": true,
+      "physicalPrinting": false,
+      "freshPackagedNativeMatrix": false
+    }
+  }
 }

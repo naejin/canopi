@@ -65,6 +65,11 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
   text: PdfTextEngine, references: FieldReferences): FieldDrawing {
   const canvas = input.canvas, operations: PdfOperation[] = [], links: PdfLink[] = [], destinations: PdfDestination[] = []
   const point = (p: PrintPoint): PrintPoint => ({ x: (frame.x + (p.x - ground.x) * scale) / MM, y: (frame.y + (p.y - ground.y) * scale) / MM })
+  // Shallow beds leave space beside their short axis: keep identities out of the planting.
+  const strip = Math.max(frame.width / frame.height, frame.height / frame.width) >= 4
+    ? inflate({ x: frame.x / MM, y: frame.y / MM, width: frame.width / MM, height: frame.height / MM }, 1) : undefined
+  const stripOptions = (anchor: PrintPoint) => strip ? { outside: strip, axis: frame.width > frame.height ? 'y' as const : 'x' as const,
+    preferred: frame.width > frame.height ? anchor.y < strip.y + strip.height / 2 ? -1 : 1 : anchor.x < strip.x + strip.width / 2 ? -1 : 1 } : {}
   const opacity = (name: string) => canvas.layers.find(l => l.name === name)?.opacity ?? 1
   const space = new FieldSpace({ x: 8, y: 8, width: page.width / MM - 16, height: page.height / MM - 16 }, text)
   space.reserve({ x: 8.3, y: 8.3, width: 12, height: 10 })
@@ -144,7 +149,10 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
     placeNotes()
     const owners = new Map<FieldLabel, Target>()
     const unresolved: Target[] = []
-    targets.sort((a, b) => Number(!!a.spine) - Number(!!b.spine) || a.anchors[0]!.y - b.anchors[0]!.y || a.anchors[0]!.x - b.anchors[0]!.x)
+    // Sweep along the bed so earlier leaders do not consume later plants' exit corridors.
+    targets.sort((a, b) => Number(!!a.spine) - Number(!!b.spine)
+      || (strip && frame.width > frame.height ? a.anchors[0]!.x - b.anchors[0]!.x : a.anchors[0]!.y - b.anchors[0]!.y)
+      || (strip && frame.width > frame.height ? a.anchors[0]!.y - b.anchors[0]!.y : a.anchors[0]!.x - b.anchors[0]!.x))
     for (const target of targets) {
       const p = target.plants[0]!, reference = references.species.get(p.canonicalName)!, ids = target.plants.map(p => p.id)
       if (new Set(target.plants.map(appearance)).size > 1) {
@@ -164,7 +172,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       let left = 30, right = 30
       for (const other of points) { if (ids.includes(other.plant.id) || Math.abs(other.point.y - position.y) > 3.5) continue
         if (other.point.x < position.x) left = Math.min(left, position.x - other.point.x); else right = Math.min(right, other.point.x - position.x) }
-      const label = space.place(measured, target.anchors, ids, `${page.id}:key:${reference}`, { preferred: left >= right ? -1 : 1 })
+      const label = space.place(measured, target.anchors, ids, `${page.id}:key:${reference}`, { preferred: left >= right ? -1 : 1, ...stripOptions(position) })
       if (!label) { unresolved.push(target); continue }
       space.admit(label); owners.set(label, target)
       for (const segment of target.segments ?? []) line(segment, '#656058', .19, opacity('plants'))
@@ -186,7 +194,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       const measured = space.measure(value, 9.5, 29)
       // Long authored names remain complete in the key instead of occupying the map.
       if (measured.lines.length > 5) continue
-      const next = space.place(measured, target.anchors.slice(0, 3), old.ids, old.target, { ignored: old, name: true })
+      const next = space.place(measured, target.anchors.slice(0, 3), old.ids, old.target, { ignored: old, name: true, ...stripOptions(target.anchors[0]!) })
       if (!next || space.crossings(next.route, old)) continue
       space.replace(old, next); owners.delete(old); owners.set(next, target); named.add(p.canonicalName)
     }
@@ -198,7 +206,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       for (let k = 0; k <= Math.ceil(length / 65); k++) {
         const t = k / Math.ceil(length / 65), anchor = { x: target.spine.a.x + (target.spine.b.x - target.spine.a.x) * t, y: target.spine.a.y + (target.spine.b.y - target.spine.a.y) * t }
         if (distance(anchor, primary.route[0]!.a) < 25) continue
-        const label = space.place(measured, [anchor], [], primary.target, { near: true })
+        const label = space.place(measured, [anchor], [], primary.target, { near: true, ...stripOptions(anchor) })
         if (label && space.crossings(label.route) <= 1) { label.repeated = true; space.admit(label) }
       }
     }
@@ -213,7 +221,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       const isDistance = note.kind === 'annotation' && /^\(?\s*\d+(?:[,.]\d+)?\s*(?:cm|m)\s*\)?$/u.test(note.text.trim())
       const value = note.reference + (isDistance ? ` · ${note.text}` : '')
       const reservedValue = value + (note.continuation ? '      000' : '')
-      const label = space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true })
+      const label = space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true, ...stripOptions(anchor) })
       if (label) {
         if (note.continuation) {
           label.lines = [text.line(value, label.size)]

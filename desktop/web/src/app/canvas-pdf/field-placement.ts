@@ -71,23 +71,25 @@ export class FieldSpace {
     return route.reduce((n, s) => n + this.paths.query(segmentBounds(s)).filter(p => this.crossingPaths.has(p) && !ignored?.route.includes(p) && crossing(s, p)).length, 0)
   }
   place(measured: FieldMeasure, anchors: readonly Point[], ids: readonly string[], target: string,
-    options: { color?: string; boxed?: boolean; near?: boolean; name?: boolean; note?: boolean; ignored?: FieldLabel; preferred?: number } = {}): FieldLabel | null {
+    options: { color?: string; boxed?: boolean; near?: boolean; name?: boolean; note?: boolean; ignored?: FieldLabel; preferred?: number; axis?: 'x' | 'y'; outside?: Bounds } = {}): FieldLabel | null {
     const { width, height } = measured
     let best: FieldLabel | null = null, score = Infinity
-    const offsets = options.name ? [2, 4, 7, 10, 14].flatMap(gap => [-width / 2 - gap, width / 2 + gap]) : options.near ? [-4, 4, -6, 6, -8, 8, -11, 11] : [-4, 4, -5, 5, -6, 6, -8, 8, -10, 10, -13, 13, -16, 16, -20, 20, -24, 24, -28, 28, -34, 34, -40, 40]
+    const extent = options.axis === 'y' ? height : width
+    const offsets = options.name ? [2, 4, 7, 10, 14].flatMap(gap => [-extent / 2 - gap, extent / 2 + gap]) : options.near ? [-4, 4, -6, 6, -8, 8, -11, 11] : [-4, 4, -5, 5, -6, 6, -8, 8, -10, 10, -13, 13, -16, 16, -20, 20, -24, 24, -28, 28, -34, 34, -40, 40]
     const vertical = options.name ? [0, -4, 4, -8, 8, -12, 12] : options.near ? [0, -2, 2, -4, 4, -7, 7] : options.note ? [0, -4, 4, -8, 8, -12, 12, -16, 16, -20, 20, -25, 25, -30, 30]
       : [0, -.75, .75, -1.5, 1.5, -2.25, 2.25, -3, 3, -4, 4, -5, 5, -7.5, 7.5, -12, 12, -18, 18]
     for (const anchor of anchors) for (const dx of offsets) for (const dy of vertical) {
       const baseCost = Math.abs(dx) + Math.abs(dy) * 3 + (options.preferred && Math.sign(dx) !== options.preferred ? 6 : 0)
       if (baseCost >= score) continue
-      const bounds = { x: anchor.x + dx - width / 2, y: anchor.y + dy - height / 2, width, height }
+      const bounds = { x: anchor.x + (options.axis === 'y' ? dy : dx) - width / 2, y: anchor.y + (options.axis === 'y' ? dx : dy) - height / 2, width, height }
+      if (options.outside && overlaps(bounds, options.outside)) continue
       if (!this.clear(bounds, options.ignored)) continue
       const end = edge(bounds, anchor)
       const routes: Segment[][] = [[{ a: anchor, b: end }]]
       const straightClear = this.pathClear(routes[0]!, ids, options.ignored)
       if (!straightClear || this.crossings(routes[0]!, options.ignored)) {
         for (const [x, y] of [[0, -2], [0, 2], [0, -3], [0, 3], [0, -4], [0, 4], [-2, 0], [2, 0], [-3, 0], [3, 0]]) {
-          const elbow = { x: anchor.x + x!, y: anchor.y + y! }
+          const elbow = { x: anchor.x + (options.axis === 'y' ? y! : x!), y: anchor.y + (options.axis === 'y' ? x! : y!) }
           routes.push([{ a: anchor, b: elbow }, { a: elbow, b: end }])
         }
       }

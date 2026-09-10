@@ -44,6 +44,12 @@ individually overridden. Removing an area removes its associated page choices.
 runs, splitting at species, appearance, spacing or direction changes; arbitrary
 layouts remain individual. `field-placement.ts` places transparent identities with
 actual Fontkit ink bounds and routes leaders around printed labels and plant marks.
+For frames at least 4:1 in either orientation, label search runs along the short
+axis and keeps ink outside the planting frame with 1 mm clearance. Targets are
+visited along the long axis to preserve exit corridors for later plants. This
+applies to identities, name upgrades, repeated references and note anchors; it
+never rotates plants, changes ground coverage or adds pages. Keep horizontal,
+vertical and slightly tilted strip regressions in `canvas-pdf-strips.test.ts`.
 Crossing leaders have gaps in their own stroke, never opaque erasers. Compact
 numeric references repeat along long rows. A full common name is added once per
 Species where it fits; full names always remain in the key.
