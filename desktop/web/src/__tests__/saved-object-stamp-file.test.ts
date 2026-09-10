@@ -15,7 +15,7 @@ function canopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
     location: { lat: 45, lon: 3, altitude_m: 20 },
     north_bearing_deg: 15,
     plant_species_colors: { 'Malus domestica': '#112233' },
-    plant_species_symbols: { 'Malus domestica': 'tree' },
+    plant_species_symbols: { 'Malus domestica': 'canopy' },
     layers: [
       { name: 'plants', visible: true, locked: true, opacity: 0.5 },
       { name: 'zones', visible: false, locked: false, opacity: 1 },
@@ -46,7 +46,7 @@ describe('Saved Object Stamp file composition', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: '#C44230',
-        symbol: 'tree',
+        symbol: 'canopy',
         position: { x: 10, y: 20 },
         rotationDeg: 15,
         scale: 2,
@@ -111,7 +111,7 @@ describe('Saved Object Stamp file composition', () => {
       canonical_name: 'Malus domestica',
       common_name: 'Apple',
       color: '#C44230',
-      symbol: 'tree',
+      symbol: 'canopy',
       pinned_name: false,
       position: { x: 10, y: 20 },
       rotation: 15,
@@ -191,7 +191,7 @@ describe('Saved Object Stamp file composition', () => {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: '#C44230',
-        symbol: 'tree',
+        symbol: 'canopy',
         position: { x: 10, y: 20 },
         rotation: 30,
         scale: 2,
@@ -237,7 +237,7 @@ describe('Saved Object Stamp file composition', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: '#C44230',
-        symbol: 'tree',
+        symbol: 'canopy',
         position: { x: 10, y: 20 },
         rotationDeg: 30,
         scale: 2,
@@ -264,7 +264,7 @@ describe('Saved Object Stamp file composition', () => {
 
   it('imports Plant Symbols inherited from species defaults as explicit stamp symbols', () => {
     const payload = savedObjectStampPayloadFromCanopiFile(canopiFile({
-      plant_species_symbols: { 'Malus domestica': 'tree' },
+      plant_species_symbols: { 'Malus domestica': 'canopy' },
       plants: [{
         id: 'source-plant',
         locked: false,
@@ -281,7 +281,7 @@ describe('Saved Object Stamp file composition', () => {
       }],
     }))
 
-    expect(payload?.plants[0]?.symbol).toBe('tree')
+    expect(payload?.plants[0]?.symbol).toBe('canopy')
   })
 
   it('round-trips exported Zone group membership through a stamp import', () => {

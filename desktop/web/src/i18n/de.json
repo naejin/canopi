@@ -251,16 +251,19 @@
       "current": "Aktuell: {{symbol}}",
       "inherited": "Geerbt: {{symbol}}",
       "names": {
-        "round": "Rund",
-        "square": "Quadrat",
-        "triangle": "Dreieck",
-        "cross": "Kreuz",
-        "tree": "Baum",
+        "canopy": "Kronenbaum",
+        "conifer": "Nadelbaum",
+        "palm": "Palme",
         "shrub": "Strauch",
-        "herbaceous": "Krautig",
+        "herb": "Kraut",
+        "grass": "Gras",
+        "bamboo": "Bambus / Rohr",
+        "fern": "Farn",
         "climber": "Kletterpflanze",
         "groundcover": "Bodendecker",
-        "wave": "Welle"
+        "rosette": "Rosette",
+        "cactus": "Kaktus",
+        "round": "Neutraler Punkt"
       }
     },
     "group": {

@@ -251,16 +251,19 @@
       "current": "Actuel : {{symbol}}",
       "inherited": "Hérité : {{symbol}}",
       "names": {
-        "round": "Rond",
-        "square": "Carré",
-        "triangle": "Triangle",
-        "cross": "Croix",
-        "tree": "Arbre",
+        "canopy": "Arbre à couronne",
+        "conifer": "Conifère",
+        "palm": "Palmier",
         "shrub": "Arbuste",
-        "herbaceous": "Herbacée",
+        "herb": "Herbacée",
+        "grass": "Graminée",
+        "bamboo": "Bambou / canne",
+        "fern": "Fougère",
         "climber": "Grimpante",
         "groundcover": "Couvre-sol",
-        "wave": "Onde"
+        "rosette": "Rosette",
+        "cactus": "Cactus",
+        "round": "Point neutre"
       }
     },
     "group": {

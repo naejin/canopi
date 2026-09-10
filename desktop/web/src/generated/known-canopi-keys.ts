@@ -4,16 +4,19 @@ export const DEFAULT_BUDGET_CURRENCY = "EUR"
 export const DEFAULT_PLANT_SYMBOL_ID = "round"
 
 export const PLANT_SYMBOL_IDS = [
-  "round",
-  "square",
-  "triangle",
-  "cross",
-  "tree",
+  "canopy",
+  "conifer",
+  "palm",
   "shrub",
-  "herbaceous",
+  "herb",
+  "grass",
+  "bamboo",
+  "fern",
   "climber",
   "groundcover",
-  "wave",
+  "rosette",
+  "cactus",
+  "round",
 ] as const
 export type PlantSymbolId = (typeof PLANT_SYMBOL_IDS)[number]
 

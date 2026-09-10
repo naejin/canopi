@@ -39,6 +39,7 @@ vi.mock('pixi.js', () => {
     moveTo = vi.fn(() => this)
     lineTo = vi.fn(() => this)
     bezierCurveTo = vi.fn(() => this)
+    cut = vi.fn(() => this)
     closePath = vi.fn(() => this)
     fill = vi.fn(() => this)
     stroke = vi.fn(() => this)
@@ -244,6 +245,7 @@ describe('createPixiSceneRenderer', () => {
         graphics: Array<{
           circle: ReturnType<typeof vi.fn>
           rect: ReturnType<typeof vi.fn>
+          bezierCurveTo: ReturnType<typeof vi.fn>
           lineTo: ReturnType<typeof vi.fn>
         }>
       }
@@ -273,16 +275,16 @@ describe('createPixiSceneRenderer', () => {
 
     const snapshot = createRendererSnapshot({
       plants: [
-        createPlant({ id: 'square', symbol: 'square', position: { x: 10, y: 10 } }),
-        createPlant({ id: 'triangle', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
+        createPlant({ id: 'rosette', symbol: 'rosette', position: { x: 10, y: 10 } }),
+        createPlant({ id: 'conifer', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
       ],
-      plantSpeciesSymbols: { 'Pyrus communis': 'triangle' },
+      plantSpeciesSymbols: { 'Pyrus communis': 'conifer' },
       viewport: { x: 0, y: 0, scale: 20 },
     })
 
     renderer.renderScene(snapshot)
 
-    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.rect.mock.calls.length > 0)).toBe(true)
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.bezierCurveTo.mock.calls.length > 0)).toBe(true)
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.lineTo.mock.calls.length > 0)).toBe(true)
 
     vi.clearAllMocks()
@@ -292,7 +294,7 @@ describe('createPixiSceneRenderer', () => {
     })
 
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.circle.mock.calls.length > 0)).toBe(true)
-    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.rect.mock.calls.length > 0)).toBe(false)
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.bezierCurveTo.mock.calls.length > 0)).toBe(false)
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.lineTo.mock.calls.length > 0)).toBe(false)
     renderer.dispose()
   })

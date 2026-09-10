@@ -251,16 +251,19 @@
       "current": "Current: {{symbol}}",
       "inherited": "Inherited: {{symbol}}",
       "names": {
-        "round": "Round",
-        "square": "Square",
-        "triangle": "Triangle",
-        "cross": "Cross",
-        "tree": "Tree",
+        "canopy": "Canopy tree",
+        "conifer": "Conifer",
+        "palm": "Palm",
         "shrub": "Shrub",
-        "herbaceous": "Herbaceous",
+        "herb": "Herb",
+        "grass": "Grass",
+        "bamboo": "Bamboo / cane",
+        "fern": "Fern",
         "climber": "Climber",
         "groundcover": "Groundcover",
-        "wave": "Wave"
+        "rosette": "Rosette",
+        "cactus": "Cactus",
+        "round": "Neutral dot"
       }
     },
     "group": {

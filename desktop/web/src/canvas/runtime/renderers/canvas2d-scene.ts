@@ -15,9 +15,8 @@ import {
   MEASUREMENT_GUIDE_TICK_HALF_PX,
 } from '../measurement-guides'
 import {
-  DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
-  DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
-  PLANT_SYMBOL_RECIPES,
+  getPlantSymbolShapes,
+  tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
 import type {
@@ -30,6 +29,8 @@ import { isSceneObjectGroupMemberTarget } from '../scene'
 import {
   getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
+  getPlantSymbolEdgeColor,
+  getPlantSymbolEdgeWidth,
   getPlantLabelColor,
   getSceneLayerStyle,
   getStackBadgeBackgroundColor,
@@ -343,7 +344,6 @@ function renderPlants(
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return
 
-  const worldLineWidth = 1.5 / snapshot.viewport.scale
   const entries = buildPlantPresentationEntries(snapshot.scene.plants, {
     viewport: snapshot.viewport,
     speciesCache: snapshot.speciesCache,
@@ -366,23 +366,9 @@ function renderPlants(
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     const renderedSymbol = resolveRenderedPlantSymbol(entry)
     const selectedStrokeColor = interactionVisual?.color ?? entry.color
-    const glyphStrokeColor = renderedSymbol === 'round' && selected ? selectedStrokeColor : entry.color
-    const glyphLineWidth = renderedSymbol === 'round' && selected
-      ? (interactionVisual?.widthPx ?? 1.5) / snapshot.viewport.scale
-      : worldLineWidth
+    drawPlantSymbolGlyph(ctx, renderedSymbol, entry, layer.opacity, snapshot.viewport.scale)
 
-    drawPlantSymbolGlyph(
-      ctx,
-      renderedSymbol,
-      entry,
-      entry.color,
-      glyphStrokeColor,
-      glyphLineWidth,
-      layer.opacity,
-      snapshot.viewport.scale,
-    )
-
-    if (selected && (renderedSymbol !== 'round' || entry.lod === 'dot')) {
+    if (selected) {
       ctx.beginPath()
       ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld, 0, Math.PI * 2)
       ctx.globalAlpha = layer.opacity
@@ -418,117 +404,34 @@ function drawPlantSymbolGlyph(
   ctx: CanvasRenderingContext2D,
   symbol: PlantSymbolId,
   entry: PlantPresentationEntry,
-  fillColor: string,
-  strokeColor: string,
-  worldLineWidth: number,
   opacity: number,
   viewportScale: number,
 ): void {
-  const x = entry.plant.position.x
-  const y = entry.plant.position.y
+  const { x, y } = entry.plant.position
   const r = entry.radiusWorld
-  if (entry.lod === 'dot') {
+  ctx.globalAlpha = opacity
+  ctx.fillStyle = entry.color
+  if (entry.lod === 'dot' || symbol === 'round') {
     ctx.beginPath()
     ctx.arc(x, y, r, 0, Math.PI * 2)
-    ctx.fillStyle = fillColor
-    ctx.globalAlpha = opacity
     ctx.fill()
+    if (entry.lod !== 'dot') {
+      ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color)
+      ctx.lineWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2) / viewportScale
+      ctx.stroke()
+    }
     return
   }
-  const lineWidth = Math.max(worldLineWidth, 1.6 / Math.max(viewportScale, 0.001))
-
-  ctx.fillStyle = fillColor
-  ctx.strokeStyle = strokeColor
-  ctx.lineWidth = lineWidth
+  ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color)
+  ctx.lineWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2) / viewportScale
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-
-  for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
-    switch (command.kind) {
-      case 'circle':
-        ctx.beginPath()
-        ctx.arc(x + command.cx * r, y + command.cy * r, command.radius * r, 0, Math.PI * 2)
-        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
-        break
-      case 'rect':
-        ctx.beginPath()
-        ctx.rect(x + command.x * r, y + command.y * r, command.width * r, command.height * r)
-        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
-        break
-      case 'path': {
-        const first = command.points[0]
-        if (!first) break
-        ctx.beginPath()
-        ctx.moveTo(x + first[0] * r, y + first[1] * r)
-        for (let index = 1; index < command.points.length; index += 1) {
-          const point = command.points[index]!
-          ctx.lineTo(x + point[0] * r, y + point[1] * r)
-        }
-        if (command.closed) ctx.closePath()
-        ctx.lineWidth = lineWidth * (
-          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
-          DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
-        )
-        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
-        ctx.lineWidth = lineWidth
-        break
-      }
-      case 'curvePath':
-        ctx.beginPath()
-        ctx.moveTo(x + command.start[0] * r, y + command.start[1] * r)
-        for (const segment of command.segments) {
-          if (segment.kind === 'line') {
-            ctx.lineTo(x + segment.to[0] * r, y + segment.to[1] * r)
-          } else {
-            ctx.bezierCurveTo(
-              x + segment.control1[0] * r,
-              y + segment.control1[1] * r,
-              x + segment.control2[0] * r,
-              y + segment.control2[1] * r,
-              x + segment.to[0] * r,
-              y + segment.to[1] * r,
-            )
-          }
-        }
-        if (command.closed) ctx.closePath()
-        ctx.lineWidth = lineWidth * (
-          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
-          DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
-        )
-        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
-        ctx.lineWidth = lineWidth
-        break
-      case 'lines':
-        ctx.globalAlpha = opacity
-        ctx.lineWidth = lineWidth * (
-          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH) /
-          DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH
-        )
-        ctx.beginPath()
-        for (const segment of command.segments) {
-          ctx.moveTo(x + segment[0] * r, y + segment[1] * r)
-          ctx.lineTo(x + segment[2] * r, y + segment[3] * r)
-        }
-        ctx.stroke()
-        ctx.lineWidth = lineWidth
-        break
-    }
-  }
-}
-
-function fillAndStrokeCanvasSymbolCommand(
-  ctx: CanvasRenderingContext2D,
-  fill: boolean,
-  stroke: boolean,
-  opacity: number,
-): void {
-  if (fill) {
-    ctx.globalAlpha = 0.55 * opacity
-    ctx.fill()
-  }
-  if (stroke) {
-    ctx.globalAlpha = opacity
+  for (const shape of getPlantSymbolShapes(symbol, entry.radiusScreenPx * 2)) {
+    ctx.beginPath()
+    tracePlantSymbolContour(ctx, shape.outline, x, y, r)
     ctx.stroke()
+    for (const hole of shape.holes ?? []) tracePlantSymbolContour(ctx, hole, x, y, r)
+    ctx.fill()
   }
 }
 

@@ -8,9 +8,8 @@ import {
   type PlantPresentationContext,
 } from '../plant-presentation'
 import {
-  DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
-  DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
-  PLANT_SYMBOL_RECIPES,
+  getPlantSymbolShapes,
+  plantSymbolShapePath,
 } from '../plant-symbol-recipes'
 import type {
   PlantSymbolId,
@@ -26,7 +25,7 @@ import {
   type SceneArrangementTemplate,
 } from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
-import { getAnnotationTextColor, resolveZoneVisual } from '../scene-visuals'
+import { getAnnotationTextColor, getPlantSymbolEdgeColor, getPlantSymbolEdgeWidth, resolveZoneVisual } from '../scene-visuals'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './layer-guards'
 import { isEditableTarget } from './pointer-utils'
@@ -36,7 +35,6 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 const STAMP_GHOST_OPACITY = 0.62
 const STAMP_GHOST_ANNOTATION_OPACITY = 0.68
 const ZONE_STROKE_WIDTH_PX = 2
-const PLANT_SYMBOL_STROKE_WIDTH_PX = 1.6
 
 export interface SavedObjectStampPlacementContext {
   readonly preview: HTMLDivElement
@@ -352,82 +350,20 @@ function appendPlantSymbolCommands(
     return
   }
 
-  for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
-    switch (command.kind) {
-      case 'circle': {
-        const circle = createSvgElement('circle')
-        setSvgAttributes(circle, {
-          cx: center.x + command.cx * radius,
-          cy: center.y + command.cy * radius,
-          r: command.radius * radius,
-        })
-        applyPlantSymbolPaint(circle, entry.color, command.fill, command.stroke, PLANT_SYMBOL_STROKE_WIDTH_PX)
-        group.appendChild(circle)
-        break
-      }
-      case 'rect': {
-        const rect = createSvgElement('rect')
-        setSvgAttributes(rect, {
-          x: center.x + command.x * radius,
-          y: center.y + command.y * radius,
-          width: command.width * radius,
-          height: command.height * radius,
-        })
-        applyPlantSymbolPaint(rect, entry.color, command.fill, command.stroke, PLANT_SYMBOL_STROKE_WIDTH_PX)
-        group.appendChild(rect)
-        break
-      }
-      case 'path': {
-        const path = createSvgElement('path')
-        setSvgAttributes(path, {
-          d: svgPathData(command.points.map(([x, y]) => ({
-            x: center.x + x * radius,
-            y: center.y + y * radius,
-          })), command.closed),
-        })
-        const strokeWidth = PLANT_SYMBOL_STROKE_WIDTH_PX * (
-          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
-          DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
-        )
-        applyPlantSymbolPaint(path, entry.color, command.fill, command.stroke, strokeWidth)
-        group.appendChild(path)
-        break
-      }
-      case 'lines': {
-        const path = createSvgElement('path')
-        const d = command.segments
-          .map(([x1, y1, x2, y2]) => (
-            `M ${formatNumber(center.x + x1 * radius)} ${formatNumber(center.y + y1 * radius)} `
-            + `L ${formatNumber(center.x + x2 * radius)} ${formatNumber(center.y + y2 * radius)}`
-          ))
-          .join(' ')
-        setSvgAttributes(path, { d })
-        const strokeWidth = PLANT_SYMBOL_STROKE_WIDTH_PX * (
-          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH) /
-          DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH
-        )
-        applyPlantSymbolPaint(path, entry.color, false, true, strokeWidth)
-        group.appendChild(path)
-        break
-      }
-    }
+  for (const shape of getPlantSymbolShapes(symbol, radius * 2)) {
+    const path = createSvgElement('path')
+    setSvgAttributes(path, {
+      d: plantSymbolShapePath(shape),
+      transform: `translate(${center.x} ${center.y}) scale(${radius})`,
+      fill: entry.color,
+      'fill-opacity': 1,
+      'fill-rule': 'nonzero',
+      stroke: getPlantSymbolEdgeColor(entry.color),
+      'stroke-width': getPlantSymbolEdgeWidth(radius * 2) / radius,
+      'paint-order': 'stroke fill',
+    })
+    group.appendChild(path)
   }
-}
-
-function applyPlantSymbolPaint(
-  element: SVGElement,
-  color: string,
-  fill: boolean,
-  stroke: boolean,
-  strokeWidth: number,
-): void {
-  setSvgAttributes(element, {
-    fill: fill ? color : 'none',
-    'fill-opacity': fill ? '0.55' : '0',
-    stroke: stroke ? color : 'none',
-    'stroke-opacity': stroke ? '1' : '0',
-    'stroke-width': stroke ? strokeWidth : 0,
-  })
 }
 
 function appendAnnotationGhost(
@@ -499,18 +435,6 @@ function svgPoints(points: readonly ScenePoint[]): string {
   return points
     .map((point) => `${formatNumber(point.x)},${formatNumber(point.y)}`)
     .join(' ')
-}
-
-function svgPathData(points: readonly ScenePoint[], closed: boolean): string {
-  const first = points[0]
-  if (!first) return ''
-  const segments = [`M ${formatNumber(first.x)} ${formatNumber(first.y)}`]
-  for (let index = 1; index < points.length; index += 1) {
-    const point = points[index]!
-    segments.push(`L ${formatNumber(point.x)} ${formatNumber(point.y)}`)
-  }
-  if (closed) segments.push('Z')
-  return segments.join(' ')
 }
 
 function formatNumber(value: number): string {

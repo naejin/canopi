@@ -251,16 +251,19 @@
       "current": "Actual: {{symbol}}",
       "inherited": "Heredado: {{symbol}}",
       "names": {
-        "round": "Redondo",
-        "square": "Cuadrado",
-        "triangle": "Triángulo",
-        "cross": "Cruz",
-        "tree": "Árbol",
+        "canopy": "Árbol de copa",
+        "conifer": "Conífera",
+        "palm": "Palmera",
         "shrub": "Arbusto",
-        "herbaceous": "Herbácea",
+        "herb": "Herbácea",
+        "grass": "Gramínea",
+        "bamboo": "Bambú / caña",
+        "fern": "Helecho",
         "climber": "Trepadora",
-        "groundcover": "Cobertura vegetal",
-        "wave": "Onda"
+        "groundcover": "Tapizante",
+        "rosette": "Roseta",
+        "cactus": "Cactus",
+        "round": "Punto neutro"
       }
     },
     "group": {

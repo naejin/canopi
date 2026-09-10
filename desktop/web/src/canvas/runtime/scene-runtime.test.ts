@@ -1071,13 +1071,13 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithGroupedPair())
     runtime.commandSurface.sceneEdits.selectAll()
 
-    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantSymbol('triangle')
+    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantSymbol('conifer')
 
     expect(changed).toBe(2)
     expect(runtime.querySurface.getSelectedPlantSymbolContext()).toMatchObject({
       plantIds: ['plant-1', 'plant-2'],
-      sharedCurrentSymbol: 'triangle',
-      sharedEffectiveSymbol: 'triangle',
+      sharedCurrentSymbol: 'conifer',
+      sharedEffectiveSymbol: 'conifer',
       singleSpeciesCanonicalName: 'Malus domestica',
     })
   })
@@ -1086,13 +1086,13 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithGroupedPair())
 
-    const changed = runtime.commandSurface.plantPresentation.setPlantSymbolForSpecies('Malus domestica', 'tree')
+    const changed = runtime.commandSurface.plantPresentation.setPlantSymbolForSpecies('Malus domestica', 'canopy')
 
     expect(changed).toBe(2)
     expect(runtime.querySurface.getSceneSnapshot().plantSpeciesSymbols).toEqual({
-      'Malus domestica': 'tree',
+      'Malus domestica': 'canopy',
     })
-    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.symbol)).toEqual(['tree', 'tree'])
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.symbol)).toEqual(['canopy', 'canopy'])
 
     runtime.commandSurface.history.undo()
     expect(runtime.querySurface.getSceneSnapshot().plantSpeciesSymbols).toEqual({})
@@ -1100,7 +1100,7 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.history.redo()
     expect(runtime.querySurface.getSceneSnapshot().plantSpeciesSymbols).toEqual({
-      'Malus domestica': 'tree',
+      'Malus domestica': 'canopy',
     })
   })
 
@@ -1145,7 +1145,7 @@ describe('scene canvas runtime', () => {
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(runtime.querySurface.getSelectedPlantSymbolContext().plantIds).toEqual([])
 
-    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantSymbol('triangle')
+    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantSymbol('conifer')
 
     expect(changed).toBe(0)
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.symbol ?? null).toBeNull()
@@ -2212,7 +2212,7 @@ describe('scene canvas runtime', () => {
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
-    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle', pinned_name: true }))
+    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'conifer', pinned_name: true }))
     runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
 
@@ -2234,7 +2234,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.paste()
     const pasted = runtime.querySurface.getSceneSnapshot().plants[2]!
     expect(pasted.canonicalName).toBe('Malus domestica')
-    expect(pasted.symbol).toBe('triangle')
+    expect(pasted.symbol).toBe('conifer')
     expect(pasted.pinnedName).toBe(false)
     expect(pasted.position).toEqual({ x: 21, y: 20 })
     events.dispose()

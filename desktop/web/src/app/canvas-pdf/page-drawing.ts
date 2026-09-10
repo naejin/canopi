@@ -98,9 +98,15 @@ export function drawCanvas(input: PdfInput, frame: PrintBounds, ground: PrintBou
 }
 
 export function drawMark(plant: PrintPlant, x: number, y: number, radius: number, opacity: number, operations: PdfOperation[]): void {
-  const dot = plant.symbol === 'round' && radius < .8 * MM
-  for (const mark of plant.mark) operations.push({ kind: 'path', d: mark.d, matrix: [radius, 0, 0, radius, x, y],
-    fill: dot || mark.fill ? plant.color : null, stroke: !dot && mark.stroke ? plant.color : null,
+  if (radius < .8 * MM) {
+    operations.push({ kind: 'path', d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z',
+      matrix: [radius, 0, 0, radius, x, y], fill: plant.color, stroke: null, width: 0, opacity })
+    return
+  }
+  // PDF units are points; 16 CSS px corresponds to 12pt at 96px/in.
+  const marks = radius * 2 < 12 ? plant.smallMark ?? plant.mark : plant.mark
+  for (const mark of marks) operations.push({ kind: 'path', d: mark.d, matrix: [radius, 0, 0, radius, x, y],
+    fill: mark.fill ? plant.color : null, stroke: mark.stroke ? plant.color : null,
     width: Math.max(mark.strokeWidth, .12 * MM / radius), opacity })
 }
 export function textOp(line: TextLine, x: number, y: number, size: number, rotation = 0, opacity = 1): PdfOperation {

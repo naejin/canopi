@@ -251,16 +251,19 @@
       "current": "Huidig: {{symbol}}",
       "inherited": "Overgenomen: {{symbol}}",
       "names": {
-        "round": "Rond",
-        "square": "Vierkant",
-        "triangle": "Driehoek",
-        "cross": "Kruis",
-        "tree": "Boom",
+        "canopy": "Kroonboom",
+        "conifer": "Conifeer",
+        "palm": "Palm",
         "shrub": "Struik",
-        "herbaceous": "Kruidachtig",
+        "herb": "Kruid",
+        "grass": "Gras",
+        "bamboo": "Bamboe / riet",
+        "fern": "Varen",
         "climber": "Klimplant",
         "groundcover": "Bodembedekker",
-        "wave": "Golf"
+        "rosette": "Rozet",
+        "cactus": "Cactus",
+        "round": "Neutrale stip"
       }
     },
     "group": {

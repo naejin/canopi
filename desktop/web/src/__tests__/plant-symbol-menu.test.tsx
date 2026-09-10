@@ -75,13 +75,13 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const triangleButton = container.querySelector<HTMLButtonElement>('button[aria-label="Triangle"]')
-    expect(triangleButton).not.toBeNull()
-    expect(triangleButton?.title).toBe('Triangle')
-    expect(triangleButton?.textContent).toBe('Triangle')
+    const coniferButton = container.querySelector<HTMLButtonElement>('button[aria-label="Conifer"]')
+    expect(coniferButton).not.toBeNull()
+    expect(coniferButton?.title).toBe('Conifer')
+    expect(coniferButton?.textContent).toBe('Conifer')
 
     await act(async () => {
-      triangleButton?.click()
+      coniferButton?.click()
       await Promise.resolve()
     })
 
@@ -94,11 +94,11 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('triangle')
+    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('conifer')
     expect(plantSymbolMenuOpen.value).toBe(false)
   })
 
-  it('offers groundcover in the habit row and wave in the abstract row', async () => {
+  it('offers the twelve botanical forms in one keyboard grid', async () => {
     getSelectedPlantSymbolContext.mockReturnValue({
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -116,15 +116,17 @@ describe('PlantSymbolMenu', () => {
     })
 
     const symbolRows = container.querySelectorAll('[role="listbox"]')
+    expect(symbolRows).toHaveLength(1)
+    expect(symbolRows[0]?.querySelectorAll('[role=option]')).toHaveLength(12)
     expect(symbolRows[0]?.textContent).toContain('Groundcover')
     expect(symbolRows[0]?.querySelector('button[aria-label="Groundcover"]')).toBeTruthy()
-    expect(symbolRows[1]?.querySelector('button[aria-label="Wave"]')).toBeTruthy()
+    expect(symbolRows[0]?.querySelector('button[aria-label="Fern"]')).toBeTruthy()
 
-    const waveButton = symbolRows[1]?.querySelector<HTMLButtonElement>('button[aria-label="Wave"]')
-    expect(waveButton?.textContent).toBe('Wave')
+    const fernButton = symbolRows[0]?.querySelector<HTMLButtonElement>('button[aria-label="Fern"]')
+    expect(fernButton?.textContent).toBe('Fern')
 
     await act(async () => {
-      waveButton?.click()
+      fernButton?.click()
       await Promise.resolve()
     })
 
@@ -137,10 +139,10 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('wave')
+    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('fern')
   })
 
-  it('renders option and preview glyphs in padded SVG frames', async () => {
+  it('renders option and preview glyphs in normalized SVG frames', async () => {
     getSelectedPlantSymbolContext.mockReturnValue({
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -158,12 +160,12 @@ describe('PlantSymbolMenu', () => {
     })
 
     const [previewSvg] = container.querySelectorAll('svg')
-    const triangleSvg = container.querySelector('button[aria-label="Triangle"] svg')
+    const coniferSvg = container.querySelector('button[aria-label="Conifer"] svg')
 
     expect(previewSvg).toBeTruthy()
-    expect(triangleSvg).toBeTruthy()
-    expect(previewSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
-    expect(triangleSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
+    expect(coniferSvg).toBeTruthy()
+    expect(previewSvg?.getAttribute('viewBox')).toBe('-1 -1 2 2')
+    expect(coniferSvg?.getAttribute('viewBox')).toBe('-1 -1 2 2')
   })
 
   it('uses a defined preview sizing token for the symbol preview frame', () => {
@@ -175,13 +177,13 @@ describe('PlantSymbolMenu', () => {
     expect(previewRule).not.toContain('var(--space-10)')
   })
 
-  it('sizes the popover for two five-symbol rows', () => {
+  it('sizes the popover for three four-symbol rows', () => {
     const css = readFileSync('src/components/canvas/PlantSymbolMenu.module.css', 'utf8')
     const menuRule = css.match(/\.menu\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
     const gridRule = css.match(/\.grid\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
 
     expect(menuRule).toContain('width: 360px;')
-    expect(gridRule).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));')
+    expect(gridRule).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));')
   })
 
   it('updates the selected plant name when localized plant names refresh', async () => {
@@ -220,7 +222,7 @@ describe('PlantSymbolMenu', () => {
       singleSpeciesCanonicalName: null,
       singleSpeciesCommonName: null,
       sharedCurrentSymbol: null,
-      sharedEffectiveSymbol: 'tree',
+      sharedEffectiveSymbol: 'canopy',
       inheritedSymbol: null,
       singleSpeciesDefaultSymbol: null,
       canClearSelectedSymbol: false,
@@ -231,9 +233,9 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const treeButton = container.querySelector<HTMLButtonElement>('button[aria-label="Tree"]')
-    expect(treeButton?.getAttribute('aria-selected')).toBe('true')
-    expect(container.textContent).toContain('Inherited: Tree')
+    const canopyButton = container.querySelector<HTMLButtonElement>('button[aria-label="Canopy tree"]')
+    expect(canopyButton?.getAttribute('aria-selected')).toBe('true')
+    expect(container.textContent).toContain('Inherited: Canopy tree')
 
     const setSymbolButton = [...container.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Set symbol'),
@@ -244,7 +246,7 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('tree')
+    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('canopy')
     expect(setSelectedPlantSymbol).not.toHaveBeenCalledWith('round')
   })
 
@@ -265,10 +267,10 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const roundButton = container.querySelector<HTMLButtonElement>('button[aria-label="Round"]')
-    expect(roundButton?.getAttribute('aria-selected')).toBe('true')
+    const roundButton = container.querySelector<HTMLButtonElement>('button[aria-label="Neutral dot"]')
+    expect(roundButton?.getAttribute('aria-pressed')).toBe('true')
     expect(container.textContent).toContain('Mixed symbols')
-    expect(container.textContent).not.toContain('Inherited: Round')
+    expect(container.textContent).not.toContain('Inherited: Neutral dot')
   })
 
   it('applies the selected symbol to all placed instances of the selected species', async () => {
@@ -288,9 +290,9 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const treeButton = container.querySelector<HTMLButtonElement>('button[aria-label="Tree"]')
+    const canopyButton = container.querySelector<HTMLButtonElement>('button[aria-label="Canopy tree"]')
     await act(async () => {
-      treeButton?.click()
+      canopyButton?.click()
       await Promise.resolve()
     })
 
@@ -303,7 +305,7 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    expect(setPlantSymbolForSpecies).toHaveBeenCalledWith('Malus domestica', 'tree')
+    expect(setPlantSymbolForSpecies).toHaveBeenCalledWith('Malus domestica', 'canopy')
     expect(plantSymbolMenuOpen.value).toBe(false)
   })
 
@@ -312,8 +314,8 @@ describe('PlantSymbolMenu', () => {
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
       singleSpeciesCommonName: 'Apple',
-      sharedCurrentSymbol: 'triangle',
-      sharedEffectiveSymbol: 'triangle',
+      sharedCurrentSymbol: 'conifer',
+      sharedEffectiveSymbol: 'conifer',
       inheritedSymbol: 'round',
       singleSpeciesDefaultSymbol: 'round',
       canClearSelectedSymbol: true,

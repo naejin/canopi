@@ -4,6 +4,7 @@ import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../../canvas/plant-colors'
 import {
   DEFAULT_PLANT_SYMBOL_ID,
+  PLANT_SYMBOL_IDS,
   type PlantSymbolId,
 } from '../../canvas/runtime/scene'
 import { t } from '../../i18n'
@@ -15,8 +16,7 @@ interface PlantSymbolMenuProps {
   buttonRef: { current: HTMLButtonElement | null }
 }
 
-const HABIT_SYMBOLS: readonly PlantSymbolId[] = ['tree', 'shrub', 'herbaceous', 'climber', 'groundcover']
-const ABSTRACT_SYMBOLS: readonly PlantSymbolId[] = ['round', 'square', 'triangle', 'cross', 'wave']
+const BOTANICAL_SYMBOLS = PLANT_SYMBOL_IDS.filter((symbol) => symbol !== DEFAULT_PLANT_SYMBOL_ID)
 
 function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
   plantSymbolMenuOpen.value = false
@@ -109,7 +109,7 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
       role="dialog"
       aria-label={t('canvas.plantSymbol.label')}
       data-preserve-overlays="true"
-      onKeyDown={(event) => navigateAppearanceChoices(event, 5)}
+      onKeyDown={(event) => navigateAppearanceChoices(event, 4)}
     >
       <div className={styles.header}>
         <div className={styles.headerText}>
@@ -143,15 +143,19 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
         style={{ '--plant-symbol-preview-color': previewColor } as Record<string, string>}
         aria-label={t('canvas.plantSymbol.preview')}
       >
-        <PlantSymbolGlyph symbol={activeSymbol} className={styles.previewGlyph} />
+        <PlantSymbolGlyph symbol={activeSymbol} size={36} className={styles.previewGlyph} />
         <div className={styles.previewText}>
           <strong>{symbolLabel(activeSymbol)}</strong>
           <span className={styles.status}>{statusText}</span>
         </div>
       </div>
 
-      <SymbolGrid symbols={HABIT_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
-      <SymbolGrid symbols={ABSTRACT_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+      <SymbolGrid symbols={BOTANICAL_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+      <button type="button" className={`${styles.symbolButton} ${styles.neutralButton}${activeSymbol === DEFAULT_PLANT_SYMBOL_ID ? ` ${styles.symbolButtonActive}` : ''}`}
+        aria-label={symbolLabel(DEFAULT_PLANT_SYMBOL_ID)} aria-pressed={activeSymbol === DEFAULT_PLANT_SYMBOL_ID} onClick={() => setActiveSymbol(DEFAULT_PLANT_SYMBOL_ID)}>
+        <PlantSymbolGlyph symbol={DEFAULT_PLANT_SYMBOL_ID} size={16} />
+        <span>{symbolLabel(DEFAULT_PLANT_SYMBOL_ID)}</span>
+      </button>
 
       <div className={styles.actions}>
         <button type="button" className={styles.primaryAction} onClick={applyToSelection}>
@@ -189,11 +193,11 @@ function SymbolGrid({
             aria-label={label}
             aria-selected={active}
             role="option"
-            tabIndex={active ? 0 : -1}
+            tabIndex={active || (activeSymbol === DEFAULT_PLANT_SYMBOL_ID && symbol === symbols[0]) ? 0 : -1}
             title={label}
             onClick={() => onSelect(symbol)}
           >
-            <PlantSymbolGlyph symbol={symbol} className={styles.symbolGlyph} />
+            <PlantSymbolGlyph symbol={symbol} size={28} className={styles.symbolGlyph} />
             <span className={styles.symbolLabel}>{label}</span>
           </button>
         )

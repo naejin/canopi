@@ -251,16 +251,19 @@
       "current": "当前：{{symbol}}",
       "inherited": "继承：{{symbol}}",
       "names": {
-        "round": "圆形",
-        "square": "方形",
-        "triangle": "三角形",
-        "cross": "十字",
-        "tree": "树",
+        "canopy": "冠形乔木",
+        "conifer": "针叶树",
+        "palm": "棕榈",
         "shrub": "灌木",
-        "herbaceous": "草本",
-        "climber": "藤本",
-        "groundcover": "地被",
-        "wave": "波浪"
+        "herb": "草本",
+        "grass": "禾草",
+        "bamboo": "竹 / 芦苇",
+        "fern": "蕨类",
+        "climber": "攀缘植物",
+        "groundcover": "地被植物",
+        "rosette": "莲座植物",
+        "cactus": "仙人掌",
+        "round": "中性圆点"
       }
     },
     "group": {

@@ -103,16 +103,16 @@ describe('createCanvas2DSceneRenderer', () => {
 
     const snapshot = createRendererSnapshot({
       plants: [
-        createPlant({ id: 'square', symbol: 'square', position: { x: 10, y: 10 } }),
-        createPlant({ id: 'triangle', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
+        createPlant({ id: 'rosette', symbol: 'rosette', position: { x: 10, y: 10 } }),
+        createPlant({ id: 'conifer', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
       ],
-      plantSpeciesSymbols: { 'Pyrus communis': 'triangle' },
+      plantSpeciesSymbols: { 'Pyrus communis': 'conifer' },
       viewport: { x: 0, y: 0, scale: 20 },
     })
 
     renderer.renderScene(snapshot)
 
-    expect(ctx.rect).toHaveBeenCalled()
+    expect(ctx.bezierCurveTo).toHaveBeenCalled()
     expect(ctx.lineTo).toHaveBeenCalled()
 
     vi.clearAllMocks()

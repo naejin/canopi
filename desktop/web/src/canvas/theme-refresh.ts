@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 type CanvasColorName =
+  | 'background'
   | 'plant-label'
   | 'guide-line'
   | 'guide-smart'
@@ -26,6 +27,7 @@ type CanvasColorName =
 // CSS variable name for each canvas color. Most follow `--canvas-{key}`;
 // the two exceptions are explicit here instead of hidden in procedural code.
 const _cssVarMap: { [K in CanvasColorName]: string } = {
+  background: '--canvas-bg',
   'plant-label': '--canvas-plant-label',
   'guide-line': '--canvas-guide-line',
   'guide-smart': '--canvas-guide-smart',
@@ -45,6 +47,7 @@ const _cssVarMap: { [K in CanvasColorName]: string } = {
 }
 
 const _colors: { [K in CanvasColorName]: string } = {
+  background: '#F6F2EA',
   'plant-label': '#444444',
   'guide-line': 'rgba(45, 95, 63, 0.6)',
   'guide-smart': 'rgba(181, 67, 42, 0.72)',

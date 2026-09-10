@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
+import { drawMark } from '../app/canvas-pdf/page-drawing'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import type { PdfInput, PdfLabels, PdfPage } from '../app/canvas-pdf/types'
+import type { PdfInput, PdfLabels, PdfPage, PdfOperation } from '../app/canvas-pdf/types'
 
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 const labels: PdfLabels = { overview: 'Overview', plants: 'Plants', actualSize: 'Actual size', page: 'Page', continued: 'Continued', legendFor: 'Legend for' }
@@ -20,7 +21,7 @@ function input(): PdfInput {
   return { name: 'Garden', locale: 'en', commonNames: {}, canvas: {
     layers: ['plants', 'annotations', 'measurement-guides'].map(name => ({ name, visible: true, opacity: 1 })),
     plants: [0, .4, 40].map((x, i) => ({ id: String(i), canonicalName: 'Mentha spicata', position: { x, y: 0 },
-      color: '#123456', symbol: 'square', mark, pinnedName: false })),
+      color: '#123456', symbol: 'rosette', mark, pinnedName: false })),
     annotations: [], zones: [], measurements: [],
   } }
 }
@@ -67,19 +68,19 @@ it('requires explicit retention for crowded text without a readable detail home'
   expect(words(retained.pages[0]!)).toContain('Second note')
 })
 
-it('prints small round marks as solid positions and keeps other symbols legible', () => {
-  const source = input()
-  const plants = source.canvas.plants.map((plant, i) => ({ ...plant, position: { x: i === 2 ? 100 : i * .05, y: 0 },
-    symbol: i === 0 ? 'round' : 'square', mark: i === 0 ? [{ d: 'M-1 0 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0', fill: false, stroke: true, strokeWidth: .14 }] : mark }))
-  const page = buildPdfPlan({ ...source, canvas: { ...source.canvas, plants } }, { paper: 'A4', layers: ['plants'] }, text(), labels).pages[0]!
-  const round = page.operations.find(op => op.kind === 'path' && op.d === plants[0]!.mark[0]!.d)!
-  expect(round.kind).toBe('path')
-  if (round.kind !== 'path') throw new Error('Missing round plant')
-  expect(round.fill).toBe('#123456')
-  expect(round.stroke).toBeNull()
-  const square = page.operations.find(op => op.kind === 'path' && op.d === mark[0]!.d)!
-  if (square.kind !== 'path') throw new Error('Missing square plant')
-  expect(square.width * square.matrix[0]).toBeGreaterThanOrEqual(.34)
+it('prints every tiny symbol as a solid position and selects detail at readable sizes', () => {
+  const plant = { ...input().canvas.plants[0]!, smallMark: [{ ...mark[0]!, d: 'compact' }] }
+  for (const symbol of ['round', 'canopy', 'fern', 'rosette']) {
+    const operations: PdfOperation[] = []
+    drawMark({ ...plant, symbol }, 10, 20, 1, .6, operations)
+    expect(operations).toEqual([{ kind: 'path', d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z',
+      matrix: [1, 0, 0, 1, 10, 20], fill: '#123456', stroke: null, width: 0, opacity: .6 }])
+  }
+  for (const [radius, expected] of [[3, 'compact'], [6, mark[0]!.d]] as const) {
+    const operations: PdfOperation[] = []
+    drawMark(plant, 10, 20, radius, 1, operations)
+    expect(operations[0]).toMatchObject({ kind: 'path', d: expected, fill: '#123456' })
+  }
 })
 
 it.each([

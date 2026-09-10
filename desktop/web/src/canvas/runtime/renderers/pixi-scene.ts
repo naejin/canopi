@@ -19,15 +19,16 @@ import {
   type PlantPresentationEntry,
 } from '../plant-presentation'
 import {
-  DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
-  DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
-  PLANT_SYMBOL_RECIPES,
+  getPlantSymbolShapes,
+  tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
 import { getCanvasDetailLayout, getCanvasPlantNameLabels, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
+  getPlantSymbolEdgeColor,
+  getPlantSymbolEdgeWidth,
   getPlantLabelColor,
   getSceneLayerStyle,
   getStackBadgeBackgroundColor,
@@ -633,21 +634,10 @@ function drawPlant(
   const r = entry.radiusScreenPx
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
-  const strokeColor = renderedSymbol === 'round' && selected ? selectedStrokeColor : color
-  const strokeWidthPx = renderedSymbol === 'round' && selected
-    ? interactionVisual?.widthPx ?? PLANT_STROKE_PX
-    : PLANT_STROKE_PX
   graphics.clear()
-  drawPlantSymbolGlyph(
-    graphics,
-    renderedSymbol,
-    entry,
-    color,
-    strokeColor,
-    strokeWidthPx,
-    renderedSymbol === 'round' && selected ? cssColorAlpha(interactionVisual?.color ?? entry.color) : 1,
-  )
-  if (selected && (renderedSymbol !== 'round' || entry.lod === 'dot')) {
+  drawPlantSymbolGlyph(graphics, renderedSymbol, entry)
+
+  if (selected) {
     graphics.circle(x, y, r)
       .stroke({
         color: selectedStrokeColor,
@@ -670,130 +660,25 @@ function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolI
   return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
 }
 
-function drawPlantSymbolGlyph(
-  graphics: Graphics,
-  symbol: PlantSymbolId,
-  entry: PlantPresentationEntry,
-  fillColor: number,
-  strokeColor: number,
-  lineWidthPx: number,
-  strokeAlpha: number,
-): void {
-  const x = entry.screenPoint.x
-  const y = entry.screenPoint.y
+function drawPlantSymbolGlyph(graphics: Graphics, symbol: PlantSymbolId, entry: PlantPresentationEntry): void {
+  const { x, y } = entry.screenPoint
   const r = entry.radiusScreenPx
-  if (entry.lod === 'dot') {
-    graphics.circle(x, y, r).fill({ color: fillColor, alpha: 1 })
+  const color = toPixiColor(entry.color, 0)
+  if (entry.lod === 'dot' || symbol === 'round') {
+    graphics.circle(x, y, r).fill({ color, alpha: 1 })
+    if (entry.lod !== 'dot') graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width: getPlantSymbolEdgeWidth(r * 2) })
     return
   }
-  const lineWidth = Math.max(lineWidthPx, 1.6)
-
-  for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
-    switch (command.kind) {
-      case 'circle':
-        fillAndStrokePixiSymbolCommand(
-          graphics.circle(x + command.cx * r, y + command.cy * r, command.radius * r),
-          command.fill,
-          command.stroke,
-          fillColor,
-          strokeColor,
-          lineWidth,
-          strokeAlpha,
-        )
-        break
-      case 'rect':
-        fillAndStrokePixiSymbolCommand(
-          graphics.rect(x + command.x * r, y + command.y * r, command.width * r, command.height * r),
-          command.fill,
-          command.stroke,
-          fillColor,
-          strokeColor,
-          lineWidth,
-          strokeAlpha,
-        )
-        break
-      case 'path': {
-        const first = command.points[0]
-        if (!first) break
-        graphics.moveTo(x + first[0] * r, y + first[1] * r)
-        for (let index = 1; index < command.points.length; index += 1) {
-          const point = command.points[index]!
-          graphics.lineTo(x + point[0] * r, y + point[1] * r)
-        }
-        if (command.closed) graphics.closePath()
-        fillAndStrokePixiSymbolCommand(
-          graphics,
-          command.fill,
-          command.stroke,
-          fillColor,
-          strokeColor,
-          lineWidth * (
-            (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
-            DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
-          ),
-          strokeAlpha,
-        )
-        break
-      }
-      case 'curvePath':
-        graphics.moveTo(x + command.start[0] * r, y + command.start[1] * r)
-        for (const segment of command.segments) {
-          if (segment.kind === 'line') {
-            graphics.lineTo(x + segment.to[0] * r, y + segment.to[1] * r)
-          } else {
-            graphics.bezierCurveTo(
-              x + segment.control1[0] * r,
-              y + segment.control1[1] * r,
-              x + segment.control2[0] * r,
-              y + segment.control2[1] * r,
-              x + segment.to[0] * r,
-              y + segment.to[1] * r,
-            )
-          }
-        }
-        if (command.closed) graphics.closePath()
-        fillAndStrokePixiSymbolCommand(
-          graphics,
-          command.fill,
-          command.stroke,
-          fillColor,
-          strokeColor,
-          lineWidth * (
-            (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
-            DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
-          ),
-          strokeAlpha,
-        )
-        break
-      case 'lines':
-        for (const segment of command.segments) {
-          graphics.moveTo(x + segment[0] * r, y + segment[1] * r)
-            .lineTo(x + segment[2] * r, y + segment[3] * r)
-        }
-        graphics.stroke({
-          color: strokeColor,
-          width: lineWidth * (
-            (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH) /
-            DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH
-          ),
-          alpha: strokeAlpha,
-        })
-        break
+  const edge = toPixiColor(getPlantSymbolEdgeColor(entry.color), 0)
+  const width = getPlantSymbolEdgeWidth(r * 2)
+  for (const shape of getPlantSymbolShapes(symbol, r * 2)) {
+    tracePlantSymbolContour(graphics, shape.outline, x, y, r)
+    graphics.stroke({ color: edge, width, join: 'round', cap: 'round' }).fill({ color, alpha: 1 })
+    for (const hole of shape.holes ?? []) {
+      tracePlantSymbolContour(graphics, hole, x, y, r)
+      graphics.cut()
     }
   }
-}
-
-function fillAndStrokePixiSymbolCommand(
-  graphics: Graphics,
-  fill: boolean,
-  stroke: boolean,
-  fillColor: number,
-  strokeColor: number,
-  lineWidth: number,
-  strokeAlpha: number,
-): void {
-  if (fill) graphics.fill({ color: fillColor, alpha: 0.55 })
-  if (stroke) graphics.stroke({ color: strokeColor, width: lineWidth, alpha: strokeAlpha })
 }
 
 function screenPxToWorldPx(px: number, viewportScale: number): number {

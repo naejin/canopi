@@ -7985,7 +7985,7 @@ describe('SceneInteractionSession', () => {
         'Malus domestica': '#C44230',
       }
       draft.plantSpeciesSymbols = {
-        'Malus domestica': 'tree',
+        'Malus domestica': 'canopy',
       }
     })
     selectPlantStampSource({
@@ -8006,7 +8006,7 @@ describe('SceneInteractionSession', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#C44230',
-      symbol: 'tree',
+      symbol: 'canopy',
       position: { x: 50, y: 70 },
     })
     expect(store.session.selectedTargets).toEqual([plantTarget(store.persisted.plants[0]!.id)])
@@ -8887,7 +8887,7 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: '#C44230',
-        symbol: 'tree',
+        symbol: 'canopy',
         position: { x: 12, y: 24 },
         rotationDeg: 15,
         scale: 4,
@@ -8950,7 +8950,7 @@ describe('SceneInteractionSession', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#C44230',
-      symbol: 'tree',
+      symbol: 'canopy',
       position: { x: 100, y: 120 },
       rotationDeg: 15,
       scale: 4,
@@ -9067,7 +9067,7 @@ describe('SceneInteractionSession', () => {
           canonicalName: 'Malus domestica',
           commonName: 'Apple',
           color: '#C44230',
-          symbol: 'tree',
+          symbol: 'canopy',
           position: { x: -4, y: 0 },
           rotationDeg: null,
           scale: 4,
@@ -9133,7 +9133,7 @@ describe('SceneInteractionSession', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#C44230',
-      symbol: 'tree',
+      symbol: 'canopy',
       position: { x: 36, y: 45 },
       locked: false,
     })

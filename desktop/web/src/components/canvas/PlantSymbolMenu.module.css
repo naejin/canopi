@@ -109,16 +109,11 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
   justify-content: space-between;
 }
 
-.grid + .grid {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-}
 
 .symbolButton {
   width: 100%;
@@ -253,4 +248,11 @@
   max-width: 100%;
   overflow-wrap: anywhere;
   padding: 0 var(--space-0-5);
+}
+
+.neutralButton {
+  min-height: var(--control-size-sm);
+  flex-direction: row;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
 }

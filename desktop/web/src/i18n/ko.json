@@ -251,16 +251,19 @@
       "current": "현재: {{symbol}}",
       "inherited": "상속됨: {{symbol}}",
       "names": {
-        "round": "원형",
-        "square": "사각형",
-        "triangle": "삼각형",
-        "cross": "십자",
-        "tree": "나무",
+        "canopy": "수관형 나무",
+        "conifer": "침엽수",
+        "palm": "야자",
         "shrub": "관목",
-        "herbaceous": "초본",
-        "climber": "덩굴",
+        "herb": "초본",
+        "grass": "벼과 풀",
+        "bamboo": "대나무 / 왕대",
+        "fern": "양치식물",
+        "climber": "덩굴식물",
         "groundcover": "지피식물",
-        "wave": "물결"
+        "rosette": "로제트",
+        "cactus": "선인장",
+        "round": "중립 점"
       }
     },
     "group": {

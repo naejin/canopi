@@ -3,9 +3,9 @@ import { resolvePlantSymbolForPlant, resolvePlantSymbolId } from './plant-symbol
 
 describe('plant symbols', () => {
   it('resolves missing and unknown Plant Symbol IDs to round', () => {
-    expect(resolvePlantSymbolId('triangle')).toBe('triangle')
+    expect(resolvePlantSymbolId('conifer')).toBe('conifer')
     expect(resolvePlantSymbolId('groundcover')).toBe('groundcover')
-    expect(resolvePlantSymbolId('wave')).toBe('wave')
+    expect(resolvePlantSymbolId('fern')).toBe('fern')
     expect(resolvePlantSymbolId(null)).toBe('round')
     expect(resolvePlantSymbolId(undefined)).toBe('round')
     expect(resolvePlantSymbolId('spiral')).toBe('round')
@@ -13,13 +13,13 @@ describe('plant symbols', () => {
     expect(
       resolvePlantSymbolForPlant(
         { canonicalName: 'Quercus robur', symbol: null },
-        { 'Quercus robur': 'tree' },
+        { 'Quercus robur': 'canopy' },
       ),
-    ).toBe('tree')
+    ).toBe('canopy')
     expect(
       resolvePlantSymbolForPlant(
         { canonicalName: 'Quercus robur', symbol: 'spiral' },
-        { 'Quercus robur': 'tree' },
+        { 'Quercus robur': 'canopy' },
       ),
     ).toBe('round')
   })

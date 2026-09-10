@@ -569,14 +569,14 @@ describe('scene runtime mutation controller', () => {
       { kind: 'plant', id: 'plant-2' },
     ])
 
-    const changed = controller.setSelectedPlantSymbol('triangle')
+    const changed = controller.setSelectedPlantSymbol('conifer')
 
     expect(changed).toBe(2)
-    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['triangle', 'triangle'])
+    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['conifer', 'conifer'])
     expect(controller.getSelectedPlantSymbolContext()).toMatchObject({
       plantIds: ['plant-1', 'plant-2'],
-      sharedCurrentSymbol: 'triangle',
-      sharedEffectiveSymbol: 'triangle',
+      sharedCurrentSymbol: 'conifer',
+      sharedEffectiveSymbol: 'conifer',
       canClearSelectedSymbol: true,
     })
     expect(state.dirtyTypes).toEqual(['set-selected-plant-symbol'])
@@ -585,8 +585,8 @@ describe('scene runtime mutation controller', () => {
 
   it('clears selected plant symbols back to inherited symbols', () => {
     const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'tree' }
-    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle' }))
+    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
+    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'conifer' }))
     const { controller, sceneStore, state } = createController(file)
     sceneStore.setSelection([
       { kind: 'plant', id: 'plant-1' },
@@ -599,8 +599,8 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.persisted.plants.map((plant) => plant.symbol ?? null)).toEqual([null, null])
     expect(controller.getSelectedPlantSymbolContext()).toMatchObject({
       sharedCurrentSymbol: null,
-      sharedEffectiveSymbol: 'tree',
-      inheritedSymbol: 'tree',
+      sharedEffectiveSymbol: 'canopy',
+      inheritedSymbol: 'canopy',
       canClearSelectedSymbol: false,
     })
     expect(state.dirtyTypes).toEqual(['set-selected-plant-symbol'])
@@ -630,15 +630,15 @@ describe('scene runtime mutation controller', () => {
 
   it('clears species symbol defaults without rewriting existing plants', () => {
     const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'tree' }
-    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle' }))
+    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
+    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'conifer' }))
     const { controller, sceneStore, state } = createController(file)
 
     const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
 
     expect(changed).toBe(true)
     expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
-    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['triangle', 'triangle'])
+    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['conifer', 'conifer'])
     expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
     expect(state.invalidations).toBe(1)
   })
@@ -650,22 +650,22 @@ describe('scene runtime mutation controller', () => {
     )
     const { controller, sceneStore, state } = createController(file)
 
-    const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'tree')
+    const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'canopy')
     const lockedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
 
     expect(changed).toBe(1)
-    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol).toBe('tree')
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol).toBe('canopy')
     expect(lockedPlant.symbol).toBe('round')
     expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('round')
     expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({
-      'Malus domestica': 'tree',
+      'Malus domestica': 'canopy',
     })
     expect(state.dirtyTypes).toEqual(['set-plant-symbol-for-species'])
   })
 
   it('does not resymbol locked Plants when clearing a species symbol default', () => {
     const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'tree' }
+    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
     file.plants = file.plants.map((plant) =>
       plant.id === 'plant-2' ? { ...plant, locked: true } : plant,
     )
@@ -677,8 +677,8 @@ describe('scene runtime mutation controller', () => {
     expect(changed).toBe(true)
     expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
     expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol ?? null).toBeNull()
-    expect(lockedPlant.symbol).toBe('tree')
-    expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('tree')
+    expect(lockedPlant.symbol).toBe('canopy')
+    expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('canopy')
     expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
   })
 
@@ -692,11 +692,11 @@ describe('scene runtime mutation controller', () => {
     }]
     const { controller, sceneStore, state } = createController(file)
 
-    const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'tree')
+    const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'canopy')
     const groupedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
 
     expect(changed).toBe(1)
-    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol).toBe('tree')
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol).toBe('canopy')
     expect(groupedPlant.symbol).toBe('round')
     expect(resolvePlantSymbolForPlant(groupedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('round')
     expect(state.dirtyTypes).toEqual(['set-plant-symbol-for-species'])
@@ -709,7 +709,7 @@ describe('scene runtime mutation controller', () => {
     )
     const { controller, sceneStore, state } = createController(file)
 
-    const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'tree')
+    const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'canopy')
 
     expect(changed).toBe(0)
     expect(sceneStore.persisted.plants.map((plant) => plant.symbol ?? null)).toEqual([null, null])

@@ -93,16 +93,19 @@ impl CanopiDesignIngestionErrorKind {
     }
 }
 pub const PLANT_SYMBOL_IDS: &[&str] = &[
-    "round",
-    "square",
-    "triangle",
-    "cross",
-    "tree",
+    "canopy",
+    "conifer",
+    "palm",
     "shrub",
-    "herbaceous",
+    "herb",
+    "grass",
+    "bamboo",
+    "fern",
     "climber",
     "groundcover",
-    "wave",
+    "rosette",
+    "cactus",
+    "round",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

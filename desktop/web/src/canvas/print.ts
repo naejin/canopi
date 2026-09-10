@@ -14,6 +14,7 @@ export interface PrintPlant {
   readonly color: string
   readonly symbol: string
   readonly mark: readonly PrintMarkPath[]
+  readonly smallMark?: readonly PrintMarkPath[]
   readonly pinnedName: boolean
 }
 export interface PrintZone {

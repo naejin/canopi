@@ -36,7 +36,7 @@ export function DisplayLegend() {
               style={{ color: entry.color }}
               aria-hidden="true"
             >
-              <PlantSymbolGlyph symbol={entry.symbol} className={styles.symbolGlyph} />
+              <PlantSymbolGlyph symbol={entry.symbol} size={14} className={styles.symbolGlyph} />
             </span>
             <span className={styles.entryLabel}>{entry.label}</span>
             {entry.count > 1 && (

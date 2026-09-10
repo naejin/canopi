@@ -137,8 +137,8 @@ _Avoid_: Species, plant record, catalog item
 A user-chosen built-in marker shape used to visually distinguish placed plants in a design. A placed plant may have its own plant symbol, and a design may define a default plant symbol for a species' placed plants; the symbol sits within the placed plant's Visual Footprint and is design-owned presentation, not Species Catalog data, physical geometry, or imported artwork.
 _Avoid_: Custom icon, uploaded icon, SVG asset
 
-**Plant Habit Symbol**:
-A plant symbol that suggests a broad growth habit such as tree, shrub, herbaceous plant, or climber. A plant habit symbol is a user-applied visual cue, not a botanical classification, catalog value, or validation rule.
+**Plant Form Symbol**:
+A botanical plant symbol that suggests a visible form, such as a canopy, palm, fern, rosette, or climber. Plant Form Symbols are a compact visual vocabulary chosen by the designer, not a botanical classification, catalog value, or validation rule. Life cycle, aquatic habitat, epiphytic attachment, and species identity do not require separate symbols.
 _Avoid_: Growth form value, inferred species icon, botanical claim
 
 **Zone**:

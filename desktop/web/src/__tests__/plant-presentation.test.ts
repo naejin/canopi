@@ -39,7 +39,7 @@ describe('plant presentation service', () => {
   it.each([10, 20, 40, 100, 200, 400])('keeps dense positions distinct and authored presentation intact at %s px/m', (scale) => {
     const plants = Array.from({ length: 2200 }, (_, index) => createPlant({
       id: String(index), position: { x: (index % 40) * .14, y: Math.floor(index / 40) * .27 },
-      color: '#c44230', symbol: 'square',
+      color: '#c44230', symbol: 'rosette',
     }))
     const before = JSON.stringify(plants)
     const presentation = buildPlantPresentationSnapshot(plants, {
@@ -50,7 +50,7 @@ describe('plant presentation service', () => {
     for (const entry of presentation.entries) {
       expect(entry.radiusScreenPx * 2).toBeLessThan(.14 * scale)
       expect(entry.color).toBe('#C44230')
-      expect(entry.symbol).toBe('square')
+      expect(entry.symbol).toBe('rosette')
     }
     expect(JSON.stringify(plants)).toBe(before)
   })
@@ -106,7 +106,7 @@ describe('plant presentation service', () => {
 
   it('resolves Plant Symbols without changing the Visual Footprint', () => {
     const entries = buildPlantPresentationEntries([
-      createPlant({ id: 'explicit', symbol: 'triangle' }),
+      createPlant({ id: 'explicit', symbol: 'conifer' }),
       createPlant({ id: 'species-default', canonicalName: 'Pyrus communis' }),
       createPlant({ id: 'unknown', symbol: 'spiral' }),
     ], {
@@ -117,7 +117,7 @@ describe('plant presentation service', () => {
       },
     }, new Set())
 
-    expect(entries.map((entry) => entry.symbol)).toEqual(['triangle', 'climber', 'round'])
+    expect(entries.map((entry) => entry.symbol)).toEqual(['conifer', 'climber', 'round'])
     expect(entries.map((entry) => entry.radiusScreenPx)).toEqual([
       entries[0]!.radiusScreenPx,
       entries[0]!.radiusScreenPx,
@@ -126,8 +126,8 @@ describe('plant presentation service', () => {
   })
 
   it('keeps species canopy metadata out of the symbolic Visual Footprint', () => {
-    const canopyPlant = createPlant({ id: 'canopy-plant', symbol: 'square' })
-    const fallbackPlant = createPlant({ id: 'fallback-plant', canonicalName: 'Pyrus communis', symbol: 'triangle' })
+    const canopyPlant = createPlant({ id: 'canopy-plant', symbol: 'rosette' })
+    const fallbackPlant = createPlant({ id: 'fallback-plant', canonicalName: 'Pyrus communis', symbol: 'conifer' })
     const speciesCache = new Map([
       ['Malus domestica', { width_max_m: 4 }],
     ])
@@ -147,7 +147,7 @@ describe('plant presentation service', () => {
     expect(fallbackPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
     expect(fallbackPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
     expect(fallbackPresentation.usesCanopyRadius).toBe(false)
-    expect(fallbackPresentation.symbol).toBe('triangle')
+    expect(fallbackPresentation.symbol).toBe('conifer')
   })
 
   it('computes screen hit bounds from the resolved Visual Footprint plus interaction padding', () => {

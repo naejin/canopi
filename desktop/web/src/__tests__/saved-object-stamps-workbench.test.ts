@@ -197,7 +197,7 @@ describe('Saved Object Stamp Workbench', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#c0442e',
-      symbol: 'tree',
+      symbol: 'canopy',
       stratum: null,
       canopySpreadM: null,
       position: { x: 12, y: 24 },
@@ -249,7 +249,7 @@ describe('Saved Object Stamp Workbench', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#c0442e',
-      symbol: 'tree',
+      symbol: 'canopy',
       position: { x: 12, y: 24 },
       rotationDeg: 15,
       scale: 2,
@@ -262,7 +262,7 @@ describe('Saved Object Stamp Workbench', () => {
 
   it('captures the effective Plant Symbol inherited from species defaults', async () => {
     const scene = createDefaultScenePersistedState()
-    scene.plantSpeciesSymbols = { 'Malus domestica': 'tree' }
+    scene.plantSpeciesSymbols = { 'Malus domestica': 'canopy' }
     scene.plants = [{
       kind: 'plant',
       id: 'source-plant-default-symbol',
@@ -307,7 +307,7 @@ describe('Saved Object Stamp Workbench', () => {
     await workbench.saveSelection(captureFromQuery(query))
 
     const payload = JSON.parse(createStamp.mock.calls[0]![1])
-    expect(payload.plants[0].symbol).toBe('tree')
+    expect(payload.plants[0].symbol).toBe('canopy')
   })
 
   it('updates selection availability when the canvas selection changes without a scene edit', () => {

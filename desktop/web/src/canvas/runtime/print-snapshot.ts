@@ -1,7 +1,7 @@
 import type { CanvasPrintSnapshot, PrintMarkPath } from '../print'
 import { resolvePlantBaseColor, type PlantPresentationContext } from './plant-presentation'
 import { resolvePlantSymbolForPlant, type ScenePersistedState } from './scene'
-import { PLANT_SYMBOL_RECIPES, type PlantSymbolRecipeCommand } from './plant-symbol-recipes'
+import { getPlantSymbolShapes, plantSymbolShapePath, type PlantSymbolShape } from './plant-symbol-recipes'
 import { getRectangularZoneCorners, getZoneWorldBounds } from './zone-geometry'
 
 export function buildCanvasPrintSnapshot(
@@ -14,7 +14,8 @@ export function buildCanvasPrintSnapshot(
       const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
       return { id: plant.id, canonicalName: plant.canonicalName, position: { ...plant.position },
         color: resolvePlantBaseColor(plant, context.speciesCache), symbol,
-        mark: PLANT_SYMBOL_RECIPES[symbol].map(markPath), pinnedName: plant.pinnedName === true }
+        mark: getPlantSymbolShapes(symbol, 24).map(markPath),
+        smallMark: getPlantSymbolShapes(symbol, 12).map(markPath), pinnedName: plant.pinnedName === true }
     }),
     zones: scene.zones.flatMap((zone) => {
       const bounds = getZoneWorldBounds(zone)
@@ -32,20 +33,8 @@ export function buildCanvasPrintSnapshot(
   }
 }
 
-function markPath(command: PlantSymbolRecipeCommand): PrintMarkPath {
-  let d: string
-  switch (command.kind) {
-    case 'circle': d = ellipsePath(command.cx, command.cy, command.radius, command.radius, 0); break
-    case 'rect': d = `M${command.x} ${command.y} h${command.width} v${command.height} h${-command.width} Z`; break
-    case 'path': d = command.points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ') + (command.closed ? ' Z' : ''); break
-    case 'curvePath':
-      d = `M${command.start.join(' ')} ` + command.segments.map((s) => s.kind === 'line'
-        ? `L${s.to.join(' ')}` : `C${s.control1.join(' ')} ${s.control2.join(' ')} ${s.to.join(' ')}`).join(' ') + (command.closed ? ' Z' : '')
-      break
-    case 'lines': d = command.segments.map(([x1, y1, x2, y2]) => `M${x1} ${y1} L${x2} ${y2}`).join(' '); break
-  }
-  return { d, fill: command.kind !== 'lines' && command.fill, stroke: command.kind === 'lines' || command.stroke,
-    strokeWidth: 'strokeWidth' in command ? command.strokeWidth ?? 0.14 : 0.14 }
+function markPath(shape: PlantSymbolShape): PrintMarkPath {
+  return { d: plantSymbolShapePath(shape), fill: true, stroke: false, strokeWidth: 0 }
 }
 
 // Cubic ellipse representation is shared by PDF and preview, including rotation.

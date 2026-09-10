@@ -251,16 +251,19 @@
       "current": "現在: {{symbol}}",
       "inherited": "継承: {{symbol}}",
       "names": {
-        "round": "円",
-        "square": "四角",
-        "triangle": "三角",
-        "cross": "十字",
-        "tree": "高木",
+        "canopy": "樹冠のある木",
+        "conifer": "針葉樹",
+        "palm": "ヤシ",
         "shrub": "低木",
-        "herbaceous": "草本",
+        "herb": "草本",
+        "grass": "イネ科草本",
+        "bamboo": "竹・大型草本",
+        "fern": "シダ",
         "climber": "つる植物",
-        "groundcover": "グランドカバー",
-        "wave": "波"
+        "groundcover": "地被植物",
+        "rosette": "ロゼット",
+        "cactus": "サボテン",
+        "round": "無指定の点"
       }
     },
     "group": {
