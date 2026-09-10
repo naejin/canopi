@@ -46,7 +46,13 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     const choices = requested.width === requested.height && (!view?.orientation || view.orientation === 'auto') ? ['portrait'] as const : orientations(view)
     const candidates = choices.map(orientation => {
       const geometry = pageGeometry(setup.paper, orientation, 'detail')
-      const fit = fitArea(requested, geometry.frame, view?.zoom)
+      const available = { ...geometry.frame }
+      // Leave physical room for references at bracket ends, without changing ground coverage.
+      if (Math.max(requested.width / requested.height, requested.height / requested.width) >= 4) {
+        if (requested.width > requested.height) { available.x += 8 * MM; available.width -= 16 * MM }
+        else { available.y += 8 * MM; available.height -= 16 * MM }
+      }
+      const fit = fitArea(requested, available, view?.zoom)
       return { geometry: { ...geometry, frame: fit.frame }, ...moveCoverage(fit, view?.offset) }
     }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
     const { geometry, ground, pointsPerMeter } = candidates[0]!

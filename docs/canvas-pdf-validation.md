@@ -7,7 +7,37 @@ sidebar legend and readability consent remain retired. The [user guide](canvas-p
 [ADR 0024](adr/0024-shared-canvas-pdf-export.md) and [agent guide](agent/canvas-pdf.md)
 describe the current behaviour.
 
-## Narrow-strip correction (`canopi-dcxj`)
+## Current continuous brackets (`canopi-v36o`)
+
+The approved continuous proposal is now implemented in the shared production layout.
+Repeated appearance groups use external brackets with orthogonal stems, membership
+dots, crossing gaps and readable references at both ends. Shallow horizontal sheets
+can use spare paper for a complete quick key and a metre ruler. Authored ground
+geometry is never divided or rearranged; unsuitable fields retain the established
+local layout. Pinned names, coincident memberships, authored appearances and complete
+paginated keys remain intact. Pale connector ink is darkened independently of marks.
+
+All nine original orchard rectangles retain their exact coverage. The 19-page Chrome
+export contains all 2,201 plants exactly once across the detailed views, with no
+unplaced identities. Page 16 identifies 189 plants through 11 shared brackets and
+three singletons. Its compact key includes all 14 Species and the complete note.
+All 19 SVG/Poppler comparisons pass the unchanged 0.25 tolerance (maximum 0.106).
+Embedded Unicode fonts, vector artwork, named links, page numbering and the physical
+50 mm overview bar pass. The job took 6.94 seconds during local build activity and
+released every worker after clearing; this is not an isolated timing benchmark.
+
+TypeScript, all 2,239 frontend tests in 244 files, both edition builds, the Web
+boundary scan and the production probe build pass. New regressions cover both
+orientations, tilted strips, complete membership, appearance/pinned/coincident
+exclusions, atomic fallback, bounded routing, crossing semantics, pale ink and the
+complete quick key. No runtime dependencies or shared contracts were added. No
+physical printer test or fresh packaged-native matrix was performed. The compact
+data records this evidence under `sharedBracketRevision`. All nine public fixtures
+also pass, including multilingual text and a 10,000-plant, 99-page export in 12.11
+seconds. Every fixture releases its worker; the overview-only fixture stays a single
+lightweight page.
+
+## Earlier narrow-strip correction (`canopi-dcxj`)
 
 The newer 19-page orchard export exposed a direction bias on page 16: a shallow
 horizontal bed with 189 plants had 68 identity groups labelled inside its crowded
@@ -15,8 +45,8 @@ planting strip and four without placed labels. Rotating the same plants preserve
 inferred row groups while removing missing labels, isolating placement direction
 and target order as the cause.
 
-Narrow-sheet labels now search outward along the short axis, remain clear of the
-planting frame and are allocated in order along the long axis. The reproduction has
+That correction made narrow-sheet labels search outward along the short axis, remain clear of the
+planting frame and are allocated in order along the long axis. The reproduction then had
 166 nonempty identity groups covering all 189 plants, with none inside the strip.
 The other 18 page plans are identical to baseline `8fe09a71`; exact coverage, scale,
 all nine map/key pairs and the lightweight overview are preserved. The source PDF

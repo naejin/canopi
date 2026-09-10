@@ -20,12 +20,22 @@ notes** page; additional pages are added automatically when needed. There is no 
 overflow or crowded-text confirmation before saving.
 
 Numeric references distinguish Species even when they share a symbol and colour.
-They stay consistent throughout the PDF. Straight runs can share a bracket, reference
-and plant count; long runs repeat the reference so it is easy to follow. Individual
-placements keep their own leaders. On long, narrow sheets, references sit outside
-the planting strip and leaders run out toward the free paper space. Names appear beside the drawing where space permits;
+They stay consistent throughout the PDF. Repeated plants with the same appearance
+can share a bracket beside the drawing, with a reference at both ends. Right-angle
+stems connect individual plants; a dot means membership and a gap means a crossing.
+This works above/below horizontal beds and beside vertical beds when there is room.
+Other placements retain local references, and straight neighbouring runs can share
+short brackets and counts. Long, narrow sheets leave extra room at the ends for
+references. Every Print Area stays one continuous, proportionally correct drawing;
+the layout never automatically divides or rearranges it. Names appear beside the drawing where space permits;
 the key always includes full common and botanical names, the Design's letter code,
 counts and every authored appearance. These print references do not change your Design.
+
+A shallow horizontal sheet can also use spare paper for a compact local key and a
+metre ruler. The quick key includes all local Species and notes only when they fit
+completely; the following full key always remains available. The ruler measures
+from the left edge of the printed ground rectangle, so subtract readings to estimate
+spacing along the bed.
 
 Aligned Measurement Guides show actual endpoint distances. A guide cut by the page
 edge keeps its full value in an M entry; an arrow points to another detail showing its

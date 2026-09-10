@@ -40,7 +40,25 @@ can crop; `fitPage()` restores full coverage and centring. Orientation overrides
 at the retained zoom/displacement. Key pages inherit source orientation unless
 individually overridden. Removing an area removes its associated page choices.
 
-`field-layout.ts` owns the drawing pass. `field-rows.ts` infers straight neighbouring
+`field-layout.ts` owns the drawing pass. Authored dimensions and notes have placement
+priority over shared brackets. When no shared group fits, the established local-run
+layout order is retained. `field-brackets.ts` selects repeated
+appearance groups, reserves readable references at both ends and admits a group only
+when every member can be routed. Pinned names and coincident placements remain in
+the local identity path. Groups outside the available edge space fall back to that
+same path. Horizontal and vertical brackets use one millimetre-based algorithm.
+`field-routing.ts` owns bounded orthogonal routing (12,000 nodes per route, 240,000
+per field); there is no new worker or persistent cache. Crossing gaps remove only
+connector strokes; membership dots and dark references remain readable independently
+of authored plant opacity. Pale connector colours are darkened for paper contrast,
+without changing the authored marks. Connectors are explicit geometry, never empty fake labels.
+`layout.ts` leaves 8 mm at both long-axis ends of frames at least 4:1; the ground
+rectangle stays exact and the drawing is never split, rotated or stretched.
+`field-support.ts` adds a complete compact key and a metre ruler to spare space on
+shallow horizontal fields only when their physical bounds fit. The complete paginated
+key remains authoritative. The ruler starts at the left ground edge, independent of
+world coordinates. These paths run only for detail sheets and share the existing
+layout-cache, cancellation and preview/encoding pipeline. `field-rows.ts` infers straight neighbouring
 runs, splitting at species, appearance, spacing or direction changes; arbitrary
 layouts remain individual. `field-placement.ts` places transparent identities with
 actual Fontkit ink bounds and routes leaders around printed labels and plant marks.
@@ -48,7 +66,7 @@ For frames at least 4:1 in either orientation, label search runs along the short
 axis and keeps ink outside the planting frame with 1 mm clearance. Targets are
 visited along the long axis to preserve exit corridors for later plants. This
 applies to identities, name upgrades, repeated references and note anchors; it
-never rotates plants, changes ground coverage or adds pages. Keep horizontal,
+never rotates plants, changes ground coverage or adds map pages. Keep horizontal,
 vertical and slightly tilted strip regressions in `canvas-pdf-strips.test.ts`.
 Crossing leaders have gaps in their own stroke, never opaque erasers. Compact
 numeric references repeat along long rows. A full common name is added once per

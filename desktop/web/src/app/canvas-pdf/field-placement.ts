@@ -3,6 +3,14 @@ import type { PdfTextEngine, TextLine } from './text'
 import { MM } from './print-style'
 import { PaperIndex, contains, crossing, distance, edge, fits, hits, inflate, overlaps, segmentBounds, type Segment } from './field-geometry'
 
+export interface FieldConnector {
+  route: Segment[]
+  color: string
+  width: number
+  group?: string
+  rail?: boolean
+}
+
 export interface FieldLabel {
   bounds: Bounds
   lines: readonly TextLine[]
@@ -67,6 +75,8 @@ export class FieldSpace {
     }
     return true
   }
+  /** Row brackets score marker crossings separately, but may never cross printed text. */
+  inkClear(route: readonly Segment[]): boolean { return this.pathClear(route, [...this.marks.keys()]) }
   crossings(route: readonly Segment[], ignored?: FieldLabel): number {
     return route.reduce((n, s) => n + this.paths.query(segmentBounds(s)).filter(p => this.crossingPaths.has(p) && !ignored?.route.includes(p) && crossing(s, p)).length, 0)
   }
@@ -114,16 +124,17 @@ export class FieldSpace {
 }
 
 /** Gaps belong to the underpassing connector; no white eraser hides artwork. */
-export function separatedConnectors(labels: readonly FieldLabel[]): { segment: Segment; label: FieldLabel }[] {
+export function separatedConnectors<T extends { route: readonly Segment[]; group?: string; rail?: boolean }>(labels: readonly T[]): { segment: Segment; label: T }[] {
   const pool = labels.flatMap(label => label.route.map(segment => ({ segment, label })))
   const index = new PaperIndex<typeof pool[number]>(), gaps = new Map<Segment, [number, number][]>()
-  const length = (label: FieldLabel) => label.route.reduce((n, s) => n + distance(s.a, s.b), 0)
+  const length = (label: T) => label.route.reduce((n, s) => n + distance(s.a, s.b), 0)
   for (const item of pool) {
     for (const other of index.query(segmentBounds(item.segment))) {
-      if (item.label === other.label) continue
+      if (item.label === other.label || item.label.group && item.label.group === other.label.group) continue
       const cross = crossing(item.segment, other.segment)
       if (!cross) continue
-      const under = length(item.label) >= length(other.label) ? item : other
+      const under = !!item.label.rail !== !!other.label.rail ? item.label.rail ? item : other
+        : length(item.label) >= length(other.label) ? item : other
       const t = under === item ? cross.t : cross.u, delta = .45 / distance(under.segment.a, under.segment.b)
       if (t < delta || t > 1 - delta) continue
       const intervals = gaps.get(under.segment) ?? []; intervals.push([t - delta, t + delta]); gaps.set(under.segment, intervals)
@@ -134,7 +145,7 @@ export function separatedConnectors(labels: readonly FieldLabel[]): { segment: S
     const intervals = (gaps.get(s) ?? []).sort((a, b) => a[0] - b[0])
     const at = (t: number): Point => ({ x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t })
     let from = 0
-    const result: { segment: Segment; label: FieldLabel }[] = []
+    const result: { segment: Segment; label: T }[] = []
     for (const [low, high] of [...intervals, [1, 1]]) {
       if (low! > from) result.push({ segment: { a: at(from), b: at(low!) }, label })
       from = Math.max(from, high!)

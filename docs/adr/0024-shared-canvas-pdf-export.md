@@ -42,8 +42,16 @@ each detail automatically. There are no minimaps, running detail headers/footers
 narrow legend sidebars, or consent gates for crowded text and overflowing legends.
 
 Whole-Design numeric print references distinguish Species sharing an appearance.
-The existing Design letter code remains in the key and is never reassigned. Straight
-neighbouring planting runs may share brackets and counts; irregular placements stay
+The existing Design letter code remains in the key and is never reassigned. Repeated
+appearance groups may share external brackets with references at both ends,
+orthogonal stems, membership dots and gaps at crossings. Selection is adaptive in
+both orientations and admission is atomic: every member and both references must
+fit, otherwise the group uses local placement. Search has a per-route and per-page
+budget. Print Areas remain continuous; grouping never splits or rearranges ground
+geometry. Narrow sheets reserve physical room at bracket ends. Spare paper on
+shallow horizontal sheets may hold a complete quick key and a metre ruler; these
+supplement the complete following key. Straight neighbouring runs may still share
+short brackets and counts; irregular placements stay
 individual, and long runs repeat references. Full common names appear on the map where
 they fit; complete common/canonical names, counts and all authored appearances remain
 in the key. Authored colours, symbols, opacity and plant positions are unchanged.

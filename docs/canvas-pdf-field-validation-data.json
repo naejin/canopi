@@ -848,5 +848,283 @@
       "physicalPrinting": false,
       "freshPackagedNativeMatrix": false
     }
+  },
+  "sharedBracketRevision": {
+    "date": "2026-09-10",
+    "bead": "canopi-v36o",
+    "browser": "150.0.7871.46",
+    "checks": {
+      "frontendFiles": 244,
+      "frontendTests": 2239,
+      "focusedPdfAndSnapshotTests": 100,
+      "typeScript": true,
+      "desktopBuild": true,
+      "webBuildAndBoundaryScan": true,
+      "productionProbeBuild": true,
+      "physicalPrinterTested": false,
+      "freshPackagedNativeMatrix": false
+    },
+    "privatePdf": {
+      "file": "private.pdf",
+      "sha256": "d92fd8edf157f9585ea3bdc0adcf8405498813a804fc692c279449067a598d05",
+      "pages": 19,
+      "bytes": 756121,
+      "canvasPages": 10,
+      "exact50mmBars": 1,
+      "embeddedUnicodeFonts": true,
+      "vectorCanvas": true,
+      "textSha256": "979347a69513ee735be0ac8e98b5491a25413815290689e6adc2f1ae4662ab26",
+      "planSha256": "274907db1234c0ba668df48978684a489d6a02408caf35599622501bb7246203",
+      "previewComparisons": [
+        {
+          "page": 1,
+          "meanChannelDifference": 2.5417648246219904,
+          "neighborhoodDifference": 0.06377747573056561,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 2,
+          "meanChannelDifference": 6.099553224294881,
+          "neighborhoodDifference": 0.025204391683712236,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 3,
+          "meanChannelDifference": 3.016150659494375,
+          "neighborhoodDifference": 0.07349973120162479,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 4,
+          "meanChannelDifference": 4.838740185312762,
+          "neighborhoodDifference": 0.0443905961058371,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 5,
+          "meanChannelDifference": 3.3872274814493655,
+          "neighborhoodDifference": 0.08053193410405615,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 6,
+          "meanChannelDifference": 4.308862780424385,
+          "neighborhoodDifference": 0.03491393871042391,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 7,
+          "meanChannelDifference": 3.1133625745771414,
+          "neighborhoodDifference": 0.06967478499824299,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 8,
+          "meanChannelDifference": 3.2664564749080633,
+          "neighborhoodDifference": 0.07048310116778782,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 9,
+          "meanChannelDifference": 4.130168753363674,
+          "neighborhoodDifference": 0.10596625996689302,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 10,
+          "meanChannelDifference": 5.286743585264943,
+          "neighborhoodDifference": 0.0289844150140517,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 11,
+          "meanChannelDifference": 2.458002876837146,
+          "neighborhoodDifference": 0.057019243244649076,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 12,
+          "meanChannelDifference": 2.4899238291311234,
+          "neighborhoodDifference": 0.044623485737135586,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 13,
+          "meanChannelDifference": 3.3319992422220626,
+          "neighborhoodDifference": 0.08263798932313347,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 14,
+          "meanChannelDifference": 2.799213672394629,
+          "neighborhoodDifference": 0.04676382420142944,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 15,
+          "meanChannelDifference": 3.82190001882623,
+          "neighborhoodDifference": 0.09783669767231544,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 16,
+          "meanChannelDifference": 4.015762904169168,
+          "neighborhoodDifference": 0.02983647187576934,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 17,
+          "meanChannelDifference": 1.5209936111990359,
+          "neighborhoodDifference": 0.038191830716428204,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 18,
+          "meanChannelDifference": 3.8655177641886085,
+          "neighborhoodDifference": 0.03269764512526241,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 19,
+          "meanChannelDifference": 2.700165830421474,
+          "neighborhoodDifference": 0.06238043348799215,
+          "maximumAllowed": 0.25
+        }
+      ]
+    },
+    "generationMs": 6944.5999999940395,
+    "activeWorkersAfterClear": 0,
+    "uniquePlantCoverage": 2201,
+    "detailViews": [
+      {
+        "page": 2,
+        "plants": 301,
+        "identityGroups": 92,
+        "unplaced": 0
+      },
+      {
+        "page": 4,
+        "plants": 211,
+        "identityGroups": 73,
+        "unplaced": 0
+      },
+      {
+        "page": 6,
+        "plants": 256,
+        "identityGroups": 74,
+        "unplaced": 0
+      },
+      {
+        "page": 8,
+        "plants": 328,
+        "identityGroups": 94,
+        "unplaced": 0
+      },
+      {
+        "page": 10,
+        "plants": 263,
+        "identityGroups": 94,
+        "unplaced": 0
+      },
+      {
+        "page": 12,
+        "plants": 212,
+        "identityGroups": 104,
+        "unplaced": 0
+      },
+      {
+        "page": 14,
+        "plants": 207,
+        "identityGroups": 107,
+        "unplaced": 0
+      },
+      {
+        "page": 16,
+        "plants": 189,
+        "identityGroups": 14,
+        "unplaced": 0
+      },
+      {
+        "page": 18,
+        "plants": 234,
+        "identityGroups": 65,
+        "unplaced": 0
+      }
+    ],
+    "scope": "Continuous shared appearance brackets; no automatic splitting or geometry rearrangement; local fallback for unsuitable fields.",
+    "publicFixtures": [
+      {
+        "fixture": "dense",
+        "pages": 3,
+        "plants": 320,
+        "bytes": 113656,
+        "generationMs": 916.8000000119209,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "mixed",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 49120,
+        "generationMs": 409.19999998807907,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "framing",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 34414,
+        "generationMs": 404.80000001192093,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "legends",
+        "pages": 4,
+        "plants": 100,
+        "bytes": 97170,
+        "generationMs": 591.4000000059605,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "multilingual",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 138944,
+        "generationMs": 1905.6000000238419,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "map-excluded",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 49120,
+        "generationMs": 403,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "stress-1",
+        "pages": 1,
+        "plants": 100,
+        "bytes": 10209,
+        "generationMs": 223.59999999403954,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "stress-10",
+        "pages": 14,
+        "plants": 900,
+        "bytes": 247431,
+        "generationMs": 703.7000000178814,
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "stress-50",
+        "pages": 99,
+        "plants": 10000,
+        "bytes": 2732629,
+        "generationMs": 12108.800000011921,
+        "activeWorkersAfterClear": 0
+      }
+    ]
   }
 }

@@ -9,6 +9,8 @@ import { contains, clipSegment, distance, hits, inflate, outlineSegments, type S
 import { FieldSpace, separatedConnectors, type FieldLabel } from './field-placement'
 import { plantingRows } from './field-rows'
 import { fieldDimensions } from './field-dimensions'
+import { fieldBrackets, type FieldBracket } from './field-brackets'
+import { fieldSupport } from './field-support'
 
 export interface FieldReferences {
   species: ReadonlyMap<string, string>
@@ -63,6 +65,11 @@ export function visibleFieldCanvas(canvas: CanvasPrintSnapshot, ground: PrintBou
 /** One pure physical layout feeds both the SVG preview and the encoder. */
 export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, page: { id: string; width: number; height: number },
   text: PdfTextEngine, references: FieldReferences): FieldDrawing {
+  return drawFieldPass(input, frame, ground, scale, page, text, references, true)
+}
+
+function drawFieldPass(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, page: { id: string; width: number; height: number },
+  text: PdfTextEngine, references: FieldReferences, shared: boolean): FieldDrawing {
   const canvas = input.canvas, operations: PdfOperation[] = [], links: PdfLink[] = [], destinations: PdfDestination[] = []
   const point = (p: PrintPoint): PrintPoint => ({ x: (frame.x + (p.x - ground.x) * scale) / MM, y: (frame.y + (p.y - ground.y) * scale) / MM })
   // Shallow beds leave space beside their short axis: keep identities out of the planting.
@@ -106,12 +113,20 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
   }
   const pageReferences: PdfPageReference[] = []
   const processedNotes = new Set<string>()
+  let brackets: FieldBracket[] = []
   {
-    const grouped = new Set<string>()
+    if (shared) {
+      placeDimensions()
+      brackets = fieldBrackets(points, { x: frame.x / MM, y: frame.y / MM, width: frame.width / MM, height: frame.height / MM }, space, references.species, page.id)
+      // Preserve the established local layout when no complete shared group fits.
+      if (!brackets.length) return drawFieldPass(input, frame, ground, scale, page, text, references, false)
+    }
+    const grouped = new Set(brackets.flatMap(b => b.ids))
+    for (const bracket of brackets) identifiedPlants.push({ ids: bracket.ids, reference: bracket.reference, bounds: paper(bracket.labels[0]!.bounds) })
     interface Target { plants: readonly PrintPlant[]; anchors: PrintPoint[]; spine?: Segment; segments?: Segment[] }
     const targets: Target[] = []
     const directions = zoneSegments.filter(s => distance(s.a, s.b) / scale * MM > 2).map(s => Math.atan2(s.b.y - s.a.y, s.b.x - s.a.x))
-    for (const run of plantingRows(canvas.plants, directions)) {
+    for (const run of plantingRows(canvas.plants.filter(p => !grouped.has(p.id)), directions)) {
       const first = point(run[0]!.position), last = point(run[run.length - 1]!.position), length = distance(first, last)
       if (length < 5 || run.some(p => p.pinnedName)) continue
       const u = { x: (last.x - first.x) / length, y: (last.y - first.y) / length }
@@ -121,7 +136,8 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
         const ticks = run.map(p => { const v = point(p.position), d = (v.x - first.x) * u.x + (v.y - first.y) * u.y
           return { a: { x: a.x + u.x * d, y: a.y + u.y * d }, b: v } })
         return { spine, ticks, cost: points.filter(p => hits(spine, space.marks.get(p.plant.id)!)).length * 10 + space.crossings([spine]) }
-      }).filter(c => contains(space.frame, c.spine.a) && contains(space.frame, c.spine.b)).sort((a, b) => a.cost - b.cost)
+      }).filter(c => contains(space.frame, c.spine.a) && contains(space.frame, c.spine.b)
+        && (!shared || space.inkClear([c.spine, ...c.ticks]))).sort((a, b) => a.cost - b.cost)
       const chosen = choices[0]
       if (!chosen || chosen.cost >= 20) continue
       const segments = [chosen.spine, ...chosen.ticks]
@@ -136,17 +152,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       const group = singles.get(key) ?? []; group.push(p); singles.set(key, group)
     }
     for (const group of singles.values()) targets.push({ plants: group, anchors: [point(group[0]!.position)] })
-    const complete = canvas.measurements.filter(g => contains(ground, g.start) && contains(ground, g.end))
-    const dimensions = fieldDimensions(complete, point, space, input.locale)
-    const dimensionIds = new Set(dimensions.map(d => d.guide.id))
-    for (const d of dimensions) {
-      d.segments.forEach((s, i) => line(s, i === 1 ? '#49453f' : '#a29c91', i === 1 ? .23 : .12, opacity('measurement-guides')))
-      d.ticks.forEach(s => line(s, INK, .3, opacity('measurement-guides'))); labelText(d.label)
-    }
-    for (const guide of canvas.measurements.filter(g => !dimensionIds.has(g.id))) {
-      deferredMeasurement(guide)
-    }
-    placeNotes()
+    if (!shared) placeDimensions()
     const owners = new Map<FieldLabel, Target>()
     const unresolved: Target[] = []
     // Sweep along the bed so earlier leaders do not consume later plants' exit corridors.
@@ -213,6 +219,20 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
     for (const [label, target] of owners) identifiedPlants.push({ ids: label.ids, reference: references.species.get(target.plants[0]!.canonicalName)!, bounds: paper(label.bounds) })
   }
 
+  function placeDimensions(): void {
+    const complete = canvas.measurements.filter(g => contains(ground, g.start) && contains(ground, g.end))
+    const dimensions = fieldDimensions(complete, point, space, input.locale)
+    const dimensionIds = new Set(dimensions.map(d => d.guide.id))
+    for (const d of dimensions) {
+      d.segments.forEach((s, i) => line(s, i === 1 ? '#49453f' : '#a29c91', i === 1 ? .23 : .12, opacity('measurement-guides')))
+      d.ticks.forEach(s => line(s, INK, .3, opacity('measurement-guides'))); labelText(d.label)
+    }
+    for (const guide of canvas.measurements.filter(g => !dimensionIds.has(g.id))) {
+      deferredMeasurement(guide)
+    }
+    placeNotes()
+  }
+
   function placeNotes(): void {
     for (const note of notes) {
       if (processedNotes.has(note.id)) continue
@@ -241,7 +261,12 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       destinations.push({ id: `${page.id}:anchor:${note.reference}`, bounds: paper(inflate({ ...anchor, width: 0, height: 0 }, 12)) })
     }
   }
-  for (const { segment, label } of separatedConnectors(space.labels)) line(segment, label.color === OCHRE ? '#8a6b3b' : '#625d55', label.ids.length > 1 ? .23 : .17)
+  const connectors = [...space.labels.map(label => ({ route: label.route, color: label.color === OCHRE ? '#8a6b3b' : '#625d55', width: label.ids.length > 1 ? .23 : .17 })), ...brackets.flatMap(b => b.connectors)]
+  for (const { segment, label } of separatedConnectors(connectors)) line(segment, label.color, label.width)
+  for (const bracket of brackets) for (const p of bracket.junctions) {
+    const x = p.x * MM, y = p.y * MM, r = .32 * MM
+    operations.push(pathOp(`M${x + r} ${y} a${r} ${r} 0 1 0 ${-2 * r} 0 a${r} ${r} 0 1 0 ${2 * r} 0 Z`, null, bracket.color))
+  }
   for (const label of space.labels) {
     if (label.boxed) operations.push(pathOp(rectPath(paper(label.bounds)), label.color, null, .2 * MM))
     labelText(label)
@@ -255,6 +280,8 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
     const x = Math.min(...locations.map(p => p.x)), y = Math.min(...locations.map(p => p.y))
     destinations.push({ id: `${page.id}:species:${entry.reference}`, bounds: paper(inflate({ x, y, width: Math.max(...locations.map(p => p.x)) - x, height: Math.max(...locations.map(p => p.y)) - y }, 10)) })
   }
+  const support = fieldSupport(input, legend, notes, brackets, { x: frame.x / MM, y: frame.y / MM, width: frame.width / MM, height: frame.height / MM }, ground, scale, space, page.id)
+  operations.push(...support.operations); links.push(...support.links)
   notes.sort((a, b) => a.kind.localeCompare(b.kind, 'en') || Number(a.reference.slice(1)) - Number(b.reference.slice(1)))
   return { pageReferences, operations, links, destinations, legend, notes, identifiedPlants, annotationIds: canvas.annotations.map(n => n.id), measurementIds: canvas.measurements.map(g => g.id) }
 }

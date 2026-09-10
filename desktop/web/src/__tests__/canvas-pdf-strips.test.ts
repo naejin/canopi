@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
+import { MM } from '../app/canvas-pdf/print-style'
 import { overlaps } from '../app/canvas-pdf/field-geometry'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
 const fonts = new Map<PdfFontId, Uint8Array>([
@@ -38,4 +39,25 @@ it.each([
     expect(ink.slice(i + 1).some(other => overlaps(bounds, other))).toBe(false)
   }
   expect(page.operations.some(op => op.kind === 'path' && op.fill === '#ffffff')).toBe(false)
+})
+
+it('adds a complete quick key and metre ruler only in spare paper, retaining the full linked key', () => {
+  const input: PdfInput = { name: 'Repeated strip', locale: 'en', commonNames: { 'Species 0': 'Apple', 'Species 1': 'Pear', 'Species 2': 'Plum' }, canvas: {
+    layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], measurements: [],
+    annotations: [{ id: 'note', text: 'Keep this access clear', position: { x: 5, y: .7 }, fontSize: 12, rotation: 0 }],
+    plants: Array.from({ length: 60 }, (_, i) => ({ id: String(i), canonicalName: `Species ${i % 3}`,
+      position: { x: i % 30 * .35, y: Math.floor(i / 30) * .4 }, color: '#428063', symbol: 'round', mark: [], pinnedName: false })),
+  } }
+  const plan = buildPdfPlan(input, { paper: 'A4', layers: ['plants', 'annotations'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: -.2, y: -.2, width: 10.6, height: 1.2 } }] }, createPdfTextEngine(fonts, 'en'), labels)
+  const page = plan.pages.find(p => p.kind === 'detail')!
+  const text = page.operations.flatMap(op => op.kind === 'text' ? [op.line.runs.map(r => r.text).join('')] : [])
+  expect(text).toEqual(expect.arrayContaining(['Apple · 20', 'Pear · 20', 'Plum · 20', 'Keep this access clear', 'm']))
+  expect(page.legend.reduce((n, e) => n + e.count!, 0)).toBe(60)
+  expect(page.continuationIds).toHaveLength(1)
+  const destinations = new Set(plan.pages.flatMap(p => [`page:${p.id}`, ...p.destinations?.map(d => d.id) ?? []]))
+  expect(page.links!.every(link => destinations.has(link.target))).toBe(true)
+  for (const op of page.operations) if (op.kind === 'text' && op.line.ink) {
+    expect(op.x + op.line.ink.x).toBeGreaterThanOrEqual(8 * MM)
+    expect(op.y + op.line.ink.y + op.line.ink.height).toBeLessThan(page.height - 8 * MM)
+  }
 })
