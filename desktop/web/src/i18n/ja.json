@@ -263,8 +263,13 @@
         "groundcover": "地被植物",
         "rosette": "ロゼット",
         "cactus": "サボテン",
-        "round": "無指定の点"
-      }
+        "round": "無指定の点",
+        "square": "四角",
+        "triangle": "三角",
+        "cross": "十字"
+      },
+      "botanical": "植物の形",
+      "abstract": "抽象図形"
     },
     "group": {
       "group": "グループ化",

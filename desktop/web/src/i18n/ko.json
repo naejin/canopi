@@ -263,8 +263,13 @@
         "groundcover": "지피식물",
         "rosette": "로제트",
         "cactus": "선인장",
-        "round": "중립 점"
-      }
+        "round": "중립 점",
+        "square": "사각형",
+        "triangle": "삼각형",
+        "cross": "십자형"
+      },
+      "botanical": "식물 형태",
+      "abstract": "추상 도형"
     },
     "group": {
       "group": "그룹",

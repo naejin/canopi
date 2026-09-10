@@ -330,8 +330,8 @@ Earthy, not neon:
 - Plant Spacing should show generated-count feedback as one line, such as `128 generated`. Do not add a separate dense-warning sentence when the count crosses the threshold.
 
 ### Appearance Pickers
-- Plant Color precedes Plant Symbol in the existing toolbar. Both dialogs are 360px wide, clamped to the viewport and scrollable when needed.
-- Symbol choices are the twelve botanical forms in a four-column grid, followed by a compact Neutral dot button. The old geometric/habit choices are retired. Show labeled choices in neutral ink, ochre selection, and an effective-color preview; color previews use the effective symbol.
+- Plant Color precedes Plant Symbol in the existing toolbar. Both dialogs are 360px wide and clamped to the viewport. The symbol dialog scrolls its preview and choices independently, preserving its header and apply actions.
+- Symbol choices form one four-column keyboard grid with labeled Botanical (twelve forms) and Abstract (Neutral dot, Square, Triangle, Cross) groups. The abstract silhouettes have softened corners and the same opaque treatment as botanical forms. Show labeled choices in neutral ink, ochre selection, and an effective-color preview; color previews use the effective symbol.
 - Opening moves focus into the dialog. Arrow keys preview choices; selection and species-default application remain explicit actions. Escape returns focus to the trigger.
 - Color drags belong to the open picker and end on pointer release/cancellation, window blur, closing the advanced controls, selection change or unmount.
 - Glyph artwork is maintained in `desktop/web/src/canvas/runtime/plant-symbol-recipes.ts`, shared with canvas and PDF. Closed native contours are opaque silhouettes; small marks omit fine cuts, and canvas edges adapt to the theme. Accepted throwaway studies are removed after their decision is recorded.

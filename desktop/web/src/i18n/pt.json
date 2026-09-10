@@ -263,8 +263,13 @@
         "groundcover": "Forração",
         "rosette": "Roseta",
         "cactus": "Cacto",
-        "round": "Ponto neutro"
-      }
+        "round": "Ponto neutro",
+        "square": "Quadrado",
+        "triangle": "Triângulo",
+        "cross": "Cruz"
+      },
+      "botanical": "Botânicos",
+      "abstract": "Abstratos"
     },
     "group": {
       "group": "Agrupar",

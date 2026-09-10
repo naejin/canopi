@@ -263,8 +263,13 @@
         "groundcover": "Tappezzante",
         "rosette": "Rosetta",
         "cactus": "Cactus",
-        "round": "Punto neutro"
-      }
+        "round": "Punto neutro",
+        "square": "Quadrato",
+        "triangle": "Triangolo",
+        "cross": "Croce"
+      },
+      "botanical": "Botanici",
+      "abstract": "Astratti"
     },
     "group": {
       "group": "Raggruppa",

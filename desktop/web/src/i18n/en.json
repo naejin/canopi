@@ -263,8 +263,13 @@
         "groundcover": "Groundcover",
         "rosette": "Rosette",
         "cactus": "Cactus",
-        "round": "Neutral dot"
-      }
+        "round": "Neutral dot",
+        "square": "Square",
+        "triangle": "Triangle",
+        "cross": "Cross"
+      },
+      "botanical": "Botanical",
+      "abstract": "Abstract"
     },
     "group": {
       "group": "Group",

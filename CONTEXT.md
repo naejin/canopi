@@ -141,6 +141,10 @@ _Avoid_: Custom icon, uploaded icon, SVG asset
 A botanical plant symbol that suggests a visible form, such as a canopy, palm, fern, rosette, or climber. Plant Form Symbols are a compact visual vocabulary chosen by the designer, not a botanical classification, catalog value, or validation rule. Life cycle, aquatic habitat, epiphytic attachment, and species identity do not require separate symbols.
 _Avoid_: Growth form value, inferred species icon, botanical claim
 
+**Abstract Plant Symbol**:
+A simple geometric plant marker whose meaning is assigned by the designer. Abstract Plant Symbols complement botanical forms; neither shape nor color alone guarantees a unique species identity.
+_Avoid_: Botanical form, species identifier
+
 **Zone**:
 A named spatial feature in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants, other zones, or linear boundaries.
 _Avoid_: Shape, polygon, region

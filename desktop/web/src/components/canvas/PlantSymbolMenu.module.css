@@ -2,8 +2,9 @@
   position: fixed;
   max-width: calc(100vw - 16px);
   max-height: calc(100dvh - 16px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   width: 360px;
   padding: var(--space-4);
   background: var(--color-surface);
@@ -25,7 +26,15 @@
   }
 }
 
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-0-5);
+}
+
 .header {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -114,11 +123,10 @@
   justify-content: space-between;
 }
 
-
 .symbolButton {
   width: 100%;
   min-width: 0;
-  min-height: 72px;
+  min-height: 64px;
   padding: 0;
   display: inline-flex;
   flex-direction: column;
@@ -151,14 +159,17 @@
 }
 
 .symbolGlyph {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
 }
 
 .actions {
+  flex-shrink: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
   display: grid;
   gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
 }
 
 .primaryAction,
@@ -250,9 +261,15 @@
   padding: 0 var(--space-0-5);
 }
 
-.neutralButton {
-  min-height: var(--control-size-sm);
-  flex-direction: row;
-  margin-top: var(--space-2);
+.symbolGroup + .symbolGroup {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.groupLabel {
+  margin-bottom: var(--space-2);
   font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
 }

@@ -263,8 +263,13 @@
         "groundcover": "地被植物",
         "rosette": "莲座植物",
         "cactus": "仙人掌",
-        "round": "中性圆点"
-      }
+        "round": "中性圆点",
+        "square": "方形",
+        "triangle": "三角形",
+        "cross": "十字形"
+      },
+      "botanical": "植物形态",
+      "abstract": "抽象形状"
     },
     "group": {
       "group": "编组",

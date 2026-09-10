@@ -263,8 +263,13 @@
         "groundcover": "Bodembedekker",
         "rosette": "Rozet",
         "cactus": "Cactus",
-        "round": "Neutrale stip"
-      }
+        "round": "Neutrale stip",
+        "square": "Vierkant",
+        "triangle": "Driehoek",
+        "cross": "Kruis"
+      },
+      "botanical": "Botanisch",
+      "abstract": "Abstract"
     },
     "group": {
       "group": "Groeperen",

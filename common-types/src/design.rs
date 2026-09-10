@@ -106,6 +106,9 @@ pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "rosette",
     "cactus",
     "round",
+    "square",
+    "triangle",
+    "cross",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

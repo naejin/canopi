@@ -16,7 +16,8 @@ interface PlantSymbolMenuProps {
   buttonRef: { current: HTMLButtonElement | null }
 }
 
-const BOTANICAL_SYMBOLS = PLANT_SYMBOL_IDS.filter((symbol) => symbol !== DEFAULT_PLANT_SYMBOL_ID)
+const ABSTRACT_SYMBOLS = ['round', 'square', 'triangle', 'cross'] as const satisfies readonly PlantSymbolId[]
+const BOTANICAL_SYMBOLS = PLANT_SYMBOL_IDS.filter((symbol) => !ABSTRACT_SYMBOLS.some((abstract) => abstract === symbol))
 
 function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
   plantSymbolMenuOpen.value = false
@@ -138,24 +139,24 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
         </button>
       </div>
 
-      <div
-        className={styles.preview}
-        style={{ '--plant-symbol-preview-color': previewColor } as Record<string, string>}
-        aria-label={t('canvas.plantSymbol.preview')}
-      >
-        <PlantSymbolGlyph symbol={activeSymbol} size={36} className={styles.previewGlyph} />
-        <div className={styles.previewText}>
-          <strong>{symbolLabel(activeSymbol)}</strong>
-          <span className={styles.status}>{statusText}</span>
+      <div className={styles.body}>
+        <div
+          className={styles.preview}
+          style={{ '--plant-symbol-preview-color': previewColor } as Record<string, string>}
+          aria-label={t('canvas.plantSymbol.preview')}
+        >
+          <PlantSymbolGlyph symbol={activeSymbol} size={36} className={styles.previewGlyph} />
+          <div className={styles.previewText}>
+            <strong>{symbolLabel(activeSymbol)}</strong>
+            <span className={styles.status}>{statusText}</span>
+          </div>
+        </div>
+
+        <div role="listbox" aria-label={t('canvas.plantSymbol.label')}>
+          <SymbolGrid label={t('canvas.plantSymbol.botanical')} symbols={BOTANICAL_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+          <SymbolGrid label={t('canvas.plantSymbol.abstract')} symbols={ABSTRACT_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
         </div>
       </div>
-
-      <SymbolGrid symbols={BOTANICAL_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
-      <button type="button" className={`${styles.symbolButton} ${styles.neutralButton}${activeSymbol === DEFAULT_PLANT_SYMBOL_ID ? ` ${styles.symbolButtonActive}` : ''}`}
-        aria-label={symbolLabel(DEFAULT_PLANT_SYMBOL_ID)} aria-pressed={activeSymbol === DEFAULT_PLANT_SYMBOL_ID} onClick={() => setActiveSymbol(DEFAULT_PLANT_SYMBOL_ID)}>
-        <PlantSymbolGlyph symbol={DEFAULT_PLANT_SYMBOL_ID} size={16} />
-        <span>{symbolLabel(DEFAULT_PLANT_SYMBOL_ID)}</span>
-      </button>
 
       <div className={styles.actions}>
         <button type="button" className={styles.primaryAction} onClick={applyToSelection}>
@@ -172,36 +173,41 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
 }
 
 function SymbolGrid({
+  label,
   symbols,
   activeSymbol,
   onSelect,
 }: {
+  label: string
   symbols: readonly PlantSymbolId[]
   activeSymbol: PlantSymbolId
   onSelect(symbol: PlantSymbolId): void
 }) {
   return (
-    <div className={styles.grid} role="listbox" aria-label={t('canvas.plantSymbol.label')}>
-      {symbols.map((symbol) => {
-        const active = symbol === activeSymbol
-        const label = symbolLabel(symbol)
-        return (
-          <button
-            key={symbol}
-            type="button"
-            className={`${styles.symbolButton}${active ? ` ${styles.symbolButtonActive}` : ''}`}
-            aria-label={label}
-            aria-selected={active}
-            role="option"
-            tabIndex={active || (activeSymbol === DEFAULT_PLANT_SYMBOL_ID && symbol === symbols[0]) ? 0 : -1}
-            title={label}
-            onClick={() => onSelect(symbol)}
-          >
-            <PlantSymbolGlyph symbol={symbol} size={28} className={styles.symbolGlyph} />
-            <span className={styles.symbolLabel}>{label}</span>
-          </button>
-        )
-      })}
+    <div className={styles.symbolGroup} role="group" aria-label={label}>
+      <div className={styles.groupLabel} aria-hidden="true">{label}</div>
+      <div className={styles.grid}>
+        {symbols.map((symbol) => {
+          const active = symbol === activeSymbol
+          const label = symbolLabel(symbol)
+          return (
+            <button
+              key={symbol}
+              type="button"
+              className={`${styles.symbolButton}${active ? ` ${styles.symbolButtonActive}` : ''}`}
+              aria-label={label}
+              aria-selected={active}
+              role="option"
+              tabIndex={active ? 0 : -1}
+              title={label}
+              onClick={() => onSelect(symbol)}
+            >
+              <PlantSymbolGlyph symbol={symbol} size={24} className={styles.symbolGlyph} />
+              <span className={styles.symbolLabel}>{label}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

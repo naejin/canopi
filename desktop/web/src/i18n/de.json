@@ -263,8 +263,13 @@
         "groundcover": "Bodendecker",
         "rosette": "Rosette",
         "cactus": "Kaktus",
-        "round": "Neutraler Punkt"
-      }
+        "round": "Neutraler Punkt",
+        "square": "Quadrat",
+        "triangle": "Dreieck",
+        "cross": "Kreuz"
+      },
+      "botanical": "Botanisch",
+      "abstract": "Abstrakt"
     },
     "group": {
       "group": "Gruppieren",

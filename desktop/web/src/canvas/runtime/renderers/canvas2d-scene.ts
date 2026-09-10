@@ -16,6 +16,7 @@ import {
 } from '../measurement-guides'
 import {
   getPlantSymbolShapes,
+  ROUND_PLANT_SYMBOL_RADIUS,
   tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
@@ -413,7 +414,7 @@ function drawPlantSymbolGlyph(
   ctx.fillStyle = entry.color
   if (entry.lod === 'dot' || symbol === 'round') {
     ctx.beginPath()
-    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.arc(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS, 0, Math.PI * 2)
     ctx.fill()
     if (entry.lod !== 'dot') {
       ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color)

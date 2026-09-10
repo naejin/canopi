@@ -117,7 +117,7 @@ describe('PlantSymbolMenu', () => {
 
     const symbolRows = container.querySelectorAll('[role="listbox"]')
     expect(symbolRows).toHaveLength(1)
-    expect(symbolRows[0]?.querySelectorAll('[role=option]')).toHaveLength(12)
+    expect(symbolRows[0]?.querySelectorAll('[role=option]')).toHaveLength(16)
     expect(symbolRows[0]?.textContent).toContain('Groundcover')
     expect(symbolRows[0]?.querySelector('button[aria-label="Groundcover"]')).toBeTruthy()
     expect(symbolRows[0]?.querySelector('button[aria-label="Fern"]')).toBeTruthy()
@@ -140,6 +140,29 @@ describe('PlantSymbolMenu', () => {
     })
 
     expect(setSelectedPlantSymbol).toHaveBeenCalledWith('fern')
+  })
+
+  it('previews abstract choices with the same keyboard grid and applies only on confirmation', async () => {
+    getSelectedPlantSymbolContext.mockReturnValue({
+      plantIds: ['plant-1'], singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple', sharedCurrentSymbol: 'canopy',
+      sharedEffectiveSymbol: 'canopy', inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null, canClearSelectedSymbol: true,
+    })
+    await act(async () => { render(<PlantSymbolMenu buttonRef={buttonRef} />, container) })
+    expect(container.querySelector('[role="group"][aria-label="Botanical"]')).not.toBeNull()
+    expect(container.querySelector('[role="group"][aria-label="Abstract"]')?.querySelectorAll('[role="option"]')).toHaveLength(4)
+    const canopy = container.querySelector<HTMLButtonElement>('[aria-label="Canopy tree"]')!
+    await act(async () => { canopy.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })) })
+    const cross = container.querySelector<HTMLButtonElement>('[aria-label="Cross"]')!
+    expect(document.activeElement).toBe(cross)
+    expect(cross.getAttribute('aria-selected')).toBe('true')
+    expect(container.querySelectorAll('[role="option"][tabindex="0"]')).toHaveLength(1)
+    expect(setSelectedPlantSymbol).not.toHaveBeenCalled()
+    await act(async () => {
+      Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Set symbol')!.click()
+    })
+    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('cross')
   })
 
   it('renders option and preview glyphs in normalized SVG frames', async () => {
@@ -177,7 +200,7 @@ describe('PlantSymbolMenu', () => {
     expect(previewRule).not.toContain('var(--space-10)')
   })
 
-  it('sizes the popover for three four-symbol rows', () => {
+  it('sizes the popover for four-column symbol groups', () => {
     const css = readFileSync('src/components/canvas/PlantSymbolMenu.module.css', 'utf8')
     const menuRule = css.match(/\.menu\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
     const gridRule = css.match(/\.grid\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
@@ -268,7 +291,7 @@ describe('PlantSymbolMenu', () => {
     })
 
     const roundButton = container.querySelector<HTMLButtonElement>('button[aria-label="Neutral dot"]')
-    expect(roundButton?.getAttribute('aria-pressed')).toBe('true')
+    expect(roundButton?.getAttribute('aria-selected')).toBe('true')
     expect(container.textContent).toContain('Mixed symbols')
     expect(container.textContent).not.toContain('Inherited: Neutral dot')
   })

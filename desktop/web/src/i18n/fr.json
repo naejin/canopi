@@ -263,8 +263,13 @@
         "groundcover": "Couvre-sol",
         "rosette": "Rosette",
         "cactus": "Cactus",
-        "round": "Point neutre"
-      }
+        "round": "Point neutre",
+        "square": "Carré",
+        "triangle": "Triangle",
+        "cross": "Croix"
+      },
+      "botanical": "Botaniques",
+      "abstract": "Abstraits"
     },
     "group": {
       "group": "Grouper",

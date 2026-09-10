@@ -263,8 +263,13 @@
         "groundcover": "Tapizante",
         "rosette": "Roseta",
         "cactus": "Cactus",
-        "round": "Punto neutro"
-      }
+        "round": "Punto neutro",
+        "square": "Cuadrado",
+        "triangle": "Triángulo",
+        "cross": "Cruz"
+      },
+      "botanical": "Botánicos",
+      "abstract": "Abstractos"
     },
     "group": {
       "group": "Agrupar",

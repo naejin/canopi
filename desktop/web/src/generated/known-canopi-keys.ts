@@ -17,6 +17,9 @@ export const PLANT_SYMBOL_IDS = [
   "rosette",
   "cactus",
   "round",
+  "square",
+  "triangle",
+  "cross",
 ] as const
 export type PlantSymbolId = (typeof PLANT_SYMBOL_IDS)[number]
 

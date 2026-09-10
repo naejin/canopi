@@ -20,6 +20,7 @@ import {
 } from '../plant-presentation'
 import {
   getPlantSymbolShapes,
+  ROUND_PLANT_SYMBOL_RADIUS,
   tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
@@ -665,7 +666,7 @@ function drawPlantSymbolGlyph(graphics: Graphics, symbol: PlantSymbolId, entry: 
   const r = entry.radiusScreenPx
   const color = toPixiColor(entry.color, 0)
   if (entry.lod === 'dot' || symbol === 'round') {
-    graphics.circle(x, y, r).fill({ color, alpha: 1 })
+    graphics.circle(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color, alpha: 1 })
     if (entry.lod !== 'dot') graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width: getPlantSymbolEdgeWidth(r * 2) })
     return
   }

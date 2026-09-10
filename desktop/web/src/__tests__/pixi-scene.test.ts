@@ -214,7 +214,7 @@ describe('createPixiSceneRenderer', () => {
       viewport: { x: -9900, y: -9900, scale: 1000 },
     }))
     const circles = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.circle.mock.calls)
-    expect(circles.some(([x, y, radius]) => x === 100 && y === 100 && radius > 6 && radius < 7)).toBe(true)
+    expect(circles.some(([x, y, radius]) => x === 100 && y === 100 && radius > 4.8 && radius < 5.6)).toBe(true)
     expect(pixi.__pixiMockState.texts.find((text) => text.text === '2')?.style.options.fontSize).toBe(9)
     renderer.dispose()
   })
