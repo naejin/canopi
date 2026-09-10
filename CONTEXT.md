@@ -9,11 +9,11 @@ An agroecological plan that combines plants, spatial layout, scheduling, budget,
 _Avoid_: Document, file, project
 
 **Canvas PDF**:
-A printable, shareable representation of selected Layers from a Design's spatial layout, with a plant-identification legend. A Canvas PDF may contain an overview fitted to printable objects and detail-sheet coverage, plus numbered detail pages focused on drawn Print Areas; the editable Design remains the source of truth.
+A printable, shareable representation of selected Layers from a Design's spatial layout, with local plant-identification keys on explicitly requested field sheets. A Canvas PDF may contain an overview fitted to printable objects and detail-sheet coverage, plus numbered detail pages focused on drawn Print Areas; the editable Design remains the source of truth.
 _Avoid_: Design Report, Design file, canvas screenshot
 
 **Print Area**:
-A temporary rectangle drawn over a Design's spatial layout to define a Canvas PDF detail page. A Print Area belongs to the export setup, remains independent of Zones, and does not create or modify the Design's spatial features.
+A temporary rectangle selected over a Design's spatial layout to define a Canvas PDF detail page. A Print Area belongs to the export setup, remains independent of Zones, and does not create or modify the Design's spatial features.
 _Avoid_: Zone, Zone Draft
 
 **Design Session**:
@@ -235,7 +235,7 @@ The visible on-screen presence of a design object or its readable presentation a
 _Avoid_: Object scale, canvas scale, display size
 
 **Automatic Detail**:
-The presentation that reveals plant symbols, names, annotations and measurements as available space allows. On the Canvas this uses screen space; a Canvas PDF uses physical page space, transparent plant references, aligned measurements and automatically paginated keys/notes to preserve authored text. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
+The presentation that reveals plant symbols, names, annotations and measurements as available space allows. On the Canvas this uses screen space; explicit Canvas PDF field sheets use physical page space, transparent plant references, aligned measurements and automatically paginated keys/notes. The PDF overview always renders authored artwork directly and does not apply field-sheet processing. Automatic Detail changes what is readable at a given zoom without changing the Design or its authored presentation choices.
 _Avoid_: Display by mode, canopy sizing, automatic design editing
 
 **Inspection Lens**:

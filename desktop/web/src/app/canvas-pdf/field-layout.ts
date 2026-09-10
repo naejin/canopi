@@ -3,6 +3,7 @@ import type { PdfDestination, PdfInput, PdfLegendEntry, PdfLink, PdfOperation, P
 import type { PdfTextEngine } from './text'
 import { MM } from './print-style'
 import { drawMark, identifyPlants, pathOp, rectPath, textOp } from './page-drawing'
+import { nearestPlantSpacing } from '../../canvas/plant-spacing'
 import { paperPlantRadius } from './plant-marks'
 import { contains, clipSegment, distance, hits, inflate, outlineSegments, type Segment } from './field-geometry'
 import { FieldSpace, separatedConnectors, type FieldLabel } from './field-placement'
@@ -61,7 +62,7 @@ export function visibleFieldCanvas(canvas: CanvasPrintSnapshot, ground: PrintBou
 
 /** One pure physical layout feeds both the SVG preview and the encoder. */
 export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, page: { id: string; width: number; height: number },
-  text: PdfTextEngine, references: FieldReferences, navigation = false): FieldDrawing {
+  text: PdfTextEngine, references: FieldReferences): FieldDrawing {
   const canvas = input.canvas, operations: PdfOperation[] = [], links: PdfLink[] = [], destinations: PdfDestination[] = []
   const point = (p: PrintPoint): PrintPoint => ({ x: (frame.x + (p.x - ground.x) * scale) / MM, y: (frame.y + (p.y - ground.y) * scale) / MM })
   const opacity = (name: string) => canvas.layers.find(l => l.name === name)?.opacity ?? 1
@@ -94,13 +95,13 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
     const position = { x: (clipped.a.x + clipped.b.x) / 2, y: (clipped.a.y + clipped.b.y) / 2 }
     const value = `${new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 }).format(distance(guide.start, guide.end))} m`
     const projected = { a: point(clipped.a), b: point(clipped.b) }
-    if (!navigation) { line(projected, '#a29c91', .12, opacity('measurement-guides')); space.addSegments([projected]) }
+    line(projected, '#a29c91', .12, opacity('measurement-guides')); space.addSegments([projected])
     notes.push({ id: guide.id, reference: references.measurements.get(guide.id)!, text: value, position, kind: 'distance',
       continuation: references.measurementHomes?.get(guide.id) === page.id ? undefined : references.measurementHomes?.get(guide.id) })
   }
   const pageReferences: PdfPageReference[] = []
   const processedNotes = new Set<string>()
-  if (!navigation) {
+  {
     const grouped = new Set<string>()
     interface Target { plants: readonly PrintPlant[]; anchors: PrintPoint[]; spine?: Segment; segments?: Segment[] }
     const targets: Target[] = []
@@ -154,6 +155,9 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
         notes.push({ id: p.id, reference: references.plants.get(p.id)!, text: value, position: p.position, kind: 'plants', plantIds: ids })
         continue
       }
+      // Below the printed dot diameter, separate positions cannot be read.
+      // Avoid searching hundreds of leader routes through an inseparable cluster.
+      if (!target.spine && !p.pinnedName && nearestPlantSpacing(canvas.plants, p.position) * scale < .7 * MM) { unresolved.push(target); continue }
       const value = reference + (p.pinnedName ? ` ${input.commonNames[p.canonicalName]?.trim() || p.canonicalName}` : '') + (ids.length > 1 ? ` ×${ids.length}` : '')
       const measured = space.measure(value, 9.5, p.pinnedName ? 29 : Infinity)
       const position = point(p.position)
@@ -165,11 +169,12 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       space.admit(label); owners.set(label, target)
       for (const segment of target.segments ?? []) line(segment, '#656058', .19, opacity('plants'))
     }
-    // Never discard an unplaceable identity: preserve an anchored location entry.
+    // Density is solved by enlarging coverage on explicit field sheets, not by
+    // turning every failed label into another coordinate entry in the key.
     for (const target of unresolved) {
-      const p = target.plants[0]!, reference = references.plants.get(p.id)!, species = references.species.get(p.canonicalName)!
-      notes.push({ id: p.id, reference, text: `${species} · ${input.commonNames[p.canonicalName]?.trim() || p.canonicalName} ×${target.plants.length}`,
-        position: p.position, kind: 'plants', plantIds: target.plants.map(p => p.id) })
+      const p = target.plants[0]!, anchor = point(p.position)
+      identifiedPlants.push({ ids: target.plants.map(p => p.id), reference: references.species.get(p.canonicalName)!,
+        bounds: paper({ ...anchor, width: 0, height: 0 }) })
     }
     placeNotes()
     const named = new Set(canvas.plants.filter(p => p.pinnedName).map(p => p.canonicalName))
@@ -198,7 +203,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       }
     }
     for (const [label, target] of owners) identifiedPlants.push({ ids: label.ids, reference: references.species.get(target.plants[0]!.canonicalName)!, bounds: paper(label.bounds) })
-  } else { canvas.measurements.forEach(deferredMeasurement); placeNotes() }
+  }
 
   function placeNotes(): void {
     for (const note of notes) {
@@ -208,7 +213,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
       const isDistance = note.kind === 'annotation' && /^\(?\s*\d+(?:[,.]\d+)?\s*(?:cm|m)\s*\)?$/u.test(note.text.trim())
       const value = note.reference + (isDistance ? ` · ${note.text}` : '')
       const reservedValue = value + (note.continuation ? '      000' : '')
-      const label = navigation ? null : space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true })
+      const label = space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true })
       if (label) {
         if (note.continuation) {
           label.lines = [text.line(value, label.size)]
@@ -224,7 +229,7 @@ export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBoun
         note.location = `x ${number.format(note.position.x)} m · y ${number.format(note.position.y)} m`
         if (note.plantIds) identifiedPlants.push({ ids: note.plantIds, reference: note.reference, bounds: paper({ ...anchor, width: 0, height: 0 }) })
       }
-      if (!navigation) operations.push(pathOp(rectPath(paper({ x: anchor.x - .55, y: anchor.y - .55, width: 1.1, height: 1.1 })), OCHRE, null, .23 * MM))
+      operations.push(pathOp(rectPath(paper({ x: anchor.x - .55, y: anchor.y - .55, width: 1.1, height: 1.1 })), OCHRE, null, .23 * MM))
       destinations.push({ id: `${page.id}:anchor:${note.reference}`, bounds: paper(inflate({ ...anchor, width: 0, height: 0 }, 12)) })
     }
   }

@@ -3,10 +3,11 @@ import type { PdfTextEngine } from './text'
 import { MM, PRINT, fitOverview, textOp, pathOp, rectPath } from './page-drawing'
 import { moveCoverage, zoomCoverage, fitArea } from './coverage'
 import { drawField, fieldReferences, visibleFieldCanvas, type FieldDrawing } from './field-layout'
+import { drawOverview } from './overview'
 import { fieldKey } from './field-key'
 import { contains } from './field-geometry'
 import { pdfAreaKey } from './types'
-import type { PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup, PdfPageView } from './types'
+import type { PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup, PdfPageView, PdfLayoutCache, PdfLayoutCacheEntry } from './types'
 
 type Geometry = Pick<PdfPage, 'width' | 'height' | 'frame'>
 const orientations = (view: PdfPageView = {}) => !view.orientation || view.orientation === 'auto' ? ['portrait', 'landscape'] as const : [view.orientation]
@@ -16,11 +17,17 @@ export function printableCanvas(canvas: CanvasPrintSnapshot, layers: readonly st
     annotations: selected('annotations') ? canvas.annotations : [], measurements: selected('measurement-guides') ? canvas.measurements : [] }
 }
 
-export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels): PdfPlan {
-  const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers) }, references = fieldReferences(input)
+export interface PdfLayoutOptions {
+  readonly cache?: PdfLayoutCache
+  readonly priority?: string
+  readonly retain?: (id: string, entry: PdfLayoutCacheEntry) => void
+  readonly progress?: (pages: readonly PdfPage[]) => void
+}
+export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels, options: PdfLayoutOptions = {}): PdfPlan {
+  const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers) }
   const details: PdfPage[] = []
   const empty = !(setup.areas?.length || selected.canvas.plants.length || selected.canvas.zones.length || selected.canvas.annotations.length || selected.canvas.measurements.length)
-  const asPages = (id: string, kind: 'overview' | 'detail', geometry: Geometry, ground: PrintBounds, scale: number, drawing: FieldDrawing, areaName?: string): PdfPage[] => {
+  const asPages = (id: string, geometry: Geometry, ground: PrintBounds, scale: number, drawing: FieldDrawing, areaName?: string): PdfPage[] => {
     const keyGeometry = (index: number) => {
       const view = setup.views?.[`${id}:legend:${index}`]
       const orientation = !view?.orientation || view.orientation === 'auto' ? geometry.width > geometry.height ? 'landscape' : 'portrait' : view.orientation
@@ -29,7 +36,7 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     const bodies = fieldKey(drawing, id, keyGeometry, text, labels, selected.canvas.layers.find(l => l.name === 'plants')?.opacity ?? 1)
     const continuations: PdfPage[] = bodies.map((body, index) => ({ ...body, id: `${id}:legend:${index}`, sourceId: id, kind: 'legend', number: 0,
       ground: { x: 0, y: 0, width: 0, height: 0 }, pointsPerMeter: 0, legend: body.entries }))
-    const page: PdfPage = { ...geometry, ...drawing, id, kind, number: 0, ground, pointsPerMeter: scale,
+    const page: PdfPage = { ...geometry, ...drawing, id, kind: 'detail', number: 0, ground, pointsPerMeter: scale,
       ...(areaName === undefined ? {} : { areaName, areaKey: id }), continuationIds: continuations.map(p => p.id) }
     return [page, ...continuations]
   }
@@ -45,17 +52,38 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     const { geometry, ground, pointsPerMeter } = candidates[0]!
     return { id, area, geometry, ground, pointsPerMeter }
   })
-  references.measurementHomes = new Map(selected.canvas.measurements.flatMap(guide => {
-    const home = fittedDetails.filter(p => contains(p.ground, guide.start) && contains(p.ground, guide.end))
-      .sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)[0]
-    return home ? [[guide.id, home.id]] : []
-  }))
-  for (const { id, area, geometry, ground, pointsPerMeter } of fittedDetails) {
-    const visible = { ...selected, canvas: visibleFieldCanvas(selected.canvas, ground) }
-    const drawing = drawField(visible, geometry.frame, ground, pointsPerMeter, { id, ...geometry }, text, references)
-    details.push(...asPages(id, 'detail', geometry, ground, pointsPerMeter, drawing, area.name))
-    if (details.length > 199) throw new Error('coverage-too-large')
+  if (fittedDetails.length) {
+    const references = fieldReferences(input)
+    references.measurementHomes = new Map(selected.canvas.measurements.flatMap(guide => {
+      const home = fittedDetails.filter(p => contains(p.ground, guide.start) && contains(p.ground, guide.end))
+        .sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)[0]
+      return home ? [[guide.id, home.id]] : []
+    }))
+    for (const { id, area, geometry, ground, pointsPerMeter } of [...fittedDetails].sort((a, b) => Number(b.id === options.priority) - Number(a.id === options.priority))) {
+      const visible = { ...selected, canvas: visibleFieldCanvas(selected.canvas, ground) }
+      const names = Object.fromEntries(visible.canvas.plants.map(p => [p.canonicalName, input.commonNames[p.canonicalName]]))
+      const key = JSON.stringify([visible.canvas, names, input.locale, geometry, ground, pointsPerMeter, area.name, labels,
+        Object.entries(setup.views ?? {}).filter(([key]) => key.startsWith(`${id}:legend:`)),
+        [...references.species], [...references.notes], [...references.plants], [...references.measurements],
+        visible.canvas.measurements.map(g => references.measurementHomes?.get(g.id))])
+      const cached = options.cache?.[id]
+      let local: readonly PdfPage[]
+      if (cached?.key === key) {
+        Object.assign(text.outlines, cached.outlines)
+        local = cached.pages
+      } else {
+        const drawing = drawField(visible, geometry.frame, ground, pointsPerMeter, { id, ...geometry }, text, references)
+        local = asPages(id, geometry, ground, pointsPerMeter, drawing, area.name)
+      }
+      const glyphs = new Set(local.flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.flatMap(r => r.glyphs.map(g => g.key)) : [])))
+      options.retain?.(id, { key, pages: local, outlines: Object.fromEntries([...glyphs].map(key => [key, text.outlines[key]!])) })
+      details.push(...local)
+      if (id === options.priority) options.progress?.(local)
+      if (details.length > 199) throw new Error('coverage-too-large')
+    }
   }
+  const order = new Map(fittedDetails.map((p, i) => [p.id, i]))
+  details.sort((a, b) => order.get(a.sourceId ?? a.id)! - order.get(b.sourceId ?? b.id)!)
   const detailMaps = details.filter(p => p.kind === 'detail')
   const extents = detailMaps.map(p => p.ground)
   const fits = orientations(setup.views?.overview).map(orientation => {
@@ -64,15 +92,10 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
   }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
   const fitted = fits[0]!, overviewFit = moveCoverage(zoomCoverage(fitted, setup.views?.overview?.zoom), setup.views?.overview?.offset)
   const visible = visibleFieldCanvas(selected.canvas, overviewFit.ground)
-  // Complete annotations already have a readable home in their detail's key.
-  const annotations = detailMaps.length ? visible.annotations.filter(n => !detailMaps.some(p => p.annotationIds?.includes(n.id))) : visible.annotations
-  const measurements = detailMaps.length ? visible.measurements.filter(g => !detailMaps.some(p => contains(p.ground, g.start) && contains(p.ground, g.end))) : visible.measurements
-  const drawing = drawField({ ...selected, canvas: { ...visible, annotations, measurements } }, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter,
-    { id: 'overview', ...fitted.geometry }, text, references, detailMaps.length > 0)
-  if (detailMaps.length) drawing.legend = []
-  const overviewPages = asPages('overview', 'overview', fitted.geometry, overviewFit.ground, overviewFit.pointsPerMeter, drawing)
-  // Keep detailed map/key pairs adjacent. Uncovered overview notes follow them.
-  const pages = [overviewPages[0]!, ...details, ...overviewPages.slice(1)].map((page, i) => ({ ...page, number: i + 1 }))
+  const drawing = drawOverview({ ...selected, canvas: visible }, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text)
+  const overview: PdfPage = { ...fitted.geometry, ...drawing, id: 'overview', kind: 'overview', number: 1,
+    ground: overviewFit.ground, pointsPerMeter: overviewFit.pointsPerMeter, continuationIds: [] }
+  const pages = [overview, ...details].map((page, i) => ({ ...page, number: i + 1 }))
   if (pages.length > 200) throw new Error('coverage-too-large')
   const byId = new Map(pages.map(page => [page.id, page]))
   const finalized = pages.map((page): PdfPage => {
@@ -113,8 +136,7 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
     return { geometry, ...fitOverview(selected, geometry.frame, extents.length ? extents : empty ? [{ x: -5, y: -5, width: 10, height: 10 }] : []) }
   }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
   const picker = pickerFits[0]!
-  const pickerDrawing = drawField({ ...selected, canvas: { ...selected.canvas, annotations: [], measurements: [] } }, picker.geometry.frame, picker.ground, picker.pointsPerMeter,
-    { id: 'picker', ...picker.geometry }, text, references, true)
+  const pickerDrawing = drawOverview(selected, picker.geometry.frame, picker.ground, picker.pointsPerMeter, text)
   const pickerPage: PdfPage = { id: 'overview', kind: 'overview', number: 1, ...picker.geometry, ...pickerDrawing, ground: picker.ground, pointsPerMeter: picker.pointsPerMeter }
   return { pages: finalized, pickerPage, outlines: text.outlines, blocked: empty ? 'empty' : null }
 }

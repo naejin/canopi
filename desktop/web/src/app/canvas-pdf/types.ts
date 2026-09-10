@@ -58,4 +58,6 @@ export interface PdfPlan {
   readonly outlines: Record<string, GlyphOutline>
   readonly blocked: 'empty' | null
 }
-export interface PreparedPdf { readonly plan: PdfPlan; readonly bytes: Uint8Array | null }
+export interface PdfLayoutCacheEntry { readonly key: string; readonly pages: readonly PdfPage[]; readonly outlines: Record<string, GlyphOutline> }
+export type PdfLayoutCache = Readonly<Record<string, PdfLayoutCacheEntry>>
+export interface PreparedPdf { readonly layoutCache?: PdfLayoutCache; readonly plan: PdfPlan; readonly bytes: Uint8Array | null }

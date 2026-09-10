@@ -1,11 +1,11 @@
 {
   "date": "2026-09-10",
-  "bead": "canopi-jqyz",
+  "bead": "canopi-n820",
   "browser": "150.0.7871.46",
   "checks": {
-    "frontendFiles": 241,
-    "frontendTests": 2219,
-    "focusedPdfTests": 80,
+    "frontendFiles": 242,
+    "frontendTests": 2227,
+    "focusedPdfTests": 86,
     "pythonTests": 4,
     "typeScript": true,
     "desktopBuild": true,
@@ -14,22 +14,42 @@
     "physicalPrinterTested": false,
     "freshPackagedNativeMatrix": false
   },
+  "privateOverview": {
+    "file": "private.pdf",
+    "sha256": "6f1f0fd006e67d7e6d26bf706f6aaa570c9dc62b675085d7558e549a7955b1d0",
+    "pages": 1,
+    "bytes": 60637,
+    "canvasPages": 1,
+    "exact50mmBars": 1,
+    "embeddedUnicodeFonts": true,
+    "vectorCanvas": true,
+    "textSha256": "3290a1305833a1d35d5e75fcd973260673720eb002131d33b704adbce4f2acc0",
+    "planSha256": "9e34bfb4468b86fc7e6d77010d4c02fb7b19eb4fb3ab369ec62ef7278ae1dc5c",
+    "previewComparisons": [
+      {
+        "page": 1,
+        "meanChannelDifference": 1.9866717973316403,
+        "neighborhoodDifference": 0.04916246918571677,
+        "maximumAllowed": 0.25
+      }
+    ]
+  },
   "privateSample": {
     "file": "private.pdf",
-    "sha256": "b5f7c88d9e7814ba10ccf942ed0fa8beb9f6987e0c8f1d5a885542052387fc19",
-    "pages": 11,
-    "bytes": 528520,
+    "sha256": "3277480315bef3a703921ccef1bf4610504c897ce72cc93fa5e0380fe552cf04",
+    "pages": 9,
+    "bytes": 469060,
     "canvasPages": 5,
     "exact50mmBars": 1,
     "embeddedUnicodeFonts": true,
     "vectorCanvas": true,
-    "textSha256": "9a6f54d61eb54e4e631b4b83e78c266f4f9f80f8c0a54ec7afefbe1ec11efcd4",
-    "planSha256": "fdaf6df3fa9b87a65a821a0d3ffbcd5c4f967249471ec1eded3bc5b447d17249",
+    "textSha256": "a9fd687cbb99260ddb37ccf23d2dcc65180c9ebb538f0f27be954f09d929926c",
+    "planSha256": "2f2c70f464032c958f5979afc1c2eb7b47ffa4068d9b1c2523c2f898c3491ee5",
     "previewComparisons": [
       {
         "page": 1,
-        "meanChannelDifference": 1.4723170183506982,
-        "neighborhoodDifference": 0.016983210371745643,
+        "meanChannelDifference": 2.1532839359056997,
+        "neighborhoodDifference": 0.0424051233354524,
         "maximumAllowed": 0.25
       },
       {
@@ -79,73 +99,28 @@
         "meanChannelDifference": 2.484136167139096,
         "neighborhoodDifference": 0.057733280489848465,
         "maximumAllowed": 0.25
-      },
-      {
-        "page": 10,
-        "meanChannelDifference": 3.995618246607067,
-        "neighborhoodDifference": 0.10757816358250455,
-        "maximumAllowed": 0.25
-      },
-      {
-        "page": 11,
-        "meanChannelDifference": 3.1647179892758466,
-        "neighborhoodDifference": 0.06918181557564672,
-        "maximumAllowed": 0.25
       }
-    ],
-    "plants": 2201,
-    "species": 117,
-    "generationMs": 3282.6,
-    "completeAnnotations": 127,
-    "completeMeasurementGuides": 113,
-    "details": [
-      {
-        "page": 2,
-        "placements": 371,
-        "species": 39,
-        "annotations": 22,
-        "measurementOccurrences": 13,
-        "unplacedLabels": 0
-      },
-      {
-        "page": 4,
-        "placements": 410,
-        "species": 42,
-        "annotations": 16,
-        "measurementOccurrences": 25,
-        "unplacedLabels": 0
-      },
-      {
-        "page": 6,
-        "placements": 323,
-        "species": 39,
-        "annotations": 13,
-        "measurementOccurrences": 30,
-        "unplacedLabels": 0
-      },
-      {
-        "page": 8,
-        "placements": 263,
-        "species": 23,
-        "annotations": 6,
-        "measurementOccurrences": 10,
-        "unplacedLabels": 0
-      }
-    ],
-    "activeWorkersAfterClear": 0
+    ]
   },
-  "fixtures": [
+  "privateOverviewGenerationMs": 628.5,
+  "privateFieldGenerationMs": 2938.800000011921,
+  "layoutOnlyWarmCacheExperimentMs": {
+    "fourSheets": 2305,
+    "oneChangedSheet": 580,
+    "allUnchanged": 103
+  },
+  "publicSamples": [
     {
       "file": "dense.pdf",
-      "sha256": "f75bc93f9d42b2241ef50cd43aa277379acf5ae66c99628f8324d9379a6dd4bc",
+      "sha256": "0875e2dd9b7a7d9e486c7fdef3ff3778e40a105cd9f0e34f101bb99236718e1f",
       "pages": 3,
-      "bytes": 114654,
+      "bytes": 113656,
       "canvasPages": 2,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
       "textSha256": "865ae182a7e878b962f57d391786450b2c23d22b4e5c8204dfd5b5b03e381fe5",
-      "planSha256": "a3978515d2759d69b99614a9ad2a714984c1fa253dafdb825eb7deefbe93d071",
+      "planSha256": "c12c303a917cc8e9cde127b9137c5d37a6d507a2233dc9fa7301229dff20a8e6",
       "previewComparisons": [
         {
           "page": 2,
@@ -154,22 +129,19 @@
           "maximumAllowed": 0.25
         }
       ],
-      "generationMs": 754.6,
-      "activeWorkersAfterClear": 0,
-      "plants": 320,
-      "rendererPeakKiB": 255104
+      "generationMs": 575.1000000238419
     },
     {
       "file": "framing.pdf",
-      "sha256": "920f06620e874c2ae910ef0a63e89091d48f3a5c144abba484697e97e3da1b56",
+      "sha256": "508f5580d962ee30baaa67164774b971e75e94063678a3329fdd9d069eef6e90",
       "pages": 3,
-      "bytes": 35276,
+      "bytes": 34414,
       "canvasPages": 2,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "ab1458f4a7c23cda592e082942a16ac1bd3dea9fd27a4cd7d08c1b66cb7b76df",
-      "planSha256": "aee9f9ad11c496bb2e19c5ef925476c4e5f26a1560c6a9effcfcd9b7234d8166",
+      "textSha256": "1fcfa1cb8b2248ade6f2e488227a124c6e995ed6c19ccca1aaafd4f564882d36",
+      "planSha256": "446e08a8e6e0e23cadbad0c4005b054c43007830517fa49c1f15b83d3507294e",
       "previewComparisons": [
         {
           "page": 2,
@@ -178,46 +150,40 @@
           "maximumAllowed": 0.25
         }
       ],
-      "generationMs": 357.1,
-      "activeWorkersAfterClear": 0,
-      "plants": 120,
-      "rendererPeakKiB": 311760
+      "generationMs": 664.5999999940395
     },
     {
       "file": "legends.pdf",
-      "sha256": "83d40c90273d366f0068af150b85794500f2f699228e8b4a79555be46fb5918d",
-      "pages": 3,
-      "bytes": 94091,
-      "canvasPages": 1,
+      "sha256": "fecaca5bd35f2d8499eabd6879690ffd3affd861fb05c1bf571106cdaf3758f5",
+      "pages": 4,
+      "bytes": 97170,
+      "canvasPages": 2,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "5b589eb54bf82dc44f091a05073e9260be4b64793f053f743a12373d15d60a9e",
-      "planSha256": "b84e8b928987de1703617994b1123e08d5dd4fdae44ccd75164de16a854bd8d5",
+      "textSha256": "171ca6e76b1292dd3d4c8e84f3994b343321684a7b21e26d37e7f453a2f6d69f",
+      "planSha256": "292b80975ad1aef6b5b5f56ac71130aa1a6a464bf18246fba810c51e35eedf49",
       "previewComparisons": [
         {
           "page": 2,
-          "meanChannelDifference": 6.569979344344756,
-          "neighborhoodDifference": 0.1238455634377465,
+          "meanChannelDifference": 3.2952691781508148,
+          "neighborhoodDifference": 0.11093910379459371,
           "maximumAllowed": 0.25
         }
       ],
-      "generationMs": 590.9,
-      "activeWorkersAfterClear": 0,
-      "plants": 100,
-      "rendererPeakKiB": 326552
+      "generationMs": 865.5
     },
     {
       "file": "map-excluded.pdf",
-      "sha256": "f1dd8f3c684c4244fe7d49fbe489797dc12e7c4fb33849f0595dc5a0d2b4189d",
+      "sha256": "cc7a77028f8c68bb30d81077e666f1c0db939f7bee66e3708a765f26ad772fc6",
       "pages": 3,
-      "bytes": 49983,
+      "bytes": 49120,
       "canvasPages": 2,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "d1176f9d2bad4e8e407182e15edd6a11b35acc2948426d619a7bd4a3083f2f9b",
-      "planSha256": "b6c25f5cc9e7859410ef25f41906f040ad1b0a80818e86bee82f049cdc5d1e6f",
+      "textSha256": "87f3b1ff2b0aef4bc459211f2dba75a9fcda919d1c885a9ab37c01e43f5118f3",
+      "planSha256": "85f011995a87011589104258c3cd323707b3b05ad7beeaff30ce298d887f741e",
       "previewComparisons": [
         {
           "page": 2,
@@ -226,22 +192,19 @@
           "maximumAllowed": 0.25
         }
       ],
-      "generationMs": 408.9,
-      "activeWorkersAfterClear": 0,
-      "plants": 120,
-      "rendererPeakKiB": 433668
+      "generationMs": 629.4000000059605
     },
     {
       "file": "mixed.pdf",
-      "sha256": "04cac6ae7fff65e456e335d558b077e55c8c7c4c95303c1e27807b0756757dea",
+      "sha256": "2c8c78eaeb51375d612bf4fc2d21af246756b936abb1e845423bf20bc721b733",
       "pages": 3,
-      "bytes": 49983,
+      "bytes": 49120,
       "canvasPages": 2,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "d1176f9d2bad4e8e407182e15edd6a11b35acc2948426d619a7bd4a3083f2f9b",
-      "planSha256": "b6c25f5cc9e7859410ef25f41906f040ad1b0a80818e86bee82f049cdc5d1e6f",
+      "textSha256": "87f3b1ff2b0aef4bc459211f2dba75a9fcda919d1c885a9ab37c01e43f5118f3",
+      "planSha256": "85f011995a87011589104258c3cd323707b3b05ad7beeaff30ce298d887f741e",
       "previewComparisons": [
         {
           "page": 2,
@@ -250,92 +213,429 @@
           "maximumAllowed": 0.25
         }
       ],
-      "generationMs": 508.9,
-      "activeWorkersAfterClear": 0,
-      "plants": 120,
-      "rendererPeakKiB": 297664
+      "generationMs": 421.69999998807907
     },
     {
       "file": "multilingual.pdf",
-      "sha256": "dad3090570cb96c352b3d088c1b220ecd22b51efcb964ab07edfd9a2b9250a77",
-      "pages": 2,
-      "bytes": 137871,
-      "canvasPages": 1,
+      "sha256": "3ab64fed828e2f1435c41f9f9ec1a6394d561c306682dd45b2d609a5d9aa8f08",
+      "pages": 3,
+      "bytes": 138944,
+      "canvasPages": 2,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "17a63b66e9897ecd9c9f088a24aa94afa41d42dbef26854f222a7fd76b80505a",
-      "planSha256": "2a4ea04afa811e170a0335deb0d7a7ca08f3025c98a6ba79185cca336621d479",
+      "textSha256": "b064f401807a04f492946e99f6b1b1d098e66f11c1e3f323a6448c6c4f385e43",
+      "planSha256": "1d3771260a667c957664008495d7de495edd45280b7c974464bfe4217ab36794",
       "previewComparisons": [
         {
           "page": 2,
-          "meanChannelDifference": 1.3885597992893322,
-          "neighborhoodDifference": 0.026665567238458,
+          "meanChannelDifference": 1.2648634861863643,
+          "neighborhoodDifference": 0.019336341392555866,
           "maximumAllowed": 0.25
         }
       ],
-      "generationMs": 1223.8,
-      "activeWorkersAfterClear": 0,
-      "plants": 120,
-      "rendererPeakKiB": 467652
+      "generationMs": 1389.300000011921
     },
     {
       "file": "stress-1.pdf",
-      "sha256": "6117e045b1f85013abd786620cea937f7e82d2aa5aad516546845cbd37fd1ddc",
-      "pages": 2,
-      "bytes": 52231,
+      "sha256": "61d3fcff30de5642929af3033eda0c0f194969227e5035734cd3a3b20e39add0",
+      "pages": 1,
+      "bytes": 10209,
       "canvasPages": 1,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "30245912414dfd9a96bd74029995b0ed7776f0c44ece7eb32bc6621384ec05f6",
-      "planSha256": "659f089b2a4276ba1701832aa005798a668a3ad234ec1565522204e9fe92a3c7",
+      "textSha256": "f06329c86efd3a487a294683e72a1e3ce0ebc14a73dddefd9efb5cf3e6e79de3",
+      "planSha256": "c4f8f790967e3adbfa95895868c1d18c977992a1927fdbfea6eed1ccf66d59b3",
       "previewComparisons": [],
-      "generationMs": 482.1,
-      "activeWorkersAfterClear": 0,
-      "plants": 100,
-      "rendererPeakKiB": 423516
+      "generationMs": 465.30000001192093
     },
     {
       "file": "stress-10.pdf",
-      "sha256": "cab8d644402ccb1d6f21aefef8b51eff74e50c024b3cb3427de79bcae0b603bb",
+      "sha256": "c85c7277be91144febc89142cf3ab9912946f0c903a950286d620c3adf32a7a0",
       "pages": 14,
-      "bytes": 250817,
+      "bytes": 247431,
       "canvasPages": 10,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "9f00fff80a95a4b6343645c02ae34294a976e7f107be1fd3c1ea0fc953778fb1",
-      "planSha256": "2b4a1a5ae4be51b2a865dc23687b4be0e94a6af64804ae75bb197db6999b4aad",
+      "textSha256": "7a62644e50f16f47b11b2ef26305c3e40519544b8209ae2aaf2827d82a91168d",
+      "planSha256": "1dd23e716a2eb6295bfd2d69e96e54cff9d1146be310ae65741c7936176ae6f9",
       "previewComparisons": [],
-      "generationMs": 1120.3,
-      "activeWorkersAfterClear": 0,
-      "plants": 900,
-      "rendererPeakKiB": 428616
+      "generationMs": 689.0999999940395
     },
     {
       "file": "stress-50.pdf",
-      "sha256": "1c22f0d6cb51aec864191b8da845050a19c1c2dd238f895af7c30eb96817ead9",
+      "sha256": "78fd0466ab83ef105956316a64b71434a4cc668ae264bbbf69ae9ba4c1d23f3f",
       "pages": 99,
-      "bytes": 2763327,
+      "bytes": 2732629,
       "canvasPages": 50,
       "exact50mmBars": 1,
       "embeddedUnicodeFonts": true,
       "vectorCanvas": true,
-      "textSha256": "87ecd5dab6135a67b947c5306ae534452eabc824b0b95c51e04ceecff8e66f70",
-      "planSha256": "2ac4a0280ddbfb1f4d81c453c030c7617f17abfd0470364ede8eeb2f94892caf",
+      "textSha256": "e04c4f80adee417b72e3843def98130f1e1100592d945a528b68d32f561a51d7",
+      "planSha256": "3c0e94e182c2713e1c69d176a4dcdb001c8a8c586ba8a40b1eaf8715da253daf",
       "previewComparisons": [],
-      "generationMs": 13278.4,
-      "activeWorkersAfterClear": 0,
-      "plants": 10000,
-      "rendererPeakKiB": 788588
+      "generationMs": 14432.799999982119
     }
   ],
-  "webDelivery": {
+  "priorFieldLayout": {
+    "date": "2026-09-10",
+    "bead": "canopi-jqyz",
+    "browser": "150.0.7871.46",
+    "checks": {
+      "frontendFiles": 241,
+      "frontendTests": 2219,
+      "focusedPdfTests": 80,
+      "pythonTests": 4,
+      "typeScript": true,
+      "desktopBuild": true,
+      "webBuildAndBoundaryScan": true,
+      "productionProbeBuild": true,
+      "physicalPrinterTested": false,
+      "freshPackagedNativeMatrix": false
+    },
+    "privateSample": {
+      "file": "private.pdf",
+      "sha256": "b5f7c88d9e7814ba10ccf942ed0fa8beb9f6987e0c8f1d5a885542052387fc19",
+      "pages": 11,
+      "bytes": 528520,
+      "canvasPages": 5,
+      "exact50mmBars": 1,
+      "embeddedUnicodeFonts": true,
+      "vectorCanvas": true,
+      "textSha256": "9a6f54d61eb54e4e631b4b83e78c266f4f9f80f8c0a54ec7afefbe1ec11efcd4",
+      "planSha256": "fdaf6df3fa9b87a65a821a0d3ffbcd5c4f967249471ec1eded3bc5b447d17249",
+      "previewComparisons": [
+        {
+          "page": 1,
+          "meanChannelDifference": 1.4723170183506982,
+          "neighborhoodDifference": 0.016983210371745643,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 2,
+          "meanChannelDifference": 3.9070327053293012,
+          "neighborhoodDifference": 0.0936352268619866,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 3,
+          "meanChannelDifference": 4.427956272311817,
+          "neighborhoodDifference": 0.10811369151640408,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 4,
+          "meanChannelDifference": 4.0908278428420575,
+          "neighborhoodDifference": 0.07385231664596371,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 5,
+          "meanChannelDifference": 4.309037447647859,
+          "neighborhoodDifference": 0.109129184883335,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 6,
+          "meanChannelDifference": 3.3255214821474435,
+          "neighborhoodDifference": 0.07120600476950871,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 7,
+          "meanChannelDifference": 3.866211408813809,
+          "neighborhoodDifference": 0.11201784383804476,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 8,
+          "meanChannelDifference": 2.7990712195998495,
+          "neighborhoodDifference": 0.05374194232907955,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 9,
+          "meanChannelDifference": 2.484136167139096,
+          "neighborhoodDifference": 0.057733280489848465,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 10,
+          "meanChannelDifference": 3.995618246607067,
+          "neighborhoodDifference": 0.10757816358250455,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 11,
+          "meanChannelDifference": 3.1647179892758466,
+          "neighborhoodDifference": 0.06918181557564672,
+          "maximumAllowed": 0.25
+        }
+      ],
+      "plants": 2201,
+      "species": 117,
+      "generationMs": 3282.6,
+      "completeAnnotations": 127,
+      "completeMeasurementGuides": 113,
+      "details": [
+        {
+          "page": 2,
+          "placements": 371,
+          "species": 39,
+          "annotations": 22,
+          "measurementOccurrences": 13,
+          "unplacedLabels": 0
+        },
+        {
+          "page": 4,
+          "placements": 410,
+          "species": 42,
+          "annotations": 16,
+          "measurementOccurrences": 25,
+          "unplacedLabels": 0
+        },
+        {
+          "page": 6,
+          "placements": 323,
+          "species": 39,
+          "annotations": 13,
+          "measurementOccurrences": 30,
+          "unplacedLabels": 0
+        },
+        {
+          "page": 8,
+          "placements": 263,
+          "species": 23,
+          "annotations": 6,
+          "measurementOccurrences": 10,
+          "unplacedLabels": 0
+        }
+      ],
+      "activeWorkersAfterClear": 0
+    },
+    "fixtures": [
+      {
+        "file": "dense.pdf",
+        "sha256": "f75bc93f9d42b2241ef50cd43aa277379acf5ae66c99628f8324d9379a6dd4bc",
+        "pages": 3,
+        "bytes": 114654,
+        "canvasPages": 2,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "865ae182a7e878b962f57d391786450b2c23d22b4e5c8204dfd5b5b03e381fe5",
+        "planSha256": "a3978515d2759d69b99614a9ad2a714984c1fa253dafdb825eb7deefbe93d071",
+        "previewComparisons": [
+          {
+            "page": 2,
+            "meanChannelDifference": 1.7235209956800155,
+            "neighborhoodDifference": 0.05834003482113751,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "generationMs": 754.6,
+        "activeWorkersAfterClear": 0,
+        "plants": 320,
+        "rendererPeakKiB": 255104
+      },
+      {
+        "file": "framing.pdf",
+        "sha256": "920f06620e874c2ae910ef0a63e89091d48f3a5c144abba484697e97e3da1b56",
+        "pages": 3,
+        "bytes": 35276,
+        "canvasPages": 2,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "ab1458f4a7c23cda592e082942a16ac1bd3dea9fd27a4cd7d08c1b66cb7b76df",
+        "planSha256": "aee9f9ad11c496bb2e19c5ef925476c4e5f26a1560c6a9effcfcd9b7234d8166",
+        "previewComparisons": [
+          {
+            "page": 2,
+            "meanChannelDifference": 0.5949727167432571,
+            "neighborhoodDifference": 0.009064962907597491,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "generationMs": 357.1,
+        "activeWorkersAfterClear": 0,
+        "plants": 120,
+        "rendererPeakKiB": 311760
+      },
+      {
+        "file": "legends.pdf",
+        "sha256": "83d40c90273d366f0068af150b85794500f2f699228e8b4a79555be46fb5918d",
+        "pages": 3,
+        "bytes": 94091,
+        "canvasPages": 1,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "5b589eb54bf82dc44f091a05073e9260be4b64793f053f743a12373d15d60a9e",
+        "planSha256": "b84e8b928987de1703617994b1123e08d5dd4fdae44ccd75164de16a854bd8d5",
+        "previewComparisons": [
+          {
+            "page": 2,
+            "meanChannelDifference": 6.569979344344756,
+            "neighborhoodDifference": 0.1238455634377465,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "generationMs": 590.9,
+        "activeWorkersAfterClear": 0,
+        "plants": 100,
+        "rendererPeakKiB": 326552
+      },
+      {
+        "file": "map-excluded.pdf",
+        "sha256": "f1dd8f3c684c4244fe7d49fbe489797dc12e7c4fb33849f0595dc5a0d2b4189d",
+        "pages": 3,
+        "bytes": 49983,
+        "canvasPages": 2,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "d1176f9d2bad4e8e407182e15edd6a11b35acc2948426d619a7bd4a3083f2f9b",
+        "planSha256": "b6c25f5cc9e7859410ef25f41906f040ad1b0a80818e86bee82f049cdc5d1e6f",
+        "previewComparisons": [
+          {
+            "page": 2,
+            "meanChannelDifference": 1.4488344731034644,
+            "neighborhoodDifference": 0.016246711690025083,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "generationMs": 408.9,
+        "activeWorkersAfterClear": 0,
+        "plants": 120,
+        "rendererPeakKiB": 433668
+      },
+      {
+        "file": "mixed.pdf",
+        "sha256": "04cac6ae7fff65e456e335d558b077e55c8c7c4c95303c1e27807b0756757dea",
+        "pages": 3,
+        "bytes": 49983,
+        "canvasPages": 2,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "d1176f9d2bad4e8e407182e15edd6a11b35acc2948426d619a7bd4a3083f2f9b",
+        "planSha256": "b6c25f5cc9e7859410ef25f41906f040ad1b0a80818e86bee82f049cdc5d1e6f",
+        "previewComparisons": [
+          {
+            "page": 2,
+            "meanChannelDifference": 1.4488344731034644,
+            "neighborhoodDifference": 0.016246711690025083,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "generationMs": 508.9,
+        "activeWorkersAfterClear": 0,
+        "plants": 120,
+        "rendererPeakKiB": 297664
+      },
+      {
+        "file": "multilingual.pdf",
+        "sha256": "dad3090570cb96c352b3d088c1b220ecd22b51efcb964ab07edfd9a2b9250a77",
+        "pages": 2,
+        "bytes": 137871,
+        "canvasPages": 1,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "17a63b66e9897ecd9c9f088a24aa94afa41d42dbef26854f222a7fd76b80505a",
+        "planSha256": "2a4ea04afa811e170a0335deb0d7a7ca08f3025c98a6ba79185cca336621d479",
+        "previewComparisons": [
+          {
+            "page": 2,
+            "meanChannelDifference": 1.3885597992893322,
+            "neighborhoodDifference": 0.026665567238458,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "generationMs": 1223.8,
+        "activeWorkersAfterClear": 0,
+        "plants": 120,
+        "rendererPeakKiB": 467652
+      },
+      {
+        "file": "stress-1.pdf",
+        "sha256": "6117e045b1f85013abd786620cea937f7e82d2aa5aad516546845cbd37fd1ddc",
+        "pages": 2,
+        "bytes": 52231,
+        "canvasPages": 1,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "30245912414dfd9a96bd74029995b0ed7776f0c44ece7eb32bc6621384ec05f6",
+        "planSha256": "659f089b2a4276ba1701832aa005798a668a3ad234ec1565522204e9fe92a3c7",
+        "previewComparisons": [],
+        "generationMs": 482.1,
+        "activeWorkersAfterClear": 0,
+        "plants": 100,
+        "rendererPeakKiB": 423516
+      },
+      {
+        "file": "stress-10.pdf",
+        "sha256": "cab8d644402ccb1d6f21aefef8b51eff74e50c024b3cb3427de79bcae0b603bb",
+        "pages": 14,
+        "bytes": 250817,
+        "canvasPages": 10,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "9f00fff80a95a4b6343645c02ae34294a976e7f107be1fd3c1ea0fc953778fb1",
+        "planSha256": "2b4a1a5ae4be51b2a865dc23687b4be0e94a6af64804ae75bb197db6999b4aad",
+        "previewComparisons": [],
+        "generationMs": 1120.3,
+        "activeWorkersAfterClear": 0,
+        "plants": 900,
+        "rendererPeakKiB": 428616
+      },
+      {
+        "file": "stress-50.pdf",
+        "sha256": "1c22f0d6cb51aec864191b8da845050a19c1c2dd238f895af7c30eb96817ead9",
+        "pages": 99,
+        "bytes": 2763327,
+        "canvasPages": 50,
+        "exact50mmBars": 1,
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "textSha256": "87ecd5dab6135a67b947c5306ae534452eabc824b0b95c51e04ceecff8e66f70",
+        "planSha256": "2ac4a0280ddbfb1f4d81c453c030c7617f17abfd0470364ede8eeb2f94892caf",
+        "previewComparisons": [],
+        "generationMs": 13278.4,
+        "activeWorkersAfterClear": 0,
+        "plants": 10000,
+        "rendererPeakKiB": 788588
+      }
+    ],
+    "webDelivery": {
+      "browser": "chromium",
+      "version": "150.0.7871.46",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+      "fileImport": true,
+      "automaticKeyPagination": true,
+      "repeatedDownloads": 2,
+      "retainedSetup": true,
+      "drawnPage": true,
+      "zoomThenOrientation": true,
+      "keyboardFraming": true,
+      "temporaryInspection": true,
+      "overviewNavigation": true,
+      "compactWorkspace": true,
+      "pageRemoval": true
+    }
+  },
+  "webEdition": {
     "browser": "chromium",
     "version": "150.0.7871.46",
     "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
     "fileImport": true,
+    "wholeDesignFieldSheet": true,
+    "splitPreviewApplyCancel": true,
     "automaticKeyPagination": true,
     "repeatedDownloads": 2,
     "retainedSetup": true,
@@ -346,5 +646,15 @@
     "overviewNavigation": true,
     "compactWorkspace": true,
     "pageRemoval": true
-  }
+  },
+  "privateDetailPreviewsPixelIdenticalToPrior": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ]
 }

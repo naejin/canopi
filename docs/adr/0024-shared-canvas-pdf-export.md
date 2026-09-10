@@ -34,8 +34,8 @@ exact squares use portrait. Independent zoom/framing can crop; Fit restores comp
 coverage. Adding an area uses its own fitted overview, independent of printed framing.
 An explicitly drawn blank area is printable; an otherwise empty overview is not.
 
-The approved field layout assigns distinct roles to the pages. The overview shows
-the whole layout, final numbered detail outlines and a 50 mm calibration bar. Detail
+The approved field layout assigns explicit roles to the pages, independent of Design size. The overview shows
+the whole layout, final numbered detail outlines and a 50 mm calibration bar. It renders authored artwork directly, including scaled notes, with no generated key, appendix, name lookup or field-label processing. Whole-design field coverage is an explicit action, never an automatic size threshold. Detail
 maps devote the sheet to planting positions, transparent identities and aligned
 measurements, with only a large source page number. Full-width keys and notes follow
 each detail automatically. There are no minimaps, running detail headers/footers,
@@ -52,9 +52,12 @@ Measurement Guides preserve actual endpoint distance and alignment. Cropped guid
 retain full values in M entries and link to a complete detail when available. Numerical
 spacing notes stay by their anchor; other Annotation text moves to linked N entries.
 Coincident mixed placements use P location entries with complete membership. If a
-readable leader cannot be placed, coordinates and a digital location link retain the
-anchor. Uncovered overview notes and guides remain in an appendix. This preserves
-content without requiring the user to solve a label collision before exporting.
+note leader cannot be placed, coordinates and a digital location link retain that note.
+Failed plant-label placement does not generate per-position coordinate entries: local
+keys retain complete Species identities and counts. An explicit split action previews
+smaller frames and the actual PDF page count before replacing the original Print Area.
+This trades additional map space for readable positions instead of growing an index
+that cannot practically be used in the field. No density warning blocks export.
 
 Keys paginate at fixed readable type sizes with complete entry fragments across
 orientation overrides. Page numbers and named destinations resolve only after all

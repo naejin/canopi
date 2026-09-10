@@ -28,6 +28,7 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
     scene.plants.push({ kind: 'plant', id: `p${i}`, canonicalName, commonName: null, position: { x: i % side * spacing, y: Math.floor(i / side) * spacing },
       color, pinnedName: i < 2 && name !== 'dense', locked: false, stratum: null, canopySpreadM: null, rotationDeg: 0, scale: null, notes: null, plantedDate: null, quantity: 1 })
   }
+  if (name === 'legends' || name === 'multilingual') setup = { ...setup, areas: [{ id: 'all', name: 'Whole design', bounds: { x: -1, y: -4, width: 20, height: 24 } }] }
   if (name === 'dense') setup = { ...setup, areas: [{ id: 'bed', name: 'Nursery bed', bounds: { x: -.2, y: -.2, width: 2.2, height: 2.8 } }] }
   if (name === 'mixed' || name === 'map-excluded' || name === 'framing') {
     scene.zones.push({ kind: 'zone', name: 'Orchard', locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,

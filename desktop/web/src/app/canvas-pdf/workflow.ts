@@ -1,15 +1,17 @@
 import { batch, signal } from '@preact/signals'
 import type { PrintBounds } from '../../canvas/print'
+import { splitFieldBounds } from './split-sheets'
+import { contains } from './field-geometry'
 import { PDF_ZOOM, pdfAreaKey, type PdfPageView } from './types'
 import type { PdfPreparation } from './prepare'
-import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf } from './types'
+import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf, PdfPlan, PdfLayoutCache } from './types'
 export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
 export type PdfDeliveryResult = 'saved' | 'downloaded' | 'cancelled'
 export interface PdfDelivery { save(bytes: Uint8Array, name: string, signal: AbortSignal): Promise<PdfDeliveryResult>; dispose(): void }
 export interface PdfWorkflowDependencies {
   capture(): PdfCapture | null
   resolveNames(names: readonly string[], locale: string): Promise<Record<string, string>>
-  prepare(input: PdfPreparation, signal: AbortSignal): Promise<PreparedPdf>
+  prepare(input: PdfPreparation, signal: AbortSignal, progress?: (plan: PdfPlan) => void): Promise<PreparedPdf>
   readonly delivery: PdfDelivery
   labels(): PdfLabels
   fontBaseUrl(): string
@@ -27,7 +29,10 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   const state = signal<PdfWorkflowState>(IDLE)
   const defaults = (): PdfSetup => ({ paper: 'A4', layers: [] })
   const setup = signal<PdfSetup>(defaults())
+  const splitPreview = signal<PdfSetup | null>(null)
   const availableLayers = signal<readonly string[]>([])
+  let cache: PdfLayoutCache = {}
+  let priority = 'overview'
   let nextAreaId = 0
   let identity: object | null = null
   let capture: PdfCapture | null = null
@@ -45,7 +50,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function synchronize(nextIdentity: object) {
     if (disposed) return
     if (identity !== null && identity !== nextIdentity) {
-      stop(); identity = null; capture = null; nextAreaId = 0
+      stop(); cache = {}; splitPreview.value = null; identity = null; capture = null; nextAreaId = 0
       batch(() => { open.value = false; state.value = IDLE; setup.value = defaults(); availableLayers.value = [] })
     } else if (open.peek() && ((capture && !capture.isCurrent()) || state.peek().error === 'canvas-busy')) {
       refreshSoon()
@@ -71,7 +76,8 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     }
     const abort = new AbortController(); controller = abort
     const ticket = generation
-    state.value = { status: 'preparing', error: null, result: null }
+    const previous = state.peek().result
+    state.value = { status: 'preparing', error: null, result: previous ? { ...previous, bytes: null } : null }
     const current = () => {
       if (disposed || !open.peek() || ticket !== generation || abort.signal.aborted) return false
       if (next.isCurrent()) return true
@@ -79,13 +85,25 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       return false
     }
     try {
-      const names = Array.from(new Set(next.input.canvas.plants.map((plant) => plant.canonicalName)))
-      // Catalog availability must not prevent printing existing Design content.
-      // Missing localized names retain the full canonical identity.
+      const choices = splitPreview.peek() ?? setup.peek()
+      const progress = (plan: PdfPlan) => { if (current()) state.value = { status: 'preparing', error: null, result: { plan, bytes: null } } }
+      if (choices.areas?.length && !previous) {
+        const overview = await deps.prepare({ input: next.input, setup: { ...choices, areas: [] }, labels: deps.labels(), fontBaseUrl: deps.fontBaseUrl() }, abort.signal)
+        if (!current()) return
+        progress(overview.plan)
+      }
+      const names = choices.areas?.length && choices.layers.includes('plants')
+        ? Array.from(new Set(next.input.canvas.plants.filter(plant => choices.areas!.some(area => {
+          // A manually displaced/zoomed view can include plants outside its original rectangle.
+          return choices.views?.[pdfAreaKey(area)] ? true : contains(area.bounds, plant.position)
+        })).map(plant => plant.canonicalName))) : []
+      // Catalog failure retains full canonical identities on explicitly requested field sheets.
       const commonNames = names.length ? await resolvePrintNames(deps.resolveNames, names, next.input.locale, abort.signal) : {}
       if (!current()) return
-      const result = await deps.prepare({ input: { ...next.input, commonNames }, setup: setup.peek(), labels: deps.labels(), fontBaseUrl: deps.fontBaseUrl() }, abort.signal)
+      const result = await deps.prepare({ input: { ...next.input, commonNames }, setup: choices, labels: deps.labels(),
+        fontBaseUrl: deps.fontBaseUrl(), cache, priority }, abort.signal, progress)
       if (!current()) return
+      cache = result.layoutCache ?? {}
       state.value = { status: 'ready', error: null, result }
     } catch (error) {
       if (!current()) return
@@ -98,10 +116,11 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function show(): void { if (disposed) return; open.value = true; void rebuild() }
   function close(): void {
     if (state.peek().status === 'delivering') return
-    stop(); capture = null; batch(() => { open.value = false; state.value = IDLE; availableLayers.value = [] })
+    stop(); cache = {}; splitPreview.value = null; capture = null; batch(() => { open.value = false; state.value = IDLE; availableLayers.value = [] })
   }
   function configure(value: Partial<PdfSetup>): void {
     if (disposed || state.peek().status === 'delivering') return
+    splitPreview.value = null
     setup.value = { ...setup.peek(), ...value }
     void rebuild()
   }
@@ -113,9 +132,32 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     if (!open.peek() || disposed || state.peek().status === 'delivering') return
     if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return
     const number = ++nextAreaId
+    priority = `area:${number}`
     configure({ areas: [...setup.peek().areas ?? [], { id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds } }] })
     return `area:${number}`
   }
+  function addWholeDesign(): string | undefined {
+    const page = state.peek().result?.plan.pickerPage
+    return page ? addPrintArea(page.ground) : undefined
+  }
+  function previewSplit(id: string): void {
+    const page = state.peek().result?.plan.pages.find(p => p.id === id && p.kind === 'detail')
+    if (!page || !capture?.isCurrent() || !['ready', 'saved', 'downloaded', 'error'].includes(state.peek().status)) return
+    const bounds = splitFieldBounds(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [])
+    const areas = bounds.map((bounds, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), bounds }))
+    const views = Object.fromEntries(Object.entries(setup.peek().views ?? {}).filter(([key]) => key !== id && !key.startsWith(`${id}:legend:`)))
+    splitPreview.value = { ...setup.peek(), areas: setup.peek().areas?.flatMap(a => pdfAreaKey(a) === id ? areas : [a]), views }
+    priority = pdfAreaKey(areas[0]!)
+    void rebuild()
+  }
+  function applySplit(): void {
+    const preview = splitPreview.peek()
+    if (!preview || state.peek().status !== 'ready' || !capture?.isCurrent()) return
+    nextAreaId = Math.max(nextAreaId, ...preview.areas!.map(a => Number(a.id)))
+    batch(() => { setup.value = preview; splitPreview.value = null })
+  }
+  function cancelSplit(): void { if (!splitPreview.peek()) return; splitPreview.value = null; void rebuild() }
+  function prioritize(id: string): void { priority = id.split(':legend:')[0]! }
   function removeArea(key: string): void {
     const views = Object.fromEntries(Object.entries(setup.peek().views ?? {}).filter(([id]) => id !== key && !id.startsWith(`${key}:legend:`)))
     configure({ areas: (setup.peek().areas ?? []).filter((area) => pdfAreaKey(area) !== key), views })
@@ -132,6 +174,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   }
   function fitPage(id: string): void { setPageView(id, { zoom: 100, offset: { x: 0, y: 0 } }) }
   async function save(): Promise<void> {
+    if (splitPreview.peek()) return
     const snapshot = state.peek(), source = capture
     if (!source || !source.isCurrent() || !['ready', 'saved', 'downloaded', 'error'].includes(snapshot.status) || !snapshot.result?.bytes || snapshot.result.plan.blocked) return
     const abort = new AbortController(); controller = abort
@@ -146,8 +189,8 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       state.value = { ...snapshot, status: 'error', error: 'delivery-failed' }
     } finally { if (controller === abort) controller = null }
   }
-  function dispose(): void { if (disposed) return; disposed = true; stop(); deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = [] }
-  return { open, state, setup, availableLayers, show, close, rebuild, configure, selectLayer, addPrintArea, removeArea, setPageView, fitPage, save, synchronize, dispose }
+  function dispose(): void { if (disposed) return; disposed = true; stop(); cache = {}; splitPreview.value = null; deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = [] }
+  return { open, state, setup, splitPreview, availableLayers, prioritize, addWholeDesign, previewSplit, applySplit, cancelSplit, show, close, rebuild, configure, selectLayer, addPrintArea, removeArea, setPageView, fitPage, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>
 

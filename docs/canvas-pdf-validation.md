@@ -1,8 +1,9 @@
 # Canvas PDF approval and validation
 
 The field layout proposal was approved on **2026-09-10** and integrated under
-`canopi-jqyz`. It supersedes the compact sidebar legend and consent-based readability
-behaviour accepted earlier that day. The [user guide](canvas-pdf.md),
+`canopi-jqyz`. The subsequent explicit-overview and field-sheet revision is tracked by
+`canopi-n820`, superseding automatic overview keys and appendices. The earlier compact
+sidebar legend and readability consent remain retired. The [user guide](canvas-pdf.md),
 [ADR 0024](adr/0024-shared-canvas-pdf-export.md) and [agent guide](agent/canvas-pdf.md)
 describe the current behaviour.
 
@@ -12,11 +13,16 @@ The private orchard contains 2,201 plants and 117 Species. Production validation
 the four exact rectangles from its supplied export: 371/410/323/263 plant placements
 and 39/42/39/23 Species respectively. All placements retain their positions and authored
 appearances, and every detail plant has a nonempty readable label allocation. The
+eight detail/key SVG preview images are pixel-identical to the prior approved
+production output; only the overview and its removed appendix change. The
 selected 55 unique Annotations (57 occurrences) have visible anchors and full text in
 the companion keys. The 67 unique complete Measurement Guides remain represented;
 three cropped guides on the second detail link to their complete view on page 6.
-No consent is required for text or key pagination. Notes and measurements outside the
-four rectangles remain in an overview appendix. Source files are unchanged.
+The resulting PDF has nine pages: one overview plus four map/key pairs. No consent is
+required for density or key pagination. All overview notes and measurements remain
+in their authored positions, with text scaled to the artwork and no appendix. Source
+files are unchanged. The overview-only export is one page rather than the reproduced
+25-page failure (24 generated key pages).
 
 The production worker, fonts, SVG preview and PDFKit encoder are exercised together
 in Chrome 150.0.7871.46. Independent Poppler checks verify embedded Unicode fonts,
@@ -33,7 +39,8 @@ cleanup. Renderer RSS includes shared pages and transient allocations; these sam
 are not a device performance guarantee. The 120-second job deadline, 30-second
 font/name waits and 64 MiB native delivery bound remain unchanged.
 
-The built Web Edition is tested through normal file import, automatic key pagination,
+The built Web Edition is tested through normal file import, explicit whole-design sheets,
+split preview/cancel/apply, automatic local key pagination,
 repeated actual downloads, retained session setup, drawing pages, zoom/orientation,
 keyboard framing, inspection, overview navigation, compact workspace and page removal.
 Frontend coverage includes exact coverage, complete identity and text retention,
@@ -41,9 +48,19 @@ transparent labels, leader clearance, aligned/cropped guides, final navigation,
 long mixed-script keys, sample reflow across orientations, ink/row clearance, worker
 cancellation and Design Session isolation. TypeScript, the full frontend suite, both
 edition builds, the Web boundary scan and the production validation build are required.
-The final gates passed: 241 frontend files / 2,219 tests, 80 focused PDF tests and
+The gates passed: 242 frontend files / 2,227 tests, 86 focused PDF tests and
 four Python verifier tests, TypeScript, both edition builds and the production probe
-build. No Rust or shared transport contract changed.
+build. Focused UI/area tests and TypeScript were rerun after correcting split-preview
+fit and read-only navigation. No Rust or shared transport contract changed.
+
+The real overview worker completed in 629 ms (60,637 bytes), and the four-field-sheet
+worker in 2,939 ms (469,060 bytes), including font loading and encoding. A separate
+warm Node layout-only experiment measured 2,305 ms for four sheets, 580 ms after
+changing one sheet and 103 ms with all sheets reused. These are local observations,
+not cross-device guarantees. The public 10,000-plant / 50-source-page fixture completed
+in 14.4 seconds with 99 total pages. The private nine-page SVG/Poppler comparisons
+remain below 0.113 against the unchanged 0.25 maximum. Current evidence and the prior
+field-layout baseline are distinguished in the compact data file.
 
 These are screen, browser and independent PDF checks. Physical printer measurements,
 field use and a fresh packaged-native matrix for the field layout were not performed.

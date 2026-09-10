@@ -35,8 +35,8 @@ export function PdfPageRail({ plan, setup, selected, disabled, onSelect, onRemov
         {group.id !== 'overview' && <button type="button" disabled={disabled} className={styles.removePage}
           aria-label={`${t('pdf.removePage')}: ${group.name}`} onClick={() => onRemove(group.id)}>×</button>}
       </div>
-      {(group.id !== 'overview' || groups.length === 1) && keyPages(group.id)}
-    </li>)}{groups.length > 1 && !!plan?.pages.some(page => page.sourceId === 'overview') && <li>{keyPages('overview')}</li>}</ol>
+      {group.id !== 'overview' && keyPages(group.id)}
+    </li>)}</ol>
   </nav>
 }
 function Thumbnail({ page, plan }: { readonly page: PdfPage; readonly plan: PdfPlan }) {

@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 
-it('exports coincident notes with automatic keys and no readability confirmation', async () => {
+it('opens with one overview and explicitly adds a whole-design field sheet', async () => {
   const container = document.createElement('div'); document.body.append(container)
   const canvas = { layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
     annotations: ['Water weekly', 'Protect from wind'].map((text, i) => ({ id: String(i), text, position: { x: 0, y: 0 }, fontSize: 14, rotation: 0 })) }
@@ -27,8 +27,26 @@ it('exports coincident notes with automatic keys and no readability confirmation
     expect(button('Add detail page')).toBeUndefined()
     expect(button('Keep text on overview')).toBeUndefined()
     expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(workflow.state.value.result!.plan.pages).toHaveLength(1)
+    await act(async () => { button('Add field sheet').click() })
+    await act(async () => { button('Whole design').click() })
     expect(workflow.state.value.result!.plan.pages.some(page => page.kind === 'legend')).toBe(true)
-    await act(async () => { workflow.close(); workflow.show() })
+    const original = workflow.setup.peek()
+    await act(async () => { button('Split into readable sheets').click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    expect(workflow.setup.peek()).toBe(original)
+    expect(workflow.splitPreview.value!.areas).toHaveLength(2)
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('width')).toBe('100%')
+    expect(button('Save PDF').disabled).toBe(true)
+    await act(async () => { button('Cancel').click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    expect(workflow.setup.peek()).toBe(original)
+    await act(async () => { button('View page: Area 1').click() })
+    await act(async () => { button('Split into readable sheets').click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    await act(async () => { button('Apply sheets').click() })
+    expect(workflow.splitPreview.value).toBeNull()
+    expect(workflow.setup.value.areas).toHaveLength(2)
+    expect(button('Save PDF').disabled).toBe(false)
+
+    await act(async () => { workflow.close(); workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
     expect(button('Save PDF').disabled).toBe(false)
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
@@ -75,7 +93,7 @@ it('offers only printable layers and sends checkbox changes to the export setup'
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
 
-it('creates detail pages only by drawing and edits their zoom and orientation independently', async () => {
+it('creates explicitly drawn detail pages and edits their zoom and orientation independently', async () => {
   const container = document.createElement('div'); document.body.append(container)
   const canvas = { layers: [{ name: 'zones', visible: true, opacity: 1 }], plants: [], annotations: [], measurements: [], zones: [
     { name: 'Wide bed', bounds: { x: 0, y: 0, width: 30, height: 5 }, path: 'M0 0 H30 V5 H0 Z', fill: null },
@@ -92,7 +110,7 @@ it('creates detail pages only by drawing and edits their zoom and orientation in
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
     const draw = async (width: number, height: number) => {
-      await act(async () => { button('Add page').click() })
+      await act(async () => { button('Add field sheet').click() })
       expect(container.querySelector('input[type="search"]')).toBeNull()
       expect(button('Wide bed')).toBeUndefined()
       const overview = workflow.state.value.result!.plan.pickerPage!, svg = container.querySelector<SVGSVGElement>('[data-pdf-editor]')!
@@ -141,7 +159,7 @@ it('creates detail pages only by drawing and edits their zoom and orientation in
     await act(async () => { button('Fit').click() })
     expect(workflow.setup.value.views?.['area:1']).toEqual({ zoom: 100, orientation: 'portrait', offset: { x: 0, y: 0 } })
     const retained = workflow.setup.peek()
-    await act(async () => { button('Add page').click() })
+    await act(async () => { button('Add field sheet').click() })
     await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
     expect(document.activeElement).toBe(container.querySelector('[data-pdf-editor]'))
     expect(workflow.setup.peek()).toBe(retained)
@@ -169,15 +187,16 @@ it('returns to the source page when refreshed content no longer needs the select
       await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
       render(<CanvasPdfDialog workflow={workflow} />, container)
     })
-    const continuation = container.querySelector<HTMLButtonElement>('button[aria-label^="View page: 1 · Key and notes"]')!
+    await act(async () => { workflow.addWholeDesign(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    const continuation = container.querySelector<HTMLButtonElement>('button[aria-label^="View page: 2 · Key and notes"]')!
     expect(continuation).not.toBeNull()
     await act(async () => { continuation.click() })
-    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('2')
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('3')
     await act(async () => {
       workflow.selectLayer('plants', false)
       await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     })
-    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('1')
-    expect(container.querySelector('[aria-current="page"]')!.getAttribute('aria-label')).toBe('View page: Overview')
+    expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('2')
+    expect(container.querySelector('[aria-current="page"]')!.getAttribute('aria-label')).toBe('View page: Print area 1')
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })

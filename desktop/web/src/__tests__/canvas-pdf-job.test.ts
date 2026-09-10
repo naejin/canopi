@@ -39,3 +39,17 @@ it('does not allocate a worker for an already cancelled operation', async () => 
   await expect(preparePdfJob(input, AbortSignal.abort())).rejects.toMatchObject({ name: 'AbortError' })
   expect(workers.instances).toEqual([])
 })
+
+it('admits progress without resolving bytes and ignores messages after cancellation', async () => {
+  const abort = new AbortController(), progress = vi.fn()
+  const promise = preparePdfJob(input, abort.signal, progress)
+  const settled = promise.catch(error => error.name)
+  const worker = workers.instances[0]!, plan = { pages: [], outlines: {}, blocked: null }
+  worker.onmessage!({ data: { progress: plan } })
+  expect(progress).toHaveBeenCalledWith(plan)
+  expect(worker.terminate).not.toHaveBeenCalled()
+  abort.abort()
+  worker.onmessage!({ data: { progress: plan } })
+  expect(progress).toHaveBeenCalledOnce()
+  expect(await settled).toBe('AbortError')
+})

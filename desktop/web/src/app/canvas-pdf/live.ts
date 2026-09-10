@@ -25,7 +25,7 @@ export const canvasPdf = createPdfWorkflow({
         && query.getSettledPlacedPlants() !== null }
   },
   resolveNames: resolvePdfNames,
-  prepare: async (input, signal) => (await import('./job')).preparePdfJob(input, signal),
+  prepare: async (input, signal, progress) => (await import('./job')).preparePdfJob(input, signal, progress),
   delivery: createPdfDelivery(),
   labels: () => ({ notes: t('pdf.notes'), observations: t('pdf.observations'), keyAndNotes: t('pdf.keyAndNotes'), overview: t('pdf.overview'), plants: t('pdf.plants'), actualSize: t('pdf.actualSize') }),
   namePrintArea: (number) => t('pdf.areaName', { number }),

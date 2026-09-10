@@ -23,16 +23,16 @@ it('emits native SVG clipping and stroke attributes so the physical drawing matc
   } finally { render(null, container) }
 })
 
-it('lists overview appendices after detail/key pairs in final PDF order', async () => {
+it('lists a single overview followed by adjacent detail/key pairs', async () => {
   const container = document.createElement('div')
   const frame = { x: 0, y: 0, width: 100, height: 100 }
   const make = (id: string, number: number, kind: PdfPage['kind'], sourceId?: string): PdfPage => ({ id, number, kind, sourceId,
     width: 100, height: 100, frame, ground: frame, pointsPerMeter: 1, legend: [], operations: [] })
-  const pages = [make('overview', 1, 'overview'), make('area:a', 2, 'detail'), make('area:a:legend:0', 3, 'legend', 'area:a'), make('overview:legend:0', 4, 'legend', 'overview')]
+  const pages = [make('overview', 1, 'overview'), make('area:a', 2, 'detail'), make('area:a:legend:0', 3, 'legend', 'area:a')]
   try {
     await act(async () => { render(<PdfPageRail plan={{ pages, outlines: {}, blocked: null }} setup={{ paper: 'A4', layers: [], areas: [{ id: 'a', name: 'Bed', bounds: frame }] }}
       selected="overview" disabled={false} onSelect={() => {}} onRemove={() => {}} onHover={() => {}} />, container) })
     const titles = [...container.querySelectorAll('button[aria-label^="View page"]')].map(button => button.getAttribute('aria-label'))
-    expect(titles).toEqual(['View page: Overview', 'View page: Bed', 'View page: 2 · Key and notes · Page 3', 'View page: 1 · Key and notes · Page 4'])
+    expect(titles).toEqual(['View page: Overview', 'View page: Bed', 'View page: 2 · Key and notes · Page 3'])
   } finally { render(null, container) }
 })

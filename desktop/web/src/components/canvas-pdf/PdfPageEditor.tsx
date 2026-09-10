@@ -10,6 +10,7 @@ interface EditorProps {
   readonly adding?: boolean
   readonly disabled?: boolean
   readonly inspecting?: boolean
+  readonly navigationOnly?: boolean
   readonly highlightedPage?: string | null
   readonly onPrintArea?: (bounds: PrintBounds) => void
   readonly onPage?: (id: string) => void
@@ -22,7 +23,7 @@ interface Gesture {
   readonly bounds: DOMRect
   readonly pageId?: string
 }
-export function PdfPageEditor({ page, plan, adding = false, disabled = false, inspecting = false, highlightedPage,
+export function PdfPageEditor({ page, plan, adding = false, disabled = false, inspecting = false, navigationOnly = false, highlightedPage,
   onPrintArea, onPage, onMove }: EditorProps) {
   const root = useRef<SVGSVGElement>(null)
   const drag = useRef<Gesture | null>(null)
@@ -35,7 +36,7 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     if (previous && root.current?.hasPointerCapture(previous.pointerId)) root.current.releasePointerCapture(previous.pointerId)
   }
   // A new plan, mode, or unmount cancels gestures against the old geometry.
-  useEffect(() => { cancel(); return cancel }, [page, adding, disabled, inspecting])
+  useEffect(() => { cancel(); return cancel }, [page, adding, disabled, inspecting, navigationOnly])
   function point(event: PointerEvent, bounds: DOMRect): PrintPoint {
     const scale = Math.min(bounds.width / page.width, bounds.height / page.height)
     return { x: (event.clientX - bounds.left - (bounds.width - page.width * scale) / 2) / scale,
@@ -52,15 +53,16 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     const bounds = root.current!.getBoundingClientRect(), start = point(event, bounds)
     if (![start.x, start.y].every(Number.isFinite) || start.x < page.frame.x || start.x > page.frame.x + page.frame.width
       || start.y < page.frame.y || start.y > page.frame.y + page.frame.height) return
-    event.preventDefault(); event.stopPropagation(); root.current!.focus()
     const target = event.target instanceof Element ? event.target : null
+    if (navigationOnly && !target?.getAttribute('data-pdf-target')) return
+    event.preventDefault(); event.stopPropagation(); root.current!.focus()
     drag.current = { start, bounds, pointerId: event.pointerId,
       pageId: target?.getAttribute('data-pdf-target') ?? undefined }
     root.current!.setPointerCapture(event.pointerId)
   }
   function pointerMove(event: PointerEvent) {
     const gesture = drag.current
-    if (!gesture || gesture.pointerId !== event.pointerId) return
+    if (!gesture || gesture.pointerId !== event.pointerId || navigationOnly) return
     event.preventDefault()
     const end = point(event, gesture.bounds)
     if (adding) setSelection(rectangle(end))
@@ -77,6 +79,7 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     const moved = Math.hypot(end.x - gesture.start.x, end.y - gesture.start.y) * scale >= 4
     cancel()
     if (!moved) { if (!adding && gesture.pageId) onPage?.(gesture.pageId); return }
+    if (navigationOnly) return
     if (adding) {
       if (bounds.width < 2 || bounds.height < 2) return
       onPrintArea?.({ x: page.ground.x + (bounds.x - page.frame.x) / page.pointsPerMeter,
@@ -88,11 +91,11 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     role="group" tabindex={0} aria-label={t('pdf.pageCount', { page: page.number, count: plan.pages.length })}
     aria-describedby="pdf-editor-hint" data-pdf-editor data-pdf-page={page.number}
     width={inspecting ? page.width * 2 : '100%'} height={inspecting ? page.height * 2 : '100%'}
-    style={{ touchAction: interactive ? 'none' : undefined, cursor: interactive ? adding ? 'crosshair' : 'grab' : undefined }}
+    style={{ touchAction: interactive ? 'none' : undefined, cursor: interactive && !navigationOnly ? adding ? 'crosshair' : 'grab' : undefined }}
     onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} onLostPointerCapture={cancel}
     onKeyDown={(event) => {
       if (event.key === 'Escape' && drag.current) { event.preventDefault(); event.stopPropagation(); cancel(); return }
-      if (!interactive || adding || event.altKey || event.ctrlKey || event.metaKey) return
+      if (!interactive || navigationOnly || adding || event.altKey || event.ctrlKey || event.metaKey) return
       const delta = event.shiftKey ? 30 : 5
       const direction = { ArrowLeft: [delta, 0], ArrowRight: [-delta, 0], ArrowUp: [0, delta], ArrowDown: [0, -delta] }[event.key]
       if (direction) { event.preventDefault(); onMove?.({ x: direction[0]! / page.pointsPerMeter, y: direction[1]! / page.pointsPerMeter }) }

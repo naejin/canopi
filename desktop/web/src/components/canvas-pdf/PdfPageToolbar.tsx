@@ -4,8 +4,9 @@ import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
 import { t } from '../../i18n'
 import styles from './canvas-pdf.module.css'
 
-export function PdfPageToolbar({ page, workflow, disabled, inspecting, onInspect }: {
+export function PdfPageToolbar({ page, workflow, disabled, inspecting, onInspect, onSplit }: {
   readonly page: PdfPage; readonly workflow: PdfWorkflow; readonly disabled: boolean
+  readonly onSplit?: () => void
   readonly inspecting: boolean; readonly onInspect: () => void
 }) {
   const view = workflow.setup.value.views?.[page.id], zoom = view?.zoom ?? 100
@@ -34,6 +35,7 @@ export function PdfPageToolbar({ page, workflow, disabled, inspecting, onInspect
       {(['auto', 'portrait', 'landscape'] as const).map((orientation) => <button type="button" key={orientation}
         aria-pressed={(view?.orientation ?? 'auto') === orientation} onClick={() => workflow.setPageView(page.id, { orientation })}>{t(`pdf.${orientation}`)}</button>)}
     </fieldset>
+    {page.kind === 'detail' && <button type="button" disabled={disabled || !onSplit} onClick={onSplit}>{t('pdf.splitSheets')}</button>}
     <button type="button" aria-pressed={inspecting} disabled={disabled} onClick={onInspect}>{t(inspecting ? 'pdf.doneInspect' : 'pdf.inspect')}</button>
   </div>
 }

@@ -17,9 +17,11 @@ function input(): PdfInput {
   } }
 }
 describe('Canvas PDF page plan', () => {
-  it('updates the overview legend to match an explicit canvas zoom crop', () => {
+  it('crops overview artwork without introducing a generated key', () => {
     const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'landscape', zoom: 300 } }, layers: ['plants'] }, text(), labels)
-    expect(plan.pages[0]!.legend.map((entry) => entry.canonicalName)).toEqual(['Rosmarinus officinalis var. angustifolius'])
+    expect(plan.pages).toHaveLength(1)
+    expect(plan.pages[0]!.legend).toEqual([])
+    expect(plan.pages[0]!.operations.filter(op => op.kind === 'path' && op.fill)).toHaveLength(1)
   })
   it('excludes distant deselected content from extent and legends without changing visibility', () => {
     const design = input()
@@ -28,17 +30,17 @@ describe('Canvas PDF page plan', () => {
     const before = structuredClone(canvas)
     const plants = buildPdfPlan({ ...design, canvas }, { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'] }, text(), labels)
     expect(plants.pages[0]!.ground.width).toBeLessThan(100)
-    expect(plants.pages[0]!.legend).toHaveLength(2)
+    expect(plants.pages[0]!.operations.filter(op => op.kind === 'path' && op.fill)).toHaveLength(3)
     const notes = buildPdfPlan({ ...design, canvas }, { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['annotations'] }, text(), labels)
     expect(notes.pages[0]!.legend).toEqual([])
     expect(notes.pages[0]!.ground.x).toBeGreaterThan(9_000)
     expect(canvas).toEqual(before)
   })
   it('fits authored content on A4 with complete species identity, common-name fallback and every appearance', () => {
-    const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'] }, text(), labels)
+    const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'portrait' }, 'area:all': { orientation: 'portrait' } }, layers: ['plants'], areas: [{ id: 'all', name: 'Garden', bounds: { x: -1, y: -1, width: 32, height: 14 } }] }, text(), labels)
     expect(plan.blocked).toBeNull()
-    expect(plan.pages).toHaveLength(2)
-    const page = plan.pages[0]!
+    expect(plan.pages).toHaveLength(3)
+    const page = plan.pages[1]!
     expect(page.width).toBeCloseTo(595.27559, 4)
     expect(page.height).toBeCloseTo(841.88976, 4)
     expect(page.legend.map((entry) => entry.name)).toEqual(['Apple', 'Rosmarinus officinalis var. angustifolius'])

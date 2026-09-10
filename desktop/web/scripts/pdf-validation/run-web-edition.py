@@ -52,7 +52,7 @@ async def main():
             await page.get_by_text('Export to PDF', exact=True).click()
             await expect(save).to_be_enabled(timeout=30_000)
             # Exercise the workspace through public UI and SVG coordinates.
-            await page.get_by_role('button', name='Add page', exact=True).click()
+            await page.get_by_role('button', name='Add field sheet', exact=True).click()
             editor = page.locator('[data-pdf-editor]')
             points = await editor.evaluate('''svg => {
               const frame = svg.querySelector('clipPath rect');
@@ -94,8 +94,27 @@ async def main():
             assert await page.evaluate('document.body.scrollWidth') == 860
             await page.get_by_role('button', name='Remove page: Print area 1', exact=True).click()
             await expect(page.get_by_role('button', name='View page: Overview', exact=True)).to_have_attribute('aria-current', 'page')
-            report = {'browser': args.browser, 'version': browser.version, 'userAgent': await page.evaluate('navigator.userAgent'),
-                      'fileImport': True, 'automaticKeyPagination': True, 'repeatedDownloads': 2, 'retainedSetup': True, 'drawnPage': True, 'zoomThenOrientation': True,
+            await expect(save).to_be_enabled(timeout=30_000)
+            await page.get_by_role('button', name='Add field sheet', exact=True).click()
+            await page.get_by_role('button', name='Whole design', exact=True).click()
+            await expect(save).to_be_enabled(timeout=30_000)
+            await page.get_by_role('button', name='Split into readable sheets', exact=True).click()
+            apply = page.get_by_role('button', name='Apply sheets', exact=True)
+            await expect(apply).to_be_enabled(timeout=30_000)
+            await expect(save).to_be_disabled()
+            await page.screenshot(path=args.output / 'split-preview.png')
+            await page.get_by_role('button', name='Cancel', exact=True).click()
+            await expect(save).to_be_enabled(timeout=30_000)
+            await page.get_by_role('button', name='View page: Print area 2', exact=True).click()
+            await page.get_by_role('button', name='Split into readable sheets', exact=True).click()
+            await expect(apply).to_be_enabled(timeout=30_000)
+            await apply.click()
+            await expect(save).to_be_enabled(timeout=30_000)
+            async with page.expect_download() as download:
+                await save.click()
+            await (await download.value).save_as(args.output / 'split-field-sheets.pdf')
+            report = {'browser' : args.browser, 'version': browser.version, 'userAgent': await page.evaluate('navigator.userAgent'),
+                      'fileImport': True, 'wholeDesignFieldSheet': True, 'splitPreviewApplyCancel': True, 'automaticKeyPagination': True, 'repeatedDownloads': 2, 'retainedSetup': True, 'drawnPage': True, 'zoomThenOrientation': True,
                       'keyboardFraming': True, 'temporaryInspection': True, 'overviewNavigation': True, 'compactWorkspace': True, 'pageRemoval': True}
             (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
             print(json.dumps(report))

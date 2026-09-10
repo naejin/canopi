@@ -84,12 +84,14 @@ it('retains complete rotated, coincident and boundary annotations automatically 
   expect(page.links!.filter(l => l.target.includes(':note:N'))).toHaveLength(3)
 })
 
-it('reflows annotations into the overview key after removing or moving their detail coverage', () => {
+it('retains authored overview notes without adding an appendix when field coverage changes', () => {
   const base = input(), source = { ...base, canvas: { ...base.canvas, annotations: [{ id: 'note', text: 'Protect seedlings', fontSize: 100, rotation: -45, position: { x: 2, y: 2 } }] } }
   for (const options of [setup, { ...setup, areas: [] }, { ...setup, views: { 'area:bed': { offset: { x: 100, y: 100 } } } }]) {
     const plan = buildPdfPlan(source, options, text(), labels)
     expect(plan.blocked).toBeNull()
-    expect(plan.pages.filter(p => p.kind === 'legend').map(words).join(' ')).toContain('Protect seedlings')
+    expect(words(plan.pages[0]!)).toContain('Protect seedlings')
+    expect(plan.pages.some(p => p.sourceId === 'overview')).toBe(false)
+    if (options === setup) expect(plan.pages.filter(p => p.kind === 'legend').map(words).join(' ')).toContain('Protect seedlings')
   }
 })
 

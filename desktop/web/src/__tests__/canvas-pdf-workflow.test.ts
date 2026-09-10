@@ -203,10 +203,14 @@ it('bounds an unavailable name lookup and releases its deadline when preview clo
   resolveNames.mockImplementation(() => new Promise(() => {}))
   try {
     workflow.show()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(resolveNames).not.toHaveBeenCalled()
+    workflow.addPrintArea({ x: -1, y: -1, width: 2, height: 2 })
     await vi.advanceTimersByTimeAsync(30_000)
     expect(workflow.state.value.status).toBe('ready')
     expect(prepare.mock.lastCall![0].input.commonNames).toEqual({})
     workflow.close(); workflow.show()
+    await vi.advanceTimersByTimeAsync(0)
     expect(vi.getTimerCount()).toBe(1)
     workflow.close()
     await Promise.resolve()
@@ -232,5 +236,16 @@ it('recovers from encoding and delivery failures without rebuilding valid bytes 
     expect(workflow.state.value.status).toBe('saved')
     expect(prepare).toHaveBeenCalledTimes(2)
     expect(capture.input).toEqual(before)
+  } finally { workflow.dispose() }
+})
+
+it('opens an overview without asking the catalog for any plant names', async () => {
+  const { workflow, resolveNames, prepare } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+  try {
+    resolveNames.mockImplementation(() => new Promise(() => {}))
+    workflow.show()
+    await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    expect(resolveNames).not.toHaveBeenCalled()
+    expect(prepare).toHaveBeenCalledOnce()
   } finally { workflow.dispose() }
 })

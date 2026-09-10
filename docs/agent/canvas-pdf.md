@@ -6,9 +6,9 @@ Canvas PDF exports are derived files. The Design Session and canvas retain owner
 
 - `CanvasQuerySurface.capturePrintSnapshot()` returns an owned renderer-neutral projection from settled Scene state, or `null` while an edit owns the Scene. It must never settle an edit, flush maintenance, or request the persistence role. Symbol recipes and resolved authored colors are captured inside the runtime; maps, viewport decorations, and selection state never enter the projection.
 - `app/canvas-pdf/live.ts` composes capture, selected-language name resolution, the worker, and the edition delivery adapter. Its owned observation invalidates stale output and schedules an automatic rebuild on Scene, canvas attachment, Design name, or locale changes while the workspace is open. A Design Session identity change instead cancels the operation, closes the workspace and discards its setup. Catalog failure or a 30-second lookup deadline retains full canonical names. Closing/replacing the preview immediately releases the wait without disposing the shared catalog reader.
-- `app/canvas-pdf/workflow.ts` owns temporary setup, cancellation, current-result admission, and delivery status. Its owned 100 ms refresh timer leaves the reactive observer before capturing, coalesces source revisions, and is cleared on rebuild, close, replacement and disposal. A busy Scene is retried when the settled-source observation changes; no polling loop is installed. Layer selections override print inclusion without changing Scene visibility. Closing releases results and the current job while retaining choices for the current Design. Reopening captures current content; missing Layer selections block preparation until explicitly reviewed. Replacing the Design discards setup. Export never calls Design persistence or marks a Design saved.
+- `app/canvas-pdf/workflow.ts` owns temporary setup, cancellation, current-result admission, and delivery status. Its owned 100 ms refresh timer leaves the reactive observer before capturing, coalesces source revisions, and is cleared on rebuild, close, replacement and disposal. A busy Scene is retried when the settled-source observation changes; no polling loop is installed. Layer selections override print inclusion without changing Scene visibility. Closing releases results, retained field layouts and the current job while retaining choices for the current Design. Reopening captures current content; missing Layer selections block preparation until explicitly reviewed. Replacing the Design discards setup. Export never calls Design persistence or marks a Design saved.
 - `layout.ts` composes a page plan in PDF points (72 points/inch); the field placement modules calculate collision geometry in physical millimetres. `text.ts` uses Fontkit shaping and embedded Noto font metrics for both preview outlines and PDF text. `encode.ts` replays the same plan through PDFKit; no screenshot, browser print stylesheet, native renderer, or system font participates.
-- A lazily imported inline Vite worker owns each shaping/encoding job. Termination releases its fonts, caches, and in-flight fetches on cancellation, timeout, completion, or error. Main-thread preview data contains only required glyph outlines and prepared PDF bytes.
+- A lazily imported inline Vite worker owns each shaping/encoding job. Progress messages contain preview-only plans, never exportable bytes. The workflow admits them only for the current generation and source. Termination releases its fonts, caches, and in-flight fetches on cancellation, timeout, completion, or error. Main-thread preview data contains required glyph outlines, prepared PDF bytes and serialized field layouts. `PdfLayoutCache` retains only the current setup’s unnumbered map/key pages and their used glyph outlines. Cache signatures cover printable content, references, localized names, relevant measurement homes, geometry, key orientations and labels. `layout.ts` reuses matching sheets, prioritizes the selected source, then finalizes the original document order and links. Cancellation still terminates the worker; no persistent worker or font owner is added.
 - `components/canvas-pdf/PdfPagePreview.tsx` supplies shared SVG artwork to the plain preview, visible thumbnails and page editor. Do not replace the outline preview with browser text metrics; actual PDF text remains selectable.
 
 ## Assets and delivery
@@ -31,8 +31,7 @@ session ID and ground bounds, independent of Zones. At 100% its exact ground ext
 is fitted into a centred physical frame, without adding ground outside the rectangle.
 `coverage.ts` owns fit, zoom and displacement. Automatic orientation maximizes the
 usable scale; exact squares use portrait. Each area produces one detail map followed
-by its automatic key/notes pages. No preset scales, forced tiling or Zone-based page
-creation participates.
+by its automatic key/notes pages. `addWholeDesign()` explicitly uses the fitted picker extent. `split-sheets.ts` partitions an explicitly requested sheet along its longest ground axis, aiming for at most 120 distinct positions per partition, with at least two and at most 32 proposed rectangles. This is a coverage heuristic, not a guarantee that coincident or unusually dense positions become readable. Full ground coverage is preserved. `splitPreview` owns proposed setup separately from committed `setup`; Apply commits only a current ready preview and Cancel rebuilds the original. Export is unavailable while reviewing a proposal, never because a sheet is crowded.
 
 `PdfSetup.views` stores temporary zoom, ground-centre displacement in metres and
 orientation by stable ID (`overview`, `area:<id>`, `<source>:legend:<index>`), never by
@@ -56,21 +55,23 @@ a vector arrow names and links that final detail page. Authored numerical spacin
 Annotations print their original value beside an N reference. Other Annotations use
 N anchors with their complete text in the key. Coincident mixed Species use a P
 location reference and complete membership instead of overlapping individual leaders.
-If an anchor cannot accept a readable leader, its key entry retains ground x/y and a
-digital link to the location. Placement metadata distinguishes that fallback by
-zero-sized label bounds; it must not be reported as a readable on-map label.
+Unplaceable notes retain ground coordinates and a location link. Ordinary failed plant labels retain Species identity/counts in the local key, without adding P coordinate entries. Placement metadata uses zero-sized bounds for unresolved plant labels; never report these as readable map identities. Individual unpinned positions closer than the 0.7 mm printed dot diameter bypass futile leader searching; row and coincident membership handling remains explicit.
 
 `field-geometry.ts` owns bounded spatial indices, segment clipping/crossings and
 flattening the M/L/H/V/C/Z paths emitted by print capture. It does not parse glyph or
 plant-symbol paths. `canvas/plant-spacing.ts` remains the shared nearest-position
 utility; PDF layout does not import interactive renderers or runtime state.
 
-The navigation overview shows authored geometry and numbered exact detail frames.
-It does not duplicate detail labels or keys. Notes and guides outside all selected
-details are retained in an overview appendix, with coordinates and digital location
-links. An overview used alone receives field identities and its own complete key.
-Selected layers and explicit manual cropping determine inclusion. Annotation anchors,
-not their interactive text-box width or rotation, determine printed coverage.
+`overview.ts` directly renders authored geometry, notes, guides and pinned canonical
+names. It never infers rows, solves labels or constructs keys/notes appendices, even
+when there are no field sheets. Annotation positions and rotation are retained;
+screen-pixel text sizes are projected from a fixed 60 px/m reference scale, capped
+at the original 96 dpi physical size. Overview text scales with the drawing rather
+than taking field-sheet typography space. Only explicit field sheets request localized
+Species names; opening an overview requires no catalog lookup. Reopening an export
+with saved field choices first prepares a lightweight overview before waiting for names.
+The picker uses the same authored drawing path without generated print references.
+Selected layers and manual cropping determine inclusion.
 
 Detail sheets have 8 mm side/top margins, 10 mm bottom clearance and only their source
 page number above the drawing. They have no minimap, running title, footer or grid.
@@ -102,16 +103,16 @@ failures still have explicit recovery. Engineering bounds remain 200 total pages
 `setPageView()` validates changes and rebuilds through the cancellable workflow. The
 workspace keeps its last displayed plan during rebuilding to keep controls stable,
 but marks it busy, disables pointer/keyboard framing and immediately clears exportable
-bytes. Zoom/orientation remain usable; each effective edit cancels the older job.
+bytes. Progressive overview/selected-sheet plans can replace the retained artwork; provisional sheets have no final printed page number until the complete plan is finalized. Zoom/orientation remain usable; each effective edit cancels the older job.
 Closing releases the cached plan. Temporary inspection is separate from print zoom.
 Print choices never dirty the Design; a blank Design can acquire printable coverage
 through an explicitly drawn area.
 
 ## Print workspace
 
-`CanvasPdfDialog.tsx` mounts the shared full-window workspace in both editions. It owns page selection, Add page and inspection modes, focus restoration/trapping, and the compact paper/Layer controls. Nested controls handle Escape locally. `PdfPageToolbar` edits the selected page through workflow commands; it never writes Scene state. `PdfPageRail` renders source pages and their linked continuations, preserving page cards while a plan rebuilds. Thumbnails use owned IntersectionObservers so only visible cards materialize their glyph SVGs; observers disconnect on unmount.
+`CanvasPdfDialog.tsx` mounts the shared full-window workspace in both editions. It owns page selection, Add field sheet and inspection modes, focus restoration/trapping, and the compact paper/Layer controls. Nested controls handle Escape locally. `PdfPageToolbar` edits the selected page through workflow commands; it never writes Scene state. `PdfPageRail` renders source pages and their linked continuations, preserving page cards while a plan rebuilds. Thumbnails use owned IntersectionObservers so only visible cards materialize their glyph SVGs; observers disconnect on unmount.
 
-`PdfPlan.pickerPage` is a separate fitted drawing surface for Add page, computed from printable content and existing detail coverage. It does not enter `pages` or the exported page count and is never replayed by the encoder. It preserves the user's printed overview zoom and displacement. Add page focuses the drawing surface; Cancel or Escape returns to the previous page. The page rail remains available for navigation. Zone geometry is ordinary artwork on selected print Layers, with no extra hit targets, hover selection or search list. Clicking without dragging creates nothing; dragging over any artwork creates the requested Print Area. Zone edits refresh the artwork without changing Print Area identity or bounds.
+`PdfPlan.pickerPage` is a separate fitted drawing surface for Add field sheet, computed from printable content and existing detail coverage. It does not enter `pages` or the exported page count and is never replayed by the encoder. It preserves the user's printed overview zoom and displacement. Add field sheet focuses the drawing surface; Cancel or Escape returns to the previous page. The page rail remains available for navigation. Zone geometry is ordinary artwork on selected print Layers, with no extra hit targets, hover selection or search list. Clicking without dragging creates nothing; dragging over any artwork creates the requested Print Area. Zone edits refresh the artwork without changing Print Area identity or bounds.
 
 The printed overview's interactive coverage targets derive from finalized detail-page ground bounds and stable IDs. Hovering/focusing a thumbnail highlights its source coverage; clicking an outline opens the matching detail. Overlay colours, selection rectangles, pointer state and magnification stay outside the physical page plan.
 
