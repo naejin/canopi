@@ -53,6 +53,33 @@ describe('design notebook workbench', () => {
     }
   }
 
+  it('publishes relocation together and refreshes after failure without holding mutation admission', async () => {
+    const entry = (path: string, sectionId: string | null, order: number) => ({
+      path, name: path, section_id: sectionId, sort_order: order, plant_count: 0, updated_at: '',
+    })
+    const before: DesignNotebookSnapshot = {
+      sections: [{ id: 'destination', name: 'Destination', sort_order: 0, created_at: '', updated_at: '' }],
+      entries: [entry('first', null, 0), entry('second', null, 1)],
+    }
+    const pending = deferred<void>()
+    const relocateEntry = vi.fn(() => pending.promise)
+    const loadNotebook = vi.fn(async () => before)
+    const workbench = createDesignNotebookWorkbench({ loadNotebook, relocateEntry })
+    await workbench.load()
+    const moving = workbench.relocateEntry('first', 'destination', ['second', 'first'])
+    expect(workbench.view.value.entries).toEqual(before.entries)
+    pending.resolve()
+    await moving
+    expect(workbench.view.value.entries).toEqual([entry('second', null, 0), entry('first', 'destination', 1)])
+    relocateEntry.mockRejectedValueOnce(new Error('storage failed'))
+    await expect(workbench.relocateEntry('first', null, ['first', 'second'])).rejects.toThrow('storage failed')
+    expect(workbench.view.value.entries).toEqual(before.entries)
+    expect(loadNotebook).toHaveBeenCalledTimes(2)
+    await expect(workbench.relocateEntry('first', 'deleted', ['first', 'second'])).rejects.toThrow('no longer available')
+    expect(relocateEntry).toHaveBeenCalledTimes(2)
+    workbench.dispose()
+  })
+
   it('loads a saved-design ledger and opens rows through the document seam', async () => {
     const activePath = signal<string | null>('/designs/terrace.canopi')
     const openDesign = vi.fn().mockImplementation(async (path: string) => {

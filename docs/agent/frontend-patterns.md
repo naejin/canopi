@@ -143,6 +143,8 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Notebook rows are navigation items: row click opens that Design, and dragging the row itself reorders it within a Notebook Section or moves it into another Notebook Section. Notebook Sections are reordered by dragging the section title directly. Do not add six-dot row handles, Pin/Unpin, Pinned/All views, search, section move dropdowns, or one-item overflow menus. Row actions should stay direct and minimal; Remove from Notebook is a visible delete icon and must not delete the `.canopi` Design file. Notebook Section names are renamed by double-clicking the section title; do not add a separate rename button. Do not add Reveal in File Manager until a validated backend command exists.
 - Notebook entry names come from the saved Design file. Do not add a separate notebook label for a Design; only Notebook Section names are user-owned editable text.
 
+- Notebook row drops use the Workbench `relocateEntry` operation to commit section membership and manual order together. The Workbench owns recovery refresh after mutation admission releases; panels must not compose separate move/reorder writes.
+
 ## Saved Object Stamps
 
 - Saved Object Stamps are personal reusable arrangements, not Design Templates and not Species favorites. Keep them in the existing Favorites side panel as a section below Species favorites; do not add a separate PanelBar route unless a later product decision changes the navigation model.

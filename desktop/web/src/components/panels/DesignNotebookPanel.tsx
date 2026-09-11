@@ -279,16 +279,9 @@ export function DesignNotebookPanel({
       return
     }
 
-    void (async () => {
-      if (sectionChanged) {
-        await workbench.moveEntryToSection(session.sourceId, target.sectionId)
-      }
-      if (orderChanged) {
-        await workbench.reorderEntries(nextPaths)
-      }
-    })()
+    void workbench.relocateEntry(session.sourceId, target.sectionId, nextPaths)
       .catch(() => {
-        void workbench.refresh()
+        // The Workbench refreshes its projection after a failed relocation.
       })
       .finally(clearDragPreview)
   }

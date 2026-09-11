@@ -178,6 +178,34 @@ pub fn reorder_design_references(
     tx.commit()
 }
 
+pub fn relocate_design_reference(
+    conn: &Connection,
+    path: &str,
+    section_id: Option<&str>,
+    paths: &[String],
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    tx.query_row(
+        "SELECT path FROM design_notebook_entries WHERE path = ?1",
+        [path],
+        |_| Ok(()),
+    )?;
+    match section_id {
+        Some(section_id) => assign_design_reference_to_section(&tx, path, section_id)?,
+        None => remove_design_reference_from_section(&tx, path)?,
+    }
+    {
+        let mut stmt =
+            tx.prepare("UPDATE design_notebook_entries SET sort_order = ?2 WHERE path = ?1")?;
+        for (index, path) in paths.iter().enumerate() {
+            if stmt.execute((path, index as i32))? != 1 {
+                return Err(rusqlite::Error::QueryReturnedNoRows);
+            }
+        }
+    }
+    tx.commit()
+}
+
 pub fn remove_design_reference_from_section(
     conn: &Connection,
     path: &str,
@@ -233,6 +261,61 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::user_db::initialize_connection(&conn).unwrap();
         conn
+    }
+
+    #[test]
+    fn relocation_rolls_back_membership_when_order_write_fails() {
+        let conn = test_db();
+        super::record_design_reference(&conn, "/first.canopi", "First", 1).unwrap();
+        super::record_design_reference(&conn, "/second.canopi", "Second", 1).unwrap();
+        let section = super::create_notebook_section(&conn, "Destination").unwrap();
+        conn.execute_batch("CREATE TRIGGER reject_order BEFORE UPDATE OF sort_order ON design_notebook_entries BEGIN SELECT RAISE(ABORT, 'order unavailable'); END;").unwrap();
+        let result = super::relocate_design_reference(
+            &conn,
+            "/first.canopi",
+            Some(&section.id),
+            &["/second.canopi".into(), "/first.canopi".into()],
+        );
+        assert!(result.is_err());
+        let entries = super::get_design_notebook_entries_with_sections(&conn).unwrap();
+        assert_eq!(entries[0].path, "/first.canopi");
+        assert_eq!(entries[0].section_id, None);
+    }
+
+    #[test]
+    fn relocation_commits_order_and_membership_and_rejects_stale_targets() {
+        let conn = test_db();
+        super::record_design_reference(&conn, "/first.canopi", "First", 1).unwrap();
+        super::record_design_reference(&conn, "/second.canopi", "Second", 1).unwrap();
+        let section = super::create_notebook_section(&conn, "Destination").unwrap();
+        let paths = vec!["/second.canopi".into(), "/first.canopi".into()];
+        super::relocate_design_reference(&conn, "/first.canopi", Some(&section.id), &paths)
+            .unwrap();
+        let entries = super::get_design_notebook_entries_with_sections(&conn).unwrap();
+        assert_eq!(entries[0].path, "/second.canopi");
+        assert_eq!(entries[1].section_id.as_deref(), Some(section.id.as_str()));
+        assert!(
+            super::relocate_design_reference(
+                &conn,
+                "/first.canopi",
+                Some("deleted-section"),
+                &paths
+            )
+            .is_err()
+        );
+        assert!(super::relocate_design_reference(&conn, "/missing.canopi", None, &paths).is_err());
+        assert!(
+            super::relocate_design_reference(
+                &conn,
+                "/first.canopi",
+                None,
+                &["/missing.canopi".into()]
+            )
+            .is_err()
+        );
+        let after = super::get_design_notebook_entries_with_sections(&conn).unwrap();
+        assert_eq!(after[0].path, "/second.canopi");
+        assert_eq!(after[1].section_id.as_deref(), Some(section.id.as_str()));
     }
 
     #[test]

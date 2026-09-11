@@ -184,3 +184,25 @@ pub async fn reorder_design_references(
         )
         .await
 }
+
+#[tauri::command]
+pub async fn relocate_design_reference(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
+    path: String,
+    section_id: Option<String>,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    let user_db = user_db.inner().clone();
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "design notebook reference relocate",
+            move || {
+                crate::services::design_notebook::relocate_design_reference(
+                    &user_db, &path, section_id, paths,
+                )
+            },
+        )
+        .await
+}

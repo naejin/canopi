@@ -128,6 +128,26 @@ pub fn move_design_reference_to_section(
     Ok(())
 }
 
+pub fn relocate_design_reference(
+    user_db: &UserDb,
+    path: &str,
+    section_id: Option<String>,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    validate_order_values(&paths, "Design path")?;
+    if path.trim().is_empty() || !paths.iter().any(|entry| entry == path) {
+        return Err("Design Notebook relocation must include the moved Design in its order".into());
+    }
+    let conn = user_db.acquire();
+    crate::db::design_notebook::relocate_design_reference(
+        &conn,
+        path,
+        section_id.as_deref(),
+        &paths,
+    )
+    .map_err(|e| format!("Failed to relocate Design Notebook entry: {e}"))
+}
+
 pub fn remove_design_reference(user_db: &UserDb, path: &str) -> Result<(), String> {
     if path.trim().is_empty() {
         return Err("Design path is required".to_owned());

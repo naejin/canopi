@@ -129,6 +129,14 @@ export async function moveDesignReferenceToSection(
   return invoke('move_design_reference_to_section', { path, sectionId })
 }
 
+export async function relocateDesignReference(
+  path: string,
+  sectionId: string | null,
+  paths: string[],
+): Promise<void> {
+  return invoke('relocate_design_reference', { path, sectionId, paths })
+}
+
 export async function removeDesignReference(path: string): Promise<void> {
   return invoke('remove_design_reference', { path })
 }
