@@ -40,7 +40,9 @@ can crop; `fitPage()` restores full coverage and centring. Orientation overrides
 at the retained zoom/displacement. Key pages inherit source orientation unless
 individually overridden. Removing an area removes its associated page choices.
 
-`field-layout.ts` owns the drawing pass. Authored dimensions and notes have placement
+`field-layout.ts` owns the drawing pass. Its generated line paths use PDFKit’s
+six-decimal PDF-point precision in the shared plan, so native floating-point
+roundoff cannot make preview geometry or exact plan hashes platform-dependent. Authored dimensions and notes have placement
 priority over shared brackets. When no shared group fits, the established local-run
 layout order is retained. `field-brackets.ts` selects repeated
 appearance groups, reserves readable references at both ends and admits a group only
