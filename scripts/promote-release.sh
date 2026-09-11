@@ -121,6 +121,18 @@ fi
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
+gh api "repos/$repo/actions/runs/$run_id" > "$tmpdir/run.json"
+python3 - "$tmpdir/run.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+run = json.loads(Path(sys.argv[1]).read_text())
+if (run.get("path") != ".github/workflows/release-candidate.yml"
+        or run.get("status") != "completed" or run.get("conclusion") != "success"):
+    raise SystemExit("ERROR: Promotion requires a successful, completed Release Candidate run.")
+PY
+
 log "Downloading artifacts from run $run_id in $repo"
 artifact_json="$(gh api "repos/$repo/actions/runs/$run_id/artifacts")"
 mapfile -t artifact_lines < <(
@@ -185,15 +197,27 @@ if [[ "${#release_files[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-release_version="$(python3 - "$metadata_path" <<'PY'
+release_identity="$(python3 - "$metadata_path" "$repo" "$tag" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 
 metadata = json.loads(Path(sys.argv[1]).read_text())
-print(metadata["release_version"])
+version = metadata.get("release_version", "")
+commit = metadata.get("head_sha", "")
+if metadata.get("repository") != sys.argv[2]:
+    raise SystemExit("ERROR: Candidate metadata belongs to a different repository.")
+if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+    raise SystemExit("ERROR: Candidate metadata must identify an exact source commit.")
+if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", version):
+    raise SystemExit("ERROR: Candidate metadata must identify a release version.")
+if sys.argv[3] != "v" + version:
+    raise SystemExit("ERROR: Release tag does not match the candidate version.")
+print(version, commit)
 PY
 )"
+read -r release_version source_sha <<< "$release_identity"
 release_notes_path="$repo_root/docs/release-notes/v${release_version}.md"
 notes_file="$tmpdir/release-notes.md"
 
@@ -238,12 +262,38 @@ PY
   printf -- "- [release-metadata.json](https://github.com/%s/releases/download/%s/release-metadata.json)\n\n" "$repo" "$tag"
 } >> "$notes_file"
 
-if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
+gh api "repos/$repo/git/matching-refs/tags/$tag" > "$tmpdir/tags.json"
+existing_tag="$(python3 - "$tmpdir/tags.json" "$tag" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+print("yes" if any(ref["ref"] == "refs/tags/" + sys.argv[2]
+                   for ref in json.loads(Path(sys.argv[1]).read_text())) else "no")
+PY
+)"
+if [[ "$existing_tag" == "yes" ]]; then
+  tag_sha="$(gh api "repos/$repo/commits/$tag" --jq .sha)"
+  if [[ "$tag_sha" != "$source_sha" ]]; then
+    echo "ERROR: Existing tag '$tag' does not resolve to candidate commit '$source_sha'." >&2
+    exit 1
+  fi
+fi
+
+if gh release view "$tag" --repo "$repo" --json isDraft > "$tmpdir/release.json" 2>/dev/null; then
+  python3 - "$tmpdir/release.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+if json.loads(Path(sys.argv[1]).read_text()).get("isDraft") is not True:
+    raise SystemExit("ERROR: Published releases cannot be replaced; prepare a new release version.")
+PY
   log "Updating existing release $repo@$tag"
-  gh release edit "$tag" --repo "$repo" --title "$title" --notes-file "$notes_file"
+  gh release edit "$tag" --repo "$repo" --target "$source_sha" --title "$title" --notes-file "$notes_file"
 else
   log "Creating draft release $repo@$tag"
-  gh release create "$tag" --repo "$repo" --draft --title "$title" --notes-file "$notes_file"
+  gh release create "$tag" --repo "$repo" --target "$source_sha" --draft --title "$title" --notes-file "$notes_file"
 fi
 
 log "Uploading packaged artifacts and manifest"

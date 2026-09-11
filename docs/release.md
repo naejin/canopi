@@ -65,7 +65,13 @@ Minimum packaged-app smoke script:
 scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <version>"
 ```
 
-This script downloads artifacts from the specified run, requires the manifest artifact, verifies `SHA256SUMS.txt`, creates or updates the GitHub Release, and uploads packaged artifacts plus manifest.
+This script admits only a successful, completed `Release Candidate` run, downloads
+its artifacts, requires the manifest artifact and verifies `SHA256SUMS.txt`. The
+manifest repository and version must match the requested repository and `v<version>`
+tag. A new draft targets the exact manifest source commit, even if `main` has advanced.
+An existing tag must resolve to that same commit. Only draft releases can be updated;
+published releases require a new version. It then uploads packaged artifacts plus
+the manifest. Promotion never performs or substitutes for the packaged smoke checks.
 
 When `docs/release-notes/v<version>.md` exists, the script uses it as the base release body and appends release metadata plus explicit download links.
 
