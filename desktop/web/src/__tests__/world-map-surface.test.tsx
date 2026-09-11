@@ -13,12 +13,11 @@ const maplibreMock = vi.hoisted(() => ({
 }))
 
 vi.mock('maplibre-gl', () => ({
-  default: {
-    Map: maplibreMock.mapConstructor,
-    NavigationControl: maplibreMock.navigationControlConstructor,
-    Marker: maplibreMock.markerConstructor,
-    LngLatBounds: maplibreMock.boundsConstructor,
-  },
+  Map: maplibreMock.mapConstructor,
+  NavigationControl: maplibreMock.navigationControlConstructor,
+  Marker: maplibreMock.markerConstructor,
+  LngLatBounds: maplibreMock.boundsConstructor,
+  setWorkerUrl: vi.fn(),
 }))
 
 class FakeWorldMap {

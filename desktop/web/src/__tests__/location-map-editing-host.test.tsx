@@ -23,10 +23,9 @@ const maplibreMock = vi.hoisted(() => ({
 }))
 
 vi.mock('maplibre-gl', () => ({
-  default: {
-    Map: maplibreMock.mapConstructor,
-    NavigationControl: maplibreMock.navigationControlConstructor,
-  },
+  Map: maplibreMock.mapConstructor,
+  NavigationControl: maplibreMock.navigationControlConstructor,
+  setWorkerUrl: vi.fn(),
 }))
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {

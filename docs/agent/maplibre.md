@@ -18,6 +18,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - `app/canvas-map-surface/snapshot.ts` owns in-canvas map snapshot inputs: canvas query surface freshness, saved Location, north bearing, basemap style, layer visibility/opacity, theme, terrain settings, and Target Presentation overlays. The mounted `components/canvas/maplibre-surface-controller.ts` should call that seam instead of importing those authorities directly.
 - `app/canvas-map-surface/reconciliation.ts` owns pure in-canvas map activation decisions: inactive, destroy, create, sync, or rebuild from snapshot inputs plus lifecycle state. `app/canvas-map-surface/lifecycle.ts` is the Canvas Map Surface adapter: it requests MapLibre Surface Adapter maps and owns camera sync, basemap presentation, terrain, Target Presentation overlays, readiness state, diagnostics, and MapLibre event reactions for the in-canvas surface.
 - The lazy import boundary around `maplibre-gl` should stay inside the MapLibre Host/loader path for bundle size.
+- MapLibre 6 uses namespace exports and a separately bundled module worker. `maplibre/loader.ts` owns the one-time `setWorkerUrl()` call before exposing the shared module. Import its worker with Vite's `?worker&url`, not plain `?url`: the latter leaves the worker's sibling-module imports unresolved in production. Keep failed loads retryable. The real-library attribution regression protects the sanitizer fix introduced in 6.4.1.
 
 ## Camera And Projection
 
@@ -57,7 +58,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 ## Tauri And Network
 
 - Review CSP in `tauri.conf.json` when adding tile or image sources; connection and image directives currently allow HTTPS sources. Keep native asset access restricted to the image cache.
-- MapLibre's default bundle starts workers from blob URLs. Keep both `worker-src` and the WebKit fallback `child-src` open to `blob:` in Tauri CSP.
+- MapLibre's worker is emitted as a self-hosted asset by Vite. Keep both `worker-src` and the WebKit fallback `child-src` admitting self-hosted workers and `blob:`; other canvas/PDF/terrain workers still use blob URLs. Never broaden CSP to compensate for a missing worker bundle.
 - Linux desktop startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` before Tauri initializes WebKitGTK. Keep this in process startup, not in developer shell instructions, because MapLibre/WebGL can freeze the WebKitGTK webview on affected systems when the default DMA-BUF renderer is used.
 - Blocking HTTP/file work must run through the managed Native Operation Executor: use `Network` for remote requests and `Local` for local file work. Direct `spawn_blocking` calls belong only in `desktop/src/native_operation.rs`; see the [executor guide](build-release.md#native-operation-executor).
 - All `ureq` calls must set global timeouts and response size limits.

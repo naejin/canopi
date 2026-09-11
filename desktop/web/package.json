@@ -36,7 +36,7 @@
     "fontkit": "2.0.4",
     "i18next": "^24.0.0",
     "maplibre-contour": "^0.1.0",
-    "maplibre-gl": "^5.21.1",
+    "maplibre-gl": "^6.4.1",
     "pdfkit": "0.20.2",
     "pixi.js": "^8.17.1",
     "preact": "^10.25.0"
