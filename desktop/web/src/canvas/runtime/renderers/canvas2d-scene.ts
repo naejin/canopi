@@ -21,10 +21,10 @@ import {
   ROUND_PLANT_SYMBOL_RADIUS,
   tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
-import { computePinnedPlantNameLabels, computeSelectionLabels, type PlantNameLabel } from '../selection-labels'
+import type { PlantNameLabel } from '../selection-labels'
+import { SceneViewportPresentation } from './viewport-presentation'
 import type {
   SceneAnnotationEntity,
-  ScenePoint,
   PlantSymbolId,
   SceneViewportState,
   SceneZoneEntity,
@@ -72,8 +72,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
       context.container.appendChild(canvas)
 
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
-      let snapshot: SceneRendererSnapshot | null = null
-      let plantNameLabels: readonly PlantNameLabel[] = []
+      const presentation = new SceneViewportPresentation()
       let logicalWidth = Math.max(1, context.container.clientWidth)
       let logicalHeight = Math.max(1, context.container.clientHeight)
 
@@ -89,63 +88,26 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
       const instance: SceneRendererInstance = {
         id: 'canvas2d',
         dispose() {
-          snapshot = null
-          plantNameLabels = []
+          presentation.dispose()
           canvas.remove()
         },
         resize(width, height) {
           resize(width, height)
         },
         renderScene(nextSnapshot) {
-          snapshot = nextSnapshot
-          plantNameLabels = getCanvasPlantNameLabels(nextSnapshot)
+          presentation.setScene(nextSnapshot)
           redraw()
         },
         setViewport(viewport) {
-          if (!snapshot) return
-          const previousViewport = snapshot.viewport
-          const panOnly = previousViewport.scale === viewport.scale
-          const translate = <T extends { screenPoint: ScenePoint }>(label: T): T => ({
-            ...label,
-            screenPoint: {
-              x: label.screenPoint.x + viewport.x - previousViewport.x,
-              y: label.screenPoint.y + viewport.y - previousViewport.y,
-            },
-          })
-          const labels = panOnly ? snapshot.selectionLabels.map(translate) : computeSelectionLabels(
-            snapshot.scene.plants,
-            snapshot.selectionLabelPlantIds,
-            viewport,
-            snapshot.localizedCommonNames,
-            {
-              plantContext: {
-                viewport,
-                speciesCache: snapshot.speciesCache,
-                localizedCommonNames: snapshot.localizedCommonNames,
-              },
-            },
-          )
-          const pinnedPlantNameLabels = panOnly ? snapshot.pinnedPlantNameLabels.map(translate) : computePinnedPlantNameLabels(
-            snapshot.scene.plants,
-            viewport,
-            snapshot.localizedCommonNames,
-            {
-              selectionLabelPlantIds: snapshot.selectionLabelPlantIds,
-              plantContext: {
-                viewport,
-                speciesCache: snapshot.speciesCache,
-                localizedCommonNames: snapshot.localizedCommonNames,
-              },
-            },
-          )
-          snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
-          plantNameLabels = panOnly ? plantNameLabels.map(translate) : getCanvasPlantNameLabels(snapshot)
+          presentation.setViewport(viewport)
           redraw()
         },
       }
 
       const redraw = (): void => {
-        if (!snapshot) return
+        const current = presentation.current
+        if (!current) return
+        const { snapshot, plantNameLabels } = current
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 

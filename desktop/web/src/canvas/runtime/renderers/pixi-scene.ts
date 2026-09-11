@@ -25,8 +25,9 @@ import {
   ROUND_PLANT_SYMBOL_RADIUS,
   tracePlantSymbolContour,
 } from '../plant-symbol-recipes'
-import { computePinnedPlantNameLabels, computeSelectionLabels, type PlantNameLabel } from '../selection-labels'
-import { getCanvasDetailLayout, getCanvasPlantNameLabels, isMeasurementLabelVisible } from '../automatic-detail'
+import type { PlantNameLabel } from '../selection-labels'
+import { SceneViewportPresentation } from './viewport-presentation'
+import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-detail'
 import {
   getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
@@ -110,8 +111,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       app.stage.addChild(selectionLabelLayer)
 
       const viewSize = { width: context.container.clientWidth, height: context.container.clientHeight }
-      let snapshot: SceneRendererSnapshot | null = null
-      let plantNameLabels: readonly PlantNameLabel[] = []
+      const presentation = new SceneViewportPresentation()
       const zoneGraphicsByName = new Map<string, Graphics>()
       const measurementGuideGraphicsById = new Map<string, Graphics>()
       const measurementGuideLabelById = new Map<string, Text>()
@@ -126,6 +126,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       const instance: SceneRendererInstance = {
         id: 'pixi',
         dispose() {
+          presentation.dispose()
           app.destroy({ removeView: false })
           canvas.remove()
         },
@@ -135,8 +136,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           app.renderer.resize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
         },
         renderScene(nextSnapshot) {
-          snapshot = nextSnapshot
-          plantNameLabels = getCanvasPlantNameLabels(nextSnapshot)
+          const { plantNameLabels } = presentation.setScene(nextSnapshot)
           syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
           syncMeasurementGuides(
             createText,
@@ -174,44 +174,9 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           app.render()
         },
         setViewport(viewport) {
-          if (!snapshot) return
-          const previousViewport = snapshot.viewport
-          const panOnly = previousViewport.scale === viewport.scale
-          const translate = <T extends { screenPoint: ScenePoint }>(label: T): T => ({
-            ...label,
-            screenPoint: {
-              x: label.screenPoint.x + viewport.x - previousViewport.x,
-              y: label.screenPoint.y + viewport.y - previousViewport.y,
-            },
-          })
-          const labels = panOnly ? snapshot.selectionLabels.map(translate) : computeSelectionLabels(
-            snapshot.scene.plants,
-            snapshot.selectionLabelPlantIds,
-            viewport,
-            snapshot.localizedCommonNames,
-            {
-              plantContext: {
-                viewport,
-                speciesCache: snapshot.speciesCache,
-                localizedCommonNames: snapshot.localizedCommonNames,
-              },
-            },
-          )
-          const pinnedPlantNameLabels = panOnly ? snapshot.pinnedPlantNameLabels.map(translate) : computePinnedPlantNameLabels(
-            snapshot.scene.plants,
-            viewport,
-            snapshot.localizedCommonNames,
-            {
-              selectionLabelPlantIds: snapshot.selectionLabelPlantIds,
-              plantContext: {
-                viewport,
-                speciesCache: snapshot.speciesCache,
-                localizedCommonNames: snapshot.localizedCommonNames,
-              },
-            },
-          )
-          snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
-          plantNameLabels = panOnly ? plantNameLabels.map(translate) : getCanvasPlantNameLabels(snapshot)
+          const current = presentation.setViewport(viewport)
+          if (!current) return
+          const { snapshot, plantNameLabels } = current
           syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
           syncMeasurementGuides(
             createText,
