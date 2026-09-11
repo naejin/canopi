@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { fixture } from '../../scripts/pdf-validation/fixtures'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
@@ -50,4 +51,16 @@ describe('Canvas PDF page plan', () => {
     expect(page.ground.x + page.ground.width).toBeGreaterThan(30)
     expect(plan.pages.flatMap(page => page.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(run => run.text) : [])).join(' ')).toContain('Apple')
   })
+})
+
+it('serializes routed field strokes at the encoder precision shared by native previews', () => {
+  const { input, setup, labels } = fixture('mixed')
+  const plan = buildPdfPlan(input, setup, text(), labels)
+  const strokes = plan.pages[1]!.operations.filter(op => op.kind === 'path' && /^M[\d.]+ [\d.]+ L[\d.]+ [\d.]+$/.test(op.d))
+  expect(strokes.length).toBeGreaterThan(10)
+  for (const stroke of strokes) {
+    if (stroke.kind !== 'path') continue
+    expect(stroke.d).not.toMatch(/\.\d{7}/)
+  }
+  expect(strokes.some(op => op.kind === 'path' && op.d === 'M171.815477 92.562476 L168.708661 95.669291')).toBe(true)
 })
