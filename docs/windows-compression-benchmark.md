@@ -32,10 +32,52 @@ registry entries and application settings.
 The `windows-compression-evidence` artifact retains the JSON report, generated
 NSIS scripts, command logs, accessibility output, and screenshots for 30 days.
 Installers and temporary extracted payloads are discarded; released installers
-remain unchanged. Record reviewed measurements and the policy recommendation
-here before closing the benchmark bead.
+remain unchanged. The reviewed measurements and policy recommendation below
+retain the outcome after the workflow artifacts expire.
 
 References: [Tauri bundle CLI](https://v2.tauri.app/reference/cli/#bundle),
 [Tauri NSIS compression options](https://v2.tauri.app/reference/config/#nsiscompression),
 [NSIS SetCompressor](https://nsis.sourceforge.io/Reference/SetCompressor),
 [Windows administrative installation](https://learn.microsoft.com/en-us/windows/win32/msi/administrative-installation).
+
+## Reviewed measurements — 2026-09-12
+
+[Run 34655208968](https://github.com/naejin/canopi/actions/runs/34655208968)
+passed both installed-payload and rendered-startup checks. Both screenshots were
+also visually reviewed: the expected Canopi welcome screen rendered identically.
+Comparing the generated NSIS scripts found only the compressor substitutions.
+The complete machine-readable report is retained in
+[`evidence/windows-compression-1.1.1.json`](evidence/windows-compression-1.1.1.json).
+
+| NSIS compressor | Bundle time | Installer bytes | Decimal MB | Payload and startup |
+| --- | ---: | ---: | ---: | --- |
+| LZMA | 673.329 s (11m 13s) | 292,547,303 | 292.55 | Passed |
+| zlib | 165.467 s (2m 45s) | 456,091,697 | 456.09 | Passed |
+
+The runner was Windows Server 2025, image `20260907.229.1`, with four logical
+processors on an AMD EPYC 7763 and approximately 16 GiB RAM. Tools were Tauri CLI
+2.11.4 and NSIS 3.11. The identical application/database payload was
+1,296,261,120 bytes. Both installed executables matched SHA-256
+`b235d284e737fb9acf0efb11701b6452ce7b00b6d25b13134adcf7f89c37f4af`;
+both installed databases matched
+`76dd7abe3eb1420e1e4b068a69112ba8d90f2a507ee53b4c0028469e6287a51b`.
+
+zlib saved **507.862 seconds (8m 28s), or 75.4% of the NSIS bundling time**, while
+adding **163,544,394 bytes (55.9%)** to the installer. This is a one-pair bundling
+comparison, not an end-to-end CI speedup: compilation, MSI creation and the larger
+artifact upload still contribute to the full job. As an illustrative download
+cost, those extra bytes alone take about 65 seconds at 20 Mbit/s, excluding
+protocol overhead; actual user connections vary.
+
+### Recommended policy
+
+Keep **LZMA for public release candidates**: the smaller public download is worth
+the one-time packaging cost, and promotion reuses the already verified candidate
+bytes. Use **zlib for routine Windows Build & Test installers**, subject to a
+separate policy review, while retaining MSI and every existing package format.
+Release-candidate validation must continue to exercise the public LZMA installer.
+
+Neither workflow policy nor `desktop/tauri.conf.json` changes as part of this
+measurement bead. Decision `canopi-todb` tracks review of the proposed split;
+an accepted implementation must also measure complete Windows CI duration,
+including artifact upload, and preserve packaged verification.

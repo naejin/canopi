@@ -1,0 +1,38 @@
+{
+  "release": "v1.1.1",
+  "source_sha": "8af863dfd3ec26ca3973672d0f74ef6a4576cde5",
+  "msi_sha256": "d699f77bd591315df6a2bd4ee26839af3fe096e74e223ec632cc5ade1928cb7e",
+  "exe_sha256": "b235d284e737fb9acf0efb11701b6452ce7b00b6d25b13134adcf7f89c37f4af",
+  "db_sha256": "76dd7abe3eb1420e1e4b068a69112ba8d90f2a507ee53b4c0028469e6287a51b",
+  "payload_bytes": 1296261120,
+  "tauri_cli": "tauri-cli 2.11.4",
+  "os": "Windows-2025Server-10.0.26100-SP0",
+  "runner": {
+    "cpu": "AMD EPYC 7763 64-Core Processor                ",
+    "logical_processors": 4,
+    "memory_bytes": 17174360064
+  },
+  "runner_image": "20260907.229.1",
+  "run_url": "https://github.com/naejin/canopi/actions/runs/34655208968",
+  "timing_scope": "tauri bundle only; excludes setup, compilation, verification and uploads",
+  "warmup": "untimed compression=none populates the NSIS tool cache",
+  "results": [
+    {
+      "compressor": "lzma",
+      "elapsed_seconds": 673.329,
+      "installer_bytes": 292547303,
+      "installer_sha256": "8ddc96d285facced803cbace5029c371a563d9b84a4528161497cb57e5c2cfdb",
+      "payload_verified": true,
+      "startup_verified": true
+    },
+    {
+      "compressor": "zlib",
+      "elapsed_seconds": 165.467,
+      "installer_bytes": 456091697,
+      "installer_sha256": "5dfceb85e82da1275b919dc97b202b9f701c85d2632979d3f1367f16c856a582",
+      "payload_verified": true,
+      "startup_verified": true
+    }
+  ],
+  "nsis_version": "v3.11"
+}
