@@ -32,6 +32,13 @@ visually inspected. All 15 private SVG/Poppler comparisons pass (maximum residua
 The source Design and previous review files remain unchanged. Packaged release smoke
 tests are tracked separately under `canopi-ru64`.
 
+The final 1.1.1 dependency integration (`canopi-ps1b`, `canopi-ru64`) passes
+**2,321 frontend tests in 253 files**, both edition builds and the same public and
+private PDF checks. The overview and 14-page packet retain identical physical plans
+and coverage metadata after the dependency refresh; all 15 private comparisons
+remain below 0.099. Generated bindings pass after rebuilding the local tool in the
+main checkout; see the Cargo worktree-cache rule in the [build guide](agent/build-release.md).
+
 ## Current transparent Zone interiors (`canopi-d2ly`, 2026-09-11)
 
 Zone interiors now remain transparent on overview, detail and picker pages. Both
