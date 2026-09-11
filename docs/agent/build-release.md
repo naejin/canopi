@@ -31,6 +31,13 @@ using a subsequent build's restored cache, compiler timings and successful gates
 not just a reported cache hit. Installer compression and artifact upload remain
 separate costs; changing release compression requires measuring the size trade-off.
 
+The isolated `windows-compression-benchmark.yml` workflow rebundles the fixed
+1.1.1 Windows payload with pinned Tauri tools, compares LZMA/zlib, and verifies
+installed payload hashes and rendered startup. See
+[the benchmark method and evidence](../windows-compression-benchmark.md).
+Keep this experimental harness separate from production packaging policy; it
+must not publish or replace release assets.
+
 Build & Test and the production PDF probe cancel superseded runs only for the same
 PR. Main pushes and manual runs keep distinct concurrency groups; release
 candidates are not cancelled by those validation workflows.
