@@ -3,15 +3,10 @@ import type { PdfTextEngine, TextLine } from './text'
 import { MM } from './print-style'
 import { PaperIndex, contains, crossing, distance, edge, fits, hits, inflate, overlaps, segmentBounds, type Segment } from './field-geometry'
 
-export interface FieldConnector {
-  route: Segment[]
-  color: string
-  width: number
-  group?: string
-  rail?: boolean
-}
-
 export interface FieldLabel {
+  opacity?: number
+  origin?: Point
+  rotation?: number
   bounds: Bounds
   lines: readonly TextLine[]
   size: number
@@ -32,23 +27,15 @@ export class FieldSpace {
   readonly labels: FieldLabel[] = []
   readonly marks = new Map<string, Bounds>()
   private markerBounds = new Set<Bounds>()
+  private markerIds = new Map<Bounds, string>()
   readonly segments: Segment[] = []
   private rectangles = new PaperIndex<Bounds>()
   private paths = new PaperIndex<Segment>()
   private crossingPaths = new Set<Segment>()
   constructor(readonly frame: Bounds, readonly text: PdfTextEngine) {}
 
-  fork(): FieldSpace {
-    const copy = new FieldSpace(this.frame, this.text)
-    for (const r of this.rectangles.query(this.frame)) copy.reserve(r)
-    for (const [id, r] of this.marks) { copy.marks.set(id, r); copy.markerBounds.add(r) }
-    for (const s of this.segments) copy.addSegments([s], this.crossingPaths.has(s))
-    return copy
-  }
-
   reserve(bounds: Bounds): void { this.rectangles.add(bounds, bounds) }
-  release(bounds: Bounds): void { this.rectangles.remove(bounds) }
-  mark(id: string, bounds: Bounds): void { this.marks.set(id, bounds); this.markerBounds.add(bounds); this.reserve(bounds) }
+  mark(id: string, bounds: Bounds): void { this.marks.set(id, bounds); this.markerBounds.add(bounds); this.markerIds.set(bounds, id); this.reserve(bounds) }
   addSegments(segments: readonly Segment[], crossingObstacle = false): void {
     for (const s of segments) { this.segments.push(s); this.paths.add(s, inflate(segmentBounds(s), .1)); if (crossingObstacle) this.crossingPaths.add(s) }
   }
@@ -75,29 +62,39 @@ export class FieldSpace {
     }
     return true
   }
-  /** Row brackets score marker crossings separately, but may never cross printed text. */
-  inkClear(route: readonly Segment[]): boolean { return this.pathClear(route, [...this.marks.keys()]) }
   crossings(route: readonly Segment[], ignored?: FieldLabel): number {
     return route.reduce((n, s) => n + this.paths.query(segmentBounds(s)).filter(p => this.crossingPaths.has(p) && !ignored?.route.includes(p) && crossing(s, p)).length, 0)
   }
   place(measured: FieldMeasure, anchors: readonly Point[], ids: readonly string[], target: string,
-    options: { color?: string; boxed?: boolean; near?: boolean; name?: boolean; note?: boolean; ignored?: FieldLabel; preferred?: number; axis?: 'x' | 'y'; outside?: Bounds } = {}): FieldLabel | null {
+    options: { association?: boolean; associationPeers?: readonly string[]; avoid?: readonly Segment[]; color?: string; boxed?: boolean; near?: boolean; name?: boolean; note?: boolean; ignored?: FieldLabel; preferred?: number; axis?: 'x' | 'y'; outside?: Bounds } = {}): FieldLabel | null {
     const { width, height } = measured
+    const peers = options.associationPeers ? new Set(options.associationPeers) : undefined
     let best: FieldLabel | null = null, score = Infinity
     const extent = options.axis === 'y' ? height : width
-    const offsets = options.name ? [2, 4, 7, 10, 14].flatMap(gap => [-extent / 2 - gap, extent / 2 + gap]) : options.near ? [-4, 4, -6, 6, -8, 8, -11, 11] : [-4, 4, -5, 5, -6, 6, -8, 8, -10, 10, -13, 13, -16, 16, -20, 20, -24, 24, -28, 28, -34, 34, -40, 40]
-    const vertical = options.name ? [0, -4, 4, -8, 8, -12, 12] : options.near ? [0, -2, 2, -4, 4, -7, 7] : options.note ? [0, -4, 4, -8, 8, -12, 12, -16, 16, -20, 20, -25, 25, -30, 30]
+    const offsets = options.association ? [0, ...[1.2, 2, 3, 4].flatMap(gap => [-extent / 2 - gap, extent / 2 + gap])] : options.name ? [2, 4, 7, 10, 14].flatMap(gap => [-extent / 2 - gap, extent / 2 + gap]) : options.near ? [-4, 4, -6, 6, -8, 8, -11, 11] : [-4, 4, -5, 5, -6, 6, -8, 8, -10, 10, -13, 13, -16, 16, -20, 20, -24, 24, -28, 28, -34, 34, -40, 40]
+    const crossExtent = options.axis === 'y' ? width : height
+    const vertical = options.association ? [0, ...[1.2, 2, 3].flatMap(gap => [-crossExtent / 2 - gap, crossExtent / 2 + gap])] : options.name ? [0, -4, 4, -8, 8, -12, 12] : options.near ? [0, -2, 2, -4, 4, -7, 7] : options.note ? [0, -4, 4, -8, 8, -12, 12, -16, 16, -20, 20, -25, 25, -30, 30]
       : [0, -.75, .75, -1.5, 1.5, -2.25, 2.25, -3, 3, -4, 4, -5, 5, -7.5, 7.5, -12, 12, -18, 18]
     for (const anchor of anchors) for (const dx of offsets) for (const dy of vertical) {
       const baseCost = Math.abs(dx) + Math.abs(dy) * 3 + (options.preferred && Math.sign(dx) !== options.preferred ? 6 : 0)
       if (baseCost >= score) continue
       const bounds = { x: anchor.x + (options.axis === 'y' ? dy : dx) - width / 2, y: anchor.y + (options.axis === 'y' ? dx : dy) - height / 2, width, height }
       if (options.outside && overlaps(bounds, options.outside)) continue
-      if (!this.clear(bounds, options.ignored)) continue
+      if (!this.clear(bounds, options.ignored) || options.avoid?.some(s => hits(s, inflate(bounds, .2)))) continue
       const end = edge(bounds, anchor)
+      if (options.association) {
+        const own = new Set(ids), reach = distance(end, anchor)
+        if (this.rectangles.query(inflate(bounds, reach + .1)).some(mark => {
+          const id = this.markerIds.get(mark)
+          if (!id) return false
+          const center = { x: mark.x + mark.width / 2, y: mark.y + mark.height / 2 }
+          return !own.has(id) && (!peers || peers.has(id)) && distance(edge(bounds, center), center) < reach - .01
+        })) continue
+      }
       const routes: Segment[][] = [[{ a: anchor, b: end }]]
       const straightClear = this.pathClear(routes[0]!, ids, options.ignored)
-      if (!straightClear || this.crossings(routes[0]!, options.ignored)) {
+      if (options.association && !straightClear) continue
+      if (!options.association && (!straightClear || this.crossings(routes[0]!, options.ignored))) {
         for (const [x, y] of [[0, -2], [0, 2], [0, -3], [0, 3], [0, -4], [0, 4], [-2, 0], [2, 0], [-3, 0], [3, 0]]) {
           const elbow = { x: anchor.x + (options.axis === 'y' ? y! : x!), y: anchor.y + (options.axis === 'y' ? x! : y!) }
           routes.push([{ a: anchor, b: elbow }, { a: elbow, b: end }])
@@ -115,41 +112,4 @@ export class FieldSpace {
     return best
   }
   admit(label: FieldLabel): void { this.labels.push(label); this.reserve(label.bounds); this.addSegments(label.route, true) }
-  replace(previous: FieldLabel, next: FieldLabel): void {
-    this.release(previous.bounds)
-    for (const s of previous.route) { this.paths.remove(s); this.crossingPaths.delete(s); const i = this.segments.indexOf(s); if (i >= 0) this.segments.splice(i, 1) }
-    this.labels[this.labels.indexOf(previous)] = next
-    this.reserve(next.bounds); this.addSegments(next.route, true)
-  }
-}
-
-/** Gaps belong to the underpassing connector; no white eraser hides artwork. */
-export function separatedConnectors<T extends { route: readonly Segment[]; group?: string; rail?: boolean }>(labels: readonly T[]): { segment: Segment; label: T }[] {
-  const pool = labels.flatMap(label => label.route.map(segment => ({ segment, label })))
-  const index = new PaperIndex<typeof pool[number]>(), gaps = new Map<Segment, [number, number][]>()
-  const length = (label: T) => label.route.reduce((n, s) => n + distance(s.a, s.b), 0)
-  for (const item of pool) {
-    for (const other of index.query(segmentBounds(item.segment))) {
-      if (item.label === other.label || item.label.group && item.label.group === other.label.group) continue
-      const cross = crossing(item.segment, other.segment)
-      if (!cross) continue
-      const under = !!item.label.rail !== !!other.label.rail ? item.label.rail ? item : other
-        : length(item.label) >= length(other.label) ? item : other
-      const t = under === item ? cross.t : cross.u, delta = .45 / distance(under.segment.a, under.segment.b)
-      if (t < delta || t > 1 - delta) continue
-      const intervals = gaps.get(under.segment) ?? []; intervals.push([t - delta, t + delta]); gaps.set(under.segment, intervals)
-    }
-    index.add(item, segmentBounds(item.segment))
-  }
-  return pool.flatMap(({ segment: s, label }) => {
-    const intervals = (gaps.get(s) ?? []).sort((a, b) => a[0] - b[0])
-    const at = (t: number): Point => ({ x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t })
-    let from = 0
-    const result: { segment: Segment; label: T }[] = []
-    for (const [low, high] of [...intervals, [1, 1]]) {
-      if (low! > from) result.push({ segment: { a: at(from), b: at(low!) }, label })
-      from = Math.max(from, high!)
-    }
-    return result
-  })
 }

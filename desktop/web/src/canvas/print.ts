@@ -23,6 +23,9 @@ export interface PrintZone {
   readonly path: string
   readonly bounds: PrintBounds
   readonly fill: string | null
+  readonly geometry?:
+    | { readonly kind: 'ellipse'; readonly center: PrintPoint; readonly radii: PrintPoint; readonly rotation: number }
+    | { readonly kind: 'rect' | 'polygon' | 'line'; readonly points: readonly PrintPoint[] }
 }
 export interface CanvasPrintSnapshot {
   readonly layers: readonly { readonly name: string; readonly visible: boolean; readonly opacity: number }[]

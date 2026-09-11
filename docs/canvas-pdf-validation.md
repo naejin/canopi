@@ -1,13 +1,159 @@
 # Canvas PDF approval and validation
 
 The field layout proposal was approved on **2026-09-10** and integrated under
-`canopi-jqyz`. The subsequent explicit-overview and field-sheet revision is tracked by
-`canopi-n820`, superseding automatic overview keys and appendices. The earlier compact
-sidebar legend and readability consent remain retired. The [user guide](canvas-pdf.md),
+`canopi-jqyz`. The subsequent revisions were tracked by `canopi-n820` and `canopi-v36o`.
+The 2026-09-11 field-print revisions supersede their bracket, separate-key and
+overview-index defaults. The explicit-coverage correction below removes automatic
+annotation sheets introduced during that polish. Readability consent remains retired. The [user guide](canvas-pdf.md),
 [ADR 0024](adr/0024-shared-canvas-pdf-export.md) and [agent guide](agent/canvas-pdf.md)
 describe the current behaviour.
 
-## Current continuous brackets (`canopi-v36o`)
+## Release review (`canopi-bw80`, 2026-09-11)
+
+The release review preserves the approved field-print behaviour and removes the
+obsolete bracket/routing implementation. A new failing trapezoid regression exposed
+an omitted polygon edge: only native rectangles now use rectangular dimensions.
+Each field drawing derives its Zone measurements once. The overview index accepts
+guide-value strings directly, with distance-only admission, instead of fabricated
+Canvas annotations.
+
+All **2,319 frontend tests in 251 files**, TypeScript, both edition builds, the Web
+boundary scan, generated-binding checks, Rust formatting/Clippy/check/tests, 108
+catalog tests and four PDF verifier tests pass. The full frontend run used two
+workers to limit local memory pressure. All nine public production fixtures pass,
+including 10,000 plants across 99 pages, with worker cleanup verified.
+
+The private overview remains one page and has an identical physical plan to the
+transparent-Zone revision. The complete orchard packet remains 14 pages with
+unchanged coverage, identities, names and guide metadata. Corrected polygon
+dimensions change ink on three detail pages; those pages and the overview were
+visually inspected. All 15 private SVG/Poppler comparisons pass (maximum residual
+0.099, unchanged limit 0.25), along with fonts, vector geometry, links and calibration.
+The source Design and previous review files remain unchanged. Packaged release smoke
+tests are tracked separately under `canopi-ru64`.
+
+## Current transparent Zone interiors (`canopi-d2ly`, 2026-09-11)
+
+Zone interiors now remain transparent on overview, detail and picker pages. Both
+PDF renderers omit authored fills and the former pale fill for closed unfilled
+Zones. Zone stroke protection no longer retains a fill when it opens a gap around
+text. Native geometry, neutral outlines, references, dimensions and authored Design
+fills are preserved. Existing draw order keeps Zone outlines beneath plants,
+Measurement Guides and annotations.
+
+A regression at `buildPdfPlan` failed on the old pale fill, then passed after the
+correction. It covers overlapping rectangles, polygons and ellipses with null,
+coloured and white authored fills on all three surfaces, verifies transparent ink
+and draw order, and checks that the input is unchanged. All 135 focused PDF/snapshot
+tests in 21 files pass. The prior explicit-coverage rule remains in force.
+
+TypeScript, both edition builds, the Web boundary scan and the production validation
+build pass. The production overview remains one page and the full orchard packet
+14 pages. Their coverage, plant identities, names, guide metadata, links and scales
+match the preceding explicit-coverage output exactly. All 15 SVG/Poppler comparisons
+pass (maximum residual 0.099 against the unchanged 0.25 limit), alongside embedded
+Unicode fonts, vector artwork, calibration and worker cleanup. The overview's top
+ellipse now reveals the overlapping bed outline. The overview and first detail were
+visually inspected, including a grayscale overview. The source Design is unchanged.
+Counts and hashes are under `transparentZoneRevision` in the validation data. This
+confined rendering change used focused coverage; the previous full frontend-suite
+results below were not rerun. No physical printer or fresh packaged-native tests
+were performed. User and agent guides and ADR 0024 reflect transparent Zone ink.
+
+## Explicit detail coverage (`canopi-kg34`, 2026-09-11)
+
+The user clarified that notes which cannot fit on the overview and fall outside
+chosen detail coverage must be omitted. The previous annotation-coverage loop violated
+that rule: a fresh overview-only orchard setup generated **35 pages**, including
+33 automatic details and one key continuation. The identical input without annotations
+produced one page; a single long note reproduced the failure without plants, Zones,
+Measurement Guides, saved views or chosen details. This isolates coverage expansion
+from legitimate dimension-table pagination and retained setup.
+
+The loop, remote-note relocation, derived page types/controls, their locale strings
+and annotation-triggered Species lookups are removed. The real layout repro now
+produces **one overview page** with its Zone dimensions and guide values. Only explicit
+Print Areas create detail pages. Their crowded notes retain N/full-key fallback;
+notes outside those views never generate or relocate content. The picker still lets
+users explicitly frame any authored annotation. Overview dimension and guide overflow
+continues independently at readable physical sizes.
+
+A failing regression was recorded before the fix at `buildPdfPlan`; a separate workflow
+regression caught the unnecessary catalog lookup. All 64 focused tests pass, including
+the real preview workflow, chosen-detail fallback, dense overview-only coverage and
+a 90-Zone index retaining all 90 guide values without adding annotation pages.
+
+The production worker generates 1 page for overview-only, 5 pages with three chosen
+areas, and 14 pages with all nine original areas. Every export retains all 134 stored
+guides on the overview; the full packet contains all 2,201 plants exactly once across
+its nine detail maps with no unresolved identities. It prints 104 of 106 annotations;
+the two uncovered notes are intentionally omitted under the corrected rule.
+The overview-only PDF and the affected key page were visually inspected.
+
+All 20 private SVG/Poppler comparisons pass the unchanged 0.25 tolerance (maximum
+residual 0.096), together with Unicode font embedding, vector artwork, links and the
+physical 50 mm calibration bar. Every run releases its workers. TypeScript, all
+**2,317 frontend tests in 250 files**, both edition builds, the Web boundary scan and
+the production validation build pass. Compact counts and hashes are under
+`explicitCoverageRevision` in the [validation data](canvas-pdf-field-validation-data.json).
+No new physical printer or packaged-native tests were performed; public-fixture
+results below belong to the earlier run. User/agent guides, domain vocabulary, ADR
+0024 and all 11 locales reflect the corrected scope. The source Design is unchanged.
+
+## Earlier field-print polish (`canopi-46aj`, 2026-09-11)
+
+The following evidence records the preceding revision. Its supplementary note coverage
+was subsequently rejected and replaced by `canopi-kg34` above.
+
+This revision follows `canopi-8d38` and implements the comparison with the approved
+zone-dimension proposal. The overview has contextual text only, without annotation
+indexes or N markers. Local appearance frequency selects simple enclosures or direct
+Species Codes; bounded enclosure exchanges resolve codes blocked by measurement ink.
+Ordinary P fallback identities are removed. P remains reserved for coincident groups.
+Keys reserve usable drawing space before label placement and retain complete names,
+counts and one sample per appearance. Zone-table rules clear multiline text; overview
+zone references are unboxed, navigation numbers boxed, and the ground scale is separate
+from the physical 50 mm calibration bar.
+
+Uncovered spatial annotations receive supplementary coverage, with smaller frames
+when planting context is dense. Each supplementary sheet prints its assigned deferred
+notes only. Free-standing notes outside the artwork reuse an existing detail's notes
+section instead of creating an empty map. Chosen Print Areas, authored geometry,
+custom colours and the editable Design remain unchanged.
+
+The final orchard review has **15 pages**: an overview, nine chosen details, four
+key continuations and one supplementary detail. Detail numbering is consecutive
+from 1 to 10. All 2,201 plants occur exactly once across the nine chosen details;
+the supplementary sheet repeats 34 context plants. All 106 annotations and all
+134 stored Measurement Guides are represented, including all guides on the
+overview. There are no unresolved plant identities or ordinary P references.
+The 24 native zones and the source Design are unchanged. Every review page was
+visually inspected, with an additional grayscale review of the first detail.
+
+A separate three-area coverage stress case contains 28 pages, including 23 smaller
+supplementary details for notes outside the chosen views. It also retains every
+annotation and guide with no unresolved plant identities. This demonstrates the
+paper cost of sparse manual coverage; the nine-area review is the compact complete
+orchard packet. Supplementary pages remain visible in the export preview.
+
+Both private exports pass every SVG/Poppler page comparison: 43 comparisons, maximum
+residual 0.097 against the unchanged 0.25 limit. Embedded Unicode fonts, vector
+artwork, named links and the exact 50 mm overview calibration bar pass. Generation
+took 4.11 seconds for the full review and 3.49 seconds for the partial-selection
+coverage case; these are local observations, not device guarantees. All nine public
+fixtures pass, including 10,000 plants across 99 pages in 2.54 seconds. All runs
+release their workers. Hashes and detailed counts are recorded under
+`fieldPrintRevision` in the [validation data](canvas-pdf-field-validation-data.json).
+
+TypeScript, all **2,316 frontend tests in 250 files**, the final 48 focused tests
+(including 36 field-proposal regressions), four Python verifier tests, both edition
+builds, the Web boundary scan and the production validation build pass. User and
+agent documentation, ADR 0024, domain vocabulary and all 11 locales agree with the
+implementation. No runtime dependencies, Rust code or shared contracts changed.
+Physical printer tests and a fresh packaged-native matrix remain separate from browser
+worker, SVG-preview, grayscale screen review and edition-build checks.
+
+## Earlier continuous brackets (`canopi-v36o`)
 
 The approved continuous proposal is now implemented in the shared production layout.
 Repeated appearance groups use external brackets with orthogonal stems, membership

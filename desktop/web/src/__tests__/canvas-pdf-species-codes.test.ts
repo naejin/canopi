@@ -5,7 +5,7 @@ import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
 const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-it('keeps numeric paper references consistent across frames, locale and layers without changing reserved Design codes', () => {
+it('keeps key identities consistent across frames, locale and layers without changing reserved Design codes', () => {
   const input: PdfInput = { name: 'Garden', locale: 'en', commonNames: {}, canvas: { layers: [{ name: 'plants', visible: true, opacity: 1 }], annotations: [], measurements: [], zones: [],
     plants: ['Same appearance A', 'Same appearance B'].map((name, i) => ({ id: String(i), canonicalName: name, speciesCode: ['APPLE', 'MSP'][i]!,
       position: { x: i * 10, y: 0 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false })) } }
@@ -16,7 +16,7 @@ it('keeps numeric paper references consistent across frames, locale and layers w
     { paper: 'Letter', layers: ['plants'], areas: areas.slice(1) }, text(), labels)
   expect(first.pages.filter(p => p.kind === 'detail').map(p => p.legend[0]!.reference)).toEqual(['01', '02'])
   expect(second.pages.find(p => p.kind === 'detail')!.legend[0]!.reference).toBe('02')
-  const keyText = first.pages.filter(p => p.kind === 'legend').flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])).join(' ')
+  const keyText = first.pages.filter(p => p.kind !== 'overview').flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])).join(' ')
   expect(keyText).toContain('APPLE'); expect(keyText).toContain('MSP')
   expect(input).toEqual(before)
 })

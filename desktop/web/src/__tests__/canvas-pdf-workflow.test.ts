@@ -249,3 +249,15 @@ it('opens an overview without asking the catalog for any plant names', async () 
     expect(prepare).toHaveBeenCalledOnce()
   } finally { workflow.dispose() }
 })
+
+it('does not resolve plant names for uncovered annotations on an overview-only export', async () => {
+  const plant = { id: 'remote', canonicalName: 'Prunus avium', speciesCode: 'PAV', position: { x: 30, y: 30 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false }
+  const { workflow, capture, setCanvas, resolveNames } = fixture([plant])
+  setCanvas({ ...capture.input.canvas, layers: [...capture.input.canvas.layers, { name: 'annotations', visible: true, opacity: 1 }],
+    annotations: [{ id: 'note', text: 'Complete instruction '.repeat(30), fontSize: 16, rotation: 0, position: { x: 30, y: 30 } }] })
+  try {
+    workflow.show()
+    await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    expect(resolveNames).not.toHaveBeenCalled()
+  } finally { workflow.dispose() }
+})

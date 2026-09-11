@@ -9,6 +9,14 @@ export const fits = (frame: Bounds, r: Bounds) => contains(frame, r) && contains
 export const edge = (r: Bounds, p: Point): Point => ({ x: Math.max(r.x, Math.min(p.x, r.x + r.width)), y: Math.max(r.y, Math.min(p.y, r.y + r.height)) })
 export const segmentBounds = (s: Segment): Bounds => ({ x: Math.min(s.a.x, s.b.x), y: Math.min(s.a.y, s.b.y), width: Math.abs(s.b.x - s.a.x), height: Math.abs(s.b.y - s.a.y) })
 
+export function rotatedBounds(bounds: Bounds, rotation: number, origin: Point): Bounds {
+  const angle = rotation * Math.PI / 180, c = Math.cos(angle), s = Math.sin(angle)
+  const corners = [[bounds.x, bounds.y], [bounds.x + bounds.width, bounds.y], [bounds.x, bounds.y + bounds.height], [bounds.x + bounds.width, bounds.y + bounds.height]]
+    .map(([x, y]) => ({ x: origin.x + x! * c - y! * s, y: origin.y + x! * s + y! * c }))
+  const x = Math.min(...corners.map(p => p.x)), y = Math.min(...corners.map(p => p.y))
+  return { x, y, width: Math.max(...corners.map(p => p.x)) - x, height: Math.max(...corners.map(p => p.y)) - y }
+}
+
 export function hits(s: Segment, r: Bounds): boolean {
   return clipSegment(s, r) !== null
 }

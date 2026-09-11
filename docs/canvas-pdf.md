@@ -4,7 +4,7 @@ Open a Design and choose **File → Export to PDF**. The print workspace shows y
 
 Choose A4 or US Letter and open **Print layers** to choose the Design Layers to print. Initially, export uses the visible printable layers. These choices never change your Design's visibility or content. Maps and the Timeline, Budget, and Consortium tabs are excluded.
 
-Start with one lightweight overview, regardless of Design size. It shows authored artwork and numbered field-sheet frames without generating a species key. Choose **Add field sheet**, then drag a rectangle around the area to print on the fitted overview. The new detail page opens with the whole area fitted and the best orientation selected automatically. Exact squares use portrait. Each Print Area produces one canvas page and remains temporary. **Add field sheet → Whole design** explicitly creates a detailed view of the entire Design, including small gardens.
+Start with a spatial overview, followed only by dimension/spacing continuation pages when necessary. It shows authored artwork and numbered field-sheet frames without generating a species key. Choose **Add field sheet**, then drag a rectangle around the area to print on the fitted overview. The new detail page opens with the whole area fitted and the best orientation selected automatically. Exact squares use portrait. Each Print Area produces one canvas page and remains temporary. **Add field sheet → Whole design** explicitly creates a detailed view of the entire Design, including small gardens.
 
 The Add field sheet overview fits printable content and existing detail coverage independently of the printed overview's zoom and position. **Cancel** or Escape returns to the previous page without changing its framing. Zones appear as artwork when their print layer is selected; clicking them does not create a page. Drawing a Print Area never creates or modifies a Design Zone.
 
@@ -14,39 +14,47 @@ Drag the drawing within the paper to adjust its printed position. With the paper
 
 **Automatic / Portrait / Landscape** applies to the selected page only, including legend pages. Changing orientation retains that page's zoom and manual displacement. **Inspect text** temporarily enlarges the paper on screen; scroll to read it, then choose **Done inspecting** or press Escape. Inspection never changes the printed scale.
 
-Detail pages use almost the whole sheet for the Design, with just a large page number
-matching its outline on the overview. Each detail is followed by a complete **Key and
-notes** page; additional pages are added automatically when needed. There is no legend
-overflow or crowded-text confirmation before saving.
+Details are numbered **1, 2, 3…**, independently of extra key pages. Each sheet shows
+the Design title, plant/species totals and its ground scale. The complete plant key
+shares the page when there is enough room; otherwise **Key and notes** pages follow
+automatically. Plant positions and the selected ground area remain unchanged.
 
-Numeric references distinguish Species even when they share a symbol and colour.
-They stay consistent throughout the PDF. Repeated plants with the same appearance
-can share a bracket beside the drawing, with a reference at both ends. Right-angle
-stems connect individual plants; a dot means membership and a gap means a crossing.
-This works above/below horizontal beds and beside vertical beds when there is room.
-Other placements retain local references, and straight neighbouring runs can share
-short brackets and counts. Long, narrow sheets leave extra room at the ends for
-references. Every Print Area stays one continuous, proportionally correct drawing;
-the layout never automatically divides or rearranges it. Names appear beside the drawing where space permits;
-the key always includes full common and botanical names, the Design's letter code,
-counts and every authored appearance. These print references do not change your Design.
+A unique symbol/colour combination needs only the key. When different Species share
+that appearance in a detail, a circle, square or diamond enclosure distinguishes
+them; the most frequent retains the plain mark. Occasional ambiguous plants use their
+existing Species Code directly beside the plant. Further conflicts use codes too.
+These are print-only identifiers: export never recolours or edits your Design. Codes
+appear to the left of key symbols, followed by complete common and botanical names
+and quantities. All authored appearance overrides remain in the key.
 
-A shallow horizontal sheet can also use spare paper for a compact local key and a
-metre ruler. The quick key includes all local Species and notes only when they fit
-completely; the following full key always remains available. The ruler measures
-from the left edge of the printed ground rectangle, so subtract readings to estimate
-spacing along the bed.
+Annotations print near their position at a readable size when they fit. Only crowded
+detail notes use **N** references with their full text in the key. A **P** reference is
+reserved for coincident plants. An unplaceable Species Code retains its coordinates
+under the same code in the key; no second identifier is introduced. Small gaps in Zone outlines keep text clear without hiding plants.
 
-Aligned Measurement Guides show actual endpoint distances. A guide cut by the page
-edge keeps its full value in an M entry; an arrow points to another detail showing its
-complete length when available. Numerical spacing notes remain beside their anchor.
-Other notes use N references and complete text in the following key. Coincident mixed
-plants use a P location entry listing their Species and counts. PDF links connect entries to their map location. Unplaceable plant labels do not create a coordinate catalog; the local key still includes every Species and its count.
+Stored Measurement Guides appear on both overview and detail pages. They retain their
+actual endpoint distances. The overview groups repeated values by Zone, and suitable
+connected guides form a readable band below the map. A crowded guide uses an **M**
+reference and its complete value; an arrow links to a detail showing its full length
+when available. No artificial spacing guides are added.
 
-The overview always retains authored notes and measurements in place, with text scaled
-with the artwork. It never generates an appendix or switches to field-sheet processing.
-Plant marks adapt to nearby spacing while retaining authored colours and symbols.
-Tiny marks become solid position dots. Spare key-page space provides lines for observations.
+Zones print as outlines with transparent interiors, including ellipses and Zones
+filled in the Design. Their outlines sit beneath plants, guides and annotations.
+Overlapping Zones remain visible without using ink for background fills; your
+Design's saved fills are unchanged.
+
+The Zone index gives true side lengths, end widths and ellipse diameters. Bent beds
+list their exterior segments; varying end widths appear as a range. Full Zone sizes
+also remain above cropped details, with dimension lines where they fit. Long overview
+dimension indexes continue on another sheet. The overview shows full annotation text
+only where it fits with clear space around it; it never lists annotations or N references.
+Notes that cannot fit on the overview appear only if they fall within a chosen detail.
+Otherwise they are omitted from the PDF. Export never adds detail sheets or moves
+uncovered notes into another detail's key. Add a field sheet over a note to include it.
+With no chosen details, only remaining dimension/spacing data can add pages after the
+overview. Remote notes do not shrink the overview's planting plan. Plant marks retain
+their custom colours and compact symbols. Spare key-page space provides lines for
+field observations.
 
 On a detail page, choose **Split into readable sheets** to preview smaller adjacent
 frames at a larger scale. The overview and thumbnails show the proposed coverage and
@@ -62,4 +70,4 @@ adjust another page. Preview artwork appears before final PDF encoding completes
 
 Choose **Back to design** to edit, then reopen Export to PDF to keep the current session's print choices. Open previews refresh automatically when source content changes. Print Areas keep their chosen bounds even if Zones are renamed, resized or removed. If a selected print Layer no longer exists, review **Print layers** before exporting. Opening another Design discards the old print setup. Generating or saving a PDF never changes the Design or marks it saved.
 
-Print at **100% / actual size**. Disable the printer dialog's fit-to-page scaling. The calibration bar on the overview measures 50 mm; its distance label states the corresponding ground distance. Each page has its own fitted physical scale; the displayed ratio is approximate. Canvas zoom and screen inspection are separate from the printer's 100% setting. See the [validation record](canvas-pdf-validation.md) for screen checks and the scope of physical testing.
+Print at **100% / actual size**. Disable the printer dialog's fit-to-page scaling. The calibration bar on the overview measures 50 mm; it is labelled **50 mm** for checking the print size. A separate ground scale appears on the overview and each detail. Canvas zoom and screen inspection are separate from the printer's 100% setting. See the [validation record](canvas-pdf-validation.md) for screen checks and the scope of physical testing.

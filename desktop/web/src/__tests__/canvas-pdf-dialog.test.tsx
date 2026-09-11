@@ -30,7 +30,8 @@ it('opens with one overview and explicitly adds a whole-design field sheet', asy
     expect(workflow.state.value.result!.plan.pages).toHaveLength(1)
     await act(async () => { button('Add field sheet').click() })
     await act(async () => { button('Whole design').click() })
-    expect(workflow.state.value.result!.plan.pages.some(page => page.kind === 'legend')).toBe(true)
+    expect(workflow.state.value.result!.plan.pages.filter(page => page.kind === 'detail')).toHaveLength(1)
+    expect(workflow.state.value.result!.plan.pages.flatMap(p => p.annotationIds ?? [])).toEqual(expect.arrayContaining(['0', '1']))
     const original = workflow.setup.peek()
     await act(async () => { button('Split into readable sheets').click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
     expect(workflow.setup.peek()).toBe(original)
@@ -188,7 +189,7 @@ it('returns to the source page when refreshed content no longer needs the select
       render(<CanvasPdfDialog workflow={workflow} />, container)
     })
     await act(async () => { workflow.addWholeDesign(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
-    const continuation = container.querySelector<HTMLButtonElement>('button[aria-label^="View page: 2 · Key and notes"]')!
+    const continuation = container.querySelector<HTMLButtonElement>('button[aria-label^="View page: 1 · Key and notes"]')!
     expect(continuation).not.toBeNull()
     await act(async () => { continuation.click() })
     expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('3')
@@ -198,5 +199,31 @@ it('returns to the source page when refreshed content no longer needs the select
     })
     expect(container.querySelector('[data-pdf-editor]')!.getAttribute('data-pdf-page')).toBe('2')
     expect(container.querySelector('[aria-current="page"]')!.getAttribute('aria-label')).toBe('View page: Print area 1')
+  } finally { render(null, container); workflow.dispose(); container.remove() }
+})
+
+it('opens only the overview for an unreadable note and lets the user choose a detail', async () => {
+  const container = document.createElement('div'); document.body.append(container)
+  const canvas = { layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
+    annotations: [{ id: 'long', text: 'Keep the complete instruction '.repeat(20), position: { x: 0, y: 0 }, fontSize: 14, rotation: 0 }] }
+  const text = createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
+  const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
+    prepare: async ({ input, setup, labels }) => ({ plan: buildPdfPlan(input, setup, text, labels), bytes: new Uint8Array([1]) }),
+    resolveNames: async () => ({}), delivery: { save: vi.fn(), dispose: vi.fn() },
+    labels: () => ({ notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'Plants', actualSize: '100%' }),
+    namePrintArea: number => `Area ${number}`, fontBaseUrl: () => '' })
+  try {
+    await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
+    await act(async () => { await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    expect(workflow.state.value.result!.plan.pages.map(p => p.kind)).toEqual(['overview'])
+    expect(container.querySelectorAll('button[aria-label^="View page:"]')).toHaveLength(1)
+    expect(container.querySelector('input[aria-label="Canvas zoom (%)"]')).not.toBeNull()
+    await act(async () => { workflow.addWholeDesign(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    expect(workflow.state.value.result!.plan.pages.filter(p => p.kind === 'detail')).toHaveLength(1)
+    const card = container.querySelector<HTMLButtonElement>('button[aria-label="View page: Area 1"]')!
+    expect(card).not.toBeNull()
+    await act(async () => { card.click() })
+    expect(container.querySelector('input[aria-label="Canvas zoom (%)"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Remove page: Area 1"]')).not.toBeNull()
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })

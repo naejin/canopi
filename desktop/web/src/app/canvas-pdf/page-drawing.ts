@@ -49,11 +49,6 @@ export function fitOverview(input: PdfInput, frame: PrintBounds, coverage: reado
 }
 
 export function drawMark(plant: PrintPlant, x: number, y: number, radius: number, opacity: number, operations: PdfOperation[]): void {
-  if (radius < .8 * MM) {
-    operations.push({ kind: 'path', d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z',
-      matrix: [radius, 0, 0, radius, x, y], fill: plant.color, stroke: null, width: 0, opacity })
-    return
-  }
   // PDF units are points; 16 CSS px corresponds to 12pt at 96px/in.
   const marks = radius * 2 < 12 ? plant.smallMark ?? plant.mark : plant.mark
   for (const mark of marks) operations.push({ kind: 'path', d: mark.d, matrix: [radius, 0, 0, radius, x, y],

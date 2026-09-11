@@ -25,14 +25,18 @@ it.each([
   const bounds = { ...point(-.2, -.4), width: vertical ? 1.7 : 10.6, height: vertical ? 10.6 : 1.7 }
   const plan = buildPdfPlan(input, { paper: 'A4', layers: ['plants'], areas: [{ id: 'strip', name: 'Strip', bounds }] }, createPdfTextEngine(fonts, 'en'), labels)
   const page = plan.pages.find(p => p.kind === 'detail')!
-  expect(plan.pages).toHaveLength(3)
+  expect(plan.pages.filter(p => p.kind === 'detail')).toHaveLength(1)
   expect(page.ground).toEqual(bounds)
   expect(page.identifiedPlants!.flatMap(g => g.ids).sort()).toEqual(input.canvas.plants.map(p => p.id).sort())
-  expect(page.identifiedPlants!.every(g => g.bounds.width > 0)).toBe(true)
+  const rendered = plan.pages.filter(p => p.id === page.id || p.sourceId === page.id).flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])).join(' ')
+  for (const group of page.identifiedPlants!.filter(g => g.bounds.width === 0)) {
+    expect(rendered).toContain(group.reference)
+    expect(rendered).toContain('x ')
+  }
   const inside = page.identifiedPlants!.filter(({ bounds: b }) => vertical
     ? b.x + b.width / 2 > page.frame.x && b.x + b.width / 2 < page.frame.x + page.frame.width
     : b.y + b.height / 2 > page.frame.y && b.y + b.height / 2 < page.frame.y + page.frame.height)
-  expect(inside.length).toBe(0)
+  expect(inside.length).toBeGreaterThan(0)
   const ink = page.operations.flatMap(op => op.kind === 'text' && op.line.ink
     ? [{ ...op.line.ink, x: op.x + op.line.ink.x, y: op.y + op.line.ink.y }] : [])
   for (const [i, bounds] of ink.entries()) {
@@ -41,7 +45,7 @@ it.each([
   expect(page.operations.some(op => op.kind === 'path' && op.fill === '#ffffff')).toBe(false)
 })
 
-it('adds a complete quick key and metre ruler only in spare paper, retaining the full linked key', () => {
+it('fits one complete key and ground scale in spare paper without duplicating the key', () => {
   const input: PdfInput = { name: 'Repeated strip', locale: 'en', commonNames: { 'Species 0': 'Apple', 'Species 1': 'Pear', 'Species 2': 'Plum' }, canvas: {
     layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], measurements: [],
     annotations: [{ id: 'note', text: 'Keep this access clear', position: { x: 5, y: .7 }, fontSize: 12, rotation: 0 }],
@@ -51,9 +55,10 @@ it('adds a complete quick key and metre ruler only in spare paper, retaining the
   const plan = buildPdfPlan(input, { paper: 'A4', layers: ['plants', 'annotations'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: -.2, y: -.2, width: 10.6, height: 1.2 } }] }, createPdfTextEngine(fonts, 'en'), labels)
   const page = plan.pages.find(p => p.kind === 'detail')!
   const text = page.operations.flatMap(op => op.kind === 'text' ? [op.line.runs.map(r => r.text).join('')] : [])
-  expect(text).toEqual(expect.arrayContaining(['Apple · 20', 'Pear · 20', 'Plum · 20', 'Keep this access clear', 'm']))
+  expect(text).toEqual(expect.arrayContaining(['Apple', 'Pear', 'Plum', '×20', '1 m']))
+  expect(text.join(' ')).toContain('Keep this access clear')
   expect(page.legend.reduce((n, e) => n + e.count!, 0)).toBe(60)
-  expect(page.continuationIds).toHaveLength(1)
+  expect(page.continuationIds).toHaveLength(0)
   const destinations = new Set(plan.pages.flatMap(p => [`page:${p.id}`, ...p.destinations?.map(d => d.id) ?? []]))
   expect(page.links!.every(link => destinations.has(link.target))).toBe(true)
   for (const op of page.operations) if (op.kind === 'text' && op.line.ink) {

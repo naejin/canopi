@@ -16,7 +16,7 @@ export function PdfPageRail({ plan, setup, selected, disabled, onSelect, onRemov
     return <button type="button" className={styles.pageCard} aria-label={`${t('pdf.viewPage')}: ${name}`}
       aria-current={selected === id ? 'page' : undefined} onClick={() => onSelect(id)}>
       {page && plan ? <Thumbnail page={page} plan={plan} /> : <span className={styles.thumbnail} />}
-      <span className={styles.pageCaption}><span>{page?.number ?? '·'}</span><span>{name}</span></span>
+      <span className={styles.pageCaption}><span>{(page?.kind === 'detail' ? page.detailNumber : page?.number) ?? '·'}</span><span>{name}</span></span>
     </button>
   }
   function keyPages(sourceId: string) {
@@ -24,7 +24,7 @@ export function PdfPageRail({ plan, setup, selected, disabled, onSelect, onRemov
     if (!pages.length) return null
     const source = plan!.pages.find(page => page.id === sourceId)!
     return <ol className={styles.legendPages}>{pages.map(page => <li key={page.id}>
-      {pageButton(page.id, `${source.number} · ${t('pdf.keyAndNotes')} · ${t('pdf.pageLabel')} ${page.number}`)}
+      {pageButton(page.id, `${source.detailNumber ?? t('pdf.overview')} · ${t(source.kind === 'overview' ? 'pdf.measurementSummary' : 'pdf.keyAndNotes')} · ${t('pdf.pageLabel')} ${page.number}`)}
     </li>)}</ol>
   }
   return <nav ref={root} className={styles.pageRail} aria-label={t('pdf.pages')}>
@@ -35,7 +35,7 @@ export function PdfPageRail({ plan, setup, selected, disabled, onSelect, onRemov
         {group.id !== 'overview' && <button type="button" disabled={disabled} className={styles.removePage}
           aria-label={`${t('pdf.removePage')}: ${group.name}`} onClick={() => onRemove(group.id)}>×</button>}
       </div>
-      {group.id !== 'overview' && keyPages(group.id)}
+      {keyPages(group.id)}
     </li>)}</ol>
   </nav>
 }

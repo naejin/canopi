@@ -15,13 +15,22 @@ const source = (count: number): PdfInput => ({ name: 'Garden', locale: 'en', com
   zones: [], measurements: [], annotations: [{ id: 'note', text: 'Keep this note', position: { x: 1, y: 1 }, fontSize: 14, rotation: 35 }],
 } })
 const setup: PdfSetup = { paper: 'A4', layers: ['plants', 'annotations'] }
-it.each([1, 2201])('keeps %i plants on one authored overview without generated identities or keys', count => {
+it('does not create detail or note pages for an unreadable note in an overview-only export', () => {
+  const base = source(0)
+  const input = { ...base, canvas: { ...base.canvas, annotations: [{ ...base.canvas.annotations[0]!, text: 'A long field instruction that cannot fit in two overview lines. '.repeat(8) }] } }
+  const plan = buildPdfPlan(input, setup, text(), labels)
+  expect(plan.pages.map(p => p.kind)).toEqual(['overview'])
+  expect(plan.pages[0]!.annotationIds).toEqual([])
+  expect(plan.pages[0]!.continuationIds).toEqual([])
+})
+it.each([1, 2201])('keeps an overview-only export to one page even with %i plants and annotations', count => {
   const plan = buildPdfPlan(source(count), setup, text(), labels)
+  expect(plan.pages.filter(p => p.kind === 'overview')).toHaveLength(1)
   expect(plan.pages).toHaveLength(1)
   const page = plan.pages[0]!
   expect(page.legend).toEqual([]); expect(page.identifiedPlants).toEqual([])
-  expect(page.links).toEqual([]); expect(page.continuationIds).toEqual([])
-  expect(page.operations.find(op => op.kind === 'text' && op.line.runs.some(r => r.text === 'Keep this note')))
+  expect(page.operations.some(op => op.kind === 'text' && /^N\d+$/.test(op.line.runs.map(r => r.text).join('')))).toBe(false)
+  if (page.annotationIds?.includes('note')) expect(page.operations.find(op => op.kind === 'text' && op.line.runs.some(r => r.text === 'Keep this note')))
     .toMatchObject({ kind: 'text', rotation: 35, opacity: .6 })
 })
 it('reuses unchanged sheets with fresh glyph outlines and invalidates changed coverage and names', () => {
@@ -51,7 +60,7 @@ it('prioritizes a selected sheet while retaining document order and complete des
   const destinations = new Set(plan.pages.flatMap(p => [`page:${p.id}`, ...p.destinations?.map(d => d.id) ?? []]))
   for (const page of plan.pages) for (const link of page.links ?? []) expect(destinations.has(link.target)).toBe(true)
 })
-it('retains complete local species identity without coordinate entries for failed labels', () => {
+it('retains complete local species identity and explicit locations for unresolved codes', () => {
   const input = source(400)
   const plan = buildPdfPlan(input, { ...setup, layers: ['plants'], areas: [{ id: 'all', name: 'All', bounds: { x: -100, y: -100, width: 200, height: 200 } }] }, text(), labels)
   const page = plan.pages.find(p => p.kind === 'detail')!
@@ -60,7 +69,8 @@ it('retains complete local species identity without coordinate entries for faile
   expect(page.identifiedPlants!.some(group => group.bounds.width === 0)).toBe(true)
   const words = plan.pages.filter(p => p.kind === 'legend').flatMap(p => p.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(r => r.text) : [])).join(' ')
   for (const plant of input.canvas.plants) expect(words).toContain(plant.canonicalName)
-  expect(words).not.toMatch(/P\d+|x -?\d+ m · y/)
+  for (const group of plan.pages.find(p => p.kind === 'detail')!.identifiedPlants!.filter(g => !g.bounds.width)) expect(words).toContain(group.reference)
+  expect(words).toMatch(/x -?\d+(?:\.\d+)? m · y/)
 })
 it('partitions all ground with bounded frames and handles coincident locations', () => {
   const bounds = { x: 0, y: 0, width: 5, height: 5 }, input = source(2201)

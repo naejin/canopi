@@ -97,7 +97,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
           // A manually displaced/zoomed view can include plants outside its original rectangle.
           return choices.views?.[pdfAreaKey(area)] ? true : contains(area.bounds, plant.position)
         })).map(plant => plant.canonicalName))) : []
-      // Catalog failure retains full canonical identities on explicitly requested field sheets.
+      // Catalog failure retains full canonical identities on chosen detail sheets.
       const commonNames = names.length ? await resolvePrintNames(deps.resolveNames, names, next.input.locale, abort.signal) : {}
       if (!current()) return
       const result = await deps.prepare({ input: { ...next.input, commonNames }, setup: choices, labels: deps.labels(),

@@ -1,22 +1,26 @@
 import type { CanvasPrintSnapshot, PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
-import type { PdfDestination, PdfInput, PdfLegendEntry, PdfLink, PdfOperation, PdfPageReference } from './types'
-import type { PdfTextEngine } from './text'
+import type { PdfDestination, PdfEnclosure, PdfInput, PdfLegendEntry, PdfLink, PdfOperation, PdfPageReference } from './types'
+import type { PdfTextEngine, TextLine } from './text'
 import { MM } from './print-style'
 import { drawMark, identifyPlants, pathOp, rectPath, textOp } from './page-drawing'
-import { nearestPlantSpacing } from '../../canvas/plant-spacing'
 import { paperPlantRadius } from './plant-marks'
+import { nearestPlantSpacing } from '../../canvas/plant-spacing'
 import { contains, clipSegment, distance, hits, inflate, outlineSegments, type Segment } from './field-geometry'
-import { FieldSpace, separatedConnectors, type FieldLabel } from './field-placement'
-import { plantingRows } from './field-rows'
+import { FieldSpace, type FieldLabel } from './field-placement'
 import { fieldDimensions } from './field-dimensions'
-import { fieldBrackets, type FieldBracket } from './field-brackets'
-import { fieldSupport } from './field-support'
+import { appearanceKey, assignFieldIdentity, drawEnclosure, enclosureRadius, fieldIdentity } from './field-identity'
+import { directAnnotation } from './field-annotations'
+import { zoneMeasurements } from './zone-measurements'
+import { zoneLabels } from './zone-labels'
+import { protectZoneInk } from './zone-ink'
 
 export interface FieldReferences {
   species: ReadonlyMap<string, string>
   notes: ReadonlyMap<string, string>
   measurements: ReadonlyMap<string, string>
   plants: ReadonlyMap<string, string>
+  allPlants?: readonly PrintPlant[]
+  identities?: ReadonlyMap<string, PdfEnclosure>
   measurementHomes?: ReadonlyMap<string, string>
 }
 export interface FieldNote {
@@ -24,7 +28,8 @@ export interface FieldNote {
   reference: string
   text: string
   position: PrintPoint
-  kind: 'annotation' | 'distance' | 'plants'
+  species?: string
+  kind: 'annotation' | 'distance' | 'plants' | 'zone'
   plantIds?: readonly string[]
   location?: string
   continuation?: string
@@ -41,17 +46,16 @@ export interface FieldDrawing {
   measurementIds: string[]
 }
 const INK = '#24211c', OCHRE = '#A06B1F'
-const appearance = (p: PrintPlant) => JSON.stringify([p.canonicalName, p.symbol, p.color.toLowerCase()])
 const paper = (r: PrintBounds): PrintBounds => ({ x: r.x * MM, y: r.y * MM, width: r.width * MM, height: r.height * MM })
 
 /** Allocate once from the whole Design: cropping and locale never renumber a species. */
-export function fieldReferences(input: PdfInput): FieldReferences {
+export function fieldReferences(input: PdfInput, fields?: readonly PrintBounds[]): FieldReferences {
   const codes = new Map(input.canvas.plants.map(p => [p.canonicalName, p.speciesCode ?? p.canonicalName]))
   const names = [...codes.keys()].sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, 'en') || a.localeCompare(b, 'en'))
   const ordered = <T extends { id: string; position: PrintPoint }>(items: readonly T[], prefix: string) => new Map([...items]
     .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x || a.id.localeCompare(b.id))
     .map((p, i) => [p.id, `${prefix}${i + 1}`]))
-  return { species: new Map(names.map((name, i) => [name, String(i + 1).padStart(2, '0')])),
+  return { allPlants: input.canvas.plants, identities: assignFieldIdentity(input.canvas.plants, fields), species: new Map(names.map((name, i) => [name, String(i + 1).padStart(2, '0')])),
     notes: ordered(input.canvas.annotations, 'N'), plants: ordered(input.canvas.plants, 'P'),
     measurements: ordered(input.canvas.measurements.map(g => ({ ...g, position: g.start })), 'M') }
 }
@@ -63,46 +67,81 @@ export function visibleFieldCanvas(canvas: CanvasPrintSnapshot, ground: PrintBou
 }
 
 /** One pure physical layout feeds both the SVG preview and the encoder. */
-export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, page: { id: string; width: number; height: number },
+export function drawField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, page: { id: string; width: number; height: number; reserved?: readonly PrintBounds[]; summary?: readonly TextLine[]; bodyTop?: number },
   text: PdfTextEngine, references: FieldReferences): FieldDrawing {
-  return drawFieldPass(input, frame, ground, scale, page, text, references, true)
+  let identities = new Map(fieldIdentity(input.canvas.plants, references.allPlants ?? input.canvas.plants, references.identities))
+  let best = layoutField(input, frame, ground, scale, page, text, references, identities)
+  const unresolved = (drawing: FieldDrawing) => drawing.identifiedPlants.filter(p => !p.bounds.width).reduce((n, p) => n + p.ids.length, 0)
+  // Spend enclosures where guide ink prevents a direct code; keep the retry budget bounded.
+  if (unresolved(best) > 8) return best
+  let attempts = 0
+  for (const failure of best.notes.filter(n => n.species)) {
+    const plant = input.canvas.plants.find(p => p.id === failure.id)!
+    if (nearestPlantSpacing(input.canvas.plants, plant.position) * scale < .7 * MM) continue
+    const group = input.canvas.plants.filter(p => appearanceKey(p) === appearanceKey(plant))
+    const members = group.filter(p => p.canonicalName === plant.canonicalName)
+    const choices = (['circle', 'square', 'diamond', 'plain'] as const).map(style => ({ style, donors: group.filter(p => identities.get(p.id) === style) }))
+      .sort((a, b) => a.donors.length - b.donors.length)
+    for (const { style, donors } of choices) {
+      if (++attempts > 8) return best
+      const candidate = new Map(identities)
+      for (const p of donors) candidate.set(p.id, 'code')
+      for (const p of members) candidate.set(p.id, style)
+      const drawing = layoutField(input, frame, ground, scale, page, text, references, candidate)
+      if (unresolved(drawing) >= unresolved(best)) continue
+      identities = candidate; best = drawing; break
+    }
+    if (!unresolved(best)) break
+  }
+  return best
 }
 
-function drawFieldPass(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, page: { id: string; width: number; height: number },
-  text: PdfTextEngine, references: FieldReferences, shared: boolean): FieldDrawing {
+function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, page: { id: string; width: number; height: number; reserved?: readonly PrintBounds[]; summary?: readonly TextLine[]; bodyTop?: number },
+  text: PdfTextEngine, references: FieldReferences, identities: ReadonlyMap<string, PdfEnclosure>): FieldDrawing {
   const canvas = input.canvas, operations: PdfOperation[] = [], links: PdfLink[] = [], destinations: PdfDestination[] = []
   const point = (p: PrintPoint): PrintPoint => ({ x: (frame.x + (p.x - ground.x) * scale) / MM, y: (frame.y + (p.y - ground.y) * scale) / MM })
-  // Shallow beds leave space beside their short axis: keep identities out of the planting.
+  // Prefer short-axis margins for shallow beds; codes can also use clear internal gaps.
   const strip = Math.max(frame.width / frame.height, frame.height / frame.width) >= 4
     ? inflate({ x: frame.x / MM, y: frame.y / MM, width: frame.width / MM, height: frame.height / MM }, 1) : undefined
   const stripOptions = (anchor: PrintPoint) => strip ? { outside: strip, axis: frame.width > frame.height ? 'y' as const : 'x' as const,
     preferred: frame.width > frame.height ? anchor.y < strip.y + strip.height / 2 ? -1 : 1 : anchor.x < strip.x + strip.width / 2 ? -1 : 1 } : {}
+  const numbers = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 })
+  const coordinates = (p: PrintPoint) => `x ${numbers.format(p.x)} m · y ${numbers.format(p.y)} m`
   const opacity = (name: string) => canvas.layers.find(l => l.name === name)?.opacity ?? 1
-  const space = new FieldSpace({ x: 8, y: 8, width: page.width / MM - 16, height: page.height / MM - 16 }, text)
-  space.reserve({ x: 8.3, y: 8.3, width: 12, height: 10 })
+  const top = (page.bodyTop ?? 24 * MM) / MM
+  const space = new FieldSpace({ x: 8, y: top, width: page.width / MM - 16, height: page.height / MM - top - 18 }, text)
+  page.summary?.forEach((line, i) => operations.push({ ...textOp(line, 10 * MM, 28 * MM + i * 11, 8), color: '#655f55' }))
+  for (const r of page.reserved ?? []) space.reserve({ x: r.x / MM, y: r.y / MM, width: r.width / MM, height: r.height / MM })
   // Match PDFKit’s six-decimal point precision in the shared preview/export plan.
   const coordinate = (mm: number) => Math.round(mm * MM * 1e6) / 1e6
   const line = (s: Segment, color: string, width: number, alpha = 1) => operations.push({ ...pathOp(`M${coordinate(s.a.x)} ${coordinate(s.a.y)} L${coordinate(s.b.x)} ${coordinate(s.b.y)}`, color, null, width * MM), opacity: alpha })
-  const labelText = (label: FieldLabel) => label.lines.forEach((l, i) => operations.push({ ...textOp(l, (label.bounds.x + label.inset) * MM,
-    (label.bounds.y + label.baseline + i * label.leading) * MM, label.size), color: label.color }))
-  const legend = identifyPlants(canvas.plants, input.commonNames, input.locale).map(entry => ({ ...entry, reference: references.species.get(entry.canonicalName)!,
+  const labelText = (label: FieldLabel, alpha = label.opacity ?? 1) => label.lines.forEach((l, i) => operations.push({ ...textOp(l, (label.origin?.x ?? label.bounds.x + label.inset) * MM,
+    ((label.origin?.y ?? label.bounds.y + label.baseline) + i * label.leading) * MM, label.size, label.rotation ?? 0, alpha), color: label.color }))
+  const codePeers = new Map<string, string[]>()
+  for (const plant of canvas.plants) if (identities.get(plant.id) === 'plain' || identities.get(plant.id) === 'code') {
+    const key = appearanceKey(plant), peers = codePeers.get(key) ?? []
+    peers.push(plant.id); codePeers.set(key, peers)
+  }
+  const legend = identifyPlants(canvas.plants, input.commonNames, input.locale).map(entry => ({ ...entry, enclosures: entry.appearances.map(p => identities.get(p.id)!), reference: references.species.get(entry.canonicalName)!,
     count: canvas.plants.filter(p => p.canonicalName === entry.canonicalName).length })).sort((a, b) => Number(a.reference) - Number(b.reference))
   operations.push({ kind: 'clip', bounds: frame })
+  const zonePaths = new Set<PdfOperation>()
   const zoneSegments: Segment[] = []
   for (const zone of canvas.zones) {
     if (!hits({ a: { x: zone.bounds.x, y: zone.bounds.y }, b: { x: zone.bounds.x + zone.bounds.width, y: zone.bounds.y + zone.bounds.height } }, ground)
       && !(zone.bounds.x <= ground.x + ground.width && zone.bounds.x + zone.bounds.width >= ground.x && zone.bounds.y <= ground.y + ground.height && zone.bounds.y + zone.bounds.height >= ground.y)) continue
     operations.push({ kind: 'path', d: zone.path, matrix: [scale, 0, 0, scale, frame.x - ground.x * scale, frame.y - ground.y * scale],
-      fill: zone.fill, stroke: '#8b877f', width: .18 * MM / scale, opacity: opacity('zones') })
+      fill: null, stroke: '#8b877f', width: .18 * MM / scale, opacity: opacity('zones') })
+    zonePaths.add(operations[operations.length - 1]!)
     zoneSegments.push(...outlineSegments(zone.path, point))
   }
   operations.push({ kind: 'unclip' })
-  space.addSegments(zoneSegments)
-  const points = canvas.plants.map(p => ({ plant: p, point: point(p.position), radius: Math.min(1, paperPlantRadius(canvas.plants, p, scale) / MM) }))
-  for (const p of points) space.mark(p.plant.id, { x: p.point.x - p.radius, y: p.point.y - p.radius, width: 2 * p.radius, height: 2 * p.radius })
-  const notes: FieldNote[] = canvas.annotations.map((n): FieldNote => ({ id: n.id, reference: references.notes.get(n.id)!, text: n.text, position: n.position, kind: 'annotation' }))
-    .sort((a, b) => Number(a.reference.slice(1)) - Number(b.reference.slice(1)))
-  for (const note of notes) { const p = point(note.position); space.mark(note.id, { x: p.x - .7, y: p.y - .7, width: 1.4, height: 1.4 }) }
+  const points = canvas.plants.map(p => ({ plant: p, point: point(p.position), radius: Math.min(.8, paperPlantRadius(canvas.plants, p, scale) / MM) }))
+  for (const p of points) {
+    const radius = enclosureRadius(identities.get(p.plant.id)!, p.radius * MM) / MM
+    space.mark(p.plant.id, { x: p.point.x - radius, y: p.point.y - radius, width: 2 * radius, height: 2 * radius })
+  }
+  const notes: FieldNote[] = []
   const identifiedPlants: FieldDrawing['identifiedPlants'] = []
   const deferredMeasurement = (guide: CanvasPrintSnapshot['measurements'][number]) => {
     const clipped = clipSegment({ a: guide.start, b: guide.end }, ground)!
@@ -110,128 +149,100 @@ function drawFieldPass(input: PdfInput, frame: PrintBounds, ground: PrintBounds,
     const value = `${new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 }).format(distance(guide.start, guide.end))} m`
     const projected = { a: point(clipped.a), b: point(clipped.b) }
     line(projected, '#a29c91', .12, opacity('measurement-guides')); space.addSegments([projected])
+    const home = references.measurementHomes?.get(guide.id)
+    const continuation = home && home !== page.id ? home : undefined
+    const label = space.place(space.measure(value + (continuation ? '      000' : ''), 8.5), [point(position)], [], '', { near: true })
+    if (label) {
+      label.route = []; label.opacity = opacity('measurement-guides')
+      if (continuation) {
+        label.lines = [text.line(value, label.size)]
+        pageReferences.push({ target: continuation, x: (label.bounds.x + label.inset) * MM + label.lines[0]!.width + MM,
+          y: (label.bounds.y + label.baseline) * MM, size: label.size })
+        links.push({ bounds: paper(label.bounds), target: `page:${continuation}` })
+      }
+      space.admit(label)
+      return
+    }
     notes.push({ id: guide.id, reference: references.measurements.get(guide.id)!, text: value, position, kind: 'distance',
       continuation: references.measurementHomes?.get(guide.id) === page.id ? undefined : references.measurementHomes?.get(guide.id) })
   }
   const pageReferences: PdfPageReference[] = []
   const processedNotes = new Set<string>()
-  let brackets: FieldBracket[] = []
-  {
-    if (shared) {
-      placeDimensions()
-      brackets = fieldBrackets(points, { x: frame.x / MM, y: frame.y / MM, width: frame.width / MM, height: frame.height / MM }, space, references.species, page.id)
-      // Preserve the established local layout when no complete shared group fits.
-      if (!brackets.length) return drawFieldPass(input, frame, ground, scale, page, text, references, false)
-    }
-    const grouped = new Set(brackets.flatMap(b => b.ids))
-    for (const bracket of brackets) identifiedPlants.push({ ids: bracket.ids, reference: bracket.reference, bounds: paper(bracket.labels[0]!.bounds) })
-    interface Target { plants: readonly PrintPlant[]; anchors: PrintPoint[]; spine?: Segment; segments?: Segment[] }
-    const targets: Target[] = []
-    const directions = zoneSegments.filter(s => distance(s.a, s.b) / scale * MM > 2).map(s => Math.atan2(s.b.y - s.a.y, s.b.x - s.a.x))
-    for (const run of plantingRows(canvas.plants.filter(p => !grouped.has(p.id)), directions)) {
-      const first = point(run[0]!.position), last = point(run[run.length - 1]!.position), length = distance(first, last)
-      if (length < 5 || run.some(p => p.pinnedName)) continue
-      const u = { x: (last.x - first.x) / length, y: (last.y - first.y) / length }
-      const choices = [-1, 1].map(side => {
-        const n = { x: -u.y * side, y: u.x * side }, a = { x: first.x + n.x * 1.55, y: first.y + n.y * 1.55 }, b = { x: last.x + n.x * 1.55, y: last.y + n.y * 1.55 }
-        const spine = { a, b }
-        const ticks = run.map(p => { const v = point(p.position), d = (v.x - first.x) * u.x + (v.y - first.y) * u.y
-          return { a: { x: a.x + u.x * d, y: a.y + u.y * d }, b: v } })
-        return { spine, ticks, cost: points.filter(p => hits(spine, space.marks.get(p.plant.id)!)).length * 10 + space.crossings([spine]) }
-      }).filter(c => contains(space.frame, c.spine.a) && contains(space.frame, c.spine.b)
-        && (!shared || space.inkClear([c.spine, ...c.ticks]))).sort((a, b) => a.cost - b.cost)
-      const chosen = choices[0]
-      if (!chosen || chosen.cost >= 20) continue
-      const segments = [chosen.spine, ...chosen.ticks]
-      space.addSegments(segments)
-      targets.push({ plants: run, anchors: [chosen.spine.a, chosen.spine.b, { x: (chosen.spine.a.x + chosen.spine.b.x) / 2, y: (chosen.spine.a.y + chosen.spine.b.y) / 2 }, ...chosen.ticks.map(t => t.a)], spine: chosen.spine, segments })
-      run.forEach(p => grouped.add(p.id))
-    }
-    // Coincident placements remain a single physical anchor with an explicit count.
-    const singles = new Map<string, PrintPlant[]>()
-    for (const p of canvas.plants.filter(p => !grouped.has(p.id))) {
-      const key = JSON.stringify([p.position.x, p.position.y])
-      const group = singles.get(key) ?? []; group.push(p); singles.set(key, group)
-    }
-    for (const group of singles.values()) targets.push({ plants: group, anchors: [point(group[0]!.position)] })
-    if (!shared) placeDimensions()
-    const owners = new Map<FieldLabel, Target>()
-    const unresolved: Target[] = []
-    // Sweep along the bed so earlier leaders do not consume later plants' exit corridors.
-    targets.sort((a, b) => Number(!!a.spine) - Number(!!b.spine)
-      || (strip && frame.width > frame.height ? a.anchors[0]!.x - b.anchors[0]!.x : a.anchors[0]!.y - b.anchors[0]!.y)
-      || (strip && frame.width > frame.height ? a.anchors[0]!.y - b.anchors[0]!.y : a.anchors[0]!.x - b.anchors[0]!.x))
-    for (const target of targets) {
-      const p = target.plants[0]!, reference = references.species.get(p.canonicalName)!, ids = target.plants.map(p => p.id)
-      if (new Set(target.plants.map(appearance)).size > 1) {
-        const counts = new Map<string, number>()
-        for (const plant of target.plants) counts.set(plant.canonicalName, (counts.get(plant.canonicalName) ?? 0) + 1)
-        const value = [...counts].sort((a, b) => Number(references.species.get(a[0])) - Number(references.species.get(b[0])))
-          .map(([name, count]) => `${references.species.get(name)} · ${input.commonNames[name]?.trim() || name} ×${count}`).join('\n')
-        notes.push({ id: p.id, reference: references.plants.get(p.id)!, text: value, position: p.position, kind: 'plants', plantIds: ids })
+  const locations = new Map<string, PrintPlant[]>()
+  for (const p of canvas.plants) {
+    const key = JSON.stringify(p.position), group = locations.get(key) ?? []
+    group.push(p); locations.set(key, group)
+  }
+  const coincident = new Set<string>()
+  for (const group of locations.values()) if (group.length > 1) {
+    const first = [...group].sort((a, b) => a.id.localeCompare(b.id))[0]!, counts = new Map<string, number>()
+    for (const p of group) { coincident.add(p.id); counts.set(p.canonicalName, (counts.get(p.canonicalName) ?? 0) + 1) }
+    const value = [...counts].map(([name, count]) => {
+      const p = group.find(p => p.canonicalName === name)!
+      return `${p.speciesCode ?? references.species.get(name)} · ${input.commonNames[name]?.trim() || name} ×${count}`
+    }).join('\n')
+    notes.push({ id: first.id, reference: references.plants.get(first.id)!, text: value, position: first.position, kind: 'plants', plantIds: group.map(p => p.id) })
+  }
+  const guideInk = canvas.measurements.map(g => ({ a: point(g.start), b: point(g.end) }))
+  for (const p of points) {
+    if (coincident.has(p.plant.id)) continue
+    const reference = references.species.get(p.plant.canonicalName)!
+    let bounds = paper({ x: p.point.x - p.radius, y: p.point.y - p.radius, width: 2 * p.radius, height: 2 * p.radius })
+    if (identities.get(p.plant.id) === 'code' || p.plant.pinnedName) {
+      const value = p.plant.pinnedName ? input.commonNames[p.plant.canonicalName]?.trim() || p.plant.canonicalName : p.plant.speciesCode ?? reference
+      const measured = space.measure(value, p.plant.pinnedName ? 8.5 : 8, 32, !p.plant.pinnedName)
+      const inseparable = nearestPlantSpacing(canvas.plants, p.plant.position) * scale < .7 * MM
+      const label = inseparable ? null : space.place(measured, [p.point], [p.plant.id], `${page.id}:key:${reference}`, { near: true, association: true, avoid: guideInk, associationPeers: p.plant.pinnedName ? undefined : codePeers.get(appearanceKey(p.plant)), ...stripOptions(p.point), outside: undefined })
+      if (label) { label.route = []; space.admit(label); bounds = paper(label.bounds) }
+      else {
+        notes.push({ id: p.plant.id, reference: p.plant.speciesCode ?? reference, text: `${p.plant.speciesCode ?? reference} · ${input.commonNames[p.plant.canonicalName]?.trim() || p.plant.canonicalName}`,
+          position: p.plant.position, species: p.plant.canonicalName, kind: 'plants', plantIds: [p.plant.id],
+          location: coordinates(p.plant.position) })
         continue
       }
-      // Below the printed dot diameter, separate positions cannot be read.
-      // Avoid searching hundreds of leader routes through an inseparable cluster.
-      if (!target.spine && !p.pinnedName && nearestPlantSpacing(canvas.plants, p.position) * scale < .7 * MM) { unresolved.push(target); continue }
-      const value = reference + (p.pinnedName ? ` ${input.commonNames[p.canonicalName]?.trim() || p.canonicalName}` : '') + (ids.length > 1 ? ` ×${ids.length}` : '')
-      const measured = space.measure(value, 9.5, p.pinnedName ? 29 : Infinity)
-      const position = point(p.position)
-      let left = 30, right = 30
-      for (const other of points) { if (ids.includes(other.plant.id) || Math.abs(other.point.y - position.y) > 3.5) continue
-        if (other.point.x < position.x) left = Math.min(left, position.x - other.point.x); else right = Math.min(right, other.point.x - position.x) }
-      const label = space.place(measured, target.anchors, ids, `${page.id}:key:${reference}`, { preferred: left >= right ? -1 : 1, ...stripOptions(position) })
-      if (!label) { unresolved.push(target); continue }
-      space.admit(label); owners.set(label, target)
-      for (const segment of target.segments ?? []) line(segment, '#656058', .19, opacity('plants'))
     }
-    // Density is solved by enlarging coverage on explicit field sheets, not by
-    // turning every failed label into another coordinate entry in the key.
-    for (const target of unresolved) {
-      const p = target.plants[0]!, anchor = point(p.position)
-      identifiedPlants.push({ ids: target.plants.map(p => p.id), reference: references.species.get(p.canonicalName)!,
-        bounds: paper({ ...anchor, width: 0, height: 0 }) })
-    }
-    placeNotes()
-    const named = new Set(canvas.plants.filter(p => p.pinnedName).map(p => p.canonicalName))
-    for (const [old, target] of [...owners].sort((a, b) => Number(!!b[1].spine) - Number(!!a[1].spine))) {
-      const p = target.plants[0]!
-      if (named.has(p.canonicalName)) continue
-      const name = input.commonNames[p.canonicalName]?.trim() || p.canonicalName
-      const value = `${references.species.get(p.canonicalName)} ${name}` + (target.plants.length > 1 ? `\n×${target.plants.length}` : '')
-      const measured = space.measure(value, 9.5, 29)
-      // Long authored names remain complete in the key instead of occupying the map.
-      if (measured.lines.length > 5) continue
-      const next = space.place(measured, target.anchors.slice(0, 3), old.ids, old.target, { ignored: old, name: true, ...stripOptions(target.anchors[0]!) })
-      if (!next || space.crossings(next.route, old)) continue
-      space.replace(old, next); owners.delete(old); owners.set(next, target); named.add(p.canonicalName)
-    }
-    for (const [primary, target] of owners) {
-      if (!target.spine) continue
-      const length = distance(target.spine.a, target.spine.b)
-      if (length < 65) continue
-      const measured = space.measure(references.species.get(target.plants[0]!.canonicalName)!)
-      for (let k = 0; k <= Math.ceil(length / 65); k++) {
-        const t = k / Math.ceil(length / 65), anchor = { x: target.spine.a.x + (target.spine.b.x - target.spine.a.x) * t, y: target.spine.a.y + (target.spine.b.y - target.spine.a.y) * t }
-        if (distance(anchor, primary.route[0]!.a) < 25) continue
-        const label = space.place(measured, [anchor], [], primary.target, { near: true, ...stripOptions(anchor) })
-        if (label && space.crossings(label.route) <= 1) { label.repeated = true; space.admit(label) }
-      }
-    }
-    for (const [label, target] of owners) identifiedPlants.push({ ids: label.ids, reference: references.species.get(target.plants[0]!.canonicalName)!, bounds: paper(label.bounds) })
+    identifiedPlants.push({ ids: [p.plant.id], reference, bounds })
   }
+  const nativeDimensions = fieldDimensions(canvas.measurements.filter(g => contains(ground, g.start) && contains(ground, g.end)), point, space, input.locale)
+  const nativeDimensionIds = new Set(nativeDimensions.map(d => d.guide.id))
+  for (const d of nativeDimensions) {
+    d.segments.forEach(s => line(s, '#656058', .17, opacity('measurement-guides')))
+    d.ticks.forEach(s => line(s, INK, .25, opacity('measurement-guides'))); labelText(d.label, opacity('measurement-guides'))
+  }
+  for (const guide of canvas.measurements.filter(g => !nativeDimensionIds.has(g.id))) {
+    const clipped = clipSegment({ a: guide.start, b: guide.end }, ground)!
+    space.addSegments([{ a: point(clipped.a), b: point(clipped.b) }])
+  }
+  notes.push(...[...canvas.annotations].sort((a, b) => a.text.length - b.text.length || a.id.localeCompare(b.id))
+    .filter(n => !directAnnotation(n, point(n.position), scale, space, opacity('annotations'), operations)).map((n): FieldNote => ({ id: n.id, reference: references.notes.get(n.id)!, text: n.text, position: n.position, kind: 'annotation' }))
+    .sort((a, b) => Number(a.reference.slice(1)) - Number(b.reference.slice(1))))
+  for (const note of notes.filter(n => !n.species)) { const p = point(note.position); space.mark(note.id, { x: p.x - .7, y: p.y - .7, width: 1.4, height: 1.4 }) }
+  const zones = zoneMeasurements(canvas.zones)
+  operations.push(...zoneLabels(zones, ground, point, space))
+  placeDimensions()
+  space.addSegments(zoneSegments)
+  for (const zone of zones.filter(item => item.zone.bounds.x <= ground.x + ground.width
+    && item.zone.bounds.x + item.zone.bounds.width >= ground.x && item.zone.bounds.y <= ground.y + ground.height
+    && item.zone.bounds.y + item.zone.bounds.height >= ground.y)) {
+    const complete = zone.dimensions.filter(d => contains(ground, d.start) && contains(ground, d.end))
+    const reused = new Set(complete.filter(d => canvas.measurements.some(g =>
+      distance(g.start, d.start) < .005 && distance(g.end, d.end) < .005 || distance(g.end, d.start) < .005 && distance(g.start, d.end) < .005)).map(d => d.id))
+    const dimensions = fieldDimensions(complete.filter(d => !reused.has(d.id)), point, space, input.locale)
+    for (const d of dimensions) {
+      d.segments.forEach(s => line(s, '#656058', .16, opacity('zones')))
+      d.ticks.forEach(s => line(s, INK, .25, opacity('zones'))); labelText(d.label, opacity('zones'))
+    }
+    if (!page.summary?.length && dimensions.length + reused.size < zone.dimensions.length) {
+      const number = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 })
+      notes.push({ id: `zone:${zone.reference}`, reference: zone.reference, kind: 'zone', position: {
+        x: Math.max(ground.x, zone.zone.bounds.x), y: Math.max(ground.y, zone.zone.bounds.y) },
+      text: `${zone.diameter ? 'Ø ' : ''}${zone.lengths.map(n => number.format(n)).join(' / ')}${zone.widths.length ? ` × ${zone.widths.map(n => number.format(n)).join('–')}` : ''} m` })
+    }
+  }
+  placeNotes()
 
   function placeDimensions(): void {
-    const complete = canvas.measurements.filter(g => contains(ground, g.start) && contains(ground, g.end))
-    const dimensions = fieldDimensions(complete, point, space, input.locale)
-    const dimensionIds = new Set(dimensions.map(d => d.guide.id))
-    for (const d of dimensions) {
-      d.segments.forEach((s, i) => line(s, i === 1 ? '#49453f' : '#a29c91', i === 1 ? .23 : .12, opacity('measurement-guides')))
-      d.ticks.forEach(s => line(s, INK, .3, opacity('measurement-guides'))); labelText(d.label)
-    }
-    for (const guide of canvas.measurements.filter(g => !dimensionIds.has(g.id))) {
-      deferredMeasurement(guide)
-    }
+    for (const guide of canvas.measurements.filter(g => !nativeDimensionIds.has(g.id))) deferredMeasurement(guide)
     placeNotes()
   }
 
@@ -240,10 +251,14 @@ function drawFieldPass(input: PdfInput, frame: PrintBounds, ground: PrintBounds,
       if (processedNotes.has(note.id)) continue
       processedNotes.add(note.id)
       const anchor = point(note.position)
+      if (note.species) {
+        identifiedPlants.push({ ids: note.plantIds!, reference: note.reference, bounds: paper({ ...anchor, width: 0, height: 0 }) })
+        continue
+      }
       const isDistance = note.kind === 'annotation' && /^\(?\s*\d+(?:[,.]\d+)?\s*(?:cm|m)\s*\)?$/u.test(note.text.trim())
       const value = note.reference + (isDistance ? ` · ${note.text}` : '')
       const reservedValue = value + (note.continuation ? '      000' : '')
-      const label = space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true, ...stripOptions(anchor) })
+      const label = note.location ? null : space.place(space.measure(reservedValue, isDistance ? 9.5 : 8), [anchor], [note.id, ...note.plantIds ?? []], `${page.id}:note:${note.reference}`, { color: OCHRE, boxed: !isDistance, note: true, ...stripOptions(anchor) })
       if (label) {
         if (note.continuation) {
           label.lines = [text.line(value, label.size)]
@@ -252,22 +267,16 @@ function drawFieldPass(input: PdfInput, frame: PrintBounds, ground: PrintBounds,
           links.push({ bounds: paper(label.bounds), target: `page:${note.continuation}` })
           label.target = ''
         }
+        label.route = []
         space.admit(label)
         if (note.plantIds) identifiedPlants.push({ ids: note.plantIds, reference: note.reference, bounds: paper(label.bounds) })
       } else {
-        const number = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 })
-        note.location = `x ${number.format(note.position.x)} m · y ${number.format(note.position.y)} m`
+        note.location = coordinates(note.position)
         if (note.plantIds) identifiedPlants.push({ ids: note.plantIds, reference: note.reference, bounds: paper({ ...anchor, width: 0, height: 0 }) })
       }
       operations.push(pathOp(rectPath(paper({ x: anchor.x - .55, y: anchor.y - .55, width: 1.1, height: 1.1 })), OCHRE, null, .23 * MM))
       destinations.push({ id: `${page.id}:anchor:${note.reference}`, bounds: paper(inflate({ ...anchor, width: 0, height: 0 }, 12)) })
     }
-  }
-  const connectors = [...space.labels.map(label => ({ route: label.route, color: label.color === OCHRE ? '#8a6b3b' : '#625d55', width: label.ids.length > 1 ? .23 : .17 })), ...brackets.flatMap(b => b.connectors)]
-  for (const { segment, label } of separatedConnectors(connectors)) line(segment, label.color, label.width)
-  for (const bracket of brackets) for (const p of bracket.junctions) {
-    const x = p.x * MM, y = p.y * MM, r = .32 * MM
-    operations.push(pathOp(`M${x + r} ${y} a${r} ${r} 0 1 0 ${-2 * r} 0 a${r} ${r} 0 1 0 ${2 * r} 0 Z`, null, bracket.color))
   }
   for (const label of space.labels) {
     if (label.boxed) operations.push(pathOp(rectPath(paper(label.bounds)), label.color, null, .2 * MM))
@@ -275,15 +284,17 @@ function drawFieldPass(input: PdfInput, frame: PrintBounds, ground: PrintBounds,
     if (label.target) links.push({ bounds: paper(label.bounds), target: label.target })
   }
   operations.push({ kind: 'clip', bounds: frame })
-  for (const p of points) drawMark(p.plant, p.point.x * MM, p.point.y * MM, p.radius * MM, opacity('plants'), operations)
+  for (const p of points) {
+    if (coincident.has(p.plant.id)) continue
+    drawMark(p.plant, p.point.x * MM, p.point.y * MM, p.radius * MM, opacity('plants'), operations)
+    drawEnclosure(identities.get(p.plant.id)!, p.point.x * MM, p.point.y * MM, p.radius * MM, opacity('plants'), operations)
+  }
   operations.push({ kind: 'unclip' })
   for (const entry of legend) {
     const locations = points.filter(p => p.plant.canonicalName === entry.canonicalName).map(p => p.point)
     const x = Math.min(...locations.map(p => p.x)), y = Math.min(...locations.map(p => p.y))
     destinations.push({ id: `${page.id}:species:${entry.reference}`, bounds: paper(inflate({ x, y, width: Math.max(...locations.map(p => p.x)) - x, height: Math.max(...locations.map(p => p.y)) - y }, 10)) })
   }
-  const support = fieldSupport(input, legend, notes, brackets, { x: frame.x / MM, y: frame.y / MM, width: frame.width / MM, height: frame.height / MM }, ground, scale, space, page.id)
-  operations.push(...support.operations); links.push(...support.links)
   notes.sort((a, b) => a.kind.localeCompare(b.kind, 'en') || Number(a.reference.slice(1)) - Number(b.reference.slice(1)))
-  return { pageReferences, operations, links, destinations, legend, notes, identifiedPlants, annotationIds: canvas.annotations.map(n => n.id), measurementIds: canvas.measurements.map(g => g.id) }
+  return { pageReferences, operations: protectZoneInk(operations, zonePaths), links, destinations, legend, notes, identifiedPlants, annotationIds: canvas.annotations.map(n => n.id), measurementIds: canvas.measurements.map(g => g.id) }
 }

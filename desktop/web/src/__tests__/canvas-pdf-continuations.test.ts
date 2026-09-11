@@ -43,14 +43,15 @@ it('keeps automatic area fit while linking legends and later detail pages after 
   expect(plan.pages.slice(2, -1).every(page => page.kind === 'legend')).toBe(true)
   expect(plan.pages[1]!.width).toBeGreaterThan(plan.pages[1]!.height)
   expect(plan.pages[2]!.sourceId).toBe('area:1')
-  expect(plan.pages[2]!.operations.some((op) => op.kind === 'text' && op.line.runs.some((run) => run.text === '2 · Key and notes'))).toBe(true)
+  expect(plan.pages[2]!.operations.some((op) => op.kind === 'text' && op.line.runs.some((run) => run.text === '1 · Key and notes'))).toBe(true)
   const lastDetail = plan.pages.at(-1)!
   expect(lastDetail.kind).toBe('detail')
   expect(lastDetail.number).toBe(plan.pages.length)
   expect(new Set(plan.pages.map((page) => page.id)).size).toBe(plan.pages.length)
   const overviewText = plan.pages[0]!.operations.flatMap((op) => op.kind === 'text' ? op.line.runs.map((run) => run.text) : [])
   expect(overviewText).toContain('2')
-  expect(overviewText).toContain(String(lastDetail.number))
+  expect(overviewText).toContain(String(lastDetail.detailNumber))
+  expect(overviewText).toContain('1')
 })
 
 it('changes a legend page orientation independently and preserves the complete legend', () => {
