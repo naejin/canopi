@@ -55,6 +55,21 @@ python3 scripts/species_catalog_contract.py verify-db --profile prepared desktop
 cargo build --release
 ```
 
+## Frontend Dependency Maintenance
+
+Check both `npm audit --omit=dev` and `npm audit` when preparing a release. Keep
+security updates within existing version ranges when possible; a required major
+upgrade needs its migration guidance, focused regressions and production-build
+smoke coverage. MapLibre 6's worker setup is documented in [MapLibre](maplibre.md).
+If npm 10's updater fails on the Vitest peer graph with `edgesOut`, use a Node-compatible
+npm 11 through `npx` for the lockfile update, then verify a normal `npm ci` from that
+lockfile. Do not force an incompatible npm release or suppress the audit findings.
+Vite's development filesystem admission is the frontend directory plus the exact
+`desktop/tauri.conf.json` file used by the About dialog's version import. Vite 6.4.3
+also checks the complete raw-import ID during transformation, so that exact `?raw`
+ID is explicitly admitted too. Keep the sibling-file exception narrow instead of
+admitting the repository or disabling filesystem restrictions.
+
 ## PDF Font Assets
 
 Canvas PDF uses shared frontend rendering and native byte delivery; platform crates retain PNG export only. The obsolete Cairo PDF feature and macOS/Windows PDF stubs are removed.

@@ -54,10 +54,13 @@ let mapLibreModulePromise: Promise<MapLibreApi> | null = null
 
 export function loadMapLibreModule(): Promise<MapLibreApi> {
   if (!mapLibreModulePromise) {
-    mapLibreModulePromise = import('maplibre-gl')
-      .then((module) => {
-        const normalized = module as unknown as { default?: MapLibreApi }
-        return normalized.default ?? (module as unknown as MapLibreApi)
+    mapLibreModulePromise = Promise.all([
+      import('maplibre-gl'),
+      import('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'),
+    ])
+      .then(([module, worker]) => {
+        module.setWorkerUrl(worker.default)
+        return module as unknown as MapLibreApi
       })
       .catch((error) => {
         mapLibreModulePromise = null

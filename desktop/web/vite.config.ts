@@ -5,6 +5,7 @@ import { resolveWebEditionDevHtmlUrl } from "./src/web/dev-entry";
 
 const DEFAULT_WEB_EDITION_BASE_PATH = "/app/";
 const WEB_EDITION_BASE_PATH_ENV = "CANOPI_WEB_BASE_PATH";
+const tauriConfigPath = fileURLToPath(new URL('../tauri.conf.json', import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const isWebEdition = mode === 'web';
@@ -52,6 +53,13 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 1420,
       strictPort: true,
+      fs: {
+        allow: [
+          fileURLToPath(new URL('.', import.meta.url)),
+          tauriConfigPath,
+          `${tauriConfigPath}?raw`,
+        ],
+      },
     },
     build: {
       outDir: isWebEdition ? "dist-web" : "dist",

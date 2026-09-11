@@ -7,7 +7,7 @@ function readTauriCsp(): Record<string, string> {
 }
 
 describe('Tauri CSP', () => {
-  it('allows MapLibre blob workers through WebKit worker-src fallback', () => {
+  it('allows shared blob workers through the WebKit worker-src fallback', () => {
     const csp = readTauriCsp()
 
     expect(csp['worker-src']).toContain('blob:')
