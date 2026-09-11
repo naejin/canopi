@@ -26,7 +26,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Map/canvas projection is bearing-aware, Mercator-backed, and shared.
 - `north_bearing_deg` participates in camera derivation and world-to-geo feature projection.
 - `desktop/web/src/canvas/projection.ts` is the dependency-free canonical seam for local-Mercator math, scalar precision policy, and projection diagnostics. `createProjectionPrecisionSnapshot()` accepts only the already-derived physical extent in meters; it must not import Scene contracts or infer Scene geometry. MapLibre surface state and developer diagnostics both consume that snapshot; do not duplicate its threshold comparison in surface code. Consumers import only the operations and constants they need; do not add a strategy or selector until a second demonstrated implementation has a real selection seam.
-- `maplibre/canvas-surface-state.ts` composes the current Scene's radial physical extent from `canvas/runtime/scene-physical-extent.ts` with the scalar projection precision policy. Preserve design origin `(0, 0)` as the radial origin, the stable `local-mercator` projection identity, and the strict warning boundary: exactly 10 km is not a warning, while any extent above it is.
+- `CanvasQuerySurface.getScenePhysicalExtentMeters()` computes the current Scene’s radial physical extent through `canvas/runtime/scene-physical-extent.ts` inside SceneStore, without cloning the Scene. `maplibre/canvas-surface-state.ts` composes that scalar with the projection precision policy. Preserve design origin `(0, 0)` as the radial origin, the stable `local-mercator` projection identity, and the strict warning boundary: exactly 10 km is not a warning, while any extent above it is.
 - MapLibre-facing bearing adaptation belongs in `desktop/web/src/canvas/maplibre-camera.ts`.
 - Do not keep separate bearing math, zoom shortcuts, or equirectangular fallbacks in surface or overlay code.
 - Exact sync is correctness-critical. Do not add camera deadbands or tolerances that can suppress tiny pan/zoom changes.
@@ -50,6 +50,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Contours use `layerVisibility.contours` and `layerOpacity.contours`.
 - Hillshading uses `hillshadeVisible` and `hillshadeOpacity`.
 - Canvas Layer Presentation bridges scene/map/terrain layer asymmetry for the Desktop `LayersPanel` adapter, Canvas shell Location Notices, and Canvas Map Surface snapshots. Map readiness callers should consume its map-surface projection instead of recomputing base/contour/hillshade visibility.
+- Camera-driven map snapshots use `readCanvasMapLayerPresentation()` for settings-only map/terrain inputs; do not build Scene layer rows or clone geometry for map settings. Empty, disabled, or unlocated Target overlays clear their map layers without querying Scene geometry. Nonempty overlays still read current geometry for every sync.
 - Terrain paint-only changes, such as opacity and theme, should stay incremental through `maplibre/terrain-sync.ts`.
 - Rebuild terrain sources/layers only when source-shape inputs change.
 

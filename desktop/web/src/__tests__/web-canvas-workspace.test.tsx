@@ -580,6 +580,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     }),
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
+    getScenePhysicalExtentMeters: () => null,
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
     getSelection: vi.fn(() => []),
     getDesignObjectSelection: vi.fn(() => ({

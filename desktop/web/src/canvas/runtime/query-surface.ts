@@ -51,6 +51,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
       )
     }, null)
   }
+  getScenePhysicalExtentMeters(): number | null { return this.options.sceneStore.physicalExtentMeters }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getSelection(): SceneDesignObjectTarget[] {

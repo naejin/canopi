@@ -332,7 +332,7 @@ export class SceneCanvasRuntime {
       camera: this._camera.snapshot.peek(),
       rulersVisible: chromeSettings.rulersVisible,
       gridVisible: chromeSettings.gridVisible,
-      guides: this._sceneState.persisted.guides,
+      guides: this._sceneState.guides,
     })
   }
 

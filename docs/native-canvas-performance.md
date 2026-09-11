@@ -116,3 +116,22 @@ This removes 74% of observed scene clones in this empty-selection pan. It does n
 Regression tests first failed for the duplicate selection read, empty-selection reads and duplicate print read, then passed. Additional checks exercise live-preview movement, abort and commit, viewport-dependent bounds, defensive ownership of returned results, and refusal of print capture during an active edit. The copied Design remained byte-identical to the original; temporary scripts and isolated app data are removed after recording the aggregate evidence.
 
 Final validation for `canopi-u8am`: **247 test files / 2,261 tests**, `npx tsc --noEmit`, `npm run build`, `npm run build:web` (including browser boundary checks), and `git diff --check` passed. The focused selection/presentation/interaction/print run passed 304 tests. Rust gates were not needed for this frontend-only read-path change. The canvas runtime agent guide documents operation-local snapshot reuse and its freshness boundary.
+
+## Map and chrome follow-up (2026-09-11, canopi-zr86)
+
+The `7b747448` native pan capture above established the baseline: 100 of its 120 full Scene reads came from camera-driven map/chrome work (five reads per pan step). Inspection confirmed those reads requested much more data than the callers needed:
+
+- Map settings built Scene layer rows twice. `readCanvasMapLayerPresentation()` now projects map and terrain settings independently of Scene rows.
+- Precision cloned the Scene before deriving its radial extent. `getScenePhysicalExtentMeters()` now returns the current scalar computed within SceneStore, using the existing physical-extent algorithm and projection precision policy.
+- Empty Target overlays read geometry before constructing empty overlays. They now clear directly; active overlays retain their current-geometry query path.
+- Chrome cloned the Scene for guides. It now receives a defensive copy of only the guide list.
+
+These changes do not add a cross-edit snapshot cache or camera deadband. Physical extent reads observe live edits; guides remain owned copies. Read-side runtime interfaces and their test adapters were updated together.
+
+An isolated native Tauri window loaded the same copied 2,201-Plant Design. The same twenty XTest pan moves at 120 ms intervals changed the camera by exactly 40 × 20 CSS pixels at unchanged scale. Instrumenting `SceneStore.persisted` recorded **zero full Scene reads** in the final capture; all 100 map/chrome reads identified in the baseline were eliminated. The baseline also included 20 incidental setup/hover/render reads absent from this capture, so its 120-to-zero total must not be described as a universal per-gesture reduction. Narrow geometry calculations, rendering, and other input work still consume CPU.
+
+A controlled comparison in the same native WebView ran forty precision queries per batch, five batches. The previous path (`computeScenePhysicalExtentMeters(getSceneSnapshot())`) took **37, 35, 33, 32, 32 ms**, versus **5, 4, 6, 5, 3 ms** through the new scalar query: median **33 → 5 ms** per batch, with identical values in every comparison. This isolates avoided cloning; it does not measure GPU completion or frame rate.
+
+Regression coverage verifies settings-only map reads, current precision and camera synchronization without whole-scene reads, clearing existing overlays when targets become empty, live-edit/abort extent freshness, and guide-copy ownership. Existing MapLibre tests retain exact small camera movements, active Target projection, terrain and lifecycle behavior. The isolated copied Design, instrumentation and app data are temporary and removed after recording aggregate evidence.
+
+Final validation for `canopi-zr86`: **247 test files / 2,266 tests**, `npx tsc --noEmit`, and `git diff --check` passed; focused map/lifecycle/query/store coverage passed 44 tests. Runtime and MapLibre agent guides describe the narrow read surfaces. No Rust or transport contract changed, so Rust gates were not required for this bead.

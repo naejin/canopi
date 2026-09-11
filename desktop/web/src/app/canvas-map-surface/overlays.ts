@@ -24,6 +24,11 @@ export function syncCanvasMapSurfaceOverlays(
   snapshot: CanvasMapSurfaceOverlaySnapshot,
   enabled: boolean,
 ): void {
+  if (!enabled || !snapshot.runtime || !snapshot.location
+    || (snapshot.hoveredTargets.length === 0 && snapshot.selectedTargets.length === 0)) {
+    clearCanvasMapSurfaceOverlays(map)
+    return
+  }
   syncCanvasPanelTargetOverlays(
     map,
     snapshot.runtime?.getSceneSnapshot() ?? null,

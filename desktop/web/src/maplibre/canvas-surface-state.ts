@@ -1,6 +1,4 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
-import type { ScenePersistedState } from '../canvas/runtime/scene'
-import { computeScenePhysicalExtentMeters } from '../canvas/runtime/scene-physical-extent'
 import { createProjectionPrecisionSnapshot } from '../canvas/projection'
 
 export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -28,11 +26,10 @@ export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   designExtentMeters: null,
 }
 
-export function precisionSnapshot(scene: ScenePersistedState | null): Pick<
+export function precisionSnapshot(designExtentMeters: number | null): Pick<
   MapLibreCanvasSurfaceState,
   'precisionWarning' | 'designExtentMeters'
 > {
-  const designExtentMeters = scene ? computeScenePhysicalExtentMeters(scene) : null
   const precision = createProjectionPrecisionSnapshot(designExtentMeters)
   return {
     precisionWarning: precision.precisionWarning,
@@ -42,11 +39,11 @@ export function precisionSnapshot(scene: ScenePersistedState | null): Pick<
 
 export function mergeMapLibreCanvasSurfaceState(
   next: MapLibreCanvasSurfaceStateInput,
-  scene: ScenePersistedState | null,
+  designExtentMeters: number | null,
 ): MapLibreCanvasSurfaceState {
   return {
     ...next,
-    ...precisionSnapshot(scene),
+    ...precisionSnapshot(designExtentMeters),
   }
 }
 

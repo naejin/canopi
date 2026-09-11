@@ -109,8 +109,8 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   }
 
   private setSurfaceState(next: MapLibreCanvasSurfaceStateInput): void {
-    const scene = this.snapshot?.runtime?.getSceneSnapshot() ?? null
-    const merged = mergeMapLibreCanvasSurfaceState(next, scene)
+    const extent = this.snapshot?.runtime?.getScenePhysicalExtentMeters() ?? null
+    const merged = mergeMapLibreCanvasSurfaceState(next, extent)
     if (mapLibreCanvasSurfaceStateEquals(this.state, merged)) return
     this.state = merged
     this.deps.onStateChange?.(merged)

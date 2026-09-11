@@ -1,3 +1,4 @@
+import { computeScenePhysicalExtentMeters } from '../../canvas/runtime/scene-physical-extent'
 import { buildCanvasPrintSnapshot } from '../../canvas/runtime/print-snapshot'
 import { signal } from '@preact/signals'
 import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
@@ -62,6 +63,7 @@ export function createTestCanvasQuerySurface({
       void admissionRevision.value
       return settled ? buildCanvasPrintSnapshot(scene, { viewport, speciesCache: new Map() }) : null
     },
+    getScenePhysicalExtentMeters: () => computeScenePhysicalExtentMeters(scene),
     getSceneSnapshot: () => scene,
     getSelection: () => currentSelection.map((target) => ({ ...target })),
     getDesignObjectSelection: () => ({

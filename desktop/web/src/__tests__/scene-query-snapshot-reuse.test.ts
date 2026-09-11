@@ -42,6 +42,20 @@ function setup() {
 afterEach(() => vi.restoreAllMocks())
 
 describe('scene query snapshot reuse', () => {
+  it('projects physical extent from live edits without cloning a scene snapshot', () => {
+    const { store, authority, query } = setup()
+    const read = vi.spyOn(store, 'persisted', 'get')
+    expect(query.getScenePhysicalExtentMeters()).toBe(3)
+    expect(read).not.toHaveBeenCalled()
+    const edit = authority.begin('move')
+    edit.mutate((draft) => { draft.plants[0]!.position.x = 10 })
+    read.mockClear()
+    expect(query.getScenePhysicalExtentMeters()).toBe(10)
+    expect(read).not.toHaveBeenCalled()
+    edit.abort()
+    expect(query.getScenePhysicalExtentMeters()).toBe(3)
+  })
+
   it('observes live-preview movement, abort, commit, and viewport changes on each call', () => {
     const { authority, camera, query } = setup()
     const centerX = () => {

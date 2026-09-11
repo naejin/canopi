@@ -1,3 +1,4 @@
+import { computeScenePhysicalExtentMeters } from '../scene-physical-extent'
 import type {
   CanopiFile,
 } from '../../../types/design'
@@ -37,6 +38,14 @@ export class SceneStore {
 
   get persisted(): ScenePersistedState {
     return cloneScenePersistedState(this._persisted)
+  }
+
+  get guides(): ScenePersistedState['guides'] {
+    return this._persisted.guides.map((guide) => ({ ...guide }))
+  }
+
+  get physicalExtentMeters(): number | null {
+    return computeScenePhysicalExtentMeters(this._persisted)
   }
 
   get session(): SceneSessionState {
@@ -98,7 +107,7 @@ export class SceneStore {
   }
 }
 
-export type SceneStateReader = Pick<SceneStore, 'persisted' | 'session'>
+export type SceneStateReader = Pick<SceneStore, 'persisted' | 'session' | 'guides' | 'physicalExtentMeters'>
 export type SceneDocumentReader = Pick<SceneStore, 'toCanopiFile'>
 export type SceneSessionWriter = Pick<
   SceneStore,

@@ -128,7 +128,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
     },
   ]
 
-  const mapSurface = createCanvasLayerPresentationMapSurface(rows, visibility, opacities, hillshadeOn)
+  const mapSurface = readCanvasMapLayerPresentation()
 
   return {
     rows,
@@ -207,38 +207,32 @@ function clampUnitInterval(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
 
-function createCanvasLayerPresentationMapSurface(
-  rows: readonly CanvasLayerPresentationRow[],
-  visibility: Record<string, boolean>,
-  opacities: Record<string, number>,
-  hillshadeOn: boolean,
-): CanvasLayerPresentationMapSurface {
-  const base = rows.find((row) => row.id === 'base')
-  const contours = rows.find((row) => row.id === 'contours')
-  const hillshade = rows.find((row) => row.id === 'hillshading')
-
-  const layerVisibility = {
+export function readCanvasMapLayerPresentation(): CanvasLayerPresentationMapSurface {
+  const visibility = layerVisibility.value
+  const opacities = layerOpacity.value
+  const hillshadeOn = hillshadeVisible.value
+  const mapVisibility = {
     ...visibility,
-    base: base?.visible ?? true,
-    contours: contours?.visible ?? false,
+    base: visibility.base ?? true,
+    contours: visibility.contours ?? false,
   }
-  const layerOpacity = {
+  const mapOpacity = {
     ...opacities,
-    base: base?.opacity ?? 1,
-    contours: contours?.opacity ?? 1,
+    base: opacities.base ?? 1,
+    contours: opacities.contours ?? 1,
   }
   const terrain = {
     contourIntervalMeters: contourIntervalMeters.value,
-    contoursVisible: contours?.visible ?? false,
-    contoursOpacity: contours?.opacity ?? 1,
-    hillshadeVisible: hillshade?.visible ?? hillshadeOn,
-    hillshadeOpacity: hillshade?.opacity ?? hillshadeOpacity.value,
+    contoursVisible: visibility.contours ?? false,
+    contoursOpacity: opacities.contours ?? 1,
+    hillshadeVisible: hillshadeOn,
+    hillshadeOpacity: hillshadeOpacity.value,
   }
 
   return {
-    hasVisibleMapLayer: layerVisibility.base || terrain.contoursVisible || terrain.hillshadeVisible,
-    layerVisibility,
-    layerOpacity,
+    hasVisibleMapLayer: mapVisibility.base || terrain.contoursVisible || terrain.hillshadeVisible,
+    layerVisibility: mapVisibility,
+    layerOpacity: mapOpacity,
     terrain,
   }
 }

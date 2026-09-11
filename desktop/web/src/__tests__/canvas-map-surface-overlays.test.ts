@@ -83,6 +83,18 @@ function createSnapshot(
 }
 
 describe('canvas map surface overlay sync', () => {
+  it('clears empty overlays without reading Scene geometry', () => {
+    const map = new FakeOverlayMap()
+    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
+    const read = vi.fn(() => createOverlayScene())
+    syncCanvasMapSurfaceOverlays(map, createSnapshot({
+      runtime: { getSceneSnapshot: read }, hoveredTargets: [], selectedTargets: [],
+    }), true)
+    expect(read).not.toHaveBeenCalled()
+    expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
+    expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
+  })
+
   it('projects panel targets from the lifecycle snapshot into MapLibre overlay contracts', () => {
     const map = new FakeOverlayMap()
 
