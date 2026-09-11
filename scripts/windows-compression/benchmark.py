@@ -132,7 +132,7 @@ def benchmark(source, output, scratch):
         elapsed = time.perf_counter() - started
         installer = one_file(release_dir / "bundle" / "nsis", "*.exe")
         if compression == "none":
-            makensis = one_file(Path(os.environ["LOCALAPPDATA"]) / "tauri", "makensis.exe")
+            makensis = Path(os.environ["LOCALAPPDATA"]) / "tauri" / "NSIS" / "makensis.exe"
             report["nsis_version"] = run([makensis, "/VERSION"]).strip()
             write_json(output / "report.json", report)
             installer.unlink()
