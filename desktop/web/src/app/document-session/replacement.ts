@@ -32,15 +32,19 @@ export interface DesignSessionPendingCanvasReplacementIdentity {
   readonly [designSessionPendingCanvasReplacementBrand]: true;
 }
 
+export interface PendingDesignReplacementStatus {
+  readonly identity: DesignSessionPendingCanvasReplacementIdentity;
+  readonly isDesignBaselineCurrent: boolean;
+  readonly designWasApplied: boolean;
+}
+
+export interface DesignReplacementSettlementReceipt {
+  readonly preservedCurrentDesign: boolean;
+}
+
 export interface DesignSessionReplacement {
   attach(canvas: CanvasDocumentSurface): DesignSessionApplicationReceipt;
-  isPendingCanvasReplacementDesignFinalized(
-    canvas: CanvasDocumentSurface,
-    identity: DesignSessionPendingCanvasReplacementIdentity,
-  ): boolean;
-  pendingCanvasReplacementIdentity(
-    canvas: CanvasDocumentSurface,
-  ): DesignSessionPendingCanvasReplacementIdentity | null;
+  pendingCanvasReplacement(canvas: CanvasDocumentSurface): PendingDesignReplacementStatus | null;
   matchesPendingCanvasReplacement(
     input: ResolvedDesignReplacement,
     canvas: CanvasDocumentSurface,
@@ -49,16 +53,15 @@ export interface DesignSessionReplacement {
   resumePendingCanvasReplacement(
     canvas: CanvasDocumentSurface,
     identity: DesignSessionPendingCanvasReplacementIdentity,
-    options?: { readonly preserveCurrentDesign?: boolean },
-  ): boolean;
+  ): DesignReplacementSettlementReceipt | null;
   settlePendingCanvasReplacementForHandoff(
     canvas: CanvasDocumentSurface,
     identity: DesignSessionPendingCanvasReplacementIdentity,
-    options?: { readonly preserveCurrentDesign?: boolean },
-  ): boolean;
+  ): DesignReplacementSettlementReceipt | null;
   replace(
     input: ResolvedDesignReplacement,
-    canvas?: CanvasDocumentSurface | null,
+    canvas: CanvasDocumentSurface | null,
+    isDesignBaselineCurrent: () => boolean,
   ): DesignSessionApplicationReceipt;
 }
 
@@ -72,6 +75,7 @@ interface PendingDesignReplacement {
   readonly key: string;
   readonly file: CanopiFile;
   readonly finalization: DesignReplacementFinalizer;
+  isDesignBaselineCurrent: () => boolean;
   canvasApplication: PendingCanvasApplication | null;
   workflowsInstalled: boolean;
 }
@@ -80,6 +84,7 @@ interface DesignReplacementFinalizer {
   run(): void;
   preserveCurrentDesign(): void;
   wasDesignApplied(): boolean;
+  wasDesignPreserved(): boolean;
 }
 
 interface PendingCanvasApplication {
@@ -109,6 +114,27 @@ export function createDesignSessionReplacement({
     }
   }
 
+  function settlePending(
+    canvas: CanvasDocumentSurface,
+    identity: DesignSessionPendingCanvasReplacementIdentity,
+    purpose: "resume" | "handoff",
+  ): DesignReplacementSettlementReceipt | null {
+    const operation = pendingReplacement;
+    const application = operation?.canvasApplication;
+    if (!operation || operation.identity !== identity || !application
+      || application.canvas !== canvas || application.canvasReplaced) return null;
+
+    // Settlement must finish an admitted Scene swap, but cannot erase Design
+    // edits made after its authorization. An applied finalizer remains one-shot.
+    if (!operation.finalization.wasDesignApplied() && !operation.isDesignBaselineCurrent()) {
+      operation.finalization.preserveCurrentDesign();
+    }
+    settleAdmittedCanvasReplacement(operation, application);
+    if (purpose === "resume") finishCanvasApplication(operation, application, workflowRunner);
+    if (pendingReplacement === operation) pendingReplacement = null;
+    return { preservedCurrentDesign: operation.finalization.wasDesignPreserved() };
+  }
+
   return {
     attach(canvas): DesignSessionApplicationReceipt {
       const file = store.readCurrentDesign();
@@ -125,11 +151,15 @@ export function createDesignSessionReplacement({
       return { file, canvasHydrated: true };
     },
 
-    pendingCanvasReplacementIdentity(canvas) {
-      return pendingReplacement?.canvasApplication?.canvas === canvas
-        && !pendingReplacement.canvasApplication.canvasReplaced
-        ? pendingReplacement.identity
-        : null;
+    pendingCanvasReplacement(canvas) {
+      const operation = pendingReplacement;
+      if (!operation || operation.canvasApplication?.canvas !== canvas
+        || operation.canvasApplication.canvasReplaced) return null;
+      return {
+        identity: operation.identity,
+        isDesignBaselineCurrent: operation.isDesignBaselineCurrent(),
+        designWasApplied: operation.finalization.wasDesignApplied(),
+      };
     },
 
     matchesPendingCanvasReplacement(input, canvas, identity) {
@@ -140,57 +170,18 @@ export function createDesignSessionReplacement({
         && operation.key === designReplacementKey(input, normalizeReplacement(input));
     },
 
-    isPendingCanvasReplacementDesignFinalized(canvas, identity) {
-      return pendingReplacement?.identity === identity
-        && pendingReplacement.canvasApplication?.canvas === canvas
-        && pendingReplacement.finalization.wasDesignApplied();
-    },
+    resumePendingCanvasReplacement: (canvas, identity) => settlePending(canvas, identity, "resume"),
+    settlePendingCanvasReplacementForHandoff: (canvas, identity) => settlePending(canvas, identity, "handoff"),
 
-    resumePendingCanvasReplacement(canvas, identity, options = {}) {
-      const operation = pendingReplacement;
-      const canvasApplication = operation?.canvasApplication;
-      if (
-        !operation
-        || operation.identity !== identity
-        || !canvasApplication
-        || canvasApplication.canvas !== canvas
-        || canvasApplication.canvasReplaced
-      ) return false;
-
-      if (options.preserveCurrentDesign) {
-        operation.finalization.preserveCurrentDesign();
-      }
-      settleAdmittedCanvasReplacement(operation, canvasApplication);
-      finishCanvasApplication(operation, canvasApplication, workflowRunner);
-      if (pendingReplacement === operation) pendingReplacement = null;
-      return true;
-    },
-
-    settlePendingCanvasReplacementForHandoff(canvas, identity, options = {}) {
-      const operation = pendingReplacement;
-      const canvasApplication = operation?.canvasApplication;
-      if (
-        !operation
-        || operation.identity !== identity
-        || !canvasApplication
-        || canvasApplication.canvas !== canvas
-        || canvasApplication.canvasReplaced
-      ) return false;
-
-      if (options.preserveCurrentDesign) {
-        operation.finalization.preserveCurrentDesign();
-      }
-      settleAdmittedCanvasReplacement(operation, canvasApplication);
-      if (pendingReplacement === operation) pendingReplacement = null;
-      return true;
-    },
-
-    replace(input, canvas = null): DesignSessionApplicationReceipt {
+    replace(input, canvas, isDesignBaselineCurrent): DesignSessionApplicationReceipt {
       const file = normalizeReplacement(input);
       const replacementKey = designReplacementKey(input, file);
       const operation = pendingReplacement?.key === replacementKey
         ? pendingReplacement
-        : createPendingDesignReplacement(store, replacementKey, file, input);
+        : createPendingDesignReplacement(store, replacementKey, file, input, isDesignBaselineCurrent);
+      // A fresh explicit replacement attempt has already passed its caller's
+      // dirty guard; retain that authorization for any later interrupted retry.
+      operation.isDesignBaselineCurrent = isDesignBaselineCurrent;
       pendingReplacement = operation;
 
       if (canvas) {
@@ -226,12 +217,14 @@ function createPendingDesignReplacement(
   key: string,
   file: CanopiFile,
   input: ResolvedDesignReplacement,
+  isDesignBaselineCurrent: () => boolean,
 ): PendingDesignReplacement {
   const ownedFile = cloneDocument(file);
   return {
     identity: Object.freeze({}) as DesignSessionPendingCanvasReplacementIdentity,
     key,
     file: ownedFile,
+    isDesignBaselineCurrent,
     finalization: createDesignReplacementFinalizer(
       store,
       ownedFile,
@@ -342,6 +335,7 @@ function createDesignReplacementFinalizer(
       if (outcome === "pending") preserveCurrentDesign = true;
     },
     wasDesignApplied,
+    wasDesignPreserved: () => outcome === "preserved",
   });
 }
 
