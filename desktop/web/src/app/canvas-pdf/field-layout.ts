@@ -80,7 +80,9 @@ function drawFieldPass(input: PdfInput, frame: PrintBounds, ground: PrintBounds,
   const opacity = (name: string) => canvas.layers.find(l => l.name === name)?.opacity ?? 1
   const space = new FieldSpace({ x: 8, y: 8, width: page.width / MM - 16, height: page.height / MM - 16 }, text)
   space.reserve({ x: 8.3, y: 8.3, width: 12, height: 10 })
-  const line = (s: Segment, color: string, width: number, alpha = 1) => operations.push({ ...pathOp(`M${s.a.x * MM} ${s.a.y * MM} L${s.b.x * MM} ${s.b.y * MM}`, color, null, width * MM), opacity: alpha })
+  // Match PDFKit’s six-decimal point precision in the shared preview/export plan.
+  const coordinate = (mm: number) => Math.round(mm * MM * 1e6) / 1e6
+  const line = (s: Segment, color: string, width: number, alpha = 1) => operations.push({ ...pathOp(`M${coordinate(s.a.x)} ${coordinate(s.a.y)} L${coordinate(s.b.x)} ${coordinate(s.b.y)}`, color, null, width * MM), opacity: alpha })
   const labelText = (label: FieldLabel) => label.lines.forEach((l, i) => operations.push({ ...textOp(l, (label.bounds.x + label.inset) * MM,
     (label.bounds.y + label.baseline + i * label.leading) * MM, label.size), color: label.color }))
   const legend = identifyPlants(canvas.plants, input.commonNames, input.locale).map(entry => ({ ...entry, reference: references.species.get(entry.canonicalName)!,
