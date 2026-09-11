@@ -65,8 +65,27 @@ Minimum packaged-app smoke script:
 scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <version>"
 ```
 
+If the exact candidate packages were already downloaded for smoke testing, reuse
+that directory to avoid downloading the installer ZIPs again:
+
+```bash
+scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <version>" \
+  --artifact-dir ~/Downloads/canopi-candidate-<run-id>
+```
+
+Keep the artifact directories from `gh run download` intact (for example,
+`canopi-x86_64-unknown-linux-gnu/deb/Canopi_<version>_amd64.deb`). Relative paths
+are resolved from the caller's working directory. Promotion always downloads the
+remote manifest afresh; any manifest in the supplied directory is ignored. Every
+listed package must exist and match its checksum. Missing, changed or unsafe
+files fail before a release is created or updated, without a download fallback.
+Verified local bytes are copied to operation-owned staging before upload so later
+changes to the supplied directory cannot alter the release. Extra files are not
+uploaded, and the supplied directory is never modified.
+
 This script admits only a successful, completed `Release Candidate` run, downloads
-its artifacts, requires the manifest artifact and verifies `SHA256SUMS.txt`. The
+its artifacts unless local packages were supplied, requires the remote manifest
+artifact and verifies `SHA256SUMS.txt`. Only manifest-listed packages are uploaded. The
 manifest repository and version must match the requested repository and `v<version>`
 tag. A new draft targets the exact manifest source commit, even if `main` has advanced.
 An existing tag must resolve to that same commit. Only draft releases can be updated;
