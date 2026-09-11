@@ -36,6 +36,7 @@ export function createBrowserSpeciesCatalogRuntime({
     reader,
   })
   const workbench = createSpeciesCatalogWorkbench({
+    favoritesIncludeRecentlyViewed: true,
     search: catalogAdapters.search,
     loadDynamicFilterOptions: catalogAdapters.loadDynamicFilterOptions,
     getFilterOptions: catalogAdapters.getFilterOptions,

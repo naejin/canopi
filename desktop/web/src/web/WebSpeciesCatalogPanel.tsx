@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'preact/hooks'
-import { locale } from '../app/settings/state'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../canvas/session'
 import {
@@ -23,7 +22,6 @@ interface WebSpeciesCatalogPanelProps {
 }
 
 export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
-  const currentLocale = locale.value
   const intent = speciesCatalogWorkbench.intent.value
   const results = speciesCatalogWorkbench.results.value
   const filterStrip = speciesCatalogWorkbench.filterStrip.value
@@ -35,17 +33,7 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   const visibleItems = isCatalog ? results.items : favoritesView.items
   const title = isCatalog ? t('nav.plantDb') : t('nav.favorites')
 
-  useEffect(() => {
-    const dispose = speciesCatalogWorkbench.mount()
-    speciesCatalogWorkbench.ensureInitialSearch()
-    void speciesCatalogWorkbench.loadFilterOptions()
-    void speciesCatalogWorkbench.reloadSidebarLists()
-    return dispose
-  }, [])
-
-  useEffect(() => {
-    if (mode === 'favorites') void speciesCatalogWorkbench.loadFavorites()
-  }, [mode, currentLocale, favoritesView.revision])
+  useEffect(() => speciesCatalogWorkbench.mount(mode), [mode])
 
   return (
     <section className={styles.panel} data-testid={`web-species-${mode}-panel`} aria-label={title}>

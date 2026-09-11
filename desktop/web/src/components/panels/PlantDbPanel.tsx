@@ -1,6 +1,5 @@
 import { useEffect } from 'preact/hooks'
-import { useSignal, useSignalEffect } from '@preact/signals'
-import { locale } from '../../app/settings/state'
+import { useSignal } from '@preact/signals'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { SearchBar } from '../plant-db/SearchBar'
 import { FilterStrip } from '../plant-db/FilterStrip'
@@ -16,17 +15,7 @@ export function PlantDbPanel() {
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
   const moreFiltersOpen = useSignal(false)
 
-  useEffect(() => {
-    const disposeController = speciesCatalogWorkbench.mount()
-    speciesCatalogWorkbench.ensureInitialSearch()
-    return disposeController
-  }, [])
-
-  // Reload favorites/recent when locale changes (names are locale-dependent)
-  useSignalEffect(() => {
-    void locale.value
-    void speciesCatalogWorkbench.reloadSidebarLists()
-  })
+  useEffect(() => speciesCatalogWorkbench.mount('catalog'), [])
 
   return (
     <div className={styles.panel}>

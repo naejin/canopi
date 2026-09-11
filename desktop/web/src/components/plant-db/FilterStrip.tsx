@@ -1,4 +1,3 @@
-import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import type { FilterOptions, SpeciesFilter } from '../../types/species'
@@ -10,10 +9,6 @@ import styles from './PlantDb.module.css'
 
 export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
   const filterStrip = speciesCatalogWorkbench.filterStrip.value;
-
-  useEffect(() => {
-    void speciesCatalogWorkbench.loadFilterOptions();
-  }, []);
 
   return (
     <div className={styles.filterStrip}>

@@ -1,4 +1,4 @@
-import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
+import { batch, computed, effect, signal, untracked, type ReadonlySignal } from '@preact/signals'
 import type {
   DynamicFilterOptions,
   FilterOp,
@@ -95,9 +95,8 @@ export interface SpeciesCatalogWorkbench {
   readonly dynamicOptions: ReadonlySignal<SpeciesCatalogDynamicOptionsView>
   readonly sidebar: ReadonlySignal<SpeciesCatalogSidebarView>
   readonly detail: ReadonlySignal<SpeciesCatalogDetailView>
-  mount(): () => void
+  mount(view?: 'catalog' | 'favorites'): () => void
   dispose(): void
-  ensureInitialSearch(): void
   reloadSidebarLists(): Promise<void>
   loadFavorites(): Promise<void>
   loadFilterOptions(): Promise<void>
@@ -131,6 +130,7 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly getSpeciesDetail?: SpeciesDetailAdapter
   readonly onSpeciesSelected?: SpeciesSelectedAdapter
   readonly locale?: ReadonlySignal<string>
+  readonly favoritesIncludeRecentlyViewed?: boolean
   readonly pageSize?: number
   readonly textDebounceMs?: number
 }
@@ -158,6 +158,7 @@ export function createSpeciesCatalogWorkbench({
   getSpeciesDetail: getSpeciesDetailAdapter = emptySpeciesDetailAdapter,
   onSpeciesSelected,
   locale: localeSignal = locale,
+  favoritesIncludeRecentlyViewed = false,
   pageSize,
   textDebounceMs,
 }: SpeciesCatalogWorkbenchOptions = {}): SpeciesCatalogWorkbench {
@@ -279,7 +280,11 @@ export function createSpeciesCatalogWorkbench({
   let favoriteItemsActivePromise: Promise<void> | null = null
   let favoriteItemsQueuedReload: { promise: Promise<void>; resolve: () => void } | null = null
   const favoriteToggleTails = new Map<string, Promise<void>>()
-  let controllerUsers = 0
+  const catalogUsers = signal(0)
+  const favoritesUsers = signal(0)
+  const catalogActive = computed(() => catalogUsers.value > 0)
+  const viewsActive = computed(() => catalogUsers.value + favoritesUsers.value > 0)
+  const recentActive = computed(() => catalogActive.value || (favoritesIncludeRecentlyViewed && favoritesUsers.value > 0))
   let disposeSearchSession: (() => void) | null = null
   let disposed = false
 
@@ -395,14 +400,14 @@ export function createSpeciesCatalogWorkbench({
     }
   }
 
-  async function loadSidebarLists(): Promise<void> {
+  async function loadSidebarLists(includeFavorites = true): Promise<void> {
     if (disposed) return
     const generation = ++sidebarListsGeneration
-    const favoriteGeneration = ++favoriteNamesGeneration
+    const favoriteGeneration = includeFavorites ? ++favoriteNamesGeneration : favoriteNamesGeneration
     const currentLocale = localeSignal.value
     try {
       const [favorites, recent] = await Promise.all([
-        hasAuthoritativeFavoritesAdapter
+        includeFavorites && hasAuthoritativeFavoritesAdapter
           ? getFavoritesAdapter(currentLocale).then(reconcileFavoriteSnapshot)
           : Promise.resolve(null),
         getRecentlyViewedAdapter(currentLocale, 50),
@@ -512,6 +517,34 @@ export function createSpeciesCatalogWorkbench({
     }
   }
 
+  const disposeViewEffects = [
+    effect(() => {
+      if (!catalogActive.value) return
+      untracked(() => {
+        startPlantDbController()
+        void loadFilterOptions()
+      })
+      return stopPlantDbController
+    }),
+    effect(() => {
+      if (!viewsActive.value) return
+      void localeSignal.value
+      void favoriteItemsRevision.value
+      untracked(() => { void loadFavoriteItems() })
+    }),
+    effect(() => {
+      if (!recentActive.value) return
+      void localeSignal.value
+      untracked(() => { void loadSidebarLists(false) })
+    }),
+    effect(() => {
+      if (!viewsActive.value) return
+      void localeSignal.value
+      const canonicalName = selectedCanonicalName.value
+      if (canonicalName) untracked(() => { void loadSpeciesDetail(canonicalName) })
+    }),
+  ]
+
   return {
     intent: plantSearchSession.intent,
     results: projectedResults,
@@ -524,23 +557,22 @@ export function createSpeciesCatalogWorkbench({
     sidebar,
     detail,
 
-    mount() {
+    mount(view = 'catalog') {
       if (disposed) return () => {}
-      controllerUsers += 1
-      startPlantDbController()
-
+      const users = view === 'catalog' ? catalogUsers : favoritesUsers
+      users.value += 1
+      let released = false
       return () => {
-        controllerUsers = Math.max(0, controllerUsers - 1)
-        if (controllerUsers === 0) {
-          stopPlantDbController()
-        }
+        if (released || disposed) return
+        released = true
+        users.value -= 1
       }
     },
 
     dispose() {
       if (disposed) return
       disposed = true
-      controllerUsers = 0
+      disposeViewEffects.forEach(dispose => dispose())
       stopPlantDbController()
       plantSearchSession.dispose()
       favoriteItemsGeneration += 1
@@ -550,14 +582,6 @@ export function createSpeciesCatalogWorkbench({
       filterMetadataGeneration += 1
       favoriteItemsQueuedReload?.resolve()
       favoriteItemsQueuedReload = null
-    },
-
-    ensureInitialSearch() {
-      if (disposed) return
-      const results = plantSearchSession.results.value
-      if (results.items.length === 0 && !isPlantSearchLoading(results.status)) {
-        plantSearchSession.retry()
-      }
     },
 
     reloadSidebarLists: loadSidebarLists,
@@ -578,7 +602,8 @@ export function createSpeciesCatalogWorkbench({
       if (disposed) return
       plantSearchSession.retry()
       void loadFilterOptions()
-      void loadSidebarLists()
+      void loadFavoriteItems()
+      void loadSidebarLists(false)
     },
 
     loadNextPage() {
@@ -618,8 +643,9 @@ export function createSpeciesCatalogWorkbench({
 
     selectSpecies(canonicalName) {
       if (disposed) return
+      const alreadySelected = selectedCanonicalName.peek() === canonicalName
       selectedCanonicalName.value = canonicalName
-      void loadSpeciesDetail(canonicalName)
+      if (alreadySelected || !viewsActive.peek()) void loadSpeciesDetail(canonicalName)
       try {
         void Promise.resolve(onSpeciesSelected?.(canonicalName)).catch(() => {
           // Non-fatal: selection should still open even if recents persistence fails.

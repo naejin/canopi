@@ -458,8 +458,6 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       textDebounceMs: 0,
     })
     const unmount = workbench.mount()
-    await workbench.loadFilterOptions()
-    await workbench.reloadSidebarLists()
     await vi.waitFor(() => {
       expect(workbench.results.value.error).toBe('catalog unavailable')
     })
@@ -801,7 +799,6 @@ describe('Web Edition reduced Species Catalog adapter', () => {
     })
     const unmount = workbench.mount()
     await vi.waitFor(() => expect(workbench.results.value.items).toHaveLength(3))
-    const refresh = workbench.loadFavorites()
     await vi.waitFor(() => expect(getFavorites).toHaveBeenCalledOnce())
 
     await Promise.all([
@@ -812,7 +809,6 @@ describe('Web Edition reduced Species Catalog adapter', () => {
 
     expect(getFavorites).toHaveBeenCalledOnce()
     activeSnapshot.resolve([])
-    await refresh
     await vi.waitFor(() => expect(getFavorites).toHaveBeenCalledTimes(2))
     trailingSnapshot.reject(new Error('latest refresh failed'))
     await vi.waitFor(() => expect(workbench.favorites.value.loading).toBe(false))

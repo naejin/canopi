@@ -53,7 +53,6 @@ interface SavedStampReorderSession {
 
 export function FavoritesPanel() {
   const favoritesView = speciesCatalogWorkbench.favorites.value
-  const favoritesRevision = favoritesView.revision
   const savedStampsView = savedObjectStampWorkbench.library.value
   const savedStampSelection = savedObjectStampWorkbench.selection.value
   const lang = locale.value
@@ -69,9 +68,7 @@ export function FavoritesPanel() {
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
 
-  useEffect(() => {
-    void speciesCatalogWorkbench.loadFavorites()
-  }, [favoritesRevision, lang])
+  useEffect(() => speciesCatalogWorkbench.mount('favorites'), [])
 
   useEffect(() => {
     void savedObjectStampWorkbench.loadLibrary()
