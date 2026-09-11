@@ -1126,5 +1126,868 @@
         "activeWorkersAfterClear": 0
       }
     ]
+  },
+  "fieldPrintRevision": {
+    "date": "2026-09-11",
+    "bead": "canopi-46aj",
+    "supersedes": "canopi-8d38",
+    "state": "local implementation; no Git commit or push",
+    "description": "Contextual overview notes, local-frequency enclosures and direct Species Codes, complete adaptive keys, native guides and zone dimensions; deferred spatial notes receive supplementary coverage and remote general notes reuse existing keys.",
+    "privateDesign": {
+      "plants": 2201,
+      "species": 117,
+      "zones": 24,
+      "annotations": 106,
+      "storedMeasurementGuides": 134,
+      "contentUnchanged": true
+    },
+    "privatePdf": {
+      "pages": 15,
+      "chosenDetails": 9,
+      "supplementaryDetails": 1,
+      "keyContinuations": 4,
+      "chosenPlantOccurrences": 2201,
+      "chosenUniquePlants": 2201,
+      "chosenPlantCounts": [
+        301,
+        211,
+        256,
+        328,
+        263,
+        212,
+        207,
+        189,
+        234
+      ],
+      "annotationsCovered": 106,
+      "annotationsMissing": 0,
+      "overviewGuides": 134,
+      "unresolvedPlantIdentities": 0,
+      "ordinaryPIdentities": 0,
+      "detailNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "bytes": 425121,
+      "generationMs": 4108.300000011921,
+      "planSha256": "27086eddac8afaaaeaea43ecfb16771d83372f6be9872907bb0f8d2bdc1b39ae",
+      "activeWorkersAfterClear": 0,
+      "sha256": "155356cc89a90bfa9ad099f42ef8ec570f9a4eef5a4e115c6c9b92c1ee4df20a",
+      "embeddedUnicodeFonts": true,
+      "vectorCanvas": true,
+      "exact50mmBars": 1,
+      "previewComparisons": [
+        {
+          "page": 1,
+          "meanChannelDifference": 2.969711048396416,
+          "neighborhoodDifference": 0.05263157894736842,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 2,
+          "meanChannelDifference": 3.640387968117764,
+          "neighborhoodDifference": 0.09588521260192984,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 3,
+          "meanChannelDifference": 1.8671521292407414,
+          "neighborhoodDifference": 0.027813169317559495,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 4,
+          "meanChannelDifference": 2.710718567953382,
+          "neighborhoodDifference": 0.06036274628891258,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 5,
+          "meanChannelDifference": 3.5666789909022314,
+          "neighborhoodDifference": 0.0868636948412878,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 6,
+          "meanChannelDifference": 1.7184721967314474,
+          "neighborhoodDifference": 0.04106216586766017,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 7,
+          "meanChannelDifference": 3.6235989309538397,
+          "neighborhoodDifference": 0.07971002285451166,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 8,
+          "meanChannelDifference": 3.27992506155468,
+          "neighborhoodDifference": 0.06965853001128687,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 9,
+          "meanChannelDifference": 1.912784901895243,
+          "neighborhoodDifference": 0.03563625122171004,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 10,
+          "meanChannelDifference": 2.4792283432592193,
+          "neighborhoodDifference": 0.05856849127417523,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 11,
+          "meanChannelDifference": 1.7019946642266452,
+          "neighborhoodDifference": 0.03884764555380297,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 12,
+          "meanChannelDifference": 3.129254632006306,
+          "neighborhoodDifference": 0.06712895849569848,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 13,
+          "meanChannelDifference": 1.9319592845086724,
+          "neighborhoodDifference": 0.047290485778807456,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 14,
+          "meanChannelDifference": 3.34280733082179,
+          "neighborhoodDifference": 0.09331899347938587,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 15,
+          "meanChannelDifference": 1.876826210841367,
+          "neighborhoodDifference": 0.05357289046473599,
+          "maximumAllowed": 0.25
+        }
+      ]
+    },
+    "partialSelectionCoverage": {
+      "pages": 28,
+      "chosenDetails": 3,
+      "supplementaryDetails": 23,
+      "keyContinuations": 1,
+      "chosenPlantOccurrences": 818,
+      "chosenUniquePlants": 818,
+      "chosenPlantCounts": [
+        301,
+        189,
+        328
+      ],
+      "annotationsCovered": 106,
+      "annotationsMissing": 0,
+      "overviewGuides": 134,
+      "unresolvedPlantIdentities": 0,
+      "ordinaryPIdentities": 0,
+      "detailNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "bytes": 598606,
+      "generationMs": 3493.600000023842,
+      "planSha256": "e183b939b1e752cb7f187fc22fa2d6af307219aec3b5aea4e014e698e1c3806c",
+      "activeWorkersAfterClear": 0,
+      "sha256": "e138b74a46716916d8319d368e81109c1881824a4b71d59ac94106828d87c92a",
+      "embeddedUnicodeFonts": true,
+      "vectorCanvas": true,
+      "exact50mmBars": 1,
+      "previewComparisons": [
+        {
+          "page": 1,
+          "meanChannelDifference": 3.240963335546967,
+          "neighborhoodDifference": 0.05144644262565917,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 2,
+          "meanChannelDifference": 3.5765194644602443,
+          "neighborhoodDifference": 0.09587102643149542,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 3,
+          "meanChannelDifference": 1.9314163679443384,
+          "neighborhoodDifference": 0.04729107686924222,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 4,
+          "meanChannelDifference": 1.7207765627913894,
+          "neighborhoodDifference": 0.04090286699549028,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 5,
+          "meanChannelDifference": 3.7920771420304606,
+          "neighborhoodDifference": 0.08466395178829977,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 6,
+          "meanChannelDifference": 2.379733341372163,
+          "neighborhoodDifference": 0.07100976274516585,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 7,
+          "meanChannelDifference": 2.431380754745643,
+          "neighborhoodDifference": 0.06773334846524846,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 8,
+          "meanChannelDifference": 1.9824070798447915,
+          "neighborhoodDifference": 0.060922213385420226,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 9,
+          "meanChannelDifference": 2.2334756974645473,
+          "neighborhoodDifference": 0.06580639364790575,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 10,
+          "meanChannelDifference": 2.0286182344897132,
+          "neighborhoodDifference": 0.0584830787063513,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 11,
+          "meanChannelDifference": 2.04867747948399,
+          "neighborhoodDifference": 0.06022118012978572,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 12,
+          "meanChannelDifference": 2.2793842138068676,
+          "neighborhoodDifference": 0.06660259246353785,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 13,
+          "meanChannelDifference": 1.8595179007304992,
+          "neighborhoodDifference": 0.05023500277960277,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 14,
+          "meanChannelDifference": 1.7478789458611406,
+          "neighborhoodDifference": 0.04763656922836395,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 15,
+          "meanChannelDifference": 2.3168126512267935,
+          "neighborhoodDifference": 0.06932072182781712,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 16,
+          "meanChannelDifference": 1.2022995191183767,
+          "neighborhoodDifference": 0.032726313011348644,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 17,
+          "meanChannelDifference": 2.25110201422932,
+          "neighborhoodDifference": 0.07147967964080616,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 18,
+          "meanChannelDifference": 1.2442669399868838,
+          "neighborhoodDifference": 0.03020708557836869,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 19,
+          "meanChannelDifference": 1.3475916168008,
+          "neighborhoodDifference": 0.03697063787819813,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 20,
+          "meanChannelDifference": 2.0802056521840644,
+          "neighborhoodDifference": 0.06392613497490969,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 21,
+          "meanChannelDifference": 1.5153741144356994,
+          "neighborhoodDifference": 0.0388343460190207,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 22,
+          "meanChannelDifference": 1.5074068064654653,
+          "neighborhoodDifference": 0.03469139316173387,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 23,
+          "meanChannelDifference": 2.38370458245815,
+          "neighborhoodDifference": 0.07139338043733008,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 24,
+          "meanChannelDifference": 1.9032101234876582,
+          "neighborhoodDifference": 0.05995223398196642,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 25,
+          "meanChannelDifference": 1.8741479800814345,
+          "neighborhoodDifference": 0.05961265252719237,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 26,
+          "meanChannelDifference": 2.8947864937017833,
+          "neighborhoodDifference": 0.09653659426104387,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 27,
+          "meanChannelDifference": 1.5483829686748667,
+          "neighborhoodDifference": 0.05035824513525183,
+          "maximumAllowed": 0.25
+        },
+        {
+          "page": 28,
+          "meanChannelDifference": 1.4024746592141983,
+          "neighborhoodDifference": 0.03968876724247741,
+          "maximumAllowed": 0.25
+        }
+      ]
+    },
+    "partialSelectionNote": "Three representative chosen areas leave many spatial notes uncovered. The 23 supplementary details retain those notes and their dense planting context; the nine-area review is the compact full-design packet.",
+    "visualReview": {
+      "allReviewPages": true,
+      "grayscale": true,
+      "physicalPrinter": false,
+      "newPackagedNativeMatrix": false
+    },
+    "publicFixtures": [
+      {
+        "fixture": "dense",
+        "pages": 3,
+        "plants": 320,
+        "bytes": 41620,
+        "generationMs": 483,
+        "planSha256": "7aa04dea6b082c72c9f2f04449669fd68f690c0759e002917cbe792408b223c7",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "mixed",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 38706,
+        "generationMs": 381,
+        "planSha256": "85125bcdb9f709005e5a62ef70bf73fe7b4f39576751397da3842ed31588d1e3",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "framing",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 35463,
+        "generationMs": 366.59999999403954,
+        "planSha256": "48c59e7d749c8e118253e8be79cac55243f3221c227f4bceb9415fe0fdd38396",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "legends",
+        "pages": 4,
+        "plants": 100,
+        "bytes": 93062,
+        "generationMs": 523.3000000119209,
+        "planSha256": "50e331270b4737565f238419f27a89be4540e22da92eb6ba0f031259415bab2f",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "multilingual",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 125596,
+        "generationMs": 1220.4000000059605,
+        "planSha256": "9696b1d908134a4a00579a512c1dbe9845c4ec05759b5890b7ae92c6eee0fb87",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "map-excluded",
+        "pages": 3,
+        "plants": 120,
+        "bytes": 38706,
+        "generationMs": 404.80000001192093,
+        "planSha256": "85125bcdb9f709005e5a62ef70bf73fe7b4f39576751397da3842ed31588d1e3",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "stress-1",
+        "pages": 1,
+        "plants": 100,
+        "bytes": 14375,
+        "generationMs": 278.5,
+        "planSha256": "6a8dd325cbcdb194581d232c2eab3959f88757516e23884e69d6a82012002c22",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "stress-10",
+        "pages": 14,
+        "plants": 900,
+        "bytes": 97645,
+        "generationMs": 553.7999999821186,
+        "planSha256": "166b7f4200ddc8dc66ee997affbcba8bf9346c353aba01b35d27257dfba980da",
+        "activeWorkersAfterClear": 0
+      },
+      {
+        "fixture": "stress-50",
+        "pages": 99,
+        "plants": 10000,
+        "bytes": 843495,
+        "generationMs": 2540.2000000178814,
+        "planSha256": "4fa45f4b8700fc17168336b56d870b4caaf56ee2d57816f0deb2a914e9f42c83",
+        "activeWorkersAfterClear": 0
+      }
+    ],
+    "checks": {
+      "frontendFiles": 250,
+      "frontendTests": 2316,
+      "proposalRegressionTests": 36,
+      "lastFocusedTests": 48,
+      "pythonVerifierTests": 4,
+      "typeScript": true,
+      "desktopBuild": true,
+      "webBuildAndBoundaryScan": true,
+      "productionProbeBuild": true,
+      "privatePreviewPages": 43,
+      "publicFixtures": 9,
+      "physicalPrinterTested": false,
+      "freshPackagedNativeMatrix": false
+    },
+    "supersededBy": "canopi-kg34"
+  },
+  "currentRevision": "transparentZoneRevision",
+  "explicitCoverageRevision": {
+    "date": "2026-09-11",
+    "bead": "canopi-kg34",
+    "state": "local implementation; no Git commit or push",
+    "description": "Only explicit Print Areas create detail sheets. Unreadable overview notes outside chosen detail coverage are omitted without generated pages or relocation. Zone dimension and stored-guide overview overflow remains.",
+    "regressionBefore": {
+      "overviewOnlyPages": 35,
+      "automaticDetails": 33,
+      "keyContinuations": 1,
+      "sameInputWithoutAnnotationsPages": 1,
+      "minimalLongNotePages": 3
+    },
+    "privateExports": {
+      "overview": {
+        "pages": 1,
+        "detailPages": 0,
+        "overviewContinuations": 0,
+        "keyContinuations": 0,
+        "guideCount": 134,
+        "plantOccurrences": 0,
+        "uniquePlants": 0,
+        "unresolvedPlantIdentities": 0,
+        "annotationsPrinted": 3,
+        "detailNumbers": [],
+        "bytes": 71841,
+        "generationMs": 827.6999999880791,
+        "planSha256": "a9253d03fb9e9087cb710217cd93dfa4c857c7ace1667a8dfedbb619e0ab3814",
+        "activeWorkersAfterClear": 0,
+        "sha256": "04ce797b9f48f1a37c768563e92f8232403eda804bea5ed3419ddd02e741bf40",
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "exact50mmBars": 1,
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 2.6740674144551755,
+            "neighborhoodDifference": 0.056957474294215854,
+            "maximumAllowed": 0.25
+          }
+        ]
+      },
+      "nine-details": {
+        "pages": 14,
+        "detailPages": 9,
+        "overviewContinuations": 0,
+        "keyContinuations": 4,
+        "guideCount": 134,
+        "plantOccurrences": 2201,
+        "uniquePlants": 2201,
+        "unresolvedPlantIdentities": 0,
+        "annotationsPrinted": 104,
+        "detailNumbers": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "bytes": 407007,
+        "generationMs": 2034.300000011921,
+        "planSha256": "21306f8c06e8b742d124a6d2377a9a70fc24af334b5751718ece5b10a52bc677",
+        "activeWorkersAfterClear": 0,
+        "sha256": "223cdfe371b5e11e8bb906a4883d70441500313fe3660a7151a1111bfdd86a24",
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "exact50mmBars": 1,
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 2.9572739145584688,
+            "neighborhoodDifference": 0.05262803240475981,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 2,
+            "meanChannelDifference": 3.640387968117764,
+            "neighborhoodDifference": 0.09588521260192984,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 3,
+            "meanChannelDifference": 1.8671521292407414,
+            "neighborhoodDifference": 0.027813169317559495,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 4,
+            "meanChannelDifference": 2.5506187682443757,
+            "neighborhoodDifference": 0.05544221396468885,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 5,
+            "meanChannelDifference": 3.5666789909022314,
+            "neighborhoodDifference": 0.0868636948412878,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 6,
+            "meanChannelDifference": 1.7184721967314474,
+            "neighborhoodDifference": 0.04106216586766017,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 7,
+            "meanChannelDifference": 3.6235989309538397,
+            "neighborhoodDifference": 0.07971002285451166,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 8,
+            "meanChannelDifference": 3.27992506155468,
+            "neighborhoodDifference": 0.06965853001128687,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 9,
+            "meanChannelDifference": 1.912784901895243,
+            "neighborhoodDifference": 0.03563625122171004,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 10,
+            "meanChannelDifference": 2.4792283432592193,
+            "neighborhoodDifference": 0.05856849127417523,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 11,
+            "meanChannelDifference": 1.7019946642266452,
+            "neighborhoodDifference": 0.03884764555380297,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 12,
+            "meanChannelDifference": 3.129254632006306,
+            "neighborhoodDifference": 0.06712895849569848,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 13,
+            "meanChannelDifference": 1.9319592845086724,
+            "neighborhoodDifference": 0.047290485778807456,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 14,
+            "meanChannelDifference": 3.34280733082179,
+            "neighborhoodDifference": 0.09331899347938587,
+            "maximumAllowed": 0.25
+          }
+        ]
+      },
+      "three-details": {
+        "pages": 5,
+        "detailPages": 3,
+        "overviewContinuations": 0,
+        "keyContinuations": 1,
+        "guideCount": 134,
+        "plantOccurrences": 818,
+        "uniquePlants": 818,
+        "unresolvedPlantIdentities": 0,
+        "annotationsPrinted": 23,
+        "detailNumbers": [
+          1,
+          2,
+          3
+        ],
+        "bytes": 188894,
+        "generationMs": 1577.7999999821186,
+        "planSha256": "439bbff52f73211b1b8f8c118e5081fbc34b250c2246c13c2478c651225f59de",
+        "activeWorkersAfterClear": 0,
+        "sha256": "dc1142f58e708d5b5c19a531e85a2dabd5ae9b7cbd86f94f29c2c05a16e13055",
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "exact50mmBars": 1,
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 2.75823603245914,
+            "neighborhoodDifference": 0.05147451942131064,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 2,
+            "meanChannelDifference": 3.640387968117764,
+            "neighborhoodDifference": 0.09588521260192984,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 3,
+            "meanChannelDifference": 1.9314163679443384,
+            "neighborhoodDifference": 0.04729107686924222,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 4,
+            "meanChannelDifference": 1.7204449610574846,
+            "neighborhoodDifference": 0.04095074532070646,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 5,
+            "meanChannelDifference": 3.624690970532073,
+            "neighborhoodDifference": 0.07971002285451166,
+            "maximumAllowed": 0.25
+          }
+        ]
+      }
+    },
+    "privateDesignUnchanged": true,
+    "checks": {
+      "frontendFiles": 250,
+      "frontendTests": 2317,
+      "focusedTests": 64,
+      "typeScript": true,
+      "desktopBuild": true,
+      "webBuildAndBoundaryScan": true,
+      "productionValidationBuild": true,
+      "privatePreviewComparisons": 20,
+      "maximumPreviewResidual": 0.09588521260192984,
+      "previewTolerance": 0.25,
+      "visualReview": [
+        "overview-only",
+        "detail-key after remote note removal"
+      ],
+      "physicalPrinterTested": false,
+      "freshPackagedNativeMatrix": false,
+      "publicFixturesRerun": false
+    }
+  },
+  "transparentZoneRevision": {
+    "date": "2026-09-11",
+    "bead": "canopi-d2ly",
+    "state": "local implementation; no Git commit or push",
+    "description": "PDF overview/detail/picker zones use transparent interiors, with no authored or synthetic fill. Neutral outlines remain beneath other artwork. Source Design fills are unchanged.",
+    "privateExports": {
+      "overview": {
+        "pages": 1,
+        "bytes": 71798,
+        "generationMs": 1293.2999999821186,
+        "planSha256": "448afc3ebd87ad46ff7396b13b2ff1e12811fafa5f5d0fb5be0e1668ea63ba7b",
+        "activeWorkersAfterClear": 0,
+        "sha256": "d8f8f27952bc9115dd031fedfe7285feb4213322c8ae40ec538468e48a7d62c1",
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 2.7278474821172978,
+            "neighborhoodDifference": 0.06576915495051538,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "exact50mmBars": 1,
+        "coverageAndIdentityMetadataUnchanged": true
+      },
+      "nine-details": {
+        "pages": 14,
+        "bytes": 405112,
+        "generationMs": 2202.800000011921,
+        "planSha256": "d4f326b4f35153109e63a4841ab0754025bbc2341e49684a516caada1ca6b03c",
+        "activeWorkersAfterClear": 0,
+        "sha256": "716988a3ace7df83debb8566b9d47a92a23aca9aa802d20aa7757d460fe46d7c",
+        "previewComparisons": [
+          {
+            "page": 1,
+            "meanChannelDifference": 3.007404589876335,
+            "neighborhoodDifference": 0.058325553105485706,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 2,
+            "meanChannelDifference": 3.677742519233344,
+            "neighborhoodDifference": 0.09896006504359145,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 3,
+            "meanChannelDifference": 1.9161538218282015,
+            "neighborhoodDifference": 0.029821103524465386,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 4,
+            "meanChannelDifference": 2.5506187682443757,
+            "neighborhoodDifference": 0.05544221396468885,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 5,
+            "meanChannelDifference": 3.591325393215523,
+            "neighborhoodDifference": 0.08897625205514754,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 6,
+            "meanChannelDifference": 1.7541462777409824,
+            "neighborhoodDifference": 0.04518206619799106,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 7,
+            "meanChannelDifference": 3.6235989309538397,
+            "neighborhoodDifference": 0.07971002285451166,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 8,
+            "meanChannelDifference": 3.3159005986859467,
+            "neighborhoodDifference": 0.06991151671736745,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 9,
+            "meanChannelDifference": 1.9657454226695592,
+            "neighborhoodDifference": 0.03949252521813454,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 10,
+            "meanChannelDifference": 2.4792283432592193,
+            "neighborhoodDifference": 0.05856849127417523,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 11,
+            "meanChannelDifference": 1.7452952895707707,
+            "neighborhoodDifference": 0.041519374318952994,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 12,
+            "meanChannelDifference": 3.129254632006306,
+            "neighborhoodDifference": 0.06712895849569848,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 13,
+            "meanChannelDifference": 1.9526905993272798,
+            "neighborhoodDifference": 0.04855039504051482,
+            "maximumAllowed": 0.25
+          },
+          {
+            "page": 14,
+            "meanChannelDifference": 3.374780299074027,
+            "neighborhoodDifference": 0.09754174354536634,
+            "maximumAllowed": 0.25
+          }
+        ],
+        "embeddedUnicodeFonts": true,
+        "vectorCanvas": true,
+        "exact50mmBars": 1,
+        "coverageAndIdentityMetadataUnchanged": true
+      }
+    },
+    "privateDesignUnchanged": true,
+    "checks": {
+      "focusedPdfAndSnapshotTests": 135,
+      "focusedTestFiles": 21,
+      "typeScript": true,
+      "desktopBuild": true,
+      "webBuildAndBoundaryScan": true,
+      "productionValidationBuild": true,
+      "privatePreviewComparisons": 15,
+      "maximumPreviewResidual": 0.09896006504359145,
+      "previewTolerance": 0.25,
+      "visualReview": [
+        "overview including overlapping top ellipse",
+        "first detail",
+        "grayscale overview"
+      ],
+      "physicalPrinterTested": false,
+      "freshPackagedNativeMatrix": false,
+      "fullFrontendSuiteRerun": false
+    }
   }
 }

@@ -34,14 +34,17 @@ for argument in sys.argv[1:]:
         bars += sum(abs(float(x2) - float(x1) - 141.732283) < .00001 and abs(float(y1) - float(y2)) < .00001 for x1, y1, x2, y2 in points)
     canvas_pages = sum(page['kind'] != 'legend' for page in report['legends'])
     assert bars == 1, (path, bars)
-    assert text.count(report.get('actualSizeLabel', 'Print at actual size')) == 1
+    assert text.count(report.get('actualSizeLabel', 'Print at actual size')) == canvas_pages
     destinations = {f"page:{p['id']}" for p in report['legends']}
     for page in report['legends']:
         destinations.update(d['id'] for d in page.get('destinations', []))
     assert all(link['target'] in destinations for p in report['legends'] for link in p.get('links', [])), 'Broken page/key link'
     extracted_pages = text.split('\f')
     for page in report['legends']:
-        number = page['number'] if page['kind'] != 'legend' else next(p['number'] for p in report['legends'] if p['id'] == page['sourceId'])
+        if page['kind'] == 'overview' or page.get('sourceId') == 'overview':
+            continue
+        source = page if page['kind'] == 'detail' else next(p for p in report['legends'] if p['id'] == page['sourceId'])
+        number = source.get('detailNumber', source['number'])
         assert re.search(rf'(?<!\d){number}(?!\d)', extracted_pages[page['number'] - 1]), page
     if report['fixture'] == 'multilingual':
         for word in ['Érable', 'Яблоня', '庭園', 'ローズマリー', '정원', '포도']:

@@ -8,8 +8,8 @@ Canvas PDF is a derived, printable view of a Design, available on Linux, macOS,
 Windows and Web Edition. One browser-compatible layout and encoder serve every
 edition; only saving or downloading varies. This avoids platform-dependent names,
 geometry and rendering, while keeping `.canopi` as the editable source of truth.
-The completed feature and its current defaults were reviewed and approved by the
-user on 2026-09-10. See the [validation record](../canvas-pdf-validation.md).
+The foundation was approved on 2026-09-10. The field-print revision was approved
+on 2026-09-11 under `canopi-8d38` and polished under `canopi-46aj`; `canopi-kg34` restores explicit-only detail coverage, superseding the earlier bracket and separate-key defaults. See the [validation record](../canvas-pdf-validation.md).
 
 ## Scope and ownership
 
@@ -34,44 +34,49 @@ exact squares use portrait. Independent zoom/framing can crop; Fit restores comp
 coverage. Adding an area uses its own fitted overview, independent of printed framing.
 An explicitly drawn blank area is printable; an otherwise empty overview is not.
 
-The approved field layout assigns explicit roles to the pages, independent of Design size. The overview shows
-the whole layout, final numbered detail outlines and a 50 mm calibration bar. It renders authored artwork directly, including scaled notes, with no generated key, appendix, name lookup or field-label processing. Whole-design field coverage is an explicit action, never an automatic size threshold. Detail
-maps devote the sheet to planting positions, transparent identities and aligned
-measurements, with only a large source page number. Full-width keys and notes follow
-each detail automatically. There are no minimaps, running detail headers/footers,
-narrow legend sidebars, or consent gates for crowded text and overflowing legends.
+Zone interiors are transparent throughout the PDF and its preview/picker, regardless
+of authored fill. Outline strokes draw beneath plants, guides and annotations;
+overlapping Zones cannot obscure each other with fill. Stored Design fills and
+native geometry remain unchanged.
 
-Whole-Design numeric print references distinguish Species sharing an appearance.
-The existing Design letter code remains in the key and is never reassigned. Repeated
-appearance groups may share external brackets with references at both ends,
-orthogonal stems, membership dots and gaps at crossings. Selection is adaptive in
-both orientations and admission is atomic: every member and both references must
-fit, otherwise the group uses local placement. Search has a per-route and per-page
-budget. Print Areas remain continuous; grouping never splits or rearranges ground
-geometry. Narrow sheets reserve physical room at bracket ends. Spare paper on
-shallow horizontal sheets may hold a complete quick key and a metre ruler; these
-supplement the complete following key. Straight neighbouring runs may still share
-short brackets and counts; irregular placements stay
-individual, and long runs repeat references. Full common names appear on the map where
-they fit; complete common/canonical names, counts and all authored appearances remain
-in the key. Authored colours, symbols, opacity and plant positions are unchanged.
+The overview provides navigation, stronger compact plant marks, quiet Zone outlines,
+an aligned dimension/spacing index and a physical 50 mm calibration bar. Every
+selected stored Measurement Guide remains represented. Repeated values group by
+Zone; suitable existing connected chains can use a separate band. Long indexes may
+continue on additional pages. Overview annotations are complete contextual text only
+where readable; no annotation index or N markers are generated there. Unreadable
+notes outside all chosen details are omitted. Export never creates detail coverage
+for annotations or relocates an uncovered note into another detail's key. This also
+applies when no detail has been chosen: only dimension/spacing overflow may add
+pages to the overview. Remote notes do not shrink the overview's planting plan.
+The picker stays an authored-artwork surface so users can add coverage explicitly.
+An overview-only export needs no Species name lookup, even with annotations.
 
-Measurement Guides preserve actual endpoint distance and alignment. Cropped guides
-retain full values in M entries and link to a complete detail when available. Numerical
-spacing notes stay by their anchor; other Annotation text moves to linked N entries.
-Coincident mixed placements use P location entries with complete membership. If a
-note leader cannot be placed, coordinates and a digital location link retain that note.
-Failed plant-label placement does not generate per-position coordinate entries: local
-keys retain complete Species identities and counts. An explicit split action previews
-smaller frames and the actual PDF page count before replacing the original Print Area.
-This trades additional map space for readable positions instead of growing an index
-that cannot practically be used in the field. No density warning blocks export.
+Each detail retains exact planting geometry and gains a title, counts, consecutive
+identity starting at 1 and a ground scale. A complete compact key shares the sheet
+when it fits without reducing map scale; otherwise the complete key follows. Only
+Species sharing a symbol/colour combination within that detail need disambiguation.
+Plain/circle/square/diamond choices favour locally frequent plants and work in grayscale;
+occasional ambiguous plants and remaining conflicts use the reserved Species Code. Codes sit left of key samples;
+botanical names never repeat the symbol. Every appearance, full name and count remains.
+There are no plant-connection networks, duplicate quick keys or density consent gates.
+Authored custom plant colours, symbols and positions are not rewritten by export.
 
-Keys paginate at fixed readable type sizes with complete entry fragments across
-orientation overrides. Page numbers and named destinations resolve only after all
-pages exist. Screen inspection and PDF generation never modify the Design. The
-[implementation guide](../agent/canvas-pdf.md) records physical dimensions, spatial
-placement and engineering bounds; physical printer validation remains separate.
+Annotations retain their rotation and print directly at a readable physical size
+when they fit; only unresolved notes use N references. Stored Measurement Guides
+retain actual endpoint distances and full values when cropped, with a link to a
+complete detail when available. Zone dimensions derive from true edges/diameters,
+not bounding boxes. Full sizes remain above cropped details; extra dimension strokes
+are drawn only where clear. Text can interrupt Zone outlines without erasing artwork.
+Coincident plants retain P entries with complete membership. Unplaceable Species
+Codes retain coordinates within their existing key entry, without introducing P identities. No failed placement is silently reported as a readable identity.
+
+Keys and indexes paginate at fixed physical type sizes. Physical page indices and
+consecutive detail identities are distinct, and links resolve after pagination.
+An explicit split action still previews smaller frames before replacing a Print Area;
+export never automatically divides a requested area. Screen inspection and PDF
+generation never modify the Design. The [implementation guide](../agent/canvas-pdf.md)
+records module ownership and physical bounds; physical printer validation is separate.
 
 ## Shared foundation
 

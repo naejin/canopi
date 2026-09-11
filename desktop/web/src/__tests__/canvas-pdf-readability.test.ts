@@ -22,16 +22,17 @@ function input(): PdfInput {
   } }
 }
 
-it('identifies every member of a straight row once and repeats only its reference along the bracket', () => {
+it('identifies every member of a unique straight row through its glyph and one key entry', () => {
   const source = input(), before = structuredClone(source)
   const plan = buildPdfPlan(source, setup, text(), labels), page = plan.pages.find(p => p.kind === 'detail')!
   expect(plan.blocked).toBeNull()
   const ids = page.identifiedPlants!.flatMap(group => group.ids)
   expect([...ids].sort()).toEqual(source.canvas.plants.map(p => p.id).sort())
   expect(new Set(ids).size).toBe(ids.length)
-  expect(page.identifiedPlants!.some(group => group.ids.length === 25)).toBe(true)
-  expect(words(page)).toContain('×25')
-  expect(page.links!.filter(link => link.target === 'area:bed:key:01').length).toBeGreaterThan(1)
+  expect(page.identifiedPlants!.every(group => group.ids.length === 1)).toBe(true)
+  expect(plan.pages.map(words).join(' ')).toContain('×25')
+  expect(page.legend).toHaveLength(1)
+  expect(page.legend[0]!.enclosures).toEqual(['plain'])
   expect(source).toEqual(before)
 })
 
@@ -72,16 +73,16 @@ it('places transparent readable text clear of other text and stroked geometry on
   expect(words(page)).toContain('0.4 m')
 })
 
-it('retains complete rotated, coincident and boundary annotations automatically in linked keys', () => {
+it('retains complete rotated, coincident and boundary annotations directly or in the key', () => {
   const base = input(), notes = ['First note with accents: été', 'Second note', 'Boundary note']
   const source = { ...base, canvas: { ...base.canvas, annotations: notes.map((value, i) => ({ id: `note${i}`, text: value, fontSize: 16, rotation: i * 90,
     position: i === 2 ? { x: 9, y: 14 } : { x: 2, y: 2 } })) } }
   const plan = buildPdfPlan(source, setup, text(), labels), page = plan.pages.find(p => p.kind === 'detail')!
   expect(plan.blocked).toBeNull()
   expect(page.annotationIds).toHaveLength(3)
-  const key = plan.pages.filter(p => p.sourceId === page.id).map(words).join(' ')
+  const key = plan.pages.filter(p => p.id === page.id || p.sourceId === page.id).map(words).join(' ')
   for (const value of notes) expect(key).toContain(value)
-  expect(page.links!.filter(l => l.target.includes(':note:N'))).toHaveLength(3)
+  expect(page.links!.filter(l => l.target.includes(':note:N')).length).toBeLessThan(3)
 })
 
 it('retains authored overview notes without adding an appendix when field coverage changes', () => {
@@ -89,9 +90,11 @@ it('retains authored overview notes without adding an appendix when field covera
   for (const options of [setup, { ...setup, areas: [] }, { ...setup, views: { 'area:bed': { offset: { x: 100, y: 100 } } } }]) {
     const plan = buildPdfPlan(source, options, text(), labels)
     expect(plan.blocked).toBeNull()
-    expect(words(plan.pages[0]!)).toContain('Protect seedlings')
+    expect(plan.pages.map(words).join(' ')).toContain('Protect seedlings')
+    if (options === setup) expect(words(plan.pages[0]!)).not.toContain('Protect seedlings')
+    else expect(words(plan.pages[0]!)).toContain('Protect seedlings')
     expect(plan.pages.some(p => p.sourceId === 'overview')).toBe(false)
-    if (options === setup) expect(plan.pages.filter(p => p.kind === 'legend').map(words).join(' ')).toContain('Protect seedlings')
+
   }
 })
 
@@ -99,8 +102,8 @@ it('preserves a full measurement crossing a crop instead of reporting the clippe
   const base = input(), source = { ...base, canvas: { ...base.canvas, measurements: [{ id: 'long', start: { x: -10, y: 3 }, end: { x: 20, y: 3 } }] } }
   const plan = buildPdfPlan(source, setup, text(), labels), page = plan.pages.find(p => p.kind === 'detail')!
   expect(page.measurementIds).toEqual(['long'])
-  expect(plan.pages.filter(p => p.sourceId === page.id).map(words).join(' ')).toContain('30 m')
-  expect(page.links!.some(l => l.target.endsWith(':note:M1'))).toBe(true)
+  expect(plan.pages.filter(p => p.id === page.id || p.sourceId === page.id).map(words).join(' ')).toContain('30 m')
+  expect(words(page)).not.toContain('10 m')
 })
 
 it('preserves readable pinned names and authored spacing notes beside their anchor', () => {
@@ -110,13 +113,13 @@ it('preserves readable pinned names and authored spacing notes beside their anch
   expect(words(page)).toContain('Mint'); expect(words(page)).toContain('(40 cm)')
 })
 
-it('prints every tiny symbol as a solid position and selects detail at readable sizes', () => {
+it('retains the compact authored symbol at small sizes and selects detail at readable sizes', () => {
   const plant = { ...input().canvas.plants[0]!, smallMark: [{ ...mark[0]!, d: 'compact' }] }
   for (const symbol of ['round', 'canopy', 'fern', 'rosette']) {
     const operations: PdfOperation[] = []
     drawMark({ ...plant, symbol }, 10, 20, 1, .6, operations)
-    expect(operations).toEqual([{ kind: 'path', d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z',
-      matrix: [1, 0, 0, 1, 10, 20], fill: '#123456', stroke: null, width: 0, opacity: .6 }])
+    expect(operations).toEqual([{ kind: 'path', d: 'compact',
+      matrix: [1, 0, 0, 1, 10, 20], fill: '#123456', stroke: '#123456', width: .12 * (72 / 25.4), opacity: .6 }])
   }
   for (const [radius, expected] of [[3, 'compact'], [6, mark[0]!.d]] as const) {
     const operations: PdfOperation[] = []
@@ -134,13 +137,13 @@ it('lets an annotation connector leave a plant clearance margin without obscurin
   expect(placed!.route.some(s => hits(s, space.marks.get('other')!))).toBe(false)
 })
 
-it('links a cropped measurement to its complete detail using final page numbering', () => {
+it('links a cropped measurement to its complete detail using consecutive detail numbering', () => {
   const base = input(), source = { ...base, canvas: { ...base.canvas, measurements: [{ id: 'long', start: { x: -10, y: 3 }, end: { x: 20, y: 3 } }] } }
   const options = { ...setup, areas: [...setup.areas!, { id: 'full', name: 'Full length', bounds: { x: -11, y: 0, width: 32, height: 6 } }] }
   const plan = buildPdfPlan(source, options, text(), labels), cropped = plan.pages.find(p => p.id === 'area:bed')!, full = plan.pages.find(p => p.id === 'area:full')!
   expect(cropped.links!.some(l => l.target === `page:${full.id}`)).toBe(true)
   expect(cropped.pageReferences).toHaveLength(1)
   const location = cropped.pageReferences![0]!
-  expect(cropped.operations.some(op => op.kind === 'text' && op.y === location.y && op.line.runs.map(r => r.text).join('') === String(full.number))).toBe(true)
-  expect(plan.pages.filter(p => p.sourceId === cropped.id).map(words).join(' ')).toContain('30 m')
+  expect(cropped.operations.some(op => op.kind === 'text' && op.y === location.y && op.line.runs.map(r => r.text).join('') === String(full.detailNumber))).toBe(true)
+  expect(plan.pages.filter(p => p.id === cropped.id || p.sourceId === cropped.id).map(words).join(' ')).toContain('30 m')
 })

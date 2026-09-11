@@ -40,7 +40,7 @@ describe('Canvas PDF page plan', () => {
   it('fits authored content on A4 with complete species identity, common-name fallback and every appearance', () => {
     const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'portrait' }, 'area:all': { orientation: 'portrait' } }, layers: ['plants'], areas: [{ id: 'all', name: 'Garden', bounds: { x: -1, y: -1, width: 32, height: 14 } }] }, text(), labels)
     expect(plan.blocked).toBeNull()
-    expect(plan.pages).toHaveLength(3)
+    expect(plan.pages).toHaveLength(2)
     const page = plan.pages[1]!
     expect(page.width).toBeCloseTo(595.27559, 4)
     expect(page.height).toBeCloseTo(841.88976, 4)
@@ -53,14 +53,14 @@ describe('Canvas PDF page plan', () => {
   })
 })
 
-it('serializes routed field strokes at the encoder precision shared by native previews', () => {
+it('serializes measurement strokes at the encoder precision shared by native previews', () => {
   const { input, setup, labels } = fixture('mixed')
-  const plan = buildPdfPlan(input, setup, text(), labels)
+  const source = { ...input, canvas: { ...input.canvas, measurements: [{ id: 'measure', start: { x: 1.123456789, y: 1 }, end: { x: 3.123456789, y: 1 } }] } }
+  const plan = buildPdfPlan(source, { ...setup, layers: [...setup.layers, 'measurement-guides'] }, text(), labels)
   const strokes = plan.pages[1]!.operations.filter(op => op.kind === 'path' && /^M[\d.]+ [\d.]+ L[\d.]+ [\d.]+$/.test(op.d))
-  expect(strokes.length).toBeGreaterThan(10)
+  expect(strokes.length).toBeGreaterThan(0)
   for (const stroke of strokes) {
     if (stroke.kind !== 'path') continue
     expect(stroke.d).not.toMatch(/\.\d{7}/)
   }
-  expect(strokes.some(op => op.kind === 'path' && op.d === 'M171.815477 92.562476 L168.708661 95.669291')).toBe(true)
 })

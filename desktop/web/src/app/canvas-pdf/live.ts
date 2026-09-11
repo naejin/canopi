@@ -27,7 +27,9 @@ export const canvasPdf = createPdfWorkflow({
   resolveNames: resolvePdfNames,
   prepare: async (input, signal, progress) => (await import('./job')).preparePdfJob(input, signal, progress),
   delivery: createPdfDelivery(),
-  labels: () => ({ notes: t('pdf.notes'), observations: t('pdf.observations'), keyAndNotes: t('pdf.keyAndNotes'), overview: t('pdf.overview'), plants: t('pdf.plants'), actualSize: t('pdf.actualSize') }),
+  labels: () => ({ notes: t('pdf.notes'), observations: t('pdf.observations'), keyAndNotes: t('pdf.keyAndNotes'), overview: t('pdf.overview'), plants: t('pdf.plants'), actualSize: t('pdf.actualSize'),
+    detail: t('pdf.detail'), measurementSummary: t('pdf.measurementSummary'), zone: t('pdf.zone'), longSide: t('pdf.longSide'), width: t('pdf.width'), guides: t('pdf.guides'),
+    metres: t('pdf.metres'), diameters: t('pdf.diameters'), outerSides: t('pdf.outerSides'), quantity: t('pdf.quantity'), species: t('pdf.species'), plantKey: t('pdf.plantKey') }),
   namePrintArea: (number) => t('pdf.areaName', { number }),
   fontBaseUrl: () => new URL(`${import.meta.env.BASE_URL}pdf-fonts/`, document.baseURI).href,
 })

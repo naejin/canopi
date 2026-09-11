@@ -4,7 +4,7 @@ Canvas PDF exports are derived files. The Design Session and canvas retain owner
 
 ## Shared pipeline
 
-- `CanvasQuerySurface.capturePrintSnapshot()` returns an owned renderer-neutral projection from settled Scene state, or `null` while an edit owns the Scene. It must never settle an edit, flush maintenance, or request the persistence role. Symbol recipes and resolved authored colors are captured inside the runtime; maps, viewport decorations, and selection state never enter the projection.
+- `CanvasQuerySurface.capturePrintSnapshot()` returns an owned renderer-neutral projection from settled Scene state, or `null` while an edit owns the Scene. It must never settle an edit, flush maintenance, or request the persistence role. Symbol recipes, resolved authored colors, and owned native Zone primitives (world-space polygon/rectangle corners and ellipse centre/radii/rotation) are captured inside the runtime; maps, viewport decorations, and selection state never enter the projection.
 - `app/canvas-pdf/live.ts` composes capture, selected-language name resolution, the worker, and the edition delivery adapter. Its owned observation invalidates stale output and schedules an automatic rebuild on Scene, canvas attachment, Design name, or locale changes while the workspace is open. A Design Session identity change instead cancels the operation, closes the workspace and discards its setup. Catalog failure or a 30-second lookup deadline retains full canonical names. Closing/replacing the preview immediately releases the wait without disposing the shared catalog reader.
 - `app/canvas-pdf/workflow.ts` owns temporary setup, cancellation, current-result admission, and delivery status. Its owned 100 ms refresh timer leaves the reactive observer before capturing, coalesces source revisions, and is cleared on rebuild, close, replacement and disposal. A busy Scene is retried when the settled-source observation changes; no polling loop is installed. Layer selections override print inclusion without changing Scene visibility. Closing releases results, retained field layouts and the current job while retaining choices for the current Design. Reopening captures current content; missing Layer selections block preparation until explicitly reviewed. Replacing the Design discards setup. Export never calls Design persistence or marks a Design saved.
 - `layout.ts` composes a page plan in PDF points (72 points/inch); the field placement modules calculate collision geometry in physical millimetres. `text.ts` uses Fontkit shaping and embedded Noto font metrics for both preview outlines and PDF text. `encode.ts` replays the same plan through PDFKit; no screenshot, browser print stylesheet, native renderer, or system font participates.
@@ -26,12 +26,11 @@ The [native foundation evidence](../canvas-pdf-native-verification.md) covers th
 
 ## Field layout and coverage
 
-`PdfPrintArea` is the sole detail coverage model: a named temporary rectangle with a
+`PdfPrintArea` is the detail coverage model: a named temporary rectangle with a
 session ID and ground bounds, independent of Zones. At 100% its exact ground extent
-is fitted into a centred physical frame, without adding ground outside the rectangle.
+is fitted into a physical frame, without adding ground outside the rectangle. The map may shift across spare paper to accommodate a complete key; its scale and ground coverage remain fixed. Side-key candidates start at 84 mm and grow only when needed, centring the drawing in the remaining region. Shallow horizontal drawings can reserve a key below before placing annotations; chosen map scale stays fixed.
 `coverage.ts` owns fit, zoom and displacement. Automatic orientation maximizes the
-usable scale; exact squares use portrait. Each area produces one detail map followed
-by its automatic key/notes pages. `addWholeDesign()` explicitly uses the fitted picker extent. `split-sheets.ts` partitions an explicitly requested sheet along its longest ground axis, aiming for at most 120 distinct positions per partition, with at least two and at most 32 proposed rectangles. This is a coverage heuristic, not a guarantee that coincident or unusually dense positions become readable. Full ground coverage is preserved. `splitPreview` owns proposed setup separately from committed `setup`; Apply commits only a current ready preview and Cancel rebuilds the original. Export is unavailable while reviewing a proposal, never because a sheet is crowded.
+usable scale; exact squares use portrait. Each area produces one detail map with a complete local key on the same sheet when it fits, otherwise followed by automatic key/notes pages. `addWholeDesign()` explicitly uses the fitted picker extent. `split-sheets.ts` partitions an explicitly requested sheet along its longest ground axis, aiming for at most 120 distinct positions per partition, with at least two and at most 32 proposed rectangles. This is a coverage heuristic, not a guarantee that coincident or unusually dense positions become readable. Full ground coverage is preserved. `splitPreview` owns proposed setup separately from committed `setup`; Apply commits only a current ready preview and Cancel rebuilds the original. Export is unavailable while reviewing a proposal, never because a sheet is crowded.
 
 `PdfSetup.views` stores temporary zoom, ground-centre displacement in metres and
 orientation by stable ID (`overview`, `area:<id>`, `<source>:legend:<index>`), never by
@@ -40,91 +39,107 @@ can crop; `fitPage()` restores full coverage and centring. Orientation overrides
 at the retained zoom/displacement. Key pages inherit source orientation unless
 individually overridden. Removing an area removes its associated page choices.
 
-`field-layout.ts` owns the drawing pass. Its generated line paths use PDFKit’s
-six-decimal PDF-point precision in the shared plan, so native floating-point
-roundoff cannot make preview geometry or exact plan hashes platform-dependent. Authored dimensions and notes have placement
-priority over shared brackets. When no shared group fits, the established local-run
-layout order is retained. `field-brackets.ts` selects repeated
-appearance groups, reserves readable references at both ends and admits a group only
-when every member can be routed. Pinned names and coincident placements remain in
-the local identity path. Groups outside the available edge space fall back to that
-same path. Horizontal and vertical brackets use one millimetre-based algorithm.
-`field-routing.ts` owns bounded orthogonal routing (12,000 nodes per route, 240,000
-per field); there is no new worker or persistent cache. Crossing gaps remove only
-connector strokes; membership dots and dark references remain readable independently
-of authored plant opacity. Pale connector colours are darkened for paper contrast,
-without changing the authored marks. Connectors are explicit geometry, never empty fake labels.
-`layout.ts` leaves 8 mm at both long-axis ends of frames at least 4:1; the ground
-rectangle stays exact and the drawing is never split, rotated or stretched.
-`field-support.ts` adds a complete compact key and a metre ruler to spare space on
-shallow horizontal fields only when their physical bounds fit. The complete paginated
-key remains authoritative. The ruler starts at the left ground edge, independent of
-world coordinates. These paths run only for detail sheets and share the existing
-layout-cache, cancellation and preview/encoding pipeline. `field-rows.ts` infers straight neighbouring
-runs, splitting at species, appearance, spacing or direction changes; arbitrary
-layouts remain individual. `field-placement.ts` places transparent identities with
-actual Fontkit ink bounds and routes leaders around printed labels and plant marks.
-For frames at least 4:1 in either orientation, label search runs along the short
-axis and keeps ink outside the planting frame with 1 mm clearance. Targets are
-visited along the long axis to preserve exit corridors for later plants. This
-applies to identities, name upgrades, repeated references and note anchors; it
-never rotates plants, changes ground coverage or adds map pages. Keep horizontal,
-vertical and slightly tilted strip regressions in `canvas-pdf-strips.test.ts`.
-Crossing leaders have gaps in their own stroke, never opaque erasers. Compact
-numeric references repeat along long rows. A full common name is added once per
-Species where it fits; full names always remain in the key.
+`field-layout.ts` composes physical drawing, identification, annotations and dimensions.
+`field-identity.ts` chooses plain/circle/square/diamond enclosures within each detail's
+appearance groups. Local frequency takes priority; whole-Design conflict ordering
+breaks ties. Only local symbol/colour collisions activate identification. Occasional
+members (at most three occurrences and less than one third of the most frequent
+member) use the existing Species Code, as do excess enclosure conflicts. Unique
+appearances stay plain. No plant membership networks or leader strokes are generated.
+Code labels search adjacent space on both axes, including clear gaps within multi-bed
+sheets. Their nearest edge must remain associated with the source plant among otherwise
+indistinguishable marks and have a clear direct path. Code ink avoids stored guide
+segments; dimension labels then fit around it. When at most eight plants remain unresolved, at most eight enclosure exchanges
+can resolve failed codes, accepted only when fewer plants remain unplaced. Every
+instance and key sample for an appearance changes together. A code that cannot fit retains coordinates in its existing Species
+entry, never a second P identity. P references are reserved for coincident placements
+with complete membership and counts. Zero-sized placement metadata must never be
+reported as a readable map identity. Positions closer than the 0.7 mm mark diameter
+bypass futile code/reference placement and retain coordinates.
 
-`field-dimensions.ts` positions aligned dimensions from complete authored Measurement
-Guides, retaining actual endpoint distance. Cropped or unplaceable dimensions use an
-M reference and full value in the key. When another detail contains the full guide,
-a vector arrow names and links that final detail page. Authored numerical spacing
-Annotations print their original value beside an N reference. Other Annotations use
-N anchors with their complete text in the key. Coincident mixed Species use a P
-location reference and complete membership instead of overlapping individual leaders.
-Unplaceable notes retain ground coordinates and a location link. Ordinary failed plant labels retain Species identity/counts in the local key, without adding P coordinate entries. Placement metadata uses zero-sized bounds for unresolved plant labels; never report these as readable map identities. Individual unpinned positions closer than the 0.7 mm printed dot diameter bypass futile leader searching; row and coincident membership handling remains explicit.
+`field-placement.ts` reserves actual Fontkit ink and enclosed mark bounds in physical
+millimetres. Its bounded candidate search uses clear paths to assess association;
+these paths are not printed plant connectors. `field-annotations.ts` tries readable
+8.5–12 pt, whole-word text near the authored anchor, preserving rotation. Only detail notes
+that cannot fit use an N reference and their complete text in the key. Species Code
+identification and authored guides take priority over note placement. `zone-ink.ts`
+interrupts only Zone outline strokes around text; native geometry remains intact.
+PDF Zone interiors are always transparent, including authored filled Zones. Never use opaque erasers over planting artwork.
 
-`field-geometry.ts` owns bounded spatial indices, segment clipping/crossings and
-flattening the M/L/H/V/C/Z paths emitted by print capture. It does not parse glyph or
-plant-symbol paths. `canvas/plant-spacing.ts` remains the shared nearest-position
-utility; PDF layout does not import interactive renderers or runtime state.
+`field-dimensions.ts` draws dimensions from stored Measurement Guide endpoints,
+retaining full physical distance even when cropped. Labels are 8.5 pt on details;
+vertical labels align with the guide. Stroke gaps belong to the dimension itself.
+A cropped/unplaceable guide keeps its authored segment and a nearby full value or an
+M entry. An arrow links to a detail containing the whole guide when available.
+`zone-measurements.ts` derives sizes from captured primitives: actual edges for beds
+and polygons, actual diameters for ellipses, never axis-aligned bounding-box sizes.
+Bent corridor beds retain their exterior segments and distinct end widths. Other
+polygons retain individual edges, including four-sided polygons; only native rectangles
+use the rectangular size shortcut. Matching authored guides are reused, not duplicated.
+Full dimensions remain in `field-summary.ts` above a cropped detail; derived dimension
+lines are added only where their real endpoints and physical ink fit.
 
-`overview.ts` directly renders authored geometry, notes, guides and pinned canonical
-names. It never infers rows, solves labels or constructs keys/notes appendices, even
-when there are no field sheets. Annotation positions and rotation are retained;
-screen-pixel text sizes are projected from a fixed 60 px/m reference scale, capped
-at the original 96 dpi physical size. Overview text scales with the drawing rather
-than taking field-sheet typography space. Only explicit field sheets request localized
-Species names; opening an overview requires no catalog lookup. Reopening an export
-with saved field choices first prepares a lightweight overview before waiting for names.
-The picker uses the same authored drawing path without generated print references.
-Selected layers and manual cropping determine inclusion.
+`overview.ts` preserves all selected stored guide lines and endpoint ticks. Repeated
+values are grouped by native Zone in the aligned `overview-measurements.ts` table.
+`overview-guides.ts` may place an existing connected horizontal chain in a readable
+band below the drawing; it creates no synthetic guide. Crops or tight spacing reject
+that band. Other values use physical 7.5 pt placement, with M summaries when needed.
+Long dimension indexes paginate into overview continuations. Zone labels connect
+the table to paper locations. The index accepts guide-value strings, never Canvas
+annotations; `layout.ts` admits only distance entries to this overflow path.
+Overview annotations only print as complete contextual
+text when their physical ink fits with 2 mm clearance and at most two lines, after
+plant marks, guide ink and Zone references. No N markers or annotation lists belong
+on the overview. Notes covered by chosen details appear there.
 
-Detail sheets have 8 mm side/top margins, 10 mm bottom clearance and only their source
-page number above the drawing. They have no minimap, running title, footer or grid.
-The overview carries the title and a physically 50 mm calibration bar. Canvas symbols
-are capped at 1 mm radius and by nearby spacing (0.35 mm minimum); below 0.8 mm radius
-they become solid position dots. Key samples retain 3 mm diameter. Plant and Zone artwork retain authored colours, symbol recipes, layer opacity and
-positions. Derived references and text use the readable print ink palette. PDF glyph selection
-uses compact recipes below a 12 pt diameter and detailed recipes above it, independently
-of the interactive viewport. Nonzero winding preserves enclosed symbol cutouts.
+Detail coverage comes only from explicit Print Areas and their current framing.
+Annotations that do not fit on the overview and lie outside every chosen detail are
+omitted. They never generate a detail, an overview annotation list, or a note relocated
+into another detail's key. An overview-only setup may add continuations for Zone
+sizes and stored Measurement Guide values, but never for annotations or Species keys.
+This is a layout-level invariant, including progressive overview preparation.
 
-`field-key.ts` paginates complete common/canonical names, reserved Design letter codes,
-counts, every authored appearance and full notes at fixed physical sizes. It uses two
-columns in portrait and three in landscape. Common names are 10 pt, canonical names
-8 pt, numeric references 9.5 pt semibold, notes 9.5 pt and dimension values 9 pt
-semibold. Entry fragments reflow to each continuation's orientation without dropping
-text or samples. Spare key-page space provides ruled field observations. Numeric
-paper references are allocated once from the whole Design in reserved-code order;
-framing, selected Layers and locale do not renumber them. They never change the
-Design's existing letter codes or saved presentation.
+Remote notes do not shrink the main planting plan. The separate picker still fits
+all authored anchors so users can explicitly choose detail coverage there. Catalog
+name resolution is limited to chosen detail coverage; overview annotations do not
+trigger Species name lookup. Font preparation includes printable annotations and
+pinned plant names without expanding detail coverage.
 
-`layout.ts` finalizes page numbers after all keys paginate. Overview frames, dimension
-continuations, source/key navigation and individual entries link through stable named
-destinations. `encode.ts` writes one PDFKit document; do not concatenate separately
-encoded PDFs and lose their destinations. No legend overflow or crowded-text consent
-state remains. Empty content, missing selected Layers, unsupported input and resource
-failures still have explicit recovery. Engineering bounds remain 200 total pages,
-120 seconds per job, 30 seconds per font/name wait and 64 MiB native delivery.
+`field-geometry.ts` owns spatial indices, clipping, rotated ink bounds and flattening
+M/L/H/V/C/Z captured geometry. It does not parse plant symbol or glyph paths.
+`canvas/plant-spacing.ts` remains the shared nearest-position utility. PDF layout
+imports neither interactive renderers nor runtime state.
+
+Detail sheets have an 8 mm side margin, a 26 mm header band plus full Zone summaries,
+and 20 mm bottom clearance. `page-furniture.ts` provides Design title, consecutive
+detail identity, counts, paper/actual-size reminder and a 1/2/5 ground scale. The
+overview carries the same ground scale plus a separately labelled physical 50 mm calibration bar. Plant marks retain
+authored positions, custom colours, opacity and compact symbol recipes even at small
+sizes; detail radii cap at 0.8 mm and overview radii at 1 mm. Enclosures add clearance
+outside the mark. Zone outlines use quiet neutral ink with no fill on overview, detail
+and picker pages. Draw them before plants, guides and annotations so overlapping
+Zones never mask artwork. Preserve authored fills in the snapshot and Design; this
+is a PDF presentation rule. Compact recipes apply below 12 pt diameter, independently of viewport.
+Nonzero winding preserves symbol cutouts.
+
+`integrated-key.ts` admits a full key in spare paper only if its complete entries and
+notes fit without colliding with drawing ink or reducing map scale. `field-key.ts`
+uses a compact heading and aligned quantities, with 8 pt semibold Species Codes and 9.5 pt common names, 7.5 pt botanical names and 9 pt notes in compact keys;
+standalone keys use 10/8/9.5 pt respectively. The Species Code is left of a single
+enclosed sample, with no repeated symbol beside the botanical name. Every authored
+appearance and count remains represented. Keys use up to three columns, reflow complete
+entry fragments across independent orientation overrides, and use spare space for
+ruled observations. There is no duplicate quick key. Internal whole-Design numeric
+IDs name destinations only; the Design's Species Code remains the visible identity.
+
+`layout.ts` finalizes physical page numbers after all continuations exist. The separate
+`detailNumber` starts at 1 and increments only for detail maps; overview coverage,
+headers, dimension arrows and source-key labels use it. Stable named destinations
+connect pages and entries. Overview index continuations appear in the page rail too.
+`encode.ts` writes one PDFKit document; never concatenate separate documents and lose
+links. Engineering bounds remain 200 total pages, 120 seconds per job, 30 seconds per
+font/name wait and 64 MiB native delivery. Final plans retain only glyph outlines used by printed or picker artwork, so cached and fresh layouts agree. Cache signatures include captured geometry,
+local identities, names, coverage, measurement homes, key orientation and labels.
 
 `setPageView()` validates changes and rebuilds through the cancellable workflow. The
 workspace keeps its last displayed plan during rebuilding to keep controls stable,

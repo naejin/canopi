@@ -1,4 +1,4 @@
-import type { CanvasPrintSnapshot, PrintMarkPath } from '../print'
+import type { CanvasPrintSnapshot, PrintMarkPath, PrintZone } from '../print'
 import { resolvePlantBaseColor, type PlantPresentationContext } from './plant-presentation'
 import { resolvePlantSymbolForPlant, type ScenePersistedState } from './scene'
 import { getPlantSymbolShapes, plantSymbolShapePath, type PlantSymbolShape } from './plant-symbol-recipes'
@@ -25,7 +25,10 @@ export function buildCanvasPrintSnapshot(
         ? ellipsePath(points[0]!.x, points[0]!.y, Math.abs(points[1]!.x), Math.abs(points[1]!.y), zone.rotationDeg)
         : points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ') + (zone.zoneType === 'line' ? '' : ' Z')
       if (zone.fillColor && !/^(#[\da-f]{3,8}|rgba?\([\d.,\s]+\)|[a-z]+)$/i.test(zone.fillColor)) throw new Error('unsupported-print-color')
-      return [{ name: zone.name, path, bounds, fill: zone.zoneType === 'line' ? null : zone.fillColor }]
+      const geometry: PrintZone['geometry'] = zone.zoneType === 'ellipse' && points.length >= 2
+        ? { kind: 'ellipse', center: { ...points[0]! }, radii: { x: Math.abs(points[1]!.x), y: Math.abs(points[1]!.y) }, rotation: zone.rotationDeg }
+        : { kind: zone.zoneType === 'line' ? 'line' : zone.zoneType === 'rect' ? 'rect' : 'polygon', points: points.map(p => ({ ...p })) }
+      return [{ name: zone.name, path, bounds, geometry, fill: zone.zoneType === 'line' ? null : zone.fillColor }]
     }),
     annotations: scene.annotations.map((annotation) => ({ id: annotation.id, position: { ...annotation.position },
       text: annotation.text, fontSize: annotation.fontSize, rotation: annotation.rotationDeg ?? 0 })),

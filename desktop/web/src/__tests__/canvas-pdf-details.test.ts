@@ -42,7 +42,7 @@ describe('Fitted Print Area detail pages', () => {
   })
   it('refits an individual Print Area when its orientation changes without changing the overview setting', () => {
     const plan = buildPdfPlan(garden(), { ...setup, views: { overview: { orientation: 'landscape' }, 'area:orchard': { orientation: 'portrait' } } }, text(), labels)
-    expect(plan.pages).toHaveLength(3)
+    expect(plan.pages).toHaveLength(2)
     expect(plan.pages[0]!.width).toBeGreaterThan(plan.pages[0]!.height)
     const page = plan.pages[1]!
     expect(page.width).toBeLessThan(page.height)

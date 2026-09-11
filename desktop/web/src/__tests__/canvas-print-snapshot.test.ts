@@ -18,6 +18,15 @@ describe('Canvas print capture', () => {
     expect(result.zones[1]!.path.match(/C/g)).toHaveLength(4)
     expect(result.zones[2]!.path).toBe('M0 0 L5 5')
   })
+  it('captures owned primitive geometry so ellipse diameters are independent of rotated bounds', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.zones.push({ kind: 'zone', name: 'Pond', zoneType: 'ellipse', rotationDeg: 45, locked: false, fillColor: null, notes: null,
+      points: [{ x: 10, y: 20 }, { x: 4, y: 2 }] })
+    const result = buildCanvasPrintSnapshot(scene, { viewport: { x: 0, y: 0, scale: 1 }, speciesCache: new Map() })
+    expect(result.zones[0]!.geometry).toEqual({ kind: 'ellipse', center: { x: 10, y: 20 }, radii: { x: 4, y: 2 }, rotation: 45 })
+    scene.zones[0]!.points[0]!.x = 99
+    expect(result.zones[0]!.geometry).toMatchObject({ center: { x: 10, y: 20 } })
+  })
   it('preserves authored appearance and pinning independently of screen zoom and selection', () => {
     const scene = createDefaultScenePersistedState()
     scene.plantSpeciesSymbols['Malus domestica'] = 'canopy'

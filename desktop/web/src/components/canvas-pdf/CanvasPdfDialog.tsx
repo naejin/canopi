@@ -92,7 +92,7 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
         </aside>
         <main className={styles.preview}>
           <div className={styles.previewHeading}>
-            <strong>{adding ? t('pdf.addPage') : page?.areaName ?? (page?.kind === 'legend' ? plan?.pages.find((source) => source.id === page.sourceId)?.number + ' · ' + t('pdf.keyAndNotes') : t('pdf.overview'))}</strong>
+            <strong>{adding ? t('pdf.addPage') : page?.areaName ?? (page?.kind === 'legend' ? (plan?.pages.find((source) => source.id === page.sourceId)?.detailNumber ?? t('pdf.overview')) + ' · ' + t(page.sourceId === 'overview' ? 'pdf.measurementSummary' : 'pdf.keyAndNotes') : t('pdf.overview'))}</strong>
             <span role="status">{preparing ? t('pdf.preparing') : page ? t('pdf.pageCount', { page: page.number, count: plan!.pages.length }) : ''}</span>
           </div>
           {splitPreview && <div className={styles.notice} role="status">
