@@ -41,15 +41,16 @@ Options:
   --tag TAG           Git tag / release tag to create or update (required)
   --title TITLE       GitHub Release title (required)
   --repo OWNER/REPO   GitHub repository (default: detected from git remote)
+  --artifact-dir DIR Reuse packages in a downloaded candidate directory; always fetch a fresh manifest
 EOF
 }
 
+caller_dir="$PWD"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
 require_cmd gh
 require_cmd python3
-require_cmd sha256sum
 require_cmd unzip
 
 detect_repo() {
@@ -76,6 +77,7 @@ tag=""
 title=""
 repo="$(detect_repo || true)"
 tmpdir=""
+local_artifact_dir=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -93,6 +95,13 @@ while [[ $# -gt 0 ]]; do
       ;;
     --repo)
       repo="$2"
+      shift 2
+      ;;
+    --artifact-dir)
+      local_artifact_dir="${2:?--artifact-dir requires a directory}"
+      if [[ "$local_artifact_dir" != /* ]]; then
+        local_artifact_dir="$caller_dir/$local_artifact_dir"
+      fi
       shift 2
       ;;
     -h|--help)
@@ -133,7 +142,7 @@ if (run.get("path") != ".github/workflows/release-candidate.yml"
     raise SystemExit("ERROR: Promotion requires a successful, completed Release Candidate run.")
 PY
 
-log "Downloading artifacts from run $run_id in $repo"
+log "Reading candidate artifacts from run $run_id in $repo"
 artifact_json="$(gh api "repos/$repo/actions/runs/$run_id/artifacts")"
 mapfile -t artifact_lines < <(
   ARTIFACT_JSON="$artifact_json" python3 - <<'PY'
@@ -158,6 +167,9 @@ for artifact_line in "${artifact_lines[@]}"; do
   artifact_rest="${artifact_line#*$'\t'}"
   artifact_name="${artifact_rest%%$'\t'*}"
   artifact_size="${artifact_rest#*$'\t'}"
+  if [[ -n "$local_artifact_dir" && "$artifact_name" != "canopi-release-candidate-manifest" ]]; then
+    continue
+  fi
   artifact_dir="$tmpdir/$artifact_name"
   artifact_zip="$tmpdir/$artifact_name.zip"
   log "Downloading artifact '$artifact_name' ($(format_bytes "$artifact_size"))"
@@ -176,26 +188,16 @@ if [[ ! -f "$manifest_path" || ! -f "$metadata_path" ]]; then
   exit 1
 fi
 
-log "Verifying packaged artifact checksums"
-(
-  cd "$tmpdir"
-  sha256sum -c "$manifest_path"
-)
-
-mapfile -t release_files < <(
-  find "$tmpdir" -type f \( \
-    -name '*.deb' -o \
-    -name '*.AppImage' -o \
-    -name '*.dmg' -o \
-    -name '*.msi' -o \
-    -name '*.exe' \
-  \) | sort
-)
-
-if [[ "${#release_files[@]}" -eq 0 ]]; then
-  echo "ERROR: No packaged release artifacts were downloaded from run $run_id." >&2
-  exit 1
+stage_args=()
+if [[ -n "$local_artifact_dir" ]]; then
+  log "Staging local packages against the freshly downloaded candidate manifest"
+  stage_args=(--stage-dir "$tmpdir/staged")
 fi
+log "Verifying packaged artifact checksums"
+python3 "$repo_root/scripts/release_candidate_artifacts.py" \
+  --manifest "$manifest_path" --source-dir "${local_artifact_dir:-$tmpdir}" \
+  "${stage_args[@]}" > "$tmpdir/release-files.txt"
+mapfile -t release_files < "$tmpdir/release-files.txt"
 
 release_identity="$(python3 - "$metadata_path" "$repo" "$tag" <<'PY'
 import json

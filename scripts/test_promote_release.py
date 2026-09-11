@@ -21,6 +21,13 @@ class PromotionTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / "scripts").mkdir()
         shutil.copy2(SOURCE / "promote-release.sh", self.root / "scripts")
+        shutil.copy2(SOURCE / "release_candidate_artifacts.py", self.root / "scripts")
+        self.payload = b"candidate installer bytes"
+        self.manifest = hashlib.sha256(self.payload).hexdigest() + "  ./canopi-linux/canopi_1.1.1.deb\n"
+        self.local_dir = self.root / "cached packages"
+        self.local_package = self.local_dir / "canopi-linux/canopi_1.1.1.deb"
+        self.local_package.parent.mkdir(parents=True)
+        self.local_package.write_bytes(self.payload)
         self.state = {
             "run": {"path": ".github/workflows/release-candidate.yml", "status": "completed", "conclusion": "success"},
             "metadata": {"repository": "example/canopi", "ref": SHA, "head_sha": SHA, "release_version": "1.1.1",
@@ -30,7 +37,7 @@ class PromotionTests(unittest.TestCase):
         }
         gh = self.root / "gh"
         gh.write_text('''#!/usr/bin/env python3
-import json, os, sys
+import hashlib, json, os, sys
 from pathlib import Path
 root = Path(os.environ["PROMOTION_FIXTURE"])
 state = json.loads((root / "state.json").read_text())
@@ -40,7 +47,15 @@ if args[:2] == ["release", "view"]:
     if state["release"] is None: sys.exit(1)
     print(json.dumps(state["release"]))
 elif args[0] == "release" and args[1] in ["create", "edit", "upload"]:
-    pass
+    if args[1] == "create" and state.get("rewrite_local_on_create"):
+        Path(state["rewrite_local_on_create"]).write_bytes(b"changed after verification")
+    if args[1] == "upload":
+        uploaded = {}
+        for arg in args[3:]:
+            path = Path(arg.split("#", 1)[0])
+            if path.is_file():
+                uploaded[path.name] = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        (root / "uploaded.json").write_text(json.dumps(uploaded))
 elif args[0] == "api":
     endpoint = args[1]
     if endpoint.endswith("/actions/runs/123/artifacts"):
@@ -59,22 +74,115 @@ else: raise SystemExit("Unexpected command: " + repr(args))
 ''')
         gh.chmod(0o755)
 
-    def promote(self, tag="v1.1.1"):
+    def promote(self, tag="v1.1.1", artifact_dir=None, cwd=None):
+        (self.root / "calls.jsonl").unlink(missing_ok=True)
         (self.root / "state.json").write_text(json.dumps(self.state))
-        payload = b"candidate installer bytes"
         with zipfile.ZipFile(self.root / "1.zip", "w") as archive:
-            archive.writestr("canopi_1.1.1.deb", payload)
+            archive.writestr("canopi_1.1.1.deb", self.payload)
+            archive.writestr("unlisted.exe", b"not in the candidate manifest")
         with zipfile.ZipFile(self.root / "2.zip", "w") as archive:
             archive.writestr("release-metadata.json", json.dumps(self.state["metadata"]))
-            archive.writestr("SHA256SUMS.txt", hashlib.sha256(payload).hexdigest() + "  ./canopi-linux/canopi_1.1.1.deb\n")
+            archive.writestr("SHA256SUMS.txt", self.manifest)
+        local_args = ["--artifact-dir", str(artifact_dir)] if artifact_dir is not None else []
         return subprocess.run(["bash", str(self.root / "scripts/promote-release.sh"), "--run-id", "123", "--tag", tag,
-                               "--title", "Canopi 1.1.1", "--repo", "example/canopi"],
+                               "--title", "Canopi 1.1.1", "--repo", "example/canopi", *local_args],
                               env={**os.environ, "PATH": str(self.root) + os.pathsep + os.environ["PATH"],
-                                   "PROMOTION_FIXTURE": str(self.root)}, capture_output=True, text=True)
+                                   "PROMOTION_FIXTURE": str(self.root)}, cwd=cwd, capture_output=True, text=True)
+
+    def calls(self):
+        return list(map(json.loads, (self.root / "calls.jsonl").read_text().splitlines()))
 
     def mutations(self):
-        return [call for call in map(json.loads, (self.root / "calls.jsonl").read_text().splitlines())
+        return [call for call in self.calls()
                 if call[:1] == ["release"] and call[1] in ["create", "edit", "upload"]]
+
+    def test_local_packages_skip_package_downloads_but_fetch_the_remote_manifest(self):
+        result = self.promote(artifact_dir=self.local_dir)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        downloads = [call[1] for call in self.calls() if call[0] == "api" and "/actions/artifacts/" in call[1]]
+        self.assertEqual(downloads, ["repos/example/canopi/actions/artifacts/2/zip"])
+        self.assertEqual(self.local_package.read_bytes(), self.payload)
+        uploaded = json.loads((self.root / "uploaded.json").read_text())
+        self.assertEqual(set(uploaded), {"canopi_1.1.1.deb", "SHA256SUMS.txt", "release-metadata.json"})
+
+    def test_default_path_still_downloads_packages_and_ignores_unlisted_installers(self):
+        result = self.promote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        downloads = [call[1] for call in self.calls() if call[0] == "api" and "/actions/artifacts/" in call[1]]
+        self.assertEqual(len(downloads), 2)
+        uploaded = json.loads((self.root / "uploaded.json").read_text())
+        self.assertNotIn("unlisted.exe", uploaded)
+
+    def test_local_files_are_snapshotted_before_release_mutation(self):
+        self.state["rewrite_local_on_create"] = str(self.local_package)
+        result = self.promote(artifact_dir=self.local_dir)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uploaded = json.loads((self.root / "uploaded.json").read_text())["canopi_1.1.1.deb"]
+        self.assertEqual(uploaded["sha256"], hashlib.sha256(self.payload).hexdigest())
+        self.assertNotEqual(uploaded["path"], str(self.local_package))
+        self.assertEqual(self.local_package.read_bytes(), b"changed after verification")
+
+    def test_local_snapshot_preserves_a_package_larger_than_the_copy_buffer(self):
+        self.payload = b"installer bytes" * 150000
+        self.manifest = hashlib.sha256(self.payload).hexdigest() + "  ./canopi-linux/canopi_1.1.1.deb\n"
+        self.local_package.write_bytes(self.payload)
+        result = self.promote(artifact_dir=self.local_dir)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uploaded = json.loads((self.root / "uploaded.json").read_text())["canopi_1.1.1.deb"]
+        self.assertEqual(uploaded["sha256"], hashlib.sha256(self.payload).hexdigest())
+
+    def test_a_missing_second_package_cannot_upload_a_partial_release(self):
+        self.manifest += hashlib.sha256(self.payload).hexdigest() + "  ./canopi-windows/Canopi.exe\n"
+        result = self.promote(artifact_dir=self.local_dir)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.mutations(), [])
+
+    def test_relative_artifact_directory_is_resolved_from_the_callers_directory(self):
+        caller = self.root / "caller"
+        caller.mkdir()
+        result = self.promote(artifact_dir="../cached packages", cwd=caller)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_missing_or_changed_local_packages_fail_before_release_mutation(self):
+        for content in [None, b"changed package"]:
+            with self.subTest(content=content):
+                self.local_package.unlink(missing_ok=True)
+                if content is not None:
+                    self.local_package.write_bytes(content)
+                result = self.promote(artifact_dir=self.local_dir)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.mutations(), [])
+
+    def test_a_forged_local_manifest_cannot_admit_changed_packages(self):
+        changed = b"not the candidate"
+        self.local_package.write_bytes(changed)
+        local_manifest = self.local_dir / "canopi-release-candidate-manifest"
+        local_manifest.mkdir()
+        (local_manifest / "SHA256SUMS.txt").write_text(hashlib.sha256(changed).hexdigest() + "  ./canopi-linux/canopi_1.1.1.deb\n")
+        (local_manifest / "release-metadata.json").write_text(json.dumps(self.state["metadata"]))
+        result = self.promote(artifact_dir=self.local_dir)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Checksum mismatch", result.stderr)
+        self.assertEqual(self.mutations(), [])
+
+    def test_symlinked_local_package_is_rejected(self):
+        real = self.root / "outside.deb"
+        real.write_bytes(self.payload)
+        self.local_package.unlink()
+        self.local_package.symlink_to(real)
+        result = self.promote(artifact_dir=self.local_dir)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.mutations(), [])
+
+    def test_empty_unsafe_or_duplicate_manifest_entries_cannot_mutate_a_release(self):
+        digest = hashlib.sha256(self.payload).hexdigest()
+        for manifest in ["", self.manifest * 2, f"{digest}  ../outside.deb\n", f"{digest}  /outside.deb\n",
+                         f"{digest}  ./package#label.deb\n", "invalid\n"]:
+            with self.subTest(manifest=manifest):
+                self.manifest = manifest
+                result = self.promote(artifact_dir=self.local_dir)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.mutations(), [])
 
     def test_new_release_targets_the_commit_that_built_the_candidate(self):
         result = self.promote()
