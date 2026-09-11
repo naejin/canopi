@@ -1,5 +1,5 @@
 import { getRevealedAnnotationId } from '../annotation-layout'
-import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
+import { projectScenePlantLabels } from '../renderers/viewport-presentation'
 import {
   resolvePlantCanopySpreadM,
   resolvePlantStratum,
@@ -110,12 +110,6 @@ export class SceneRuntimePresentationController {
     const localizedCommonNames = this.getLocalizedCommonNames()
 
     const viewport = this._getViewport()
-    const plantContext = {
-      plants: scene.plants,
-      viewport,
-      speciesCache: this._speciesCache.getCache(),
-      localizedCommonNames,
-    }
     const selectionLabelPlantIds = session.selectedTargets.length === 1
       && session.selectedTargets[0]?.kind === 'plant'
       ? new Set([session.selectedTargets[0].id])
@@ -135,19 +129,8 @@ export class SceneRuntimePresentationController {
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
       hoverTarget: getRendererHoverTarget(scene, session.hoveredTarget),
-      pinnedPlantNameLabels: computePinnedPlantNameLabels(
-        scene.plants,
-        viewport,
-        localizedCommonNames,
-        { plantContext, selectionLabelPlantIds },
-      ),
-      selectionLabels: computeSelectionLabels(
-        scene.plants,
-        selectionLabelPlantIds,
-        viewport,
-        localizedCommonNames,
-        { plantContext },
-      ),
+      ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds,
+        speciesCache: this._speciesCache.getCache() }),
     }
   }
 

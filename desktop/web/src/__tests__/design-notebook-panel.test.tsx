@@ -454,8 +454,7 @@ describe('DesignNotebookPanel', () => {
   })
 
   it('drags Design rows directly within a section and into another section without opening the row', async () => {
-    const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
-    const reorderEntries = vi.fn().mockResolvedValue(undefined)
+    const relocateEntry = vi.fn().mockResolvedValue(undefined)
     const openDesign = vi.fn().mockResolvedValue(undefined)
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({
@@ -503,8 +502,7 @@ describe('DesignNotebookPanel', () => {
         ],
       }),
       openDesign,
-      moveEntryToSection,
-      reorderEntries,
+      relocateEntry,
     })
 
     await act(async () => {
@@ -529,8 +527,7 @@ describe('DesignNotebookPanel', () => {
     })
 
     expect(openDesign).not.toHaveBeenCalled()
-    expect(moveEntryToSection).not.toHaveBeenCalled()
-    expect(reorderEntries).toHaveBeenCalledWith([
+    expect(relocateEntry).toHaveBeenCalledWith('/designs/first.canopi', 'section-client', [
       '/designs/second.canopi',
       '/designs/first.canopi',
       '/designs/home.canopi',
@@ -552,8 +549,7 @@ describe('DesignNotebookPanel', () => {
     })
 
     expect(openDesign).not.toHaveBeenCalled()
-    expect(moveEntryToSection).toHaveBeenCalledWith('/designs/first.canopi', 'section-home')
-    expect(reorderEntries).toHaveBeenLastCalledWith([
+    expect(relocateEntry).toHaveBeenLastCalledWith('/designs/first.canopi', 'section-home', [
       '/designs/second.canopi',
       '/designs/home.canopi',
       '/designs/first.canopi',

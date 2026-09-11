@@ -26,6 +26,7 @@ import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { usePointerResize } from '../shared/usePointerResize'
+import { usePointerReorder } from '../shared/usePointerReorder'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import styles from './FavoritesPanel.module.css'
 
@@ -44,9 +45,7 @@ interface SavedStampPreview {
 }
 
 interface SavedStampReorderSession {
-  readonly pointerId: number
   readonly sourceId: string
-  readonly grip: HTMLElement
   direction: SavedStampReorderDirection | null
   lastClientY: number
   latestIds: readonly string[]
@@ -54,7 +53,6 @@ interface SavedStampReorderSession {
 
 export function FavoritesPanel() {
   const favoritesView = speciesCatalogWorkbench.favorites.value
-  const favoritesRevision = favoritesView.revision
   const savedStampsView = savedObjectStampWorkbench.library.value
   const savedStampSelection = savedObjectStampWorkbench.selection.value
   const lang = locale.value
@@ -64,18 +62,13 @@ export function FavoritesPanel() {
   const resizeHandleRef = useRef<HTMLDivElement>(null)
   const savedStampsFrameRef = useRef<HTMLElement>(null)
   const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
-  const savedStampReorderCommittedRef = useRef(false)
-  const savedStampReorderSessionRef = useRef<SavedStampReorderSession | null>(null)
-  const savedStampReorderCleanupRef = useRef<(() => void) | null>(null)
   const savedStampItemsRef = useRef<readonly SavedObjectStamp[]>([])
   const savedStampsListRef = useRef<HTMLDivElement>(null)
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
 
-  useEffect(() => {
-    void speciesCatalogWorkbench.loadFavorites()
-  }, [favoritesRevision, lang])
+  useEffect(() => speciesCatalogWorkbench.mount('favorites'), [])
 
   useEffect(() => {
     void savedObjectStampWorkbench.loadLibrary()
@@ -85,9 +78,11 @@ export function FavoritesPanel() {
     return () => clearPreviewTimer(previewTimerRef)
   }, [])
 
-  useEffect(() => {
-    return () => savedStampReorderCleanupRef.current?.()
-  }, [])
+  const beginReorder = usePointerReorder<SavedStampReorderSession>({
+    move: updateSavedStampReorder,
+    finish: finishSavedStampReorder,
+    cancel: () => setSavedStampReorderPreviewIds(null),
+  })
 
   useEffect(() => {
     const main = mainRef.current
@@ -147,119 +142,52 @@ export function FavoritesPanel() {
     setPreview(null)
 
     const ids = orderedSavedStampItems.map((item) => item.id)
-    savedStampReorderCommittedRef.current = false
-    savedStampReorderSessionRef.current = {
-      pointerId: event.pointerId,
+    beginReorder(event, {
       sourceId,
-      grip: event.currentTarget,
       direction: null,
       lastClientY: event.clientY,
       latestIds: ids,
-    }
-    event.currentTarget.setPointerCapture(event.pointerId)
-    installSavedStampReorderDocumentListeners()
+    })
     setSavedStampReorderPreviewIds(ids)
   }
 
-  function previewSavedStampReorder(ids: readonly string[]): void {
-    if (savedStampReorderCommittedRef.current) return
-    const session = savedStampReorderSessionRef.current
-    if (session) session.latestIds = ids
-    setSavedStampReorderPreviewIds((current) => sameIdOrder(current, ids) ? current : ids)
-  }
-
-  function commitSavedStampReorder(ids: readonly string[]): void {
-    savedStampReorderCommittedRef.current = true
-    savedStampReorderSessionRef.current = null
-    setSavedStampReorderPreviewIds(ids)
-    void savedObjectStampWorkbench.reorderStamps([...ids]).then(
+  function commitSavedStampReorder(session: SavedStampReorderSession, isCurrent: () => boolean): void {
+    setSavedStampReorderPreviewIds(session.latestIds)
+    void savedObjectStampWorkbench.reorderStamps([...session.latestIds]).then(
       () => {
-        clearSavedStampReorderPreviewIfLibraryMatches()
+        if (isCurrent()) clearSavedStampReorderPreviewIfLibraryMatches()
       },
-      (error) => {
-        savedStampReorderCommittedRef.current = false
-        setSavedStampReorderPreviewIds(null)
-        throw error
+      () => {
+        // The Workbench presents persistence errors; discard only this gesture's preview.
+        if (isCurrent()) setSavedStampReorderPreviewIds(null)
       },
     )
-  }
-
-  function cancelSavedStampReorder(): void {
-    if (savedStampReorderCommittedRef.current) return
-    savedStampReorderSessionRef.current = null
-    setSavedStampReorderPreviewIds(null)
   }
 
   function clearSavedStampReorderPreviewIfLibraryMatches(): void {
     setSavedStampReorderPreviewIds((current) => {
       if (!current) return current
       if (!sameIdOrder(savedStampItemsRef.current.map((item) => item.id), current)) return current
-      savedStampReorderCommittedRef.current = false
       return null
     })
   }
 
-  function updateSavedStampReorder(event: PointerEvent): void {
-    const session = savedStampReorderSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
+  function updateSavedStampReorder(session: SavedStampReorderSession, event: PointerEvent): void {
     event.preventDefault()
     const direction = savedStampReorderDirectionForPointer(session, event.clientY)
     session.direction = direction
     session.lastClientY = event.clientY
-    previewSavedStampReorder(reorderSavedStampIdsForPointer(session.sourceId, event.clientY, direction))
+    session.latestIds = reorderSavedStampIdsForPointer(session.sourceId, event.clientY, direction)
+    setSavedStampReorderPreviewIds((current) => sameIdOrder(current, session.latestIds) ? current : session.latestIds)
   }
 
-  function finishSavedStampReorder(event: PointerEvent): void {
-    const session = savedStampReorderSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
+  function finishSavedStampReorder(session: SavedStampReorderSession, event: PointerEvent, isCurrent: () => boolean): void {
     event.preventDefault()
-    clearSavedStampReorderDocumentListeners()
-    savedStampReorderSessionRef.current = null
-    releaseSavedStampReorderPointerCapture(session.grip, event.pointerId)
-
     if (sameIdOrder(savedStampItemsRef.current.map((item) => item.id), session.latestIds)) {
       setSavedStampReorderPreviewIds(null)
       return
     }
-    commitSavedStampReorder(session.latestIds)
-  }
-
-  function abortSavedStampReorder(event: PointerEvent): void {
-    const session = savedStampReorderSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
-    clearSavedStampReorderDocumentListeners()
-    releaseSavedStampReorderPointerCapture(session.grip, event.pointerId)
-    cancelSavedStampReorder()
-  }
-
-  function installSavedStampReorderDocumentListeners(): void {
-    clearSavedStampReorderDocumentListeners()
-
-    const onMove = (event: PointerEvent) => updateSavedStampReorder(event)
-    const onUp = (event: PointerEvent) => finishSavedStampReorder(event)
-    const onCancel = (event: PointerEvent) => abortSavedStampReorder(event)
-
-    document.addEventListener('pointermove', onMove)
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onCancel)
-    savedStampReorderCleanupRef.current = () => {
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onCancel)
-      savedStampReorderCleanupRef.current = null
-    }
-  }
-
-  function clearSavedStampReorderDocumentListeners(): void {
-    savedStampReorderCleanupRef.current?.()
-  }
-
-  function releaseSavedStampReorderPointerCapture(grip: HTMLElement, pointerId: number): void {
-    try {
-      grip.releasePointerCapture(pointerId)
-    } catch {
-      // Capture may already be lost after row reflow; document listeners own session cleanup.
-    }
+    commitSavedStampReorder(session, isCurrent)
   }
 
   function savedStampReorderDirectionForPointer(

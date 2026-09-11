@@ -73,7 +73,6 @@ const mockWorkbench = vi.hoisted(() => ({
     } as import('../app/plant-browser/workbench').SpeciesCatalogDetailView,
   },
   mount: vi.fn(() => vi.fn()),
-  ensureInitialSearch: vi.fn(),
   loadFilterOptions: vi.fn(async () => {}),
   reloadSidebarLists: vi.fn(async () => {}),
   loadFavorites: vi.fn(async () => {}),
@@ -135,9 +134,7 @@ describe('Web Edition Species Catalog panel', () => {
 
     expect(container.querySelector('[data-testid="web-species-catalog-panel"]')).not.toBeNull()
     expect(mockWorkbench.mount).toHaveBeenCalledOnce()
-    expect(mockWorkbench.ensureInitialSearch).toHaveBeenCalledOnce()
-    expect(mockWorkbench.loadFilterOptions).toHaveBeenCalledOnce()
-    expect(mockWorkbench.reloadSidebarLists).toHaveBeenCalledOnce()
+    expect(mockWorkbench.mount).toHaveBeenCalledWith('catalog')
 
     const search = requiredElement<HTMLInputElement>('[data-testid="web-species-search"]')
     await act(async () => {
@@ -267,7 +264,7 @@ describe('Web Edition Species Catalog panel', () => {
     })
 
     expect(container.querySelector('[data-testid="web-species-favorites-panel"]')).not.toBeNull()
-    expect(mockWorkbench.loadFavorites).toHaveBeenCalledOnce()
+    expect(mockWorkbench.mount).toHaveBeenCalledWith('favorites')
     expect(container.textContent).toContain('Peach')
     expect(container.textContent).toContain('Lemon balm')
   })

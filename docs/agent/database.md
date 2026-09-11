@@ -40,6 +40,8 @@ python3 scripts/species_catalog_contract.py verify-db --profile prepared <canopi
 
 ## User DB Personal Libraries
 
+- Design Notebook relocation is one admitted `UserData` operation and one SQLite transaction across section membership and manual order. Missing references or sections and failed order writes roll back the whole relocation.
+
 - The user DB is separate from the bundled plant DB. It stores local app data such as settings, favorites, recently viewed Species, Recent Designs, and personal libraries that should survive normal app updates.
 - `UserDb::open` is the production connection owner; `UserDb::initialize` exists for already-opened connections such as tests. Both return only after the ordered migration registry has advanced `PRAGMA user_version` transactionally, foreign-key enforcement is enabled, legacy orphan Notebook memberships are repaired, and `foreign_key_check` passes. Do not construct or publish a raw user-database connection through another seam.
 - Desktop Settings, Favorite mutations and indexes, Recent Designs, Design Notebook operations, and Saved Object Stamp CRUD are asynchronous callers of the managed Native Operation Executor's `UserData` class. Clone the `UserDb` handle before admission, but keep validation, every Mutex acquisition, and the complete caller-shaped transaction inside the started closure. A full class must return `Native user-data operations are busy; try again` before reading, validating, pruning, or mutating personal data.

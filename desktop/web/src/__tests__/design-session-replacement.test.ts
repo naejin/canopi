@@ -17,6 +17,84 @@ import {
 } from "./support/design-session-edit";
 
 describe("Design Session replacement", () => {
+  it.each(["resumePendingCanvasReplacement", "settlePendingCanvasReplacementForHandoff"] as const)(
+    "%s preserves newer Design edits using the retained authorization", (settle) => {
+      const events: string[] = [];
+      const store = createMemoryDesignSessionStore({ file: makeFile("Previous"), path: null, name: "Previous" });
+      const canvas = makeCanvas(events);
+      const finalized = vi.fn();
+      let baselineCurrent = true;
+      vi.mocked(canvas.replaceDocument).mockImplementationOnce(() => { throw new Error("hydration interrupted"); });
+      const replacement = createDesignSessionReplacement({ store, workflowRunner: makeWorkflowRunner(events) });
+      const input = { file: makeFile("Requested"), kind: "loaded" as const, path: null, name: "Requested", onDesignFinalized: finalized };
+      expect(() => replacement.replace(input, canvas, () => baselineCurrent)).toThrow("hydration interrupted");
+      const identity = replacement.pendingCanvasReplacement(canvas)!.identity;
+      editDesignSessionForTest(store, file => ({ ...file, description: "Keep this later edit" }));
+      baselineCurrent = false;
+
+      expect(replacement[settle](canvas, identity)).toEqual({ preservedCurrentDesign: true });
+
+      expect(store.readCurrentDesign()?.description).toBe("Keep this later edit");
+      expect(store.readDesignName()).toBe("Previous");
+      expect(store.isDesignDirty()).toBe(true);
+      expect(finalized).not.toHaveBeenCalled();
+      expect(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1])
+        .toBe(vi.mocked(canvas.replaceDocument).mock.calls[0]?.[1]);
+      expect(canvas.showCanvasChrome).toHaveBeenCalledTimes(settle === "resumePendingCanvasReplacement" ? 1 : 0);
+      expect(replacement.pendingCanvasReplacement(canvas)).toBeNull();
+    },
+  );
+
+  it.each(["resumePendingCanvasReplacement", "settlePendingCanvasReplacementForHandoff"] as const)(
+    "%s retains applied finalization and refuses another Canvas identity", (settle) => {
+      const store = createMemoryDesignSessionStore({ file: makeFile("Previous"), path: null, name: "Previous" });
+      const canvas = makeCanvas([]);
+      const finalized = vi.fn();
+      let baselineCurrent = true;
+      vi.mocked(canvas.replaceDocument).mockImplementationOnce((_file, _token, finalize) => {
+        finalize();
+        throw new Error("publication interrupted after finalization");
+      });
+      const replacement = createDesignSessionReplacement({ store, workflowRunner: makeWorkflowRunner([]) });
+      const input = { file: makeFile("Requested"), kind: "loaded" as const, path: null, name: "Requested", onDesignFinalized: finalized };
+      expect(() => replacement.replace(input, canvas, () => baselineCurrent)).toThrow("publication interrupted");
+      const pending = replacement.pendingCanvasReplacement(canvas)!;
+      expect(pending.designWasApplied).toBe(true);
+      editDesignSessionForTest(store, file => ({ ...file, description: "Edit after finalization" }));
+      baselineCurrent = false;
+      const otherCanvas = makeCanvas([]);
+      expect(replacement.pendingCanvasReplacement(otherCanvas)).toBeNull();
+      expect(replacement[settle](otherCanvas, pending.identity)).toBeNull();
+      expect(canvas.replaceDocument).toHaveBeenCalledOnce();
+      expect(replacement[settle](canvas, pending.identity)).toEqual({ preservedCurrentDesign: false });
+      expect(store.readDesignName()).toBe("Requested");
+      expect(store.readCurrentDesign()?.description).toBe("Edit after finalization");
+      expect(store.isDesignDirty()).toBe(true);
+      expect(finalized).toHaveBeenCalledOnce();
+      expect(replacement[settle](canvas, pending.identity)).toBeNull();
+    },
+  );
+
+  it("retains renewed explicit authorization after a second interrupted attempt", () => {
+    const store = createMemoryDesignSessionStore({ file: makeFile("Previous"), path: null, name: "Previous" });
+    const canvas = makeCanvas([]);
+    vi.mocked(canvas.replaceDocument)
+      .mockImplementationOnce(() => { throw new Error("interrupted"); })
+      .mockImplementationOnce(() => { throw new Error("interrupted again"); });
+    const replacement = createDesignSessionReplacement({ store, workflowRunner: makeWorkflowRunner([]) });
+    const input = { file: makeFile("Requested"), kind: "loaded" as const, path: null, name: "Requested" };
+    let originalCurrent = true;
+    expect(() => replacement.replace(input, canvas, () => originalCurrent)).toThrow("interrupted");
+    const identity = replacement.pendingCanvasReplacement(canvas)!.identity;
+    originalCurrent = false;
+    expect(replacement.pendingCanvasReplacement(canvas)?.isDesignBaselineCurrent).toBe(false);
+    expect(() => replacement.replace(input, canvas, () => true)).toThrow("interrupted again");
+    expect(replacement.pendingCanvasReplacement(canvas)?.identity).toBe(identity);
+    expect(replacement.pendingCanvasReplacement(canvas)?.isDesignBaselineCurrent).toBe(true);
+    expect(replacement.resumePendingCanvasReplacement(canvas, identity)).toEqual({ preservedCurrentDesign: false });
+    expect(store.readDesignName()).toBe("Requested");
+  });
+
   it("changes the public session identity only when the Design is replaced", () => {
     const store = createMemoryDesignSessionStore({ file: makeFile("Garden"), path: null, name: "Garden" });
     const identity = store.sessionIdentity.value;
@@ -102,7 +180,7 @@ describe("Design Session replacement", () => {
       kind: "new",
       path: null,
       name: "New Display Name",
-    }, canvas);
+    }, canvas, () => true);
 
     expect(events).toEqual([
       "canvas.replace",
@@ -137,7 +215,7 @@ describe("Design Session replacement", () => {
       kind: "loaded",
       path: "/loaded.canopi",
       name: "Loaded",
-    });
+    }, null, () => true);
 
     expect(events).toEqual([
       "store.reset-baselines",
@@ -202,11 +280,11 @@ describe("Design Session replacement", () => {
       name: "Recovered",
     };
 
-    expect(() => replacement.replace(input, canvas))
+    expect(() => replacement.replace(input, canvas, () => true))
       .toThrow("clean-state publication failed");
     expect(store.readDesignName()).toBe("Previous");
 
-    const receipt = replacement.replace(input, canvas);
+    const receipt = replacement.replace(input, canvas, () => true);
 
     expect(receipt.file?.name).toBe("Recovered");
     expect(sceneStore.persisted.layers).toEqual([
@@ -256,15 +334,15 @@ describe("Design Session replacement", () => {
       name: "Rejected",
     };
 
-    expect(() => replacement.replace(rejected, canvas)).toThrow(preparationError);
-    expect(replacement.pendingCanvasReplacementIdentity(canvas)).toBeNull();
+    expect(() => replacement.replace(rejected, canvas, () => true)).toThrow(preparationError);
+    expect(replacement.pendingCanvasReplacement(canvas)).toBeNull();
 
     replacement.replace({
       file: makeFile("Later"),
       kind: "loaded",
       path: "/later.canopi",
       name: "Later",
-    }, canvas);
+    }, canvas, () => true);
 
     expect(vi.mocked(canvas.replaceDocument).mock.calls[0]?.[1])
       .not.toBe(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1]);
@@ -324,14 +402,14 @@ describe("Design Session replacement", () => {
       name: "Competing",
     };
 
-    expect(() => replacement.replace(first, canvas))
+    expect(() => replacement.replace(first, canvas, () => true))
       .toThrow("clean-state publication failed");
-    expect(() => replacement.replace(competing, canvas))
+    expect(() => replacement.replace(competing, canvas, () => true))
       .toThrow("already owns the Scene");
     expect(store.readDesignPath()).toBe("/first.canopi");
     expect(store.readDesignName()).toBe("First");
 
-    const receipt = replacement.replace(competing, canvas);
+    const receipt = replacement.replace(competing, canvas, () => true);
 
     expect(receipt.file?.name).toBe("Shared contents");
     expect(store.readDesignPath()).toBe("/competing.canopi");
@@ -410,7 +488,7 @@ describe("Design Session replacement", () => {
       name: "Recovered",
     };
 
-    expect(() => replacement.replace(input, canvas))
+    expect(() => replacement.replace(input, canvas, () => true))
       .toThrow("late backfill invalidation failed");
     expect(replaceState).toHaveBeenCalledOnce();
     expect(resetBaselines).toHaveBeenCalledOnce();
@@ -421,7 +499,7 @@ describe("Design Session replacement", () => {
     }));
     expect(store.isDesignDirty()).toBe(true);
 
-    const receipt = replacement.replace(input, canvas);
+    const receipt = replacement.replace(input, canvas, () => true);
 
     expect(replaceState).toHaveBeenCalledOnce();
     expect(resetBaselines).toHaveBeenCalledOnce();
@@ -482,14 +560,14 @@ describe("Design Session replacement", () => {
       name: "Recovered",
     };
 
-    expect(() => replacement.replace(input, canvas))
+    expect(() => replacement.replace(input, canvas, () => true))
       .toThrow("Design identity publication failed");
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Intervening field note",
     }));
 
-    const receipt = replacement.replace(input, canvas);
+    const receipt = replacement.replace(input, canvas, () => true);
 
     expect(replaceState).toHaveBeenCalledOnce();
     expect(resetBaselines).toHaveBeenCalledOnce();
@@ -545,13 +623,13 @@ describe("Design Session replacement", () => {
       name: "Recovered",
     };
 
-    expect(() => replacement.replace(input, canvas)).toThrow("failed");
+    expect(() => replacement.replace(input, canvas, () => true)).toThrow("failed");
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Intervening field note",
     }));
 
-    const receipt = replacement.replace(input, canvas);
+    const receipt = replacement.replace(input, canvas, () => true);
 
     expect(canvas.replaceDocument).toHaveBeenCalledOnce();
     expect(canvas.showCanvasChrome).toHaveBeenCalledTimes(
@@ -594,13 +672,13 @@ describe("Design Session replacement", () => {
       name: "Recovered",
     };
 
-    expect(() => replacement.replace(input)).toThrow("workflow installation failed");
+    expect(() => replacement.replace(input, null, () => true)).toThrow("workflow installation failed");
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Intervening field note",
     }));
 
-    const receipt = replacement.replace(input);
+    const receipt = replacement.replace(input, null, () => true);
 
     expect(replaceState).toHaveBeenCalledOnce();
     expect(resetBaselines).toHaveBeenCalledOnce();
@@ -667,7 +745,7 @@ describe("Design Session replacement", () => {
         kind: "loaded",
         path: "/next.canopi",
         name: "Next",
-      }, canvas);
+      }, canvas, () => true);
 
       expect(authority.canUndo.value).toBe(true);
       expect(store.isCanvasDirty()).toBe(true);

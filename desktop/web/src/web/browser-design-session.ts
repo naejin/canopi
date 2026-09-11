@@ -90,12 +90,6 @@ export interface BrowserDesignSessionAutosaveOptions {
   readonly onDraftSaved?: () => void;
 }
 
-interface PendingBrowserCanvasReplacement {
-  readonly canvas: CanvasDocumentSurface;
-  readonly identity: DesignSessionPendingCanvasReplacementIdentity;
-  isDesignBaselineCurrent(): boolean;
-}
-
 export const browserDesignFileAdapter: BrowserDesignFileAdapter = {
   openCanopiFile,
   downloadCanopiFile,
@@ -127,7 +121,6 @@ export function createBrowserDesignSessionController({
     },
   });
   const persistence = createDesignSessionPersistence({ store });
-  let pendingCanvasReplacement: PendingBrowserCanvasReplacement | null = null;
 
   function applyDesignReplacement(
     input: ResolvedDesignReplacement,
@@ -135,29 +128,14 @@ export function createBrowserDesignSessionController({
   ): void {
     const canvas = canvasSession;
     if (canvas) quarantineCompetingPendingReplacement(input, canvas);
-    try {
-      replacement.replace(input, canvas);
-      pendingCanvasReplacement = null;
-    } catch (error) {
-      const identity = canvas
-        ? replacement.pendingCanvasReplacementIdentity(canvas)
-        : null;
-      pendingCanvasReplacement = canvas && identity
-        ? {
-            canvas,
-            identity,
-            isDesignBaselineCurrent: () => baseline.isDesignBaselineCurrent(),
-          }
-        : null;
-      throw error;
-    }
+    replacement.replace(input, canvas, baseline.isDesignBaselineCurrent);
   }
 
   function quarantineCompetingPendingReplacement(
     input: ResolvedDesignReplacement,
     canvas: CanvasDocumentSurface,
   ): void {
-    const identity = replacement.pendingCanvasReplacementIdentity(canvas);
+    const identity = replacement.pendingCanvasReplacement(canvas)?.identity ?? null;
     if (
       !identity
       || replacement.matchesPendingCanvasReplacement(input, canvas, identity)
@@ -171,31 +149,9 @@ export function createBrowserDesignSessionController({
     canvas: CanvasDocumentSurface,
     identity: DesignSessionPendingCanvasReplacementIdentity,
   ): void {
-    const pending = pendingCanvasReplacement;
-    if (
-      !pending
-      || pending.canvas !== canvas
-      || pending.identity !== identity
-    ) {
-      throw new Error(
-        "Browser Canvas replacement is missing its exact Design baseline",
-      );
-    }
-
-    const designAlreadyFinalized =
-      replacement.isPendingCanvasReplacementDesignFinalized(canvas, identity);
-    const resumed = replacement.resumePendingCanvasReplacement(
-      canvas,
-      identity,
-      {
-        preserveCurrentDesign:
-          !designAlreadyFinalized && !pending.isDesignBaselineCurrent(),
-      },
-    );
-    if (!resumed) {
+    if (!replacement.resumePendingCanvasReplacement(canvas, identity)) {
       throw new Error("Browser Canvas replacement changed before quarantine");
     }
-    pendingCanvasReplacement = null;
   }
 
   async function newDesign(): Promise<void> {
@@ -219,7 +175,7 @@ export function createBrowserDesignSessionController({
     const intent = ++replacementIntent;
     const canvas = canvasSession;
     const pendingIdentity = canvas
-      ? replacement.pendingCanvasReplacementIdentity(canvas)
+      ? replacement.pendingCanvasReplacement(canvas)?.identity ?? null
       : null;
     if (canvas && pendingIdentity) {
       resumeExactPendingCanvasReplacement(canvas, pendingIdentity);
@@ -425,38 +381,11 @@ export function createBrowserDesignSessionController({
   function settlePendingReplacementForHandoff(
     session: CanvasDocumentSurface,
   ): void {
-    const identity = replacement.pendingCanvasReplacementIdentity(session);
-    if (!identity) {
-      if (pendingCanvasReplacement?.canvas === session) {
-        pendingCanvasReplacement = null;
-      }
-      return;
-    }
-
-    const pending = pendingCanvasReplacement;
-    if (
-      !pending
-      || pending.canvas !== session
-      || pending.identity !== identity
-    ) {
-      throw new Error(
-        "Browser Canvas replacement is missing its exact Design baseline",
-      );
-    }
-
-    const designAlreadyFinalized =
-      replacement.isPendingCanvasReplacementDesignFinalized(session, identity);
-    const preserveCurrentDesign =
-      !designAlreadyFinalized && !pending.isDesignBaselineCurrent();
-    const settled = replacement.settlePendingCanvasReplacementForHandoff(
-      session,
-      identity,
-      { preserveCurrentDesign },
-    );
-    if (!settled) {
+    const pending = replacement.pendingCanvasReplacement(session);
+    if (!pending) return;
+    if (!replacement.settlePendingCanvasReplacementForHandoff(session, pending.identity)) {
       throw new Error("Browser Canvas replacement changed before handoff");
     }
-    pendingCanvasReplacement = null;
   }
 
   function installAutosave({ onDraftSaved }: BrowserDesignSessionAutosaveOptions = {}): () => void {

@@ -151,11 +151,6 @@ export class DesignSessionStateMachine {
   private presentedOperationIntent: number | null = null;
   private transitionIntent = 0;
   private readonly replacement: DesignSessionReplacement;
-  private retainedReplacementAuthorization: {
-    readonly canvas: CanvasDocumentSurface;
-    readonly identity: DesignSessionPendingCanvasReplacementIdentity;
-    readonly isDesignBaselineCurrent: () => boolean;
-  } | null = null;
 
   constructor(private readonly deps: DesignSessionStateMachineDeps) {
     this.replacement = createDesignSessionReplacement({
@@ -180,7 +175,6 @@ export class DesignSessionStateMachine {
     this.activeOperationStates.clear();
     this.activeTransitionOperationIntent = null;
     this.presentedOperationIntent = null;
-    this.retainedReplacementAuthorization = null;
     this.deps.persistence.dispose();
     this.publishState(INITIAL_STATE);
   }
@@ -208,7 +202,6 @@ export class DesignSessionStateMachine {
     );
     try {
       this.replacement.attach(session);
-      this.retainedReplacementAuthorization = null;
       canvasLease.assertCurrent();
       this.finishTransitionOperationState(
         operationIntent,
@@ -386,26 +379,12 @@ export class DesignSessionStateMachine {
         try {
           replacementGuard = guardCapture.resume();
         } catch (error) {
-          const pendingIdentity = session
-            ? this.replacement.pendingCanvasReplacementIdentity(session)
-            : null;
-          const retainedAuthorization = this.retainedReplacementAuthorization;
-          if (
-            !(error instanceof CanvasAuthorityBusyError)
-            || !session
-            || !pendingIdentity
-            || retainedAuthorization?.canvas !== session
-            || retainedAuthorization.identity !== pendingIdentity
-          ) throw error;
+          const pending = session ? this.replacement.pendingCanvasReplacement(session) : null;
+          if (!(error instanceof CanvasAuthorityBusyError) || !pending) throw error;
           retainedReplacementRetry = true;
-          retainedReplacementIdentity = pendingIdentity;
-          retainedReplacementWasAuthorized =
-            retainedAuthorization.isDesignBaselineCurrent();
-          retainedReplacementDesignWasApplied =
-            this.replacement.isPendingCanvasReplacementDesignFinalized(
-              session,
-              pendingIdentity,
-            );
+          retainedReplacementIdentity = pending.identity;
+          retainedReplacementWasAuthorized = pending.isDesignBaselineCurrent;
+          retainedReplacementDesignWasApplied = pending.designWasApplied;
         }
         if (!replacementGuard && !retainedReplacementRetry) {
           throw new DesignSessionTransitionSupersededError();
@@ -473,22 +452,13 @@ export class DesignSessionStateMachine {
           const resumed = this.replacement.resumePendingCanvasReplacement(
             session,
             retainedReplacementIdentity,
-            {
-              preserveCurrentDesign:
-                !retainedReplacementDesignWasApplied
-                && !retainedReplacementWasAuthorized,
-            },
           );
           if (!resumed) {
             throw new CanvasAuthorityBusyError("document-settlement");
           }
-          if (
-            !retainedReplacementDesignWasApplied
-            && !retainedReplacementWasAuthorized
-          ) {
+          if (resumed.preservedCurrentDesign) {
             writeFence.invalidatePredecessorWrites();
           }
-          this.retainedReplacementAuthorization = null;
           activeCanvasLease.assertCurrent();
           publishCompletionIfOwned(this.steadyStateFor(session));
           return cancelledResult(session);
@@ -501,31 +471,15 @@ export class DesignSessionStateMachine {
             }
             this.replacement.attach(session);
           } else {
-            this.replacement.replace(replacementInput, session);
+            this.replacement.replace(replacementInput, session, designBaselineIsCurrent);
           }
         } catch (error) {
-          const pendingIdentity = session
-            ? this.replacement.pendingCanvasReplacementIdentity(session)
-            : null;
-          const pendingDesignWasApplied = pendingIdentity && session
-            ? this.replacement.isPendingCanvasReplacementDesignFinalized(
-                session,
-                pendingIdentity,
-              )
-            : false;
-          this.retainedReplacementAuthorization = pendingIdentity && session
-            ? {
-                canvas: session,
-                identity: pendingIdentity,
-                isDesignBaselineCurrent: designBaselineIsCurrent,
-              }
-            : null;
-          if (pendingIdentity && !pendingDesignWasApplied) {
+          const pending = session ? this.replacement.pendingCanvasReplacement(session) : null;
+          if (pending && !pending.designWasApplied) {
             writeFence.invalidatePredecessorWrites();
           }
           throw error;
         }
-        this.retainedReplacementAuthorization = null;
         // Design publication can synchronously issue a successor transition. Once the
         // replacement is applied, supersession may hide this state but cannot cancel it.
         activeCanvasLease.assertCurrent();
@@ -705,26 +659,11 @@ export class DesignSessionStateMachine {
   private settlePendingCanvasReplacementForHandoff(
     session: CanvasDocumentSurface,
   ): void {
-    const identity = this.replacement.pendingCanvasReplacementIdentity(session);
-    if (!identity) return;
-
-    const authorization = this.retainedReplacementAuthorization;
-    const designWasApplied =
-      this.replacement.isPendingCanvasReplacementDesignFinalized(session, identity);
-    const originalDesignIsCurrent = authorization?.canvas === session
-      && authorization.identity === identity
-      && authorization.isDesignBaselineCurrent();
-    const settled = this.replacement.settlePendingCanvasReplacementForHandoff(
-      session,
-      identity,
-      {
-        preserveCurrentDesign: !designWasApplied && !originalDesignIsCurrent,
-      },
-    );
-    if (!settled) {
+    const pending = this.replacement.pendingCanvasReplacement(session);
+    if (!pending) return;
+    if (!this.replacement.settlePendingCanvasReplacementForHandoff(session, pending.identity)) {
       throw new CanvasAuthorityBusyError("document-settlement");
     }
-    this.retainedReplacementAuthorization = null;
   }
 
   private startQueuedDocumentLoad({

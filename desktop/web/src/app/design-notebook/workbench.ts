@@ -9,6 +9,7 @@ import {
   renameNotebookSection,
   removeDesignReference,
   reorderDesignReferences,
+  relocateDesignReference,
   reorderNotebookSections,
 } from '../../ipc/design'
 import {
@@ -53,6 +54,7 @@ export interface DesignNotebookWorkbench {
   moveEntryToSection(path: string, sectionId: string | null): Promise<void>
   reorderSections(sectionIds: readonly string[]): Promise<void>
   reorderEntries(paths: readonly string[]): Promise<void>
+  relocateEntry(path: string, sectionId: string | null, paths: readonly string[]): Promise<void>
   dispose(): void
 }
 
@@ -70,6 +72,7 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly removeEntry?: typeof removeDesignReference
   readonly reorderSections?: typeof reorderNotebookSections
   readonly reorderEntries?: typeof reorderDesignReferences
+  readonly relocateEntry?: typeof relocateDesignReference
   readonly activePath?: ReadonlySignal<string | null>
   readonly currentDesign?: ReadonlySignal<CanopiFile | null>
 }
@@ -90,6 +93,7 @@ export function createDesignNotebookWorkbench(
   const removeEntryAdapter = options.removeEntry ?? removeDesignReference
   const reorderSectionsAdapter = options.reorderSections ?? reorderNotebookSections
   const reorderEntriesAdapter = options.reorderEntries ?? reorderDesignReferences
+  const relocateEntryAdapter = options.relocateEntry ?? relocateDesignReference
   const activePath = options.activePath ?? designPath
   const currentDesign = options.currentDesign ?? currentDesignSignal
 
@@ -330,6 +334,30 @@ export function createDesignNotebookWorkbench(
     })
   }
 
+  function relocateEntry(path: string, sectionId: string | null, paths: readonly string[]): Promise<void> {
+    const nextOrder = [...paths]
+    const lifetime = lifetimeGeneration
+    return enqueueMutation(undefined, async (admittedLifetime) => {
+      if (!entries.value.some((entry) => entry.path === path)
+        || (sectionId !== null && !sections.value.some((section) => section.id === sectionId))) {
+        throw new Error('Design Notebook relocation destination is no longer available')
+      }
+      await relocateEntryAdapter(path, sectionId, nextOrder)
+      if (!isLifetimeCurrent(admittedLifetime)) return
+      entries.value = applyManualOrder(
+        entries.value.map((entry) => entry.path === path ? { ...entry, section_id: sectionId } : entry),
+        nextOrder,
+        (entry) => entry.path,
+        (entry, sortOrder) => ({ ...entry, sort_order: sortOrder }),
+        compareNotebookEntries,
+      )
+    }).catch(async (error) => {
+      // Refresh only after releasing mutation admission: load joins that queue.
+      if (isLifetimeCurrent(lifetime)) await load()
+      throw error
+    })
+  }
+
   function dispose(): void {
     if (disposed) return
     disposed = true
@@ -401,6 +429,7 @@ export function createDesignNotebookWorkbench(
     moveEntryToSection,
     reorderSections,
     reorderEntries,
+    relocateEntry,
     dispose,
   }
 }
