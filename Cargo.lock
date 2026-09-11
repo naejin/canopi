@@ -233,7 +233,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "bindings-gen"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "common-types",
  "serde",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "canopi-desktop"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "base64 0.22.1",
  "common-types",
@@ -561,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "common-types"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "schemars 1.2.1",
  "serde",
@@ -2179,18 +2179,18 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "lib-c"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "cairo-rs 0.20.12",
 ]
 
 [[package]]
 name = "lib-cpp"
-version = "1.1.0"
+version = "1.1.1"
 
 [[package]]
 name = "lib-swift"
-version = "1.1.0"
+version = "1.1.1"
 
 [[package]]
 name = "libappindicator"
