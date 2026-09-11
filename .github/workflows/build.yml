@@ -47,6 +47,9 @@ jobs:
       - name: Check Species Search Unicode facts
         run: python3 scripts/species_search_unicode_facts.py check
 
+      - name: Release promotion tests
+        run: python3 -m unittest scripts.test_promote_release
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
