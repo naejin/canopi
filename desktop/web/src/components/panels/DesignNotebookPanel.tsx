@@ -9,6 +9,7 @@ import {
 import type { DesignNotebookEntry, DesignNotebookSection } from '../../types/design'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DesignNotebookPanel.module.css'
+import { usePointerReorder } from '../shared/usePointerReorder'
 
 const NOTEBOOK_DRAG_THRESHOLD_PX = 4
 
@@ -27,9 +28,7 @@ interface NotebookDropTarget {
 
 interface NotebookPointerDragSession {
   readonly kind: 'entry' | 'section'
-  readonly pointerId: number
   readonly sourceId: string
-  readonly sourceElement: HTMLElement
   readonly startClientX: number
   readonly startClientY: number
   readonly baseEntries: readonly DesignNotebookEntry[]
@@ -48,9 +47,8 @@ export function DesignNotebookPanel({
   const view = workbench.view.value
   const listRef = useRef<HTMLDivElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
-  const pointerDragSessionRef = useRef<NotebookPointerDragSession | null>(null)
-  const pointerDragCleanupRef = useRef<(() => void) | null>(null)
   const suppressNextOpenPathRef = useRef<string | null>(null)
+  const suppressOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [newSectionName, setNewSectionName] = useState('')
   const [sectionEditorOpen, setSectionEditorOpen] = useState(false)
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
@@ -68,9 +66,15 @@ export function DesignNotebookPanel({
     void workbench.load()
   }, [workbench])
 
-  useEffect(() => {
-    return () => clearPointerDragListeners()
+  useEffect(() => () => {
+    if (suppressOpenTimerRef.current !== null) clearTimeout(suppressOpenTimerRef.current)
   }, [])
+
+  const beginReorder = usePointerReorder<NotebookPointerDragSession>({
+    move: updatePointerDrag,
+    finish: finishPointerDrag,
+    cancel: clearDragPreview,
+  })
 
   useEffect(() => {
     if (!renamingSectionId) return
@@ -136,12 +140,9 @@ export function DesignNotebookPanel({
     event: PointerEvent,
   ): void {
     if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return
-    clearPointerDragListeners()
-    pointerDragSessionRef.current = {
+    beginReorder(event, {
       kind,
-      pointerId: event.pointerId,
       sourceId,
-      sourceElement: event.currentTarget,
       startClientX: event.clientX,
       startClientY: event.clientY,
       baseEntries: orderedEntries,
@@ -151,38 +152,10 @@ export function DesignNotebookPanel({
       latestEntries: orderedEntries,
       latestSectionIds: orderedSections.map((section) => section.id),
       latestDropTarget: null,
-    }
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      // Document listeners own the drag lifecycle if capture is unavailable.
-    }
-    installPointerDragListeners()
+    })
   }
 
-  function installPointerDragListeners(): void {
-    const onMove = (event: PointerEvent) => updatePointerDrag(event)
-    const onUp = (event: PointerEvent) => finishPointerDrag(event)
-    const onCancel = (event: PointerEvent) => cancelPointerDrag(event)
-
-    document.addEventListener('pointermove', onMove)
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onCancel)
-    pointerDragCleanupRef.current = () => {
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onCancel)
-      pointerDragCleanupRef.current = null
-    }
-  }
-
-  function clearPointerDragListeners(): void {
-    pointerDragCleanupRef.current?.()
-  }
-
-  function updatePointerDrag(event: PointerEvent): void {
-    const session = pointerDragSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
+  function updatePointerDrag(session: NotebookPointerDragSession, event: PointerEvent): void {
     const movedEnough = Math.abs(event.clientX - session.startClientX) >= NOTEBOOK_DRAG_THRESHOLD_PX
       || Math.abs(event.clientY - session.startClientY) >= NOTEBOOK_DRAG_THRESHOLD_PX
     if (!session.dragging && !movedEnough) return
@@ -224,44 +197,21 @@ export function DesignNotebookPanel({
     setSectionPreviewIds(nextSectionIds)
   }
 
-  function finishPointerDrag(event: PointerEvent): void {
-    const session = pointerDragSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
+  function finishPointerDrag(session: NotebookPointerDragSession, event: PointerEvent, isCurrent: () => boolean): void {
     if (session.dragging) event.preventDefault()
-    clearPointerDragListeners()
-    releasePointerCapture(session)
-    pointerDragSessionRef.current = null
-
     if (!session.dragging) {
       clearDragPreview()
       return
     }
 
     if (session.kind === 'entry') {
-      commitEntryPointerDrag(session)
+      commitEntryPointerDrag(session, isCurrent)
     } else {
-      commitSectionPointerDrag(session)
+      commitSectionPointerDrag(session, isCurrent)
     }
   }
 
-  function cancelPointerDrag(event: PointerEvent): void {
-    const session = pointerDragSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
-    clearPointerDragListeners()
-    releasePointerCapture(session)
-    pointerDragSessionRef.current = null
-    clearDragPreview()
-  }
-
-  function releasePointerCapture(session: NotebookPointerDragSession): void {
-    try {
-      session.sourceElement.releasePointerCapture(session.pointerId)
-    } catch {
-      // The source can re-render during preview; document listeners already cleaned up.
-    }
-  }
-
-  function commitEntryPointerDrag(session: NotebookPointerDragSession): void {
+  function commitEntryPointerDrag(session: NotebookPointerDragSession, isCurrent: () => boolean): void {
     suppressRowOpenOnce(session.sourceId)
     const target = session.latestDropTarget
     const source = session.baseEntries.find((entry) => entry.path === session.sourceId)
@@ -283,10 +233,10 @@ export function DesignNotebookPanel({
       .catch(() => {
         // The Workbench refreshes its projection after a failed relocation.
       })
-      .finally(clearDragPreview)
+      .finally(() => { if (isCurrent()) clearDragPreview() })
   }
 
-  function commitSectionPointerDrag(session: NotebookPointerDragSession): void {
+  function commitSectionPointerDrag(session: NotebookPointerDragSession, isCurrent: () => boolean): void {
     if (sameIdOrder(session.baseSectionIds, session.latestSectionIds)) {
       clearDragPreview()
       return
@@ -296,12 +246,14 @@ export function DesignNotebookPanel({
       .catch(() => {
         void workbench.refresh()
       })
-      .finally(clearDragPreview)
+      .finally(() => { if (isCurrent()) clearDragPreview() })
   }
 
   function suppressRowOpenOnce(path: string): void {
     suppressNextOpenPathRef.current = path
-    window.setTimeout(() => {
+    if (suppressOpenTimerRef.current !== null) clearTimeout(suppressOpenTimerRef.current)
+    suppressOpenTimerRef.current = setTimeout(() => {
+      suppressOpenTimerRef.current = null
       if (suppressNextOpenPathRef.current === path) {
         suppressNextOpenPathRef.current = null
       }

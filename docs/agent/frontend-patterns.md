@@ -145,6 +145,8 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 
 - Notebook row drops use the Workbench `relocateEntry` operation to commit section membership and manual order together. The Workbench owns recovery refresh after mutation admission releases; panels must not compose separate move/reorder writes.
 
+- `components/shared/usePointerReorder.ts` owns the Notebook and Saved Object Stamp reorder pointer lifetimes. Domain adapters own geometry and persistence; asynchronous completion must check the supplied `isCurrent()` before clearing a preview. Lost capture during row reflow does not finish a reorder. Keep resize's commit-on-lost-capture behavior separate.
+
 ## Saved Object Stamps
 
 - Saved Object Stamps are personal reusable arrangements, not Design Templates and not Species favorites. Keep them in the existing Favorites side panel as a section below Species favorites; do not add a separate PanelBar route unless a later product decision changes the navigation model.
