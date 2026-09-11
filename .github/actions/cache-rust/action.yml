@@ -1,0 +1,34 @@
+name: Cache Rust build dependencies
+description: Keep compiled artifacts isolated by architecture, workload and target.
+
+inputs:
+  toolchain:
+    description: Installed compiler cache identity from rust-toolchain.
+    required: true
+  workload:
+    description: Build mode whose artifacts this job owns.
+    required: true
+  target:
+    description: Explicit Cargo target, or host for commands without --target.
+    default: host
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/debug/.fingerprint
+          target/debug/build
+          target/debug/deps
+          target/release/.fingerprint
+          target/release/build
+          target/release/deps
+          target/${{ inputs.target }}/release/.fingerprint
+          target/${{ inputs.target }}/release/build
+          target/${{ inputs.target }}/release/deps
+        key: ${{ runner.os }}-${{ runner.arch }}-cargo-v2-${{ inputs.workload }}-${{ inputs.target }}-${{ inputs.toolchain }}-${{ hashFiles('Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-cargo-v2-${{ inputs.workload }}-${{ inputs.target }}-${{ inputs.toolchain }}-

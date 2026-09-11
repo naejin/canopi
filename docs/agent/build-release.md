@@ -9,6 +9,32 @@ Use this guide when changing build scripts, Tauri config, CI workflows, native p
 - Cargo cache keys include the installed toolchain's action-provided cache identity so a compiler upgrade cannot restore an incompatible `target` cache as an exact match.
 - The toolchain pin is not Canopi's minimum supported Rust version. Do not add Cargo `rust-version` metadata unless the project separately chooses and verifies an MSRV policy.
 
+## CI Rust Caches
+
+Build & Test and Release Candidate use `.github/actions/cache-rust` to separate
+compiled artifacts by runner OS/architecture, installed compiler, workload and
+explicit Cargo target. Lint, workspace tests and small platform tests have their
+own workloads. Packaging uses the same `release` workload and target in both
+workflows so compatible builds can reuse dependency compilation.
+
+Do not collapse these keys back to OS/compiler/lockfile alone: GitHub caches are
+immutable, so the fastest platform test can reserve a tiny cache that packaging
+then restores forever without saving its release outputs. The lockfile-specific
+key falls back only within the same compiler/architecture/workload/target. Cargo
+still validates restored artifacts. Cache only dependency sources and compiled
+fingerprint/build/deps directories; installer bundles and incremental workspaces
+are excluded to avoid duplicating the large bundled database and cache churn.
+
+New cache identities require an initial build. PR caches remain scoped to the PR;
+the first main build may need to populate main's cache too. Verify improvements
+using a subsequent build's restored cache, compiler timings and successful gates,
+not just a reported cache hit. Installer compression and artifact upload remain
+separate costs; changing release compression requires measuring the size trade-off.
+
+Build & Test and the production PDF probe cancel superseded runs only for the same
+PR. Main pushes and manual runs keep distinct concurrency groups; release
+candidates are not cancelled by those validation workflows.
+
 ## Local Build Commands
 
 ```bash
