@@ -87,3 +87,51 @@ Native event coalescing and received pointer-event counts varied, so the drag co
 The fresh-SceneStore-read regression failed before the fix and passed afterward without tree rebuilding. Regression coverage also verifies move/add/remove, metadata edits, hydration, defensive ownership, coincident centres, empty scenes and placement previews. Final validation: **246 frontend test files / 2,256 tests**, `npx tsc --noEmit`, and `git diff --check` passed. Rust gates were not required because only frontend geometry caching, tests and documentation changed. The canvas runtime agent guide now describes the cache and snapshot immutability contract.
 
 `canopi-u8am` tracks investigation of remaining repeated scene cloning. Temporary profiling scripts, copied Design, isolated app data, servers and baseline worktree are removed after verification.
+
+## Scene-query cloning follow-up (2026-09-11, canopi-u8am)
+
+Baseline `00fc06a9` already includes the spacing cache. Instrumenting the actual native `SceneStore.persisted` getter showed two defensive scene reads per selection query: one for the selection model and another inside `createPlantPresentationContext`. Four independently refreshed selection overlays amplified that cost during pan, including when nothing was selected. A three-round diagnostic of forty empty-selection queries recorded 80 scene reads per round, with 50–72 ms spent inside the cloning getter.
+
+The fix remains local to each synchronous query. Nonempty selection and settled print capture pass their existing snapshot's Plants into presentation context construction. Empty selection returns fresh empty results without reading persisted state. There is no cross-call cache, changed SceneStore authority, or snapshot retained across edits. Hover-path consolidation and shared overlay refresh caching were considered but were unnecessary to achieve this measured reduction.
+
+The same isolated Tauri/WebKitGTK window and copied 2,201-Plant Design were used before and after the change. The existing user app and Vite server were not instrumented or managed by this run; only the isolated window was instrumented. Five batches of forty queries measured the real query surface, with a temporary getter wrapper counting reads but without stack capture. A temporary internal selection fixture selected one Plant for the selected-query batches and restored the previous selection afterward.
+
+| Query batch (40 calls) | Baseline scene reads | Final scene reads | Baseline median batch time | Final median batch time |
+| --- | ---: | ---: | ---: | ---: |
+| Empty selection | 80 | 0 | 110 ms | below 1 ms |
+| One selected Plant | 80 | 40 | 89 ms | 73 ms |
+
+All five batch timings in milliseconds: empty baseline `155, 236, 110, 70, 75`, final `1, 0, 0, 0, 0`; selected baseline `89, 76, 108, 121, 83`, final `277, 77, 73, 69, 68`. The final selected run includes a substantial first-batch outlier; these are diagnostic timings, not stable frame-rate or input-latency thresholds.
+
+A separate matched XTest replay activated the isolated native window and sent twenty middle-button pan moves at 120 ms intervals, totaling 40 × 20 CSS pixels. Getter instrumentation recorded call stacks after timing the clone itself:
+
+| Pan capture | Baseline | Final |
+| --- | ---: | ---: |
+| Full scene clones | 464 | 120 |
+| Time inside scene-cloning getter | 488 ms | 145 ms |
+| Reads attributable to selection queries/presentation | 344 | 0 |
+
+This removes 74% of observed scene clones in this empty-selection pan. It does not mean every pan is 74% faster. The remaining capture includes 80 map-projection reads, 20 viewport-chrome reads, and 20 setup/hover/scene-render reads. `canopi-zr86` tracks that separate investigation; broader snapshot caching is not part of this change.
+
+Regression tests first failed for the duplicate selection read, empty-selection reads and duplicate print read, then passed. Additional checks exercise live-preview movement, abort and commit, viewport-dependent bounds, defensive ownership of returned results, and refusal of print capture during an active edit. The copied Design remained byte-identical to the original; temporary scripts and isolated app data are removed after recording the aggregate evidence.
+
+Final validation for `canopi-u8am`: **247 test files / 2,261 tests**, `npx tsc --noEmit`, `npm run build`, `npm run build:web` (including browser boundary checks), and `git diff --check` passed. The focused selection/presentation/interaction/print run passed 304 tests. Rust gates were not needed for this frontend-only read-path change. The canvas runtime agent guide documents operation-local snapshot reuse and its freshness boundary.
+
+## Map and chrome follow-up (2026-09-11, canopi-zr86)
+
+The `7b747448` native pan capture above established the baseline: 100 of its 120 full Scene reads came from camera-driven map/chrome work (five reads per pan step). Inspection confirmed those reads requested much more data than the callers needed:
+
+- Map settings built Scene layer rows twice. `readCanvasMapLayerPresentation()` now projects map and terrain settings independently of Scene rows.
+- Precision cloned the Scene before deriving its radial extent. `getScenePhysicalExtentMeters()` now returns the current scalar computed within SceneStore, using the existing physical-extent algorithm and projection precision policy.
+- Empty Target overlays read geometry before constructing empty overlays. They now clear directly; active overlays retain their current-geometry query path.
+- Chrome cloned the Scene for guides. It now receives a defensive copy of only the guide list.
+
+These changes do not add a cross-edit snapshot cache or camera deadband. Physical extent reads observe live edits; guides remain owned copies. Read-side runtime interfaces and their test adapters were updated together.
+
+An isolated native Tauri window loaded the same copied 2,201-Plant Design. The same twenty XTest pan moves at 120 ms intervals changed the camera by exactly 40 × 20 CSS pixels at unchanged scale. Instrumenting `SceneStore.persisted` recorded **zero full Scene reads** in the final capture; all 100 map/chrome reads identified in the baseline were eliminated. The baseline also included 20 incidental setup/hover/render reads absent from this capture, so its 120-to-zero total must not be described as a universal per-gesture reduction. Narrow geometry calculations, rendering, and other input work still consume CPU.
+
+A controlled comparison in the same native WebView ran forty precision queries per batch, five batches. The previous path (`computeScenePhysicalExtentMeters(getSceneSnapshot())`) took **37, 35, 33, 32, 32 ms**, versus **5, 4, 6, 5, 3 ms** through the new scalar query: median **33 → 5 ms** per batch, with identical values in every comparison. This isolates avoided cloning; it does not measure GPU completion or frame rate.
+
+Regression coverage verifies settings-only map reads, current precision and camera synchronization without whole-scene reads, clearing existing overlays when targets become empty, live-edit/abort extent freshness, and guide-copy ownership. Existing MapLibre tests retain exact small camera movements, active Target projection, terrain and lifecycle behavior. The isolated copied Design, instrumentation and app data are temporary and removed after recording aggregate evidence.
+
+Final validation for `canopi-zr86`: **247 test files / 2,266 tests**, `npx tsc --noEmit`, and `git diff --check` passed; focused map/lifecycle/query/store coverage passed 44 tests. Runtime and MapLibre agent guides describe the narrow read surfaces. No Rust or transport contract changed, so Rust gates were not required for this bead.

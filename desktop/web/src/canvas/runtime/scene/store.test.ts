@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../target'
 import {
@@ -9,6 +9,25 @@ import {
 } from './store'
 
 describe('scene store', () => {
+  it('projects guides and current physical extent without cloning the full scene', () => {
+    const store = new SceneStore()
+    store.updatePersisted((draft) => {
+      draft.guides.push({ id: 'guide', axis: 'h', position: 7 })
+      draft.annotations.push({ kind: 'annotation', id: 'a', locked: false,
+        annotationType: 'text', position: { x: 3, y: 4 }, text: 'Note', fontSize: 12, rotationDeg: 0 })
+    })
+    const read = vi.spyOn(store, 'persisted', 'get')
+    try {
+      expect(store.physicalExtentMeters).toBe(5)
+      const guides = store.guides
+      guides[0]!.position = 99
+      expect(store.guides[0]!.position).toBe(7)
+      store.updatePersisted((draft) => { draft.annotations[0]!.position = { x: 6, y: 8 } })
+      expect(store.physicalExtentMeters).toBe(10)
+      expect(read).not.toHaveBeenCalled()
+    } finally { read.mockRestore() }
+  })
+
   it('keeps camera viewport state out of Scene Session state', () => {
     expect(new SceneStore().session).not.toHaveProperty('viewport')
   })

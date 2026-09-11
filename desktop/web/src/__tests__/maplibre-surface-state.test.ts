@@ -9,7 +9,6 @@ import {
   LOCAL_MERCATOR_PROJECTION_ID,
   LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
 } from '../canvas/projection'
-import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 
 describe('maplibre surface state adapter', () => {
   afterEach(() => {
@@ -28,21 +27,12 @@ describe('maplibre surface state adapter', () => {
   })
 
   it('merges precision warning data from the current scene extent', () => {
-    const scene = createDefaultScenePersistedState()
-    scene.measurementGuides.push({
-      kind: 'measurement-guide',
-      locked: false,
-      id: 'guide-1',
-      start: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS, y: 0 },
-      end: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 5, y: 0 },
-    })
-
     const merged = mergeMapLibreCanvasSurfaceState({
       status: 'ready',
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-    }, scene)
+    }, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 5)
 
     expect(merged.precisionWarning).toBe(true)
     expect(merged.designExtentMeters).toBeGreaterThan(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)

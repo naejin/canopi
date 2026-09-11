@@ -1,5 +1,5 @@
 import { effect, signal } from '@preact/signals'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   contourIntervalMeters,
   hillshadeOpacity,
@@ -68,6 +68,14 @@ describe('Canvas Map Surface snapshot seam', () => {
     hoveredPanelTargets.value = []
     selectedPanelTargets.value = []
     setCurrentCanvasSession(null)
+  })
+
+  it('reads map settings without requesting the full Scene', () => {
+    const runtime = createTestCanvasQuerySurface()
+    const read = vi.spyOn(runtime, 'getSceneSnapshot')
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: runtime }))
+    expect(readCanvasMapSurfaceSnapshot().terrain.contoursVisible).toBe(true)
+    expect(read).not.toHaveBeenCalled()
   })
 
   it('assembles core map inputs and tracks runtime viewport freshness', () => {

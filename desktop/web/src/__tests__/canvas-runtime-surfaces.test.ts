@@ -30,6 +30,7 @@ function createQuerySurface() {
     }),
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
+    getScenePhysicalExtentMeters: () => null,
     getSceneSnapshot: () => createDefaultScenePersistedState(),
     getSelection: () => [],
     getDesignObjectSelection: () => ({

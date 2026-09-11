@@ -15,6 +15,7 @@ import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../rendere
 import type {
   SceneDesignObjectTarget,
   ScenePersistedState,
+  ScenePlantEntity,
   SceneStateReader,
   SceneViewportState,
 } from '../scene'
@@ -83,9 +84,12 @@ export class SceneRuntimePresentationController {
     return this._speciesCache.getSuggestedPlantColor(canonicalName)
   }
 
-  createPlantPresentationContext(viewportScale = this._getViewport().scale): PlantPresentationContext {
+  createPlantPresentationContext(
+    viewportScale = this._getViewport().scale,
+    plants: readonly ScenePlantEntity[] = this._sceneStore.persisted.plants,
+  ): PlantPresentationContext {
     return {
-      plants: this._sceneStore.persisted.plants,
+      plants,
       viewport: {
         x: 0,
         y: 0,

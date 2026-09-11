@@ -123,6 +123,7 @@ export interface CanvasQuerySurface {
   readonly revision: CanvasQueryRevision
   readonly viewport: ReadonlySignal<CameraViewportSnapshot>
   capturePrintSnapshot(): CanvasPrintSnapshot | null
+  getScenePhysicalExtentMeters(): number | null
   getSceneSnapshot(): ScenePersistedState
   getSelection(): SceneDesignObjectTarget[]
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel

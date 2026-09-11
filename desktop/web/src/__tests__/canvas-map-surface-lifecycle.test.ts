@@ -1,3 +1,4 @@
+import { computeScenePhysicalExtentMeters } from '../canvas/runtime/scene-physical-extent'
 import { signal, type Signal } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -140,6 +141,7 @@ function createRuntime(
     }),
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
+    getScenePhysicalExtentMeters: () => computeScenePhysicalExtentMeters(scene),
     getSceneSnapshot: () => scene,
     getSelection: () => [],
     getDesignObjectSelection: () => ({
@@ -257,6 +259,28 @@ describe('Canvas map surface lifecycle', () => {
     expect(observer).toBeDefined()
     return observer!
   }
+
+  it('updates precision and camera without full scene reads when overlays are empty', async () => {
+    const scene = createDefaultScenePersistedState()
+    const runtime = createRuntime(scene)
+    const read = vi.spyOn(runtime, 'getSceneSnapshot')
+    const lifecycle = createLifecycle()
+    lifecycle.attach(container)
+    lifecycle.update(createSnapshot({ runtime }))
+    await flushPromises()
+    scene.measurementGuides.push({ kind: 'measurement-guide', locked: false, id: 'extent',
+      start: { x: 0, y: 0 }, end: { x: 10001, y: 0 } })
+    runtime.viewport.value = { ...runtime.viewport.value,
+      viewport: { x: 0.0625, y: -0.0625, scale: 1 }, revision: 1 }
+    lifecycle.update(createSnapshot({ runtime }))
+    await flushPromises()
+    expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      precisionWarning: true, designExtentMeters: 10001,
+    }))
+    expect(mapAt().jumpTo).toHaveBeenCalled()
+    expect(read).not.toHaveBeenCalled()
+    lifecycle.destroy()
+  })
 
   it('creates a map only with a query surface, location, and visible map layer', async () => {
     const lifecycle = createLifecycle()

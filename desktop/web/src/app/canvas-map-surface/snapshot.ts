@@ -1,4 +1,4 @@
-import { readCanvasLayerPresentation } from '../canvas-layer-presentation/presentation'
+import { readCanvasMapLayerPresentation } from '../canvas-layer-presentation/presentation'
 import { readSavedLocationPresentation } from '../location'
 import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { basemapStyle, theme } from '../settings/state'
@@ -24,16 +24,16 @@ export function readCanvasMapSurfaceCoreSnapshot(): CanvasMapSurfaceCoreSnapshot
 
   const savedLocation = readSavedLocationPresentation()
   const location = savedLocation.location
-  const layerPresentation = readCanvasLayerPresentation()
+  const layerPresentation = readCanvasMapLayerPresentation()
 
   return {
     runtime,
     location: location ? { lat: location.lat, lon: location.lon } : null,
     northBearingDeg: savedLocation.northBearingDeg,
     basemapStyle: basemapStyle.value,
-    hasVisibleMapLayer: layerPresentation.mapSurface.hasVisibleMapLayer,
-    layerVisibility: { ...layerPresentation.mapSurface.layerVisibility },
-    layerOpacity: { ...layerPresentation.mapSurface.layerOpacity },
+    hasVisibleMapLayer: layerPresentation.hasVisibleMapLayer,
+    layerVisibility: { ...layerPresentation.layerVisibility },
+    layerOpacity: { ...layerPresentation.layerOpacity },
     theme: theme.value,
   }
 }
@@ -45,7 +45,7 @@ export function readCanvasMapSurfaceSnapshot(): CanvasMapSurfaceSnapshot {
   return {
     ...coreSnapshot,
     terrain: {
-      ...readCanvasLayerPresentation().mapSurface.terrain,
+      ...readCanvasMapLayerPresentation().terrain,
       isDark: coreSnapshot.theme === 'dark',
     },
     hoveredTargets: [...hoveredTargets],
