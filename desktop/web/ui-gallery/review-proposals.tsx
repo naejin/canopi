@@ -54,7 +54,7 @@ export function LayersProposal({ close, alternative, locate }: { close(): void; 
   const counts: Record<string, number> = { plants: scene?.plants.length ?? 0, annotations: scene?.annotations.length ?? 0, zones: scene?.zones.length ?? 0, 'measurement-guides': scene?.measurementGuides.length ?? 0 }
   const detail = active.detail
   const needsLocation = detail.type !== 'scene' && !detail.hasLocation
-  const status = !active.visible ? 'Hidden' : active.locked ? 'Visible · locked' : 'Visible'
+  const status = `${active.visible ? 'Visible' : 'Hidden'}${active.locked ? ' · locked' : ''}`
   return <section className={styles.panel} aria-label="Layers proposal">
     <Header title={t('canvas.layers.layerPanel')} close={close} />
     <div className={styles.scroll}>
@@ -231,7 +231,7 @@ export function NotebookProposal({ close, empty, long, alternative }: { close():
       </div>
       {(!alternative || !collapsed.includes(section)) && <>{entries.filter(e => e.section === section).map(entry => <div className={styles.notebookRow} data-active={entry.path === active} key={entry.path} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); e.stopPropagation(); drop(section, entry.path) }}>
         <button className={styles.notebookEntry} draggable title={entry.path} aria-current={entry.path === active ? 'page' : undefined} onDragStart={() => { drag.current = { path: entry.path } }} onDragEnd={() => { drag.current = null }} onClick={() => { setActive(entry.path); activity.value = `Design switch preview: ${entry.name}. Sample canvas retained.` }} onKeyDown={e => { if (e.altKey && ['ArrowUp', 'ArrowDown'].includes(e.key)) { e.preventDefault(); const i = entries.indexOf(entry); const next = [...entries]; next.splice(i, 1); next.splice(Math.max(0, i + (e.key === 'ArrowUp' ? -1 : 1)), 0, entry); setEntries(next) } }}>
-          <Icon name="file" /><span><strong>{long ? entry.name + ' — planting study for the northern boundary' : entry.name}</strong><small>{entry.path === active ? 'Open now' : 'Saved design'}<span> · {entry.date}</span></small></span>
+          <Icon name="file" /><span><strong>{long ? entry.name + ' — planting study for the northern boundary' : entry.name}</strong><small>{entry.path === active ? 'Open now' : 'Saved'}<span> · {entry.date}</span></small></span>
         </button>
         <IconButton icon="trash" label={`Remove ${entry.name} from notebook`} onClick={() => setRemoving(entry.path)} />
         {removing === entry.path && <div className={styles.removeNotebook}><span>Remove from notebook? The design file stays.</span><button className={styles.action} onClick={() => { setEntries(entries.filter(e => e.path !== entry.path)); setRemoving(null) }}>Remove</button><button className={styles.action} onClick={() => setRemoving(null)}>Cancel</button></div>}

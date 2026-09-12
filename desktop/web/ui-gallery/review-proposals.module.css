@@ -44,7 +44,7 @@
 .symbolGroup + .symbolGroup { padding-top: var(--space-3); margin-top: var(--space-3); border-top: 1px solid var(--color-border); }
 .symbolGroup h3 { color: var(--color-text-muted); margin-bottom: var(--space-2); font-size: var(--text-xs); }
 .symbolGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
-.symbolGrid button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); min-width: 0; min-height: 64px; padding: var(--space-2) var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: transparent; color: var(--color-text); }
+.symbolGrid button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); min-width: 0; min-height: 56px; padding: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: transparent; color: var(--color-text); }
 .symbolGrid button span { font-size: var(--text-xs); line-height: var(--line-height); max-width: 100%; overflow-wrap: normal; hyphens: auto; }
 .symbolGrid button:hover { background: var(--color-control-hover); }
 .symbolGrid button[aria-selected='true'] { border-color: var(--color-primary); background: var(--color-primary-bg); box-shadow: inset 0 0 0 1px var(--color-primary); }
@@ -57,7 +57,7 @@
 .favoriteRow:hover, .stampRow:hover, .notebookRow:hover { background: var(--color-control-hover); }
 .draggableIdentity { min-width: 0; flex: 1; cursor: grab; }
 .favoriteRow .iconButton, .favoriteRow .info { flex-basis: var(--control-size-sm); width: var(--control-size-sm); }
-.info { font-size: var(--text-xl) !important; }
+.info { font-size: var(--text-xl) !important; border-left: 1px solid var(--color-border); border-radius: 0; margin-left: var(--space-1); }
 .splitter { flex-shrink: 0; height: var(--space-2); border-block: 1px solid var(--color-border); background: var(--color-surface-alt); cursor: row-resize; touch-action: none; }
 .splitter::after { content: ''; display: block; width: var(--space-6); height: 2px; margin: 2px auto; background: var(--color-border-strong); }
 .stampsFrame { display: flex; flex-direction: column; flex-shrink: 0; min-height: 120px; max-height: calc(100% - 240px); }
@@ -77,12 +77,12 @@
 .notebookCommands { display: flex; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
 .notebookCommands button { flex: 1; font-size: var(--text-xs); }
 .editor { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
-.notebookSection + .notebookSection { margin-top: var(--space-3); }
+.notebookSection + .notebookSection { margin-top: var(--space-2); }
 .notebookSectionHeading { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); background: var(--color-surface-alt); border-bottom: 1px solid var(--color-border); }
 .sectionTitle { flex: 1; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; border: 0; background: transparent; color: var(--color-text-muted); text-align: left; cursor: grab !important; }
 .sectionTitle h3 { overflow-wrap: anywhere; }
 .notebookRow { display: flex; align-items: center; flex-wrap: wrap; border-left: 2px solid transparent; border-bottom: 1px solid var(--color-border); padding-right: var(--space-2); }
-.notebookEntry { display: flex; flex: 1; align-items: center; gap: var(--space-2); min-width: 0; min-height: 59px; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); background: transparent; border: 0; color: var(--color-text); text-align: left; }
+.notebookEntry { display: flex; flex: 1; align-items: center; gap: var(--space-2); min-width: 0; min-height: 54px; padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); background: transparent; border: 0; color: var(--color-text); text-align: left; }
 .notebookEntry svg { flex-shrink: 0; color: var(--color-text-muted); }
 .notebookEntry > span { display: grid; gap: var(--space-1); }
 .notebookEntry strong { font-weight: 600; overflow-wrap: anywhere; }

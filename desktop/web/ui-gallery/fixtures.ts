@@ -204,6 +204,9 @@ export function designFixture(state = 'populated'): CanopiFile {
       stratum: null, canopySpreadM: speciesIndex === 0 ? 2 : .7, rotationDeg: null, scale: speciesIndex === 0 ? 2 : .7,
       notes: null, plantedDate: null, quantity: null, locked: false,
     })))
+  if (state === 'dense') plants.forEach((plant, index) => {
+    plant.position = { x: (index % 7) * .32, y: Math.floor(index / 7) * .36 }
+  })
   return {
     ...serializeScenePersistedState({ ...scene, plants,
       plantSpeciesColors: Object.fromEntries(specimens.map(([name, , , color]) => [name, color])),
