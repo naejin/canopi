@@ -9,7 +9,7 @@ Read this contract, then the relevant family guide. Do not read every guide or r
 | Surface | Reference |
 | --- | --- |
 | Plant Color and Plant Symbol | [Appearance editors](patterns/appearance-editors.md) |
-| Species Key, Layers, Favorites | [Dock panels](patterns/dock-panels.md) |
+| Species Key, Layers, Favorites, Design Notebook | [Dock panels](patterns/dock-panels.md) |
 | Inspection Lens | [Inspection overlays](patterns/inspection-overlays.md) |
 | Catalog, filters, species detail and photos | [Catalog and details](patterns/catalog-and-details.md) |
 | Main canvas, tools, notices, plant labels | [Canvas workspace](patterns/canvas-workspace.md) |

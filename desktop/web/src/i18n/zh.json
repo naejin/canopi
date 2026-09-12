@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "新分区",
     "createSection": "创建分区",
     "unsectioned": "未分区",
-    "noSection": "无分区",
     "removeDesignFromNotebook": "从笔记本移除 {{name}}",
     "deleteSection": "删除分区 {{name}}",
     "sectionName": "分区名称",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "当前设计",
     "addCurrentSavedHint": "将此已保存设计添加到笔记本。",
     "addCurrentUnsavedHint": "先保存此设计，再添加到笔记本。",
-    "addCurrentSection": "当前设计的笔记本分区",
     "addCurrentDesign": "将当前设计添加到笔记本",
     "addCurrentButton": "添加当前设计",
     "openNow": "当前打开"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "检查放大镜",
       "close": "关闭放大镜",
-      "hint": "拖动浏览 · 选择名称以居中",
+      "hint": "在画布上移动指针以查看 · 在此拖动以浏览",
       "empty": "此处没有植物。拖动或扩大视野。",
       "unavailable": "预览不可用。名称仍显示在植物所在位置。",
       "locate": "将放大镜移至{{name}}",

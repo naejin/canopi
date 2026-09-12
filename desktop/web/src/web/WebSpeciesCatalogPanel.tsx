@@ -504,7 +504,7 @@ function SpeciesRow({ item, favorites = false }: { readonly item: SpeciesListIte
             </>
           )}
         </span>
-        {metadata.length > 0 && (
+        {!favorites && metadata.length > 0 && (
           <span className={styles.metadata} data-testid="web-species-row-metadata">{metadata}</span>
         )}
       </span>

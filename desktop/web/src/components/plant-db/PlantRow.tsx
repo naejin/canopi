@@ -66,7 +66,7 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
       : `Z${plant.hardiness_zone_min}`
     : null
   const metadataTags = variant === 'favorites'
-    ? favoriteMetadataTags(plant)
+    ? []
     : catalogMetadataTags(plant, hardiness)
   const showMatchedCommonName = variant === 'catalog'
     && speciesCatalogWorkbench.isActiveSearchText(speciesCatalogWorkbench.intent.value.text)
@@ -85,7 +85,7 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
       aria-label={plant.canonical_name}
     >
       <div className={styles.plantRowContent}>
-        {variant === 'favorites' ? <SpeciesIdentity commonName={plant.common_name} canonicalName={plant.canonical_name} detail={secondaryCommonName} mark={mark} /> : <>
+        {variant === 'favorites' ? <SpeciesIdentity commonName={plant.common_name} canonicalName={plant.canonical_name} mark={mark} /> : <>
         <div className={styles.nameRow}>
           {plant.common_name ? (
             <>
@@ -100,11 +100,11 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
           )}
         </div>
         </>}
-        <div className={styles.tagRow}>
+        {metadataTags.length > 0 && <div className={styles.tagRow}>
           {metadataTags.map((tag) => (
             <span key={tag.label} className={styles.tag} style={{ color: tag.color }}>{tag.label}</span>
           ))}
-        </div>
+        </div>}
       </div>
 
       <div className={styles.rowActions}>
@@ -166,23 +166,4 @@ function catalogMetadataTags(plant: SpeciesListItem, hardiness: string | null): 
     })
   }
   return tags
-}
-
-function favoriteMetadataTags(plant: SpeciesListItem): PlantRowMetadataTag[] {
-  return [
-    ...plant.climate_zones.map((zone) => ({
-      label: translateFilterValue('climateZone_', zone),
-      color: 'var(--color-hardiness)',
-    })),
-    ...plant.life_cycles.map((cycle) => ({
-      label: translateFilterValue('lifeCycle_', cycle),
-      color: 'var(--color-accent)',
-    })),
-  ]
-}
-
-function translateFilterValue(prefix: string, value: string): string {
-  const key = `filters.${prefix}${value}`
-  const translated = t(key)
-  return translated === key ? value : translated
 }

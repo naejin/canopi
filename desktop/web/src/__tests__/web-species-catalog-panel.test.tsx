@@ -274,6 +274,7 @@ describe('Web Edition Species Catalog panel', () => {
     expect(mockWorkbench.mount).toHaveBeenCalledWith('favorites')
     expect(container.textContent).toContain('Peach')
     expect(container.textContent).toContain('Lemon balm')
+    expect(container.querySelector('[data-testid="web-species-row-metadata"]')).toBeNull()
   })
 
   it('renders Species row names on one line with separate metadata', async () => {

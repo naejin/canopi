@@ -16,10 +16,11 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
     state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 },
       plants: [{ id: 'mint', name: 'Menthe verte', position: { x: 0, y: 0 }, distanceM: 0,
         screenPosition: { x: 215, y: 195 }, label: { x: 160, y: 208, width: 110, height: 24, lines: ['Menthe verte'] } }] }),
-    centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    inspectAtScreenPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
   }
   const host = document.createElement('div')
   document.body.appendChild(host)
+  host.getBoundingClientRect = () => new DOMRect(40, 60, 800, 600)
   const attachInspectionTo = vi.fn(() => view)
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo }) }))
   await act(async () => render(<InspectionLens canvasRef={{ current: host }} />, root))
@@ -29,7 +30,13 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   expect(root.textContent).toContain('Menthe verte')
   expect(root.textContent).not.toContain('Hold view')
   expect(root.textContent).not.toContain('Follow pointer')
-  await act(async () => { host.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 100 })) })
+  await act(async () => { host.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 140, clientY: 160 })) })
+  expect(view.inspectAtScreenPoint).toHaveBeenLastCalledWith({ x: 100, y: 100 })
+  const canvasControl = document.createElement('button')
+  host.appendChild(canvasControl)
+  canvasControl.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 200 }))
+  host.dispatchEvent(new MouseEvent('pointermove', { buttons: 1, clientX: 200 }))
+  expect(view.inspectAtScreenPoint).toHaveBeenCalledTimes(1)
   expect(view.panBy).not.toHaveBeenCalled()
   expect(view.centerOnCanvas).not.toHaveBeenCalled()
   expect(host.querySelector('[data-inspection-source] rect')?.getAttribute('width')).toBe('43')
@@ -76,6 +83,8 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   expect(view.panBy).toHaveBeenCalledTimes(calls)
   expect(view.dispose).toHaveBeenCalledTimes(1)
   expect(host.querySelector('[data-inspection-source]')).toBeNull()
+  host.dispatchEvent(new MouseEvent('pointermove', { clientX: 200 }))
+  expect(view.inspectAtScreenPoint).toHaveBeenCalledTimes(1)
   host.remove()
   expect(root.querySelector('button[aria-expanded="false"]')).not.toBeNull()
   expect(document.activeElement).toBe(launcher)

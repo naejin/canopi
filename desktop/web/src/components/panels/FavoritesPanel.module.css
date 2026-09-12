@@ -129,7 +129,6 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   min-height: var(--favorites-frame-min-height);
   overflow: hidden;
   padding: 0;
@@ -142,7 +141,6 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-2) var(--space-1-5);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .savedStampsResizeHandle {
@@ -150,31 +148,24 @@
   position: relative;
   cursor: row-resize;
   background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  border-block: 1px solid var(--color-border);
   transition: background-color var(--transition-fast);
 }
 
 .savedStampsResizeHandle::before {
   content: "";
   position: absolute;
-  left: var(--space-3);
-  right: var(--space-3);
+  width: var(--space-6);
+  left: calc(50% - var(--space-3));
   top: calc(50% - var(--slider-track-size) / 2);
   height: var(--slider-track-size);
   background: var(--color-border-strong);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
 }
 
 .savedStampsResizeHandle:hover,
 .savedStampsResizeHandle:focus-visible {
   background: var(--color-control-hover);
   outline: 0;
-}
-
-.savedStampsResizeHandle:hover::before,
-.savedStampsResizeHandle:focus-visible::before {
-  opacity: 1;
 }
 
 .savedStampsTitleGroup {
@@ -185,7 +176,6 @@
 }
 
 .savedStampsDescription,
-.savedStampsHint,
 .savedStampSummary,
 .savedStampsEmpty,
 .savedStampsLoading {
@@ -215,6 +205,11 @@
 }
 
 .saveStampButton {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   background: var(--color-surface);
   color: var(--color-text);
 }
@@ -249,14 +244,15 @@
 }
 
 .savedStampRow {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: var(--control-size-sm) minmax(0, 1fr) auto;
   grid-template-areas: "grip content actions";
   column-gap: var(--space-1);
   align-items: center;
   min-width: 0;
-  min-height: calc(var(--control-size-md) + var(--space-2));
-  padding: var(--space-1);
+  min-height: 54px;
+  padding: var(--space-2);
   border: 0;
   border-bottom: 1px solid var(--color-border);
   background: transparent;
@@ -555,11 +551,13 @@
   }
 }
 
-.search, .savedStampsActions { padding: var(--space-2) var(--space-3); }
+.search, .savedStampsActions { padding: 0 var(--space-3) var(--space-2); }
 .frameHeader { align-items: center; padding: var(--space-2) var(--space-3); }
 .importStampButton { position: relative; margin-left: auto; padding: 0 var(--space-2); }
-.savedStampActions > .savedStampIconButton { width: auto; padding: 0 var(--space-2); }
-.savedStampsHint, .savedStampsEmpty, .savedStampsLoading { padding: 0 var(--space-3); }
+
+.savedStampsEmpty, .savedStampsLoading { padding: 0 var(--space-3); }
 
 .savedStampName, .savedStampDeleteCopy { white-space: normal; overflow-wrap: anywhere; }
 .frameHeader { justify-content: flex-start; min-height: var(--control-size-window); }
+
+.savedStampActions > .savedStampIconButton, .importStampButton { border-color: transparent; }

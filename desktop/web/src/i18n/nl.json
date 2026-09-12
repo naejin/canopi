@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "Nieuwe sectie",
     "createSection": "Sectie maken",
     "unsectioned": "Zonder sectie",
-    "noSection": "Geen sectie",
     "removeDesignFromNotebook": "{{name}} uit notitieboek verwijderen",
     "deleteSection": "Sectie {{name}} verwijderen",
     "sectionName": "Sectienaam",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "Huidig ontwerp",
     "addCurrentSavedHint": "Voeg dit opgeslagen ontwerp toe aan het notitieboek.",
     "addCurrentUnsavedHint": "Sla dit ontwerp op voordat je het aan het notitieboek toevoegt.",
-    "addCurrentSection": "Notitieboeksectie voor huidig ontwerp",
     "addCurrentDesign": "Huidig ontwerp toevoegen aan notitieboek",
     "addCurrentButton": "Huidig ontwerp toevoegen",
     "openNow": "Nu geopend"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "Inspectieloupe",
       "close": "Loupe sluiten",
-      "hint": "Sleep om te verkennen · Kies een naam om te centreren",
+      "hint": "Beweeg over het canvas om te inspecteren · Sleep hier om te verkennen",
       "empty": "Geen planten hier. Verschuif of verbreed het beeld.",
       "unavailable": "Voorbeeld niet beschikbaar. Namen blijven op de plantposities staan.",
       "locate": "Loep centreren op {{name}}",

@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "Nova seção",
     "createSection": "Criar seção",
     "unsectioned": "Sem seção",
-    "noSection": "Sem seção",
     "removeDesignFromNotebook": "Remover {{name}} do caderno",
     "deleteSection": "Excluir seção {{name}}",
     "sectionName": "Nome da seção",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "Design atual",
     "addCurrentSavedHint": "Adicione este design salvo ao caderno.",
     "addCurrentUnsavedHint": "Salve este design antes de adicioná-lo ao caderno.",
-    "addCurrentSection": "Seção do caderno para o design atual",
     "addCurrentDesign": "Adicionar design atual ao caderno",
     "addCurrentButton": "Adicionar desenho atual",
     "openNow": "Aberto agora"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "Lupa de inspeção",
       "close": "Fechar lupa",
-      "hint": "Arraste para explorar · Escolha um nome para centrar",
+      "hint": "Mova o ponteiro sobre a tela para inspecionar · Arraste aqui para explorar",
       "empty": "Sem plantas aqui. Desloque ou amplie a vista.",
       "unavailable": "Pré-visualização indisponível. Os nomes mantêm as posições das plantas.",
       "locate": "Centrar a lupa em {{name}}",

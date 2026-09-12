@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "New section",
     "createSection": "Create section",
     "unsectioned": "Unsectioned",
-    "noSection": "No section",
     "removeDesignFromNotebook": "Remove {{name}} from Notebook",
     "deleteSection": "Delete section {{name}}",
     "sectionName": "Section name",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "Current Design",
     "addCurrentSavedHint": "Add this saved Design to the notebook.",
     "addCurrentUnsavedHint": "Save this Design before adding it to the notebook.",
-    "addCurrentSection": "Notebook section for current Design",
     "addCurrentDesign": "Add current design to notebook",
     "addCurrentButton": "Add current design",
     "openNow": "Open now"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "Inspection lens",
       "close": "Close inspection lens",
-      "hint": "Drag to explore · Select a name to centre",
+      "hint": "Move over canvas to inspect · Drag here to explore",
       "empty": "No plants here. Drag or widen the lens.",
       "unavailable": "Preview unavailable. Names remain at their plant positions.",
       "locate": "Centre lens on {{name}}",

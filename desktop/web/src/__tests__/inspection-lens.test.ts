@@ -7,6 +7,31 @@ import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapsh
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('Inspection Lens ownership', () => {
+  it('inspects the pointer position in canvas coordinates without editing the scene or camera', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const camera = new CameraController()
+    camera.initialize({ width: 800, height: 600 })
+    camera.setViewport({ x: 100, y: 50, scale: 10 })
+    const snapshot = createTestSceneRendererSnapshot()
+    const before = JSON.stringify(snapshot.scene)
+    const owner = new SceneCanvasInspectionOwner({ camera, revision: { scene: signal(0), plantNames: signal(0) },
+      getSnapshot: () => snapshot, setHoveredTarget() {} })
+    const view = owner.mount(document.createElement('div'))
+    view.inspectAtScreenPoint({ x: 250, y: 180 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual({ x: 15, y: 13 })
+    expect(camera.snapshot.peek().viewport).toEqual({ x: 100, y: 50, scale: 10 })
+    expect(JSON.stringify(snapshot.scene)).toBe(before)
+    view.inspectAtScreenPoint({ x: Number.NaN, y: 100 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual({ x: 15, y: 13 })
+    owner.dispose()
+    view.inspectAtScreenPoint({ x: 0, y: 0 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value).toBeNull()
+  })
+
   it('keeps its inspected location when the main camera moves', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)

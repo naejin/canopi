@@ -339,6 +339,25 @@ describe('DesignNotebookPanel', () => {
     expect(deleteSection).toHaveBeenCalledWith('section-empty')
   })
 
+  it('adds directly to the first section without a destination dropdown', async () => {
+    const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
+    const addDesignReference = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      activePath: signal('/designs/current.canopi'), currentDesign: signal(testDesign()),
+      loadNotebook: vi.fn().mockResolvedValue({ entries: [], sections: [{ id: 'garden', name: 'Garden', sort_order: 0, created_at: '', updated_at: '' }] }),
+      saveCurrent: async () => ({ status: 'applied', path: '/designs/current.canopi', content: testDesign() }),
+      addDesignReference, moveEntryToSection,
+    })
+    await act(async () => { render(<DesignNotebookPanel workbench={workbench} />, container); await flushEffects() })
+    await act(flushEffects)
+    expect(container.textContent).toContain('Garden')
+    expect(container.querySelector('[aria-label="Notebook section for current Design"]')).toBeNull()
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Add current design to notebook"]')!.click(); await flushEffects() })
+    expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', testDesign())
+    expect(moveEntryToSection).toHaveBeenCalledWith('/designs/current.canopi', 'garden')
+    workbench.dispose()
+  })
+
   it('shows an add-current affordance that saves before adding an unsaved Design', async () => {
     const activePath = signal<string | null>(null)
     const currentDesign = signal<CanopiFile | null>(testDesign())

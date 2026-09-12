@@ -84,15 +84,24 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
       document.addEventListener('pointercancel', end)
       window.addEventListener('blur', stop)
     }
+    const host = canvasRef.current
+    const inspectPointer = (event: PointerEvent) => {
+      if (drag || event.buttons !== 0 || !host) return
+      if (event.target instanceof Element && event.target.closest('button, input, select, textarea, [contenteditable="true"], [data-preserve-overlays="true"]')) return
+      const bounds = host.getBoundingClientRect()
+      view.inspectAtScreenPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+    }
+    host?.addEventListener('pointermove', inspectPointer, true)
     frame?.addEventListener('pointerdown', start)
     frame?.addEventListener('lostpointercapture', end)
     return () => {
       stop()
+      host?.removeEventListener('pointermove', inspectPointer, true)
       frame?.removeEventListener('pointerdown', start)
       frame?.removeEventListener('lostpointercapture', end)
       handle.value = null; view.dispose()
     }
-  }, [documents])
+  }, [documents, canvasRef])
   const state = handle.value?.state.value
   const viewport = queries.viewport.value.viewport
   return <>

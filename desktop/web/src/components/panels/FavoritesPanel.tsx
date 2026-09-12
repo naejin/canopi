@@ -340,7 +340,7 @@ export function FavoritesPanel() {
               aria-label={t('savedObjectStamps.import')}
               onClick={() => void savedObjectStampWorkbench.importStampFile()}
             >
-              <span aria-hidden="true">↓</span><ButtonTooltip label={t('savedObjectStamps.import')} side="left" />
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 11v3h10v-3" /></svg><ButtonTooltip label={t('savedObjectStamps.import')} side="left" />
             </button>
           </div>
           <div className={styles.savedStampsActions}>
@@ -348,17 +348,13 @@ export function FavoritesPanel() {
               type="button"
               className={styles.saveStampButton}
               disabled={!savedStampSelection.canSave}
+              title={!savedStampSelection.canSave ? t('savedObjectStamps.selectHint') : undefined}
               onClick={saveCanvasSelectionAsObjectStamp}
             >
-              {t('savedObjectStamps.saveSelection')}
+              <PlusIcon />{t('savedObjectStamps.saveSelection')}
             </button>
 
           </div>
-          {!savedStampSelection.canSave && (
-            <span className={styles.savedStampsHint}>
-              {t('savedObjectStamps.selectHint')}
-            </span>
-          )}
           {savedStampsView.loading ? (
             <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
               {t('savedObjectStamps.loading')}
@@ -808,7 +804,7 @@ function SavedObjectStampRow({
               onFocus={(anchor) => onPreviewRequest(stamp, anchor)}
               onBlur={onPreviewClear}
             >
-              {t('savedObjectStamps.place')}
+              <PlusIcon />
             </SavedStampIconButton>
             <ActionMenu label={t('savedObjectStamps.actions')} items={[
               { label: t('savedObjectStamps.export'), run: () => { void savedObjectStampWorkbench.exportStamp(stamp) } },
@@ -875,6 +871,10 @@ function SixDotGripIcon() {
       <span />
     </span>
   )
+}
+
+function PlusIcon() {
+  return <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
 }
 
 function CheckIcon() {

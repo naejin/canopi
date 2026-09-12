@@ -130,6 +130,14 @@ export class SceneCanvasInspectionOwner {
     this.views.add(owned)
     return {
       state,
+      inspectAtScreenPoint: (screenPoint) => {
+        if (released || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return
+        const { viewport } = options.camera.snapshot.peek()
+        const next = { x: (screenPoint.x - viewport.x) / viewport.scale, y: (screenPoint.y - viewport.y) / viewport.scale }
+        if (point?.x === next.x && point.y === next.y) return
+        point = next
+        schedule()
+      },
       centerOnCanvas: () => { if (!released) { point = canvasCenter(); schedule() } },
       panBy: (delta) => {
         if (released || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return

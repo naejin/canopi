@@ -27,6 +27,8 @@ export interface CanvasInspectionState {
 /** A view-only Canvas resource. Its owner also releases it on runtime teardown. */
 export interface CanvasInspectionHandle {
   readonly state: ReadonlySignal<CanvasInspectionState | null>
+  /** Coordinates in CSS pixels relative to the main canvas host. */
+  inspectAtScreenPoint(point: InspectionPoint): void
   centerOnCanvas(): void
   panBy(delta: InspectionPoint): void
   zoomBy(factor: number): void

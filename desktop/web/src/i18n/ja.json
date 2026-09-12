@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "新しいセクション",
     "createSection": "セクションを作成",
     "unsectioned": "セクションなし",
-    "noSection": "セクションなし",
     "removeDesignFromNotebook": "{{name}} をノートから削除",
     "deleteSection": "セクション {{name}} を削除",
     "sectionName": "セクション名",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "現在のデザイン",
     "addCurrentSavedHint": "この保存済みデザインをノートに追加します。",
     "addCurrentUnsavedHint": "ノートに追加する前にこのデザインを保存します。",
-    "addCurrentSection": "現在のデザインのノートセクション",
     "addCurrentDesign": "現在のデザインをノートに追加",
     "addCurrentButton": "現在の設計を追加",
     "openNow": "現在開いています"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "確認用ルーペ",
       "close": "ルーペを閉じる",
-      "hint": "ドラッグで探索 · 名前を選んで中央に表示",
+      "hint": "キャンバス上にポインターを動かして確認 · ここをドラッグして探索",
       "empty": "ここに植物はありません。ドラッグするか視野を広げてください。",
       "unavailable": "プレビューを表示できません。名前は植物の位置に表示されます。",
       "locate": "{{name}}をルーペの中央に表示",

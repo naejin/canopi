@@ -60,11 +60,14 @@ location, and its own hover highlight. Attachment failure rolls back resources.
 Document replacement resets the inspected location; view close and runtime destruction
 release the resources. Locale/theme updates refresh mounted views.
 
-The shared `InspectionLens` component opens at the Canvas centre. The view keeps
-its own location; canvas pointer movement never controls it. Drag inside the preview
+The shared `InspectionLens` component opens at the Canvas centre. Pointer movement over canvas artwork
+updates the view through `inspectAtScreenPoint`, using host-relative CSS pixels.
+The runtime converts to world coordinates. Moving onto controls leaves the view
+at its last position; canvas editing drags do not redirect the lens. Drag inside the preview
 or use arrow keys (Shift for larger steps) to pan. Recenter explicitly samples the
 current main Canvas centre. Drag listeners release on up, cancel, lost capture,
-window blur and unmount. There are no hold/follow modes.
+window blur and unmount. There are no Hold/Follow controls or modes. The component also releases its canvas
+pointer listener on close or host replacement.
 Main Canvas clicks retain normal editing behavior. `inspection-layout.ts` selects a
 local scale from the nearest distinct planting separation and places full localized
 names inside the frame, with short connectors to their exact plant positions. The
@@ -96,7 +99,7 @@ its copies, and screenshots outside Git. Tests use anonymous fixtures, including
 Regression coverage exercises distinct positions and coincident stacks, shared hit
 and band bounds, collision admission through pan and zoom reversal, pin priority,
 hidden Layers, annotation reveal, measurement reveal, renderer viewport updates,
-and lens attachment rollback, independent location, recentering, reset, drag/keyboard use, and
+and lens attachment rollback, mouse-following, control exclusion, recentering, reset, drag/keyboard use, and
 disposal. Run TypeScript, the full frontend suite, and both edition builds.
 
 For visual review, import a local reference into the normal Web route and sweep

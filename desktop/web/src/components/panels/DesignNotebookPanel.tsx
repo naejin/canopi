@@ -8,7 +8,6 @@ import {
 } from '../../app/design-notebook'
 import type { DesignNotebookEntry, DesignNotebookSection } from '../../types/design'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
-import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DesignNotebookPanel.module.css'
 import { usePointerReorder } from '../shared/usePointerReorder'
 
@@ -54,7 +53,6 @@ export function DesignNotebookPanel({
   const [sectionEditorOpen, setSectionEditorOpen] = useState(false)
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
-  const [addCurrentSectionId, setAddCurrentSectionId] = useState<string>('')
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<NotebookDropTarget | null>(null)
@@ -91,10 +89,6 @@ export function DesignNotebookPanel({
   const orderedEntries = entryPreviewEntries ?? entriesInNotebookDisplayOrder(view.entries, orderedSections)
   const unsectionedEntries = entriesForSection(orderedEntries, null)
   const shouldShowUnsectioned = unsectionedEntries.length > 0 || draggedPath !== null
-  const addSectionItems: DropdownItem<string>[] = [
-    { value: '', label: t('designNotebook.noSection') },
-    ...view.sections.map((section) => ({ value: section.id, label: section.name })),
-  ]
 
   function createSection(): void {
     const name = newSectionName.trim()
@@ -282,20 +276,6 @@ export function DesignNotebookPanel({
       <DockPanelHeader title={t('designNotebook.title')} count={view.visibleEntries.length} />
       <header className={styles.header}>
         <div className={styles.headerActions}>
-          {view.canAddCurrentDesign && view.sections.length > 0 && (
-            <Dropdown
-              trigger={sectionNameForId(view.sections, addCurrentSectionId) ?? t('designNotebook.noSection')}
-              items={addSectionItems}
-              value={addCurrentSectionId}
-              onChange={setAddCurrentSectionId}
-              ariaLabel={t('designNotebook.addCurrentSection')}
-              className={styles.sectionDropdown}
-              triggerClassName={styles.sectionDropdownTrigger}
-              menuClassName={styles.sectionDropdownMenu}
-              optionClassName={styles.sectionDropdownOption}
-              preserveOverlays
-            />
-          )}
           <button
             disabled={!view.canAddCurrentDesign}
             className={styles.headerButton}
@@ -303,7 +283,7 @@ export function DesignNotebookPanel({
             aria-label={t('designNotebook.addCurrentDesign')}
             title={view.canAddCurrentDesign ? t(view.currentDesignPath ? 'designNotebook.addCurrentSavedHint' : 'designNotebook.addCurrentUnsavedHint') : undefined}
             onClick={() => {
-              void workbench.addCurrentDesignToNotebook(addCurrentSectionId || null)
+              void workbench.addCurrentDesignToNotebook(view.sections[0]?.id ?? null)
             }}
           >
             <PlusIcon />
@@ -479,13 +459,6 @@ function EmptyState({ title, text }: { readonly title: string; readonly text: st
       <p className={styles.emptyText}>{text}</p>
     </div>
   )
-}
-
-function sectionNameForId(
-  sections: readonly DesignNotebookSection[],
-  sectionId: string,
-): string | null {
-  return sections.find((section) => section.id === sectionId)?.name ?? null
 }
 
 function NotebookSectionGroup({

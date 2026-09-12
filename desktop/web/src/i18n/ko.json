@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "새 섹션",
     "createSection": "섹션 만들기",
     "unsectioned": "섹션 없음",
-    "noSection": "섹션 없음",
     "removeDesignFromNotebook": "{{name}}을(를) 노트북에서 제거",
     "deleteSection": "{{name}} 섹션 삭제",
     "sectionName": "섹션 이름",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "현재 디자인",
     "addCurrentSavedHint": "이 저장된 디자인을 노트북에 추가합니다.",
     "addCurrentUnsavedHint": "노트북에 추가하기 전에 이 디자인을 저장합니다.",
-    "addCurrentSection": "현재 디자인의 노트북 섹션",
     "addCurrentDesign": "현재 디자인을 노트북에 추가",
     "addCurrentButton": "현재 설계 추가",
     "openNow": "현재 열림"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "확인 돋보기",
       "close": "돋보기 닫기",
-      "hint": "드래그하여 탐색 · 이름을 선택하여 중앙에 표시",
+      "hint": "캔버스 위로 포인터를 움직여 살펴보기 · 여기를 드래그하여 탐색",
       "empty": "여기에 식물이 없습니다. 이동하거나 시야를 넓히세요.",
       "unavailable": "미리보기를 사용할 수 없습니다. 이름은 식물 위치에 계속 표시됩니다.",
       "locate": "{{name}}을 돋보기 중앙에 표시",

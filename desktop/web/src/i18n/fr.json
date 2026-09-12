@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "Nouvelle section",
     "createSection": "Créer une section",
     "unsectioned": "Sans section",
-    "noSection": "Aucune section",
     "removeDesignFromNotebook": "Retirer {{name}} du carnet",
     "deleteSection": "Supprimer la section {{name}}",
     "sectionName": "Nom de section",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "Design actuel",
     "addCurrentSavedHint": "Ajouter ce design sauvegardé au carnet.",
     "addCurrentUnsavedHint": "Sauvegardez ce design avant de l'ajouter au carnet.",
-    "addCurrentSection": "Section du carnet pour le design actuel",
     "addCurrentDesign": "Ajouter le design actuel au carnet",
     "addCurrentButton": "Ajouter le dessin actuel",
     "openNow": "Ouvert"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "Loupe d’inspection",
       "close": "Fermer la loupe",
-      "hint": "Glisser pour explorer · Choisir un nom pour centrer",
+      "hint": "Survolez le canevas pour inspecter · Glissez ici pour explorer",
       "empty": "Aucune plante ici. Déplacez ou élargissez la loupe.",
       "unavailable": "Aperçu indisponible. Les noms restent à la position des plantes.",
       "locate": "Centrer la loupe sur {{name}}",

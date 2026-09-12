@@ -27,7 +27,6 @@
     "newSectionPlaceholder": "Nuova sezione",
     "createSection": "Crea sezione",
     "unsectioned": "Senza sezione",
-    "noSection": "Nessuna sezione",
     "removeDesignFromNotebook": "Rimuovi {{name}} dal quaderno",
     "deleteSection": "Elimina sezione {{name}}",
     "sectionName": "Nome sezione",
@@ -35,7 +34,6 @@
     "addCurrentTitle": "Design corrente",
     "addCurrentSavedHint": "Aggiungi questo design salvato al quaderno.",
     "addCurrentUnsavedHint": "Salva questo design prima di aggiungerlo al quaderno.",
-    "addCurrentSection": "Sezione del quaderno per il design corrente",
     "addCurrentDesign": "Aggiungi design corrente al quaderno",
     "addCurrentButton": "Aggiungi disegno attuale",
     "openNow": "Aperto ora"
@@ -114,7 +112,7 @@
     "inspection": {
       "title": "Lente di ispezione",
       "close": "Chiudi lente",
-      "hint": "Trascina per esplorare · Scegli un nome per centrare",
+      "hint": "Sposta il puntatore sulla tela per ispezionare · Trascina qui per esplorare",
       "empty": "Nessuna pianta qui. Sposta o allarga la vista.",
       "unavailable": "Anteprima non disponibile. I nomi restano nelle posizioni delle piante.",
       "locate": "Centra la lente su {{name}}",

@@ -48,7 +48,7 @@ describe('PlantRow', () => {
     expect(plantBrowserMock.selectSpecies).toHaveBeenCalledWith('Malus domestica')
   })
 
-  it('shows climate zone and life cycle instead of hardiness and edibility in Favorites', () => {
+  it('keeps Favorites identity to common and botanical names only', () => {
     const plant = {
       ...makeSpeciesListItem('Malus domestica', true),
       common_name: 'Apple',
@@ -63,9 +63,9 @@ describe('PlantRow', () => {
 
     expect(container.textContent).toContain('Apple')
     expect(container.textContent).toContain('Malus domestica')
-    expect(container.textContent).toContain('Temperate')
-    expect(container.textContent).toContain('Continental')
-    expect(container.textContent).toContain('Perennial')
+    expect(container.textContent).not.toContain('Temperate')
+    expect(container.textContent).not.toContain('Continental')
+    expect(container.textContent).not.toContain('Perennial')
     expect(container.textContent).not.toContain('Z4')
     expect(container.textContent).not.toContain('Edible')
   })
@@ -86,7 +86,7 @@ describe('PlantRow', () => {
     expect(container.textContent).not.toContain('Moluque verte')
   })
 
-  it('keeps favorite rows on their normal secondary Common Name', () => {
+  it('omits alternate and matched common names from compact Favorites rows', () => {
     plantBrowserMock.intent.value = { text: 'melis' }
     const plant = {
       ...makeSpeciesListItem('Moluccella laevis', true),
@@ -97,7 +97,7 @@ describe('PlantRow', () => {
 
     render(<PlantRow plant={plant} variant="favorites" />, container)
 
-    expect(container.textContent).toContain('Moluque verte')
+    expect(container.textContent).not.toContain('Moluque verte')
     expect(container.textContent).not.toContain('Mélisse des Moluques')
   })
 })
