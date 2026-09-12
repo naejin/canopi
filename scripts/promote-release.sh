@@ -188,15 +188,10 @@ if [[ ! -f "$manifest_path" || ! -f "$metadata_path" ]]; then
   exit 1
 fi
 
-stage_args=()
-if [[ -n "$local_artifact_dir" ]]; then
-  log "Staging local packages against the freshly downloaded candidate manifest"
-  stage_args=(--stage-dir "$tmpdir/staged")
-fi
-log "Verifying packaged artifact checksums"
+log "Verifying and staging complete desktop downloads with stable filenames"
 python3 "$repo_root/scripts/release_candidate_artifacts.py" \
   --manifest "$manifest_path" --source-dir "${local_artifact_dir:-$tmpdir}" \
-  "${stage_args[@]}" > "$tmpdir/release-files.txt"
+  --release-dir "$tmpdir/release" > "$tmpdir/release-files.txt"
 mapfile -t release_files < "$tmpdir/release-files.txt"
 
 release_identity="$(python3 - "$metadata_path" "$repo" "$tag" <<'PY'
@@ -307,4 +302,4 @@ gh release upload "$tag" \
   --clobber
 
 log "Promoted run $run_id to release $repo@$tag"
-log "Uploaded ${#release_files[@]} packaged artifacts plus checksum manifest."
+log "Uploaded desktop installers, stable copies, release checksums and candidate metadata."

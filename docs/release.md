@@ -85,20 +85,68 @@ uploaded, and the supplied directory is never modified.
 
 This script admits only a successful, completed `Release Candidate` run, downloads
 its artifacts unless local packages were supplied, requires the remote manifest
-artifact and verifies `SHA256SUMS.txt`. Only manifest-listed packages are uploaded. The
-manifest repository and version must match the requested repository and `v<version>`
+artifact and verifies `SHA256SUMS.txt`. Only manifest-listed packages and their
+generated stable copies are uploaded. The manifest repository and version must match the requested repository and `v<version>`
 tag. A new draft targets the exact manifest source commit, even if `main` has advanced.
 An existing tag must resolve to that same commit. Only draft releases can be updated;
-published releases require a new version. It then uploads packaged artifacts plus
-the manifest. Promotion never performs or substitutes for the packaged smoke checks.
+published releases require a new version. It then uploads the original packaged
+artifacts, six stable copies, public checksums, and the original candidate manifest
+and metadata. Promotion never performs or substitutes for the packaged smoke checks.
 
 When `docs/release-notes/v<version>.md` exists, the script uses it as the base release body and appends release metadata plus explicit download links.
 
 ## 5. Publish The Draft Release
 
 ```bash
-gh release edit v<version> --draft=false
+gh release edit v<version> --draft=false --latest
 ```
+
+For a stable public app release, explicitly set `--latest` so the website follows
+this release ([GitHub CLI reference](https://cli.github.com/manual/gh_release_edit)).
+Do not mark DB-only releases or prereleases as latest. No moving Git tag is needed; keep immutable version tags. Promotion still creates a draft and
+does not publish it automatically.
+
+## Permanent Desktop Download Links
+
+Promotion uses the artifact target directory and package extension to create these
+byte-identical copies alongside the original versioned installers:
+
+| Candidate target | Stable asset names |
+| --- | --- |
+| `x86_64-unknown-linux-gnu` | `canopi-linux-x64.deb`, `canopi-linux-x64.AppImage` |
+| `aarch64-apple-darwin` | `canopi-macos-arm64.dmg` |
+| `x86_64-apple-darwin` | `canopi-macos-x64.dmg` |
+| `x86_64-pc-windows-msvc` | `canopi-windows-x64.exe`, `canopi-windows-x64.msi` |
+
+All six are required. Missing formats, unknown targets/formats, multiple packages
+for one stable name, and collisions with original names fail before any release
+mutation. If the target matrix changes, update `STABLE_PACKAGES` in
+`scripts/release_candidate_artifacts.py`, its promotion tests, and this table together.
+Original filenames keep their native packaging conventions; stable names use
+lowercase ASCII, hyphens, explicit OS and architecture, and conventional extension
+casing. Version and `latest` are omitted from stable filenames.
+
+`SHA256SUMS.txt` remains the untouched candidate manifest with artifact-relative
+paths. `RELEASE-SHA256SUMS.txt` covers both original and stable installers using
+public basenames; download it beside the installers to verify the public assets.
+Stable copies are created from privately staged, checksum-verified candidate bytes.
+They do not rebuild or modify the installers. Publishing both sets increases the
+release upload size.
+
+After the first release containing these assets is published as latest, set the
+projectcanopi.com desktop buttons once to this prefix plus a stable asset name:
+
+```text
+https://github.com/naejin/canopi/releases/latest/download/
+```
+
+For example, the Windows installer link is
+`https://github.com/naejin/canopi/releases/latest/download/canopi-windows-x64.exe`.
+Use the same prefix with `RELEASE-SHA256SUMS.txt` for current checksums. Release notes
+use version-specific links so historical releases remain reproducible. These
+changes do not backfill existing releases or change the separately maintained
+website; migrate its buttons only after verifying the new assets are live. Web
+Edition archives remain outside this desktop naming contract.
 
 ## Failure Triage
 

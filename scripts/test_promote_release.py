@@ -12,6 +12,21 @@ import zipfile
 
 SOURCE = Path(__file__).resolve().parent
 SHA = "1" * 40
+PACKAGES = {
+    "canopi-x86_64-unknown-linux-gnu/deb/canopi_1.1.1.deb": "canopi-linux-x64.deb",
+    "canopi-x86_64-unknown-linux-gnu/appimage/Canopi_1.1.1_amd64.AppImage": "canopi-linux-x64.AppImage",
+    "canopi-aarch64-apple-darwin/dmg/Canopi_1.1.1_aarch64.dmg": "canopi-macos-arm64.dmg",
+    "canopi-x86_64-apple-darwin/dmg/Canopi_1.1.1_x64.dmg": "canopi-macos-x64.dmg",
+    "canopi-x86_64-pc-windows-msvc/nsis/Canopi_1.1.1_x64-setup.exe": "canopi-windows-x64.exe",
+    "canopi-x86_64-pc-windows-msvc/msi/Canopi_1.1.1_x64_en-US.msi": "canopi-windows-x64.msi",
+}
+ARTIFACTS = [(1, "canopi-x86_64-unknown-linux-gnu"), (2, "canopi-release-candidate-manifest"),
+             (3, "canopi-aarch64-apple-darwin"), (4, "canopi-x86_64-apple-darwin"),
+             (5, "canopi-x86_64-pc-windows-msvc")]
+
+
+def candidate_manifest(payload):
+    return "".join(hashlib.sha256(payload).hexdigest() + "  ./" + name + "\n" for name in PACKAGES)
 
 
 class PromotionTests(unittest.TestCase):
@@ -23,17 +38,19 @@ class PromotionTests(unittest.TestCase):
         shutil.copy2(SOURCE / "promote-release.sh", self.root / "scripts")
         shutil.copy2(SOURCE / "release_candidate_artifacts.py", self.root / "scripts")
         self.payload = b"candidate installer bytes"
-        self.manifest = hashlib.sha256(self.payload).hexdigest() + "  ./canopi-linux/canopi_1.1.1.deb\n"
+        self.manifest = candidate_manifest(self.payload)
         self.local_dir = self.root / "cached packages"
-        self.local_package = self.local_dir / "canopi-linux/canopi_1.1.1.deb"
-        self.local_package.parent.mkdir(parents=True)
-        self.local_package.write_bytes(self.payload)
+        self.local_package = self.local_dir / "canopi-x86_64-unknown-linux-gnu/deb/canopi_1.1.1.deb"
+        for name in PACKAGES:
+            package = self.local_dir / name
+            package.parent.mkdir(parents=True, exist_ok=True)
+            package.write_bytes(self.payload)
         self.state = {
             "run": {"path": ".github/workflows/release-candidate.yml", "status": "completed", "conclusion": "success"},
             "metadata": {"repository": "example/canopi", "ref": SHA, "head_sha": SHA, "release_version": "1.1.1",
                          "db_release_tag": "canopi-core-db", "db_asset_name": "catalog.db", "db_sha256": "2" * 64,
                          "expected_db_schema_version": 13},
-            "release": None, "tag_sha": None,
+            "release": None, "tag_sha": None, "artifacts": ARTIFACTS,
         }
         gh = self.root / "gh"
         gh.write_text('''#!/usr/bin/env python3
@@ -55,12 +72,13 @@ elif args[0] == "release" and args[1] in ["create", "edit", "upload"]:
             path = Path(arg.split("#", 1)[0])
             if path.is_file():
                 uploaded[path.name] = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                if path.suffix == ".txt": uploaded[path.name]["text"] = path.read_text()
         (root / "uploaded.json").write_text(json.dumps(uploaded))
 elif args[0] == "api":
     endpoint = args[1]
     if endpoint.endswith("/actions/runs/123/artifacts"):
         print(json.dumps({"artifacts": [{"id": i, "name": name, "size_in_bytes": 100, "expired": False}
-            for i, name in [(1, "canopi-linux"), (2, "canopi-release-candidate-manifest")]]}))
+            for i, name in state["artifacts"]]}))
     elif endpoint.endswith("/actions/runs/123"):
         print(json.dumps(state["run"]))
     elif "/actions/artifacts/" in endpoint:
@@ -77,9 +95,14 @@ else: raise SystemExit("Unexpected command: " + repr(args))
     def promote(self, tag="v1.1.1", artifact_dir=None, cwd=None):
         (self.root / "calls.jsonl").unlink(missing_ok=True)
         (self.root / "state.json").write_text(json.dumps(self.state))
-        with zipfile.ZipFile(self.root / "1.zip", "w") as archive:
-            archive.writestr("canopi_1.1.1.deb", self.payload)
-            archive.writestr("unlisted.exe", b"not in the candidate manifest")
+        for artifact_id, artifact_name in ARTIFACTS:
+            if artifact_id == 2:
+                continue
+            with zipfile.ZipFile(self.root / f"{artifact_id}.zip", "w") as archive:
+                for name in PACKAGES:
+                    if name.startswith(artifact_name + "/"):
+                        archive.writestr(name.removeprefix(artifact_name + "/"), self.payload)
+                archive.writestr("unlisted.exe", b"not in the candidate manifest")
         with zipfile.ZipFile(self.root / "2.zip", "w") as archive:
             archive.writestr("release-metadata.json", json.dumps(self.state["metadata"]))
             archive.writestr("SHA256SUMS.txt", self.manifest)
@@ -103,15 +126,67 @@ else: raise SystemExit("Unexpected command: " + repr(args))
         self.assertEqual(downloads, ["repos/example/canopi/actions/artifacts/2/zip"])
         self.assertEqual(self.local_package.read_bytes(), self.payload)
         uploaded = json.loads((self.root / "uploaded.json").read_text())
-        self.assertEqual(set(uploaded), {"canopi_1.1.1.deb", "SHA256SUMS.txt", "release-metadata.json"})
+        self.assertEqual(set(uploaded), {Path(name).name for name in PACKAGES} | set(PACKAGES.values())
+                         | {"SHA256SUMS.txt", "RELEASE-SHA256SUMS.txt", "release-metadata.json"})
 
     def test_default_path_still_downloads_packages_and_ignores_unlisted_installers(self):
         result = self.promote()
         self.assertEqual(result.returncode, 0, result.stderr)
         downloads = [call[1] for call in self.calls() if call[0] == "api" and "/actions/artifacts/" in call[1]]
-        self.assertEqual(len(downloads), 2)
+        self.assertEqual(len(downloads), 5)
         uploaded = json.loads((self.root / "uploaded.json").read_text())
         self.assertNotIn("unlisted.exe", uploaded)
+
+    def test_public_checksums_cover_originals_and_identical_stable_copies(self):
+        result = self.promote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uploaded = json.loads((self.root / "uploaded.json").read_text())
+        self.assertEqual(uploaded["SHA256SUMS.txt"]["text"], self.manifest)
+        checksums = dict(line.split("  ")[::-1] for line in
+                         uploaded["RELEASE-SHA256SUMS.txt"]["text"].splitlines())
+        self.assertEqual(set(checksums), {Path(name).name for name in PACKAGES} | set(PACKAGES.values()))
+        for original, alias in PACKAGES.items():
+            self.assertEqual(uploaded[Path(original).name]["sha256"], uploaded[alias]["sha256"])
+        for name, digest in checksums.items():
+            self.assertEqual(uploaded[name]["sha256"], digest)
+
+    def test_incomplete_ambiguous_unsupported_or_colliding_downloads_fail_before_mutation(self):
+        complete = self.manifest
+        digest = hashlib.sha256(self.payload).hexdigest()
+        linux = "canopi-x86_64-unknown-linux-gnu"
+        for manifest, error in [
+            ("\n".join(complete.splitlines()[1:]) + "\n", "Missing required"),
+            (complete + f"{digest}  ./{linux}/deb/second.deb\n", "Duplicate or colliding"),
+            (complete.replace("canopi_1.1.1.deb", "canopi-linux-x64.deb"), "Duplicate or colliding"),
+            (complete.replace(linux, "canopi-unknown-linux"), "Unsupported"),
+            (complete + f"{digest}  ./{linux}/wrong.exe\n", "Unsupported"),
+        ]:
+            with self.subTest(error=error, manifest=manifest):
+                self.manifest = manifest
+                result = self.promote(artifact_dir=self.local_dir)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(error, result.stderr)
+                self.assertEqual(self.mutations(), [])
+
+    def test_next_version_keeps_stable_names_and_maps_distinct_platform_bytes(self):
+        self.state["metadata"]["release_version"] = "1.2.0"
+        self.manifest = ""
+        expected = {}
+        for name, alias in PACKAGES.items():
+            versioned = name.replace("1.1.1", "1.2.0")
+            payload = versioned.encode()
+            (self.local_dir / versioned).write_bytes(payload)
+            digest = hashlib.sha256(payload).hexdigest()
+            self.manifest += f"{digest}  ./{versioned}\n"
+            expected[alias] = digest
+        result = self.promote(tag="v1.2.0", artifact_dir=self.local_dir)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uploaded = json.loads((self.root / "uploaded.json").read_text())
+        for alias, digest in expected.items():
+            self.assertEqual(uploaded[alias]["sha256"], digest)
+        for name in PACKAGES:
+            self.assertIn(Path(name.replace("1.1.1", "1.2.0")).name, uploaded)
+            self.assertNotIn(Path(name).name, uploaded)
 
     def test_local_files_are_snapshotted_before_release_mutation(self):
         self.state["rewrite_local_on_create"] = str(self.local_package)
@@ -120,19 +195,22 @@ else: raise SystemExit("Unexpected command: " + repr(args))
         uploaded = json.loads((self.root / "uploaded.json").read_text())["canopi_1.1.1.deb"]
         self.assertEqual(uploaded["sha256"], hashlib.sha256(self.payload).hexdigest())
         self.assertNotEqual(uploaded["path"], str(self.local_package))
+        stable = json.loads((self.root / "uploaded.json").read_text())["canopi-linux-x64.deb"]
+        self.assertEqual(stable["sha256"], uploaded["sha256"])
         self.assertEqual(self.local_package.read_bytes(), b"changed after verification")
 
     def test_local_snapshot_preserves_a_package_larger_than_the_copy_buffer(self):
         self.payload = b"installer bytes" * 150000
-        self.manifest = hashlib.sha256(self.payload).hexdigest() + "  ./canopi-linux/canopi_1.1.1.deb\n"
-        self.local_package.write_bytes(self.payload)
+        self.manifest = candidate_manifest(self.payload)
+        for name in PACKAGES:
+            (self.local_dir / name).write_bytes(self.payload)
         result = self.promote(artifact_dir=self.local_dir)
         self.assertEqual(result.returncode, 0, result.stderr)
         uploaded = json.loads((self.root / "uploaded.json").read_text())["canopi_1.1.1.deb"]
         self.assertEqual(uploaded["sha256"], hashlib.sha256(self.payload).hexdigest())
 
     def test_a_missing_second_package_cannot_upload_a_partial_release(self):
-        self.manifest += hashlib.sha256(self.payload).hexdigest() + "  ./canopi-windows/Canopi.exe\n"
+        (self.local_dir / list(PACKAGES)[-1]).unlink()
         result = self.promote(artifact_dir=self.local_dir)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.mutations(), [])
@@ -158,7 +236,7 @@ else: raise SystemExit("Unexpected command: " + repr(args))
         self.local_package.write_bytes(changed)
         local_manifest = self.local_dir / "canopi-release-candidate-manifest"
         local_manifest.mkdir()
-        (local_manifest / "SHA256SUMS.txt").write_text(hashlib.sha256(changed).hexdigest() + "  ./canopi-linux/canopi_1.1.1.deb\n")
+        (local_manifest / "SHA256SUMS.txt").write_text(hashlib.sha256(changed).hexdigest() + "  ./canopi-x86_64-unknown-linux-gnu/deb/canopi_1.1.1.deb\n")
         (local_manifest / "release-metadata.json").write_text(json.dumps(self.state["metadata"]))
         result = self.promote(artifact_dir=self.local_dir)
         self.assertNotEqual(result.returncode, 0)

@@ -4,9 +4,53 @@ import argparse
 import hashlib
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 
 
 PACKAGE_SUFFIXES = {".deb", ".AppImage", ".dmg", ".msi", ".exe"}
+
+# Artifact roots come from the Release Candidate target matrix. Public names
+# are a website contract: changing a build filename must not change these URLs.
+STABLE_PACKAGES = {
+    ("canopi-x86_64-unknown-linux-gnu", ".deb"): "canopi-linux-x64.deb",
+    ("canopi-x86_64-unknown-linux-gnu", ".AppImage"): "canopi-linux-x64.AppImage",
+    ("canopi-aarch64-apple-darwin", ".dmg"): "canopi-macos-arm64.dmg",
+    ("canopi-x86_64-apple-darwin", ".dmg"): "canopi-macos-x64.dmg",
+    ("canopi-x86_64-pc-windows-msvc", ".exe"): "canopi-windows-x64.exe",
+    ("canopi-x86_64-pc-windows-msvc", ".msi"): "canopi-windows-x64.msi",
+}
+
+
+def release_packages(manifest: Path, source_root: Path, release_root: Path):
+    packages = manifest_packages(manifest)
+    aliases = {}
+    original_names = {relative.name for relative, _ in packages}
+    for relative, _ in packages:
+        alias = STABLE_PACKAGES.get((relative.parts[0], relative.suffix))
+        if alias is None:
+            raise ValueError(f"Unsupported release package target or format: {relative}")
+        if alias in aliases or alias in original_names:
+            raise ValueError(f"Duplicate or colliding stable release asset: {alias}")
+        aliases[alias] = relative
+    missing = set(STABLE_PACKAGES.values()) - aliases.keys()
+    if missing:
+        raise ValueError(f"Missing required release packages: {', '.join(sorted(missing))}")
+
+    # Always snapshot before making public copies, including --artifact-dir.
+    originals = verified_packages(manifest, source_root, release_root / "originals")
+    public_root = release_root / "downloads"
+    public_root.mkdir(parents=True)
+    files = list(originals)
+    checksums = []
+    for (relative, digest), original in zip(packages, originals):
+        alias = STABLE_PACKAGES[(relative.parts[0], relative.suffix)]
+        target = public_root / alias
+        shutil.copyfile(original, target)
+        files.append(target)
+        checksums.extend([f"{digest}  {original.name}\n", f"{digest}  {alias}\n"])
+    checksum_path = release_root / "RELEASE-SHA256SUMS.txt"
+    checksum_path.write_text("".join(sorted(checksums)))
+    return files + [checksum_path]
 
 
 def manifest_packages(manifest: Path):
@@ -65,10 +109,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--source-dir", type=Path, required=True)
-    parser.add_argument("--stage-dir", type=Path)
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--stage-dir", type=Path)
+    output.add_argument("--release-dir", type=Path,
+                        help="Stage a complete desktop release with stable copies and public checksums")
     args = parser.parse_args()
     try:
-        files = verified_packages(args.manifest, args.source_dir, args.stage_dir)
+        if args.release_dir:
+            files = release_packages(args.manifest, args.source_dir, args.release_dir)
+        else:
+            files = verified_packages(args.manifest, args.source_dir, args.stage_dir)
     except (OSError, ValueError) as error:
         parser.exit(1, f"ERROR: Cannot prepare candidate packages: {error}\n")
     for path in files:
