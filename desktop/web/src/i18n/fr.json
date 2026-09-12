@@ -113,7 +113,7 @@
     "inspection": {
       "title": "Loupe d’inspection",
       "close": "Fermer la loupe",
-      "hold": "Figer",
+      "hold": "Figer la vue",
       "follow": "Suivre le pointeur",
       "held": "Position figée",
       "following": "Suit le pointeur",
@@ -125,7 +125,8 @@
       "compact": "Réduire la loupe",
       "widen": "Élargir la vue",
       "magnify": "Zoomer dans la loupe",
-      "namesCount": "{{shown}} noms · {{total}} plantes"
+      "namesCount": "{{shown}} noms · {{total}} plantes",
+      "panHint": "Utilisez les flèches pour déplacer et figer cette vue."
     },
     "emptyWelcome": "Commencez votre design",
     "emptyNewDesign": "Nouveau design",
@@ -216,7 +217,7 @@
       "toolbarDesc": "Modifier les couleurs des plantes sélectionnées",
       "selectedCount": "{{count}} sélectionnées",
       "suggested": "Suggestion basée sur la couleur de la fleur",
-      "moreColors": "Plus de couleurs",
+      "moreColors": "Couleur personnalisée",
       "advanced": "Couleur avancée",
       "customSwatch": "Couleur personnalisée",
       "customSwatchEmpty": "Aucune couleur personnalisée sélectionnée",
@@ -238,7 +239,8 @@
         "white": "Blanc",
         "brown": "Brun",
         "black": "Noir"
-      }
+      },
+      "applySelection": "Appliquer aux {{count}} sélectionnés"
     },
     "plantSymbol": {
       "label": "Symbole de plante",
@@ -269,7 +271,8 @@
         "cross": "Croix"
       },
       "botanical": "Botaniques",
-      "abstract": "Abstraits"
+      "abstract": "Abstraits",
+      "applySelection": "Appliquer aux {{count}} sélectionnés"
     },
     "group": {
       "group": "Grouper",
@@ -356,7 +359,8 @@
       "styleStreet": "Plan",
       "styleTerrain": "Relief",
       "styleSatellite": "Satellite",
-      "styleNone": "Aucun"
+      "styleNone": "Aucun",
+      "references": "Références du site"
     },
     "bottomPanel": {
       "ariaLabel": "Panneau inférieur",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "Aucun favori pour le moment",
     "emptyHint": "Marquez des plantes depuis le panneau de recherche pour les ajouter ici",
-    "dragHint": "Glisser sur le canevas pour placer"
+    "dragHint": "Glisser sur le canevas pour placer",
+    "search": "Rechercher dans les favoris"
   },
   "savedObjectStamps": {
     "title": "Planches",
@@ -867,7 +872,8 @@
     "confirmDelete": "Confirmer la suppression",
     "cancelDelete": "Annuler la suppression",
     "reorderLabel": "Réorganiser la planche",
-    "resizeFrame": "Redimensionner le cadre Planches"
+    "resizeFrame": "Redimensionner le cadre Planches",
+    "actions": "Actions de la planche"
   },
   "error": {
     "title": "Une erreur est survenue",
@@ -987,6 +993,8 @@
     "focus": "Focus : {{code}}",
     "noResults": "Aucune espèce correspondante.",
     "empty": "Placez des plantes pour créer votre clé des espèces.",
-    "detailHint": "Les codes apparaissent en zoomant, si la place le permet. Cliquez sur une ligne pour repérer ses plantes."
+    "detailHint": "Les codes apparaissent en zoomant, si la place le permet. Cliquez sur une ligne pour repérer ses plantes.",
+    "clearSearch": "Effacer la recherche",
+    "details": "Détails de {{name}}"
   }
 }

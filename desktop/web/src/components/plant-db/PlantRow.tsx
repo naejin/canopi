@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { t } from '../../i18n'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../../canvas/session'
@@ -8,6 +9,7 @@ import {
 import { STRATUM_I18N_KEY } from '../../types/constants'
 import type { SpeciesListItem } from '../../types/species'
 import { secondaryCommonNameForDisplay } from './common-name-display'
+import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import styles from './PlantDb.module.css'
 
 /** Format height to 1 decimal place max, dropping trailing .0 */
@@ -19,9 +21,10 @@ function fmtHeight(m: number): string {
 interface Props {
   plant: SpeciesListItem
   variant?: 'catalog' | 'favorites'
+  mark?: ComponentChildren
 }
 
-export function PlantRow({ plant, variant = 'catalog' }: Props) {
+export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
   const session = currentCanvasToolCommandSurface.value
 
   const handleDragStart = (e: DragEvent) => {
@@ -50,6 +53,7 @@ export function PlantRow({ plant, variant = 'catalog' }: Props) {
   }
 
   const handleRowKeyDown = (e: KeyboardEvent) => {
+    if (e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       speciesCatalogWorkbench.selectSpecies(plant.canonical_name)
@@ -71,6 +75,7 @@ export function PlantRow({ plant, variant = 'catalog' }: Props) {
   return (
     <div
       className={styles.plantRow}
+      data-variant={variant}
       draggable={true}
       onDragStart={handleDragStart}
       onClick={handleRowClick}
@@ -80,6 +85,7 @@ export function PlantRow({ plant, variant = 'catalog' }: Props) {
       aria-label={plant.canonical_name}
     >
       <div className={styles.plantRowContent}>
+        {variant === 'favorites' ? <SpeciesIdentity commonName={plant.common_name} canonicalName={plant.canonical_name} detail={secondaryCommonName} mark={mark} /> : <>
         <div className={styles.nameRow}>
           {plant.common_name ? (
             <>
@@ -93,6 +99,7 @@ export function PlantRow({ plant, variant = 'catalog' }: Props) {
             <span className={styles.botanicalName}>{plant.canonical_name}</span>
           )}
         </div>
+        </>}
         <div className={styles.tagRow}>
           {metadataTags.map((tag) => (
             <span key={tag.label} className={styles.tag} style={{ color: tag.color }}>{tag.label}</span>

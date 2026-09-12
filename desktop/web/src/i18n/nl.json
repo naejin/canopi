@@ -113,7 +113,7 @@
     "inspection": {
       "title": "Inspectieloupe",
       "close": "Loupe sluiten",
-      "hold": "Vastzetten",
+      "hold": "Beeld vastzetten",
       "follow": "Aanwijzer volgen",
       "held": "Positie vastgezet",
       "following": "Volgt de aanwijzer",
@@ -125,7 +125,8 @@
       "compact": "Loep verkleinen",
       "widen": "Zichtgebied vergroten",
       "magnify": "Inzoomen in loep",
-      "namesCount": "{{shown}} namen · {{total}} planten"
+      "namesCount": "{{shown}} namen · {{total}} planten",
+      "panHint": "Gebruik de pijltjestoetsen om dit beeld te verplaatsen en vast te zetten."
     },
     "emptyWelcome": "Begin je ontwerp",
     "emptyNewDesign": "Nieuw ontwerp",
@@ -216,7 +217,7 @@
       "toolbarDesc": "Kleuren van geselecteerde planten bewerken",
       "selectedCount": "{{count}} geselecteerd",
       "suggested": "Voorgesteld op basis van bloemkleur",
-      "moreColors": "Meer kleuren",
+      "moreColors": "Eigen kleur",
       "advanced": "Geavanceerde kleur",
       "customSwatch": "Aangepaste kleur",
       "customSwatchEmpty": "Geen aangepaste kleur geselecteerd",
@@ -238,7 +239,8 @@
         "white": "Wit",
         "brown": "Bruin",
         "black": "Zwart"
-      }
+      },
+      "applySelection": "Toepassen op {{count}} geselecteerde"
     },
     "plantSymbol": {
       "label": "Plantsymbool",
@@ -269,7 +271,8 @@
         "cross": "Kruis"
       },
       "botanical": "Botanisch",
-      "abstract": "Abstract"
+      "abstract": "Abstract",
+      "applySelection": "Toepassen op {{count}} geselecteerde"
     },
     "group": {
       "group": "Groeperen",
@@ -356,7 +359,8 @@
       "styleStreet": "Straat",
       "styleTerrain": "Terrein",
       "styleSatellite": "Satelliet",
-      "styleNone": "Geen"
+      "styleNone": "Geen",
+      "references": "Terreinreferenties"
     },
     "bottomPanel": {
       "ariaLabel": "Onderpaneel",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "Nog geen favorieten",
     "emptyHint": "Markeer planten in het zoekpaneel om ze hier toe te voegen",
-    "dragHint": "Sleep naar canvas om te plaatsen"
+    "dragHint": "Sleep naar canvas om te plaatsen",
+    "search": "Favorieten zoeken"
   },
   "savedObjectStamps": {
     "title": "Opgeslagen stempels",
@@ -867,7 +872,8 @@
     "confirmDelete": "Verwijderen bevestigen",
     "cancelDelete": "Verwijderen annuleren",
     "reorderLabel": "Opgeslagen stempel herschikken",
-    "resizeFrame": "Frame Opgeslagen stempels aanpassen"
+    "resizeFrame": "Frame Opgeslagen stempels aanpassen",
+    "actions": "Stempelacties"
   },
   "error": {
     "title": "Er is iets misgegaan",
@@ -987,6 +993,8 @@
     "focus": "Focus: {{code}}",
     "noResults": "Geen overeenkomende soorten.",
     "empty": "Plaats planten om de soortensleutel te maken.",
-    "detailHint": "Codes verschijnen bij inzoomen, als er ruimte is. Klik op een rij om de planten te vinden."
+    "detailHint": "Codes verschijnen bij inzoomen, als er ruimte is. Klik op een rij om de planten te vinden.",
+    "clearSearch": "Zoekopdracht wissen",
+    "details": "Details van {{name}}"
   }
 }

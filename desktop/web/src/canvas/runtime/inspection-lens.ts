@@ -80,7 +80,7 @@ export class SceneCanvasInspectionOwner {
         }
       }
       state.value = {
-        point: centre, held, zoomPercent: Math.round(scale / camera.referenceScale * 100), previewAvailable: ctx !== null,
+        point: centre, held, scale, zoomPercent: Math.round(scale / camera.referenceScale * 100), previewAvailable: ctx !== null,
         frame: { width, height }, plants: layout.plants,
       }
     }
@@ -132,6 +132,14 @@ export class SceneCanvasInspectionOwner {
         if (released || held || !Number.isFinite(next.x) || !Number.isFinite(next.y)) return
         if (point?.x === next.x && point.y === next.y) return
         point = { ...next }; schedule()
+      },
+      panBy: (delta) => {
+        if (released || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return
+        const centre = point ?? state.peek()?.point
+        if (!centre) return
+        point = { x: centre.x + delta.x, y: centre.y + delta.y }
+        held = true
+        schedule()
       },
       setHeld: (next) => {
         if (released || held === next) return

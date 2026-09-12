@@ -28,8 +28,8 @@ const DesignNotebookPanel = lazy(async () => {
 });
 
 const SpeciesKeyPanel = lazy(async () => {
-  const module = await import("./components/panels/SpeciesKeyPanel");
-  return { default: module.SpeciesKeyPanel };
+  const module = await import("./components/panels/DesktopSpeciesKeyPanel");
+  return { default: module.DesktopSpeciesKeyPanel };
 });
 const LayerPanel = lazy(async () => {
   const module = await import("./components/panels/LayersPanel");

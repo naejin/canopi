@@ -164,7 +164,7 @@ describe('CanvasToolbar', () => {
     })
 
     expect(plantColorMenuOpen.value).toBe(true)
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
   })
 
   it('shows a separate plant symbol button after plant color and opens the symbol popover', async () => {
@@ -190,7 +190,7 @@ describe('CanvasToolbar', () => {
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
   })
 
   it('uses a simple neutral marker icon for the plant symbol action', async () => {

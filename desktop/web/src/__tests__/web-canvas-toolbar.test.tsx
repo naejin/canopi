@@ -139,13 +139,13 @@ describe('WebCanvasToolbar', () => {
       colorButton.click()
       await Promise.resolve()
     })
-    expect(container.querySelector('[role="dialog"][aria-label="Plant color"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"][aria-label="Plant color"]')).not.toBeNull()
 
     await act(async () => {
       symbolButton.click()
       await Promise.resolve()
     })
-    expect(container.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
   })
 
   it('exposes Plant Spacing as a Web canvas tool', async () => {

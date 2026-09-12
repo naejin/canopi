@@ -13,7 +13,8 @@ vi.mock('../app/plant-browser', () => ({
   speciesCatalogWorkbench: plantBrowserMock,
 }))
 
-vi.mock('../canvas/session', () => ({
+vi.mock('../canvas/session', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../canvas/session')>(),
   currentCanvasToolCommandSurface: signal(null),
 }))
 

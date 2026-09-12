@@ -28,6 +28,12 @@ import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { usePointerResize } from '../shared/usePointerResize'
 import { usePointerReorder } from '../shared/usePointerReorder'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
+import { currentCanvasQuerySurface } from '../../canvas/session'
+import { resolvePlantSymbolId } from '../../canvas/runtime/scene'
+import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
+import { DockPanelHeader } from '../shared/DockPanelHeader'
+import { SurfaceSearch } from '../shared/SurfaceSearch'
+import { ActionMenu } from '../shared/ActionMenu'
 import styles from './FavoritesPanel.module.css'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
@@ -52,6 +58,10 @@ interface SavedStampReorderSession {
 }
 
 export function FavoritesPanel() {
+  const [search, setSearch] = useState('')
+  const queries = currentCanvasQuerySurface.value
+  void queries?.revision.scene.value
+  const scene = queries?.getSceneSnapshot()
   const favoritesView = speciesCatalogWorkbench.favorites.value
   const savedStampsView = savedObjectStampWorkbench.library.value
   const savedStampSelection = savedObjectStampWorkbench.selection.value
@@ -99,6 +109,8 @@ export function FavoritesPanel() {
   }, [])
 
   const items = favoritesView.items
+  const needle = normalizeFavoriteSearch(search)
+  const visibleItems = items.filter(plant => normalizeFavoriteSearch(`${plant.common_name ?? ''} ${plant.canonical_name}`).includes(needle))
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
@@ -243,11 +255,10 @@ export function FavoritesPanel() {
         className={`${styles.main} ${selected !== null ? plantDetailStyles.detailHidden : ''}`}
         data-favorites-main
         aria-hidden={selected !== null}
+        inert={selected !== null}
       >
         {/* Header — always visible */}
-        <div ref={headerRef} className={styles.header}>
-          <span className={styles.title}>{t('nav.favorites')}</span>
-        </div>
+        <div ref={headerRef}><DockPanelHeader title={t('nav.favorites')} /></div>
 
         <section
           className={styles.plantsFrame}
@@ -260,6 +271,7 @@ export function FavoritesPanel() {
               <span className={styles.count}>{count}</span>
             )}
           </div>
+          <div className={styles.search}><SurfaceSearch value={search} onChange={setSearch} label={t('favorites.search')} /></div>
           <div className={styles.plantsFrameBody}>
             {isLoading ? (
               <div className={styles.loading} aria-live="polite" aria-busy="true">
@@ -273,10 +285,16 @@ export function FavoritesPanel() {
                 <span className={styles.emptyTitle}>{t('favorites.empty')}</span>
                 <span className={styles.emptyHint}>{t('favorites.emptyHint')}</span>
               </div>
+            ) : visibleItems.length === 0 ? (
+              <div className={styles.empty} role="status">{t('speciesKey.noResults')}</div>
             ) : (
               <div className={styles.list} role="list" aria-label={t('canvas.layers.plants')}>
-                {items.map((plant) => (
-                  <PlantRow key={plant.canonical_name} plant={plant} variant="favorites" />
+                {visibleItems.map((plant) => (
+                  <PlantRow key={plant.canonical_name} plant={plant} variant="favorites" mark={
+                    <span style={{ color: scene?.plantSpeciesColors[plant.canonical_name] ?? 'var(--color-text-muted)' }}>
+                      <PlantSymbolGlyph symbol={resolvePlantSymbolId(scene?.plantSpeciesSymbols[plant.canonical_name])} size={24} />
+                    </span>
+                  } />
                 ))}
               </div>
             )}
@@ -301,13 +319,18 @@ export function FavoritesPanel() {
               <span id="saved-object-stamps-title" className={styles.title}>
                 {t('savedObjectStamps.title')}
               </span>
-              <span className={styles.savedStampsDescription}>
-                {t('savedObjectStamps.description')}
-              </span>
             </div>
             {savedStampsView.items.length > 0 && (
               <span className={styles.count}>{savedStampsView.items.length}</span>
             )}
+            <button
+              type="button"
+              className={styles.importStampButton}
+              aria-label={t('savedObjectStamps.import')}
+              onClick={() => void savedObjectStampWorkbench.importStampFile()}
+            >
+              <span aria-hidden="true">↓</span><ButtonTooltip label={t('savedObjectStamps.import')} side="left" />
+            </button>
           </div>
           <div className={styles.savedStampsActions}>
             <button
@@ -318,13 +341,7 @@ export function FavoritesPanel() {
             >
               {t('savedObjectStamps.saveSelection')}
             </button>
-            <button
-              type="button"
-              className={styles.importStampButton}
-              onClick={() => void savedObjectStampWorkbench.importStampFile()}
-            >
-              {t('savedObjectStamps.import')}
-            </button>
+
           </div>
           {!savedStampSelection.canSave && (
             <span className={styles.savedStampsHint}>
@@ -425,6 +442,15 @@ function SavedStampsResizeHandle({
       aria-label={t('savedObjectStamps.resizeFrame')}
       tabIndex={0}
       onPointerDown={onPointerDown}
+      onKeyDown={event => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+        if (!frameRef.current) return
+        event.preventDefault()
+        commitSavedStampsFrameHeight(resolveSavedStampsFrameHeight(
+          currentSavedStampsFrameHeight(frameRef.current) + (event.key === 'ArrowUp' ? 20 : -20),
+          mainRef.current, [headerRef.current, handleRef.current],
+        ))
+      }}
     />
   )
 }
@@ -615,7 +641,7 @@ function SavedObjectStampRow({
   }, [isRenaming])
 
   function commitRename(): void {
-    const next = draftName.trim()
+    const next = (renameInputRef.current?.value ?? draftName).trim()
     if (next.length === 0) {
       setDraftName(stamp.name)
       setIsRenaming(false)
@@ -658,6 +684,16 @@ function SavedObjectStampRow({
         className={styles.savedStampGrip}
         aria-label={t('savedObjectStamps.reorderLabel')}
         onPointerDown={(event) => onReorderBegin(stamp.id, event)}
+        onKeyDown={event => {
+          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+          event.preventDefault()
+          const ids = savedObjectStampWorkbench.library.value.items.map(item => item.id)
+          const index = ids.indexOf(stamp.id)
+          const target = index + (event.key === 'ArrowUp' ? -1 : 1)
+          if (index < 0 || target < 0 || target >= ids.length) return
+          ;[ids[index], ids[target]] = [ids[target]!, ids[index]!]
+          void savedObjectStampWorkbench.reorderStamps(ids)
+        }}
       >
         <SixDotGripIcon />
       </button>
@@ -761,34 +797,13 @@ function SavedObjectStampRow({
               onFocus={(anchor) => onPreviewRequest(stamp, anchor)}
               onBlur={onPreviewClear}
             >
-              <PlaceIcon />
+              {t('savedObjectStamps.place')}
             </SavedStampIconButton>
-            <SavedStampIconButton
-              label={t('savedObjectStamps.export')}
-              onClick={() => void savedObjectStampWorkbench.exportStamp(stamp)}
-            >
-              <ExportIcon />
-            </SavedStampIconButton>
-            <SavedStampIconButton
-              label={t('savedObjectStamps.rename')}
-              onClick={() => {
-                setConfirmingDelete(false)
-                setDraftName(stamp.name)
-                setIsRenaming(true)
-              }}
-            >
-              <PencilIcon />
-            </SavedStampIconButton>
-            <SavedStampIconButton
-              label={t('savedObjectStamps.delete')}
-              onClick={() => {
-                setIsRenaming(false)
-                setConfirmingDelete(true)
-              }}
-              tone="danger"
-            >
-              <TrashIcon />
-            </SavedStampIconButton>
+            <ActionMenu label={t('savedObjectStamps.actions')} items={[
+              { label: t('savedObjectStamps.export'), run: () => { void savedObjectStampWorkbench.exportStamp(stamp) } },
+              { label: t('savedObjectStamps.rename'), run: () => { setConfirmingDelete(false); setDraftName(stamp.name); setIsRenaming(true) } },
+              { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setConfirmingDelete(true) } },
+            ]} />
           </>
         )}
       </div>
@@ -851,34 +866,6 @@ function SixDotGripIcon() {
   )
 }
 
-function PlaceIcon() {
-  return (
-    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 3v10" />
-      <path d="M3 8h10" />
-    </svg>
-  )
-}
-
-function ExportIcon() {
-  return (
-    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 10V3" />
-      <path d="M5.5 5.5 8 3l2.5 2.5" />
-      <path d="M4 9.5v2.5h8V9.5" />
-    </svg>
-  )
-}
-
-function PencilIcon() {
-  return (
-    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3.5 11.5 3 13l1.5-.5 7-7L10.5 4.5l-7 7Z" />
-      <path d="m9.5 5.5 1 1" />
-    </svg>
-  )
-}
-
 function CheckIcon() {
   return (
     <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -892,16 +879,6 @@ function CancelIcon() {
     <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m4.5 4.5 7 7" />
       <path d="m11.5 4.5-7 7" />
-    </svg>
-  )
-}
-
-function TrashIcon() {
-  return (
-    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 4.5h10" />
-      <path d="M6.5 4.5V3h3v1.5" />
-      <path d="M5 6.5v6h6v-6" />
     </svg>
   )
 }
@@ -937,4 +914,8 @@ function countPart(
   if (count <= 0) return null
   const key = count === 1 ? singularKey : pluralKey
   return t(`savedObjectStamps.${key}`, { count })
+}
+
+function normalizeFavoriteSearch(value: string): string {
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
 }

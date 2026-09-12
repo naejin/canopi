@@ -71,9 +71,9 @@ describe('PlantColorMenu', () => {
       singleSpeciesDefaultColor: null,
     })
     await act(async () => render(<PlantColorMenu buttonRef={buttonRef} />, container))
-    const more = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('More colors'))!
+    const more = [...document.querySelectorAll('button')].find(button => button.textContent?.includes('Custom color'))!
     await act(async () => more.click())
-    const square = container.querySelector<HTMLElement>('[aria-label="Saturation and lightness"]')!
+    const square = document.querySelector<HTMLElement>('[aria-label="Saturation and lightness"]')!
     vi.spyOn(square, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 100, 100))
     const remove = vi.spyOn(document, 'removeEventListener')
     const removeWindow = vi.spyOn(window, 'removeEventListener')
@@ -99,6 +99,47 @@ describe('PlantColorMenu', () => {
     expect(setSelectedPlantColor).not.toHaveBeenCalled()
   })
 
+  it('previews the species suggestion without applying until confirmed', async () => {
+    getSelectedPlantColorContext.mockReturnValue({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple',
+      sharedCurrentColor: '#123ABC',
+      suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: null,
+    })
+    await act(async () => render(<PlantColorMenu buttonRef={buttonRef} />, container))
+    const suggestion = [...document.querySelectorAll('button')].find(button =>
+      button.textContent?.includes('Suggested'),
+    )
+    expect(suggestion).toBeDefined()
+    await act(async () => suggestion!.click())
+    expect(setSelectedPlantColor).not.toHaveBeenCalled()
+    const apply = [...document.querySelectorAll('button')].find(button =>
+      button.textContent?.includes('Apply to'),
+    )!
+    await act(async () => apply.click())
+    expect(setSelectedPlantColor).toHaveBeenCalledWith('#C8A51E')
+  })
+
+  it('adjusts custom color with the keyboard without applying it', async () => {
+    getSelectedPlantColorContext.mockReturnValue({
+      plantIds: ['plant-1'], singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple', sharedCurrentColor: '#C8A51E',
+      suggestedColor: null, singleSpeciesDefaultColor: null,
+    })
+    await act(async () => render(<PlantColorMenu buttonRef={buttonRef} />, container))
+    await act(async () => { [...document.querySelectorAll('button')].find(button => button.textContent === 'Custom color')!.click() })
+    const hue = document.querySelector<HTMLElement>('[aria-label="Hue"]')!
+    expect(hue.getAttribute('role')).toBe('slider')
+    const input = document.querySelector<HTMLInputElement>('[aria-label="Custom hex"]')!
+    const before = input.value
+    await act(async () => { hue.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })) })
+    expect(input.value).not.toBe(before)
+    expect(setSelectedPlantColor).not.toHaveBeenCalled()
+    expect(setPlantColorForSpecies).not.toHaveBeenCalled()
+  })
+
   it('applies a selected palette color to the current plant selection', async () => {
     getSelectedPlantColorContext.mockReturnValue({
       plantIds: ['plant-1', 'plant-2'],
@@ -114,9 +155,9 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const swatches = container.querySelectorAll('button[aria-selected]')
-    const setColorButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Set color'),
+    const swatches = document.querySelectorAll('button[aria-selected]')
+    const setColorButton = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Apply to'),
     ) as HTMLButtonElement
 
     await act(async () => {
@@ -149,7 +190,7 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Apple')
+    expect(document.body.textContent).toContain('Apple')
 
     commonName = 'Pommier'
     await act(async () => {
@@ -157,8 +198,8 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Pommier')
-    expect(container.textContent).not.toContain('Apple')
+    expect(document.body.textContent).toContain('Pommier')
+    expect(document.body.textContent).not.toContain('Apple')
   })
 
   it('applies the selected color to all placed instances of the selected species', async () => {
@@ -176,7 +217,7 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const setAllButton = [...container.querySelectorAll('button')].find((button) =>
+    const setAllButton = [...document.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Set for all'),
     ) as HTMLButtonElement
 
@@ -204,13 +245,13 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const actionButtons = [...container.querySelectorAll('button')]
+    const actionButtons = [...document.querySelectorAll('button')]
       .map((button) => button.textContent?.trim())
       .filter(Boolean)
 
-    expect(actionButtons).toContain('Set color')
+    expect(actionButtons).toContain('Apply to 1 selected')
     expect(actionButtons).toContain('Set for all Apple')
-    expect(container.textContent).not.toContain('Sets the default color')
+    expect(document.body.textContent).not.toContain('Sets the default color')
     expect(actionButtons.some((label) => label?.includes('Clear color'))).toBe(false)
     expect(actionButtons.some((label) => label?.includes('Clear species default'))).toBe(false)
   })
@@ -231,11 +272,11 @@ describe('PlantColorMenu', () => {
     })
 
     expect(
-      [...container.querySelectorAll('button')].some((button) => button.textContent?.includes('Set for all')),
+      [...document.querySelectorAll('button')].some((button) => button.textContent?.includes('Set for all')),
     ).toBe(false)
   })
 
-  it('opens the advanced picker and keeps the custom swatch empty until a custom color is picked', async () => {
+  it('opens the custom picker directly without an empty swatch', async () => {
     getSelectedPlantColorContext.mockReturnValue({
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -250,13 +291,11 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const emptySwatch = container.querySelector('button[aria-label="No custom color selected"]') as HTMLButtonElement
-    expect(emptySwatch).not.toBeNull()
-    expect(emptySwatch.disabled).toBe(true)
-    expect(emptySwatch.className).toContain('customSwatchEmpty')
+    const emptySwatch = document.querySelector('button[aria-label="No custom color selected"]') as HTMLButtonElement
+    expect(emptySwatch).toBeNull()
 
-    const moreColorsButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('More colors'),
+    const moreColorsButton = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Custom color'),
     ) as HTMLButtonElement
 
     await act(async () => {
@@ -264,10 +303,10 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[aria-label="Saturation and lightness"]')).not.toBeNull()
+    expect(document.querySelector('[aria-label="Saturation and lightness"]')).not.toBeNull()
   })
 
-  it('does not populate the custom swatch when only curated palette colors are used', async () => {
+  it('keeps curated choices independent of the custom disclosure', async () => {
     getSelectedPlantColorContext.mockReturnValue({
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -282,18 +321,17 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const swatches = container.querySelectorAll('button[aria-selected]')
+    const swatches = document.querySelectorAll('button[aria-selected]')
     await act(async () => {
       ;(swatches[1] as HTMLButtonElement).click()
       await Promise.resolve()
     })
 
-    const emptySwatch = container.querySelector('button[aria-label="No custom color selected"]') as HTMLButtonElement
-    expect(emptySwatch).not.toBeNull()
-    expect(emptySwatch.disabled).toBe(true)
+    const emptySwatch = document.querySelector('button[aria-label="No custom color selected"]') as HTMLButtonElement
+    expect(emptySwatch).toBeNull()
   })
 
-  it('applies a valid advanced custom hex color and exposes it in the custom swatch', async () => {
+  it('rejects invalid hex and applies a valid custom color', async () => {
     getSelectedPlantColorContext.mockReturnValue({
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -308,8 +346,8 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const moreColorsButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('More colors'),
+    const moreColorsButton = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Custom color'),
     ) as HTMLButtonElement
 
     await act(async () => {
@@ -317,15 +355,15 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const input = container.querySelector('input[placeholder="#C44230"]') as HTMLInputElement
+    const input = document.querySelector('input[placeholder="#C44230"]') as HTMLInputElement
     await act(async () => {
       input.value = 'invalid'
       input.dispatchEvent(new Event('input', { bubbles: true }))
       await Promise.resolve()
     })
     expect(input.getAttribute('aria-invalid')).toBe('true')
-    const applyActions = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(button =>
-      button.textContent?.includes('Set color') || button.textContent?.includes('Set for all'),
+    const applyActions = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(button =>
+      button.textContent?.includes('Apply to') || button.textContent?.includes('Set for all'),
     )
     expect(applyActions).toHaveLength(2)
     expect(applyActions.every(button => button.disabled)).toBe(true)
@@ -335,13 +373,11 @@ describe('PlantColorMenu', () => {
       await Promise.resolve()
     })
 
-    const customSwatch = container.querySelector('button[aria-label="Custom color"]') as HTMLButtonElement
     expect(input.getAttribute('aria-invalid')).toBe('false')
-    expect(customSwatch).not.toBeNull()
-    expect(customSwatch.disabled).toBe(false)
+    expect(input.value).toBe('#123ABC')
 
-    const setColorButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Set color'),
+    const setColorButton = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Apply to'),
     ) as HTMLButtonElement
 
     await act(async () => {

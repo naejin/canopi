@@ -619,3 +619,6 @@
     transition: none;
   }
 }
+
+.plantRow[data-variant="favorites"] .rowActions, .plantRow:focus-within .rowActions { opacity: 1; }
+.plantRow[data-variant="favorites"] { padding: var(--space-3); }

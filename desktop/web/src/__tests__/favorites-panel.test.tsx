@@ -270,6 +270,18 @@ describe('FavoritesPanel', () => {
     expect(container.textContent).toContain('Malus domestica')
   })
 
+  it('searches favorites and clears a no-results state without changing the library', async () => {
+    await act(async () => { render(<FavoritesPanel />, container); await flushEffects(); await workbench.loadFavorites() })
+    const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites"]')!
+    await act(async () => { input.value = 'no-such-species'; input.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect(container.textContent).toContain('No matching species.')
+    expect(container.querySelector('[data-testid="favorite-row"]')).toBeNull()
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Clear search"]')!.click() })
+    expect(container.querySelector('[data-testid="favorite-row"]')?.textContent).toBe('Malus domestica')
+    expect(workbench.favorites.value.items).toHaveLength(1)
+    expect(document.activeElement).toBe(input)
+  })
+
   it('renders Saved Stamps below species favorites and saves the current selection', async () => {
     await act(async () => {
       render(<FavoritesPanel />, container)
@@ -277,8 +289,8 @@ describe('FavoritesPanel', () => {
     })
 
     expect(loadStampLibraryMock).toHaveBeenCalledTimes(1)
-    expect(container.textContent).toContain('Saved Stamps')
-    expect(container.textContent).toContain('For reusable groups of plants, zones, and annotations.')
+    expect(container.textContent).toContain('Saved stamps')
+    expect(container.querySelector('button[aria-label="Stamp actions"]')).toBeTruthy()
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
     expect(container.textContent).toContain('Pommier, Lavande')
     expect(container.textContent).toContain('2 plants · 1 zone · 1 annotation')
@@ -296,7 +308,7 @@ describe('FavoritesPanel', () => {
     expect(saveSelectionMock).not.toHaveBeenCalled()
 
     const importButton = [...container.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Import')
+      .find((button) => button.getAttribute('aria-label') === 'Import')
     expect(importButton).toBeTruthy()
 
     await act(async () => {
@@ -316,7 +328,8 @@ describe('FavoritesPanel', () => {
 
     expect(placeStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0])
 
-    const exportButton = container.querySelector<HTMLButtonElement>('button[aria-label="Export"]')
+    await openStampActions()
+    const exportButton = document.querySelector<HTMLButtonElement>('button[aria-label="Export"]')
     expect(exportButton).toBeTruthy()
 
     await act(async () => {
@@ -339,7 +352,7 @@ describe('FavoritesPanel', () => {
     expect(plantsFrame).toBeTruthy()
     expect(stampsFrame).toBeTruthy()
     expect(plantsFrame?.textContent).toContain('Plants')
-    expect(stampsFrame?.textContent).toContain('Saved Stamps')
+    expect(stampsFrame?.textContent).toContain('Saved stamps')
   })
 
   it('manages Saved Stamps with ledger actions rename delete and separate drag handles', async () => {
@@ -372,13 +385,15 @@ describe('FavoritesPanel', () => {
     grip!.dispatchEvent(dragStartEvent(reorderDragData))
     expect(readSavedObjectStampDragData(reorderDragData)).toBeNull()
 
+    await openStampActions()
     expect(container.querySelector('button[aria-label="Place"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Export"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Rename"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Delete"]')).toBeTruthy()
+    expect(document.querySelector('button[aria-label="Export"]')).toBeTruthy()
+    expect(document.querySelector('button[aria-label="Rename"]')).toBeTruthy()
+    expect(document.querySelector('button[aria-label="Delete"]')).toBeTruthy()
 
+    await openStampActions()
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+      document.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
@@ -386,7 +401,7 @@ describe('FavoritesPanel', () => {
     const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
     expect(renameInput).toBeTruthy()
     expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
-    expect(container.querySelector('button[aria-label="Export"]')).toBeNull()
+    expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
 
@@ -401,8 +416,9 @@ describe('FavoritesPanel', () => {
     })
     expect(renameStampMock).toHaveBeenCalledWith('stamp-1', 'Kitchen guild')
 
+    await openStampActions()
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+      document.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
@@ -410,14 +426,15 @@ describe('FavoritesPanel', () => {
     await act(async () => {
       emptyRenameInput!.value = '   '
       emptyRenameInput!.dispatchEvent(new Event('input', { bubbles: true }))
-      emptyRenameInput!.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+      emptyRenameInput!.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
       await flushEffects()
     })
     expect(renameStampMock).toHaveBeenCalledTimes(1)
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
     expect(container.textContent).toContain('Pommier, Lavande')
 
-    const deleteButton = container.querySelector<HTMLButtonElement>('button[aria-label="Delete"]')
+    await openStampActions()
+    const deleteButton = document.querySelector<HTMLButtonElement>('button[aria-label="Delete"]')
     expect(deleteButton).toBeTruthy()
 
     await act(async () => {
@@ -426,8 +443,8 @@ describe('FavoritesPanel', () => {
     })
     expect(container.textContent).toContain('Delete this saved stamp?')
     expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
-    expect(container.querySelector('button[aria-label="Export"]')).toBeNull()
-    expect(container.querySelector('button[aria-label="Rename"]')).toBeNull()
+    expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
+    expect(document.querySelector('button[aria-label="Rename"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm delete"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel delete"]')).toBeTruthy()
 
@@ -437,9 +454,10 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
     expect(deleteStampMock).not.toHaveBeenCalled()
+    await openStampActions()
 
     await act(async () => {
-      deleteButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      document.querySelector<HTMLButtonElement>('button[aria-label="Delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
     const confirmButton = container.querySelector<HTMLButtonElement>('button[aria-label="Confirm delete"]')
@@ -457,8 +475,9 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
 
+    await openStampActions()
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+      document.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
@@ -485,8 +504,9 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
 
+    await openStampActions()
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+      document.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
@@ -503,7 +523,7 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
     await act(async () => {
-      renameInput!.dispatchEvent(new FocusEvent('blur', {
+      renameInput!.dispatchEvent(new FocusEvent('focusout', {
         bubbles: true,
         relatedTarget: cancelButton,
       }))
@@ -522,8 +542,9 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
 
+    await openStampActions()
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+      document.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
@@ -534,7 +555,7 @@ describe('FavoritesPanel', () => {
     expect(renameInput?.selectionStart).toBe(0)
     expect(renameInput?.selectionEnd).toBe('Pommier, Lavande'.length)
     expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
-    expect(container.querySelector('button[aria-label="Export"]')).toBeNull()
+    expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
   })
@@ -917,7 +938,7 @@ describe('FavoritesPanel', () => {
     const main = container.querySelector<HTMLElement>('[data-favorites-main]')
     const body = container.querySelector<HTMLElement>('[data-saved-stamp-body="stamp-1"]')
     const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label="Place"]')
-    const exportButton = container.querySelector<HTMLButtonElement>('button[aria-label="Export"]')
+    const exportButton = container.querySelector<HTMLButtonElement>('button[aria-label="Stamp actions"]')
     expect(main).toBeTruthy()
     expect(body).toBeTruthy()
     expect(placeButton).toBeTruthy()
@@ -957,14 +978,14 @@ describe('FavoritesPanel', () => {
       expect(container.querySelector('[data-saved-stamp-thumbnail-overlay]')).toBeNull()
 
       await act(async () => {
-        placeButton.dispatchEvent(new FocusEvent('focus', { bubbles: false }))
+        placeButton.dispatchEvent(new FocusEvent('focusin', { bubbles: false }))
         await Promise.resolve()
       })
       expect(container.querySelector('[data-saved-stamp-thumbnail-overlay]')).toBeTruthy()
 
       await act(async () => {
-        placeButton.dispatchEvent(new FocusEvent('blur', { bubbles: false }))
-        exportButton.dispatchEvent(new FocusEvent('focus', { bubbles: false }))
+        placeButton.dispatchEvent(new FocusEvent('focusout', { bubbles: false }))
+        exportButton.dispatchEvent(new FocusEvent('focusin', { bubbles: false }))
         await Promise.resolve()
       })
       expect(container.querySelector('[data-saved-stamp-thumbnail-overlay]')).toBeNull()
@@ -1096,3 +1117,10 @@ describe('FavoritesPanel', () => {
     }
   })
 })
+
+async function openStampActions() {
+  if (document.querySelector('[role="menu"]')) return
+  await act(async () => {
+    document.querySelector<HTMLButtonElement>('button[aria-label="Stamp actions"]')!.click()
+  })
+}

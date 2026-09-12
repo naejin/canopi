@@ -113,7 +113,7 @@
     "inspection": {
       "title": "Inspection lens",
       "close": "Close inspection lens",
-      "hold": "Hold",
+      "hold": "Hold view",
       "follow": "Follow pointer",
       "held": "Held in place",
       "following": "Following pointer",
@@ -125,7 +125,8 @@
       "compact": "Compact lens",
       "widen": "Widen lens",
       "magnify": "Magnify lens",
-      "namesCount": "{{shown}} names · {{total}} plants"
+      "namesCount": "{{shown}} names · {{total}} plants",
+      "panHint": "Use arrow keys to move and hold this view."
     },
     "emptyWelcome": "Start your design",
     "emptyNewDesign": "New Design",
@@ -216,7 +217,7 @@
       "toolbarDesc": "Edit selected plant colors",
       "selectedCount": "{{count}} selected",
       "suggested": "Suggested from flower color",
-      "moreColors": "More colors",
+      "moreColors": "Custom color",
       "advanced": "Advanced color",
       "customSwatch": "Custom color",
       "customSwatchEmpty": "No custom color selected",
@@ -238,7 +239,8 @@
         "white": "White",
         "brown": "Brown",
         "black": "Black"
-      }
+      },
+      "applySelection": "Apply to {{count}} selected"
     },
     "plantSymbol": {
       "label": "Plant symbol",
@@ -269,7 +271,8 @@
         "cross": "Cross"
       },
       "botanical": "Botanical",
-      "abstract": "Abstract"
+      "abstract": "Abstract",
+      "applySelection": "Apply to {{count}} selected"
     },
     "group": {
       "group": "Group",
@@ -356,7 +359,8 @@
       "styleStreet": "Street",
       "styleTerrain": "Terrain",
       "styleSatellite": "Satellite",
-      "styleNone": "None"
+      "styleNone": "None",
+      "references": "Site references"
     },
     "bottomPanel": {
       "ariaLabel": "Bottom panel",
@@ -838,10 +842,11 @@
   "favorites": {
     "empty": "No favorites yet",
     "emptyHint": "Star plants from the search panel to add them here",
-    "dragHint": "Drag to canvas to place"
+    "dragHint": "Drag to canvas to place",
+    "search": "Search favorites"
   },
   "savedObjectStamps": {
-    "title": "Saved Stamps",
+    "title": "Saved stamps",
     "description": "For reusable groups of plants, zones, and annotations.",
     "saveSelection": "Save selection",
     "import": "Import",
@@ -867,7 +872,8 @@
     "confirmDelete": "Confirm delete",
     "cancelDelete": "Cancel delete",
     "reorderLabel": "Reorder saved stamp",
-    "resizeFrame": "Resize Saved Stamps frame"
+    "resizeFrame": "Resize Saved Stamps frame",
+    "actions": "Stamp actions"
   },
   "error": {
     "title": "Something went wrong",
@@ -987,6 +993,8 @@
     "focus": "Focus: {{code}}",
     "noResults": "No matching species.",
     "empty": "Place plants to build your species key.",
-    "detailHint": "Codes appear as you zoom in, where space allows. Click a row to focus its plants."
+    "detailHint": "Codes appear as you zoom in, where space allows. Click a row to focus its plants.",
+    "clearSearch": "Clear search",
+    "details": "Details for {{name}}"
   }
 }

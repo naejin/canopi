@@ -60,13 +60,13 @@ describe('App sidebar width', () => {
     document.body.style.userSelect = ''
   })
 
-  it('uses a responsive first-use width without a fixed pixel cap when no explicit width is saved', async () => {
+  it('uses the compact first-use width within the viewport when no explicit width is saved', async () => {
     await act(async () => {
       render(<App />, container)
     })
 
     const style = sidePanelElement(container).getAttribute('style')
-    expect(style).toContain('--side-panel-width: clamp(320px, 35vw, 90vw)')
+    expect(style).toContain('--side-panel-width: clamp(320px, 352px, 90vw)')
     expect(style).not.toContain('520px')
   })
 

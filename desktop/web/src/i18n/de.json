@@ -113,7 +113,7 @@
     "inspection": {
       "title": "Inspektionslupe",
       "close": "Lupe schließen",
-      "hold": "Festhalten",
+      "hold": "Ansicht fixieren",
       "follow": "Zeiger folgen",
       "held": "Position festgehalten",
       "following": "Folgt dem Zeiger",
@@ -125,7 +125,8 @@
       "compact": "Lupe verkleinern",
       "widen": "Ausschnitt erweitern",
       "magnify": "Lupe heranzoomen",
-      "namesCount": "{{shown}} Namen · {{total}} Pflanzen"
+      "namesCount": "{{shown}} Namen · {{total}} Pflanzen",
+      "panHint": "Mit den Pfeiltasten diese Ansicht verschieben und fixieren."
     },
     "emptyWelcome": "Starten Sie Ihren Entwurf",
     "emptyNewDesign": "Neuer Entwurf",
@@ -216,7 +217,7 @@
       "toolbarDesc": "Farben ausgewählter Pflanzen bearbeiten",
       "selectedCount": "{{count}} ausgewählt",
       "suggested": "Vorschlag aus der Blütenfarbe",
-      "moreColors": "Mehr Farben",
+      "moreColors": "Eigene Farbe",
       "advanced": "Erweiterte Farbe",
       "customSwatch": "Benutzerdefinierte Farbe",
       "customSwatchEmpty": "Keine benutzerdefinierte Farbe ausgewählt",
@@ -238,7 +239,8 @@
         "white": "Weiß",
         "brown": "Braun",
         "black": "Schwarz"
-      }
+      },
+      "applySelection": "Auf {{count}} ausgewählte anwenden"
     },
     "plantSymbol": {
       "label": "Pflanzensymbol",
@@ -269,7 +271,8 @@
         "cross": "Kreuz"
       },
       "botanical": "Botanisch",
-      "abstract": "Abstrakt"
+      "abstract": "Abstrakt",
+      "applySelection": "Auf {{count}} ausgewählte anwenden"
     },
     "group": {
       "group": "Gruppieren",
@@ -356,7 +359,8 @@
       "styleStreet": "Straße",
       "styleTerrain": "Gelände",
       "styleSatellite": "Satellit",
-      "styleNone": "Keine"
+      "styleNone": "Keine",
+      "references": "Standortreferenzen"
     },
     "bottomPanel": {
       "ariaLabel": "Unteres Panel",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "Noch keine Favoriten",
     "emptyHint": "Markieren Sie Pflanzen im Suchpanel, um sie hier hinzuzufügen",
-    "dragHint": "Auf die Fläche ziehen zum Platzieren"
+    "dragHint": "Auf die Fläche ziehen zum Platzieren",
+    "search": "Favoriten durchsuchen"
   },
   "savedObjectStamps": {
     "title": "Gespeicherte Stempel",
@@ -867,7 +872,8 @@
     "confirmDelete": "Löschen bestätigen",
     "cancelDelete": "Löschen abbrechen",
     "reorderLabel": "Gespeicherten Stempel neu anordnen",
-    "resizeFrame": "Bereich Gespeicherte Stempel anpassen"
+    "resizeFrame": "Bereich Gespeicherte Stempel anpassen",
+    "actions": "Stempelaktionen"
   },
   "error": {
     "title": "Etwas ist schiefgelaufen",
@@ -987,6 +993,8 @@
     "focus": "Fokus: {{code}}",
     "noResults": "Keine passenden Arten.",
     "empty": "Platzieren Sie Pflanzen, um den Artenschlüssel zu erstellen.",
-    "detailHint": "Kürzel erscheinen beim Vergrößern, wenn Platz ist. Eine Zeile fokussiert ihre Pflanzen."
+    "detailHint": "Kürzel erscheinen beim Vergrößern, wenn Platz ist. Eine Zeile fokussiert ihre Pflanzen.",
+    "clearSearch": "Suche löschen",
+    "details": "Details zu {{name}}"
   }
 }

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'preact/hooks'
+import type { ComponentChildren } from 'preact'
+import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import {
   currentCanvasQuerySurface,
   currentCanvasSpeciesFocusCommands,
@@ -7,9 +8,24 @@ import { buildSpeciesKey } from '../../canvas/runtime/species-key'
 import { t } from '../../i18n'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
+import { SpeciesIdentity } from '../shared/SpeciesIdentity'
+import { SurfaceSearch } from '../shared/SurfaceSearch'
+import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import styles from './SpeciesKeyPanel.module.css'
 
-export function SpeciesKeyPanel() {
+export function SpeciesKeyPanel({ renderDetail }: { renderDetail?: (canonicalName: string) => ComponentChildren }) {
+  const [openedDetail, setOpenedDetail] = useState<string | null>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const wasShowingDetail = useRef(false)
+  const selected = speciesCatalogWorkbench.selectedCanonicalName.value
+  const showingDetail = Boolean(selected && selected === openedDetail && renderDetail)
+  useLayoutEffect(() => {
+    if (wasShowingDetail.current && !showingDetail) {
+      const buttons = panelRef.current?.querySelectorAll<HTMLButtonElement>('[data-species-detail]') ?? []
+      Array.from(buttons).find(button => button.dataset.speciesDetail === openedDetail)?.focus()
+    }
+    wasShowingDetail.current = showingDetail
+  }, [showingDetail, openedDetail])
   const [search, setSearch] = useState('')
   const queries = currentCanvasQuerySurface.value
   const revision = queries?.revision.scene.value
@@ -32,18 +48,11 @@ export function SpeciesKeyPanel() {
     ).includes(needle),
   )
   return (
-    <section className={styles.panel} aria-label={t('speciesKey.title')}>
-      <DockPanelHeader title={t('speciesKey.title')} />
+    <section ref={panelRef} className={styles.panel} aria-label={t('speciesKey.title')}>
+      {selected && selected === openedDetail && renderDetail ? renderDetail(selected) : <>
+      <DockPanelHeader title={t('speciesKey.title')} count={entries.length} />
       <div className={styles.controls}>
-        <p className={styles.hint}>{t('speciesKey.description')}</p>
-        <input
-          type="search"
-          className={styles.search}
-          value={search}
-          aria-label={t('speciesKey.search')}
-          placeholder={t('speciesKey.search')}
-          onInput={(event) => setSearch(event.currentTarget.value)}
-        />
+        <SurfaceSearch value={search} onChange={setSearch} label={t('speciesKey.search')} />
         <label className={styles.toggle}>
           <input
             type="checkbox"
@@ -57,7 +66,7 @@ export function SpeciesKeyPanel() {
           {t('speciesKey.showCodes')}
         </label>
         <div className={styles.summary}>
-          <span>{t('speciesKey.count', { count: entries.length })}</span>
+          <span>{t('savedObjectStamps.summaryPlantOther', { count: entries.reduce((total, entry) => total + entry.count, 0) })}</span>
           {focus?.canonicalName && (
             <button
               type="button"
@@ -70,9 +79,9 @@ export function SpeciesKeyPanel() {
           )}
         </div>
       </div>
-      <ul className={styles.list}>
+      {visible.length > 0 && <ul className={styles.list}>
         {visible.map((entry) => (
-          <li key={entry.canonicalName}>
+          <li key={entry.canonicalName} className={styles.row}>
             <button
               type="button"
               className={styles.entry}
@@ -85,33 +94,26 @@ export function SpeciesKeyPanel() {
                 )
               }
             >
+              <SpeciesIdentity commonName={entry.commonName} canonicalName={entry.canonicalName} mark={
+                entry.appearances.map(appearance => <span key={appearance.color + appearance.symbol} style={{ color: appearance.color }}>
+                  <PlantSymbolGlyph symbol={appearance.symbol} size={20} />
+                </span>)
+              } />
               <span className={styles.code}>{entry.code}</span>
-              <span className={styles.appearances} aria-hidden="true">
-                {entry.appearances.map((appearance) => (
-                  <span style={{ color: appearance.color }}>
-                    <PlantSymbolGlyph symbol={appearance.symbol} size={20} />
-                  </span>
-                ))}
-              </span>
-              <span className={styles.names}>
-                <span>{entry.commonName || entry.canonicalName}</span>
-                {entry.commonName && (
-                  <span className={styles.canonical}>
-                    {entry.canonicalName}
-                  </span>
-                )}
-              </span>
               <span className={styles.count}>{entry.count}</span>
             </button>
+            {renderDetail && <button type="button" className={styles.details} data-species-detail={entry.canonicalName}
+              aria-label={t('speciesKey.details', { name: entry.commonName || entry.canonicalName })}
+              onClick={() => { setOpenedDetail(entry.canonicalName); speciesCatalogWorkbench.selectSpecies(entry.canonicalName) }}>›</button>}
           </li>
         ))}
-      </ul>
+      </ul>}
       {visible.length === 0 && (
         <p className={styles.empty}>
           {t(entries.length ? 'speciesKey.noResults' : 'speciesKey.empty')}
         </p>
       )}
-      <p className={styles.footer}>{t('speciesKey.detailHint')}</p>
+      </>}
     </section>
   )
 }

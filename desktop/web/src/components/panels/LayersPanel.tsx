@@ -9,7 +9,7 @@ import {
   setCanvasLayerPresentationContourIntervalMeters,
 } from '../../app/canvas-layer-presentation/presentation'
 
-export function LayersPanel() {
+export function LayersPanel({ onLocation = () => runAppCommand('nav.location') }: { onLocation?: () => void } = {}) {
   return (
     <LayerPanel
       rows={readCanvasLayerPresentation().rows}
@@ -19,7 +19,7 @@ export function LayersPanel() {
         locked: setCanvasLayerPresentationLocked,
         opacity: setCanvasLayerPresentationOpacity,
         contourInterval: setCanvasLayerPresentationContourIntervalMeters,
-        location: () => runAppCommand('nav.location'),
+        location: onLocation,
       }}
     />
   )

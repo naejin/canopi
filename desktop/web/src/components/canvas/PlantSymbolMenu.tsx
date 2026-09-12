@@ -10,6 +10,10 @@ import {
 import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
+import { createPortal } from 'preact/compat'
+import { SurfaceHeader } from '../shared/SurfaceHeader'
+import { AppearanceSelection } from './AppearanceSelection'
+import shared from './appearance.module.css'
 import styles from './PlantSymbolMenu.module.css'
 
 interface PlantSymbolMenuProps {
@@ -103,72 +107,46 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
     closeMenu(buttonRef)
   }
 
-  return (
+  return createPortal(
     <div
       ref={menuRef}
-      className={styles.menu}
+      className={shared.menu}
       role="dialog"
       aria-label={t('canvas.plantSymbol.label')}
       data-preserve-overlays="true"
-      onKeyDown={(event) => navigateAppearanceChoices(event, 4)}
+      onKeyDown={event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(buttonRef) }
+        else navigateAppearanceChoices(event, 4)
+      }}
     >
-      <div className={styles.header}>
-        <div className={styles.headerText}>
-          <div className={styles.sectionLabel}>{t('canvas.plantSymbol.label')}</div>
-          <div className={styles.title}>
-            {selectionSummary}
-            {singleSpeciesLabel && (
-              <span className={styles.selectionCount} aria-label={t('canvas.plantSymbol.selectedCount', { count: context.plantIds.length })}>
-                {context.plantIds.length}
-              </span>
-            )}
-          </div>
-          {context.singleSpeciesCommonName && context.singleSpeciesCanonicalName && (
-            <div className={styles.subtitle}>
-              <em>{context.singleSpeciesCanonicalName}</em>
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          className={styles.close}
-          onClick={() => closeMenu(buttonRef)}
-          aria-label={t('window.close')}
-        >
-          ×
-        </button>
-      </div>
-
-      <div className={styles.body}>
-        <div
-          className={styles.preview}
-          style={{ '--plant-symbol-preview-color': previewColor } as Record<string, string>}
-          aria-label={t('canvas.plantSymbol.preview')}
-        >
-          <PlantSymbolGlyph symbol={activeSymbol} size={36} className={styles.previewGlyph} />
-          <div className={styles.previewText}>
-            <strong>{symbolLabel(activeSymbol)}</strong>
-            <span className={styles.status}>{statusText}</span>
-          </div>
-        </div>
-
+      <SurfaceHeader title={t('canvas.plantSymbol.label')} closeLabel={t('window.close')} onClose={() => closeMenu(buttonRef)} />
+      <AppearanceSelection
+        commonName={context.singleSpeciesCommonName}
+        canonicalName={context.singleSpeciesCanonicalName}
+        summary={selectionSummary}
+        count={context.plantIds.length}
+        countLabel={t('canvas.plantSymbol.selectedCount', { count: context.plantIds.length })}
+        preview={<span style={{ color: previewColor }}><PlantSymbolGlyph symbol={activeSymbol} size={32} /></span>}
+        detail={statusText}
+      />
+      <div className={shared.body}>
         <div role="listbox" aria-label={t('canvas.plantSymbol.label')}>
           <SymbolGrid label={t('canvas.plantSymbol.botanical')} symbols={BOTANICAL_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
           <SymbolGrid label={t('canvas.plantSymbol.abstract')} symbols={ABSTRACT_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
         </div>
       </div>
 
-      <div className={styles.actions}>
-        <button type="button" className={styles.primaryAction} onClick={applyToSelection}>
-          {t('canvas.plantSymbol.setSymbol')}
+      <div className={shared.actions}>
+        <button type="button" className={shared.primaryAction} onClick={applyToSelection}>
+          {t('canvas.plantSymbol.applySelection', { count: context.plantIds.length })}
         </button>
         {context.singleSpeciesCanonicalName && singleSpeciesLabel && (
-          <button type="button" className={styles.secondaryAction} onClick={applyToSpecies}>
+          <button type="button" className={shared.secondaryAction} onClick={applyToSpecies}>
             {t('canvas.plantSymbol.setSymbolForSpecies', { species: singleSpeciesLabel })}
           </button>
         )}
       </div>
-    </div>
+    </div>, document.body,
   )
 }
 

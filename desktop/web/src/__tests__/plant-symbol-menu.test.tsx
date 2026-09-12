@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -75,7 +74,7 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const coniferButton = container.querySelector<HTMLButtonElement>('button[aria-label="Conifer"]')
+    const coniferButton = document.querySelector<HTMLButtonElement>('button[aria-label="Conifer"]')
     expect(coniferButton).not.toBeNull()
     expect(coniferButton?.title).toBe('Conifer')
     expect(coniferButton?.textContent).toBe('Conifer')
@@ -85,8 +84,8 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const setSymbolButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Set symbol'),
+    const setSymbolButton = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Apply to'),
     ) as HTMLButtonElement
 
     await act(async () => {
@@ -115,7 +114,7 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const symbolRows = container.querySelectorAll('[role="listbox"]')
+    const symbolRows = document.querySelectorAll('[role="listbox"]')
     expect(symbolRows).toHaveLength(1)
     expect(symbolRows[0]?.querySelectorAll('[role=option]')).toHaveLength(16)
     expect(symbolRows[0]?.textContent).toContain('Groundcover')
@@ -130,8 +129,8 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const setSymbolButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Set symbol'),
+    const setSymbolButton = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Apply to'),
     ) as HTMLButtonElement
 
     await act(async () => {
@@ -150,17 +149,17 @@ describe('PlantSymbolMenu', () => {
       singleSpeciesDefaultSymbol: null, canClearSelectedSymbol: true,
     })
     await act(async () => { render(<PlantSymbolMenu buttonRef={buttonRef} />, container) })
-    expect(container.querySelector('[role="group"][aria-label="Botanical"]')).not.toBeNull()
-    expect(container.querySelector('[role="group"][aria-label="Abstract"]')?.querySelectorAll('[role="option"]')).toHaveLength(4)
-    const canopy = container.querySelector<HTMLButtonElement>('[aria-label="Canopy tree"]')!
+    expect(document.querySelector('[role="group"][aria-label="Botanical"]')).not.toBeNull()
+    expect(document.querySelector('[role="group"][aria-label="Abstract"]')?.querySelectorAll('[role="option"]')).toHaveLength(4)
+    const canopy = document.querySelector<HTMLButtonElement>('[aria-label="Canopy tree"]')!
     await act(async () => { canopy.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })) })
-    const cross = container.querySelector<HTMLButtonElement>('[aria-label="Cross"]')!
+    const cross = document.querySelector<HTMLButtonElement>('[aria-label="Cross"]')!
     expect(document.activeElement).toBe(cross)
     expect(cross.getAttribute('aria-selected')).toBe('true')
-    expect(container.querySelectorAll('[role="option"][tabindex="0"]')).toHaveLength(1)
+    expect(document.querySelectorAll('[role="option"][tabindex="0"]')).toHaveLength(1)
     expect(setSelectedPlantSymbol).not.toHaveBeenCalled()
     await act(async () => {
-      Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Set symbol')!.click()
+      Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('Apply to'))!.click()
     })
     expect(setSelectedPlantSymbol).toHaveBeenCalledWith('cross')
   })
@@ -182,31 +181,13 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const [previewSvg] = container.querySelectorAll('svg')
-    const coniferSvg = container.querySelector('button[aria-label="Conifer"] svg')
+    const previewSvg = document.querySelector('svg[viewBox="-1 -1 2 2"]')
+    const coniferSvg = document.querySelector('button[aria-label="Conifer"] svg')
 
     expect(previewSvg).toBeTruthy()
     expect(coniferSvg).toBeTruthy()
     expect(previewSvg?.getAttribute('viewBox')).toBe('-1 -1 2 2')
     expect(coniferSvg?.getAttribute('viewBox')).toBe('-1 -1 2 2')
-  })
-
-  it('uses a defined preview sizing token for the symbol preview frame', () => {
-    const css = readFileSync('src/components/canvas/PlantSymbolMenu.module.css', 'utf8')
-    const previewRule = css.match(/\.preview\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
-
-    expect(previewRule).toContain('--symbol-preview-min-height:')
-    expect(previewRule).toContain('min-height: var(--symbol-preview-min-height);')
-    expect(previewRule).not.toContain('var(--space-10)')
-  })
-
-  it('sizes the popover for four-column symbol groups', () => {
-    const css = readFileSync('src/components/canvas/PlantSymbolMenu.module.css', 'utf8')
-    const menuRule = css.match(/\.menu\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
-    const gridRule = css.match(/\.grid\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
-
-    expect(menuRule).toContain('width: 360px;')
-    expect(gridRule).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));')
   })
 
   it('updates the selected plant name when localized plant names refresh', async () => {
@@ -227,7 +208,7 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Apple')
+    expect(document.body.textContent).toContain('Apple')
 
     commonName = 'Pommier'
     await act(async () => {
@@ -235,8 +216,8 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Pommier')
-    expect(container.textContent).not.toContain('Apple')
+    expect(document.body.textContent).toContain('Pommier')
+    expect(document.body.textContent).not.toContain('Apple')
   })
 
   it('keeps a shared inherited effective symbol when applying an unchanged multi-species selection', async () => {
@@ -256,12 +237,12 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const canopyButton = container.querySelector<HTMLButtonElement>('button[aria-label="Canopy tree"]')
+    const canopyButton = document.querySelector<HTMLButtonElement>('button[aria-label="Canopy tree"]')
     expect(canopyButton?.getAttribute('aria-selected')).toBe('true')
-    expect(container.textContent).toContain('Inherited: Canopy tree')
+    expect(document.body.textContent).toContain('Inherited: Canopy tree')
 
-    const setSymbolButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Set symbol'),
+    const setSymbolButton = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Apply to'),
     ) as HTMLButtonElement
 
     await act(async () => {
@@ -290,10 +271,10 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const roundButton = container.querySelector<HTMLButtonElement>('button[aria-label="Neutral dot"]')
+    const roundButton = document.querySelector<HTMLButtonElement>('button[aria-label="Neutral dot"]')
     expect(roundButton?.getAttribute('aria-selected')).toBe('true')
-    expect(container.textContent).toContain('Mixed symbols')
-    expect(container.textContent).not.toContain('Inherited: Neutral dot')
+    expect(document.body.textContent).toContain('Mixed symbols')
+    expect(document.body.textContent).not.toContain('Inherited: Neutral dot')
   })
 
   it('applies the selected symbol to all placed instances of the selected species', async () => {
@@ -313,13 +294,13 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const canopyButton = container.querySelector<HTMLButtonElement>('button[aria-label="Canopy tree"]')
+    const canopyButton = document.querySelector<HTMLButtonElement>('button[aria-label="Canopy tree"]')
     await act(async () => {
       canopyButton?.click()
       await Promise.resolve()
     })
 
-    const setAllButton = [...container.querySelectorAll('button')].find((button) =>
+    const setAllButton = [...document.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Set for all Apple'),
     ) as HTMLButtonElement
 
@@ -349,13 +330,13 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const actionButtons = [...container.querySelectorAll('button')]
+    const actionButtons = [...document.querySelectorAll('button')]
       .map((button) => button.textContent?.trim())
       .filter(Boolean)
 
-    expect(actionButtons).toContain('Set symbol')
+    expect(actionButtons).toContain('Apply to 1 selected')
     expect(actionButtons).toContain('Set for all Apple')
-    expect(container.textContent).not.toContain('Sets the default symbol')
+    expect(document.body.textContent).not.toContain('Sets the default symbol')
     expect(actionButtons.some((label) => label?.includes('Clear symbol'))).toBe(false)
     expect(actionButtons.some((label) => label?.includes('Clear species default'))).toBe(false)
   })

@@ -113,7 +113,7 @@
     "inspection": {
       "title": "检查放大镜",
       "close": "关闭放大镜",
-      "hold": "固定位置",
+      "hold": "固定视图",
       "follow": "跟随指针",
       "held": "位置已固定",
       "following": "跟随指针",
@@ -125,7 +125,8 @@
       "compact": "缩小放大镜",
       "widen": "扩大查看范围",
       "magnify": "放大查看",
-      "namesCount": "{{shown}} 个名称 · {{total}} 株植物"
+      "namesCount": "{{shown}} 个名称 · {{total}} 株植物",
+      "panHint": "使用方向键移动并固定视图。"
     },
     "emptyWelcome": "开始您的设计",
     "emptyNewDesign": "新建设计",
@@ -216,7 +217,7 @@
       "toolbarDesc": "编辑所选植物颜色",
       "selectedCount": "已选择 {{count}} 个",
       "suggested": "根据花色推荐",
-      "moreColors": "更多颜色",
+      "moreColors": "自定义颜色",
       "advanced": "高级颜色",
       "customSwatch": "自定义颜色",
       "customSwatchEmpty": "尚未选择自定义颜色",
@@ -238,7 +239,8 @@
         "white": "白色",
         "brown": "棕色",
         "black": "黑色"
-      }
+      },
+      "applySelection": "应用于所选的 {{count}} 个"
     },
     "plantSymbol": {
       "label": "植物符号",
@@ -269,7 +271,8 @@
         "cross": "十字形"
       },
       "botanical": "植物形态",
-      "abstract": "抽象形状"
+      "abstract": "抽象形状",
+      "applySelection": "应用于所选的 {{count}} 个"
     },
     "group": {
       "group": "编组",
@@ -356,7 +359,8 @@
       "styleStreet": "街道",
       "styleTerrain": "地形",
       "styleSatellite": "卫星",
-      "styleNone": "无"
+      "styleNone": "无",
+      "references": "场地参考"
     },
     "bottomPanel": {
       "ariaLabel": "底部面板",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "暂无收藏",
     "emptyHint": "在搜索面板中标记植物以添加到此处",
-    "dragHint": "拖拽到画布以放置"
+    "dragHint": "拖拽到画布以放置",
+    "search": "搜索收藏"
   },
   "savedObjectStamps": {
     "title": "已保存图章",
@@ -867,7 +872,8 @@
     "confirmDelete": "确认删除",
     "cancelDelete": "取消删除",
     "reorderLabel": "重新排序已保存图章",
-    "resizeFrame": "调整已保存图章框架大小"
+    "resizeFrame": "调整已保存图章框架大小",
+    "actions": "图章操作"
   },
   "error": {
     "title": "出现了问题",
@@ -987,6 +993,8 @@
     "focus": "聚焦：{{code}}",
     "noResults": "没有匹配的物种。",
     "empty": "放置植物以创建物种图例。",
-    "detailHint": "放大后，空间允许时会显示代码。点击一行可突出显示该物种的植物。"
+    "detailHint": "放大后，空间允许时会显示代码。点击一行可突出显示该物种的植物。",
+    "clearSearch": "清除搜索",
+    "details": "{{name}} 的详情"
   }
 }

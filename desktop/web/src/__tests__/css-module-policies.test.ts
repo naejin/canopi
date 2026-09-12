@@ -37,14 +37,6 @@ const GLOBAL_DESIGN_TOKEN_NAMES = collectGlobalDesignTokenNames(
 const STRUCTURAL_SPACING_EXCEPTIONS = [
   {
     file: 'src/components/canvas/LayerPanel.module.css',
-    rule: '.layerDetail',
-    atRules: [],
-    property: 'padding-left',
-    value: 'calc(var(--control-size-sm) + var(--space-2) + var(--space-1))',
-    reason: 'Aligns nested layer detail with the preceding control-width column plus visual spacing.',
-  },
-  {
-    file: 'src/components/canvas/LayerPanel.module.css',
     rule: '.mapSlider::-webkit-slider-thumb',
     atRules: [],
     property: 'margin-top',

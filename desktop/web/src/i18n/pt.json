@@ -113,7 +113,7 @@
     "inspection": {
       "title": "Lupa de inspeção",
       "close": "Fechar lupa",
-      "hold": "Fixar",
+      "hold": "Fixar vista",
       "follow": "Seguir o ponteiro",
       "held": "Posição fixa",
       "following": "Segue o ponteiro",
@@ -125,7 +125,8 @@
       "compact": "Reduzir lupa",
       "widen": "Ampliar área",
       "magnify": "Aproximar lupa",
-      "namesCount": "{{shown}} nomes · {{total}} plantas"
+      "namesCount": "{{shown}} nomes · {{total}} plantas",
+      "panHint": "Use as setas para mover e fixar esta vista."
     },
     "emptyWelcome": "Comece seu design",
     "emptyNewDesign": "Novo design",
@@ -216,7 +217,7 @@
       "toolbarDesc": "Editar as cores das plantas selecionadas",
       "selectedCount": "{{count}} selecionadas",
       "suggested": "Sugestão baseada na cor da flor",
-      "moreColors": "Mais cores",
+      "moreColors": "Cor personalizada",
       "advanced": "Cor avançada",
       "customSwatch": "Cor personalizada",
       "customSwatchEmpty": "Nenhuma cor personalizada selecionada",
@@ -238,7 +239,8 @@
         "white": "Branco",
         "brown": "Marrom",
         "black": "Preto"
-      }
+      },
+      "applySelection": "Aplicar a {{count}} selecionadas"
     },
     "plantSymbol": {
       "label": "Símbolo da planta",
@@ -269,7 +271,8 @@
         "cross": "Cruz"
       },
       "botanical": "Botânicos",
-      "abstract": "Abstratos"
+      "abstract": "Abstratos",
+      "applySelection": "Aplicar a {{count}} selecionadas"
     },
     "group": {
       "group": "Agrupar",
@@ -356,7 +359,8 @@
       "styleStreet": "Ruas",
       "styleTerrain": "Terreno",
       "styleSatellite": "Satélite",
-      "styleNone": "Nenhum"
+      "styleNone": "Nenhum",
+      "references": "Referências do local"
     },
     "bottomPanel": {
       "ariaLabel": "Painel inferior",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "Nenhum favorito ainda",
     "emptyHint": "Marque plantas no painel de pesquisa para adicioná-las aqui",
-    "dragHint": "Arraste para a tela para posicionar"
+    "dragHint": "Arraste para a tela para posicionar",
+    "search": "Pesquisar favoritos"
   },
   "savedObjectStamps": {
     "title": "Carimbos salvos",
@@ -867,7 +872,8 @@
     "confirmDelete": "Confirmar exclusão",
     "cancelDelete": "Cancelar exclusão",
     "reorderLabel": "Reordenar carimbo salvo",
-    "resizeFrame": "Redimensionar quadro de Carimbos salvos"
+    "resizeFrame": "Redimensionar quadro de Carimbos salvos",
+    "actions": "Ações do carimbo"
   },
   "error": {
     "title": "Algo deu errado",
@@ -987,6 +993,8 @@
     "focus": "Foco: {{code}}",
     "noResults": "Nenhuma espécie correspondente.",
     "empty": "Coloque plantas para criar a legenda de espécies.",
-    "detailHint": "Os códigos aparecem ao ampliar, se houver espaço. Clique numa linha para localizar as suas plantas."
+    "detailHint": "Os códigos aparecem ao ampliar, se houver espaço. Clique numa linha para localizar as suas plantas.",
+    "clearSearch": "Limpar pesquisa",
+    "details": "Detalhes de {{name}}"
   }
 }

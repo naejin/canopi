@@ -53,14 +53,17 @@ export interface LayerPanelActions {
 
 export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLayerPresentationRow[]; readonly actions: LayerPanelActions }) {
 
+  const active = rows.find(row => row.active)
+  const firstReference = rows.find(row => row.detail.type !== 'scene')?.id
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
-      <DockPanelHeader title={t('canvas.layers.layerPanel')} />
+      <DockPanelHeader title={t('canvas.layers.layerPanel')} count={rows.length} />
       <div role="list">
         {rows.map((row) => {
           const lockLabel = row.locked ? t('canvas.layers.unlockLayer') : t('canvas.layers.lockLayer')
           return (
             <div key={row.id}>
+              {row.id === firstReference && <h3 className={styles.groupLabel}>{t('canvas.layers.references')}</h3>}
               <div
                 role="listitem"
                 className={styles.layerRow}
@@ -106,11 +109,15 @@ export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLa
                   <span className={styles.lockSlot} aria-hidden="true" />
                 )}
               </div>
-              {row.active && <LayerDetail row={row} actions={actions} />}
+
             </div>
           )
         })}
       </div>
+      {active && <section className={styles.inspector} aria-label={active.label}>
+        <h3 className={styles.groupLabel}>{active.label}</h3>
+        <LayerDetail row={active} actions={actions} />
+      </section>}
     </aside>
   )
 }
@@ -175,7 +182,9 @@ function ContourLayerDetail({ row, detail, actions }: {
               value={String(detail.contourIntervalMeters)}
               aria-label={t('canvas.terrain.contourInterval')}
               onInput={(event) => {
-                actions.contourInterval?.(Number((event.target as HTMLInputElement).value))
+                const raw = event.currentTarget.value
+                const value = Number(raw)
+                if (raw.trim() && Number.isFinite(value) && value >= 0) actions.contourInterval?.(value)
               }}
             />
           </div>
@@ -195,20 +204,7 @@ function HillshadeLayerDetail({ row, detail, actions }: {
   return (
     <div className={styles.layerDetail}>
       {detail.hasLocation ? (
-        <div className={styles.controlRow}>
-          <span className={styles.controlLabel}>{t('canvas.terrain.hillshadeOpacity')}</span>
-          <input
-            type="range"
-            className={styles.mapSlider}
-            min="0"
-            max="100"
-            value={Math.round(row.opacity * 100)}
-            aria-label={t('canvas.terrain.hillshadeOpacity')}
-            onInput={(event) => {
-              actions.opacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
-            }}
-          />
-        </div>
+        <OpacitySlider actions={actions} row={row} label={t('canvas.terrain.hillshadeOpacity')} />
       ) : (
         <DesignLocationButton actions={actions} />
       )}
@@ -224,12 +220,12 @@ function SceneLayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; a
   )
 }
 
-function OpacitySlider({ row, disabled, actions }: { row: CanvasLayerPresentationRow; disabled?: boolean; actions: LayerPanelActions }) {
+function OpacitySlider({ row, disabled, actions, label }: { row: CanvasLayerPresentationRow; disabled?: boolean; actions: LayerPanelActions; label?: string }) {
   const opacity = Math.round(row.opacity * 100)
   return (
     <div className={styles.controlRow}>
       <span className={styles.controlLabel}>
-        {t('canvas.layers.opacity')}
+        {label ?? t('canvas.layers.opacity')}
         <output className={styles.opacityValue}>{opacity}%</output>
       </span>
       <input
@@ -238,7 +234,7 @@ function OpacitySlider({ row, disabled, actions }: { row: CanvasLayerPresentatio
         min="0"
         max="100"
         value={opacity}
-        aria-label={`${t('canvas.layers.opacity')}: ${row.label}`}
+        aria-label={label ?? `${t('canvas.layers.opacity')}: ${row.label}`}
         disabled={disabled}
         onInput={(event) => {
           actions.opacity(row.id, Number((event.target as HTMLInputElement).value) / 100)

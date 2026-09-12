@@ -25,7 +25,9 @@
     "prebuild": "npm run prepare:pdf-fonts",
     "prebuild:web": "npm run prepare:pdf-fonts",
     "pretest": "npm run prepare:pdf-fonts",
-    "build:pdf-validation": "npm run prepare:pdf-fonts && tsc -p scripts/pdf-validation/tsconfig.json && vite build --config scripts/pdf-validation/vite.config.mjs && node scripts/pdf-validation/copy-fonts.mjs"
+    "build:pdf-validation": "npm run prepare:pdf-fonts && tsc -p scripts/pdf-validation/tsconfig.json && vite build --config scripts/pdf-validation/vite.config.mjs && node scripts/pdf-validation/copy-fonts.mjs",
+    "dev:ui": "vite --config ui-gallery/vite.config.ts",
+    "check:ui": "tsc --noEmit -p ui-gallery/tsconfig.json"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.33.1-dev57.0",

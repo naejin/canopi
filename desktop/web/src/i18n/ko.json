@@ -113,7 +113,7 @@
     "inspection": {
       "title": "확인 돋보기",
       "close": "돋보기 닫기",
-      "hold": "위치 고정",
+      "hold": "보기 고정",
       "follow": "포인터 따라가기",
       "held": "위치 고정됨",
       "following": "포인터 따라가는 중",
@@ -125,7 +125,8 @@
       "compact": "돋보기 축소",
       "widen": "보기 범위 넓히기",
       "magnify": "돋보기 안에서 확대",
-      "namesCount": "이름 {{shown}}개 · 식물 {{total}}개"
+      "namesCount": "이름 {{shown}}개 · 식물 {{total}}개",
+      "panHint": "화살표 키로 보기를 이동하고 고정하세요."
     },
     "emptyWelcome": "설계를 시작하세요",
     "emptyNewDesign": "새 설계",
@@ -216,7 +217,7 @@
       "toolbarDesc": "선택한 식물 색상 편집",
       "selectedCount": "{{count}}개 선택됨",
       "suggested": "꽃 색상 기반 추천",
-      "moreColors": "더 많은 색상",
+      "moreColors": "사용자 지정 색상",
       "advanced": "고급 색상",
       "customSwatch": "사용자 지정 색상",
       "customSwatchEmpty": "선택한 사용자 지정 색상이 없습니다",
@@ -238,7 +239,8 @@
         "white": "흰색",
         "brown": "갈색",
         "black": "검정"
-      }
+      },
+      "applySelection": "선택한 {{count}}개에 적용"
     },
     "plantSymbol": {
       "label": "식물 심볼",
@@ -269,7 +271,8 @@
         "cross": "십자형"
       },
       "botanical": "식물 형태",
-      "abstract": "추상 도형"
+      "abstract": "추상 도형",
+      "applySelection": "선택한 {{count}}개에 적용"
     },
     "group": {
       "group": "그룹",
@@ -356,7 +359,8 @@
       "styleStreet": "거리",
       "styleTerrain": "지형",
       "styleSatellite": "위성",
-      "styleNone": "없음"
+      "styleNone": "없음",
+      "references": "부지 참고 자료"
     },
     "bottomPanel": {
       "ariaLabel": "하단 패널",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "즐겨찾기가 없습니다",
     "emptyHint": "검색 패널에서 식물에 별표를 눌러 여기에 추가하세요",
-    "dragHint": "캔버스로 드래그하여 배치"
+    "dragHint": "캔버스로 드래그하여 배치",
+    "search": "즐겨찾기 검색"
   },
   "savedObjectStamps": {
     "title": "저장된 스탬프",
@@ -867,7 +872,8 @@
     "confirmDelete": "삭제 확인",
     "cancelDelete": "삭제 취소",
     "reorderLabel": "저장된 스탬프 순서 변경",
-    "resizeFrame": "저장된 스탬프 프레임 크기 조정"
+    "resizeFrame": "저장된 스탬프 프레임 크기 조정",
+    "actions": "스탬프 작업"
   },
   "error": {
     "title": "문제가 발생했습니다",
@@ -987,6 +993,8 @@
     "focus": "포커스: {{code}}",
     "noResults": "일치하는 식물종이 없습니다.",
     "empty": "식물을 배치하면 범례가 만들어집니다.",
-    "detailHint": "확대하면 공간이 있는 곳에 코드가 표시됩니다. 행을 클릭하면 해당 식물이 강조됩니다."
+    "detailHint": "확대하면 공간이 있는 곳에 코드가 표시됩니다. 행을 클릭하면 해당 식물이 강조됩니다.",
+    "clearSearch": "검색 지우기",
+    "details": "{{name}} 상세 정보"
   }
 }

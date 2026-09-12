@@ -113,7 +113,7 @@
     "inspection": {
       "title": "Lupa de inspección",
       "close": "Cerrar lupa",
-      "hold": "Fijar",
+      "hold": "Fijar vista",
       "follow": "Seguir el puntero",
       "held": "Posición fija",
       "following": "Sigue el puntero",
@@ -125,7 +125,8 @@
       "compact": "Reducir lupa",
       "widen": "Ampliar área",
       "magnify": "Acercar lupa",
-      "namesCount": "{{shown}} nombres · {{total}} plantas"
+      "namesCount": "{{shown}} nombres · {{total}} plantas",
+      "panHint": "Usa las flechas para mover y fijar esta vista."
     },
     "emptyWelcome": "Comienza tu diseño",
     "emptyNewDesign": "Nuevo diseño",
@@ -216,7 +217,7 @@
       "toolbarDesc": "Editar los colores de las plantas seleccionadas",
       "selectedCount": "{{count}} seleccionadas",
       "suggested": "Sugerido por el color de la flor",
-      "moreColors": "Más colores",
+      "moreColors": "Color personalizado",
       "advanced": "Color avanzado",
       "customSwatch": "Color personalizado",
       "customSwatchEmpty": "No se ha seleccionado un color personalizado",
@@ -238,7 +239,8 @@
         "white": "Blanco",
         "brown": "Marrón",
         "black": "Negro"
-      }
+      },
+      "applySelection": "Aplicar a {{count}} seleccionadas"
     },
     "plantSymbol": {
       "label": "Símbolo de planta",
@@ -269,7 +271,8 @@
         "cross": "Cruz"
       },
       "botanical": "Botánicos",
-      "abstract": "Abstractos"
+      "abstract": "Abstractos",
+      "applySelection": "Aplicar a {{count}} seleccionadas"
     },
     "group": {
       "group": "Agrupar",
@@ -356,7 +359,8 @@
       "styleStreet": "Calles",
       "styleTerrain": "Terreno",
       "styleSatellite": "Satélite",
-      "styleNone": "Ninguno"
+      "styleNone": "Ninguno",
+      "references": "Referencias del terreno"
     },
     "bottomPanel": {
       "ariaLabel": "Panel inferior",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "Aún no hay favoritos",
     "emptyHint": "Marca plantas desde el panel de búsqueda para añadirlas aquí",
-    "dragHint": "Arrastra al lienzo para colocar"
+    "dragHint": "Arrastra al lienzo para colocar",
+    "search": "Buscar favoritos"
   },
   "savedObjectStamps": {
     "title": "Sellos guardados",
@@ -867,7 +872,8 @@
     "confirmDelete": "Confirmar eliminación",
     "cancelDelete": "Cancelar eliminación",
     "reorderLabel": "Reordenar sello guardado",
-    "resizeFrame": "Redimensionar el marco de Sellos guardados"
+    "resizeFrame": "Redimensionar el marco de Sellos guardados",
+    "actions": "Acciones del sello"
   },
   "error": {
     "title": "Algo salió mal",
@@ -987,6 +993,8 @@
     "focus": "Enfoque: {{code}}",
     "noResults": "No hay especies coincidentes.",
     "empty": "Coloca plantas para crear la clave de especies.",
-    "detailHint": "Los códigos aparecen al ampliar, si hay espacio. Pulsa una fila para localizar sus plantas."
+    "detailHint": "Los códigos aparecen al ampliar, si hay espacio. Pulsa una fila para localizar sus plantas.",
+    "clearSearch": "Borrar búsqueda",
+    "details": "Detalles de {{name}}"
   }
 }

@@ -1,5 +1,5 @@
 import { SidePanelDock } from '../components/shared/SidePanelDock'
-import { SpeciesKeyPanel } from '../components/panels/SpeciesKeyPanel'
+import { WebSpeciesKeyPanel } from './WebSpeciesCatalogPanel'
 import { WebLayersPanel } from './WebLayersPanel'
 import { CanvasPdfDialog } from '../components/canvas-pdf/CanvasPdfDialog'
 import type { ComponentChildren } from "preact";
@@ -94,7 +94,7 @@ function WebWorkspace({
       </div>
       {currentSidePanel && <SidePanelDock responsive>
         <div className={styles.speciesSidebar} data-web-side-panel={currentSidePanel}>
-          {currentSidePanel === 'species-key' && <SpeciesKeyPanel />}
+          {currentSidePanel === 'species-key' && <WebSpeciesKeyPanel />}
           {currentSidePanel === 'layers' && <WebLayersPanel />}
           {currentSidePanel === 'plant-db' && <WebSpeciesCatalogPanel mode="catalog" />}
           {currentSidePanel === 'favorites' && <WebSpeciesCatalogPanel mode="favorites" />}

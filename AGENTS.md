@@ -36,7 +36,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 ## Subsystem Guides
 
 - [Document lifecycle](docs/agent/document-lifecycle.md): document authority, save/load, dirty state, settings persistence.
-- [Frontend patterns](docs/agent/frontend-patterns.md): Preact, signals, i18n, CSS, UI behavior, testing gotchas.
+- [Frontend guide](docs/agent/frontend-patterns.md): short routing guide for runtime, workbenches, browser state, chrome, localization and tests.
 - [Canvas runtime](docs/agent/canvas-runtime.md): runtime seams, scene ownership, rendering, interaction, Target projection.
 - [Canvas PDF](docs/agent/canvas-pdf.md): shared print layout, temporary page setup, fonts, preview, delivery, and validation.
 - [MapLibre](docs/agent/maplibre.md): basemap and terrain integration, projection, camera sync.
@@ -53,7 +53,7 @@ Repo-local skills live in the ignored `.agents/skills/` directory as flat skill 
 - [Triage workflow](docs/agents/triage-workflow.md): readiness labels and durable brief conventions for bd beads.
 - [Domain docs](docs/agents/domain.md): project vocabulary and decision docs that skills should read before planning or editing.
 
-Read the relevant subsystem guide before changing that area. If a guide disagrees with current code, trust the code, fix the guide, and note it in the handoff.
+Read the relevant subsystem guide before changing that area. For UI/UX, start with [.interface-design/system.md](.interface-design/system.md), then only the relevant surface-family guide. Inspect real components with `cd desktop/web && npm run dev:ui`. Prototype consequential uncertainty; reuse accepted components directly. Do not load every design/frontend guide by default. If a guide disagrees with current code, trust the code, fix the guide, and note it in the handoff.
 
 ## Common Commands
 

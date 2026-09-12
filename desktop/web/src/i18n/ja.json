@@ -113,7 +113,7 @@
     "inspection": {
       "title": "確認用ルーペ",
       "close": "ルーペを閉じる",
-      "hold": "位置を固定",
+      "hold": "表示を固定",
       "follow": "ポインターを追従",
       "held": "位置を固定中",
       "following": "ポインターを追従中",
@@ -125,7 +125,8 @@
       "compact": "ルーペを小さくする",
       "widen": "表示範囲を広げる",
       "magnify": "ルーペ内を拡大",
-      "namesCount": "名前 {{shown}} 件 · 植物 {{total}} 株"
+      "namesCount": "名前 {{shown}} 件 · 植物 {{total}} 株",
+      "panHint": "矢印キーで表示を移動して固定します。"
     },
     "emptyWelcome": "デザインを始めましょう",
     "emptyNewDesign": "新規デザイン",
@@ -216,7 +217,7 @@
       "toolbarDesc": "選択した植物の色を編集",
       "selectedCount": "{{count}} 件を選択",
       "suggested": "花色からの提案",
-      "moreColors": "その他の色",
+      "moreColors": "カスタムカラー",
       "advanced": "詳細な色",
       "customSwatch": "カスタム色",
       "customSwatchEmpty": "カスタム色は未選択です",
@@ -238,7 +239,8 @@
         "white": "白",
         "brown": "茶",
         "black": "黒"
-      }
+      },
+      "applySelection": "選択した{{count}}個に適用"
     },
     "plantSymbol": {
       "label": "植物シンボル",
@@ -269,7 +271,8 @@
         "cross": "十字"
       },
       "botanical": "植物の形",
-      "abstract": "抽象図形"
+      "abstract": "抽象図形",
+      "applySelection": "選択した{{count}}個に適用"
     },
     "group": {
       "group": "グループ化",
@@ -356,7 +359,8 @@
       "styleStreet": "道路",
       "styleTerrain": "地形",
       "styleSatellite": "衛星",
-      "styleNone": "なし"
+      "styleNone": "なし",
+      "references": "敷地の参照情報"
     },
     "bottomPanel": {
       "ariaLabel": "下部パネル",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "お気に入りはまだありません",
     "emptyHint": "検索パネルで植物にスターを付けてここに追加",
-    "dragHint": "キャンバスにドラッグして配置"
+    "dragHint": "キャンバスにドラッグして配置",
+    "search": "お気に入りを検索"
   },
   "savedObjectStamps": {
     "title": "保存済みスタンプ",
@@ -867,7 +872,8 @@
     "confirmDelete": "削除を確認",
     "cancelDelete": "削除をキャンセル",
     "reorderLabel": "保存済みスタンプを並べ替え",
-    "resizeFrame": "保存済みスタンプ枠のサイズ変更"
+    "resizeFrame": "保存済みスタンプ枠のサイズ変更",
+    "actions": "スタンプの操作"
   },
   "error": {
     "title": "問題が発生しました",
@@ -987,6 +993,8 @@
     "focus": "フォーカス：{{code}}",
     "noResults": "該当する植物種はありません。",
     "empty": "植物を配置すると凡例が作成されます。",
-    "detailHint": "拡大時に空きがあればコードが表示されます。行をクリックするとその植物を強調します。"
+    "detailHint": "拡大時に空きがあればコードが表示されます。行をクリックするとその植物を強調します。",
+    "clearSearch": "検索をクリア",
+    "details": "{{name}}の詳細"
   }
 }

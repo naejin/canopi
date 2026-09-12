@@ -20,6 +20,10 @@ import {
 import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
+import { createPortal } from 'preact/compat'
+import { SurfaceHeader } from '../shared/SurfaceHeader'
+import { AppearanceSelection } from './AppearanceSelection'
+import shared from './appearance.module.css'
 import styles from './PlantColorMenu.module.css'
 
 interface PlantColorMenuProps {
@@ -66,7 +70,6 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   const [activeColor, setActiveColor] = useState<string | null>(DEFAULT_PLANT_COLOR)
   const [customInput, setCustomInput] = useState(DEFAULT_PLANT_COLOR)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [customColorHex, setCustomColorHex] = useState<string | null>(null)
   const [pickerColor, setPickerColor] = useState<HslColor>(DEFAULT_HSL)
   const [, setCacheVersion] = useState(0)
 
@@ -83,7 +86,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     pickerColorRef.current = pickerColor
   }, [pickerColor])
 
-  function syncPickerFromHex(nextHex: string, options: { markCustom: boolean }): void {
+  function syncPickerFromHex(nextHex: string): void {
     const normalized = normalizeHexColor(nextHex)
     if (!normalized) {
       setActiveColor(null)
@@ -96,9 +99,6 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     setPickerColor(nextHsl)
     setCustomInput(normalized)
     setActiveColor(normalized)
-    if (options.markCustom) {
-      setCustomColorHex(normalized)
-    }
   }
 
   function syncPickerFromHsl(nextHsl: HslColor): void {
@@ -107,7 +107,6 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     const nextHex = hslToHex(nextHsl)
     setCustomInput(nextHex)
     setActiveColor(nextHex)
-    setCustomColorHex(nextHex)
   }
 
   function beginPointerDrag(
@@ -160,7 +159,6 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     setPickerColor(initialHsl)
     setActiveColor(initialColor)
     setCustomInput(initialColor)
-    setCustomColorHex(null)
     setAdvancedOpen(false)
   }, [menuOpen, selectionKey, context.sharedCurrentColor, context.singleSpeciesDefaultColor, context.suggestedColor])
 
@@ -170,11 +168,13 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     const pending = commandSurface?.ensureSpeciesCacheEntries([context.singleSpeciesCanonicalName], activeLocale)
     if (!pending) return
 
+    let active = true
     void pending.then((loaded) => {
-      if (loaded) {
+      if (active && loaded) {
         setCacheVersion((value) => value + 1)
       }
-    })
+    }).catch(error => { if (active) console.error('Unable to load suggested plant color:', error) })
+    return () => { active = false }
   }, [menuOpen, activeLocale, commandSurface, context.singleSpeciesCanonicalName, context.suggestedColor])
 
   useEffect(() => {
@@ -212,10 +212,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
       : t('canvas.plantColor.selectedCount', { count: context.plantIds.length })
   const previewColor =
     normalizedActiveColor
-    ?? customColorHex
-    ?? context.singleSpeciesDefaultColor
-    ?? context.suggestedColor
-    ?? DEFAULT_PLANT_COLOR
+    ?? hslToHex(pickerColor)
   const applyToSelection = () => {
     if (!normalizedActiveColor) return
     commandSurface?.setSelectedPlantColor(normalizedActiveColor)
@@ -235,57 +232,34 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   const previewSymbol = !effectiveSymbol || effectiveSymbol === 'mixed' ? 'round' : effectiveSymbol
   const paletteHasActiveColor = PLANT_COLOR_PALETTE.some(entry => normalizeHexColor(entry.hex) === normalizedActiveColor)
 
-  return (
+  return createPortal(
     <div
       ref={menuRef}
-      className={styles.menu}
+      className={shared.menu}
       role="dialog"
       aria-label={t('canvas.plantColor.label')}
       data-preserve-overlays="true"
-      onKeyDown={(event) => navigateAppearanceChoices(event, 6)}
+      onKeyDown={event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(buttonRef) }
+        else navigateAppearanceChoices(event, 6)
+      }}
     >
-      <div className={styles.header}>
-        <div className={styles.headerText}>
-          <div className={styles.sectionLabel}>{t('canvas.plantColor.label')}</div>
-          <div className={styles.title}>
-            {selectionSummary}
-            {singleSpeciesLabel && (
-              <span className={styles.selectionCount} aria-label={t('canvas.plantColor.selectedCount', { count: context.plantIds.length })}>
-                {context.plantIds.length}
-              </span>
-            )}
-          </div>
-          {context.singleSpeciesCommonName && context.singleSpeciesCanonicalName && (
-            <div className={styles.subtitle}>
-              <em>{context.singleSpeciesCanonicalName}</em>
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          className={styles.close}
-          onClick={() => closeMenu(buttonRef)}
-          aria-label={t('window.close')}
-        >
-          ×
-        </button>
-      </div>
-
-      <div className={styles.preview} aria-label={t('canvas.plantColor.preview')}>
-        <span className={styles.previewGlyph} style={{ color: previewColor }}>
-          <PlantSymbolGlyph symbol={previewSymbol} />
-        </span>
-        <div className={styles.previewText}>
-          <strong>{normalizedActiveColor ?? customInput}</strong>
-          <span>{t('canvas.plantColor.preview')}</span>
-        </div>
-      </div>
-
+      <SurfaceHeader title={t('canvas.plantColor.label')} closeLabel={t('window.close')} onClose={() => closeMenu(buttonRef)} />
+      <AppearanceSelection
+        commonName={context.singleSpeciesCommonName}
+        canonicalName={context.singleSpeciesCanonicalName}
+        summary={selectionSummary}
+        count={context.plantIds.length}
+        countLabel={t('canvas.plantColor.selectedCount', { count: context.plantIds.length })}
+        preview={<span style={{ color: previewColor }}><PlantSymbolGlyph symbol={previewSymbol} size={32} /></span>}
+        detail={normalizedActiveColor ?? customInput}
+      />
+      <div className={shared.body}>
       {context.suggestedColor && context.sharedCurrentColor !== 'mixed' && (
-        <div className={styles.suggestion}>
+        <button type="button" className={styles.suggestion} onClick={() => syncPickerFromHex(context.suggestedColor!)}>
           <span className={styles.suggestionSwatch} style={{ backgroundColor: context.suggestedColor }} />
           {t('canvas.plantColor.suggested')}
-        </div>
+        </button>
       )}
 
       <div className={styles.palette} role="listbox" aria-label={t('canvas.plantColor.label')}>
@@ -303,7 +277,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
               tabIndex={active || (color === PLANT_COLOR_PALETTE[0] && !paletteHasActiveColor) ? 0 : -1}
               title={color.name}
               onClick={() => {
-                syncPickerFromHex(color.hex, { markCustom: false })
+                syncPickerFromHex(color.hex)
               }}
             />
           )
@@ -319,31 +293,28 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
         >
           {t('canvas.plantColor.moreColors')}
         </button>
-        <button
-          type="button"
-          className={`${styles.customSwatchButton}${customColorHex ? '' : ` ${styles.customSwatchEmpty}`}${customColorHex && customColorHex === normalizedActiveColor ? ` ${styles.swatchActive}` : ''}`}
-          aria-label={customColorHex ? t('canvas.plantColor.customSwatch') : t('canvas.plantColor.customSwatchEmpty')}
-          disabled={!customColorHex}
-          onClick={() => {
-            if (!customColorHex) return
-            syncPickerFromHex(customColorHex, { markCustom: true })
-          }}
-        >
-          {customColorHex && (
-            <span
-              className={styles.customSwatchFill}
-              style={{ backgroundColor: customColorHex }}
-            />
-          )}
-        </button>
       </div>
 
       {advancedOpen && (
         <div className={styles.advancedSection}>
-          <div className={styles.sectionLabel}>{t('canvas.plantColor.advanced')}</div>
           <div className={styles.advancedControls}>
             <div
               ref={squareRef}
+              tabIndex={0}
+              role="slider"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(pickerColor.s)}
+              aria-valuetext={`${t('canvas.plantColor.saturationLightness')}: ${Math.round(pickerColor.s)}%, ${Math.round(pickerColor.l)}%`}
+              onKeyDown={event => {
+                const step = event.shiftKey ? 10 : 1
+                const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[event.key]
+                if (!delta) return
+                event.preventDefault(); event.stopPropagation()
+                syncPickerFromHsl({ ...pickerColorRef.current,
+                  s: Math.max(0, Math.min(100, pickerColorRef.current.s + delta[0]!)),
+                  l: Math.max(0, Math.min(100, pickerColorRef.current.l + delta[1]!)) })
+              }}
               className={styles.colorSquare}
               aria-label={t('canvas.plantColor.saturationLightness')}
               style={{
@@ -368,6 +339,21 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
 
             <div
               ref={hueRef}
+              tabIndex={0}
+              role="slider"
+              aria-orientation="vertical"
+              aria-valuemin={0}
+              aria-valuemax={360}
+              aria-valuenow={Math.round(pickerColor.h)}
+              onKeyDown={event => {
+                const step = event.shiftKey ? 10 : 1
+                const delta = { ArrowUp: -step, ArrowDown: step, ArrowLeft: -step, ArrowRight: step }[event.key]
+                if (delta === undefined && event.key !== 'Home' && event.key !== 'End') return
+                event.preventDefault(); event.stopPropagation()
+                const h = event.key === 'Home' ? 0 : event.key === 'End' ? 360
+                  : Math.max(0, Math.min(360, pickerColorRef.current.h + (delta ?? 0)))
+                syncPickerFromHsl({ ...pickerColorRef.current, h })
+              }}
               className={styles.hueStrip}
               aria-label={t('canvas.plantColor.hue')}
               style={{ background: HUE_STRIP_BACKGROUND }}
@@ -400,7 +386,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
                   setActiveColor(null)
                   return
                 }
-                syncPickerFromHex(normalized, { markCustom: true })
+                syncPickerFromHex(normalized)
               }}
               placeholder="#C44230"
               aria-label={t('canvas.plantColor.customHex')}
@@ -411,21 +397,22 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
         </div>
       )}
 
-      <div className={styles.actions}>
+      </div>
+      <div className={shared.actions}>
         <button
           type="button"
-          className={styles.primaryAction}
+          className={shared.primaryAction}
           disabled={!canApply}
           onClick={applyToSelection}
         >
-          {t('canvas.plantColor.setColor')}
+          {t('canvas.plantColor.applySelection', { count: context.plantIds.length })}
         </button>
         {context.singleSpeciesCanonicalName && singleSpeciesLabel && (
-          <button type="button" className={styles.secondaryAction} disabled={!canApply} onClick={applyToSpecies}>
+          <button type="button" className={shared.secondaryAction} disabled={!canApply} onClick={applyToSpecies}>
             {t('canvas.plantColor.setColorForSpecies', { species: singleSpeciesLabel })}
           </button>
         )}
       </div>
-    </div>
+    </div>, document.body,
   )
 }

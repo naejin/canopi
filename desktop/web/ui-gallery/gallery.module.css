@@ -1,0 +1,12 @@
+.gallery { height: 100dvh; display: flex; flex-direction: column; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); }
+.title { display: flex; align-items: center; gap: var(--space-6); padding: var(--space-3); border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); }
+.title strong { font-family: var(--font-serif); font-size: var(--text-xl); }
+.title button { margin-left: auto; }
+.review { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2); border-bottom: 1px solid var(--color-border); font-size: var(--text-xs); }
+.review a { color: var(--color-text-muted); }
+.review a[aria-current], .review button[aria-pressed='true'] { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-bg); }
+.title button, .review button { padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); cursor: pointer; }
+.workspace { display: flex; flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.canvasArea { position: relative; flex: 1; min-width: 0; }
+.canvas { position: absolute; inset: 0; overflow: hidden; }
+.status { padding: var(--space-1) var(--space-3); border-top: 1px solid var(--color-border); font-size: var(--text-xs); color: var(--color-text-muted); }

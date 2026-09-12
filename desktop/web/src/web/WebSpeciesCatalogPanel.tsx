@@ -13,6 +13,9 @@ import { t } from '../i18n'
 import type { FilterOptions, SpeciesFilter, SpeciesListItem } from '../types/species'
 import type { StripChoiceField, StripControlField } from '../app/plant-browser'
 import { toggleArrayValue } from '../components/plant-db/filter-utils'
+import { SpeciesKeyPanel } from '../components/panels/SpeciesKeyPanel'
+import { DockPanelHeader } from '../components/shared/DockPanelHeader'
+import { SurfaceSearch } from '../components/shared/SurfaceSearch'
 import styles from './WebSpeciesCatalogPanel.module.css'
 
 const MOBILE_FILTER_COLLAPSE_QUERY = '(max-width: 860px)'
@@ -22,6 +25,7 @@ interface WebSpeciesCatalogPanelProps {
 }
 
 export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
+  const [favoriteSearch, setFavoriteSearch] = useState('')
   const intent = speciesCatalogWorkbench.intent.value
   const results = speciesCatalogWorkbench.results.value
   const filterStrip = speciesCatalogWorkbench.filterStrip.value
@@ -30,14 +34,17 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   const detailView = speciesCatalogWorkbench.detail.value
   const isCatalog = mode === 'catalog'
   const searching = speciesCatalogWorkbench.isSearchLoading(results.status)
-  const visibleItems = isCatalog ? results.items : favoritesView.items
+  const visibleItems = isCatalog ? results.items : favoritesView.items.filter(item =>
+    `${item.common_name ?? ''} ${item.canonical_name}`.toLocaleLowerCase().includes(favoriteSearch.toLocaleLowerCase()))
   const title = isCatalog ? t('nav.plantDb') : t('nav.favorites')
 
   useEffect(() => speciesCatalogWorkbench.mount(mode), [mode])
 
   return (
-    <section className={styles.panel} data-testid={`web-species-${mode}-panel`} aria-label={title}>
-      <header className={styles.header}>
+    <section className={styles.panel} data-testid={`web-species-${mode}-panel`} data-mode={mode} aria-label={title}>
+      {!isCatalog && <DockPanelHeader title={title} count={favoritesView.items.length} />}
+      {!isCatalog && <div className={styles.header}><SurfaceSearch value={favoriteSearch} onChange={setFavoriteSearch} label={t('favorites.search')} /></div>}
+      {isCatalog && <header className={styles.header}>
         <div className={styles.titleRow}>
           <h2 className={styles.title}>{title}</h2>
           <span className={styles.count}>
@@ -54,7 +61,7 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
             data-testid="web-species-search"
           />
         )}
-      </header>
+      </header>}
 
       {isCatalog && (
         <WebFilterRegion filterStrip={filterStrip} />
@@ -72,12 +79,12 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
         />
       ) : (
         <div className={styles.list}>
-          <h3 className={styles.sectionTitle}>{t('nav.favorites')}</h3>
+          <h3 className={styles.sectionTitle}>{t('canvas.layers.plants')}</h3>
           <SpeciesList
             items={visibleItems}
             loading={favoritesView.loading}
             error={null}
-            emptyLabel={t('plantDb.noFavorites')}
+            emptyLabel={t(favoriteSearch ? 'speciesKey.noResults' : 'plantDb.noFavorites')}
             hasMore={false}
           />
           <h3 className={styles.sectionTitle}>{t('plantDb.recentlyViewed')}</h3>
@@ -455,7 +462,7 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
       onDragStart={handleDragStart}
       onClick={() => { speciesCatalogWorkbench.selectSpecies(item.canonical_name) }}
       onKeyDown={(event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return
+        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
         event.preventDefault()
         speciesCatalogWorkbench.selectSpecies(item.canonical_name)
       }}
@@ -497,7 +504,7 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
             void speciesCatalogWorkbench.toggleFavorite(item.canonical_name)
           }}
           onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return
+            if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
             event.preventDefault()
             event.stopPropagation()
             void speciesCatalogWorkbench.toggleFavorite(item.canonical_name)
@@ -525,4 +532,12 @@ function translateChoiceValue(control: StripChoiceField, value: string): string 
   const key = `${control.valueI18nPrefix}${value}`
   const translated = t(key)
   return translated === key ? value : translated
+}
+
+export function WebSpeciesKeyPanel() {
+  const view = speciesCatalogWorkbench.detail.value
+  return <SpeciesKeyPanel renderDetail={() => <div className={styles.panel}>
+    <button type="button" className={styles.backButton} onClick={() => speciesCatalogWorkbench.closeSpeciesDetail()}>{t('plantDetail.back')}</button>
+    <WebSpeciesDetail view={view} />
+  </div>} />
 }

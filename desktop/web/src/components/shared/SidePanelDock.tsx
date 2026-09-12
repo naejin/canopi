@@ -7,8 +7,8 @@ import { usePointerResize } from './usePointerResize'
 import styles from './SidePanelDock.module.css'
 
 const MIN_SIDEBAR_WIDTH = 320
-const DEFAULT_SIDEBAR_RATIO = 0.35
-const DEFAULT_SIDEBAR_WIDTH = `clamp(${MIN_SIDEBAR_WIDTH}px, 35vw, 90vw)`
+const DEFAULT_SIDEBAR_SIZE = 352
+const DEFAULT_SIDEBAR_WIDTH = `clamp(${MIN_SIDEBAR_WIDTH}px, 352px, 90vw)`
 const MAX_SIDEBAR_RATIO = 0.9
 
 interface SidebarResizeSession {
@@ -100,7 +100,7 @@ function SidePanelResizeHandle({
       }}
       aria-valuemin={MIN_SIDEBAR_WIDTH}
       aria-valuemax={Math.max(MIN_SIDEBAR_WIDTH, Math.floor(window.innerWidth * MAX_SIDEBAR_RATIO))}
-      aria-valuenow={Math.round(sidePanelWidth.value ?? Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth * DEFAULT_SIDEBAR_RATIO))}
+      aria-valuenow={Math.round(sidePanelWidth.value ?? Math.max(MIN_SIDEBAR_WIDTH, Math.min(DEFAULT_SIDEBAR_SIZE, window.innerWidth * MAX_SIDEBAR_RATIO)))}
       role="separator"
       aria-orientation="vertical"
       aria-label={t('sidebar.resize')}
@@ -115,7 +115,7 @@ function currentSidebarWidth(panel: HTMLDivElement): number {
     sidePanelWidth.peek() ??
     Math.max(
       MIN_SIDEBAR_WIDTH,
-      Math.floor(window.innerWidth * DEFAULT_SIDEBAR_RATIO),
+      Math.floor(Math.min(DEFAULT_SIDEBAR_SIZE, window.innerWidth * MAX_SIDEBAR_RATIO)),
     )
   )
 }

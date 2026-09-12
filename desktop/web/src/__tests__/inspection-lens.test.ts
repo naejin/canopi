@@ -57,6 +57,34 @@ describe('Inspection Lens ownership', () => {
     }
     owner.dispose()
   })
+  it('pans and holds only the inspection view, ignoring invalid or released movement', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const snapshot = createTestSceneRendererSnapshot()
+    const camera = new CameraController()
+    camera.initialize({ width: 800, height: 600 })
+    const viewport = { ...camera.snapshot.peek().viewport }
+    const owner = new SceneCanvasInspectionOwner({ camera, revision: { scene: signal(0), plantNames: signal(0) },
+      getSnapshot: () => snapshot, setHoveredTarget() {} })
+    const view = owner.mount(document.createElement('div'))
+    view.inspect({ x: 1, y: 2 })
+    vi.advanceTimersByTime(20)
+    view.panBy({ x: 2, y: -1 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value?.point).toEqual({ x: 3, y: 1 })
+    expect(view.state.value?.held).toBe(true)
+    view.inspect({ x: 9, y: 9 })
+    view.panBy({ x: Number.NaN, y: 0 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value?.point).toEqual({ x: 3, y: 1 })
+    expect(view.state.value?.scale).toBeGreaterThan(0)
+    expect(camera.snapshot.peek().viewport).toEqual(viewport)
+    owner.dispose()
+    view.panBy({ x: 2, y: 2 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value).toBeNull()
+  })
+
   it('rolls back its canvas and scheduled work if attachment fails', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)

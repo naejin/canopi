@@ -2,6 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SpeciesKeyPanel } from '../components/panels/SpeciesKeyPanel'
+import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import {
   createTestCanvasCommandSurface,
@@ -104,6 +105,17 @@ describe('Species key dock', () => {
     })
     expect(container.querySelectorAll('li')).toHaveLength(1)
     expect(container.querySelector('li')!.textContent).toContain('SOF')
+  })
+
+  it('opens edition-specific detail without focusing plants and returns to its detail trigger', async () => {
+    await act(() => render(<SpeciesKeyPanel renderDetail={name => <button onClick={() => speciesCatalogWorkbench.closeSpeciesDetail()}>Back from {name}</button>} />, container))
+    const detail = container.querySelector<HTMLButtonElement>('[aria-label="Details for Menthe verte"]')!
+    detail.focus()
+    await act(async () => detail.click())
+    expect(container.textContent).toContain('Back from Mentha spicata')
+    expect(queries.getSpeciesFocus().canonicalName).toBeNull()
+    await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Details for Menthe verte')
   })
 
   it('keeps a clearable focus when the key is replaced by Layers', async () => {

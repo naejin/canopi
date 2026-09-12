@@ -113,7 +113,7 @@
     "inspection": {
       "title": "Lente di ispezione",
       "close": "Chiudi lente",
-      "hold": "Blocca posizione",
+      "hold": "Blocca vista",
       "follow": "Segui puntatore",
       "held": "Posizione fissa",
       "following": "Segue il puntatore",
@@ -125,7 +125,8 @@
       "compact": "Riduci lente",
       "widen": "Allarga vista",
       "magnify": "Ingrandisci nella lente",
-      "namesCount": "{{shown}} nomi · {{total}} piante"
+      "namesCount": "{{shown}} nomi · {{total}} piante",
+      "panHint": "Usa le frecce per spostare e bloccare questa vista."
     },
     "emptyWelcome": "Inizia il tuo design",
     "emptyNewDesign": "Nuovo design",
@@ -216,7 +217,7 @@
       "toolbarDesc": "Modifica i colori delle piante selezionate",
       "selectedCount": "{{count}} selezionate",
       "suggested": "Suggerito dal colore del fiore",
-      "moreColors": "Più colori",
+      "moreColors": "Colore personalizzato",
       "advanced": "Colore avanzato",
       "customSwatch": "Colore personalizzato",
       "customSwatchEmpty": "Nessun colore personalizzato selezionato",
@@ -238,7 +239,8 @@
         "white": "Bianco",
         "brown": "Marrone",
         "black": "Nero"
-      }
+      },
+      "applySelection": "Applica a {{count}} selezionate"
     },
     "plantSymbol": {
       "label": "Simbolo pianta",
@@ -269,7 +271,8 @@
         "cross": "Croce"
       },
       "botanical": "Botanici",
-      "abstract": "Astratti"
+      "abstract": "Astratti",
+      "applySelection": "Applica a {{count}} selezionate"
     },
     "group": {
       "group": "Raggruppa",
@@ -356,7 +359,8 @@
       "styleStreet": "Strade",
       "styleTerrain": "Terreno",
       "styleSatellite": "Satellite",
-      "styleNone": "Nessuno"
+      "styleNone": "Nessuno",
+      "references": "Riferimenti del sito"
     },
     "bottomPanel": {
       "ariaLabel": "Pannello inferiore",
@@ -838,7 +842,8 @@
   "favorites": {
     "empty": "Nessun preferito ancora",
     "emptyHint": "Segna le piante dal pannello di ricerca per aggiungerle qui",
-    "dragHint": "Trascina sulla tela per posizionare"
+    "dragHint": "Trascina sulla tela per posizionare",
+    "search": "Cerca nei preferiti"
   },
   "savedObjectStamps": {
     "title": "Timbri salvati",
@@ -867,7 +872,8 @@
     "confirmDelete": "Conferma eliminazione",
     "cancelDelete": "Annulla eliminazione",
     "reorderLabel": "Riordina timbro salvato",
-    "resizeFrame": "Ridimensiona il riquadro Timbri salvati"
+    "resizeFrame": "Ridimensiona il riquadro Timbri salvati",
+    "actions": "Azioni del timbro"
   },
   "error": {
     "title": "Qualcosa è andato storto",
@@ -987,6 +993,8 @@
     "focus": "In evidenza: {{code}}",
     "noResults": "Nessuna specie corrispondente.",
     "empty": "Inserisci piante per creare la legenda delle specie.",
-    "detailHint": "I codici appaiono ingrandendo, se c’è spazio. Premi una riga per individuare le sue piante."
+    "detailHint": "I codici appaiono ingrandendo, se c’è spazio. Premi una riga per individuare le sue piante.",
+    "clearSearch": "Cancella ricerca",
+    "details": "Dettagli di {{name}}"
   }
 }
