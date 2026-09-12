@@ -35,6 +35,7 @@ export interface CanvasLayerPresentationRow {
   readonly visible: boolean
   readonly opacity: number
   readonly locked: boolean
+  readonly count?: number
   readonly canLock: boolean
   readonly detail: CanvasLayerPresentationDetail
 }
@@ -76,6 +77,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
         id,
         label: t(`canvas.layers.${id}`),
         authority: 'scene' as const,
+        count: (id === 'measurement-guides' ? scene?.measurementGuides : scene?.[id])?.length ?? 0,
         active: active === id,
         visible: sceneLayer?.visible ?? visibility[id] ?? true,
         opacity: sceneLayer?.opacity ?? opacities[id] ?? 1,

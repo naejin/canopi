@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "Sla dit ontwerp op voordat je het aan het notitieboek toevoegt.",
     "addCurrentSection": "Notitieboeksectie voor huidig ontwerp",
     "addCurrentDesign": "Huidig ontwerp toevoegen aan notitieboek",
-    "addCurrentButton": "Toevoegen"
+    "addCurrentButton": "Huidig ontwerp toevoegen",
+    "openNow": "Nu geopend"
   },
   "plantDb": {
     "title": "Plantendatabase",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "Inspectieloupe",
       "close": "Loupe sluiten",
-      "hold": "Beeld vastzetten",
-      "follow": "Aanwijzer volgen",
-      "held": "Positie vastgezet",
-      "following": "Volgt de aanwijzer",
-      "hint": "Wijs een naam aan of geef deze focus om de plant te markeren. Activeer de naam om de loep te centreren.",
-      "empty": "Geen planten in deze weergave. Verplaats de aanwijzer of vergroot het zichtgebied.",
+      "hint": "Sleep om te verkennen · Kies een naam om te centreren",
+      "empty": "Geen planten hier. Verschuif of verbreed het beeld.",
       "unavailable": "Voorbeeld niet beschikbaar. Namen blijven op de plantposities staan.",
       "locate": "Loep centreren op {{name}}",
       "expand": "Loep uitbreiden",
       "compact": "Loep verkleinen",
       "widen": "Zichtgebied vergroten",
       "magnify": "Inzoomen in loep",
-      "namesCount": "{{shown}} namen · {{total}} planten",
-      "panHint": "Gebruik de pijltjestoetsen om dit beeld te verplaatsen en vast te zetten."
+      "namesCount": "Namen {{shown}} / {{total}}",
+      "panHint": "Voorbeeld. Sleep of gebruik pijltjestoetsen; Shift verplaatst verder.",
+      "recenter": "Centreren op canvas"
     },
     "emptyWelcome": "Begin je ontwerp",
     "emptyNewDesign": "Nieuw ontwerp",
@@ -360,7 +358,14 @@
       "styleTerrain": "Terrein",
       "styleSatellite": "Satelliet",
       "styleNone": "Geen",
-      "references": "Terreinreferenties"
+      "references": "Terreinreferenties",
+      "sceneStack": "Tekenlagen",
+      "topToBottom": "Van boven naar beneden",
+      "referenceOrder": "Onafhankelijk van de tekenvolgorde",
+      "visible": "Zichtbaar",
+      "hidden": "Verborgen",
+      "locked": "Vergrendeld",
+      "unlocked": "Ontgrendeld"
     },
     "bottomPanel": {
       "ariaLabel": "Onderpaneel",

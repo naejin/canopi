@@ -199,7 +199,7 @@ export function designFixture(state = 'populated'): CanopiFile {
     Array.from({ length: speciesIndex === 0 ? 3 : 8 }, (_, i) => ({
       kind: 'plant' as const, id: `plant-${speciesIndex}-${i}`, canonicalName,
       commonName: state === 'long' ? `${commonName} — a particularly long local cultivar name` : commonName,
-      position: { x: speciesIndex * 3 + (i % 3) * .7, y: (i % 4) * 2 + (speciesIndex % 2) },
+      position: state === 'dense' ? { x: ((speciesIndex === 0 ? i : 3 + (speciesIndex - 1) * 8 + i) % 7) * .32, y: Math.floor((speciesIndex === 0 ? i : 3 + (speciesIndex - 1) * 8 + i) / 7) * .36 } : { x: speciesIndex * 3 + (i % 3) * .7, y: (i % 4) * 2 + (speciesIndex % 2) },
       color: state === 'mixed' && i === 0 ? '#C44230' : specimens[speciesIndex]![3], symbol: state === 'mixed' && i === 0 ? 'conifer' : null,
       stratum: null, canopySpreadM: speciesIndex === 0 ? 2 : .7, rotationDeg: null, scale: speciesIndex === 0 ? 2 : .7,
       notes: null, plantedDate: null, quantity: null, locked: false,

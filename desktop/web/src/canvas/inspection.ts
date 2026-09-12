@@ -16,7 +16,6 @@ export interface InspectedPlant {
 }
 export interface CanvasInspectionState {
   readonly point: InspectionPoint
-  readonly held: boolean
   /** Preview pixels per world metre, for an accurate source footprint. */
   readonly scale: number
   readonly zoomPercent: number
@@ -28,9 +27,8 @@ export interface CanvasInspectionState {
 /** A view-only Canvas resource. Its owner also releases it on runtime teardown. */
 export interface CanvasInspectionHandle {
   readonly state: ReadonlySignal<CanvasInspectionState | null>
-  inspect(point: InspectionPoint): void
+  centerOnCanvas(): void
   panBy(delta: InspectionPoint): void
-  setHeld(held: boolean): void
   zoomBy(factor: number): void
   highlightPlant(id: string | null): void
   focusPlant(id: string): void

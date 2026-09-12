@@ -622,3 +622,8 @@
 
 .plantRow[data-variant="favorites"] .rowActions, .plantRow:focus-within .rowActions { opacity: 1; }
 .plantRow[data-variant="favorites"] { padding: var(--space-3); }
+
+.detailBtn { width: var(--control-size-sm); height: var(--control-size-sm); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.detailBtn:hover { background: var(--color-control-hover); color: var(--color-primary); }
+.detailBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.plantRow[data-variant="favorites"] { cursor: grab; padding: var(--space-2) var(--space-3); }

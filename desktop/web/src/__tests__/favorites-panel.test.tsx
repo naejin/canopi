@@ -10,12 +10,6 @@ import {
   makeSpeciesListItem,
 } from './support/species-catalog-workbench'
 
-vi.mock('../components/plant-db/PlantRow', () => ({
-  PlantRow: ({ plant }: { plant: { canonical_name: string } }) => (
-    <div data-testid="favorite-row">{plant.canonical_name}</div>
-  ),
-}))
-
 vi.mock('../components/plant-detail/PlantDetailCard', () => ({
   PlantDetailCard: ({ canonicalName }: { canonicalName: string }) => (
     <div data-testid="favorite-detail">{canonicalName}</div>
@@ -275,11 +269,28 @@ describe('FavoritesPanel', () => {
     const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites"]')!
     await act(async () => { input.value = 'no-such-species'; input.dispatchEvent(new Event('input', { bubbles: true })) })
     expect(container.textContent).toContain('No matching species.')
-    expect(container.querySelector('[data-testid="favorite-row"]')).toBeNull()
+    expect(container.querySelector('[data-variant="favorites"]')).toBeNull()
     await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Clear search"]')!.click() })
-    expect(container.querySelector('[data-testid="favorite-row"]')?.textContent).toBe('Malus domestica')
+    expect(container.querySelector('[data-variant="favorites"]')?.textContent).toContain('Malus domestica')
     expect(workbench.favorites.value.items).toHaveLength(1)
     expect(document.activeElement).toBe(input)
+  })
+
+  it('restores the information button, search and list position after detail closes', async () => {
+    await act(async () => { render(<FavoritesPanel />, container); await flushEffects(); await workbench.loadFavorites() })
+    const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites"]')!
+    await act(async () => { input.value = 'Malus'; input.dispatchEvent(new Event('input', { bubbles: true })) })
+    const list = container.querySelector<HTMLElement>('[role="list"]')!
+    list.scrollTop = 90
+    const info = container.querySelector<HTMLButtonElement>('[data-species-detail]')!
+    await act(async () => { info.focus(); info.click(); await flushEffects() })
+    expect(container.querySelector('[data-favorites-main]')?.getAttribute('aria-hidden')).toBe('true')
+    expect(container.querySelector<HTMLElement>('[data-favorites-main]')?.hidden).toBe(true)
+    expect(container.querySelector('[data-testid="favorite-detail"]')).not.toBeNull()
+    await act(async () => workbench.closeSpeciesDetail())
+    expect(document.activeElement).toBe(info)
+    expect(input.value).toBe('Malus')
+    expect(list.scrollTop).toBe(90)
   })
 
   it('renders Saved Stamps below species favorites and saves the current selection', async () => {

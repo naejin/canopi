@@ -78,9 +78,9 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
       data-variant={variant}
       draggable={true}
       onDragStart={handleDragStart}
-      onClick={handleRowClick}
-      onKeyDown={handleRowKeyDown}
-      tabIndex={0}
+      onClick={variant === 'catalog' ? handleRowClick : undefined}
+      onKeyDown={variant === 'catalog' ? handleRowKeyDown : undefined}
+      tabIndex={variant === 'catalog' ? 0 : undefined}
       role="listitem"
       aria-label={plant.canonical_name}
     >
@@ -131,6 +131,13 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
         >
           {plant.is_favorite ? '★' : '☆'}
         </button>
+        {variant === 'favorites' && <button type="button" className={styles.detailBtn}
+          data-species-detail={plant.canonical_name}
+          aria-label={t('speciesKey.details', { name: plant.common_name || plant.canonical_name })}
+          title={t('speciesKey.details', { name: plant.common_name || plant.canonical_name })}
+          onClick={handleRowClick}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+        </button>}
       </div>
     </div>
   )

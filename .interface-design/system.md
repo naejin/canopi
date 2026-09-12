@@ -53,7 +53,7 @@ Prefer these components over copying JSX or CSS from screenshots. Add a shared c
 
 ## Executable reference
 
-Run `cd desktop/web && npm run dev:ui`, then open http://127.0.0.1:1422/. Direct links use `?surface=color|symbol|key|layers|favorites|lens`; add `state=empty|mixed|long|located`, `theme=dark`, or `locale=fr`.
+Run `cd desktop/web && npm run dev:ui`, then open http://127.0.0.1:1422/. Direct links use `?surface=color|symbol|key|layers|favorites|notebook|lens`; add `state=empty|mixed|long|located|dense`, `theme=dark`, or `locale=fr`.
 
 The gallery mounts production components and a real canvas runtime with deterministic memory data. Reload resets it. Use `npm run check:ui` for its type check. Gallery controls are development tools, not product UI. Native file dialogs are simulated in memory; verify platform delivery separately when changing file behavior.
 

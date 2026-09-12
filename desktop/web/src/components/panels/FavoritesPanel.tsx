@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import {
   MIN_FAVORITES_FRAME_HEIGHT,
@@ -68,6 +68,17 @@ export function FavoritesPanel() {
   const lang = locale.value
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
   const mainRef = useRef<HTMLDivElement>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
+  const previousDetail = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    if (selected) detailRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    else if (previousDetail.current) {
+      const buttons = mainRef.current?.querySelectorAll<HTMLButtonElement>('[data-species-detail]') ?? []
+      const origin = Array.from(buttons).find(button => button.dataset.speciesDetail === previousDetail.current)
+      ;(origin ?? mainRef.current?.querySelector<HTMLInputElement>('input[type="search"]'))?.focus({ preventScroll: true })
+    }
+    previousDetail.current = selected
+  }, [selected])
   const headerRef = useRef<HTMLDivElement>(null)
   const resizeHandleRef = useRef<HTMLDivElement>(null)
   const savedStampsFrameRef = useRef<HTMLElement>(null)
@@ -252,12 +263,12 @@ export function FavoritesPanel() {
       {/* Search + list view */}
       <div
         ref={mainRef}
-        className={`${styles.main} ${selected !== null ? plantDetailStyles.detailHidden : ''}`}
+        className={styles.main}
+        hidden={selected !== null}
         data-favorites-main
         aria-hidden={selected !== null}
         inert={selected !== null}
       >
-        {/* Header — always visible */}
         <div ref={headerRef}><DockPanelHeader title={t('nav.favorites')} /></div>
 
         <section
@@ -378,11 +389,11 @@ export function FavoritesPanel() {
         </section>
       </div>
 
-      <SavedStampRecognitionOverlay preview={preview} panelRef={mainRef} />
+      <SavedStampRecognitionOverlay preview={selected ? null : preview} panelRef={mainRef} />
 
-      {/* Detail card — slides in when a row is clicked */}
+      {/* Keep the list mounted so Back restores its search and scroll position. */}
       {selected !== null && (
-        <div className={plantDetailStyles.detailVisible}>
+        <div ref={detailRef} className={plantDetailStyles.detailVisible}>
           <PlantDetailCard canonicalName={selected} />
         </div>
       )}

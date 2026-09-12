@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "Speichern Sie dieses Design, bevor es zum Notizbuch hinzugefügt wird.",
     "addCurrentSection": "Notizbuchabschnitt für das aktuelle Design",
     "addCurrentDesign": "Aktuelles Design zum Notizbuch hinzufügen",
-    "addCurrentButton": "Hinzufügen"
+    "addCurrentButton": "Aktuellen Entwurf hinzufügen",
+    "openNow": "Jetzt geöffnet"
   },
   "plantDb": {
     "title": "Pflanzendatenbank",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "Inspektionslupe",
       "close": "Lupe schließen",
-      "hold": "Ansicht fixieren",
-      "follow": "Zeiger folgen",
-      "held": "Position festgehalten",
-      "following": "Folgt dem Zeiger",
-      "hint": "Zeigen Sie auf einen Namen oder fokussieren Sie ihn, um die Pflanze hervorzuheben. Aktivieren zentriert die Lupe.",
-      "empty": "Keine Pflanzen in dieser Ansicht. Bewegen Sie den Zeiger oder erweitern Sie den Ausschnitt.",
+      "hint": "Ziehen zum Erkunden · Namen zum Zentrieren wählen",
+      "empty": "Keine Pflanzen hier. Ansicht verschieben oder erweitern.",
       "unavailable": "Vorschau nicht verfügbar. Namen bleiben an den Pflanzenpositionen.",
       "locate": "Lupe auf {{name}} zentrieren",
       "expand": "Lupe vergrößern",
       "compact": "Lupe verkleinern",
       "widen": "Ausschnitt erweitern",
       "magnify": "Lupe heranzoomen",
-      "namesCount": "{{shown}} Namen · {{total}} Pflanzen",
-      "panHint": "Mit den Pfeiltasten diese Ansicht verschieben und fixieren."
+      "namesCount": "Namen {{shown}} / {{total}}",
+      "panHint": "Vorschau. Ziehen oder Pfeiltasten verwenden; Umschalt bewegt weiter.",
+      "recenter": "Auf Zeichenfläche zentrieren"
     },
     "emptyWelcome": "Starten Sie Ihren Entwurf",
     "emptyNewDesign": "Neuer Entwurf",
@@ -360,7 +358,14 @@
       "styleTerrain": "Gelände",
       "styleSatellite": "Satellit",
       "styleNone": "Keine",
-      "references": "Standortreferenzen"
+      "references": "Standortreferenzen",
+      "sceneStack": "Zeichenebenen",
+      "topToBottom": "Von oben nach unten",
+      "referenceOrder": "Unabhängig von der Zeichenreihenfolge",
+      "visible": "Sichtbar",
+      "hidden": "Ausgeblendet",
+      "locked": "Gesperrt",
+      "unlocked": "Entsperrt"
     },
     "bottomPanel": {
       "ariaLabel": "Unteres Panel",

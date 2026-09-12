@@ -63,8 +63,8 @@ describe('PlantSymbolMenu', () => {
       singleSpeciesCanonicalName: 'Malus domestica',
       singleSpeciesCommonName: 'Apple',
       sharedCurrentSymbol: null,
-      sharedEffectiveSymbol: 'round',
-      inheritedSymbol: null,
+      sharedEffectiveSymbol: 'canopy',
+      inheritedSymbol: 'canopy',
       singleSpeciesDefaultSymbol: null,
       canClearSelectedSymbol: false,
     })
@@ -73,6 +73,12 @@ describe('PlantSymbolMenu', () => {
       render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
       await Promise.resolve()
     })
+
+    expect(document.activeElement).toBe(document.querySelector('[role="option"][aria-selected="true"]'))
+    const options = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    options[0]!.focus()
+    await act(async () => { options[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })) })
+    expect(document.activeElement).toBe(options[3])
 
     const coniferButton = document.querySelector<HTMLButtonElement>('button[aria-label="Conifer"]')
     expect(coniferButton).not.toBeNull()

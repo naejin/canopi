@@ -7,6 +7,50 @@ import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapsh
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('Inspection Lens ownership', () => {
+  it('keeps its inspected location when the main camera moves', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const camera = new CameraController()
+    camera.initialize({ width: 800, height: 600 })
+    const owner = new SceneCanvasInspectionOwner({ camera,
+      revision: { scene: signal(0), plantNames: signal(0) },
+      getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
+    const view = owner.mount(document.createElement('div'))
+    vi.advanceTimersByTime(20)
+    const point = view.state.value!.point
+    camera.panBy({ x: 120, y: 80 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual(point)
+    owner.dispose()
+  })
+
+  it('recenters explicitly and resets the inspected location with the document', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const camera = new CameraController()
+    camera.initialize({ width: 800, height: 600 })
+    const owner = new SceneCanvasInspectionOwner({ camera,
+      revision: { scene: signal(0), plantNames: signal(0) },
+      getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
+    const view = owner.mount(document.createElement('div'))
+    vi.advanceTimersByTime(20)
+    camera.setViewport({ x: 100, y: 50, scale: 10 })
+    view.centerOnCanvas()
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual({ x: 30, y: 25 })
+    view.panBy({ x: 4, y: 2 })
+    view.zoomBy(2)
+    vi.advanceTimersByTime(20)
+    owner.reset()
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual({ x: 30, y: 25 })
+    expect(view.state.value!.zoomPercent).toBe(700)
+    owner.dispose()
+    view.centerOnCanvas()
+    vi.advanceTimersByTime(20)
+    expect(view.state.value).toBeNull()
+  })
+
   it('clears identification and hover when the Plants Layer becomes hidden', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
@@ -18,7 +62,7 @@ describe('Inspection Lens ownership', () => {
     const revision = { scene: signal(0), plantNames: signal(0) }, setHoveredTarget = vi.fn(target => { snapshot = { ...snapshot, hoverTarget: target } })
     const owner = new SceneCanvasInspectionOwner({ camera: new CameraController(), revision, getSnapshot: () => snapshot, setHoveredTarget })
     const view = owner.mount(document.createElement('div'))
-    view.inspect({ x: 0, y: 0 }); vi.advanceTimersByTime(20)
+    view.panBy({ x: 0, y: 0 }); vi.advanceTimersByTime(20)
     view.highlightPlant('mint'); vi.advanceTimersByTime(20)
     snapshot = { ...snapshot, scene: { ...snapshot.scene, layers: snapshot.scene.layers.map(layer => layer.name === 'plants' ? { ...layer, visible: false } : layer) } }
     revision.scene.value++; vi.advanceTimersByTime(20)
@@ -41,7 +85,7 @@ describe('Inspection Lens ownership', () => {
     const container = document.createElement('div')
     Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
     const view = owner.mount(container)
-    view.inspect({ x: .3, y: .2 })
+    view.panBy({ x: -49.7, y: -49.8 })
     vi.advanceTimersByTime(20)
     expect(view.state.value?.frame).toEqual({ width: 430, height: 390 })
     expect(view.state.value!.zoomPercent).toBeGreaterThan(700)
@@ -57,7 +101,7 @@ describe('Inspection Lens ownership', () => {
     }
     owner.dispose()
   })
-  it('pans and holds only the inspection view, ignoring invalid or released movement', () => {
+  it('pans only the inspection view, ignoring invalid or released movement', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const snapshot = createTestSceneRendererSnapshot()
@@ -67,13 +111,11 @@ describe('Inspection Lens ownership', () => {
     const owner = new SceneCanvasInspectionOwner({ camera, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
-    view.inspect({ x: 1, y: 2 })
+    view.panBy({ x: -49, y: -48 })
     vi.advanceTimersByTime(20)
     view.panBy({ x: 2, y: -1 })
     vi.advanceTimersByTime(20)
     expect(view.state.value?.point).toEqual({ x: 3, y: 1 })
-    expect(view.state.value?.held).toBe(true)
-    view.inspect({ x: 9, y: 9 })
     view.panBy({ x: Number.NaN, y: 0 })
     vi.advanceTimersByTime(20)
     expect(view.state.value?.point).toEqual({ x: 3, y: 1 })
@@ -107,7 +149,7 @@ describe('Inspection Lens ownership', () => {
     } finally { owner.dispose(); vi.unstubAllGlobals() }
   })
 
-  it('identifies nearby plants and holds its location without changing the Design', () => {
+  it('identifies nearby plants and keeps its location without changing the Design', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [{
@@ -122,11 +164,10 @@ describe('Inspection Lens ownership', () => {
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     const view = owner.mount(container)
-    view.inspect({ x: 1, y: 2 })
+    view.panBy({ x: -49, y: -48 })
     vi.advanceTimersByTime(20)
     expect(view.state.value?.plants.map((plant) => plant.name)).toEqual(['Menthe verte'])
-    view.setHeld(true)
-    view.inspect({ x: 5, y: 6 })
+    camera.panBy({ x: 5, y: 6 })
     vi.advanceTimersByTime(20)
     expect(view.state.value?.point).toEqual({ x: 1, y: 2 })
     const viewport = { ...camera.snapshot.peek().viewport }
@@ -144,11 +185,11 @@ describe('Inspection Lens ownership', () => {
     expect(view.state.value?.point).toEqual({ x: 1, y: 2 })
     owner.reset()
     vi.advanceTimersByTime(20)
-    expect(view.state.value?.held).toBe(false)
+    expect(view.state.value?.zoomPercent).toBe(700)
     expect(JSON.stringify(snapshot.scene)).toBe(before)
     owner.dispose()
     expect(container.querySelector('canvas')).toBeNull()
-    view.inspect({ x: 5, y: 6 })
+    view.panBy({ x: 5, y: 6 })
     vi.advanceTimersByTime(20)
     expect(view.state.value).toBeNull()
     view.dispose()

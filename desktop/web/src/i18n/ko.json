@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "노트북에 추가하기 전에 이 디자인을 저장합니다.",
     "addCurrentSection": "현재 디자인의 노트북 섹션",
     "addCurrentDesign": "현재 디자인을 노트북에 추가",
-    "addCurrentButton": "추가"
+    "addCurrentButton": "현재 설계 추가",
+    "openNow": "현재 열림"
   },
   "plantDb": {
     "title": "식물 데이터베이스",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "확인 돋보기",
       "close": "돋보기 닫기",
-      "hold": "보기 고정",
-      "follow": "포인터 따라가기",
-      "held": "위치 고정됨",
-      "following": "포인터 따라가는 중",
-      "hint": "이름에 포인터를 올리거나 초점을 맞추면 식물이 강조됩니다. 선택하면 돋보기 중앙에 표시됩니다.",
-      "empty": "이 영역에는 식물이 없습니다. 포인터를 옮기거나 보기 범위를 넓히세요.",
+      "hint": "드래그하여 탐색 · 이름을 선택하여 중앙에 표시",
+      "empty": "여기에 식물이 없습니다. 이동하거나 시야를 넓히세요.",
       "unavailable": "미리보기를 사용할 수 없습니다. 이름은 식물 위치에 계속 표시됩니다.",
       "locate": "{{name}}을 돋보기 중앙에 표시",
       "expand": "돋보기 확대",
       "compact": "돋보기 축소",
       "widen": "보기 범위 넓히기",
       "magnify": "돋보기 안에서 확대",
-      "namesCount": "이름 {{shown}}개 · 식물 {{total}}개",
-      "panHint": "화살표 키로 보기를 이동하고 고정하세요."
+      "namesCount": "이름 {{shown}} / {{total}}",
+      "panHint": "미리보기. 드래그하거나 방향키로 탐색하세요. Shift를 누르면 더 멀리 이동합니다.",
+      "recenter": "캔버스 보기에 맞춰 중앙 정렬"
     },
     "emptyWelcome": "설계를 시작하세요",
     "emptyNewDesign": "새 설계",
@@ -360,7 +358,14 @@
       "styleTerrain": "지형",
       "styleSatellite": "위성",
       "styleNone": "없음",
-      "references": "부지 참고 자료"
+      "references": "부지 참조",
+      "sceneStack": "설계 레이어",
+      "topToBottom": "위에서 아래로",
+      "referenceOrder": "설계 순서와 독립적",
+      "visible": "표시",
+      "hidden": "숨김",
+      "locked": "잠김",
+      "unlocked": "잠금 해제"
     },
     "bottomPanel": {
       "ariaLabel": "하단 패널",

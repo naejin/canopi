@@ -139,7 +139,7 @@ describe('DesignNotebookPanel', () => {
     })
     await act(flushEffects)
 
-    expect(container.querySelector('[aria-label="Design Notebook"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Design notebook"]')).not.toBeNull()
     expect(container.textContent).toContain('Terrace Guild')
     expect(container.textContent).toContain('Forest Edge')
     expect(container.textContent).not.toContain('All Designs')
@@ -392,7 +392,7 @@ describe('DesignNotebookPanel', () => {
 
     expect(saveAsCurrent).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('Current Design')
-    expect(container.querySelector('button[aria-label="Add current design to notebook"]')).toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Add current design to notebook"]')?.disabled).toBe(true)
   })
 
   it('drags Notebook Sections directly by title', async () => {

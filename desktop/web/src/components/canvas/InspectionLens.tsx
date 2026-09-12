@@ -2,7 +2,7 @@ import { createPortal } from 'preact/compat'
 import { SurfaceHeader } from '../shared/SurfaceHeader'
 import type { RefObject } from 'preact'
 import { useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { useSignal, useSignalEffect } from '@preact/signals'
+import { useSignal } from '@preact/signals'
 import type { CanvasInspectionHandle } from '../../canvas/inspection'
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
@@ -22,7 +22,7 @@ export function InspectionLens({ canvasRef }: { canvasRef: RefObject<HTMLDivElem
   }, [open])
   if (!documents || !queries) return null
   return <>
-    <button ref={launcher} type="button" className={styles.launcher} aria-expanded={open} aria-controls={id}
+    <button ref={launcher} type="button" className={styles.launcher} hidden={open} aria-expanded={open} aria-controls={id}
       onClick={() => setOpen(!open)}>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" /><path d="m10 10 4 4" stroke="currentColor" strokeWidth="1.4" /></svg>
       {t('canvas.inspection.title')}
@@ -51,34 +51,48 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     catch (error) { console.error('Unable to open the inspection lens:', error); failed.value = true; return }
     handle.value = view
     panel.current?.querySelector<HTMLElement>('[data-inspection-frame]')?.focus()
-    return () => { handle.value = null; view.dispose() }
-  }, [documents])
-  useSignalEffect(() => {
-    const view = handle.value, host = canvasRef.current
-    if (!view || !host) return
-    let rect = host.getBoundingClientRect()
-    const refreshRect = () => { rect = host.getBoundingClientRect() }
-    const inspect = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.closest('button, input, [role="dialog"]')) return
-      if (event.type === 'pointermove' && event.buttons !== 0) return
-      const viewport = queries.viewport.peek().viewport
-      view.inspect({ x: (event.clientX - rect.left - viewport.x) / viewport.scale,
-        y: (event.clientY - rect.top - viewport.y) / viewport.scale })
+    const frame = panel.current?.querySelector<HTMLElement>('[data-inspection-frame]')
+    let drag: { id: number; x: number; y: number } | null = null
+    const stop = () => {
+      const previous = drag
+      drag = null
+      frame?.removeAttribute('data-dragging')
+      document.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerup', end)
+      document.removeEventListener('pointercancel', end)
+      window.removeEventListener('blur', stop)
+      if (previous && frame?.hasPointerCapture?.(previous.id)) {
+        try { frame.releasePointerCapture(previous.id) } catch { /* Capture can end during element teardown. */ }
+      }
     }
-    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(refreshRect)
-    resize?.observe(host)
-    host.addEventListener('pointerenter', refreshRect)
-    host.addEventListener('pointermove', inspect)
-    host.addEventListener('pointerup', inspect)
-    window.addEventListener('resize', refreshRect)
+    const move = (event: PointerEvent) => {
+      const state = view.state.peek()
+      if (!drag || event.pointerId !== drag.id || !state) return
+      event.preventDefault()
+      view.panBy({ x: (drag.x - event.clientX) / state.scale, y: (drag.y - event.clientY) / state.scale })
+      drag.x = event.clientX; drag.y = event.clientY
+    }
+    const end = (event: PointerEvent) => { if (event.pointerId === drag?.id) stop() }
+    const start = (event: PointerEvent) => {
+      if (event.button !== 0 || drag || !view.state.peek() || (event.target instanceof Element && event.target.closest('button'))) return
+      event.preventDefault(); event.stopPropagation(); frame?.focus()
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY }
+      frame?.setAttribute('data-dragging', 'true')
+      try { frame?.setPointerCapture(event.pointerId) } catch { /* Document listeners also support hosts without capture. */ }
+      document.addEventListener('pointermove', move)
+      document.addEventListener('pointerup', end)
+      document.addEventListener('pointercancel', end)
+      window.addEventListener('blur', stop)
+    }
+    frame?.addEventListener('pointerdown', start)
+    frame?.addEventListener('lostpointercapture', end)
     return () => {
-      resize?.disconnect()
-      host.removeEventListener('pointerenter', refreshRect)
-      host.removeEventListener('pointermove', inspect)
-      host.removeEventListener('pointerup', inspect)
-      window.removeEventListener('resize', refreshRect)
+      stop()
+      frame?.removeEventListener('pointerdown', start)
+      frame?.removeEventListener('lostpointercapture', end)
+      handle.value = null; view.dispose()
     }
-  })
+  }, [documents])
   const state = handle.value?.state.value
   const viewport = queries.viewport.value.viewport
   return <>
@@ -86,23 +100,13 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
       <rect x={viewport.x + (state.point.x - state.frame.width / state.scale / 2) * viewport.scale}
         y={viewport.y + (state.point.y - state.frame.height / state.scale / 2) * viewport.scale}
         width={state.frame.width / state.scale * viewport.scale}
-        height={state.frame.height / state.scale * viewport.scale}
-        data-held={state.held} />
+        height={state.frame.height / state.scale * viewport.scale} />
     </svg>, canvasRef.current)}
     <section ref={panel} id={id} className={styles.panel} data-expanded={expanded} aria-label={t('canvas.inspection.title')}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }}>
     <SurfaceHeader title={t('canvas.inspection.title')} closeLabel={t('canvas.inspection.close')} onClose={onClose}
       actions={<button type="button" className={styles.expandButton} aria-label={t(expanded ? 'canvas.inspection.compact' : 'canvas.inspection.expand')}
         aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? '↙' : '↗'}</button>} />
-    <div className={styles.controls}>
-      <div className={styles.modes}>
-        <button type="button" disabled={!handle.value} aria-pressed={!state?.held}
-          onClick={() => handle.value?.setHeld(false)}>{t('canvas.inspection.follow')}</button>
-        <button type="button" disabled={!handle.value} aria-pressed={state?.held ?? false}
-          onClick={() => handle.value?.setHeld(true)}>{t('canvas.inspection.hold')}</button>
-      </div>
-      <span role="status">{t(state?.held ? 'canvas.inspection.held' : 'canvas.inspection.following')}</span>
-    </div>
     <div className={styles.preview} data-inspection-frame role="group" tabIndex={0} aria-label={t('canvas.inspection.panHint')}
       onKeyDown={event => {
         if (event.target !== event.currentTarget || !state) return
@@ -136,6 +140,9 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
 
     <div className={styles.controls}>
       <span role="status">{t('canvas.inspection.namesCount', { shown: state?.plants.filter(plant => plant.label).length ?? 0, total: state?.plants.length ?? 0 })}</span>
+      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.recenter')} title={t('canvas.inspection.recenter')} onClick={() => handle.value?.centerOnCanvas()}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="4" stroke="currentColor" /><path d="M8 1v4m0 6v4M1 8h4m6 0h4" stroke="currentColor" /></svg>
+      </button>
       <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.widen')} onClick={() => handle.value?.zoomBy(1 / 1.25)}>−</button>
       {state && <span>{state.zoomPercent}%</span>}
       <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.magnify')} onClick={() => handle.value?.zoomBy(1.25)}>+</button>

@@ -6,7 +6,7 @@ Both editors use SurfaceHeader, AppearanceSelection, and appearance.module.css: 
 
 Color has twelve swatches in six columns, a quiet selectable suggestion, and a Custom color disclosure with saturation/lightness, hue, and validated hex. No empty custom swatch. Suggestion and palette choices only change preview. Invalid hex disables both apply actions.
 
-Symbol has twelve Botanical and four Abstract choices in one four-column keyboard listbox. Choices use neutral ink; selected state uses ochre. The selection band previews effective color. Mixed/inherited status remains available without repeating the chosen symbol as a second headline. Arrow keys preview; only the active choice is a tab stop.
+Symbol has twelve Botanical and four Abstract choices in one three-column keyboard listbox. Compact 56px tiles keep Groundcover intact; labels wrap at word boundaries, never at an orphaned final letter. Vertical arrow steps match the three columns. Choices use neutral ink; selected state uses ochre. The selection band previews effective color. Mixed/inherited status remains available without repeating the chosen symbol as a second headline. Arrow keys preview; only the active choice is a tab stop.
 
 Footer actions distinguish selected plant count from all placed instances/default of one species. Hide the species action for mixed-species selections. Do not add clear/default-reset actions below the footer.
 

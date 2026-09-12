@@ -5,7 +5,7 @@
   display: flex;
   overflow: hidden;
   min-width: 0;
-  background: var(--color-bg);
+  background: var(--color-surface);
 }
 
 .main {
@@ -15,6 +15,8 @@
   overflow: hidden;
   min-width: 0;
 }
+
+.main[hidden] { display: none; }
 
 /* ── Header — matches PlantDb search header weight ── */
 
@@ -66,7 +68,7 @@
   flex-direction: column;
   min-height: var(--favorites-frame-min-height);
   overflow: hidden;
-  background: var(--color-bg);
+  background: var(--color-surface);
 }
 
 .plantsFrameBody {
@@ -131,7 +133,7 @@
   min-height: var(--favorites-frame-min-height);
   overflow: hidden;
   padding: 0;
-  background: var(--color-bg);
+  background: var(--color-surface);
 }
 
 .frameHeader {
@@ -147,7 +149,7 @@
   flex: 0 0 var(--space-2);
   position: relative;
   cursor: row-resize;
-  background: var(--color-bg);
+  background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   transition: background-color var(--transition-fast);
 }

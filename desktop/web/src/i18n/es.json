@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "Guarda este diseño antes de añadirlo al cuaderno.",
     "addCurrentSection": "Sección del cuaderno para el diseño actual",
     "addCurrentDesign": "Añadir diseño actual al cuaderno",
-    "addCurrentButton": "Añadir"
+    "addCurrentButton": "Añadir diseño actual",
+    "openNow": "Abierto ahora"
   },
   "plantDb": {
     "title": "Base de plantas",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "Lupa de inspección",
       "close": "Cerrar lupa",
-      "hold": "Fijar vista",
-      "follow": "Seguir el puntero",
-      "held": "Posición fija",
-      "following": "Sigue el puntero",
-      "hint": "Pasa el cursor o enfoca un nombre para resaltar su planta. Actívalo para centrar la lupa.",
-      "empty": "No hay plantas en esta vista. Mueve el cursor o amplía el área de la lupa.",
+      "hint": "Arrastra para explorar · Elige un nombre para centrar",
+      "empty": "No hay plantas aquí. Desplaza o amplía la vista.",
       "unavailable": "Vista previa no disponible. Los nombres permanecen en las posiciones de las plantas.",
       "locate": "Centrar la lupa en {{name}}",
       "expand": "Ampliar lupa",
       "compact": "Reducir lupa",
       "widen": "Ampliar área",
       "magnify": "Acercar lupa",
-      "namesCount": "{{shown}} nombres · {{total}} plantas",
-      "panHint": "Usa las flechas para mover y fijar esta vista."
+      "namesCount": "Nombres {{shown}} / {{total}}",
+      "panHint": "Vista previa. Arrastra o usa las flechas; Mayús desplaza más.",
+      "recenter": "Centrar en el lienzo"
     },
     "emptyWelcome": "Comienza tu diseño",
     "emptyNewDesign": "Nuevo diseño",
@@ -360,7 +358,14 @@
       "styleTerrain": "Terreno",
       "styleSatellite": "Satélite",
       "styleNone": "Ninguno",
-      "references": "Referencias del terreno"
+      "references": "Referencias del lugar",
+      "sceneStack": "Capas del diseño",
+      "topToBottom": "De arriba abajo",
+      "referenceOrder": "Independientes del orden del diseño",
+      "visible": "Visible",
+      "hidden": "Oculta",
+      "locked": "Bloqueada",
+      "unlocked": "Desbloqueada"
     },
     "bottomPanel": {
       "ariaLabel": "Panel inferior",

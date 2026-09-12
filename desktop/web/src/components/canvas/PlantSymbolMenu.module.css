@@ -1,6 +1,6 @@
 .grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
   justify-content: space-between;
 }
@@ -8,7 +8,7 @@
 .symbolButton {
   width: 100%;
   min-width: 0;
-  min-height: 64px;
+  min-height: 56px;
   padding: 0;
   display: inline-flex;
   flex-direction: column;
@@ -48,9 +48,11 @@
 .symbolLabel {
   font-size: var(--text-xs);
   line-height: 1.2;
-  min-height: 2.4em;
+  min-height: 1.2em;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: auto;
   padding: 0 var(--space-0-5);
 }
 

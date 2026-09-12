@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useState } from 'preact/hooks'
 import { currentCanvasPlantPresentationCommandSurface, currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
 import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../../canvas/plant-colors'
@@ -45,17 +45,22 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
     singleSpeciesDefaultSymbol: null,
     canClearSelectedSymbol: false,
   }
-  const [activeSymbol, setActiveSymbol] = useState<PlantSymbolId>(DEFAULT_PLANT_SYMBOL_ID)
+  const [activeSymbol, setActiveSymbol] = useState<PlantSymbolId>(() => resolveInitialSymbol(context.sharedCurrentSymbol, context.inheritedSymbol, context.sharedEffectiveSymbol))
   const selectionKey = context.plantIds.join('|')
   const hasSelectedPlants = context.plantIds.length > 0
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!menuOpen) return
-    setActiveSymbol(resolveInitialSymbol(
+    const initial = resolveInitialSymbol(
       context.sharedCurrentSymbol,
       context.inheritedSymbol,
       context.sharedEffectiveSymbol,
-    ))
+    )
+    setActiveSymbol(initial)
+    const focused = document.activeElement
+    if (focused instanceof HTMLElement && menuRef.current?.contains(focused) && focused.getAttribute('role') === 'option') {
+      menuRef.current.querySelector<HTMLButtonElement>(`[data-symbol="${initial}"]`)?.focus({ preventScroll: true })
+    }
   }, [menuOpen, selectionKey, context.sharedCurrentSymbol, context.sharedEffectiveSymbol, context.inheritedSymbol])
 
   useEffect(() => {
@@ -116,7 +121,7 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
       data-preserve-overlays="true"
       onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(buttonRef) }
-        else navigateAppearanceChoices(event, 4)
+        else navigateAppearanceChoices(event, 3)
       }}
     >
       <SurfaceHeader title={t('canvas.plantSymbol.label')} closeLabel={t('window.close')} onClose={() => closeMenu(buttonRef)} />
@@ -173,6 +178,7 @@ function SymbolGrid({
               key={symbol}
               type="button"
               className={`${styles.symbolButton}${active ? ` ${styles.symbolButtonActive}` : ''}`}
+              data-symbol={symbol}
               aria-label={label}
               aria-selected={active}
               role="option"

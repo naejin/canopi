@@ -7,6 +7,7 @@ import {
   type DesignNotebookWorkbench,
 } from '../../app/design-notebook'
 import type { DesignNotebookEntry, DesignNotebookSection } from '../../types/design'
+import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DesignNotebookPanel.module.css'
 import { usePointerReorder } from '../shared/usePointerReorder'
@@ -278,53 +279,46 @@ export function DesignNotebookPanel({
 
   return (
     <section className={styles.panel} aria-label={t('designNotebook.title')}>
+      <DockPanelHeader title={t('designNotebook.title')} count={view.visibleEntries.length} />
       <header className={styles.header}>
-        <div className={styles.headerMain}>
-          <div className={styles.titleGroup}>
-            <h2 className={styles.title}>{t('designNotebook.title')}</h2>
-            <span className={styles.count} aria-label={t('designNotebook.visibleCount', { count: view.visibleEntries.length })}>
-              {view.visibleEntries.length}
-            </span>
-          </div>
-          <div className={styles.headerActions}>
-            {view.canAddCurrentDesign && view.sections.length > 0 && (
-              <Dropdown
-                trigger={sectionNameForId(view.sections, addCurrentSectionId) ?? t('designNotebook.noSection')}
-                items={addSectionItems}
-                value={addCurrentSectionId}
-                onChange={setAddCurrentSectionId}
-                ariaLabel={t('designNotebook.addCurrentSection')}
-                className={styles.sectionDropdown}
-                triggerClassName={styles.sectionDropdownTrigger}
-                menuClassName={styles.sectionDropdownMenu}
-                optionClassName={styles.sectionDropdownOption}
-                preserveOverlays
-              />
-            )}
-            {view.canAddCurrentDesign && (
-              <button
-                className={styles.headerButton}
-                type="button"
-                aria-label={t('designNotebook.addCurrentDesign')}
-                onClick={() => {
-                  void workbench.addCurrentDesignToNotebook(addCurrentSectionId || null)
-                }}
-              >
-                <PlusIcon />
-                <span>{t('designNotebook.addCurrentButton')}</span>
-              </button>
-            )}
-            <button
-              className={styles.headerButton}
-              type="button"
-              aria-label={t('designNotebook.newSectionAction')}
-              aria-expanded={sectionEditorOpen}
-              onClick={() => setSectionEditorOpen((open) => !open)}
-            >
-              <PlusIcon />
-              <span>{t('designNotebook.newSectionAction')}</span>
-            </button>
-          </div>
+        <div className={styles.headerActions}>
+          {view.canAddCurrentDesign && view.sections.length > 0 && (
+            <Dropdown
+              trigger={sectionNameForId(view.sections, addCurrentSectionId) ?? t('designNotebook.noSection')}
+              items={addSectionItems}
+              value={addCurrentSectionId}
+              onChange={setAddCurrentSectionId}
+              ariaLabel={t('designNotebook.addCurrentSection')}
+              className={styles.sectionDropdown}
+              triggerClassName={styles.sectionDropdownTrigger}
+              menuClassName={styles.sectionDropdownMenu}
+              optionClassName={styles.sectionDropdownOption}
+              preserveOverlays
+            />
+          )}
+          <button
+            disabled={!view.canAddCurrentDesign}
+            className={styles.headerButton}
+            type="button"
+            aria-label={t('designNotebook.addCurrentDesign')}
+            title={view.canAddCurrentDesign ? t(view.currentDesignPath ? 'designNotebook.addCurrentSavedHint' : 'designNotebook.addCurrentUnsavedHint') : undefined}
+            onClick={() => {
+              void workbench.addCurrentDesignToNotebook(addCurrentSectionId || null)
+            }}
+          >
+            <PlusIcon />
+            <span>{t('designNotebook.addCurrentButton')}</span>
+          </button>
+          <button
+            className={styles.headerButton}
+            type="button"
+            aria-label={t('designNotebook.newSectionAction')}
+            aria-expanded={sectionEditorOpen}
+            onClick={() => setSectionEditorOpen((open) => !open)}
+          >
+            <PlusIcon />
+            <span>{t('designNotebook.newSectionAction')}</span>
+          </button>
         </div>
 
         {sectionEditorOpen && (
@@ -582,15 +576,16 @@ function NotebookRow({
         type="button"
         aria-current={active ? 'true' : undefined}
         data-design-path={entry.path}
+        title={entry.path}
         onPointerDown={onPointerDown}
         onClick={onOpen}
       >
+        <svg className={styles.fileIcon} width="18" height="22" viewBox="0 0 18 22" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="M3 1h8l4 4v16H3ZM11 1v5h4M6 10h6M6 14h6" /></svg>
         <span className={styles.rowMain}>
           <span className={styles.rowName}>{entry.name}</span>
-          <span className={styles.rowPath}>{entry.path}</span>
         </span>
         <span className={styles.rowMeta}>
-          {date}
+          {active ? t('designNotebook.openNow') : date}
           {entry.plant_count > 0 && (
             <>
               <span className={styles.metaSeparator} aria-hidden="true">·</span>

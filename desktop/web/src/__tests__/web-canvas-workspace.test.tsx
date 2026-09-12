@@ -65,7 +65,7 @@ describe('Web Edition canvas workspace', () => {
     expect(container.textContent).not.toContain('Consortium')
     expect(container.textContent).not.toContain('Display')
     expect(container.textContent).not.toContain('Color by')
-    expect(container.textContent).not.toContain('Design Notebook')
+    expect(container.textContent).not.toContain('Design notebook')
     expect(container.textContent).not.toContain('Problem Report')
   })
 

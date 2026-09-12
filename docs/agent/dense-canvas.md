@@ -55,13 +55,16 @@ the same decisions on scene and viewport updates. No renderer writes Scene data.
 
 `CanvasDocumentSurface.attachInspectionTo()` returns the disposable handle defined
 in `canvas/inspection.ts`. `SceneCanvasInspectionOwner` owns the preview canvas,
-signal subscription, ResizeObserver, coalesced animation frame, transient held
+signal subscription, ResizeObserver, coalesced animation frame, independent inspected
 location, and its own hover highlight. Attachment failure rolls back resources.
-Document replacement resets the held location; view close and runtime destruction
+Document replacement resets the inspected location; view close and runtime destruction
 release the resources. Locale/theme updates refresh mounted views.
 
-The shared `InspectionLens` component opens from the Canvas corner. Moving the
-pointer inspects its world location; Hold freezes that location, and Follow resumes.
+The shared `InspectionLens` component opens at the Canvas centre. The view keeps
+its own location; canvas pointer movement never controls it. Drag inside the preview
+or use arrow keys (Shift for larger steps) to pan. Recenter explicitly samples the
+current main Canvas centre. Drag listeners release on up, cancel, lost capture,
+window blur and unmount. There are no hold/follow modes.
 Main Canvas clicks retain normal editing behavior. `inspection-layout.ts` selects a
 local scale from the nearest distinct planting separation and places full localized
 names inside the frame, with short connectors to their exact plant positions. The
@@ -69,7 +72,7 @@ layout reserves plant footprints and wraps long names at grapheme boundaries; it
 never forces overlapping labels. The name/plant count exposes remaining crowding.
 The scale is independent of the main camera; plus/minus adjust local magnification,
 and Expand gives the frame more space. Hover/focus highlights the matching position;
-activation centres and holds only the lens. No separate plant list remains.
+activation centres only the lens. No separate plant list remains.
 
 The owner publishes the frame dimensions, all visible plant positions and admitted
 name rectangles through `canvas/inspection.ts`. The component renders accessible
@@ -93,7 +96,7 @@ its copies, and screenshots outside Git. Tests use anonymous fixtures, including
 Regression coverage exercises distinct positions and coincident stacks, shared hit
 and band bounds, collision admission through pan and zoom reversal, pin priority,
 hidden Layers, annotation reveal, measurement reveal, renderer viewport updates,
-and lens attachment rollback, holding, camera focus, reset, keyboard use, and
+and lens attachment rollback, independent location, recentering, reset, drag/keyboard use, and
 disposal. Run TypeScript, the full frontend suite, and both edition builds.
 
 For visual review, import a local reference into the normal Web route and sweep

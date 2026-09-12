@@ -2,7 +2,7 @@
   "nav": {
     "plantDb": "Plant Database",
     "canvas": "Design Canvas",
-    "designNotebook": "Design Notebook",
+    "designNotebook": "Design notebook",
     "favorites": "Favorites"
   },
   "webShell": {
@@ -13,7 +13,7 @@
     "downloadCanopi": "Download .canopi"
   },
   "designNotebook": {
-    "title": "Design Notebook",
+    "title": "Design notebook",
     "recentDesigns": "Recent Designs",
     "openRecent": "Open Recent",
     "visibleCount": "{{count}} visible designs",
@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "Save this Design before adding it to the notebook.",
     "addCurrentSection": "Notebook section for current Design",
     "addCurrentDesign": "Add current design to notebook",
-    "addCurrentButton": "Add"
+    "addCurrentButton": "Add current design",
+    "openNow": "Open now"
   },
   "plantDb": {
     "title": "Plant Database",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "Inspection lens",
       "close": "Close inspection lens",
-      "hold": "Hold view",
-      "follow": "Follow pointer",
-      "held": "Held in place",
-      "following": "Following pointer",
-      "hint": "Hover or focus a name to highlight its plant. Activate it to centre the lens.",
-      "empty": "No plants in this view. Move the pointer or widen the lens.",
+      "hint": "Drag to explore · Select a name to centre",
+      "empty": "No plants here. Drag or widen the lens.",
       "unavailable": "Preview unavailable. Names remain at their plant positions.",
       "locate": "Centre lens on {{name}}",
       "expand": "Expand lens",
       "compact": "Compact lens",
       "widen": "Widen lens",
       "magnify": "Magnify lens",
-      "namesCount": "{{shown}} names · {{total}} plants",
-      "panHint": "Use arrow keys to move and hold this view."
+      "namesCount": "Names {{shown}} / {{total}}",
+      "panHint": "Inspection preview. Drag or use arrow keys to explore; Shift moves farther.",
+      "recenter": "Centre on canvas view"
     },
     "emptyWelcome": "Start your design",
     "emptyNewDesign": "New Design",
@@ -360,7 +358,14 @@
       "styleTerrain": "Terrain",
       "styleSatellite": "Satellite",
       "styleNone": "None",
-      "references": "Site references"
+      "references": "Site references",
+      "sceneStack": "Scene stack",
+      "topToBottom": "Top to bottom",
+      "referenceOrder": "Independent of scene order",
+      "visible": "Visible",
+      "hidden": "Hidden",
+      "locked": "Locked",
+      "unlocked": "Unlocked"
     },
     "bottomPanel": {
       "ariaLabel": "Bottom panel",

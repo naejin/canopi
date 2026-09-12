@@ -1,4 +1,4 @@
-.panel {
+.main {
   height: 100%;
   min-height: 0;
   display: grid;
@@ -445,3 +445,15 @@
 .panel[data-mode="favorites"] .nameLine { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-0-5); }
 .panel[data-mode="favorites"] .nameSeparator { display: none; }
 .backButton { margin: var(--space-3); min-height: var(--control-size-md); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); cursor: pointer; }
+
+.panel { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--color-surface); }
+.main { flex: 1; min-width: 0; }
+.main[hidden] { display: none; }
+.fullDetail { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.detailScroll { flex: 1; min-height: 0; overflow-y: auto; }
+.panel[data-mode="favorites"] .main { display: flex; flex-direction: column; }
+.panel[data-mode="favorites"] .main[hidden] { display: none; }
+.row[data-favorite-row] { cursor: grab; }
+.row[data-favorite-row] .nameLine { display: flex; flex-direction: column; align-items: flex-start; }
+.row[data-favorite-row] .nameSeparator { display: none; }
+.row[data-favorite-row] .botanicalName { font-style: italic; }

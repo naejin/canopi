@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "Sauvegardez ce design avant de l'ajouter au carnet.",
     "addCurrentSection": "Section du carnet pour le design actuel",
     "addCurrentDesign": "Ajouter le design actuel au carnet",
-    "addCurrentButton": "Ajouter"
+    "addCurrentButton": "Ajouter le dessin actuel",
+    "openNow": "Ouvert"
   },
   "plantDb": {
     "title": "Base de plantes",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "Loupe d’inspection",
       "close": "Fermer la loupe",
-      "hold": "Figer la vue",
-      "follow": "Suivre le pointeur",
-      "held": "Position figée",
-      "following": "Suit le pointeur",
-      "hint": "Survolez ou ciblez un nom pour repérer sa plante. Activez-le pour centrer la loupe.",
-      "empty": "Aucune plante dans cette vue. Déplacez le pointeur ou élargissez la loupe.",
+      "hint": "Glisser pour explorer · Choisir un nom pour centrer",
+      "empty": "Aucune plante ici. Déplacez ou élargissez la loupe.",
       "unavailable": "Aperçu indisponible. Les noms restent à la position des plantes.",
       "locate": "Centrer la loupe sur {{name}}",
       "expand": "Agrandir la loupe",
       "compact": "Réduire la loupe",
       "widen": "Élargir la vue",
       "magnify": "Zoomer dans la loupe",
-      "namesCount": "{{shown}} noms · {{total}} plantes",
-      "panHint": "Utilisez les flèches pour déplacer et figer cette vue."
+      "namesCount": "Noms {{shown}} / {{total}}",
+      "panHint": "Aperçu. Glissez ou utilisez les flèches ; Maj accélère le déplacement.",
+      "recenter": "Centrer sur le canevas"
     },
     "emptyWelcome": "Commencez votre design",
     "emptyNewDesign": "Nouveau design",
@@ -360,7 +358,14 @@
       "styleTerrain": "Relief",
       "styleSatellite": "Satellite",
       "styleNone": "Aucun",
-      "references": "Références du site"
+      "references": "Repères du site",
+      "sceneStack": "Calques du dessin",
+      "topToBottom": "De haut en bas",
+      "referenceOrder": "Indépendants de l’ordre du dessin",
+      "visible": "Visible",
+      "hidden": "Masqué",
+      "locked": "Verrouillé",
+      "unlocked": "Déverrouillé"
     },
     "bottomPanel": {
       "ariaLabel": "Panneau inférieur",

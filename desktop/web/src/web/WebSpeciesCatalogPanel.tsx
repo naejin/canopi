@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../canvas/session'
 import {
@@ -38,10 +38,25 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
     `${item.common_name ?? ''} ${item.canonical_name}`.toLocaleLowerCase().includes(favoriteSearch.toLocaleLowerCase()))
   const title = isCatalog ? t('nav.plantDb') : t('nav.favorites')
 
+  const mainRef = useRef<HTMLDivElement>(null)
+  const backRef = useRef<HTMLButtonElement>(null)
+  const previousDetail = useRef<string | null>(null)
+  const showingDetail = !isCatalog && detailView.canonicalName !== null
+  useLayoutEffect(() => {
+    if (showingDetail) backRef.current?.focus()
+    else if (previousDetail.current && !isCatalog) {
+      const buttons = mainRef.current?.querySelectorAll<HTMLButtonElement>('[data-species-detail]') ?? []
+      const origin = Array.from(buttons).find(button => button.dataset.speciesDetail === previousDetail.current)
+      ;(origin ?? mainRef.current?.querySelector<HTMLInputElement>('input[type="search"]'))?.focus({ preventScroll: true })
+    }
+    previousDetail.current = showingDetail ? detailView.canonicalName : null
+  }, [showingDetail, detailView.canonicalName, isCatalog])
+
   useEffect(() => speciesCatalogWorkbench.mount(mode), [mode])
 
   return (
     <section className={styles.panel} data-testid={`web-species-${mode}-panel`} data-mode={mode} aria-label={title}>
+      <div ref={mainRef} className={styles.main} hidden={showingDetail} inert={showingDetail} data-favorites-main={!isCatalog || undefined}>
       {!isCatalog && <DockPanelHeader title={title} count={favoritesView.items.length} />}
       {!isCatalog && <div className={styles.header}><SurfaceSearch value={favoriteSearch} onChange={setFavoriteSearch} label={t('favorites.search')} /></div>}
       {isCatalog && <header className={styles.header}>
@@ -67,7 +82,7 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
         <WebFilterRegion filterStrip={filterStrip} />
       )}
 
-      <WebSpeciesDetail view={detailView} />
+      {isCatalog && <WebSpeciesDetail view={detailView} />}
 
       {isCatalog ? (
         <SpeciesList
@@ -82,21 +97,27 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
           <h3 className={styles.sectionTitle}>{t('canvas.layers.plants')}</h3>
           <SpeciesList
             items={visibleItems}
+            favorites
             loading={favoritesView.loading}
             error={null}
             emptyLabel={t(favoriteSearch ? 'speciesKey.noResults' : 'plantDb.noFavorites')}
             hasMore={false}
           />
           <h3 className={styles.sectionTitle}>{t('plantDb.recentlyViewed')}</h3>
-          <div className={styles.recentList}>
+          <div className={styles.recentList} role="list">
             {sidebar.recentlyViewed.length === 0 ? (
               <div className={styles.empty}>{t('plantDb.noRecentlyViewed')}</div>
             ) : (
-              sidebar.recentlyViewed.map((item) => <SpeciesRow key={item.canonical_name} item={item} />)
+              sidebar.recentlyViewed.map((item) => <SpeciesRow key={item.canonical_name} item={item} favorites />)
             )}
           </div>
         </div>
       )}
+      </div>
+      {showingDetail && <div className={styles.fullDetail}>
+        <button ref={backRef} type="button" data-detail-back className={styles.backButton} onClick={() => speciesCatalogWorkbench.closeSpeciesDetail()}>{t('plantDetail.back')}</button>
+        <div className={styles.detailScroll}><WebSpeciesDetail view={detailView} showBack={false} /></div>
+      </div>}
     </section>
   )
 }
@@ -279,7 +300,7 @@ function WebActiveFilterChips({
   )
 }
 
-function WebSpeciesDetail({ view }: { readonly view: SpeciesCatalogDetailView }) {
+function WebSpeciesDetail({ view, showBack = true }: { readonly view: SpeciesCatalogDetailView; readonly showBack?: boolean }) {
   const imageUrl = view.detail?.image?.url ?? null
   const [imageFailed, setImageFailed] = useState(false)
 
@@ -329,14 +350,14 @@ function WebSpeciesDetail({ view }: { readonly view: SpeciesCatalogDetailView })
             <h3 className={styles.detailTitle}>{title}</h3>
             <p className={styles.detailBotanical}>{detail.canonical_name}</p>
           </div>
-          <button
+          {showBack && <button
             type="button"
             className={styles.detailClose}
             onClick={() => { speciesCatalogWorkbench.closeSpeciesDetail() }}
             aria-label={t('plantDetail.back')}
           >
             ×
-          </button>
+          </button>}
         </div>
         {commonNames.length > 0 && (
           <Field label={t('webSpeciesDetail.commonNames')} values={commonNames} />
@@ -371,11 +392,13 @@ function SpeciesList({
   error,
   emptyLabel,
   hasMore,
+  favorites = false,
 }: {
   readonly items: readonly SpeciesListItem[]
   readonly loading: boolean
   readonly error: string | null
   readonly emptyLabel: string
+  readonly favorites?: boolean
   readonly hasMore: boolean
 }) {
   if (loading && items.length === 0) {
@@ -403,8 +426,8 @@ function SpeciesList({
   }
 
   return (
-    <div className={styles.list}>
-      {items.map((item) => <SpeciesRow key={item.canonical_name} item={item} />)}
+    <div className={styles.list} role={favorites ? 'list' : undefined}>
+      {items.map((item) => <SpeciesRow key={item.canonical_name} item={item} favorites={favorites} />)}
       {hasMore && (
         <button
           type="button"
@@ -419,7 +442,7 @@ function SpeciesList({
   )
 }
 
-function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
+function SpeciesRow({ item, favorites = false }: { readonly item: SpeciesListItem; readonly favorites?: boolean }) {
   const commandSurface = currentCanvasToolCommandSurface.value
   const commonName = item.common_name?.trim() ?? ''
   const displayName = commonName.length > 0 ? commonName : item.canonical_name
@@ -460,14 +483,15 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
       className={styles.row}
       draggable={true}
       onDragStart={handleDragStart}
-      onClick={() => { speciesCatalogWorkbench.selectSpecies(item.canonical_name) }}
+      onClick={favorites ? undefined : () => { speciesCatalogWorkbench.selectSpecies(item.canonical_name) }}
       onKeyDown={(event) => {
-        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
+        if (favorites || event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
         event.preventDefault()
         speciesCatalogWorkbench.selectSpecies(item.canonical_name)
       }}
-      role="button"
-      tabIndex={0}
+      role={favorites ? 'listitem' : 'button'}
+      tabIndex={favorites ? undefined : 0}
+      data-favorite-row={favorites || undefined}
       data-testid="web-species-row"
     >
       <span className={styles.nameBlock}>
@@ -512,6 +536,11 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
         >
           {item.is_favorite ? '★' : '☆'}
         </button>
+        {favorites && <button type="button" className={styles.favoriteButton} data-species-detail={item.canonical_name}
+          aria-label={t('speciesKey.details', { name: displayName })}
+          onClick={() => speciesCatalogWorkbench.selectSpecies(item.canonical_name)}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+        </button>}
       </span>
     </div>
   )

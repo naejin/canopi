@@ -75,7 +75,7 @@ describe('PanelBar', () => {
       'Design Location',
       'Species key',
       'Layers',
-      'Design Notebook',
+      'Design notebook',
       'Plant Database',
       'Favorites',
     ])
@@ -110,7 +110,7 @@ describe('PanelBar', () => {
     expect(panelButton('Species key').disabled).toBe(true)
     expect(panelButton('Layers').disabled).toBe(true)
     expect(panelButton('Plant Database').disabled).toBe(true)
-    expect(panelButton('Design Notebook').disabled).toBe(false)
+    expect(panelButton('Design notebook').disabled).toBe(false)
     expect(panelButton('Favorites').disabled).toBe(true)
   })
 
@@ -126,7 +126,7 @@ describe('PanelBar', () => {
     expect(sidePanel.value).toBe('plant-db')
     expect(panelButton('Plant Database').disabled).toBe(false)
     expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('true')
-    expect(panelButton('Design Notebook').disabled).toBe(false)
+    expect(panelButton('Design notebook').disabled).toBe(false)
     expect(panelButton('Favorites').disabled).toBe(true)
 
     await act(async () => {

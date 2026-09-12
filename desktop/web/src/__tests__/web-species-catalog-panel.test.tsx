@@ -127,6 +127,13 @@ describe('Web Edition Species Catalog panel', () => {
     }
   })
 
+  it('keeps Favorites behind a full dock detail with Back available while loading', async () => {
+    mockWorkbench.detail.value = { canonicalName: 'Prunus persica', loading: true, error: null, detail: null }
+    await act(async () => render(<WebSpeciesCatalogPanel mode="favorites" />, container))
+    expect(container.querySelector<HTMLElement>('[data-favorites-main]')?.hidden).toBe(true)
+    expect(container.querySelector('button[data-detail-back]')).not.toBeNull()
+  })
+
   it('renders catalog search and supported filters through the Species Catalog Workbench', async () => {
     await act(async () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)

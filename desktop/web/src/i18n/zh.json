@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "先保存此设计，再添加到笔记本。",
     "addCurrentSection": "当前设计的笔记本分区",
     "addCurrentDesign": "将当前设计添加到笔记本",
-    "addCurrentButton": "添加"
+    "addCurrentButton": "添加当前设计",
+    "openNow": "当前打开"
   },
   "plantDb": {
     "title": "植物数据库",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "检查放大镜",
       "close": "关闭放大镜",
-      "hold": "固定视图",
-      "follow": "跟随指针",
-      "held": "位置已固定",
-      "following": "跟随指针",
-      "hint": "悬停或聚焦名称可突出显示植物。激活名称可将放大镜移至该植物。",
-      "empty": "此视图中没有植物。请移动指针或扩大查看范围。",
+      "hint": "拖动浏览 · 选择名称以居中",
+      "empty": "此处没有植物。拖动或扩大视野。",
       "unavailable": "预览不可用。名称仍显示在植物所在位置。",
       "locate": "将放大镜移至{{name}}",
       "expand": "扩大放大镜",
       "compact": "缩小放大镜",
       "widen": "扩大查看范围",
       "magnify": "放大查看",
-      "namesCount": "{{shown}} 个名称 · {{total}} 株植物",
-      "panHint": "使用方向键移动并固定视图。"
+      "namesCount": "名称 {{shown}} / {{total}}",
+      "panHint": "预览。拖动或使用方向键浏览；按住 Shift 可移动更远。",
+      "recenter": "居中到画布视图"
     },
     "emptyWelcome": "开始您的设计",
     "emptyNewDesign": "新建设计",
@@ -360,7 +358,14 @@
       "styleTerrain": "地形",
       "styleSatellite": "卫星",
       "styleNone": "无",
-      "references": "场地参考"
+      "references": "场地参考",
+      "sceneStack": "设计图层",
+      "topToBottom": "从上到下",
+      "referenceOrder": "独立于设计图层顺序",
+      "visible": "可见",
+      "hidden": "隐藏",
+      "locked": "已锁定",
+      "unlocked": "未锁定"
     },
     "bottomPanel": {
       "ariaLabel": "底部面板",

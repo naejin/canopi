@@ -37,7 +37,8 @@
     "addCurrentUnsavedHint": "Salva questo design prima di aggiungerlo al quaderno.",
     "addCurrentSection": "Sezione del quaderno per il design corrente",
     "addCurrentDesign": "Aggiungi design corrente al quaderno",
-    "addCurrentButton": "Aggiungi"
+    "addCurrentButton": "Aggiungi disegno attuale",
+    "openNow": "Aperto ora"
   },
   "plantDb": {
     "title": "Database piante",
@@ -113,20 +114,17 @@
     "inspection": {
       "title": "Lente di ispezione",
       "close": "Chiudi lente",
-      "hold": "Blocca vista",
-      "follow": "Segui puntatore",
-      "held": "Posizione fissa",
-      "following": "Segue il puntatore",
-      "hint": "Passa sul nome o selezionalo con la tastiera per evidenziare la pianta. Attivalo per centrare la lente.",
-      "empty": "Nessuna pianta in questa vista. Sposta il puntatore o allarga la vista della lente.",
+      "hint": "Trascina per esplorare · Scegli un nome per centrare",
+      "empty": "Nessuna pianta qui. Sposta o allarga la vista.",
       "unavailable": "Anteprima non disponibile. I nomi restano nelle posizioni delle piante.",
       "locate": "Centra la lente su {{name}}",
       "expand": "Espandi lente",
       "compact": "Riduci lente",
       "widen": "Allarga vista",
       "magnify": "Ingrandisci nella lente",
-      "namesCount": "{{shown}} nomi · {{total}} piante",
-      "panHint": "Usa le frecce per spostare e bloccare questa vista."
+      "namesCount": "Nomi {{shown}} / {{total}}",
+      "panHint": "Anteprima. Trascina o usa le frecce; Maiusc aumenta lo spostamento.",
+      "recenter": "Centra sulla tela"
     },
     "emptyWelcome": "Inizia il tuo design",
     "emptyNewDesign": "Nuovo design",
@@ -360,7 +358,14 @@
       "styleTerrain": "Terreno",
       "styleSatellite": "Satellite",
       "styleNone": "Nessuno",
-      "references": "Riferimenti del sito"
+      "references": "Riferimenti del sito",
+      "sceneStack": "Livelli del disegno",
+      "topToBottom": "Dall’alto in basso",
+      "referenceOrder": "Indipendenti dall’ordine del disegno",
+      "visible": "Visibile",
+      "hidden": "Nascosto",
+      "locked": "Bloccato",
+      "unlocked": "Sbloccato"
     },
     "bottomPanel": {
       "ariaLabel": "Pannello inferiore",

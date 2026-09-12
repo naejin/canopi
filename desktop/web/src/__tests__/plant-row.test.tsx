@@ -39,6 +39,15 @@ describe('PlantRow', () => {
     container.remove()
   })
 
+  it('opens Favorites information only through its dedicated button', () => {
+    plantBrowserMock.selectSpecies.mockClear()
+    render(<PlantRow plant={makeSpeciesListItem('Malus domestica', true)} variant="favorites" />, container)
+    container.querySelector<HTMLElement>('[role="listitem"]')!.click()
+    expect(plantBrowserMock.selectSpecies).not.toHaveBeenCalled()
+    container.querySelector<HTMLButtonElement>('[data-species-detail]')!.click()
+    expect(plantBrowserMock.selectSpecies).toHaveBeenCalledWith('Malus domestica')
+  })
+
   it('shows climate zone and life cycle instead of hardiness and edibility in Favorites', () => {
     const plant = {
       ...makeSpeciesListItem('Malus domestica', true),

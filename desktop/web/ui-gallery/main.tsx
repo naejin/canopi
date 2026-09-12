@@ -16,6 +16,9 @@ import { SpeciesFocusChip } from '../src/components/canvas/SpeciesFocusChip'
 import { ZoomControls } from '../src/components/canvas/ZoomControls'
 import { DesktopSpeciesKeyPanel } from '../src/components/panels/DesktopSpeciesKeyPanel'
 import { LayersPanel } from '../src/components/panels/LayersPanel'
+import { DesignNotebookPanel } from '../src/components/panels/DesignNotebookPanel'
+import { notebookWorkbench } from './notebook-fixture'
+import { WebSpeciesCatalogPanel } from '../src/web/WebSpeciesCatalogPanel'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { SidePanelDock } from '../src/components/shared/SidePanelDock'
 import { sidePanel } from '../src/app/shell/state'
@@ -33,7 +36,7 @@ if (!import.meta.env.DEV) throw new Error('Gallery cannot run in production.')
 const params = new URLSearchParams(location.search)
 const initial = params.get('surface') ?? 'color'
 const fixtureState = params.get('state') ?? 'populated'
-const surfaces = { color: 'Plant color', symbol: 'Plant symbol', key: 'Species key', layers: 'Layers', favorites: 'Favorites', lens: 'Inspection lens' }
+const surfaces = { color: 'Plant color', symbol: 'Plant symbol', key: 'Species key', layers: 'Layers', favorites: 'Favorites', notebook: 'Design notebook', lens: 'Inspection lens' }
 const file = designFixture(fixtureState)
 designSessionStore.replaceCurrentDesignState(file, null, file.name)
 locale.value = (params.get('locale') ?? 'en') as typeof locale.value
@@ -49,7 +52,7 @@ function Gallery() {
   const openSurface = (next: string) => {
     surface.value = next
     speciesCatalogWorkbench.closeSpeciesDetail()
-    sidePanel.value = next === 'key' ? 'species-key' : next === 'layers' ? 'layers' : next === 'favorites' ? 'favorites' : null
+    sidePanel.value = next === 'key' ? 'species-key' : next === 'layers' ? 'layers' : next === 'favorites' ? 'favorites' : next === 'notebook' ? 'design-notebook' : null
     plantColorMenuOpen.value = next === 'color'
     plantSymbolMenuOpen.value = next === 'symbol'
     const url = new URL(location.href); url.searchParams.set('surface', next); history.replaceState(null, '', url)
@@ -76,6 +79,7 @@ function Gallery() {
       runtime.surfaces.documents.loadDocument(file)
       runtime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
       runtime.surfaces.documents.zoomToFit()
+      if (fixtureState === 'dense') for (let i = 0; i < 6; i++) runtime.surfaces.commands.viewport.zoomOut()
       runtime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
       resize.observe(container)
       ready.value = true
@@ -96,8 +100,8 @@ function Gallery() {
       <button onClick={() => { theme.value = theme.value === 'light' ? 'dark' : 'light' }}>{theme.value === 'light' ? 'Dark' : 'Light'} theme</button>
     </header>
     <nav className={styles.review} aria-label="Review surfaces">
-      {Object.entries(surfaces).map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key} aria-pressed={surface.value === key} onClick={() => openSurface(key)}>{label}</button>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      {Object.entries(surfaces).map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={surface.value === key} onClick={() => openSurface(key)}>{label}</button>)}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${surface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}`}>{state}</a>)}
     </nav>
     <main className={styles.workspace}>
@@ -110,7 +114,7 @@ function Gallery() {
         {sidePanel.value === 'species-key' ? <DesktopSpeciesKeyPanel /> : sidePanel.value === 'layers' ? <LayersPanel onLocation={() => {
           designSessionStore.replaceCurrentDesignSnapshot({ ...file, location: { lat: 48.85, lon: 2.35, altitude_m: 35 } })
           activity.value = 'Sample location set in memory.'
-        }} /> : <FavoritesPanel />}
+        }} /> : sidePanel.value === 'design-notebook' ? <DesignNotebookPanel workbench={notebookWorkbench} /> : params.get('edition') === 'web' ? <WebSpeciesCatalogPanel mode="favorites" /> : <FavoritesPanel />}
       </SidePanelDock>}
     </main>
     <footer className={styles.status} role="status">{activity.value}</footer>

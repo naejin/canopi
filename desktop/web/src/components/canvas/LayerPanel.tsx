@@ -4,6 +4,17 @@ import type { CanvasLayerPresentationDetail, CanvasLayerPresentationRow } from '
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import styles from './LayerPanel.module.css'
 
+function LayerIcon({ id }: { id: string }) {
+  const path = {
+    annotations: 'M4 3h8M8 3v10M5 13h6', plants: 'M8 13V7M8 10C2 10 2 4 2 4s6 0 6 6ZM8 7c0-5 6-5 6-5s0 5-6 5Z',
+    'measurement-guides': 'm2 11 9-9 3 3-9 9ZM7 6l2 2M10 3l2 2M4 9l2 2', zones: 'M2 3l7-1 5 6-4 6-8-3Z',
+    base: 'm1 4 5-2 4 2 5-2v11l-5 2-4-2-5 2ZM6 2v11M10 4v11',
+    contours: 'M1 6c4-7 8 7 14-2M1 10c4-7 8 7 14-2M1 14c4-7 8 7 14-2',
+    hillshading: 'm1 13 5-9 3 5 2-3 4 7ZM6 4l3 9',
+  }[id]
+  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>
+}
+
 function EyeIcon({ open }: { open: boolean }) {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -58,12 +69,13 @@ export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLa
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
       <DockPanelHeader title={t('canvas.layers.layerPanel')} count={rows.length} />
+      <div className={styles.groupHeading}><h3>{t('canvas.layers.sceneStack')}</h3><span>{t('canvas.layers.topToBottom')}</span></div>
       <div role="list">
         {rows.map((row) => {
           const lockLabel = row.locked ? t('canvas.layers.unlockLayer') : t('canvas.layers.lockLayer')
           return (
             <div key={row.id}>
-              {row.id === firstReference && <h3 className={styles.groupLabel}>{t('canvas.layers.references')}</h3>}
+              {row.id === firstReference && <div className={styles.groupHeading}><h3>{t('canvas.layers.references')}</h3></div>}
               <div
                 role="listitem"
                 className={styles.layerRow}
@@ -90,7 +102,8 @@ export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLa
                   title={row.label}
                   onClick={() => actions.active(row.id)}
                 >
-                  {row.label}
+                  <LayerIcon id={row.id} /><span>{row.label}</span>
+                  {row.count !== undefined && <span className={styles.count}>{row.count}</span>}
                 </button>
                 {row.canLock ? (
                   <button
@@ -114,8 +127,10 @@ export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLa
           )
         })}
       </div>
+      {firstReference && <p className={styles.referenceHint}>{t('canvas.layers.referenceOrder')}</p>}
       {active && <section className={styles.inspector} aria-label={active.label}>
-        <h3 className={styles.groupLabel}>{active.label}</h3>
+        <div className={styles.inspectorHeading}><LayerIcon id={active.id} /><h3>{active.label}</h3>
+          <span>{t(active.visible ? 'canvas.layers.visible' : 'canvas.layers.hidden')}{active.canLock && ` · ${t(active.locked ? 'canvas.layers.locked' : 'canvas.layers.unlocked')}`}</span></div>
         <LayerDetail row={active} actions={actions} />
       </section>}
     </aside>

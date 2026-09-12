@@ -30,13 +30,17 @@ export class SceneCanvasInspectionOwner {
     try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
     container.appendChild(canvas)
     let point: InspectionPoint | null = null
-    let held = false
     let magnification = 1
     let highlightedId: string | null = null
     let frame: number | null = null
     let released = false
     const options = this.options
 
+    function canvasCenter(): InspectionPoint {
+      const camera = options.camera.snapshot.peek()
+      return { x: (camera.screenSize.width / 2 - camera.viewport.x) / camera.viewport.scale,
+        y: (camera.screenSize.height / 2 - camera.viewport.y) / camera.viewport.scale }
+    }
     function schedule() {
       if (!released && frame === null) frame = requestAnimationFrame(paint)
     }
@@ -45,10 +49,8 @@ export class SceneCanvasInspectionOwner {
       if (released) return
       const snapshot = options.getSnapshot()
       const camera = options.camera.snapshot.peek()
-      const centre = point ?? {
-        x: (camera.screenSize.width / 2 - camera.viewport.x) / camera.viewport.scale,
-        y: (camera.screenSize.height / 2 - camera.viewport.y) / camera.viewport.scale,
-      }
+      const centre = point ?? canvasCenter()
+      point = centre
       const layer = getSceneLayerStyle(snapshot.scene, 'plants')
       const visible = layer.visible && layer.opacity > 0 ? snapshot.scene.plants : []
       const width = Math.max(1, container.clientWidth || 430), height = Math.max(1, container.clientHeight || 390)
@@ -80,7 +82,7 @@ export class SceneCanvasInspectionOwner {
         }
       }
       state.value = {
-        point: centre, held, scale, zoomPercent: Math.round(scale / camera.referenceScale * 100), previewAvailable: ctx !== null,
+        point: centre, scale, zoomPercent: Math.round(scale / camera.referenceScale * 100), previewAvailable: ctx !== null,
         frame: { width, height }, plants: layout.plants,
       }
     }
@@ -95,7 +97,7 @@ export class SceneCanvasInspectionOwner {
     let observer: ResizeObserver | null = null
     const owned = {
       refresh: schedule,
-      reset: () => { if (!released) { point = null; held = false; magnification = 1; clearHighlight(); schedule() } },
+      reset: () => { if (!released) { point = null; magnification = 1; clearHighlight(); schedule() } },
       dispose: () => {
         if (released) return
         released = true
@@ -128,23 +130,12 @@ export class SceneCanvasInspectionOwner {
     this.views.add(owned)
     return {
       state,
-      inspect: (next) => {
-        if (released || held || !Number.isFinite(next.x) || !Number.isFinite(next.y)) return
-        if (point?.x === next.x && point.y === next.y) return
-        point = { ...next }; schedule()
-      },
+      centerOnCanvas: () => { if (!released) { point = canvasCenter(); schedule() } },
       panBy: (delta) => {
         if (released || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return
-        const centre = point ?? state.peek()?.point
-        if (!centre) return
+        const centre = point ?? canvasCenter()
         point = { x: centre.x + delta.x, y: centre.y + delta.y }
-        held = true
         schedule()
-      },
-      setHeld: (next) => {
-        if (released || held === next) return
-        if (next) point = state.peek()?.point ?? point
-        held = next; schedule()
       },
       zoomBy: (factor) => {
         if (released || !Number.isFinite(factor) || factor <= 0) return
@@ -166,7 +157,7 @@ export class SceneCanvasInspectionOwner {
         if (!layer.visible || layer.opacity === 0) return
         const plant = snapshot.scene.plants.find((entry) => entry.id === id)
         if (!plant) return
-        point = { ...plant.position }; held = true
+        point = { ...plant.position }
         schedule()
       },
       dispose: owned.dispose,
