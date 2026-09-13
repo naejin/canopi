@@ -44,6 +44,8 @@ candidates are not cancelled by those validation workflows.
 
 ## Local Build Commands
 
+For daily host commands, exact working directories, ports, prerequisites, storage isolation, and verification selection, use the [edition development guide](edition-development.md).
+
 ```bash
 # Rust workspace check without local bundled plant DB
 CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
@@ -59,6 +61,9 @@ CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace
 
 # Frontend build
 cd desktop/web && npm run build
+
+# Application/gallery typecheck plus both production frontend builds
+cd desktop/web && npm run check:editions
 
 # Web Edition static build plus browser-boundary scan
 cd desktop/web && npm run build:web
@@ -141,7 +146,9 @@ The [production PDF workflow](../../.github/workflows/pdf-production-probe.yml) 
 ## Web Edition Static Bundle
 
 - Web Edition source belongs in this repository, not in `canopi-website`. Implement it as a separate browser Vite entry/build that reuses shared frontend modules behind browser-specific shell and adapter seams.
+- Start the real Web Edition from `desktop/web/` with `npm run dev:web` at `http://localhost:1421/app/`. Desktop Vite uses port 1420 and the memory gallery uses 1422; the three hosts have distinct dependency caches and strict ports. Web dev uses browser-local app data and generated catalog assets rather than gallery fixtures.
 - The Web Edition local build command is `cd desktop/web && npm run build:web`. It emits `desktop/web/dist-web/` and runs the browser-boundary scanner; keep `dist-web/` uncommitted.
+- `npm run build:web` can run without a generated Species Catalog and proves compilation plus native-import and emitted-asset size boundaries. The deterministic packaging tests exercise catalog admission, checksums, oversize rejection, and `/app/` and root manifests. Only packaging a locally generated release catalog validates that catalog's actual file set and bytes.
 - The default Web Edition artifact command is `cd desktop/web && npm run package:web`. It builds the web entry for `/app/`, scans browser chunks, and emits a versioned directory plus `.tar.gz` under `desktop/web/dist-web-artifacts/`; keep that output uncommitted.
 - The dedicated root-subdomain artifact command is `cd desktop/web && npm run package:web:root`. It sets `CANOPI_WEB_BASE_PATH=/` before Vite emits assets and packages a root-base artifact named `canopi-web-edition-root-v<version>-<commit>.tar.gz` with `basePath: "/"` and SPA fallback `/* -> /index.html`. Use this artifact for `https://web.projectcanopi.com/`; do not deploy the default `/app/` artifact at a domain root.
 - The Web Edition Species Catalog command is `cd desktop/web && npm run generate:web-catalog`. It emits ignored DuckDB-queryable Parquet catalog shards under `desktop/web/public/canopi-catalog/` from the authored `common-types/web-species-catalog-artifact.json` contract; run it from a checkout with local canopi-data exports when catalog assets are needed for packaging or adapter testing. Refresh all bindings-compiler-owned adapters, including the browser/Node admission module, with `npm run gen:types`, and verify them with `npm run check:types`. The Python contract script's `check` and legacy `emit --write` commands delegate to those Rust operations; only its `render` command writes caller-owned staging output for the Rust compiler.

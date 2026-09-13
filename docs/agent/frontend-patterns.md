@@ -6,6 +6,7 @@ For UI/UX work, first read the [design contract](../../.interface-design/system.
 
 | Work | Read |
 | --- | --- |
+| Desktop/Web/gallery setup, edition composition, verification selection | [Edition development](edition-development.md) |
 | Preact, effects, cleanup, command boundaries | [Runtime and interaction](frontend-runtime.md) |
 | Calendar, Budget, Consortium, Planning Projection | [Runtime and interaction](frontend-runtime.md), [Dock panels](../../.interface-design/patterns/dock-panels.md) |
 | Species Catalog, Favorites, Notebook, shared dock | [Workbench ownership](frontend-workbenches.md), relevant section |
@@ -17,6 +18,6 @@ For UI/UX work, first read the [design contract](../../.interface-design/system.
 
 Use Preact and CSS Modules; state uses `@preact/signals`. Components call workbenches/actions; canvas edits go through runtime commands, other document edits through Design Edit. A view must not mirror an authority's state just to restyle it.
 
-For visual changes, preserve behavior tests and verify layout live. For changed behavior, add a focused regression at the command or interaction boundary. Run TypeScript and focused Vitest; broad shared changes also require the full frontend suite. The repository contract defines the remaining quality gates.
+For visual changes, preserve behavior tests and verify layout live. For changed behavior, add a focused regression at the command or interaction boundary. Run TypeScript and focused Vitest; broad shared changes also require the full frontend suite and both edition builds. The [edition development guide](edition-development.md) maps changes to checks; the repository contract defines the remaining quality gates.
 
 Keep guides scoped. Replace stale rules when behavior changes; avoid appending one-off debugging notes. Exact token values belong in global.css; surface anatomy belongs in the design guides.

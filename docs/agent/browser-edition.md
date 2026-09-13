@@ -2,6 +2,8 @@
 
 Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 
+Run the real browser app from `desktop/web/` with `npm run dev:web` and open `http://localhost:1421/app/`. It uses browser storage and generated catalog assets; it is not the memory gallery. The [edition development guide](edition-development.md) owns prerequisites, isolated profiles, reset behavior, and the distinction between bundle, fixture-package, and release-catalog checks.
+
 ## Browser App Shell
 
 - Web Edition v1 uses a Browser App Shell instead of the desktop `TitleBar`, `MenuBar`, native window controls, native File menu, or native Recent Design path menus. See `docs/adr/0020-web-edition-browser-app-shell.md`.

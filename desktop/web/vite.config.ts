@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
     import.meta.url,
   ));
   return {
+    cacheDir: isWebEdition ? "node_modules/.vite-web" : "node_modules/.vite-desktop",
     plugins: [
       preact(),
       webEditionDevEntryPlugin(isWebEdition),
@@ -37,7 +38,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 1420,
+      port: isWebEdition ? 1421 : 1420,
       strictPort: true,
       fs: {
         allow: [

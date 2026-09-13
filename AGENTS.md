@@ -38,6 +38,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 
 - [Document lifecycle](docs/agent/document-lifecycle.md): document authority, save/load, dirty state, settings persistence.
 - [Frontend guide](docs/agent/frontend-patterns.md): short routing guide for runtime, workbenches, browser state, chrome, localization and tests.
+- [Edition development](docs/agent/edition-development.md): safe Desktop/Web/gallery setup, ports, fixtures, isolation, verification selection, and handoff.
 - [Canvas runtime](docs/agent/canvas-runtime.md): runtime seams, scene ownership, rendering, interaction, Target projection.
 - [Canvas PDF](docs/agent/canvas-pdf.md): shared print layout, temporary page setup, fonts, preview, delivery, and validation.
 - [MapLibre](docs/agent/maplibre.md): basemap and terrain integration, projection, camera sync.
@@ -64,6 +65,15 @@ cargo tauri dev
 
 # Frontend only, from desktop/web
 npm run dev
+
+# Web Edition development, from desktop/web
+npm run dev:web
+
+# Memory-only UI gallery, from desktop/web
+npm run dev:ui
+
+# Typecheck gallery and build both edition frontends, from desktop/web
+npm run check:editions
 
 # Web Edition static build, from desktop/web
 npm run build:web
@@ -160,6 +170,7 @@ cargo build --release
 - Add frontend tests under `desktop/web/src/__tests__/` as `*.test.ts` or `*.test.tsx`. Existing colocated `*.test.ts` runtime tests are also part of the full Vitest suite.
 - Bug fixes require focused regression tests, especially around document lifecycle, canvas runtime, IPC boundaries, persistence, and shared contracts.
 - Frontend changes require `cd desktop/web && npx tsc --noEmit` and focused Vitest coverage.
+- Shared edition composition changes also require `cd desktop/web && npm run check:ui`, `cd desktop/web && npm run build`, and `cd desktop/web && npm run build:web`.
 - Run `cd desktop/web && npm test` when the frontend surface area is broad or the change touches shared runtime behavior.
 - Shared contract changes require `cd desktop/web && npm run gen:types` and `cd desktop/web && npm run check:types`.
 - Species Catalog storage-contract changes require `python3 scripts/species_catalog_contract.py check`, the focused Python contract/preparation/Web tests, binding regeneration checks, and strict verification of any prepared DB artifact.

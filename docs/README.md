@@ -7,6 +7,7 @@ Start with the narrowest authority for the task. Current implementation guidance
 | Repository workflow, quality gates, architecture rules | [`AGENTS.md`](../AGENTS.md) |
 | Domain vocabulary | [`CONTEXT.md`](../CONTEXT.md) |
 | Subsystem implementation guidance | [`docs/agent/`](agent/) via the links in `AGENTS.md` |
+| Desktop/Web/gallery daily development | [`docs/agent/edition-development.md`](agent/edition-development.md) |
 | Agent workflow and issue-tracker conventions | [`docs/agents/`](agents/) |
 | UI hierarchy and reusable interaction patterns | [`.interface-design/system.md`](../.interface-design/system.md) |
 | Durable architecture decisions and supersession history | [`docs/adr/`](adr/) |
@@ -15,7 +16,7 @@ Start with the narrowest authority for the task. Current implementation guidance
 
 ## Evidence and history
 
-Active implementation specifications live under `docs/design/`. They describe proposed work and must not override current operating guides before implementation. The [Desktop/Web convergence handoff](design/edition-convergence/handoff.md) and [implementation prompt](design/edition-convergence/agent-prompt.md) define the next shared-workspace and development-workflow work. Progress belongs in bd; delivered instructions move into the subsystem guides.
+Active implementation specifications live under `docs/design/`. They describe proposed work and must not override current operating guides before implementation. The [Desktop/Web convergence handoff](design/edition-convergence/handoff.md) defines the active convergence scope; daily commands and delivered behavior belong in the [edition development guide](agent/edition-development.md), while implementation progress belongs in bd epic `canopi-dp4s`.
 
 Release notes in [`release-notes/`](release-notes/) describe shipped versions. PDF validation, canvas-performance reports, Web Catalog performance evidence, and the Windows compression benchmark are dated evidence for decisions or release gates. They do not override current agent guides or ADRs. Files under `docs/assets/` and `docs/evidence/` support those records and must not become runtime or test dependencies.
 

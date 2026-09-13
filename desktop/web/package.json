@@ -7,9 +7,12 @@
     "node": "^22.13.0"
   },
   "scripts": {
-    "dev": "vite --port 1420",
-    "build": "tsc && vite build",
-    "build:web": "tsc && vite build --mode web && node scripts/check-web-build-boundaries.mjs",
+    "dev": "vite",
+    "dev:web": "vite --mode web",
+    "build": "tsc && npm run build:desktop:bundle",
+    "build:desktop:bundle": "vite build",
+    "build:web": "tsc && npm run build:web:bundle",
+    "build:web:bundle": "vite build --mode web && node scripts/check-web-build-boundaries.mjs",
     "build:web:root": "CANOPI_WEB_BASE_PATH=/ npm run build:web",
     "package:web": "npm run build:web && node scripts/package-web-edition.mjs",
     "package:web:root": "CANOPI_WEB_BASE_PATH=/ npm run package:web",
@@ -27,7 +30,10 @@
     "pretest": "npm run prepare:pdf-fonts",
     "build:pdf-validation": "npm run prepare:pdf-fonts && tsc -p scripts/pdf-validation/tsconfig.json && vite build --config scripts/pdf-validation/vite.config.mjs && node scripts/pdf-validation/copy-fonts.mjs",
     "dev:ui": "vite --config ui-gallery/vite.config.ts",
-    "check:ui": "tsc --noEmit -p ui-gallery/tsconfig.json"
+    "check:ui": "tsc --noEmit -p ui-gallery/tsconfig.json",
+    "check:editions": "tsc && npm run check:ui && npm run build:desktop:bundle && npm run build:web:bundle",
+    "predev:web": "npm run prepare:pdf-fonts",
+    "precheck:editions": "npm run prepare:pdf-fonts"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.33.1-dev57.0",

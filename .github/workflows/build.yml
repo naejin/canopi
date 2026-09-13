@@ -66,6 +66,9 @@ jobs:
       - name: TypeScript check
         run: npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json
 
+      - name: UI gallery TypeScript check
+        run: npm run check:ui --prefix desktop/web
+
   test:
     runs-on: ubuntu-latest
     env:
@@ -99,6 +102,9 @@ jobs:
 
       - name: Frontend build
         run: npm run build --prefix desktop/web
+
+      - name: Web Edition build and browser-boundary scan
+        run: npm run build:web --prefix desktop/web
 
   test-platform:
     strategy:

@@ -18,6 +18,9 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 
 ## Testing
 
+- For shared Desktop/Web work, use the focused-to-integration sequence and change-to-check matrix in [edition development](edition-development.md). `npm run check:editions` typechecks the app once, checks the gallery project, builds both production entries, and scans the Web bundle; it does not replace Vitest, generated-contract checks, packaging tests, or Rust gates.
+- CI runs `npm run check:ui` and the real `npm run build:web` on pull requests and `main` pushes. The Web build needs pinned PDF fonts but no private/release catalog. It validates emitted browser imports and per-file size; deterministic packaging tests cover catalog admission and both base paths, while release packaging validates the actual generated catalog.
+
 - Add Vitest tests under `desktop/web/src/__tests__/`. The full suite also discovers existing colocated `*.test.ts` files under `src/app/` and `src/canvas/runtime/`; include those tests when auditing coverage.
 - `frontend-architecture-policies.test.ts` is the declarative dependency and ownership guard. Its TypeScript source graph discovers `.ts`, `.tsx`, `.mts`, and `.cts` files recursively, parses imports and re-exports through the compiler AST, follows named/default/namespace/star and transparent imported-alias export identity, and reports the named policy, importer, and resolved target. Add a compact policy there when introducing or changing a durable module boundary; retain a source-symbol policy on a protected public barrel when wrappers must not mention a private capability, and do not add implementation-shaped substring snapshots.
 - Use `source-tombstones` only for deliberately retired files and symbol policies only for durable capability ownership that imports alone cannot express. Behavior and layout belong in focused tests, not architecture policy tables.

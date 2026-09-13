@@ -65,6 +65,8 @@ cargo tauri dev
 
 Database preparation requires the exact source export pinned by the repository; see the [database guide](docs/agent/database.md#canopi-data-export). Rebuild it when that contract or source pin changes. Platform dependencies and packaging are covered in the [build guide](docs/agent/build-release.md).
 
+For safe Desktop, Web Edition, and memory-gallery workflows, including isolated profiles and fixture selection, use the [edition development guide](docs/agent/edition-development.md).
+
 ## Development
 
 Run each command independently from the repository root.
@@ -73,8 +75,17 @@ Run each command independently from the repository root.
 # Frontend only (hot reload)
 cd desktop/web && npm run dev
 
+# Web Edition (http://localhost:1421/app/)
+cd desktop/web && npm run dev:web
+
+# Memory-only UI gallery (http://127.0.0.1:1422/)
+cd desktop/web && npm run dev:ui
+
 # Static Web Edition build (requires generated catalog assets for packaging)
 cd desktop/web && npm run build:web
+
+# Typecheck the app and gallery, then build both edition frontends
+cd desktop/web && npm run check:editions
 
 # TypeScript check
 cd desktop/web && npx tsc --noEmit
