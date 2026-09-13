@@ -47,6 +47,12 @@
   animation: menuIn var(--transition-enter) forwards;
 }
 
+.calendarFloating {
+  position: fixed;
+  z-index: 50;
+  max-width: calc(100vw - var(--space-4));
+}
+
 .calendarDown {
   top: calc(100% + var(--space-1));
   transform: translateY(calc(-1 * var(--space-1)));

@@ -1,4 +1,4 @@
-import { exportFile } from '../../ipc/export'
+import { deliverBudgetCsv } from '#budget-export-platform'
 import { t } from '../../i18n'
 import { escapeBudgetCsvField } from './formatting'
 
@@ -32,18 +32,16 @@ export async function exportBudgetCsv(
   const csvRows = [header]
   for (const row of rows) {
     const entry = options.lineItemPriceMap.get(row.canonical)
-    const price = entry?.unit_cost ?? 0
     const displayName = row.commonName || row.canonical
-    csvRows.push(
-      `${escapeBudgetCsvField(displayName)},${row.count},${price.toFixed(2)},${(row.count * price).toFixed(2)},${options.currency}`,
-    )
+    const priceColumns = entry
+      ? `${entry.unit_cost.toFixed(2)},${(row.count * entry.unit_cost).toFixed(2)}`
+      : ','
+    csvRows.push(`${escapeBudgetCsvField(displayName)},${row.count},${priceColumns},${options.currency}`)
   }
   csvRows.push(`${escapeBudgetCsvField(t('canvas.budget.grandTotal'))},,,${options.grandTotal.toFixed(2)},`)
 
-  await exportFile(
+  await deliverBudgetCsv(
     csvRows.join('\n'),
     `${options.designName || 'budget'}-budget.csv`,
-    'CSV',
-    ['csv'],
   )
 }

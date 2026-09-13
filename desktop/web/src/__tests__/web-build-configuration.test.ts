@@ -13,7 +13,9 @@ describe('Web Edition build configuration', () => {
     const desktop = await resolveConfig('desktop')
 
     expect(aliasPath(web, '#platform')).toMatch(/\/src\/platform\/browser\.ts$/)
+    expect(aliasPath(web, '#budget-export-platform')).toMatch(/\/src\/app\/budget\/platform\.browser\.ts$/)
     expect(aliasPath(desktop, '#platform')).toMatch(/\/src\/platform\/desktop\.ts$/)
+    expect(aliasPath(desktop, '#budget-export-platform')).toMatch(/\/src\/app\/budget\/platform\.desktop\.ts$/)
     expect(aliasPath(web, '#species-catalog-live')).toMatch(/\/live\.browser\.ts$/)
     expect(aliasPath(desktop, '#species-catalog-live')).toMatch(/\/live\.desktop\.ts$/)
     expect(aliasPath(web, '#design-template-import-workflow')).toMatch(/\/workflow\.browser\.ts$/)
@@ -24,6 +26,7 @@ describe('Web Edition build configuration', () => {
     for (const config of [web, desktop]) {
       for (const alias of [
         '#platform',
+        '#budget-export-platform',
         '#species-catalog-live',
         '#design-template-import-workflow',
         '#design-template-catalog',

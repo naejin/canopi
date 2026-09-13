@@ -20,6 +20,10 @@ import {
 import { WebCanvasWorkspace } from "./WebCanvasWorkspace";
 import { WebSpeciesCatalogPanel } from "./WebSpeciesCatalogPanel";
 import { hasConfiguredStaticDesignTemplates } from "../app/community/catalog.browser";
+import { BudgetPanel } from "../components/panels/BudgetPanel";
+import { CalendarPanel } from "../components/panels/CalendarPanel";
+import { ConsortiumPanel } from "../components/panels/ConsortiumPanel";
+import { usePlanningViewState } from "../app/planning-view/state";
 
 const WorldMapPanel = lazy(async () => {
   const module = await import("../components/panels/WorldMapPanel");
@@ -82,7 +86,11 @@ function WebWorkspace({
     );
   }
   const currentSidePanel = sidePanel.value;
+  const planningView = usePlanningViewState();
   const hasSidePanel = currentSidePanel !== null;
+  const isPlanningPanel = currentSidePanel === 'calendar'
+    || currentSidePanel === 'budget'
+    || currentSidePanel === 'consortium';
   return (
     <div
       className={`${styles.workspaceWithSidebar} ${hasSidePanel ? styles.workspaceWithSidebarOpen : ""}`}
@@ -92,10 +100,18 @@ function WebWorkspace({
       <div className={styles.workspaceMain}>
         <WebCanvasWorkspace controller={controller} />
       </div>
-      {currentSidePanel && <SidePanelDock responsive>
+      {currentSidePanel && <SidePanelDock
+        responsive
+        responsiveSize={isPlanningPanel ? 'large' : 'default'}
+        expanded={currentSidePanel === 'calendar' && planningView.calendarExpanded.value}
+        onManualResize={() => { planningView.calendarExpanded.value = false }}
+      >
         <div className={styles.speciesSidebar} data-web-side-panel={currentSidePanel}>
           {currentSidePanel === 'species-key' && <WebSpeciesKeyPanel />}
           {currentSidePanel === 'layers' && <WebLayersPanel />}
+          {currentSidePanel === 'calendar' && <CalendarPanel />}
+          {currentSidePanel === 'budget' && <BudgetPanel />}
+          {currentSidePanel === 'consortium' && <ConsortiumPanel />}
           {currentSidePanel === 'plant-db' && <WebSpeciesCatalogPanel mode="catalog" />}
           {currentSidePanel === 'favorites' && <WebSpeciesCatalogPanel mode="favorites" />}
         </div>

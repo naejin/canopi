@@ -17,6 +17,9 @@ export type ShellCommandIdByCapability = {
   readonly navigateFavorites: 'nav.favorites'
   readonly navigateSpeciesKey: 'nav.speciesKey'
   readonly navigateLayers: 'nav.layers'
+  readonly navigateCalendar: 'nav.calendar'
+  readonly navigateBudget: 'nav.budget'
+  readonly navigateConsortium: 'nav.consortium'
   readonly toggleTheme: 'view.toggleTheme'
 }
 
@@ -247,6 +250,21 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
     capabilityId: 'navigateLayers', id: 'nav.layers', family: 'navigation',
     labelKey: 'canvas.layers.layerPanel', chromeLabelKey: 'canvas.layers.layerPanel', palette: true,
     panel: { panel: 'layers', group: 'design', order: 1 },
+  },
+  {
+    capabilityId: 'navigateCalendar', id: 'nav.calendar', family: 'navigation',
+    labelKey: 'canvas.calendar.title', chromeLabelKey: 'canvas.calendar.title', palette: true,
+    panel: { panel: 'calendar', group: 'design', order: 2 },
+  },
+  {
+    capabilityId: 'navigateBudget', id: 'nav.budget', family: 'navigation',
+    labelKey: 'canvas.budget.title', chromeLabelKey: 'canvas.budget.title', palette: true,
+    panel: { panel: 'budget', group: 'design', order: 3 },
+  },
+  {
+    capabilityId: 'navigateConsortium', id: 'nav.consortium', family: 'navigation',
+    labelKey: 'canvas.consortium.title', chromeLabelKey: 'canvas.consortium.title', palette: true,
+    panel: { panel: 'consortium', group: 'design', order: 4 },
   },
   {
     capabilityId: 'navigatePlantDatabase',

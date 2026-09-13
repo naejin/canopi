@@ -5,13 +5,6 @@ import type { BasemapStyle } from '../generated/contracts'
 import type { Settings, Theme } from '../types/settings'
 import type { SettingsProjectionInstallation } from '../app/settings/projection'
 import {
-  bottomPanelHeights,
-  bottomPanelOpen,
-  bottomPanelTab,
-  createDefaultBottomPanelHeights,
-  resolveBottomPanelHeight,
-} from '../app/canvas-settings/bottom-panel-state'
-import {
   contourIntervalMeters,
   createDefaultLayerOpacity,
   createDefaultLayerVisibility,
@@ -48,11 +41,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     snap_to_guides: true,
     auto_save_interval_s: 60,
     side_panel_width: null,
-    bottom_panel_open: false,
-    bottom_panel_timeline_height: null,
-    bottom_panel_budget_height: null,
-    bottom_panel_consortium_height: null,
-    bottom_panel_tab: 'budget',
     map_layer_visible: true,
     map_style: 'street',
     map_opacity: 1,
@@ -74,9 +62,6 @@ function resetProjectionSignals(): void {
   autoSaveIntervalMs.value = 60_000
   snapToGridEnabled.value = false
   snapToGuidesEnabled.value = true
-  bottomPanelOpen.value = false
-  bottomPanelHeights.value = createDefaultBottomPanelHeights()
-  bottomPanelTab.value = 'budget'
   sidePanelWidth.value = null
   layerVisibility.value = createDefaultLayerVisibility()
   layerOpacity.value = createDefaultLayerOpacity()
@@ -142,11 +127,6 @@ describe('settings projection', () => {
       auto_save_interval_s: 45,
       side_panel_width: 460,
       saved_stamps_frame_height: 280,
-      bottom_panel_open: true,
-      bottom_panel_timeline_height: 320,
-      bottom_panel_budget_height: null,
-      bottom_panel_consortium_height: 260,
-      bottom_panel_tab: 'timeline',
       map_layer_visible: false,
       map_opacity: 0.35,
       contour_visible: true,
@@ -164,14 +144,6 @@ describe('settings projection', () => {
     expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
     expect(savedStampsFrameHeight.value).toBe(280)
-    expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelHeights.value).toEqual({
-      timeline: 320,
-      budget: null,
-      consortium: 260,
-    })
-    expect(resolveBottomPanelHeight('budget')).toBe(224)
-    expect(bottomPanelTab.value).toBe('timeline')
     expect(basemapStyle.value).toBe('street')
     expect(layerVisibility.value.base).toBe(false)
     expect(layerOpacity.value.base).toBe(0.35)
@@ -195,11 +167,6 @@ describe('settings projection', () => {
       settings.autoSaveIntervalMs = 15_000
       settings.sidePanel.width = 440
       settings.savedStamps.frameHeight = 260
-      settings.bottomPanel.open = true
-      settings.bottomPanel.heights.timeline = 280
-      settings.bottomPanel.heights.budget = 300
-      settings.bottomPanel.heights.consortium = 260
-      settings.bottomPanel.tab = 'consortium'
       settings.mapLayers.baseVisible = false
       settings.mapLayers.baseOpacity = 0.6
       settings.mapLayers.contoursVisible = true
@@ -218,11 +185,6 @@ describe('settings projection', () => {
       auto_save_interval_s: 15,
       side_panel_width: 440,
       saved_stamps_frame_height: 260,
-      bottom_panel_open: true,
-      bottom_panel_timeline_height: 280,
-      bottom_panel_budget_height: 300,
-      bottom_panel_consortium_height: 260,
-      bottom_panel_tab: 'consortium',
       map_layer_visible: false,
       map_style: 'street',
       map_opacity: 0.6,
@@ -247,8 +209,6 @@ describe('settings projection', () => {
       plant_spacing_interval_m: 0,
       side_panel_width: Number.NaN,
       saved_stamps_frame_height: 80,
-      bottom_panel_timeline_height: 120,
-      bottom_panel_budget_height: Number.NaN,
     }))
 
     expect(theme.value).toBe('light')
@@ -260,11 +220,6 @@ describe('settings projection', () => {
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(sidePanelWidth.value).toBe(null)
     expect(savedStampsFrameHeight.value).toBe(120)
-    expect(bottomPanelHeights.value).toEqual({
-      timeline: 140,
-      budget: null,
-      consortium: null,
-    })
 
     mutateSettingsProjection((settings) => {
       settings.mapLayers.baseOpacity = -2
@@ -274,7 +229,6 @@ describe('settings projection', () => {
       settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
       settings.sidePanel.width = 120
       settings.savedStamps.frameHeight = Number.POSITIVE_INFINITY
-      settings.bottomPanel.heights.consortium = 139.6
     }, { persist: 'none' })
 
     expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
@@ -287,7 +241,6 @@ describe('settings projection', () => {
       plant_spacing_interval_m: 0.5,
       side_panel_width: 320,
       saved_stamps_frame_height: 220,
-      bottom_panel_consortium_height: 140,
     }))
   })
 
@@ -297,7 +250,6 @@ describe('settings projection', () => {
     mutateSettingsProjection((settings) => {
       settings.locale = 'es'
       settings.sidePanel.width = 480
-      settings.bottomPanel.open = true
     }, { persist: 'immediate' })
     await Promise.resolve()
 
@@ -305,7 +257,6 @@ describe('settings projection', () => {
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'es',
       side_panel_width: 480,
-      bottom_panel_open: true,
     }))
   })
 
@@ -913,7 +864,6 @@ describe('settings projection', () => {
 
   it('keeps production settings-backed callers on the projection mutation seam', () => {
     const sources = [
-      '../app/canvas-settings/controller.ts',
       '../app/canvas-layer-presentation/presentation.ts',
       '../app/canvas-runtime/app-adapter.ts',
       '../app/favorites/controller.ts',
@@ -926,7 +876,7 @@ describe('settings projection', () => {
     for (const source of sources) {
       expect(source).toContain('settings/projection')
       expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|bottomPanelOpen|bottomPanelHeights|bottomPanelTab|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
+      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
     }
 
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')

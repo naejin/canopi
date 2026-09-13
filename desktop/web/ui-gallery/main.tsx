@@ -21,7 +21,7 @@ import { notebookWorkbench } from './notebook-fixture'
 import { WebSpeciesCatalogPanel } from '../src/web/WebSpeciesCatalogPanel'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { SidePanelDock } from '../src/components/shared/SidePanelDock'
-import { sidePanel } from '../src/app/shell/state'
+import { sidePanel, sidePanelWidth } from '../src/app/shell/state'
 import { plantColorMenuOpen } from '../src/canvas/plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../src/canvas/plant-symbol-menu-state'
 import { plantDbStatus } from '../src/app/health/state'
@@ -31,14 +31,25 @@ import { invalidateCssVarCache } from '../src/canvas/canvas2d-utils'
 import { designFixture, specimens, species } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
+import { BudgetPanel } from '../src/components/panels/BudgetPanel'
+import { CalendarPanel } from '../src/components/panels/CalendarPanel'
+import { ConsortiumPanel } from '../src/components/panels/ConsortiumPanel'
+import { readPlanningViewState } from '../src/app/planning-view/state'
 
 if (!import.meta.env.DEV) throw new Error('Gallery cannot run in production.')
 const params = new URLSearchParams(location.search)
 const initial = params.get('surface') ?? 'color'
 const fixtureState = params.get('state') ?? 'populated'
-const surfaces = { color: 'Plant color', symbol: 'Plant symbol', key: 'Species key', layers: 'Layers', favorites: 'Favorites', notebook: 'Design notebook', lens: 'Inspection lens' }
+const requestedPanelWidth = Number(params.get('panelWidth'))
+const surfaces = { color: 'Plant color', symbol: 'Plant symbol', key: 'Species key', layers: 'Layers', calendar: 'Calendar', 'calendar-expanded': 'Calendar expanded', budget: 'Budget', consortium: 'Consortium', favorites: 'Favorites', notebook: 'Design notebook', lens: 'Inspection lens' }
 const file = designFixture(fixtureState)
 designSessionStore.replaceCurrentDesignState(file, null, file.name)
+const planningView = readPlanningViewState()
+planningView.calendarMonth.value = '2026-09-01'
+planningView.calendarExpanded.value = initial === 'calendar-expanded'
+if (Number.isFinite(requestedPanelWidth) && requestedPanelWidth >= 320) {
+  sidePanelWidth.value = requestedPanelWidth
+}
 locale.value = (params.get('locale') ?? 'en') as typeof locale.value
 theme.value = params.get('theme') === 'dark' ? 'dark' : 'light'
 const disposeTheme = effect(() => { document.documentElement.dataset.theme = theme.value; invalidateCssVarCache() })
@@ -52,7 +63,8 @@ function Gallery() {
   const openSurface = (next: string) => {
     surface.value = next
     speciesCatalogWorkbench.closeSpeciesDetail()
-    sidePanel.value = next === 'key' ? 'species-key' : next === 'layers' ? 'layers' : next === 'favorites' ? 'favorites' : next === 'notebook' ? 'design-notebook' : null
+    sidePanel.value = next === 'key' ? 'species-key' : next === 'layers' ? 'layers' : next === 'favorites' ? 'favorites' : next === 'notebook' ? 'design-notebook' : next === 'calendar' || next === 'calendar-expanded' ? 'calendar' : next === 'budget' ? 'budget' : next === 'consortium' ? 'consortium' : null
+    planningView.calendarExpanded.value = next === 'calendar-expanded'
     plantColorMenuOpen.value = next === 'color'
     plantSymbolMenuOpen.value = next === 'symbol'
     const url = new URL(location.href); url.searchParams.set('surface', next); history.replaceState(null, '', url)
@@ -104,14 +116,16 @@ function Gallery() {
       <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${surface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}`}>{state}</a>)}
     </nav>
-    <main className={styles.workspace}>
-      {ready.value && <WebCanvasToolbar />}
-      <div className={styles.canvasArea}>
-        <div ref={canvas} className={styles.canvas} />
-        {ready.value && <><InspectionLens key={surface.value === 'lens' ? 'lens' : 'other'} canvasRef={canvas} /><SpeciesFocusChip /><ZoomControls /></>}
+    <main className={styles.workspace} data-edition={params.get('edition') === 'web' ? 'web' : 'desktop'}>
+      <div className={styles.canvasWorkspace}>
+        {ready.value && <WebCanvasToolbar />}
+        <div className={styles.canvasArea}>
+          <div ref={canvas} className={styles.canvas} />
+          {ready.value && <><InspectionLens key={surface.value === 'lens' ? 'lens' : 'other'} canvasRef={canvas} /><SpeciesFocusChip /><ZoomControls /></>}
+        </div>
       </div>
-      {ready.value && sidePanel.value && <SidePanelDock>
-        {sidePanel.value === 'species-key' ? <DesktopSpeciesKeyPanel /> : sidePanel.value === 'layers' ? <LayersPanel onLocation={() => {
+      {ready.value && sidePanel.value && <SidePanelDock responsive={params.get('edition') === 'web'} responsiveSize={sidePanel.value === 'calendar' || sidePanel.value === 'budget' || sidePanel.value === 'consortium' ? 'large' : 'default'} expanded={sidePanel.value === 'calendar' && planningView.calendarExpanded.value} onManualResize={() => { planningView.calendarExpanded.value = false }}>
+        {sidePanel.value === 'species-key' ? <DesktopSpeciesKeyPanel /> : sidePanel.value === 'calendar' ? <CalendarPanel /> : sidePanel.value === 'budget' ? <BudgetPanel /> : sidePanel.value === 'consortium' ? <ConsortiumPanel /> : sidePanel.value === 'layers' ? <LayersPanel onLocation={() => {
           designSessionStore.replaceCurrentDesignSnapshot({ ...file, location: { lat: 48.85, lon: 2.35, altitude_m: 35 } })
           activity.value = 'Sample location set in memory.'
         }} /> : sidePanel.value === 'design-notebook' ? <DesignNotebookPanel workbench={notebookWorkbench} /> : params.get('edition') === 'web' ? <WebSpeciesCatalogPanel mode="favorites" /> : <FavoritesPanel />}

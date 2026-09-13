@@ -50,10 +50,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/components/shared/ProblemReportDialog.tsx',
       'src/components/panels/DesignNotebookPanel.tsx',
       'src/components/panels/CanvasPanel.tsx',
-      'src/components/canvas/BottomPanel.tsx',
-      'src/components/canvas/TimelineTab.tsx',
-      'src/components/canvas/BudgetTab.tsx',
-      'src/components/canvas/ConsortiumChart.tsx',
       'src/components/canvas/DisplayLegend.tsx',
       'src/app/design-notebook/**',
       'src/app/document-session/actions.ts',
@@ -148,7 +144,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
   {
     kind: 'forbid-imports',
     name: 'Workflow components do not import Design IPC',
-    from: ['src/components/shared/WelcomeScreen.tsx', 'src/components/canvas/BudgetTab.tsx'],
+    from: ['src/components/shared/WelcomeScreen.tsx', 'src/components/panels/BudgetPanel.tsx'],
     targets: ['src/ipc/design.ts'],
   },
   {
@@ -249,12 +245,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
     name: 'Planning Projection does not depend on Canvas2D renderers',
     from: ['src/app/planning-projection/consortium.ts'],
     targets: ['src/canvas/consortium-renderer.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Canvas2D consortium renderer does not depend on Planning Projection',
-    from: ['src/canvas/consortium-renderer.ts'],
-    targets: ['src/app/planning-projection/**'],
   },
   {
     kind: 'forbid-imports',
@@ -362,9 +352,9 @@ const FORBIDDEN_IMPORT_POLICIES = [
     kind: 'forbid-imports',
     name: 'Planning surfaces do not read Canvas or document authorities directly',
     from: [
-      'src/components/canvas/BudgetTab.tsx',
-      'src/components/canvas/InteractiveTimeline.tsx',
-      'src/components/canvas/ConsortiumChart.tsx',
+      'src/components/panels/BudgetPanel.tsx',
+      'src/components/panels/CalendarPanel.tsx',
+      'src/components/panels/ConsortiumPanel.tsx',
     ],
     targets: [
       'src/canvas/runtime-mirror-state.ts',
@@ -375,7 +365,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
   {
     kind: 'forbid-imports',
     name: 'Budget component uses its Workbench instead of projection or export internals',
-    from: ['src/components/canvas/BudgetTab.tsx'],
+    from: ['src/components/panels/BudgetPanel.tsx'],
     targets: [
       'src/app/planning-projection/**',
       'src/app/budget/controller.ts',
@@ -533,42 +523,18 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Planning Canvas does not depend on Scene interaction internals',
-    from: ['src/app/planning-canvas/interaction-frame.ts'],
-    targets: ['src/canvas/runtime/interaction/**'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Scene interaction does not depend on Planning Canvas',
     from: ['src/canvas/runtime/scene-interaction.ts'],
     targets: ['src/app/planning-canvas/**'],
   },
   {
     kind: 'forbid-imports',
-    name: 'Timeline component renders through the Timeline Canvas module',
-    from: ['src/components/canvas/InteractiveTimeline.tsx'],
+    name: 'Calendar component delegates mutations and authority reads to its Workbench',
+    from: ['src/components/panels/CalendarPanel.tsx'],
     targets: [
-      'src/app/timeline/controller.ts',
-      'src/app/settings/state.ts',
-      'src/canvas/timeline-renderer.ts',
-    ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Timeline Canvas barrel exposes only the host model',
-    from: ['src/app/timeline/canvas/index.ts'],
-    targets: [
-      'src/app/timeline/canvas/controller.ts',
-      'src/app/timeline/canvas/interaction-frame.ts',
-    ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Timeline host does not own interaction internals',
-    from: ['src/app/timeline/canvas/host-model.ts'],
-    targets: [
-      'src/app/timeline/canvas/interaction-frame.ts',
-      'src/app/timeline/interaction.ts',
+      'src/app/design-edit/**',
+      'src/app/document-session/store.ts',
+      'src/canvas/session.ts',
     ],
   },
   {
@@ -597,16 +563,15 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Timeline component stays behind the Timeline Canvas barrel',
-    from: ['src/components/canvas/InteractiveTimeline.tsx'],
-    targets: ['src/app/timeline/**', 'src/app/design-edit/**'],
-    exceptTargets: ['src/app/timeline/canvas/index.ts'],
+    name: 'Calendar component stays behind its Workbench for edits',
+    from: ['src/components/panels/CalendarPanel.tsx'],
+    targets: ['src/app/design-edit/**', 'src/app/document-session/store.ts'],
   },
   {
     kind: 'forbid-imports',
     name: 'Consortium component delegates document edits to its Workbench',
-    from: ['src/components/canvas/ConsortiumChart.tsx'],
-    targets: ['src/app/consortium/interaction.ts', 'src/app/design-edit/**'],
+    from: ['src/components/panels/ConsortiumPanel.tsx'],
+    targets: ['src/app/design-edit/**'],
   },
   {
     kind: 'forbid-imports',
@@ -714,7 +679,6 @@ const REQUIRED_IMPORT_POLICIES = [
     name: 'Panel resize surfaces delegate pointer lifecycle ownership',
     from: [
       'src/components/shared/SidePanelDock.tsx',
-      'src/components/canvas/BottomPanel.tsx',
       'src/components/panels/FavoritesPanel.tsx',
     ],
     targets: ['src/components/shared/usePointerResize.ts'],
@@ -934,7 +898,7 @@ const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
     name: 'Budget surface uses its Workbench',
-    from: ['src/components/canvas/BudgetTab.tsx'],
+    from: ['src/components/panels/BudgetPanel.tsx'],
     targets: ['src/app/budget/workbench.ts'],
   },
   {
@@ -945,8 +909,14 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Budget export owns export IPC',
+    name: 'Budget export delegates compile-time delivery',
     from: ['src/app/budget/export.ts'],
+    targets: ['#budget-export-platform'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Desktop Budget export delivery owns export IPC',
+    from: ['src/app/budget/platform.desktop.ts'],
     targets: ['src/ipc/export.ts'],
   },
   {
@@ -979,9 +949,8 @@ const REQUIRED_IMPORT_POLICIES = [
     from: [
       'src/app/location/controller.ts',
       'src/app/budget/workbench.ts',
-      'src/app/timeline/workbench.ts',
-      'src/app/timeline/interaction.ts',
-      'src/app/consortium/interaction.ts',
+      'src/app/timeline/calendar-workbench.ts',
+      'src/app/consortium/dock-workbench.ts',
       'src/app/consortium/workflow.ts',
     ],
     targets: ['src/app/design-edit/index.ts'],
@@ -997,8 +966,8 @@ const REQUIRED_IMPORT_POLICIES = [
     name: 'Planning workbenches consume Target presentation',
     from: [
       'src/app/budget/workbench.ts',
-      'src/app/timeline/workbench.ts',
-      'src/app/consortium/workbench.ts',
+      'src/app/timeline/calendar-workbench.ts',
+      'src/app/consortium/dock-workbench.ts',
     ],
     targets: ['src/app/panel-targets/presentation.ts'],
   },
@@ -1100,52 +1069,15 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Timeline component renders through the Timeline Canvas barrel',
-    from: ['src/components/canvas/InteractiveTimeline.tsx'],
-    targets: ['src/app/timeline/canvas/index.ts'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Timeline Canvas barrel exposes the host model',
-    from: ['src/app/timeline/canvas/index.ts'],
-    targets: ['src/app/timeline/canvas/host-model.ts'],
-    edgeKinds: ['reexport'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Timeline host composes controller and Workbench',
-    from: ['src/app/timeline/canvas/host-model.ts'],
-    targets: ['src/app/timeline/canvas/controller.ts', 'src/app/timeline/workbench.ts'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Timeline controller owns its interaction frame and geometry',
-    from: ['src/app/timeline/canvas/controller.ts'],
-    targets: [
-      'src/app/timeline/canvas/interaction-frame.ts',
-      'src/app/timeline/canvas/geometry.ts',
-    ],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Timeline interaction frame reuses Planning Canvas lifetime',
-    from: ['src/app/timeline/canvas/interaction-frame.ts'],
-    targets: ['src/app/planning-canvas/interaction-frame.ts'],
+    name: 'Calendar panel uses its Workbench',
+    from: ['src/components/panels/CalendarPanel.tsx'],
+    targets: ['src/app/timeline/calendar-workbench.ts'],
   },
   {
     kind: 'require-imports',
     name: 'Consortium component uses its Workbench',
-    from: ['src/components/canvas/ConsortiumChart.tsx'],
-    targets: ['src/app/consortium/workbench.ts'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Consortium Workbench composes interaction and Planning Canvas lifetime',
-    from: ['src/app/consortium/workbench.ts'],
-    targets: [
-      'src/app/consortium/interaction.ts',
-      'src/app/planning-canvas/interaction-frame.ts',
-    ],
+    from: ['src/components/panels/ConsortiumPanel.tsx'],
+    targets: ['src/app/consortium/dock-workbench.ts'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -1336,6 +1268,25 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/app/timeline/canvas-workbench.ts',
       'src/app/timeline/interaction-workbench.ts',
       'src/app/timeline/interaction-frame.ts',
+      'src/app/planning-canvas/interaction-frame.ts',
+      'src/app/timeline/canvas/index.ts',
+      'src/app/timeline/canvas/controller.ts',
+      'src/app/timeline/canvas/geometry.ts',
+      'src/app/timeline/canvas/host-model.ts',
+      'src/app/timeline/canvas/interaction-frame.ts',
+      'src/app/timeline/interaction.ts',
+      'src/app/timeline/workbench.ts',
+      'src/app/consortium/interaction.ts',
+      'src/app/consortium/workbench.ts',
+      'src/canvas/timeline-renderer.ts',
+      'src/canvas/consortium-renderer.ts',
+      'src/components/canvas/BottomPanel.tsx',
+      'src/components/canvas/BottomPanelLauncher.tsx',
+      'src/components/canvas/BudgetTab.tsx',
+      'src/components/canvas/TimelineTab.tsx',
+      'src/components/canvas/InteractiveTimeline.tsx',
+      'src/components/canvas/TimelinePopover.tsx',
+      'src/components/canvas/ConsortiumChart.tsx',
       'src/app/plant-browser/state.ts',
       'src/app/plant-browser/controller.ts',
       'src/web/browser-theme.ts',
@@ -1509,12 +1460,10 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     kind: 'forbid-source-symbols',
     name: 'Planning surfaces delegate document listener ownership to their frame',
     from: [
-      'src/app/timeline/canvas/host-model.ts',
-      'src/app/timeline/canvas/controller.ts',
-      'src/app/timeline/canvas/interaction-frame.ts',
-      'src/app/consortium/workbench.ts',
-      'src/components/canvas/InteractiveTimeline.tsx',
-      'src/components/canvas/ConsortiumChart.tsx',
+      'src/app/timeline/calendar-workbench.ts',
+      'src/app/consortium/dock-workbench.ts',
+      'src/components/panels/CalendarPanel.tsx',
+      'src/components/panels/ConsortiumPanel.tsx',
     ],
     names: ['addEventListener', 'removeEventListener'],
   },
@@ -1666,30 +1615,17 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-source-symbols',
     name: 'Timeline component delegates edit and form behavior',
-    from: ['src/components/canvas/InteractiveTimeline.tsx'],
+    from: ['src/components/panels/CalendarPanel.tsx'],
     names: [
       'beginDocumentArrayEdit',
-      'beginTimelineActionEdit',
-      'createTimelineActionFromFormData',
-      'formDataFromTimelineAction',
-      'timelineActionPatchFromFormData',
-    ],
-  },
-  {
-    kind: 'forbid-source-symbols',
-    name: 'Timeline interaction frame delegates Target presentation',
-    from: ['src/app/timeline/canvas/interaction-frame.ts'],
-    names: [
-      'setTimelineHoveredPanelTargets',
-      'setTimelineSelectedPanelTargets',
-      'clearTimelineHoveredPanelTargets',
-      'clearTimelineSelectedPanelTargets',
+      'createCalendarActionFromFormData',
+      'calendarActionPatchFromFormData',
     ],
   },
   {
     kind: 'forbid-source-symbols',
     name: 'Consortium component delegates document edits',
-    from: ['src/components/canvas/ConsortiumChart.tsx'],
+    from: ['src/components/panels/ConsortiumPanel.tsx'],
     names: [
       'beginDocumentArrayEdit',
       'moveConsortiumEntryInArray',
@@ -1698,8 +1634,8 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   },
   {
     kind: 'forbid-source-symbols',
-    name: 'Consortium Workbench does not revive direct hover ownership',
-    from: ['src/app/consortium/workbench.ts'],
+    name: 'Consortium Workbench delegates hover ownership to Target Presentation',
+    from: ['src/app/consortium/dock-workbench.ts'],
     names: ['setHoveredSpecies'],
   },
   {

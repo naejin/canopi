@@ -1,13 +1,14 @@
 import { useMemo } from 'preact/hooks'
-import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { currentCanvasQuerySurface } from '../../canvas/session'
+import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
+import { buildSpeciesKey, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 import { locale } from '../settings/state'
 import { DEFAULT_BUDGET_CURRENCY } from '../contracts/document'
 import { currentDesign, designName } from '../document-session/store'
 import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../../types/design'
 import { buildBudgetPlanningProjection, type BudgetPlanningProjection } from './budget'
 import { buildConsortiumPlanningProjection, type ConsortiumPlanningProjection } from './consortium'
-import { buildTimelinePlanningProjection, type TimelinePlanningProjection } from './timeline'
+import { buildTimelineSpeciesOptions, type TimelineSpeciesOption } from './timeline'
+import { buildCalendarPlanningProjection, type CalendarPlanningProjection } from './calendar'
 
 const EMPTY_PLANTS: readonly PlacedPlant[] = []
 const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
@@ -18,6 +19,9 @@ const EMPTY_CONSORTIUMS: readonly Consortium[] = []
 export interface PlanningProjectionCanvasSnapshot {
   readonly plants: readonly PlacedPlant[]
   readonly localizedNames: ReadonlyMap<string, string | null>
+  readonly speciesKey: readonly SpeciesKeyEntry[]
+  readonly zoneNames: readonly string[]
+  readonly selectedPlantIds: readonly string[]
 }
 
 export interface BudgetPlanningSurface {
@@ -27,11 +31,14 @@ export interface BudgetPlanningSurface {
   readonly activeLocale: string
 }
 
-export interface TimelinePlanningSurface {
+export interface CalendarPlanningSurface {
   readonly actions: readonly TimelineAction[]
-  readonly projection: TimelinePlanningProjection
+  readonly projection: CalendarPlanningProjection
   readonly activeLocale: string
-  readonly speciesColors: Record<string, string>
+  readonly selectedPlantIds: readonly string[]
+  readonly readSelectedPlantIds: () => readonly string[]
+  readonly zoneNames: readonly string[]
+  readonly speciesList: readonly TimelineSpeciesOption[]
 }
 
 export interface ConsortiumPlanningSurface {
@@ -44,12 +51,18 @@ export function usePlanningProjectionCanvasSnapshot(): PlanningProjectionCanvasS
   const session = currentCanvasQuerySurface.value
   const sceneRevision = session?.revision.scene.value ?? 0
   const plantNamesRevision = session?.revision.plantNames.value ?? 0
+  const selection = currentCanvasSelection.value
   const activeLocale = locale.value
 
   return useMemo(() => ({
     plants: session?.getPlacedPlants() ?? EMPTY_PLANTS,
     localizedNames: session?.getLocalizedCommonNames() ?? EMPTY_NAMES,
-  }), [session, sceneRevision, plantNamesRevision, activeLocale])
+    speciesKey: session
+      ? buildSpeciesKey(session.getSceneSnapshot(), session.getLocalizedCommonNames())
+      : [],
+    zoneNames: session?.getSceneSnapshot().zones.map((zone) => zone.name) ?? [],
+    selectedPlantIds: session?.getSelectedPlantColorContext().plantIds ?? [],
+  }), [session, sceneRevision, plantNamesRevision, selection, activeLocale])
 }
 
 export function useBudgetPlanningProjection({
@@ -69,7 +82,8 @@ export function useBudgetPlanningProjection({
     budget,
     currency,
     locale,
-  }), [snapshot.plants, snapshot.localizedNames, budget, currency, locale])
+    speciesKey: snapshot.speciesKey,
+  }), [snapshot.plants, snapshot.localizedNames, snapshot.speciesKey, budget, currency, locale])
 }
 
 export function useBudgetPlanningSurface(): BudgetPlanningSurface {
@@ -91,73 +105,68 @@ export function useBudgetPlanningSurface(): BudgetPlanningSurface {
   }
 }
 
-export function useTimelinePlanningProjection({
-  actions,
-  fallbackOriginMs,
-  locale,
-}: {
-  readonly actions: readonly TimelineAction[]
-  readonly fallbackOriginMs: number
-  readonly locale: string
-}): TimelinePlanningProjection {
+export function useCalendarPlanningSurface(options: {
+  readonly month: string
+  readonly search: string
+  readonly actionType: string
+  readonly completion: import('../planning-view/state').CalendarCompletionFilter
+}): CalendarPlanningSurface {
+  const actions = currentDesign.value?.timeline ?? EMPTY_TIMELINE
+  const activeLocale = locale.value
   const snapshot = usePlanningProjectionCanvasSnapshot()
-
-  return useMemo(() => buildTimelinePlanningProjection({
+  const projection = useMemo(() => buildCalendarPlanningProjection({
     actions,
     plants: snapshot.plants,
     localizedNames: snapshot.localizedNames,
-    fallbackOriginMs,
-    locale,
-  }), [snapshot.plants, snapshot.localizedNames, actions, fallbackOriginMs, locale])
-}
-
-export function useTimelinePlanningSurface({
-  fallbackOriginMs,
-}: {
-  readonly fallbackOriginMs: number
-}): TimelinePlanningSurface {
-  const actions = currentDesign.value?.timeline ?? EMPTY_TIMELINE
-  const activeLocale = locale.value
-  const speciesColors = plantSpeciesColorDefaults.value
-  const projection = useTimelinePlanningProjection({
-    actions,
-    fallbackOriginMs,
+    zoneNames: snapshot.zoneNames,
+    month: options.month,
+    search: options.search,
+    actionType: options.actionType,
+    completion: options.completion,
     locale: activeLocale,
-  })
-
+  }), [
+    actions,
+    activeLocale,
+    options.actionType,
+    options.completion,
+    options.month,
+    options.search,
+    snapshot.localizedNames,
+    snapshot.plants,
+    snapshot.zoneNames,
+  ])
   return {
     actions,
     projection,
     activeLocale,
-    speciesColors,
+    selectedPlantIds: snapshot.selectedPlantIds,
+    readSelectedPlantIds: () => (
+      currentCanvasQuerySurface.peek()?.getSelectedPlantColorContext().plantIds ?? []
+    ),
+    zoneNames: snapshot.zoneNames,
+    speciesList: buildTimelineSpeciesOptions(snapshot.plants, snapshot.localizedNames, activeLocale),
   }
 }
 
 export function useConsortiumPlanningProjection({
   consortiums,
-  speciesColors,
 }: {
   readonly consortiums: readonly Consortium[]
-  readonly speciesColors: Record<string, string>
 }): ConsortiumPlanningProjection {
   const snapshot = usePlanningProjectionCanvasSnapshot()
 
   return useMemo(() => buildConsortiumPlanningProjection({
     consortiums,
     plants: snapshot.plants,
-    speciesColors,
     localizedNames: snapshot.localizedNames,
-  }), [snapshot.plants, snapshot.localizedNames, consortiums, speciesColors])
+    speciesKey: snapshot.speciesKey,
+  }), [snapshot.plants, snapshot.localizedNames, snapshot.speciesKey, consortiums])
 }
 
 export function useConsortiumPlanningSurface(): ConsortiumPlanningSurface {
   const consortiums = currentDesign.value?.consortiums ?? EMPTY_CONSORTIUMS
-  const speciesColors = plantSpeciesColorDefaults.value
   const activeLocale = locale.value
-  const projection = useConsortiumPlanningProjection({
-    consortiums,
-    speciesColors,
-  })
+  const projection = useConsortiumPlanningProjection({ consortiums })
 
   return {
     consortiums,

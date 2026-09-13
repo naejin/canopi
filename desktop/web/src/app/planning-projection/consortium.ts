@@ -1,108 +1,174 @@
 import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
-import { DEFAULT_PLANT_COLOR } from '../../canvas/plant-colors'
-import { getStratumColor } from '../../canvas/plants'
 import { getConsortiumCanonicalName } from '../../target'
 import type { Consortium, PlacedPlant } from '../../types/design'
-
-export interface ConsortiumPlanningBar {
-  canonicalName: string
-  stratum: string
-  startPhase: number
-  endPhase: number
-  subLane: number
-  totalSubLanes: number
-  color: string
-  commonName: string
-  count: number
-}
+import type { PlantSymbolId } from '../../canvas/runtime/scene'
+import type { SpeciesKeyEntry } from '../../canvas/runtime/species-key'
+import { normalizeSearchText } from '../../utils/normalize-search'
+import { CONSORTIUM_STRATA, SUCCESSION_PHASE_COUNT } from '../consortium/time-model'
+import type { ConsortiumListFilter } from '../planning-view/state'
 
 export interface ConsortiumPlanningProjection {
-  readonly bars: readonly ConsortiumPlanningBar[]
   readonly activeEntries: readonly Consortium[]
+  readonly rows: readonly ConsortiumPlanningRow[]
+  readonly groups: readonly ConsortiumPlanningGroup[]
+  readonly matrix: readonly ConsortiumMatrixRow[]
+  readonly activeSpeciesCount: number
+  readonly activePlantCount: number
+}
+
+export interface ConsortiumPlanningRow {
+  readonly entry: Consortium
+  readonly canonicalName: string
+  readonly commonName: string
+  readonly code?: string
+  readonly appearances: readonly { readonly symbol: PlantSymbolId; readonly color: string }[]
+  readonly count: number
+  readonly stratum: string
+  readonly startPhase: number
+  readonly endPhase: number
+  readonly searchText: string
+}
+
+export interface ConsortiumPlanningGroup {
+  readonly stratum: string
+  readonly supported: boolean
+  readonly rows: readonly ConsortiumPlanningRow[]
+  readonly speciesCount: number
+  readonly plantCount: number
+}
+
+export interface ConsortiumMatrixRow {
+  readonly stratum: string
+  readonly counts: readonly number[]
+}
+
+export interface ConsortiumListProjection {
+  readonly groups: readonly ConsortiumPlanningGroup[]
+  readonly visibleCount: number
+  readonly restricted: boolean
 }
 
 export interface BuildConsortiumPlanningProjectionOptions {
   readonly consortiums: readonly Consortium[]
   readonly plants: readonly PlacedPlant[]
-  readonly speciesColors: Record<string, string>
   readonly localizedNames?: ReadonlyMap<string, string | null>
+  readonly speciesKey?: readonly SpeciesKeyEntry[]
 }
 
 export function buildConsortiumPlanningProjection({
   consortiums,
   plants,
-  speciesColors,
   localizedNames,
+  speciesKey = [],
 }: BuildConsortiumPlanningProjectionOptions): ConsortiumPlanningProjection {
   const activeEntries = filterActiveConsortiumEntries(consortiums, plants)
+  const rows = buildConsortiumRows(activeEntries, plants, localizedNames, speciesKey)
   return {
     activeEntries,
-    bars: buildConsortiumBars(activeEntries, plants, speciesColors, localizedNames),
+    rows,
+    groups: groupConsortiumRows(rows),
+    matrix: CONSORTIUM_STRATA.map((stratum) => ({
+      stratum,
+      counts: Array.from({ length: SUCCESSION_PHASE_COUNT }, (_, phase) => new Set(
+        rows
+          .filter((row) => row.stratum === stratum && row.startPhase <= phase && row.endPhase >= phase)
+          .map((row) => row.canonicalName),
+      ).size),
+    })),
+    activeSpeciesCount: new Set(rows.map((row) => row.canonicalName)).size,
+    activePlantCount: plants.length,
   }
 }
 
-export function buildConsortiumBars(
+export function buildConsortiumListProjection(
+  projection: ConsortiumPlanningProjection,
+  options: { readonly search: string; readonly filter: ConsortiumListFilter | null },
+): ConsortiumListProjection {
+  const needle = normalizeSearchText(options.search.trim())
+  const groups = projection.groups.map((group) => {
+    const rows = group.rows.filter((row) => {
+      if (options.filter?.stratum && row.stratum !== options.filter.stratum) return false
+      if (
+        options.filter?.phase !== null
+        && options.filter?.phase !== undefined
+        && !(row.startPhase <= options.filter.phase && row.endPhase >= options.filter.phase)
+      ) return false
+      return needle === '' || row.searchText.includes(needle)
+    })
+    return {
+      ...group,
+      rows,
+      speciesCount: rows.length,
+      plantCount: rows.reduce((sum, row) => sum + row.count, 0),
+    }
+  }).filter((group) => group.rows.length > 0)
+  return {
+    groups,
+    visibleCount: groups.reduce((sum, group) => sum + group.rows.length, 0),
+    restricted: needle !== '' || options.filter !== null,
+  }
+}
+
+function buildConsortiumRows(
   entries: readonly Consortium[],
   plants: readonly PlacedPlant[],
-  speciesColors: Record<string, string>,
-  localizedNames?: ReadonlyMap<string, string | null>,
-): ConsortiumPlanningBar[] {
+  localizedNames: ReadonlyMap<string, string | null> | undefined,
+  speciesKey: readonly SpeciesKeyEntry[],
+): ConsortiumPlanningRow[] {
   const plantCounts = groupPlantsBySpecies(plants, localizedNames)
-
-  const bars: ConsortiumPlanningBar[] = entries.map((entry) => {
+  const identity = new Map(speciesKey.map((entry) => [entry.canonicalName, entry]))
+  const seen = new Set<string>()
+  return entries.filter((entry) => {
+    const canonicalName = getConsortiumCanonicalName(entry)
+    if (seen.has(canonicalName)) return false
+    seen.add(canonicalName)
+    return true
+  }).map((entry) => {
     const canonicalName = getConsortiumCanonicalName(entry)
     const plantInfo = plantCounts.get(canonicalName)
+    const speciesIdentity = identity.get(canonicalName)
+    const commonName = plantInfo?.commonName ?? speciesIdentity?.commonName ?? canonicalName
+    const code = speciesIdentity?.code
     return {
+      entry,
       canonicalName,
+      commonName,
+      code,
+      appearances: speciesIdentity?.appearances ?? [],
+      count: plantInfo?.count ?? 0,
       stratum: entry.stratum,
       startPhase: entry.start_phase,
       endPhase: entry.end_phase,
-      subLane: 0,
-      totalSubLanes: 1,
-      color: speciesColors[canonicalName] ?? getStratumColor(entry.stratum) ?? DEFAULT_PLANT_COLOR,
-      commonName: plantInfo?.commonName ?? canonicalName,
-      count: plantInfo?.count ?? 0,
+      searchText: normalizeSearchText(`${commonName} ${canonicalName} ${code ?? ''}`),
     }
-  })
-
-  const byStratum = new Map<string, ConsortiumPlanningBar[]>()
-  for (const bar of bars) {
-    const group = byStratum.get(bar.stratum)
-    if (group) group.push(bar)
-    else byStratum.set(bar.stratum, [bar])
-  }
-
-  for (const group of byStratum.values()) {
-    packConsortiumLanes(group)
-  }
-
-  return bars
+  }).sort((left, right) => (
+    left.commonName.localeCompare(right.commonName)
+    || left.canonicalName.localeCompare(right.canonicalName)
+  ))
 }
 
-function packConsortiumLanes(group: ConsortiumPlanningBar[]): void {
-  const laneEndPhases: number[] = []
-  const ordered = group
-    .map((bar, originalIndex) => ({ bar, originalIndex }))
-    .sort((a, b) => (
-      a.bar.startPhase - b.bar.startPhase
-      || a.originalIndex - b.originalIndex
+function groupConsortiumRows(rows: readonly ConsortiumPlanningRow[]): ConsortiumPlanningGroup[] {
+  const order = new Map<string, number>(CONSORTIUM_STRATA.map((stratum, index) => [stratum, index]))
+  const grouped = new Map<string, ConsortiumPlanningRow[]>()
+  for (const row of rows) {
+    const group = grouped.get(row.stratum) ?? []
+    group.push(row)
+    grouped.set(row.stratum, group)
+  }
+  return [...grouped.entries()]
+    .sort(([left], [right]) => (
+      (order.get(left) ?? Number.MAX_SAFE_INTEGER) - (order.get(right) ?? Number.MAX_SAFE_INTEGER)
+      || left.localeCompare(right)
     ))
-
-  for (const { bar } of ordered) {
-    let laneIndex = laneEndPhases.findIndex((endPhase) => endPhase < bar.startPhase)
-    if (laneIndex === -1) {
-      laneIndex = laneEndPhases.length
-      laneEndPhases.push(bar.endPhase)
-    } else {
-      laneEndPhases[laneIndex] = bar.endPhase
-    }
-    bar.subLane = laneIndex
-  }
-
-  for (const bar of group) {
-    bar.totalSubLanes = laneEndPhases.length
-  }
+    .map(([stratum, groupRows]) => ({
+      stratum,
+      supported: order.has(stratum),
+      rows: groupRows,
+      speciesCount: groupRows.length,
+      plantCount: groupRows.reduce((sum, row) => sum + row.count, 0),
+    }))
 }
+
 
 export function filterActiveConsortiumEntries(
   entries: readonly Consortium[],

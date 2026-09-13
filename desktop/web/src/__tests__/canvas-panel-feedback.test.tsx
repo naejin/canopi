@@ -41,14 +41,6 @@ vi.mock('../components/canvas/ZoomControls', () => ({
   ZoomControls: () => <div data-testid="zoom-controls" />,
 }))
 
-vi.mock('../components/canvas/BottomPanelLauncher', () => ({
-  BottomPanelLauncher: () => <div data-testid="bottom-panel-launcher" />,
-}))
-
-vi.mock('../components/canvas/BottomPanel', () => ({
-  BottomPanel: () => <div data-testid="bottom-panel" />,
-}))
-
 vi.mock('../components/canvas/LayerPanel', () => ({
   LayerPanel: () => <div data-testid="layer-panel" />,
 }))

@@ -2,7 +2,7 @@
 
 From desktop/web: `npm run dev:ui`. Open http://127.0.0.1:1422/.
 
-The seven surfaces mount their production components over a real disposable canvas runtime. The backend and file dialogs are replaced only by this Vite configuration; native operations use memory fixtures. No user database, Design, settings store or file is read or written. Reload resets the session.
+The planning and canvas surfaces mount their production components over a real disposable canvas runtime. The backend and file dialogs are replaced only by this Vite configuration; native operations use memory fixtures. No user database, Design, settings store or file is read or written. Reload resets the session.
 
 Direct links:
 
@@ -10,11 +10,15 @@ Direct links:
 - [Plant symbol](http://127.0.0.1:1422/?surface=symbol)
 - [Species key](http://127.0.0.1:1422/?surface=key)
 - [Layers](http://127.0.0.1:1422/?surface=layers)
+- [Calendar](http://127.0.0.1:1422/?surface=calendar)
+- [Expanded Calendar](http://127.0.0.1:1422/?surface=calendar-expanded)
+- [Budget](http://127.0.0.1:1422/?surface=budget)
+- [Consortium](http://127.0.0.1:1422/?surface=consortium)
 - [Favorites](http://127.0.0.1:1422/?surface=favorites)
 - [Design notebook](http://127.0.0.1:1422/?surface=notebook)
 - [Inspection lens](http://127.0.0.1:1422/?surface=lens)
 
-Add `state=empty|mixed|long|located`, `theme=dark`, or `locale=fr`. Empty appearance stories intentionally have no editable selection. Both header review controls and the real canvas toolbar remain interactive. For a fresh selection after clicking the canvas, reload.
+Add `state=empty|mixed|long|located|dense`, `theme=dark`, `locale=fr`, or `panelWidth=320|352|480|800`. Add `edition=web` to exercise the production stacked dock breakpoint on a narrow viewport. Calendar fixtures use September 2026 so visual reviews are deterministic. Empty appearance stories intentionally have no editable selection. Both header review controls and the real canvas toolbar remain interactive. For a fresh selection after clicking the canvas, reload.
 
 Check with `npm run check:ui`. The gallery lives outside src and normal build inputs. Its Vite config rejects builds and owns a separate dependency cache so the gallery can run beside the main dev server. Add fixtures for new reusable states; do not copy production markup into the gallery.
 

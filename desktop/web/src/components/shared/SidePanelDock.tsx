@@ -10,6 +10,7 @@ const MIN_SIDEBAR_WIDTH = 320
 const DEFAULT_SIDEBAR_SIZE = 352
 const DEFAULT_SIDEBAR_WIDTH = `clamp(${MIN_SIDEBAR_WIDTH}px, 352px, 90vw)`
 const MAX_SIDEBAR_RATIO = 0.9
+const MAX_EXPANDED_SIDEBAR_WIDTH = 800
 
 interface SidebarResizeSession {
   readonly panel: HTMLDivElement
@@ -21,22 +22,31 @@ interface SidebarResizeSession {
 export function SidePanelDock({
   children,
   responsive = false,
+  responsiveSize = 'default',
+  expanded = false,
+  onManualResize,
 }: {
   readonly children: ComponentChildren
   readonly responsive?: boolean
+  readonly responsiveSize?: 'default' | 'large'
+  readonly expanded?: boolean
+  readonly onManualResize?: () => void
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const width = sidePanelWidth.value
   return (
     <>
-      <SidePanelResizeHandle panelRef={panelRef} />
+      <SidePanelResizeHandle panelRef={panelRef} onManualResize={onManualResize} />
       <div
         ref={panelRef}
-        className={`${styles.sidePanel} ${responsive ? styles.responsive : ''}`}
+        className={`${styles.sidePanel} ${responsive ? styles.responsive : ''} ${responsive && responsiveSize === 'large' ? styles.responsiveLarge : ''}`}
+        data-responsive-size={responsive ? responsiveSize : undefined}
         style={
           {
             '--side-panel-width':
-              width === null ? DEFAULT_SIDEBAR_WIDTH : `${width}px`,
+              expanded
+                ? `max(${width === null ? DEFAULT_SIDEBAR_WIDTH : `${width}px`}, min(${MAX_EXPANDED_SIDEBAR_WIDTH}px, 90%))`
+                : width === null ? DEFAULT_SIDEBAR_WIDTH : `${width}px`,
             ...(responsive
               ? {}
               : { minWidth: `${MIN_SIDEBAR_WIDTH}px`, maxWidth: '90%' }),
@@ -51,8 +61,10 @@ export function SidePanelDock({
 
 function SidePanelResizeHandle({
   panelRef,
+  onManualResize,
 }: {
   panelRef: { current: HTMLDivElement | null }
+  onManualResize?: () => void
 }) {
   const onPointerDown = usePointerResize<SidebarResizeSession>({
     cursor: 'col-resize',
@@ -72,6 +84,7 @@ function SidePanelResizeHandle({
       return width !== session.startWidth
     },
     commit: (session, event) => {
+      onManualResize?.()
       commitSidePanelWidth(resolveSidebarWidth(session, event.clientX))
     },
     rollback: (session) => {
@@ -89,6 +102,7 @@ function SidePanelResizeHandle({
         const panel = panelRef.current
         if (!panel) return
         event.preventDefault()
+        onManualResize?.()
         const width =
           currentSidebarWidth(panel) + (event.key === 'ArrowLeft' ? 20 : -20)
         commitSidePanelWidth(

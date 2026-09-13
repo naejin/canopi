@@ -15,6 +15,7 @@ export default defineConfig(({ command }) => {
       '#species-catalog-live': path('../src/app/plant-browser/live.desktop.ts'),
       '#platform': path('../src/platform/browser.ts'),
       '#canvas-pdf-platform': path('../src/app/canvas-pdf/platform.browser.ts'),
+      '#budget-export-platform': path('./budget-export.ts'),
       '#design-template-import-workflow': path('../src/app/design-template-import/workflow.browser.ts'),
       '#design-template-catalog': path('../src/app/community/catalog.browser.ts'),
     } },

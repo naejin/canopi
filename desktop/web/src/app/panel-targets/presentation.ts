@@ -1,5 +1,4 @@
 import { effect } from '@preact/signals'
-import type { BottomPanelTab } from '../canvas-settings/bottom-panel-state'
 import { isSpeciesTarget, targetIdentity, speciesTarget } from '../../target'
 import type { PanelTarget } from '../../types/design'
 import {
@@ -8,11 +7,12 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from './state'
+import type { PanelTargetPresentationOrigin } from './state'
 
-export type PanelTargetPresentationOrigin = BottomPanelTab
+export type { PanelTargetPresentationOrigin } from './state'
 
 export interface PanelTargetSelectionSnapshot {
-  readonly origin: BottomPanelTab | null
+  readonly origin: PanelTargetPresentationOrigin | null
   readonly targets: readonly PanelTarget[]
   readonly ownsOrigin: boolean
 }

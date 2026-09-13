@@ -36,6 +36,53 @@ const panelIcons: Record<Panel, () => preact.JSX.Element> = {
       <path d="m12 3 9 5-9 5-9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
     </svg>
   ),
+  calendar: () => (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width={PANEL_ICON_STROKE_WIDTH}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="16" rx="1" />
+      <path d="M7 3v4M17 3v4M3 10h18M7 14h2M11 14h2M15 14h2M7 18h2M11 18h2" />
+    </svg>
+  ),
+  consortium: () => (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width={PANEL_ICON_STROKE_WIDTH}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 20V8M9 20V4M14 20v-9M19 20V6M2 20h20" />
+      <path d="M3 11h3M8 8h3M13 14h3M18 10h3" />
+    </svg>
+  ),
+  budget: () => (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width={PANEL_ICON_STROKE_WIDTH}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 6.5h10M7 17.5h10M9 3.5 6 6.5l3 3M15 14.5l3 3-3 3" />
+    </svg>
+  ),
   canvas: () => (
     <svg
       width="20"

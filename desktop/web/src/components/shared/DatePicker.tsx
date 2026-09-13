@@ -1,5 +1,7 @@
+import { createPortal } from 'preact/compat'
 import { useRef, useCallback, useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
+import type { RefObject } from 'preact'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { toISODate } from '../../canvas/timeline-math'
@@ -111,6 +113,8 @@ export interface DatePickerProps {
   preserveOverlays?: boolean
   /** Accessible label for the trigger button */
   ariaLabel?: string
+  /** Position the calendar against the viewport so a scroll region cannot clip it. */
+  floating?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +131,7 @@ export function DatePicker({
   className,
   preserveOverlays = false,
   ariaLabel,
+  floating = false,
 }: DatePickerProps) {
   // Subscribe to locale for i18n reactivity
   const currentLocale = locale.value
@@ -134,6 +139,7 @@ export function DatePicker({
   const open = useSignal(false)
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
 
   const parsedValue = parseISO(value)
   const minDate = parseISO(min ?? '')
@@ -158,13 +164,18 @@ export function DatePicker({
   useSignalEffect(() => {
     if (!open.value) return
     const handleOutside = (e: Event) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        open.value = false
-      }
+      if (!(e.target instanceof Node)) return
+      if (ref.current?.contains(e.target) || popupRef.current?.contains(e.target)) return
+      open.value = false
     }
+    const dismissFloating = () => { if (floating) open.value = false }
     document.addEventListener('pointerup', handleOutside)
+    window.addEventListener('resize', dismissFloating)
+    window.addEventListener('scroll', dismissFloating, true)
     return () => {
       document.removeEventListener('pointerup', handleOutside)
+      window.removeEventListener('resize', dismissFloating)
+      window.removeEventListener('scroll', dismissFloating, true)
     }
   })
 
@@ -181,8 +192,8 @@ export function DatePicker({
   }, [value]) // eslint-disable-line
 
   const handleSelectDay = useCallback((date: Date) => {
-    onChange(toISODate(date))
     open.value = false
+    onChange(toISODate(date))
     triggerRef.current?.focus()
   }, [onChange]) // eslint-disable-line
 
@@ -219,6 +230,28 @@ export function DatePicker({
     className ?? '',
   ].filter(Boolean).join(' ')
 
+  const calendar = open.value && (
+    <CalendarPanel
+      viewYear={viewYear.value}
+      viewMonth={viewMonth.value}
+      selectedDate={parsedValue}
+      minDate={minDate}
+      maxDate={maxDate}
+      locale={currentLocale}
+      direction={resolvedDir}
+      alignRight={alignRight}
+      popupRef={popupRef}
+      floatingAnchor={floating ? triggerRef.current?.getBoundingClientRect() ?? null : null}
+      onSelect={handleSelectDay}
+      onPrevMonth={handlePrevMonth}
+      onNextMonth={handleNextMonth}
+      onClose={() => {
+        open.value = false
+        triggerRef.current?.focus()
+      }}
+    />
+  )
+
   return (
     <div
       className={styles.datePicker}
@@ -237,25 +270,7 @@ export function DatePicker({
       >
         {triggerText ?? placeholder ?? ''}
       </button>
-      {open.value && (
-        <CalendarPanel
-          viewYear={viewYear.value}
-          viewMonth={viewMonth.value}
-          selectedDate={parsedValue}
-          minDate={minDate}
-          maxDate={maxDate}
-          locale={currentLocale}
-          direction={resolvedDir}
-          alignRight={alignRight}
-          onSelect={handleSelectDay}
-          onPrevMonth={handlePrevMonth}
-          onNextMonth={handleNextMonth}
-          onClose={() => {
-            open.value = false
-            triggerRef.current?.focus()
-          }}
-        />
-      )}
+      {calendar && (floating ? createPortal(calendar, document.body) : calendar)}
     </div>
   )
 }
@@ -273,6 +288,8 @@ interface CalendarPanelProps {
   locale: string
   direction: 'up' | 'down'
   alignRight?: boolean
+  popupRef: RefObject<HTMLDivElement>
+  floatingAnchor: DOMRect | null
   onSelect: (date: Date) => void
   onPrevMonth: () => void
   onNextMonth: () => void
@@ -288,6 +305,8 @@ function CalendarPanel({
   locale: loc,
   direction,
   alignRight,
+  popupRef,
+  floatingAnchor,
   onSelect,
   onPrevMonth,
   onNextMonth,
@@ -443,12 +462,27 @@ function CalendarPanel({
     }
   }
 
-  const calendarClass = `${styles.calendar} ${direction === 'up' ? styles.calendarUp : styles.calendarDown}`
+  const calendarClass = `${styles.calendar} ${direction === 'up' ? styles.calendarUp : styles.calendarDown}${floatingAnchor ? ` ${styles.calendarFloating}` : ''}`
+  const calendarStyle = floatingAnchor
+    ? direction === 'up'
+      ? {
+          left: alignRight ? 'auto' : `${Math.max(8, floatingAnchor.left)}px`,
+          right: alignRight ? `${Math.max(8, window.innerWidth - floatingAnchor.right)}px` : 'auto',
+          bottom: `${Math.max(8, window.innerHeight - floatingAnchor.top + 4)}px`,
+        }
+      : {
+          left: alignRight ? 'auto' : `${Math.max(8, floatingAnchor.left)}px`,
+          right: alignRight ? `${Math.max(8, window.innerWidth - floatingAnchor.right)}px` : 'auto',
+          top: `${Math.max(8, floatingAnchor.bottom + 4)}px`,
+        }
+    : alignRight ? { left: 'auto', right: 0 } : undefined
 
   return (
     <div
+      ref={popupRef}
       className={calendarClass}
-      style={alignRight ? { left: 'auto', right: 0 } : undefined}
+      style={calendarStyle}
+      data-floating-popup={floatingAnchor ? 'true' : undefined}
       role="dialog"
       aria-label={t('shared.datePicker.chooseDate')}
       onKeyDown={handleKeyDown}

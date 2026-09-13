@@ -47,11 +47,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     auto_save_interval_s: 60,
     side_panel_width: null,
     saved_stamps_frame_height: null,
-    bottom_panel_open: false,
-    bottom_panel_timeline_height: null,
-    bottom_panel_budget_height: null,
-    bottom_panel_consortium_height: null,
-    bottom_panel_tab: 'budget',
     map_layer_visible: true,
     map_style: 'street',
     map_opacity: 1,
@@ -136,6 +131,9 @@ describe('Web Edition Browser App Shell', () => {
       'nav.canvas',
       'nav.speciesKey',
       'nav.layers',
+      'nav.calendar',
+      'nav.budget',
+      'nav.consortium',
       'nav.plantDb',
       'nav.favorites',
     ])
@@ -236,6 +234,9 @@ describe('Web Edition Browser App Shell', () => {
       'nav.templates',
       'nav.speciesKey',
       'nav.layers',
+      'nav.calendar',
+      'nav.budget',
+      'nav.consortium',
       'nav.plantDb',
       'nav.favorites',
     ])
@@ -244,6 +245,9 @@ describe('Web Edition Browser App Shell', () => {
       'World Map',
       'Species key',
       'Layers',
+      'Calendar',
+      'Budget',
+      'Consortium',
       'Plant Database',
       'Favorites',
     ])
@@ -301,6 +305,28 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-web-side-panel]')).toBeNull()
     expect(container.querySelector('[data-web-workspace-with-sidebar]')?.getAttribute('data-web-sidebar-open')).toBeNull()
     expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('allocates the larger responsive dock variant only to planning panels', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+      createDraftId: () => 'draft-planning-panel-size',
+    })
+    await act(async () => { render(<WebApp controller={controller} />, container) })
+    await clickShellCommand(container, 'file.new')
+
+    await act(async () => { panelBarButton(container, 'nav.budget').click() })
+    expect(container.querySelector('[data-web-side-panel="budget"]')).not.toBeNull()
+    expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('large')
+
+    await act(async () => { panelBarButton(container, 'nav.plantDb').click() })
+    expect(container.querySelector('[data-web-side-panel="plant-db"]')).not.toBeNull()
+    expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('default')
   })
 
   it('omits the Web Location feature from browser chrome', async () => {
