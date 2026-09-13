@@ -1,6 +1,29 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const workspaceCanvasLifecycle = vi.hoisted(() => ({
+  mounted: vi.fn(),
+  unmounted: vi.fn(),
+}))
+
+vi.mock('../web/WebCanvasWorkspace', async () => {
+  const { useEffect, useState } = await import('preact/hooks')
+  return {
+    WebCanvasWorkspace: () => {
+      const [state, setState] = useState('0:none:100')
+      useEffect(() => {
+        workspaceCanvasLifecycle.mounted()
+        return () => { workspaceCanvasLifecycle.unmounted() }
+      }, [])
+      return <button type="button" data-testid="web-workspace-canvas" onClick={() => setState('1:plant-1:125')}>{state}</button>
+    },
+  }
+})
+
+vi.mock('../components/panels/WorldMapPanel', () => ({
+  WorldMapPanel: () => <div data-testid="web-templates-workspace" />,
+}))
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { activePanel, navigateTo, sidePanel } from '../app/shell/state'
 import { locale, theme } from '../app/settings/state'
@@ -97,6 +120,8 @@ describe('Web Edition Browser App Shell', () => {
     sidePanel.value = null
     locale.value = 'en'
     theme.value = 'light'
+    workspaceCanvasLifecycle.mounted.mockClear()
+    workspaceCanvasLifecycle.unmounted.mockClear()
   })
 
   afterEach(() => {
@@ -279,31 +304,31 @@ describe('Web Edition Browser App Shell', () => {
       )
     })
 
-    expect(container.querySelector('[data-web-workspace-with-sidebar]')?.getAttribute('data-web-sidebar-open')).toBeNull()
+    expect(container.querySelector('[data-workspace-composition]')?.getAttribute('data-workspace-sidebar-open')).toBeNull()
 
     await act(async () => {
       panelBarButton(container, 'nav.plantDb').click()
     })
 
-    expect(container.querySelector('[data-web-workspace-with-sidebar]')).not.toBeNull()
-    expect(container.querySelector('[data-web-workspace-with-sidebar]')?.getAttribute('data-web-sidebar-open')).toBe('true')
-    expect(container.querySelector('[data-web-side-panel="plant-db"]')).not.toBeNull()
+    expect(container.querySelector('[data-workspace-composition]')).not.toBeNull()
+    expect(container.querySelector('[data-workspace-composition]')?.getAttribute('data-workspace-sidebar-open')).toBe('true')
+    expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
     expect(panelBarButton(container, 'nav.plantDb').getAttribute('aria-pressed')).toBe('true')
 
     await act(async () => {
       panelBarButton(container, 'nav.favorites').click()
     })
 
-    expect(container.querySelector('[data-web-side-panel="plant-db"]')).toBeNull()
-    expect(container.querySelector('[data-web-side-panel="favorites"]')).not.toBeNull()
+    expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).toBeNull()
+    expect(container.querySelector('[data-workspace-side-panel="favorites"]')).not.toBeNull()
     expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('true')
 
     await act(async () => {
       panelBarButton(container, 'nav.favorites').click()
     })
 
-    expect(container.querySelector('[data-web-side-panel]')).toBeNull()
-    expect(container.querySelector('[data-web-workspace-with-sidebar]')?.getAttribute('data-web-sidebar-open')).toBeNull()
+    expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
+    expect(container.querySelector('[data-workspace-composition]')?.getAttribute('data-workspace-sidebar-open')).toBeNull()
     expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('false')
   })
 
@@ -321,12 +346,54 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.new')
 
     await act(async () => { panelBarButton(container, 'nav.budget').click() })
-    expect(container.querySelector('[data-web-side-panel="budget"]')).not.toBeNull()
+    expect(container.querySelector('[data-workspace-side-panel="budget"]')).not.toBeNull()
     expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('large')
 
     await act(async () => { panelBarButton(container, 'nav.plantDb').click() })
-    expect(container.querySelector('[data-web-side-panel="plant-db"]')).not.toBeNull()
+    expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
     expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('default')
+  })
+
+  it('preserves the canvas across side panels and releases it for the Templates primary route', async () => {
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      fileAdapter: testFileAdapter(),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+      createDraftId: () => 'draft-workspace-routing',
+    })
+    await act(async () => { render(<WebApp controller={controller} templatesEnabled />, container) })
+    await clickShellCommand(container, 'file.new')
+    const canvas = container.querySelector<HTMLButtonElement>('[data-testid="web-workspace-canvas"]')
+    if (!canvas) throw new Error('Missing Web workspace canvas')
+
+    await act(async () => {
+      canvas.focus()
+      canvas.click()
+      panelBarButton(container, 'nav.calendar').click()
+    })
+    expect(container.querySelector('[data-testid="web-workspace-canvas"]')).toBe(canvas)
+    expect(canvas.textContent).toBe('1:plant-1:125')
+    expect(workspaceCanvasLifecycle.mounted).toHaveBeenCalledOnce()
+    expect(workspaceCanvasLifecycle.unmounted).not.toHaveBeenCalled()
+
+    await act(async () => { panelBarButton(container, 'nav.budget').click() })
+    expect(container.querySelector('[data-testid="web-workspace-canvas"]')).toBe(canvas)
+    expect(canvas.textContent).toBe('1:plant-1:125')
+    expect(workspaceCanvasLifecycle.unmounted).not.toHaveBeenCalled()
+
+    await act(async () => { panelBarButton(container, 'nav.templates').click() })
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="web-templates-workspace"]')).not.toBeNull()
+    })
+    expect(container.querySelector('[data-testid="web-workspace-canvas"]')).toBeNull()
+    expect(sidePanel.value).toBeNull()
+    expect(workspaceCanvasLifecycle.unmounted).toHaveBeenCalledOnce()
+
+    await act(async () => { panelBarButton(container, 'nav.canvas').click() })
+    expect(container.querySelector('[data-testid="web-workspace-canvas"]')).not.toBeNull()
+    expect(workspaceCanvasLifecycle.mounted).toHaveBeenCalledTimes(2)
   })
 
   it('omits the Web Location feature from browser chrome', async () => {

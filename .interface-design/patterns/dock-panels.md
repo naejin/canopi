@@ -1,8 +1,8 @@
 # Dock panels
 
-Read the [design contract](../system.md). Gallery: ?surface=key, layers, favorites, or notebook; include empty and long states.
+Read the [design contract](../system.md). Gallery: `?surface=workspace` exercises the complete Desktop composition; add `edition=web` for the Web composition. Direct panel review remains available through `?surface=key|layers|favorites|notebook`; include empty and long states.
 
-SidePanelDock is the single resizable dock. Default width is 352px, bounded by the existing minimum and viewport maximum; explicit user resize takes precedence. Web retains its narrow-screen stacked layout. DockPanelHeader uses shared sentence-case title/quiet count/close chrome and restores focus to the corresponding rail button. The shell owns which panel is open. Species Key and Layers are followed by Calendar, Budget, and Consortium in the Design group; opening or switching them keeps the canvas mounted.
+`WorkspaceComposition` validates the shell command projection against its edition's registered surfaces, chooses the primary surface, and mounts the single `SidePanelDock`. Default dock width is 352px, bounded by the existing minimum and viewport maximum; explicit user resize takes precedence. Web retains its narrow-screen stacked layout. `SidePanelDock` owns the pointer and keyboard resize lifecycle. `DockPanelHeader` uses shared sentence-case title/quiet count/close chrome and restores focus to the corresponding rail button. The shell owns which panel is open. Species Key and Layers are followed by Calendar, Budget, and Consortium in the Design group; opening or switching them keeps the canvas mounted.
 
 ## Planning
 

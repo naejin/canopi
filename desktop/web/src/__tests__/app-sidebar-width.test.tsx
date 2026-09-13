@@ -129,6 +129,29 @@ describe('App sidebar width', () => {
     expect(commitSidePanelWidth).toHaveBeenCalledWith(540)
   })
 
+  it('resizes the shared dock from its focused keyboard separator', async () => {
+    sidePanelWidth.value = 480
+
+    await act(async () => {
+      render(<App />, container)
+    })
+
+    const handle = resizeHandle(container)
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'ArrowLeft',
+    })
+    await act(async () => {
+      handle.focus()
+      handle.dispatchEvent(event)
+    })
+
+    expect(document.activeElement).toBe(handle)
+    expect(event.defaultPrevented).toBe(true)
+    expect(commitSidePanelWidth).toHaveBeenCalledWith(500)
+  })
+
   it('does not persist the responsive default from a resize-handle click without movement', async () => {
     await act(async () => {
       render(<App />, container)

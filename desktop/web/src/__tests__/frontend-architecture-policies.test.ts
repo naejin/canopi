@@ -677,9 +677,24 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Desktop and Web share the resizable side dock',
-    from: ['src/app.tsx', 'src/web/WebApp.tsx'],
-    targets: ['src/components/shared/SidePanelDock.tsx'],
+    name: 'Desktop and Web delegate workspace composition',
+    from: [
+      'src/components/workspace/DesktopWorkspace.tsx',
+      'src/web/WebWorkspace.tsx',
+    ],
+    targets: ['src/components/workspace/WorkspaceComposition.tsx'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Edition shells delegate their concrete workspace adapters',
+    from: ['src/app.tsx'],
+    targets: ['src/components/workspace/DesktopWorkspace.tsx'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Browser shell delegates its concrete workspace adapter',
+    from: ['src/web/WebApp.tsx'],
+    targets: ['src/web/WebWorkspace.tsx'],
   },
   {
     kind: 'require-imports',

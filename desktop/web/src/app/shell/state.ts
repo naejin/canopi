@@ -8,6 +8,10 @@ export type SidePanel = "plant-db" | "favorites" | "design-notebook" | "species-
 
 const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "design-notebook", "species-key", "layers", "calendar", "budget", "consortium"]);
 
+export function isSidePanel(panel: Panel): panel is SidePanel {
+  return SIDE_PANELS.has(panel);
+}
+
 export const activePanel = signal<Panel>("canvas");
 
 // Which sidebar panel is open alongside the canvas. null = none.
@@ -26,8 +30,8 @@ export const sidePanelWidth = signal<number | null>(DEFAULT_SETTINGS.side_panel_
  */
 export function navigateTo(panel: Panel): void {
   batch(() => {
-    if (SIDE_PANELS.has(panel)) {
-      const nextSidePanel = panel as SidePanel;
+    if (isSidePanel(panel)) {
+      const nextSidePanel = panel;
       if (sidePanel.value === nextSidePanel) {
         sidePanel.value = null;
       } else {

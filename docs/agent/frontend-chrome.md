@@ -24,6 +24,7 @@ Visual rules: [design contract](../../.interface-design/system.md) and its surfa
 - Use only font weights `400` and `600`.
 - Use spacing, font-size, radius, control-size, slider, and transition tokens. Add a shared token when a visual value belongs to one of those design scales; do not hide a raw scale value behind arithmetic or a scoped custom property. Keep unavoidable structural geometry or deliberately off-scale component behavior as a narrow, reviewed policy exception.
 - Icon-only chrome buttons with hover/focus tooltips should use `components/shared/ButtonTooltip.tsx` instead of native `title`, especially in rail toolbars and panel bars where locale changes must update immediately.
+- Panel bars render the command projection supplied by their shell. Workspace mounting belongs to `components/workspace/WorkspaceComposition.tsx`; chrome must not add panel-support booleans or mount a second dock.
 
 
 - Portalled Preact controls may use compat event normalization. Prefer real focus()/blur() in tests; synthetic focus events must use focusin/focusout when compat is active.

@@ -4,8 +4,8 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 
 ## Shared Design dock
 
-- Shell `sidePanel` is the sole open-panel authority. Species Key and Layers are `design`-group commands between workspace navigation and library panels. Only one side panel opens at a time; there is no separate Layer-panel collapse signal or canvas strip.
-- `SidePanelDock` owns the shared resizable dock and pointer-resize lifecycle for both editions. Drag or arrow keys resize; the existing settings projection remembers width. Web uses a stacked panel below 860px. `PanelIcon` provides identical native SVG attributes and strokes in both rails.
+- Shell `sidePanel` is the sole open-panel authority. `WorkspaceComposition` resolves it against the edition shell projection and registered surfaces, so an unsupported command cannot expose a blank dock. Species Key and Layers are `design`-group commands between workspace navigation and library panels. Only one side panel opens at a time; there is no separate Layer-panel collapse signal or canvas strip.
+- `WorkspaceComposition` owns when the dock is present and which production panel mounts. `SidePanelDock` owns the shared width and pointer-resize lifecycle. Drag or arrow keys resize; the existing settings projection remembers width. Web uses a stacked panel below 860px. `PanelIcon` provides identical native SVG attributes and strokes in both rails.
 - `SpeciesKeyPanel` reads runtime queries for names, reserved codes, counts, and actual appearance variants. It searches existing placements; the Species Catalog remains the discover/add surface. Focus is independent of panel mounting and selection. `SpeciesFocusChip` always exposes a clear action above the canvas, below its ruler. Closing a dock header restores keyboard focus to its right-bar button.
 - The dock starts closed. New Design-dependent entries are disabled until a Design exists, except that an already open entry remains enabled to close it. Do not silently auto-open Species Key or reuse inspection hover/selection as its persistent focus state.
 

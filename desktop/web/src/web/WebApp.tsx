@@ -1,9 +1,4 @@
-import { SidePanelDock } from '../components/shared/SidePanelDock'
-import { WebSpeciesKeyPanel } from './WebSpeciesCatalogPanel'
-import { WebLayersPanel } from './WebLayersPanel'
-import { CanvasPdfDialog } from '../components/canvas-pdf/CanvasPdfDialog'
 import type { ComponentChildren } from "preact";
-import { lazy, Suspense } from "preact/compat";
 import { useEffect, useMemo } from "preact/hooks";
 import { activePanel, sidePanel } from "../app/shell/state";
 import styles from "./WebApp.module.css";
@@ -17,18 +12,9 @@ import {
   browserDesignSessionController,
   type BrowserDesignSessionController,
 } from "./browser-design-session";
-import { WebCanvasWorkspace } from "./WebCanvasWorkspace";
-import { WebSpeciesCatalogPanel } from "./WebSpeciesCatalogPanel";
 import { hasConfiguredStaticDesignTemplates } from "../app/community/catalog.browser";
-import { BudgetPanel } from "../components/panels/BudgetPanel";
-import { CalendarPanel } from "../components/panels/CalendarPanel";
-import { ConsortiumPanel } from "../components/panels/ConsortiumPanel";
-import { usePlanningViewState } from "../app/planning-view/state";
-
-const WorldMapPanel = lazy(async () => {
-  const module = await import("../components/panels/WorldMapPanel");
-  return { default: module.WorldMapPanel };
-});
+import { WorkspaceDialogs } from "../components/workspace/WorkspaceComposition";
+import { WebWorkspace } from "./WebWorkspace";
 
 interface WebAppProps {
   readonly controller?: BrowserDesignSessionController;
@@ -64,58 +50,15 @@ export function WebApp({
         designIdentity={designIdentity}
         onRenameDesign={(name) => controller.renameDesign(name)}
       >
-        {workspace ?? <WebWorkspace controller={controller} templatesEnabled={templatesEnabled} />}
+        {workspace ?? (
+          <WebWorkspace
+            controller={controller}
+            panelProjection={commandProjection.panelBar}
+            templatesEnabled={templatesEnabled}
+          />
+        )}
       </BrowserAppShell>
-      <CanvasPdfDialog />
-    </div>
-  );
-}
-
-function WebWorkspace({
-  controller,
-  templatesEnabled,
-}: {
-  readonly controller: BrowserDesignSessionController;
-  readonly templatesEnabled: boolean;
-}) {
-  if (templatesEnabled && activePanel.value === "templates") {
-    return (
-      <Suspense fallback={<div className={styles.workspaceMain} aria-hidden="true" />}>
-        <WorldMapPanel />
-      </Suspense>
-    );
-  }
-  const currentSidePanel = sidePanel.value;
-  const planningView = usePlanningViewState();
-  const hasSidePanel = currentSidePanel !== null;
-  const isPlanningPanel = currentSidePanel === 'calendar'
-    || currentSidePanel === 'budget'
-    || currentSidePanel === 'consortium';
-  return (
-    <div
-      className={`${styles.workspaceWithSidebar} ${hasSidePanel ? styles.workspaceWithSidebarOpen : ""}`}
-      data-web-workspace-with-sidebar
-      data-web-sidebar-open={hasSidePanel ? "true" : undefined}
-    >
-      <div className={styles.workspaceMain}>
-        <WebCanvasWorkspace controller={controller} />
-      </div>
-      {currentSidePanel && <SidePanelDock
-        responsive
-        responsiveSize={isPlanningPanel ? 'large' : 'default'}
-        expanded={currentSidePanel === 'calendar' && planningView.calendarExpanded.value}
-        onManualResize={() => { planningView.calendarExpanded.value = false }}
-      >
-        <div className={styles.speciesSidebar} data-web-side-panel={currentSidePanel}>
-          {currentSidePanel === 'species-key' && <WebSpeciesKeyPanel />}
-          {currentSidePanel === 'layers' && <WebLayersPanel />}
-          {currentSidePanel === 'calendar' && <CalendarPanel />}
-          {currentSidePanel === 'budget' && <BudgetPanel />}
-          {currentSidePanel === 'consortium' && <ConsortiumPanel />}
-          {currentSidePanel === 'plant-db' && <WebSpeciesCatalogPanel mode="catalog" />}
-          {currentSidePanel === 'favorites' && <WebSpeciesCatalogPanel mode="favorites" />}
-        </div>
-      </SidePanelDock>}
+      <WorkspaceDialogs />
     </div>
   );
 }

@@ -4,38 +4,3 @@
   background: var(--color-bg);
   color: var(--color-text);
 }
-
-.workspaceWithSidebar {
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  overflow: hidden;
-}
-
-.workspaceWithSidebarOpen { min-width: 0; }
-
-.workspaceMain {
-  display: flex;
-  flex: 1;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.speciesSidebar {
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  background: var(--color-surface);
-}
-
-@media (max-width: 860px) {
-  .workspaceWithSidebarOpen {
-    flex-direction: column;
-  }
-
-  .speciesSidebar {
-    min-height: 0;
-  }
-}

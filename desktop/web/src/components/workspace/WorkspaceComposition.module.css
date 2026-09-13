@@ -1,0 +1,35 @@
+.root {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.primary {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidePanel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--color-surface);
+}
+
+.loading {
+  flex: 1;
+  background: var(--panel-gradient);
+}
+
+@media (max-width: 860px) {
+  .responsiveOpen {
+    flex-direction: column;
+  }
+}

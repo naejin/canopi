@@ -7,7 +7,7 @@ Use this guide for daily work that can affect both Canopi editions. The narrower
 | Concern | Shared policy | Edition composition or infrastructure |
 | --- | --- | --- |
 | Entry | Shared Preact/app modules | `desktop/web/src/main.tsx` installs Desktop adapters; `desktop/web/src/main.web.tsx` installs browser adapters |
-| Workspace and dock | Planning workbenches and panel state under `desktop/web/src/app/` | `desktop/web/src/app.tsx` and `desktop/web/src/web/WebApp.tsx` currently mount their supported surfaces |
+| Workspace and dock | `components/workspace/WorkspaceComposition.tsx` owns primary/side routing, command-to-surface validation, dock sizing, Calendar expansion reset, Suspense fallback, and shared PDF dialog registration | `DesktopWorkspace.tsx` supplies lazy Desktop surfaces; `web/WebWorkspace.tsx` supplies browser-safe surfaces and responsive mode |
 | Commands | `desktop/web/src/app/shell-commands/index.ts` owns identities and capability-based projection | Desktop command graph and `desktop/web/src/web/browser-shell-commands.ts` supply supported actions |
 | Canvas document | `SceneStore`, Canvas Runtime, and `app/document-session/` own scene and replacement behavior | Desktop attachment uses `use-canvas-document-session.ts`; Web attachment uses `WebCanvasWorkspace.tsx` and `browser-design-session.ts` |
 | Non-canvas document | `desktop/web/src/app/design-edit/` owns Budget, Calendar, Consortium, Location, description, and extra | Edition actions supply persistence and delivery capabilities |
@@ -45,7 +45,7 @@ The three hosts use separate strict ports and separate Vite dependency caches, s
 | Web Edition | `desktop/web/`: `npm run dev:web` | `http://localhost:1421/app/` | Uses the browser profile's local storage and real generated Web catalog assets |
 | UI gallery | `desktop/web/`: `npm run dev:ui` | `http://127.0.0.1:1422/` | Memory-only fixtures; reload recreates the session |
 
-For routine shared UI work, start with the gallery. Its `edition` and fixture query parameters are documented in `desktop/web/ui-gallery/README.md`. It mounts production views over one disposable runtime but does not prove Tauri IPC, browser persistence, native dialogs, downloads, or remote catalog behavior.
+For routine shared UI work, start with the gallery. Its `surface=workspace`, `edition`, and fixture query parameters are documented in `desktop/web/ui-gallery/README.md`. Both edition registrations mount through the production workspace composition over one disposable runtime. Changing the edition follows a normal link and reloads the page, so only one edition owns the runtime at a time. The gallery does not prove Tauri IPC, browser persistence, native dialogs, downloads, or remote catalog behavior.
 
 Use a fresh browser profile for Web interaction. Close the browser before deleting that profile; clearing the `http://localhost:1421` site data resets Drafts, Settings, Species activity, and Saved Object Stamps. Avoid Download actions unless a disposable download directory has also been configured.
 

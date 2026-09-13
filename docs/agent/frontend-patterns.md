@@ -9,7 +9,7 @@ For UI/UX work, first read the [design contract](../../.interface-design/system.
 | Desktop/Web/gallery setup, edition composition, verification selection | [Edition development](edition-development.md) |
 | Preact, effects, cleanup, command boundaries | [Runtime and interaction](frontend-runtime.md) |
 | Calendar, Budget, Consortium, Planning Projection | [Runtime and interaction](frontend-runtime.md), [Dock panels](../../.interface-design/patterns/dock-panels.md) |
-| Species Catalog, Favorites, Notebook, shared dock | [Workbench ownership](frontend-workbenches.md), relevant section |
+| Workspace composition, Species Catalog, Favorites, Notebook, shared dock | [Edition development](edition-development.md), [Workbench ownership](frontend-workbenches.md) |
 | Web shell, browser storage, browser species runtime | [Browser Edition](browser-edition.md), relevant section |
 | Floating controls, focus, dismissal, CSS implementation | [Chrome implementation](frontend-chrome.md) |
 | Translation keys, tests and architecture/CSS guards | [Localization and validation](frontend-validation.md) |

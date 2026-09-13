@@ -17,7 +17,7 @@
 
 ---
 
-Canopi combines a Species Catalog with an interactive canvas for designing agroecological systems. The desktop app runs on Linux, macOS, and Windows. The Web Edition shares the canvas and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, planning panels, Location editing, and native file management.
+Canopi combines a Species Catalog with an interactive canvas for designing agroecological systems. The desktop app runs on Linux, macOS, and Windows. The Web Edition shares the canvas, planning panels, and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, Location editing, Design Notebook, and native file management.
 
 ## Features
 
@@ -25,7 +25,7 @@ Canopi combines a Species Catalog with an interactive canvas for designing agroe
 
 **Design canvas** -- PixiJS-based workspace with Zones, Annotations, Plant placement, Object Groups, undo/redo, grid, rulers, and Measurement Guides. Design-scoped Plant colors and symbols, Pinned Plant Names, and zoom-aware text keep the canvas readable.
 
-**Desktop planning panels** -- Timeline for scheduling work, Budget with per-species pricing and CSV export, and Consortium planning across Strata and Succession Phases with canvas hover sync.
+**Planning panels** -- Desktop and Web share the Timeline for scheduling work, Budget with per-species pricing and CSV export, and Consortium planning across Strata and Succession Phases with canvas hover sync.
 
 **Desktop Location** -- MapLibre-powered Location editing, geocoding search, and a canvas basemap with terrain overlays.
 

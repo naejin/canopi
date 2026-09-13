@@ -53,8 +53,8 @@ Prefer these components over copying JSX or CSS from screenshots. Add a shared c
 
 ## Executable reference
 
-Run `cd desktop/web && npm run dev:ui`, then open http://127.0.0.1:1422/. Direct links use `?surface=color|symbol|key|layers|favorites|notebook|lens`; add `state=empty|mixed|long|located|dense`, `theme=dark`, or `locale=fr`.
+Run `cd desktop/web && npm run dev:ui`, then open http://127.0.0.1:1422/. Use `?surface=workspace` for the production Desktop workspace composition and add `edition=web` for the Web composition. Direct panel links use `?surface=color|symbol|key|layers|favorites|notebook|lens`; add `state=empty|mixed|long|located|dense`, `theme=dark`, or `locale=fr`.
 
-The gallery mounts production components and a real canvas runtime with deterministic memory data. Reload resets it. Use `npm run check:ui` for its type check. Gallery controls are development tools, not product UI. Native file dialogs are simulated in memory; verify platform delivery separately when changing file behavior.
+The gallery mounts production components and a real canvas runtime with deterministic memory data. Its edition links perform a normal page load, so one disposable runtime owns the canvas at a time. Reload resets it. Use `npm run check:ui` for its type check. Gallery controls are development tools, not product UI. Native file dialogs are simulated in memory; verify platform delivery separately when changing file behavior.
 
 Accepted reasoning belongs here or in a family guide. Reproducible states belong in gallery fixtures. Exact visual values belong in tokens. This keeps future context small while making the reference verifiable.

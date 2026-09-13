@@ -13,10 +13,3 @@
   flex: 1;
   overflow: hidden;
 }
-
-.sidePanelLoading {
-  flex: 1;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
-    var(--panel-gradient);
-}

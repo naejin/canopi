@@ -19,6 +19,7 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 ## Testing
 
 - For shared Desktop/Web work, use the focused-to-integration sequence and change-to-check matrix in [edition development](edition-development.md). `npm run check:editions` typechecks the app once, checks the gallery project, builds both production entries, and scans the Web bundle; it does not replace Vitest, generated-contract checks, packaging tests, or Rust gates.
+- `workspace-composition.test.tsx` exercises the shared routing seam with real command clicks, stateful canvas preservation, primary-surface cleanup, and unsupported-registration failures. Shell tests supply edition adapters and retain their persistence and command-capability assertions.
 - CI runs `npm run check:ui` and the real `npm run build:web` on pull requests and `main` pushes. The Web build needs pinned PDF fonts but no private/release catalog. It validates emitted browser imports and per-file size; deterministic packaging tests cover catalog admission and both base paths, while release packaging validates the actual generated catalog.
 
 - Add Vitest tests under `desktop/web/src/__tests__/`. The full suite also discovers existing colocated `*.test.ts` files under `src/app/` and `src/canvas/runtime/`; include those tests when auditing coverage.
