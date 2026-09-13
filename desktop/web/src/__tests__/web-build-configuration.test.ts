@@ -66,7 +66,8 @@ describe('Web Edition build configuration', () => {
     const scanner = readFileSync(scannerUrl, 'utf8')
 
     expect(existsSync(scannerUrl)).toBe(true)
-    expect(packageJson.scripts?.['build:web']).toContain(
+    expect(packageJson.scripts?.['build:web']).toContain('npm run build:web:bundle')
+    expect(packageJson.scripts?.['build:web:bundle']).toContain(
       'vite build --mode web && node scripts/check-web-build-boundaries.mjs',
     )
     expect(scanner).toContain('MAX_CLOUDFLARE_PAGES_ASSET_BYTES')
@@ -82,17 +83,22 @@ describe('Web Edition build configuration', () => {
 
   it('keeps the browser shell and optional sidebar inside the workspace', () => {
     const webAppCss = readFileSync(new URL('../web/WebApp.module.css', import.meta.url), 'utf8')
+    const workspaceCss = readFileSync(
+      new URL('../components/workspace/WorkspaceComposition.module.css', import.meta.url),
+      'utf8',
+    )
     const shellCss = readFileSync(
       new URL('../web/BrowserAppShell.module.css', import.meta.url),
       'utf8',
     )
 
     expect(cssValue(webAppCss, '.root', 'height')).toBe('100%')
-    expect(cssValue(webAppCss, '.workspaceWithSidebar', 'display')).toBe('flex')
+    expect(cssValue(workspaceCss, '.root', 'display')).toBe('flex')
+    expect(cssValue(workspaceCss, '.primary', 'display')).toBe('flex')
+    expect(cssValue(workspaceCss, '.responsiveOpen', 'flex-direction')).toBe('column')
     const dockCss = readFileSync(new URL('../components/shared/SidePanelDock.module.css', import.meta.url), 'utf8')
     expect(cssValue(dockCss, '.sidePanel', 'width')).toBe('var(--side-panel-width)')
     expect(cssValue(dockCss, '.sidePanel', 'min-width')).toBe('320px')
-    expect(cssValue(webAppCss, '.workspaceMain', 'display')).toBe('flex')
     expect(cssValue(shellCss, '.shell', 'height')).toBe('100%')
     expect(cssValue(shellCss, '.workspaceShell', 'overflow')).toBe('hidden')
     expect(cssValue(shellCss, '.workspace', 'display')).toBe('flex')

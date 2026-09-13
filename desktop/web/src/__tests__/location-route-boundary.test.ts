@@ -12,10 +12,14 @@ describe('location route boundary', () => {
 
   it('loads the location flow through the dedicated location panel', () => {
     const appSource = readSource('../app.tsx')
+    const workspaceSource = readSource('../components/workspace/DesktopWorkspace.tsx')
     const panelSource = readSource('../components/panels/LocationPanel.tsx')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
 
-    expect(appSource).toContain('import("./components/panels/LocationPanel")')
+    expect(appSource).toContain('DesktopWorkspace')
+    expect(appSource).not.toContain('LocationPanel')
+    expect(workspaceSource).toContain("import('../panels/LocationPanel')")
+    expect(workspaceSource).toContain('location: LocationPanel')
     expect(panelSource).toContain("LocationTab")
     expect(tabSource).not.toContain("ipc/geocoding")
     expect(tabSource).not.toContain("document.addEventListener('pointerup'")
