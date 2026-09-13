@@ -15,6 +15,8 @@ Start with the narrowest authority for the task. Current implementation guidance
 
 ## Evidence and history
 
+Active implementation specifications live under `docs/design/`. They describe proposed work and must not override current operating guides before implementation. The [Desktop/Web convergence handoff](design/edition-convergence/handoff.md) and [implementation prompt](design/edition-convergence/agent-prompt.md) define the next shared-workspace and development-workflow work. Progress belongs in bd; delivered instructions move into the subsystem guides.
+
 Release notes in [`release-notes/`](release-notes/) describe shipped versions. PDF validation, canvas-performance reports, Web Catalog performance evidence, and the Windows compression benchmark are dated evidence for decisions or release gates. They do not override current agent guides or ADRs. Files under `docs/assets/` and `docs/evidence/` support those records and must not become runtime or test dependencies.
 
 Superseded ADRs remain in place with their status and replacement link. Closed bead metadata remains historical even when it names a prototype or experiment that was intentionally removed after integration.
