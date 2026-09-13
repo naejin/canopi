@@ -142,6 +142,51 @@ describe('Web Edition canvas workspace', () => {
     }
   })
 
+  it('releases the old owner before a refreshed host adapter mounts', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const first = fakeRuntimeHost()
+    const second = fakeRuntimeHost()
+    const firstFactory = () => first.host
+    const secondFactory = () => second.host
+    await controller.newDesign()
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace
+          controller={controller}
+          store={store}
+          createRuntimeHost={firstFactory}
+        />,
+        container,
+      )
+    })
+    expect(currentCanvasSession.value).toBe(first.host.surfaces)
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace
+          controller={controller}
+          store={store}
+          createRuntimeHost={secondFactory}
+        />,
+        container,
+      )
+      await Promise.resolve()
+    })
+
+    expect(first.documents.captureForPersistence).toHaveBeenCalledOnce()
+    expect(first.host.destroy).toHaveBeenCalledOnce()
+    expect(second.host.init).toHaveBeenCalledOnce()
+    expect(currentCanvasSession.value).toBe(second.host.surfaces)
+  })
+
   it('shows a desktop-style browser-safe welcome screen without recent files when no Design is active', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)

@@ -7,7 +7,7 @@ Canvas PDF is a non-mutating derived export; see the [Canvas PDF guide](canvas-p
 ## Current Boundaries
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
-- `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, resize observation, autosave timing, settings flush, runtime teardown, and canvas-session publication.
+- `desktop/web/src/app/document-session/lifecycle.ts` owns the Desktop canvas host sequence: native Design Session attachment, resize observation, autosave timing, queued loads, settings flush, runtime teardown, and canvas-session publication.
 - `desktop/web/src/app/document-session/state-machine.ts` owns explicit desktop Design Session states and intent orchestration: attached/detached readiness, dirty checks, queued loads, autosave execution, teardown snapshots, persistence disposal, and workflow runner disposal.
 - `desktop/web/src/app/document-session/replacement.ts` is the platform-neutral authority-handoff seam shared by desktop and Web. Its `attach()` and `replace()` operations own new/loaded normalization, initial load versus explicit replacement, attached/detached store updates, dirty-baseline resets, canvas history/chrome/zoom ordering, and workflow installation. It must import neither Tauri nor browser infrastructure. Each explicit `replace()` supplies its authorized Design-baseline freshness callback; the replacement owner retains it with the exact pending Canvas identity and finalizer. `pendingCanvasReplacement()` returns a read-only status for platform dirty-prompt decisions. Retry and handoff settlement recheck retained freshness internally and report whether current Design authority was preserved; callers must not mirror pending authorization records or choose preservation through boolean options. A renewed explicit replacement may refresh authorization after its platform guard succeeds.
 - `desktop/web/src/app/document-session/transition.ts` exposes intent-shaped Design Session operations for document actions and lifecycle callers while keeping low-level transition request construction inside the Design Session module.
@@ -15,6 +15,7 @@ Canvas PDF is a non-mutating derived export; see the [Canvas PDF guide](canvas-p
 - `desktop/web/src/app/document-session/persistence-capability.ts` is the internal capability registry shared only by the store implementation and persistence coordinator. Do not import its raw capture API elsewhere.
 - `desktop/web/src/app/document-session/persistence.ts` owns purpose-aware persistence operations. It composes one immutable attached/detached snapshot and keeps session generation, Canvas attachment lifetime, intent ordering, destination-aware write admission, exact acknowledgement, and recovery-result policy behind the operation. Platform adapters couple durable-resource identity to the matching write effect through opaque prepared destinations from `write-admission.ts`; callers never receive raw captured content or publish write success themselves.
 - `desktop/web/src/canvas/runtime/lifecycle-owner.ts` retains exclusive runtime release authority across native and Web component unmount. A failed loss-prevention handoff remains retryable there, and the next mount must finish that requested release before constructing another runtime.
+- `desktop/web/src/web/WebCanvasWorkspace.tsx` owns the Web canvas host sequence around `BrowserDesignSessionController`: browser attachment/detachment, immediate sizing and observation, publication, and terminal host cleanup. Browser Draft autosave stays at `WebApp`/`browser-design-session.ts`, outside this host sequence.
 - `desktop/web/src/app/document-session/workflow-runner.ts` owns Design Session workflow install/dispose idempotence and retains failed disposer obligations for retry.
 - `desktop/web/src/app/document-session/workflows.ts` is the Design Session workflow registry.
 - `desktop/web/src/app/contracts/design-ingestion.ts` is the only trust boundary for raw Web Design values. It applies sequential format migrations, generated-schema validation, serde-compatible defaults, typed legacy Object Group resolution, and top-level unknown-field normalization before returning a `CanopiFile`. Browser file, template, and Draft adapters must not cast raw JSON to `CanopiFile`.
@@ -31,6 +32,25 @@ Canvas PDF is a non-mutating derived export; see the [Canvas PDF guide](canvas-p
 - `desktop/web/src/app/document-session/use-canvas-document-session.ts` is a DOM-ref adapter for `CanvasPanel`; keep lifecycle ordering out of the hook.
 - `desktop/web/src/app/canvas-runtime/host.ts` publishes `CanvasRuntimeSurfaces` for the live Design Session. Document lifecycle code should consume role-specific canvas surfaces instead of a raw `SceneCanvasRuntime`.
 - `desktop/web/src/app/canvas-runtime/app-adapter.ts` is the app-owned bridge for canvas clean state, Design file composition, and settings persistence commands used by runtime core.
+
+## Canvas host lifecycle assessment
+
+Desktop and Web share the runtime surface contract, host wrapper, exclusive lifecycle lease, exhaustive cleanup helper, and Design replacement seam. Their remaining host sequences deliberately stay in two edition adapters:
+
+| Responsibility | Desktop owner | Web owner |
+| --- | --- | --- |
+| DOM refs and host construction | `CanvasPanel` refs → `use-canvas-document-session.ts` → `createAppCanvasRuntimeHost()` | `WebCanvasWorkspace` refs → `createBrowserCanvasRuntimeHost()` |
+| Init and rulers | `document-session/lifecycle.ts`; attach only the supplied ruler overlay | `WebCanvasWorkspace`; use its ruler overlay with the canvas area as a defensive fallback |
+| Resize | Install observation after async Desktop attachment and queued-load admission | Size immediately, then observe after synchronous browser attachment |
+| Session publication | Publish only after Desktop attachment and queued-load installation | Publish only after browser attachment and resize installation |
+| Detach and authority handoff | `teardownAttachedDesignSession()` through the Desktop state machine and persistence coordinator | `BrowserDesignSessionController.attachCanvasSession()`'s disposer through browser persistence and workflow cleanup |
+| Auxiliary teardown | Autosave timer, queued load, settings flush, observer, host, then guarded unpublication after loss-prevention handoff | Observer, host, then guarded unpublication after browser handoff |
+| Failed release and next mount | `canvas/runtime/lifecycle-owner.ts` retains and retries the same release callback | The same lifecycle owner retains and retries the same release callback |
+| HMR/effect replacement | `CanvasPanel` hook cleanup releases its lease; remount must settle any retained release first | `WebCanvasWorkspace` effect cleanup does the same; the gallery root also unmounts explicitly in `import.meta.hot.dispose()` |
+
+No further common host factory is warranted. A shared sequence would need caller callbacks or switches for async versus synchronous attachment, queued-load admission, first-size timing, ruler fallback, initialization rollback, autosave/settings cleanup, and distinct loss-prevention handoffs. Those options would make each caller reconstruct the ordering that its current adapter owns. Keep the existing small shared mechanisms—`CanvasRuntimeHost`, `lifecycle-owner.ts`, `cleanup.ts`, runtime publication surfaces, and Design replacement—and keep edition persistence policy out of them.
+
+Lifecycle coverage is split by the same boundary. `use-canvas-document-session.test.tsx` covers pending initialization, reentrant publication, native handoff ordering, failed-release retry, exhaustive cleanup, and autosave interval replacement. `web-canvas-workspace.test.tsx` covers browser attachment failure, reentrant publication, refreshed-effect replacement, handoff retry, and exhaustive cleanup. `web-design-session.test.ts` covers overlapping/reentrant attachment and retained browser workflow cleanup. `calendar-workbench.test.tsx` proves that a Design replacement invalidates an open draft even when the successor repeats its action ID. Run these focused tests together when changing this boundary; the full frontend suite remains the integration gate.
 
 ## Document Mutation Rules
 

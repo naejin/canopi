@@ -677,6 +677,15 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
+    name: 'Desktop and Web canvas hosts retain one runtime lifecycle owner',
+    from: [
+      'src/app/document-session/use-canvas-document-session.ts',
+      'src/web/WebCanvasWorkspace.tsx',
+    ],
+    targets: ['src/canvas/runtime/lifecycle-owner.ts'],
+  },
+  {
+    kind: 'require-imports',
     name: 'Desktop and Web delegate workspace composition',
     from: [
       'src/components/workspace/DesktopWorkspace.tsx',
