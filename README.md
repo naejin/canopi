@@ -81,7 +81,7 @@ cd desktop/web && npm run dev:web
 # Memory-only UI gallery (http://127.0.0.1:1422/)
 cd desktop/web && npm run dev:ui
 
-# Static Web Edition build (requires generated catalog assets for packaging)
+# Static Web Edition build (no release catalog required)
 cd desktop/web && npm run build:web
 
 # Typecheck the app and gallery, then build both edition frontends

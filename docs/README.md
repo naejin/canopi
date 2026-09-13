@@ -16,7 +16,7 @@ Start with the narrowest authority for the task. Current implementation guidance
 
 ## Evidence and history
 
-Active implementation specifications live under `docs/design/`. They describe proposed work and must not override current operating guides before implementation. The [Desktop/Web convergence handoff](design/edition-convergence/handoff.md) defines the active convergence scope; daily commands and delivered behavior belong in the [edition development guide](agent/edition-development.md), while implementation progress belongs in bd epic `canopi-dp4s`.
+Implementation specifications and completed design records live under `docs/design/`. Proposed work must not override current operating guides before implementation. The [completed Desktop/Web convergence record](design/edition-convergence/handoff.md) points to the delivered [edition development guide](agent/edition-development.md); its implementation history remains in bd epic `canopi-dp4s`.
 
 Release notes in [`release-notes/`](release-notes/) describe shipped versions. PDF validation, canvas-performance reports, Web Catalog performance evidence, and the Windows compression benchmark are dated evidence for decisions or release gates. They do not override current agent guides or ADRs. Files under `docs/assets/` and `docs/evidence/` support those records and must not become runtime or test dependencies.
 
