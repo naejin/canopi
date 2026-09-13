@@ -11,8 +11,7 @@ on:
       - 'desktop/web/package*.json'
       - 'desktop/web/scripts/prepare-pdf-fonts.mjs'
       - 'desktop/web/scripts/pdf-validation/**'
-      - 'scripts/pdf-evaluation/native/**'
-      - 'scripts/pdf-evaluation/run_native.py'
+      - 'scripts/pdf-native-webview/**'
       - '.github/workflows/pdf-production-probe.yml'
   pull_request:
     branches: [main]
@@ -23,8 +22,7 @@ on:
       - 'desktop/web/package*.json'
       - 'desktop/web/scripts/prepare-pdf-fonts.mjs'
       - 'desktop/web/scripts/pdf-validation/**'
-      - 'scripts/pdf-evaluation/native/**'
-      - 'scripts/pdf-evaluation/run_native.py'
+      - 'scripts/pdf-native-webview/**'
       - '.github/workflows/pdf-production-probe.yml'
 
 concurrency:
@@ -76,10 +74,10 @@ jobs:
           npm run build:pdf-validation
       - name: Run Linux WebKitGTK
         if: runner.os == 'Linux'
-        run: xvfb-run -a /usr/bin/python3 scripts/pdf-evaluation/run_native.py production-results/${{ matrix.label }} --fixture desktop/web/dist-pdf-validation --script desktop/web/scripts/pdf-validation/run-native.js
+        run: xvfb-run -a /usr/bin/python3 scripts/pdf-native-webview/run.py production-results/${{ matrix.label }} --fixture desktop/web/dist-pdf-validation --script desktop/web/scripts/pdf-validation/run-native.js
       - name: Run macOS or Windows WebView
         if: runner.os != 'Linux'
-        run: python scripts/pdf-evaluation/run_native.py production-results/${{ matrix.label }} --fixture desktop/web/dist-pdf-validation --script desktop/web/scripts/pdf-validation/run-native.js
+        run: python scripts/pdf-native-webview/run.py production-results/${{ matrix.label }} --fixture desktop/web/dist-pdf-validation --script desktop/web/scripts/pdf-validation/run-native.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:

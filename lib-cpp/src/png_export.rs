@@ -1,7 +1,8 @@
-//! PNG export with DPI scaling — Windows stub.
+//! PNG export compatibility surface for Windows.
 //!
-//! Will use Windows Imaging Component (WIC) and Direct2D for high-quality
-//! DPI-scaled PNG rendering. For now, returns a stub error.
+//! Baseline PNG bytes pass through. Native high-DPI PNG scaling is supported
+//! only by the Linux platform implementation, so higher DPI requests return an
+//! explicit error instead of implying a future WIC/Direct2D implementation.
 
 /// Re-render `png_data` at the requested DPI.
 ///
@@ -22,6 +23,5 @@ pub fn render_png_at_dpi(
         return Ok(png_data.to_vec());
     }
 
-    // TODO: Implement via WIC (IWICImagingFactory) + Direct2D.
-    Err("Windows native PNG export not yet implemented — requires WIC/Direct2D FFI".into())
+    Err("Windows native high-DPI PNG export is unavailable".into())
 }

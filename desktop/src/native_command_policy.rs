@@ -26,14 +26,6 @@ struct SyncCommandAllowance {
 
 const SYNC_COMMAND_ALLOWLIST: &[SyncCommandAllowance] = &[
     SyncCommandAllowance {
-        path: "commands::community::get_template_catalog",
-        reason: "constructs a fixed, bounded in-memory catalog",
-    },
-    SyncCommandAllowance {
-        path: "commands::community::get_template_preview",
-        reason: "selects one entry from the fixed, bounded in-memory catalog",
-    },
-    SyncCommandAllowance {
         path: "commands::design::new_design",
         reason: "constructs bounded generated defaults and a timestamp without external I/O",
     },

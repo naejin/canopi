@@ -107,9 +107,6 @@ pub fn run() {
             commands::problem_report::create_problem_report,
             commands::problem_report::show_problem_report_folder,
             commands::geocoding::geocode_address,
-            commands::community::get_template_catalog,
-            commands::community::get_template_preview,
-            commands::community::acquire_design_template,
         ])
         .setup(|app| {
             // Logging

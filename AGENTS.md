@@ -29,6 +29,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - `common-types/`: authored cross-language contracts for Rust, TypeScript, generated adapters, and static artifacts. Regenerate checked-in outputs when these change.
 - `bindings-gen/`: codegen for frontend transport bindings.
 - `scripts/`: database preparation and release tooling.
+- `docs/README.md`: documentation map and placement rules.
 - `docs/agent/`: subsystem-specific guidance for future agents.
 - `docs/agents/`: workflow context consumed by repo-local agent skills.
 - `.interface-design/`: design system documentation.

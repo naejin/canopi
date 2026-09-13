@@ -10,9 +10,9 @@ import threading
 
 ROOT = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
-parser.add_argument('output', nargs='?', type=Path, default=ROOT / 'output' / platform.system().lower())
-parser.add_argument('--fixture', type=Path, default=ROOT / 'dist')
-parser.add_argument('--script', type=Path, default=ROOT / 'native/run-fixture.js')
+parser.add_argument('output', type=Path)
+parser.add_argument('--fixture', required=True, type=Path)
+parser.add_argument('--script', required=True, type=Path)
 args = parser.parse_args()
 output = args.output.resolve()
 fixture = args.fixture.resolve()
@@ -33,11 +33,11 @@ arguments = [url, str(output), str(args.script.resolve())]
 system = platform.system()
 try:
     if system == 'Linux':
-        command = [sys.executable, str(ROOT / 'native/linux.py'), *arguments]
+        command = [sys.executable, str(ROOT / 'linux.py'), *arguments]
     elif system == 'Darwin':
-        command = ['swift', str(ROOT / 'native/macos.swift'), *arguments]
+        command = ['swift', str(ROOT / 'macos.swift'), *arguments]
     elif system == 'Windows':
-        project = ROOT / 'native/windows/Probe.csproj'
+        project = ROOT / 'windows/Probe.csproj'
         subprocess.run(['dotnet', 'build', str(project), '--configuration', 'Release'], check=True, timeout=180)
         command = [str(project.parent / 'bin/Release/net8.0-windows/Probe.exe'), *arguments]
     else:

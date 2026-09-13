@@ -82,8 +82,9 @@ records module ownership and physical bounds; physical printer validation is sep
 
 PDFKit generates vectors and embeds Noto fonts. Fontkit shaping supplies one physical
 page plan for SVG preview and PDF encoding; system fonts and screenshot rendering do
-not determine layout. The [encoder evaluation](../canvas-pdf-evaluation.md) rejected
-the tested pdf-lib/font combination because independent rendering lost CJK text.
+not determine layout. The isolated foundation comparison rejected the tested
+pdf-lib/font combination because independent rendering lost CJK text. Its one-time
+fixture was retired after this decision and production validation were established.
 [Native foundation evidence](../canvas-pdf-native-verification.md) established the
 chosen pipeline in all three desktop WebView engines. Versions, resource limits,
 module ownership and regression commands belong in the [implementation guide](../agent/canvas-pdf.md).

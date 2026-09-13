@@ -318,23 +318,15 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Design Template common orchestration stays platform-neutral',
+    name: 'Web Design Template orchestration stays free of Desktop authorities',
     from: [
       'src/app/community/controller.ts',
+      'src/app/community/catalog.browser.ts',
       'src/app/design-template-import/coordinator.ts',
       'src/app/design-template-import/types.ts',
-      'src/app/design-template-import/workflow.ts',
-    ],
-    targets: ['src/ipc/community.ts', 'src/app/document-session/actions.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Browser Design Template adapters stay free of Desktop IPC',
-    from: [
       'src/app/design-template-import/workflow.browser.ts',
-      'src/app/community/catalog.browser.ts',
     ],
-    targets: ['src/ipc/community.ts', 'src/app/document-session/actions.ts'],
+    targets: ['@tauri-apps/api/core', 'src/app/document-session/actions.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -829,21 +821,12 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Design Template orchestration selects platform adapters',
+    name: 'Design Template controller uses the Web static-asset adapters',
     from: ['src/app/community/controller.ts'],
-    targets: ['src/app/design-template-import/workflow.ts', '#design-template-catalog'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Design Template workflow selects platform implementation',
-    from: ['src/app/design-template-import/workflow.ts'],
-    targets: ['#design-template-import-workflow'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Desktop Design Template adapters own IPC',
-    from: ['src/app/design-template-import/workflow.desktop.ts'],
-    targets: ['src/app/document-session/actions.ts', 'src/ipc/community.ts'],
+    targets: [
+      'src/app/design-template-import/workflow.browser.ts',
+      'src/app/community/catalog.browser.ts',
+    ],
   },
   {
     kind: 'require-imports',
@@ -853,12 +836,6 @@ const REQUIRED_IMPORT_POLICIES = [
       'src/app/contracts/design-ingestion.ts',
       'src/web/browser-design-session.ts',
     ],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Desktop Design Template catalog owns Community IPC',
-    from: ['src/app/community/catalog.desktop.ts'],
-    targets: ['src/ipc/community.ts'],
   },
   {
     kind: 'require-imports',
@@ -1280,6 +1257,7 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/app/consortium/workbench.ts',
       'src/canvas/timeline-renderer.ts',
       'src/canvas/consortium-renderer.ts',
+      'src/canvas/chart-label-color.ts',
       'src/components/canvas/BottomPanel.tsx',
       'src/components/canvas/BottomPanelLauncher.tsx',
       'src/components/canvas/BudgetTab.tsx',
@@ -1287,6 +1265,12 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/components/canvas/InteractiveTimeline.tsx',
       'src/components/canvas/TimelinePopover.tsx',
       'src/components/canvas/ConsortiumChart.tsx',
+      'src/components/canvas/useCanvasRenderer.ts',
+      'src/app/timeline/editing.ts',
+      'src/app/community/catalog.desktop.ts',
+      'src/app/design-template-import/workflow.ts',
+      'src/app/design-template-import/workflow.desktop.ts',
+      'src/ipc/community.ts',
       'src/app/plant-browser/state.ts',
       'src/app/plant-browser/controller.ts',
       'src/web/browser-theme.ts',
@@ -1511,7 +1495,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     kind: 'forbid-source-symbols',
     name: 'Design Template adapters keep retired path and raw-text handoff deleted',
     from: [
-      'src/app/design-template-import/workflow.desktop.ts',
       'src/app/design-template-import/workflow.browser.ts',
       'src/app/document-session/actions.ts',
       'src/app/document-session/transition.ts',

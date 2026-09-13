@@ -115,6 +115,7 @@ canopi/
 
 ## Documentation
 
+- [`docs/README.md`](docs/README.md) — documentation map, authority, and placement rules
 - [`AGENTS.md`](AGENTS.md) — agent operating contract, architecture rules, and coding standards
 - [`CONTEXT.md`](CONTEXT.md) — domain vocabulary
 - [`docs/adr/`](docs/adr/) — architectural decisions and their history

@@ -1,4 +1,3 @@
-pub mod community;
 pub mod design;
 pub mod design_notebook;
 pub mod export;

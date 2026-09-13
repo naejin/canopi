@@ -148,7 +148,7 @@ The [Canvas PDF guide](canvas-pdf.md) describes settled print capture and the re
 - `annotation-layout.ts` owns Annotation presentation and geometry. An upright 8px note marker with a 1.5px stroke crossfades with text at the authored anchor. At scales where text could appear, collision rejection uses a quieter 4px square with a 1px stroke at half opacity. Below half text opacity, marker geometry drives hit testing, band selection, outlines, selection/group bounds, and placement previews; at or above half opacity, rotated text geometry does. Pointer hits have 4px allowance around a marker; band/visual bounds use the currently visible marker footprint. Coincident markers follow existing topmost scene hit order.
 - Fit to content deliberately uses full authored rotated text bounds at every scale through `getAnnotationWorldBounds`, so framing is stable when the marker/text transition is crossed. Interactive geometry uses the explicit `getAnnotationVisualWorldBounds`/`Corners` helpers instead. Physical extent still uses Annotation anchors.
 - Both Pixi and Canvas2D apply Layer visibility/opacity and refresh text/marker presentation on viewport-only updates. Marker discovery follows existing object/Layer lock rules. Hidden text must not intercept clicks outside its visible marker or reveal hidden-Layer content.
-- The [zoom calibration](canvas-zoom-calibration.md) records historical defaults and verification limits. The [dense Canvas guide](dense-canvas.md) supersedes its footprint, collision, and Measurement Guide label rules. Zone Measurements, rulers, and the scale bar retain their existing visibility rules.
+- The [dense Canvas guide](dense-canvas.md) owns footprint, collision, and Measurement Guide label rules. Zone Measurements, rulers, and the scale bar retain their existing visibility rules.
 
 ## Interaction Ownership
 
@@ -293,17 +293,3 @@ The [Canvas PDF guide](canvas-pdf.md) describes settled print capture and the re
 - App-owned Target presentation state is exposed through `app/panel-targets/presentation.ts`; runtime adapters and map surface controllers should consume that seam instead of raw `app/panel-targets/state.ts` signals.
 - Target map overlays for Zones must project effective Zone geometry. Rectangular and Elliptical Zone targets use the rotation-aware helpers in `canvas/runtime/zone-geometry.ts`; do not project raw persisted points for oriented Zone types.
 - Canvas-origin hover remains separate.
-
-## Canvas2D Components
-
-- Use `useCanvasRenderer` for DPR-aware canvas setup, resize observation, and redraw lifecycle.
-- Use shared renderer utilities rather than duplicating drawing helpers.
-- Calendar, Budget, and Consortium are DOM right-dock panels. Their read models belong in `app/planning-projection/`, and their component/workbench boundaries are documented in `frontend-runtime.md`. Do not reintroduce canvas renderers or pointer-gesture adapters for these surfaces.
-- Canvas2D renderer functions receive `t` for i18n.
-- Cache row offsets and layout computation in refs/memos for pointer paths.
-- Snapshot drag-start values that can change mid-drag.
-- Track whether a drag actually mutated state before marking documents dirty.
-
-## Chart label contrast
-
-Timeline and Consortium labels choose black or white ink against the composited bar color through `chartLabelColor`. Do not use the UI primary-button contrast token on authored species colors: the dark theme can otherwise render dark text on dark bars. Keep bar opacity and chart background inputs consistent with rendering. Timeline stripes first composite their CSS alpha and renderer opacity over the surface with `compositeChartColor`; contrast is calculated against that resulting row background.

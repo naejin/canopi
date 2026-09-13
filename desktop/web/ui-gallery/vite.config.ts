@@ -16,8 +16,6 @@ export default defineConfig(({ command }) => {
       '#platform': path('../src/platform/browser.ts'),
       '#canvas-pdf-platform': path('../src/app/canvas-pdf/platform.browser.ts'),
       '#budget-export-platform': path('./budget-export.ts'),
-      '#design-template-import-workflow': path('../src/app/design-template-import/workflow.browser.ts'),
-      '#design-template-catalog': path('../src/app/community/catalog.browser.ts'),
     } },
     server: { host: '127.0.0.1', port: 1422, strictPort: true, fs: { allow: [path('..')] } },
   }

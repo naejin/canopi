@@ -8,7 +8,7 @@ import viteConfig from '../../vite.config'
 import { parseCssDeclarations } from './support/architecture/css-facts'
 
 describe('Web Edition build configuration', () => {
-  it('selects browser and desktop adapters at build time', async () => {
+  it('selects shared browser and desktop adapters at build time', async () => {
     const web = await resolveConfig('web')
     const desktop = await resolveConfig('desktop')
 
@@ -18,18 +18,11 @@ describe('Web Edition build configuration', () => {
     expect(aliasPath(desktop, '#budget-export-platform')).toMatch(/\/src\/app\/budget\/platform\.desktop\.ts$/)
     expect(aliasPath(web, '#species-catalog-live')).toMatch(/\/live\.browser\.ts$/)
     expect(aliasPath(desktop, '#species-catalog-live')).toMatch(/\/live\.desktop\.ts$/)
-    expect(aliasPath(web, '#design-template-import-workflow')).toMatch(/\/workflow\.browser\.ts$/)
-    expect(aliasPath(desktop, '#design-template-import-workflow')).toMatch(/\/workflow\.desktop\.ts$/)
-    expect(aliasPath(web, '#design-template-catalog')).toMatch(/\/catalog\.browser\.ts$/)
-    expect(aliasPath(desktop, '#design-template-catalog')).toMatch(/\/catalog\.desktop\.ts$/)
-
     for (const config of [web, desktop]) {
       for (const alias of [
         '#platform',
         '#budget-export-platform',
         '#species-catalog-live',
-        '#design-template-import-workflow',
-        '#design-template-catalog',
       ]) {
         expect(existsSync(aliasPath(config, alias)), `${alias} resolves to an existing source`).toBe(true)
       }

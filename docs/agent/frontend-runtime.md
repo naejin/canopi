@@ -75,20 +75,6 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 - Canvas-origin hover uses `hoveredCanvasTargets` and remains separate.
 - Planning panel width uses the shared side-dock setting. Calendar expansion is temporary view state and manual resizing exits expansion before persisting the normal dock width.
 
-
-## Canvas2D Components
-
-- Use `components/canvas/useCanvasRenderer.ts` for DPR-aware canvas setup.
-- `useCanvasRenderer` deps must include `theme.value` when renderer reads CSS theme tokens.
-- Include upstream data sources in deps even if renderers consume them through refs.
-- Canvas DPR sizing should use `Math.round()`.
-- Use `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)`, not accumulating `ctx.scale()`.
-- Use `canvas2d-utils.ts` for cached `cssVar()` and `roundRect()`.
-- `grid.ts` exports `NICE_DISTANCES`; derive subsets with `.filter()`, not independent copies.
-- Canvas2D interactive components need `onMouseLeave` to clear hover state.
-- Drag handlers should use `useCallback([])` with refs rather than signal-derived deps that re-register listeners mid-drag.
-
-
 ## Budget And Numeric Inputs
 
 - Do not use `parseFloat(v) || 0` for optional numeric inputs. It conflates empty input with zero.

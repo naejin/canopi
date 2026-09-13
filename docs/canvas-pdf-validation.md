@@ -312,8 +312,9 @@ workers after teardown. The 1/10/50-page samples are tests, not product limits.
 The native probes run production modules in owned OS WebViews over loopback with
 CSP and fixed-path delivery. They do not test the packaged Tauri asset scheme or
 save dialog. Playwright WebKit on Linux is not the Safari application. The separate
-[foundation record](canvas-pdf-native-verification.md) and [encoder comparison](canvas-pdf-evaluation.md)
-retain the earlier mixed-script font decision and rejected candidate evidence.
+[foundation record](canvas-pdf-native-verification.md) retains the earlier mixed-script
+font decision and native-engine evidence. The rejected candidate's one-time fixture
+was retired after production validation superseded it.
 
 ## Reproduce output
 

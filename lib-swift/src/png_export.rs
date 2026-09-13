@@ -1,7 +1,8 @@
-//! PNG export with DPI scaling — macOS stub.
+//! PNG export compatibility surface for macOS.
 //!
-//! Will use Core Graphics (CGImage / CGBitmapContext) for high-quality
-//! DPI-scaled PNG rendering. For now, returns a stub error.
+//! Baseline PNG bytes pass through. Native high-DPI PNG scaling is supported
+//! only by the Linux platform implementation, so higher DPI requests return an
+//! explicit error instead of implying a future Core Graphics implementation.
 
 /// Re-render `png_data` at the requested DPI.
 ///
@@ -22,6 +23,5 @@ pub fn render_png_at_dpi(
         return Ok(png_data.to_vec());
     }
 
-    // TODO: Implement via Core Graphics CGBitmapContext + CGImage.
-    Err("macOS native PNG export not yet implemented — requires Core Graphics FFI".into())
+    Err("macOS native high-DPI PNG export is unavailable".into())
 }

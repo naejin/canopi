@@ -22,19 +22,6 @@ export default defineConfig(({ mode }) => {
       : './src/app/plant-browser/live.desktop.ts',
     import.meta.url,
   ));
-  const designTemplateImportWorkflowAdapter = fileURLToPath(new URL(
-    isWebEdition
-      ? './src/app/design-template-import/workflow.browser.ts'
-      : './src/app/design-template-import/workflow.desktop.ts',
-    import.meta.url,
-  ));
-  const designTemplateCatalogAdapter = fileURLToPath(new URL(
-    isWebEdition
-      ? './src/app/community/catalog.browser.ts'
-      : './src/app/community/catalog.desktop.ts',
-    import.meta.url,
-  ));
-
   return {
     plugins: [
       preact(),
@@ -47,8 +34,6 @@ export default defineConfig(({ mode }) => {
         '#canvas-pdf-platform': fileURLToPath(new URL(isWebEdition ? './src/app/canvas-pdf/platform.browser.ts' : './src/app/canvas-pdf/platform.desktop.ts', import.meta.url)),
         '#budget-export-platform': fileURLToPath(new URL(isWebEdition ? './src/app/budget/platform.browser.ts' : './src/app/budget/platform.desktop.ts', import.meta.url)),
         '#species-catalog-live': speciesCatalogLiveAdapter,
-        '#design-template-import-workflow': designTemplateImportWorkflowAdapter,
-        '#design-template-catalog': designTemplateCatalogAdapter,
       },
     },
     server: {

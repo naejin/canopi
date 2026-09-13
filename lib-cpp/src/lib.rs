@@ -4,7 +4,7 @@
 //! Provides platform-specific adapters for:
 //! - PNG export with DPI scaling (Windows Imaging Component / Direct2D)
 //!
-//! High-DPI PNG rendering currently return explicit stub errors.
+//! High-DPI PNG rendering returns an explicit unsupported error.
 //! The `Platform` trait impl lives in `desktop/src/platform/mod.rs` (same
 //! pattern as lib-c) to avoid circular dependencies.
 

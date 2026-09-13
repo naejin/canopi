@@ -13,6 +13,7 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 - CSV and file export headers must reuse the same i18n keys as UI table headers.
 - Translations should use proper diacritics; do not use ASCII approximations in locale JSON.
 - Use `Intl.RelativeTimeFormat` and `Intl.DateTimeFormat` with `locale.value` for date display.
+- Remove retired keys from all locales with the code that used them. Before declaring a key unused, account for generated keys and runtime prefixes such as Layer IDs, Plant Symbols, Timeline Action types, Consortium Strata, filter values, PDF errors/orientations, and Saved Stamp count variants.
 
 
 ## Testing

@@ -1,6 +1,6 @@
 import { computed } from '@preact/signals'
-import { importDesignTemplateIntoCurrentSession } from '../design-template-import/workflow'
-import { getTemplateCatalog, getTemplatePreview } from '#design-template-catalog'
+import { importDesignTemplateIntoCurrentSession } from '../design-template-import/workflow.browser'
+import { getTemplateCatalog, getTemplatePreview } from './catalog.browser'
 import type { TemplateMeta } from '../../types/community'
 import {
   catalogError,
