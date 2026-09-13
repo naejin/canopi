@@ -11,6 +11,7 @@ import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { SurfaceSearch } from '../shared/SurfaceSearch'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
+import { normalizeSearchText } from '../../utils/normalize-search'
 import styles from './SpeciesKeyPanel.module.css'
 
 export function SpeciesKeyPanel({ renderDetail }: { renderDetail?: (canonicalName: string) => ComponentChildren }) {
@@ -41,9 +42,9 @@ export function SpeciesKeyPanel({ renderDetail }: { renderDetail?: (canonicalNam
     [queries, revision, namesRevision],
   )
   const focus = queries?.getSpeciesFocus()
-  const needle = normalizeSearch(search)
+  const needle = normalizeSearchText(search)
   const visible = entries.filter((entry) =>
-    normalizeSearch(
+    normalizeSearchText(
       `${entry.code} ${entry.canonicalName} ${entry.commonName ?? ''}`,
     ).includes(needle),
   )
@@ -116,11 +117,4 @@ export function SpeciesKeyPanel({ renderDetail }: { renderDetail?: (canonicalNam
       </>}
     </section>
   )
-}
-
-function normalizeSearch(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase()
 }

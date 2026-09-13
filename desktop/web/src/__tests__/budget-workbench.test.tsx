@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { BudgetTab } from '../components/canvas/BudgetTab'
+import { BudgetPanel } from '../components/panels/BudgetPanel'
 import { setCurrentCanvasSession } from '../canvas/session'
 import {
   designSessionFixture,
@@ -90,24 +90,27 @@ describe('Budget Item workbench', () => {
 
   it('commits a zero price through the workbench edit lifecycle', async () => {
     await act(async () => {
-      render(<BudgetTab />, container)
+      render(<BudgetPanel />, container)
     })
 
-    const priceButton = container.querySelector<HTMLButtonElement>('tbody button')
+    const priceButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Unit cost"]')
     expect(priceButton).toBeTruthy()
 
     await act(async () => {
       priceButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    const input = container.querySelector<HTMLInputElement>('tbody input[type="number"]')
+    const input = container.querySelector<HTMLInputElement>('input[type="number"]')
     expect(input).toBeTruthy()
 
     await act(async () => {
       if (!input) return
+      input.focus()
       input.value = '0'
       input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    })
+    await act(async () => {
+      input?.blur()
     })
 
     expect(currentDesign.value?.budget).toHaveLength(1)
@@ -118,5 +121,77 @@ describe('Budget Item workbench', () => {
     })
     expect(container.textContent).toContain('EUR')
     expect(container.textContent).toContain('0.00')
+  })
+
+  it('rejects invalid blur and lets Escape suppress a later valid blur', async () => {
+    await act(async () => { render(<BudgetPanel />, container) })
+    const priceButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Unit cost"]')!
+
+    await act(async () => { priceButton.click() })
+    let input = container.querySelector<HTMLInputElement>('input[type="number"]')!
+    await act(async () => {
+      input.value = '-2'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    })
+    expect(currentDesign.value?.budget).toEqual([])
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+
+    await act(async () => {
+      input = container.querySelector<HTMLInputElement>('input[type="number"]')!
+      input.value = '7'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    })
+    expect(currentDesign.value?.budget).toEqual([])
+    expect(container.querySelector('input[type="number"]')).toBeNull()
+    expect((document.activeElement as HTMLButtonElement)?.getAttribute('data-budget-price')).toContain('Malus')
+  })
+
+  it('advances after Enter and ignores the previous input blur', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants: [
+          makePlant('Malus domestica', 'Apple'),
+          makePlant('Prunus avium', 'Cherry'),
+        ],
+      }),
+    }))
+    await act(async () => { render(<BudgetPanel />, container) })
+    const priceButton = container.querySelector<HTMLButtonElement>('button[aria-label="Unit cost for Apple"]')!
+    await act(async () => { priceButton.click() })
+    const appleInput = container.querySelector<HTMLInputElement>('input[type="number"]')!
+
+    await act(async () => {
+      appleInput.value = '4'
+      appleInput.dispatchEvent(new Event('input', { bubbles: true }))
+      appleInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      appleInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    })
+
+    expect(currentDesign.value?.budget).toHaveLength(1)
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(4)
+    expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.id).toContain('Prunus')
+  })
+
+  it('cancels an editor when another Design replaces the session', async () => {
+    await act(async () => { render(<BudgetPanel />, container) })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label^="Unit cost"]')!.click()
+    })
+    const staleInput = container.querySelector<HTMLInputElement>('input[type="number"]')!
+    await act(async () => {
+      staleInput.value = '9'
+      staleInput.dispatchEvent(new Event('input', { bubbles: true }))
+      designSessionFixture.file = makeDesign({ name: 'Replacement budget' })
+    })
+    await act(async () => {
+      staleInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    })
+
+    expect(container.querySelector('input[type="number"]')).toBeNull()
+    expect(currentDesign.value?.name).toBe('Replacement budget')
+    expect(currentDesign.value?.budget).toEqual([])
   })
 })

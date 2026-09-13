@@ -4,7 +4,7 @@ Read the [design contract](../system.md) first.
 
 ## Canvas Workspace
 - Toolbar left (44px): command-graph tool and action groups separated by dividers
-- Bottom canvas bar: 34px (`--control-size-xl`), bottom-panel launcher on the left and Zoom Controls on the right. Text tabs retain their labels and share `--radius-md`, hover fill and ochre active feedback with the rails.
+- Bottom canvas bar: 34px (`--control-size-xl`) with Zoom Controls on the right. Calendar, Budget, and Consortium live in the right dock.
 - Scale bar bottom-left: uses `--color-text-muted` for subtlety
 - Zoom uses a fixed reference: 100% is 20 CSS pixels per design meter, independent of viewport size. Initial framing and Fit to content select their own scale; see [zoom calibration](../../docs/agent/canvas-zoom-calibration.md).
 - Rulers: background `--canvas-ruler-bg` (close to canvas bg, no harsh L-frame)

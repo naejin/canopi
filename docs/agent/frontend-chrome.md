@@ -17,6 +17,8 @@ Visual rules: [design contract](../../.interface-design/system.md) and its surfa
 - Move focus into dialogs after mount. Appearance editors focus the current choice; the Inspection Lens focuses its keyboard-operable preview.
 - Floating element positioning should be synchronous; avoid post-render rAF corrections that visibly snap.
 - Use `Dropdown.tsx` and `utils/floating-position.ts` for viewport-aware dropdown behavior.
+- `Dropdown` follows one shared keyboard contract: opening moves focus into the options, Arrow keys/Home/End move among enabled options, Enter/Space selects, and Escape restores the trigger. Use `floating` whenever a caller lives inside a bounded scroll region.
+- Do not wrap `Dropdown` or `DatePicker` in a native `label`; their button triggers use `ariaLabel`, and a separate visible field label avoids implicit label activation forwarding popup clicks.
 - Preact SVG attributes use native spellings such as `stroke-width`, `clip-path`, and lowercase `tabindex`. React-style camelCase can be emitted as an ineffective attribute; verify actual SVG rendering and focus when physical output or keyboard interaction depends on them.
 - Do not use raw `white`, `black`, or raw `rgba()` in CSS Modules. Use tokens.
 - Use only font weights `400` and `600`.

@@ -204,6 +204,7 @@ export function designFixture(state = 'populated'): CanopiFile {
       stratum: null, canopySpreadM: speciesIndex === 0 ? 2 : .7, rotationDeg: null, scale: speciesIndex === 0 ? 2 : .7,
       notes: null, plantedDate: null, quantity: null, locked: false,
     })))
+  const activeSpecies = state === 'empty' ? [] : specimens.map(([canonicalName]) => canonicalName)
   return {
     ...serializeScenePersistedState({ ...scene, plants,
       plantSpeciesColors: Object.fromEntries(specimens.map(([name, , , color]) => [name, color])),
@@ -211,5 +212,49 @@ export function designFixture(state = 'populated'): CanopiFile {
     }, { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',
     location: state === 'located' ? { lat: 48.85, lon: 2.35, altitude_m: 35 } : null,
+    budget_currency: 'EUR',
+    budget: activeSpecies.slice(0, 5).flatMap((canonicalName, index) => index === 4 ? [] : [{
+      target: { kind: 'species' as const, canonical_name: canonicalName },
+      category: 'plants',
+      description: canonicalName,
+      quantity: 0,
+      unit_cost: index === 1 ? 0 : 3.5 + index * 1.25,
+      currency: 'EUR',
+    }]),
+    timeline: state === 'empty' ? [] : [
+      {
+        id: 'gallery-calendar-range', action_type: 'pruning',
+        description: state === 'long' ? 'Prune and train the longest named orchard specimens along the northern espalier' : 'Prune orchard trees',
+        start_date: '2026-09-08', end_date: '2026-09-11', recurrence: null,
+        targets: [{ kind: 'species' as const, canonical_name: 'Malus domestica' }],
+        depends_on: null, completed: false, order: 0,
+      },
+      {
+        id: 'gallery-calendar-harvest', action_type: 'harvest', description: 'Harvest apples',
+        start_date: '2026-09-16', end_date: null, recurrence: 'FREQ=YEARLY',
+        targets: [{ kind: 'species' as const, canonical_name: 'Malus domestica' }],
+        depends_on: null, completed: false, order: 1,
+      },
+      {
+        id: 'gallery-calendar-water', action_type: 'watering', description: 'Check irrigation',
+        start_date: null, end_date: '2026-09-24', recurrence: null,
+        targets: [{ kind: 'manual' as const }], depends_on: null, completed: false, order: 2,
+      },
+      {
+        id: 'gallery-calendar-done', action_type: 'planting', description: 'Plant groundcover',
+        start_date: '2026-09-16', end_date: null, recurrence: null,
+        targets: [{ kind: 'species' as const, canonical_name: 'Fragaria vesca' }],
+        depends_on: null, completed: true, order: 3,
+      },
+    ],
+    consortiums: [
+      ...activeSpecies.map((canonicalName, index) => ({
+        target: { kind: 'species' as const, canonical_name: canonicalName },
+        stratum: ['emergent', 'high', 'medium', 'low', 'unassigned', 'legacy-layer'][index]!,
+        start_phase: Math.min(index, 3),
+        end_phase: Math.min(6, index + 2),
+      })),
+      { target: { kind: 'species' as const, canonical_name: 'Absent retained species' }, stratum: 'high', start_phase: 0, end_phase: 6 },
+    ],
   }
 }

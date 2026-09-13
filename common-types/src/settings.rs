@@ -35,11 +35,6 @@ pub struct Settings {
     pub auto_save_interval_s: u32,
     pub side_panel_width: Option<u32>,
     pub saved_stamps_frame_height: Option<u32>,
-    pub bottom_panel_open: bool,
-    pub bottom_panel_timeline_height: Option<u32>,
-    pub bottom_panel_budget_height: Option<u32>,
-    pub bottom_panel_consortium_height: Option<u32>,
-    pub bottom_panel_tab: String,
     pub map_layer_visible: bool,
     #[serde(deserialize_with = "deserialize_basemap_style")]
     pub map_style: BasemapStyle,
@@ -63,11 +58,6 @@ impl Default for Settings {
             auto_save_interval_s: 60,
             side_panel_width: None,
             saved_stamps_frame_height: None,
-            bottom_panel_open: false,
-            bottom_panel_timeline_height: None,
-            bottom_panel_budget_height: None,
-            bottom_panel_consortium_height: None,
-            bottom_panel_tab: "budget".into(),
             map_layer_visible: true,
             map_style: BasemapStyle::Street,
             map_opacity: 1.0,
@@ -162,7 +152,13 @@ mod tests {
             "check_updates": false,
             "default_design_dir": "/legacy/designs",
             "recent_files_max": 99,
-            "last_active_panel": "legacy-panel"
+            "last_active_panel": "legacy-panel",
+            "bottom_panel_open": true,
+            "bottom_panel_timeline_height": 280,
+            "bottom_panel_budget_height": 300,
+            "bottom_panel_consortium_height": 320,
+            "bottom_panel_tab": "timeline",
+            "bottom_panel_height": 260
         }))
         .expect("legacy settings should remain readable");
 
@@ -181,6 +177,12 @@ mod tests {
             "default_design_dir",
             "recent_files_max",
             "last_active_panel",
+            "bottom_panel_open",
+            "bottom_panel_timeline_height",
+            "bottom_panel_budget_height",
+            "bottom_panel_consortium_height",
+            "bottom_panel_tab",
+            "bottom_panel_height",
         ] {
             assert!(
                 serialized.get(retired_key).is_none(),

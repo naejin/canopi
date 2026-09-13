@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  bottomPanelHeights,
-  bottomPanelOpen,
-  bottomPanelTab,
-} from '../app/canvas-settings/bottom-panel-state'
-import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
@@ -37,13 +32,6 @@ describe('generated settings defaults', () => {
     expect(savedStampsFrameHeight.value).toBe(
       DEFAULT_SETTINGS.saved_stamps_frame_height ?? DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
     )
-    expect(bottomPanelOpen.value).toBe(DEFAULT_SETTINGS.bottom_panel_open)
-    expect(bottomPanelTab.value).toBe(DEFAULT_SETTINGS.bottom_panel_tab)
-    expect(bottomPanelHeights.value).toEqual({
-      timeline: DEFAULT_SETTINGS.bottom_panel_timeline_height,
-      budget: DEFAULT_SETTINGS.bottom_panel_budget_height,
-      consortium: DEFAULT_SETTINGS.bottom_panel_consortium_height,
-    })
     expect(snapToGridEnabled.value).toBe(DEFAULT_SETTINGS.snap_to_grid)
     expect(snapToGuidesEnabled.value).toBe(DEFAULT_SETTINGS.snap_to_guides)
     expect(layerVisibility.value.base).toBe(DEFAULT_SETTINGS.map_layer_visible)

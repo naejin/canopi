@@ -8,7 +8,6 @@ function readSource(path: string): string {
 describe('location route boundary', () => {
   it('keeps the canvas shell free of direct location-tab imports', () => {
     expect(readSource('../components/panels/CanvasPanel.tsx')).not.toContain('LocationTab')
-    expect(readSource('../components/canvas/BottomPanel.tsx')).not.toContain("import('./LocationTab')")
   })
 
   it('loads the location flow through the dedicated location panel', () => {

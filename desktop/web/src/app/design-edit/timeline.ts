@@ -50,6 +50,15 @@ export interface TimelineActionFormData {
   species_canonical: string | null
 }
 
+export interface CalendarActionFormData {
+  readonly action_type: string
+  readonly start_date: string
+  readonly end_date: string
+  readonly description: string
+  readonly completed: boolean
+  readonly targets: readonly PanelTarget[]
+}
+
 export function addTimelineAction(action: Omit<TimelineAction, 'order'>): void {
   editDesignArray('timeline', (timeline) => {
     let maxOrder = -1
@@ -125,6 +134,39 @@ export function timelineActionPatchFromFormData(
     start_date: data.start_date || null,
     end_date: data.end_date || null,
     targets: targetsFromTimelineActionFormData(data),
+  }
+}
+
+export function createCalendarActionFromFormData(
+  id: string,
+  data: CalendarActionFormData,
+): Omit<TimelineAction, 'order'> {
+  return {
+    id,
+    action_type: data.action_type,
+    description: data.description,
+    start_date: data.start_date || null,
+    end_date: data.end_date || null,
+    recurrence: null,
+    targets: data.targets.map((target) => ({ ...target })),
+    depends_on: null,
+    completed: data.completed,
+  }
+}
+
+export function calendarActionPatchFromFormData(
+  data: CalendarActionFormData,
+  includeTargets: boolean,
+): Partial<TimelineAction> {
+  return {
+    action_type: data.action_type,
+    description: data.description,
+    start_date: data.start_date || null,
+    end_date: data.end_date || null,
+    completed: data.completed,
+    ...(includeTargets
+      ? { targets: data.targets.map((target) => ({ ...target })) }
+      : {}),
   }
 }
 

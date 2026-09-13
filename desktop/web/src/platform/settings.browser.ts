@@ -45,20 +45,6 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
       value.saved_stamps_frame_height,
       DEFAULT_SETTINGS.saved_stamps_frame_height,
     ),
-    bottom_panel_open: readBoolean(value.bottom_panel_open, DEFAULT_SETTINGS.bottom_panel_open),
-    bottom_panel_timeline_height: readNullableU32(
-      value.bottom_panel_timeline_height,
-      DEFAULT_SETTINGS.bottom_panel_timeline_height,
-    ),
-    bottom_panel_budget_height: readNullableU32(
-      value.bottom_panel_budget_height,
-      DEFAULT_SETTINGS.bottom_panel_budget_height,
-    ),
-    bottom_panel_consortium_height: readNullableU32(
-      value.bottom_panel_consortium_height,
-      DEFAULT_SETTINGS.bottom_panel_consortium_height,
-    ),
-    bottom_panel_tab: readString(value.bottom_panel_tab, DEFAULT_SETTINGS.bottom_panel_tab),
     map_layer_visible: readBoolean(value.map_layer_visible, DEFAULT_SETTINGS.map_layer_visible),
     map_style: readEnum(
       value.map_style,
@@ -108,10 +94,6 @@ function isU32(value: unknown): value is number {
     && Number.isInteger(value)
     && value >= 0
     && value <= MAX_U32
-}
-
-function readString(value: unknown, fallback: string): string {
-  return typeof value === 'string' ? value : fallback
 }
 
 function readFiniteNumber(value: unknown, fallback: number): number {

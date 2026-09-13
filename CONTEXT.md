@@ -319,16 +319,12 @@ A scheduled action in a design, such as planting, maintenance, or another work i
 _Avoid_: Event, task, calendar item
 
 **Timeline Action Workbench**:
-The interaction surface for creating, editing, deleting, and selecting timeline actions in the timeline view. The timeline action workbench coordinates action forms and target presentation, but it does not own Design data.
+The interaction surface for creating, editing, deleting, completing, and selecting timeline actions in Calendar. The timeline action workbench coordinates action forms and target presentation, but it does not own Design data.
 _Avoid_: Timeline popup, event editor, task workbench
 
-**Timeline Action Canvas**:
-The canvas-based interaction surface for viewing, panning, zooming, dragging, selecting, and editing timeline actions. The timeline action canvas coordinates Planning Projection inputs, canvas rendering, pointer ordering, popover presentation, and target presentation, while Timeline Action data remains owned by the Design.
-_Avoid_: Timeline renderer, timeline frame, timeline canvas component
-
-**Planning Canvas Interaction Frame**:
-The planning-surface interaction seam for canvas-based Timeline Action and Consortium gesture lifetime: pointer capture, document listeners, drag preview/commit/abort, hover cleanup, stale selection cleanup, and Target Presentation writes. The planning canvas interaction frame owns shared interaction ordering while adapters own surface-specific geometry, rendering, popover details, and Design Edit commands.
-_Avoid_: Canvas2D helper, generic interaction utility, planning event handler
+**Calendar**:
+The right-dock presentation of Timeline Actions. Calendar provides month and agenda views, civil-date editing, completion, search, and explicit target editing while Timeline Action data remains owned by the Design.
+_Avoid_: Timeline canvas, calendar data store, event database
 
 **Budget Item**:
 A cost entry in a design. A budget item may refer to a species, placed plant, zone, or manual line item and contributes to the design's budget.
@@ -520,8 +516,8 @@ The **Consortium Time Model** owns Succession Phase and Stratum order, labels, d
 **Timeline Action vs Timeline Action Workbench**:
 A **Timeline Action** is the scheduled work in the Design. The **Timeline Action Workbench** is the interaction surface used to create, edit, delete, and select those actions.
 
-**Timeline Action Canvas vs Planning Canvas Interaction Frame**:
-The **Timeline Action Canvas** owns Timeline Action planning presentation. The **Planning Canvas Interaction Frame** owns interaction ordering shared with other planning canvases, such as Consortium planning.
+**Calendar vs Timeline Action**:
+**Calendar** is the user-facing planning surface. A **Timeline Action** is the saved Design record that Calendar presents and edits.
 
 ## Example Dialogue
 

@@ -45,6 +45,7 @@ export default defineConfig(({ mode }) => {
       alias: {
         '#platform': platformAdapter,
         '#canvas-pdf-platform': fileURLToPath(new URL(isWebEdition ? './src/app/canvas-pdf/platform.browser.ts' : './src/app/canvas-pdf/platform.desktop.ts', import.meta.url)),
+        '#budget-export-platform': fileURLToPath(new URL(isWebEdition ? './src/app/budget/platform.browser.ts' : './src/app/budget/platform.desktop.ts', import.meta.url)),
         '#species-catalog-live': speciesCatalogLiveAdapter,
         '#design-template-import-workflow': designTemplateImportWorkflowAdapter,
         '#design-template-catalog': designTemplateCatalogAdapter,

@@ -13,8 +13,6 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
-import { BottomPanel } from '../canvas/BottomPanel'
-import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
 import { getLocationNoticeReadModel, useSavedLocationPresentation } from '../../app/location'
@@ -163,12 +161,10 @@ export function CanvasPanel() {
         </div>
         {hasDesign && (
           <div className={styles.canvasBar}>
-            <BottomPanelLauncher />
             <div className={styles.canvasBarSpacer} />
             <ZoomControls />
           </div>
         )}
-        {hasDesign && <BottomPanel />}
       </div>
     </div>
   )

@@ -51,6 +51,14 @@
   animation: menuIn var(--transition-enter) forwards;
 }
 
+.menuFloating {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  z-index: 50;
+  max-width: calc(100vw - var(--space-4));
+}
+
 .menuUp {
   bottom: calc(100% + var(--space-2));
   transform: translateY(var(--space-1));
@@ -87,6 +95,16 @@
 .option:hover {
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+.option:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.option:disabled:hover {
+  background: none;
 }
 
 .option:focus-visible {

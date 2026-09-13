@@ -7,6 +7,7 @@ For UI/UX work, first read the [design contract](../../.interface-design/system.
 | Work | Read |
 | --- | --- |
 | Preact, effects, cleanup, command boundaries | [Runtime and interaction](frontend-runtime.md) |
+| Calendar, Budget, Consortium, Planning Projection | [Runtime and interaction](frontend-runtime.md), [Dock panels](../../.interface-design/patterns/dock-panels.md) |
 | Species Catalog, Favorites, Notebook, shared dock | [Workbench ownership](frontend-workbenches.md), relevant section |
 | Web shell, browser storage, browser species runtime | [Browser Edition](browser-edition.md), relevant section |
 | Floating controls, focus, dismissal, CSS implementation | [Chrome implementation](frontend-chrome.md) |

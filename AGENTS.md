@@ -211,8 +211,8 @@ cargo build --release
 
 - Left: canvas toolbar with drawing tools, plant color and plant symbol actions, and grid/snap/ruler toggles.
 - Center: canvas workspace.
-- Right: `PanelBar` with Canvas/Location primary navigation and Species Key, Layers, Design Notebook, Species Catalog, and Favorites side panels in one resizable dock.
-- Bottom: bottom panel with Timeline, Budget, and Consortium tabs.
+- Right: `PanelBar` with Canvas/Location primary navigation and Species Key, Layers, Calendar, Budget, Consortium, Design Notebook, Species Catalog, and Favorites side panels in one resizable dock.
+- Bottom: compact canvas utility bar with zoom controls.
 - Title bar: logo, file name, lang/theme toggle, menu controls, and window controls.
 
 ### Design Direction

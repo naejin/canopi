@@ -18,7 +18,7 @@
   min-height: 0;
 }
 
-/* Canvas area + bottom panel column */
+/* Canvas area + utility bar column */
 .canvasColumn {
   flex: 1;
   display: flex;
@@ -121,7 +121,7 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Thin utility bar between canvas and bottom panel — launcher and zoom */
+/* Thin utility bar below the canvas for zoom controls */
 .canvasBar {
   display: flex;
   align-items: center;

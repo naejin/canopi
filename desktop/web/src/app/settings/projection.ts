@@ -12,16 +12,6 @@ import {
   layerOpacity,
   layerVisibility,
 } from '../canvas-settings/signals'
-import {
-  VISIBLE_BOTTOM_PANEL_TABS,
-  MIN_BOTTOM_PANEL_HEIGHT,
-  type BottomPanelHeightPreferences,
-  type BottomPanelTab,
-  bottomPanelHeights,
-  bottomPanelOpen,
-  bottomPanelTab,
-  createDefaultBottomPanelHeights,
-} from '../canvas-settings/bottom-panel-state'
 import { sidePanelWidth } from '../shell/state'
 import {
   DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
@@ -50,11 +40,6 @@ export interface SettingsProjectionDraft {
   }
   savedStamps: {
     frameHeight: number
-  }
-  bottomPanel: {
-    open: boolean
-    heights: BottomPanelHeightPreferences
-    tab: BottomPanelTab
   }
   mapLayers: {
     baseVisible: boolean
@@ -105,7 +90,6 @@ interface PendingHydrationIntent {
 }
 
 const DEFAULT_QUEUED_PERSIST_DELAY_MS = 160
-const DEFAULT_BOTTOM_PANEL_TAB: BottomPanelTab = 'budget'
 const MIN_SIDE_PANEL_WIDTH = 320
 
 let sourceSettings: Settings | null = null
@@ -138,27 +122,8 @@ function normalizeSavedStampsFrameHeight(value: number | null): number {
   return Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.round(value))
 }
 
-function normalizeBottomPanelHeight(value: number | null): number | null {
-  if (value === null || !Number.isFinite(value)) return null
-  return Math.max(MIN_BOTTOM_PANEL_HEIGHT, Math.round(value))
-}
-
-function normalizeBottomPanelHeights(
-  heights: BottomPanelHeightPreferences,
-): BottomPanelHeightPreferences {
-  return {
-    timeline: normalizeBottomPanelHeight(heights.timeline),
-    budget: normalizeBottomPanelHeight(heights.budget),
-    consortium: normalizeBottomPanelHeight(heights.consortium),
-  }
-}
-
 function normalizeTheme(value: Theme): Theme {
   return value === 'dark' ? 'dark' : 'light'
-}
-
-function normalizeBottomPanelTab(value: BottomPanelTab): BottomPanelTab {
-  return VISIBLE_BOTTOM_PANEL_TABS.includes(value) ? value : DEFAULT_BOTTOM_PANEL_TAB
 }
 
 function createDraftFromProjection(): SettingsProjectionDraft {
@@ -175,11 +140,6 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     },
     savedStamps: {
       frameHeight: savedStampsFrameHeight.value,
-    },
-    bottomPanel: {
-      open: bottomPanelOpen.value,
-      heights: { ...bottomPanelHeights.value },
-      tab: bottomPanelTab.value,
     },
     mapLayers: {
       baseVisible: layerVisibility.value.base ?? true,
@@ -211,11 +171,6 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     savedStamps: {
       frameHeight: normalizeSavedStampsFrameHeight(draft.savedStamps.frameHeight),
     },
-    bottomPanel: {
-      open: draft.bottomPanel.open,
-      heights: normalizeBottomPanelHeights(draft.bottomPanel.heights),
-      tab: normalizeBottomPanelTab(draft.bottomPanel.tab),
-    },
     mapLayers: {
       baseVisible: draft.mapLayers.baseVisible,
       baseOpacity: clampUnitInterval(draft.mapLayers.baseOpacity, 1),
@@ -239,9 +194,6 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
     sidePanelWidth.value = draft.sidePanel.width
     savedStampsFrameHeight.value = draft.savedStamps.frameHeight
-    bottomPanelOpen.value = draft.bottomPanel.open
-    bottomPanelHeights.value = draft.bottomPanel.heights
-    bottomPanelTab.value = draft.bottomPanel.tab
     layerVisibility.value = {
       ...layerVisibility.value,
       base: draft.mapLayers.baseVisible,
@@ -268,11 +220,6 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
     side_panel_width: draft.sidePanel.width,
     saved_stamps_frame_height: draft.savedStamps.frameHeight,
-    bottom_panel_open: draft.bottomPanel.open,
-    bottom_panel_timeline_height: draft.bottomPanel.heights.timeline,
-    bottom_panel_budget_height: draft.bottomPanel.heights.budget,
-    bottom_panel_consortium_height: draft.bottomPanel.heights.consortium,
-    bottom_panel_tab: draft.bottomPanel.tab,
     map_layer_visible: draft.mapLayers.baseVisible,
     map_style: draft.basemapStyle,
     map_opacity: draft.mapLayers.baseOpacity,
@@ -311,16 +258,6 @@ function projectSettingsToSignals(settings: Settings): Settings {
     },
     savedStamps: {
       frameHeight: normalizeSavedStampsFrameHeight(settings.saved_stamps_frame_height),
-    },
-    bottomPanel: {
-      open: settings.bottom_panel_open,
-      heights: {
-        ...createDefaultBottomPanelHeights(),
-        timeline: settings.bottom_panel_timeline_height,
-        budget: settings.bottom_panel_budget_height,
-        consortium: settings.bottom_panel_consortium_height,
-      },
-      tab: normalizeBottomPanelTab(settings.bottom_panel_tab as BottomPanelTab),
     },
     mapLayers: {
       baseVisible: settings.map_layer_visible,

@@ -78,6 +78,9 @@ type DesktopShellCapabilityId =
   | 'navigatePlantDatabase'
   | 'navigateSpeciesKey'
   | 'navigateLayers'
+  | 'navigateCalendar'
+  | 'navigateBudget'
+  | 'navigateConsortium'
   | 'navigateFavorites'
   | 'navigateDesignNotebook'
   | 'toggleTheme'
@@ -273,6 +276,18 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   navigateLayers: {
     execute: () => navigateTo('layers'),
     isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'layers',
+  },
+  navigateCalendar: {
+    execute: () => navigateTo('calendar'),
+    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'calendar',
+  },
+  navigateBudget: {
+    execute: () => navigateTo('budget'),
+    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'budget',
+  },
+  navigateConsortium: {
+    execute: () => navigateTo('consortium'),
+    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'consortium',
   },
   navigateFavorites: {
     execute: () => switchPanel('favorites'),

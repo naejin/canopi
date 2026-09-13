@@ -62,7 +62,7 @@ describe('PanelBar', () => {
 
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
       .map((icon) => icon.getAttribute('stroke-width') ?? icon.getAttribute('strokeWidth'))
-    expect(strokes).toEqual(['1.5', '1.5', '1.5', '1.5', '1.5', '1.5', '1.5'])
+    expect(strokes).toEqual(Array(10).fill('1.5'))
   })
 
   it('orders the Design Notebook before plant-library panels', async () => {
@@ -75,6 +75,9 @@ describe('PanelBar', () => {
       'Design Location',
       'Species key',
       'Layers',
+      'Calendar',
+      'Budget',
+      'Consortium',
       'Design notebook',
       'Plant Database',
       'Favorites',

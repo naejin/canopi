@@ -78,7 +78,9 @@ export function createTestCanvasQuerySurface({
       },
     }),
     getSelectedPlantColorContext: () => ({
-      plantIds: [],
+      plantIds: currentSelection
+        .filter((target) => target.kind === 'plant')
+        .map((target) => target.id),
       singleSpeciesCanonicalName: null,
       singleSpeciesCommonName: null,
       sharedCurrentColor: null,

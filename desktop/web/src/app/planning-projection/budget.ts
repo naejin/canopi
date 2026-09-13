@@ -1,10 +1,16 @@
 import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
+import type { PlantSymbolId } from '../../canvas/runtime/scene'
+import type { SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 import { getBudgetHoverTarget, getBudgetSpeciesTarget } from '../../target'
 import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
+import type { BudgetPriceFilter, BudgetSort } from '../planning-view/state'
+import { normalizeSearchText } from '../../utils/normalize-search'
 
 export interface BudgetPlanningRow {
   readonly canonical: string
   readonly commonName: string
+  readonly code: string
+  readonly appearances: readonly { readonly symbol: PlantSymbolId; readonly color: string }[]
   readonly count: number
   readonly target: PanelTarget
   readonly item: BudgetItem | null
@@ -20,7 +26,14 @@ export interface BudgetPlanningProjection {
   readonly itemByCanonical: ReadonlyMap<string, BudgetItem>
   readonly totalPlants: number
   readonly pricedCount: number
+  readonly zeroPricedCount: number
   readonly grandTotal: number
+}
+
+export interface BudgetListProjection {
+  readonly rows: readonly BudgetPlanningRow[]
+  readonly shownSubtotal: number
+  readonly restricted: boolean
 }
 
 export interface BuildBudgetPlanningProjectionOptions {
@@ -29,6 +42,7 @@ export interface BuildBudgetPlanningProjectionOptions {
   readonly budget: readonly BudgetItem[]
   readonly currency: string
   readonly locale: string
+  readonly speciesKey?: readonly SpeciesKeyEntry[]
 }
 
 export function buildBudgetPlanningProjection({
@@ -37,6 +51,7 @@ export function buildBudgetPlanningProjection({
   budget,
   currency,
   locale,
+  speciesKey = [],
 }: BuildBudgetPlanningProjectionOptions): BudgetPlanningProjection {
   const itemByCanonical = new Map<string, BudgetItem>()
   const lineItemPriceMap = new Map<string, { unit_cost: number; currency: string }>()
@@ -52,14 +67,18 @@ export function buildBudgetPlanningProjection({
   }
 
   const grouped = groupPlantsBySpecies(plants, localizedNames)
+  const identityByCanonical = new Map(speciesKey.map((entry) => [entry.canonicalName, entry]))
   const rows = Array.from(grouped.entries())
     .map(([canonical, value]): BudgetPlanningRow => {
       const item = itemByCanonical.get(canonical) ?? null
       const price = lineItemPriceMap.get(canonical)
+      const identity = identityByCanonical.get(canonical)
       const unitCost = price?.unit_cost ?? 0
       return {
         canonical,
-        commonName: value.commonName,
+        commonName: identity?.commonName ?? value.commonName,
+        code: identity?.code ?? '',
+        appearances: identity?.appearances ?? [],
         count: value.count,
         target: getBudgetHoverTarget(item, canonical),
         item,
@@ -79,6 +98,52 @@ export function buildBudgetPlanningProjection({
     itemByCanonical,
     totalPlants: rows.reduce((sum, row) => sum + row.count, 0),
     pricedCount: rows.filter((row) => row.hasPrice).length,
+    zeroPricedCount: rows.filter((row) => row.hasPrice && row.unitCost === 0).length,
     grandTotal: rows.reduce((sum, row) => sum + row.subtotal, 0),
+  }
+}
+
+export function buildBudgetListProjection(
+  projection: BudgetPlanningProjection,
+  options: {
+    readonly search: string
+    readonly sort: BudgetSort
+    readonly priceFilter: BudgetPriceFilter
+    readonly locale: string
+  },
+): BudgetListProjection {
+  const needle = normalizeSearchText(options.search.trim())
+  const nameOrder = (left: BudgetPlanningRow, right: BudgetPlanningRow): number => {
+    const localized = (left.commonName || left.canonical).localeCompare(
+      right.commonName || right.canonical,
+      options.locale,
+    )
+    return localized || left.canonical.localeCompare(right.canonical)
+  }
+  const rows = projection.rows
+    .filter((row) => {
+      if (options.priceFilter === 'no-price' && row.hasPrice) return false
+      if (options.priceFilter === 'zero-price' && (!row.hasPrice || row.unitCost !== 0)) return false
+      return needle === '' || normalizeSearchText(
+        `${row.commonName} ${row.canonical} ${row.code}`,
+      ).includes(needle)
+    })
+    .sort((left, right) => {
+      if (options.sort === 'highest-total') {
+        if (left.hasPrice !== right.hasPrice) return left.hasPrice ? -1 : 1
+        if (left.hasPrice && right.hasPrice && left.subtotal !== right.subtotal) {
+          return right.subtotal - left.subtotal
+        }
+      }
+      if (options.sort === 'most-plants' && left.count !== right.count) {
+        return right.count - left.count
+      }
+      return nameOrder(left, right)
+    })
+
+  return {
+    rows,
+    shownSubtotal: rows.reduce((sum, row) => sum + (row.hasPrice ? row.subtotal : 0), 0),
+    restricted: needle !== '' || options.priceFilter !== 'all',
   }
 }

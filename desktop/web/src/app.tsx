@@ -2,7 +2,8 @@ import { CanvasPdfDialog } from './components/canvas-pdf/CanvasPdfDialog'
 import "./styles/global.css";
 import styles from "./App.module.css";
 import { lazy, Suspense } from "preact/compat";
-import { activePanel, sidePanel } from "./app/shell/state";
+import { activePanel, sidePanel, type SidePanel } from "./app/shell/state";
+import { usePlanningViewState } from "./app/planning-view/state";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
@@ -36,12 +37,27 @@ const LayerPanel = lazy(async () => {
   return { default: module.LayersPanel };
 });
 
+const BudgetPanel = lazy(async () => {
+  const module = await import("./components/panels/BudgetPanel");
+  return { default: module.BudgetPanel };
+});
+
+const CalendarPanel = lazy(async () => {
+  const module = await import("./components/panels/CalendarPanel");
+  return { default: module.CalendarPanel };
+});
+
+const ConsortiumPanel = lazy(async () => {
+  const module = await import("./components/panels/ConsortiumPanel");
+  return { default: module.ConsortiumPanel };
+});
+
 const LocationPanel = lazy(async () => {
   const module = await import("./components/panels/LocationPanel");
   return { default: module.LocationPanel };
 });
 
-function SidePanelContent({ side }: { side: string }) {
+function SidePanelContent({ side }: { side: SidePanel }) {
   const Panel = side === "plant-db"
     ? PlantDbPanel
     : side === "favorites"
@@ -49,7 +65,10 @@ function SidePanelContent({ side }: { side: string }) {
       : side === "design-notebook"
         ? DesignNotebookPanel
         : side === "species-key" ? SpeciesKeyPanel
-          : side === "layers" ? LayerPanel : null;
+          : side === "layers" ? LayerPanel
+            : side === "calendar" ? CalendarPanel
+              : side === "budget" ? BudgetPanel
+                : side === "consortium" ? ConsortiumPanel : null;
 
   if (!Panel) return null;
 
@@ -63,6 +82,7 @@ function SidePanelContent({ side }: { side: string }) {
 export function App() {
   const panel = activePanel.value;
   const side = sidePanel.value;
+  const planningView = usePlanningViewState();
 
   const showCanvas = panel === "canvas";
   const showLocation = panel === "location";
@@ -84,7 +104,10 @@ export function App() {
 
         {/* Right side panel (Species Catalog Workbench, favorites, etc.) */}
         {showSidebar && (
-          <SidePanelDock><SidePanelContent side={side!} /></SidePanelDock>
+          <SidePanelDock
+            expanded={side === "calendar" && planningView.calendarExpanded.value}
+            onManualResize={() => { planningView.calendarExpanded.value = false; }}
+          ><SidePanelContent side={side!} /></SidePanelDock>
         )}
 
         {/* Right panel bar — always visible */}
