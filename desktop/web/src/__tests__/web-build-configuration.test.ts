@@ -95,6 +95,8 @@ describe('Web Edition build configuration', () => {
     expect(cssValue(webAppCss, '.root', 'height')).toBe('100%')
     expect(cssValue(workspaceCss, '.root', 'display')).toBe('flex')
     expect(cssValue(workspaceCss, '.primary', 'display')).toBe('flex')
+    expect(cssValue(workspaceCss, '.sidePanel', 'display')).toBe('flex')
+    expect(cssValue(workspaceCss, '.sidePanel', 'flex-direction')).toBe('column')
     expect(cssValue(workspaceCss, '.responsiveOpen', 'flex-direction')).toBe('column')
     const dockCss = readFileSync(new URL('../components/shared/SidePanelDock.module.css', import.meta.url), 'utf8')
     expect(cssValue(dockCss, '.sidePanel', 'width')).toBe('var(--side-panel-width)')

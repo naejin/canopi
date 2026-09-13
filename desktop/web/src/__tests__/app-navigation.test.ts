@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { activePanel, navigateTo, sidePanel } from '../app/shell/state'
+import { activePanel, navigateTo, selectPanel, sidePanel } from '../app/shell/state'
 
 beforeEach(() => {
   activePanel.value = 'canvas'
@@ -63,5 +63,17 @@ describe('app navigation', () => {
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('design-notebook')
+  })
+
+  it('selects a sidebar panel idempotently for route-like callers', () => {
+    selectPanel('calendar')
+    selectPanel('calendar')
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('calendar')
+
+    selectPanel('location')
+    expect(activePanel.value).toBe('location')
+    expect(sidePanel.value).toBe(null)
   })
 })

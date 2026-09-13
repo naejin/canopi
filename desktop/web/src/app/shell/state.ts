@@ -23,26 +23,11 @@ export const sidePanel = signal<SidePanel | null>(null);
 // the responsive first-use default.
 export const sidePanelWidth = signal<number | null>(DEFAULT_SETTINGS.side_panel_width);
 
-/**
- * Navigate to a panel using the correct routing model:
- * - side panels share a single dock alongside the canvas (toggle if already open)
- * - canvas / location / templates: full-screen primary panels
- */
-export function navigateTo(panel: Panel): void {
+/** Select a panel without applying the command-layer toggle behavior. */
+export function selectPanel(panel: Panel): void {
   batch(() => {
     if (isSidePanel(panel)) {
-      const nextSidePanel = panel;
-      if (sidePanel.value === nextSidePanel) {
-        sidePanel.value = null;
-      } else {
-        sidePanel.value = nextSidePanel;
-        activePanel.value = "canvas";
-      }
-      return;
-    }
-
-    if (panel === "canvas") {
-      sidePanel.value = null;
+      sidePanel.value = panel;
       activePanel.value = "canvas";
       return;
     }
@@ -50,4 +35,18 @@ export function navigateTo(panel: Panel): void {
     sidePanel.value = null;
     activePanel.value = panel;
   });
+}
+
+/**
+ * Navigate to a panel using the correct routing model:
+ * - side panels share a single dock alongside the canvas (toggle if already open)
+ * - canvas / location / templates: full-screen primary panels
+ */
+export function navigateTo(panel: Panel): void {
+  if (isSidePanel(panel) && sidePanel.value === panel) {
+    sidePanel.value = null;
+    return;
+  }
+
+  selectPanel(panel);
 }
