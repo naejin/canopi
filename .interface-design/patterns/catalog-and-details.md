@@ -18,6 +18,8 @@ Read the [design contract](../system.md) first.
 - Whole row is draggable to canvas
 - Background: `--color-bg` (parchment, matches canvas area)
 
+Desktop and Web retain separate Catalog list/detail compositions around the shared Workbench because their supported fields, paging, responsive controls, images, and detail depth differ. Their Favorites surfaces share the local Common/Canonical Name matcher and detail focus-return behavior. Back restores the initiating information action, or the search field when filtering removed that row, without unmounting or scrolling the underlying list.
+
 
 ## FilterChip
 - Pill shape (`--radius-full`), 20px height, 11px text, 600 weight

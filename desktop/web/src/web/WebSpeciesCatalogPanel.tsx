@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../canvas/session'
 import {
@@ -13,6 +13,10 @@ import { t } from '../i18n'
 import type { FilterOptions, SpeciesFilter, SpeciesListItem } from '../types/species'
 import type { StripChoiceField, StripControlField } from '../app/plant-browser'
 import { toggleArrayValue } from '../components/plant-db/filter-utils'
+import {
+  filterFavoriteSpecies,
+  useFavoriteSpeciesDetailNavigation,
+} from '../components/plant-db/favorite-species-presentation'
 import { SpeciesKeyPanel } from '../components/panels/SpeciesKeyPanel'
 import { DockPanelHeader } from '../components/shared/DockPanelHeader'
 import { SurfaceSearch } from '../components/shared/SurfaceSearch'
@@ -34,23 +38,20 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   const detailView = speciesCatalogWorkbench.detail.value
   const isCatalog = mode === 'catalog'
   const searching = speciesCatalogWorkbench.isSearchLoading(results.status)
-  const visibleItems = isCatalog ? results.items : favoritesView.items.filter(item =>
-    `${item.common_name ?? ''} ${item.canonical_name}`.toLocaleLowerCase().includes(favoriteSearch.toLocaleLowerCase()))
+  const visibleItems = isCatalog
+    ? results.items
+    : filterFavoriteSpecies(favoritesView.items, favoriteSearch)
   const title = isCatalog ? t('nav.plantDb') : t('nav.favorites')
 
   const mainRef = useRef<HTMLDivElement>(null)
-  const backRef = useRef<HTMLButtonElement>(null)
-  const previousDetail = useRef<string | null>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
   const showingDetail = !isCatalog && detailView.canonicalName !== null
-  useLayoutEffect(() => {
-    if (showingDetail) backRef.current?.focus()
-    else if (previousDetail.current && !isCatalog) {
-      const buttons = mainRef.current?.querySelectorAll<HTMLButtonElement>('[data-species-detail]') ?? []
-      const origin = Array.from(buttons).find(button => button.dataset.speciesDetail === previousDetail.current)
-      ;(origin ?? mainRef.current?.querySelector<HTMLInputElement>('input[type="search"]'))?.focus({ preventScroll: true })
-    }
-    previousDetail.current = showingDetail ? detailView.canonicalName : null
-  }, [showingDetail, detailView.canonicalName, isCatalog])
+  useFavoriteSpeciesDetailNavigation({
+    active: !isCatalog,
+    canonicalName: showingDetail ? detailView.canonicalName : null,
+    detailRef,
+    mainRef,
+  })
 
   useEffect(() => speciesCatalogWorkbench.mount(mode), [mode])
 
@@ -114,8 +115,8 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
         </div>
       )}
       </div>
-      {showingDetail && <div className={styles.fullDetail}>
-        <button ref={backRef} type="button" data-detail-back className={styles.backButton} onClick={() => speciesCatalogWorkbench.closeSpeciesDetail()}>{t('plantDetail.back')}</button>
+      {showingDetail && <div ref={detailRef} className={styles.fullDetail}>
+        <button type="button" data-detail-back className={styles.backButton} onClick={() => speciesCatalogWorkbench.closeSpeciesDetail()}>{t('plantDetail.back')}</button>
         <div className={styles.detailScroll}><WebSpeciesDetail view={detailView} showBack={false} /></div>
       </div>}
     </section>

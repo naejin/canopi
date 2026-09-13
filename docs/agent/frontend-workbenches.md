@@ -21,6 +21,7 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 - Components such as `FilterStrip` and `ActiveChips` should consume `plantFilterCatalog` instead of hardcoding fixed filter rows or chip metadata.
 - Strip rows should come from `stripControls()`; active chips should come from `activeArrayChipFields()`, `activeBooleanChipFields()`, and `activeNumericChipFields()`.
 - Web Edition filter chrome should consume the generated Web-supported filter projection from the Web catalog adapter. Do not hardcode the current Web-supported filters in components, and do not render unsupported desktop-only filters as disabled controls.
+- Desktop and Web Favorites use `components/plant-db/favorite-species-presentation.ts` for accent-insensitive Common/Canonical Name filtering and full-detail focus entry/return. Keep the list mounted while detail is open and mark its Back control with `data-detail-back`; the helper restores the exact initiating `data-species-detail` button, or the search field when that Species is no longer visible.
 - Always-visible choice rows should use the same natural flex-wrapping ribbon behavior as More Filters chip rows. Do not use equal-track grid layouts or strip-only chip sizing for row-height behavior; Climate Zone has enough choices that grid tracks can make the row appear fixed instead of fitting the visible ribbons.
 - Keep the shared `SpeciesFilter` request shape stable unless the bead explicitly changes frontend/backend contracts.
 - Dormant Site Adaptation was retired by ADR 0023. If Site Adaptation returns, implement it as a sibling Design workflow, not a mode inside the Species Catalog Workbench; it may share Species Catalog read adapters, but it must not depend on plant-browser UI state.
@@ -33,6 +34,21 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 - Desktop Species Search supersession is a serialized control plane owned by `app/plant-browser/search-session.ts`. When a backend request may still be active, a newer intent, stop, or disposal must enqueue `supersede_species_search` immediately; successor dispatch waits for every earlier supersession in its generation and stale generations re-check freshness after that wait. The browser adapter remains a no-op because it does not share the Desktop SQLite connection.
 - `app/plant-browser/search-session.ts` should call search adapters with the structured generated `SpeciesSearchRequest`; `ipc/species.ts` is the flat Tauri argument adapter.
 - Species Catalog active text searches always use relevance ordering; browse mode uses deterministic Canonical Name ordering. Do not expose user-facing sort controls in the Species Catalog Workbench.
+
+### Catalog presentation assessment
+
+The Workbench is the shared behavior boundary; the two presentation adapters stay explicit where their data and interaction jobs differ:
+
+| Concern | Shared owner | Desktop presentation | Web presentation |
+| --- | --- | --- | --- |
+| Search request, cancellation, stale results, pagination cursor, filter intent, locale refresh | `app/plant-browser/workbench.ts` and `search-session.ts` | `SearchBar`, full Filter Strip/More Filters, virtual infinite list and optional card view | Compact search, generated supported choice rows, narrow-layout collapse and explicit Load More |
+| Loading/error/retry | Workbench status and `retrySearch()` | Desktop list states include browse/search distinctions and virtual-list continuity | Reduced list states keep the direct retry button and existing rows while more data loads |
+| Row commands | `canvas/plant-stamp-source.ts` and Workbench selection/favorite commands | Rich metadata tags, matched alternate Common Name, pointer-oriented icon actions | Reduced climate/life-cycle metadata and a persistent touch-sized Place action |
+| Favorites search and detail navigation | `favorite-species-presentation.ts` | Plant marks plus the Saved Object Stamp sibling frame | Browser-local favorites plus Recently Viewed |
+| Detail selection and freshness | Workbench selected identity; edition adapters retain their read model | Full native `PlantDetailCard` and image-cache/IPC controller | Reduced Workbench detail projection and one remote hero image |
+| Storage and lifetime | Workbench interface and mount/dispose contract | Compile-time SQLite/Tauri live adapter | Compile-time DuckDB-WASM/Parquet runtime and browser app-data adapter |
+
+Do not merge the list/detail components into one option-driven catalog view. Sharing them would require flags or slots for supported fields, virtual versus explicit paging, card mode, responsive filter disclosure, matched-name metadata, touch Place visibility, Saved Stamps, Recently Viewed, image delivery, and full versus reduced detail. That interface would preserve both implementations inside a third policy layer. Share new behavior at the Workbench, Plant Stamp, favorite-presentation, or another narrow capability seam only when callers lose knowledge.
 
 
 ## Design Notebook

@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import {
   MIN_FAVORITES_FRAME_HEIGHT,
@@ -23,6 +23,10 @@ import {
 } from '../../canvas/saved-object-stamp-source'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import { PlantRow } from '../plant-db/PlantRow'
+import {
+  filterFavoriteSpecies,
+  useFavoriteSpeciesDetailNavigation,
+} from '../plant-db/favorite-species-presentation'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { usePointerResize } from '../shared/usePointerResize'
@@ -69,16 +73,7 @@ export function FavoritesPanel() {
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
   const mainRef = useRef<HTMLDivElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
-  const previousDetail = useRef<string | null>(null)
-  useLayoutEffect(() => {
-    if (selected) detailRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
-    else if (previousDetail.current) {
-      const buttons = mainRef.current?.querySelectorAll<HTMLButtonElement>('[data-species-detail]') ?? []
-      const origin = Array.from(buttons).find(button => button.dataset.speciesDetail === previousDetail.current)
-      ;(origin ?? mainRef.current?.querySelector<HTMLInputElement>('input[type="search"]'))?.focus({ preventScroll: true })
-    }
-    previousDetail.current = selected
-  }, [selected])
+  useFavoriteSpeciesDetailNavigation({ canonicalName: selected, detailRef, mainRef })
   const headerRef = useRef<HTMLDivElement>(null)
   const resizeHandleRef = useRef<HTMLDivElement>(null)
   const savedStampsFrameRef = useRef<HTMLElement>(null)
@@ -120,8 +115,7 @@ export function FavoritesPanel() {
   }, [])
 
   const items = favoritesView.items
-  const needle = normalizeFavoriteSearch(search)
-  const visibleItems = items.filter(plant => normalizeFavoriteSearch(`${plant.common_name ?? ''} ${plant.canonical_name}`).includes(needle))
+  const visibleItems = filterFavoriteSpecies(items, search)
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
@@ -925,8 +919,4 @@ function countPart(
   if (count <= 0) return null
   const key = count === 1 ? singularKey : pluralKey
   return t(`savedObjectStamps.${key}`, { count })
-}
-
-function normalizeFavoriteSearch(value: string): string {
-  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
 }

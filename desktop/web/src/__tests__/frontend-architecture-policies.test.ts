@@ -654,6 +654,7 @@ const REQUIRED_IMPORT_POLICIES = [
       'src/app/plant-browser/search-session.ts',
       'src/web/reduced-species-catalog.ts',
       'src/web/duckdb-wasm-catalog.ts',
+      'src/components/plant-db/favorite-species-presentation.ts',
     ],
     targets: ['src/utils/species-search-normalization.ts'],
   },
@@ -683,6 +684,15 @@ const REQUIRED_IMPORT_POLICIES = [
       'src/web/WebCanvasWorkspace.tsx',
     ],
     targets: ['src/canvas/runtime/lifecycle-owner.ts'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Desktop and Web Favorites share search and detail navigation policy',
+    from: [
+      'src/components/panels/FavoritesPanel.tsx',
+      'src/web/WebSpeciesCatalogPanel.tsx',
+    ],
+    targets: ['src/components/plant-db/favorite-species-presentation.ts'],
   },
   {
     kind: 'require-imports',

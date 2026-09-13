@@ -277,6 +277,62 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.querySelector('[data-testid="web-species-row-metadata"]')).toBeNull()
   })
 
+  it('matches accented Favorites and restores focus after full-detail navigation', async () => {
+    mockWorkbench.favorites.value = {
+      items: [makeSpeciesListItem('Prunus persica', 'Pêcher', true)],
+      loading: false,
+      revision: 0,
+    }
+    mockWorkbench.sidebar.value = {
+      favoriteNames: ['Prunus persica'],
+      recentlyViewed: [makeSpeciesListItem('Prunus persica', 'Pêcher', true)],
+    }
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="favorites" />, container)
+    })
+
+    const search = requiredElement<HTMLInputElement>('[aria-label="Search favorites"]')
+    await act(async () => {
+      search.value = 'pecher'
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('Pêcher')
+    const origins = container.querySelectorAll<HTMLButtonElement>(
+      '[data-species-detail="Prunus persica"]',
+    )
+    expect(origins).toHaveLength(2)
+    const origin = origins[1]!
+
+    mockWorkbench.detail.value = {
+      canonicalName: 'Prunus persica',
+      detail: null,
+      loading: true,
+      error: null,
+    }
+    await act(async () => {
+      origin.focus()
+      origin.click()
+      search.value = 'pecher '
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const back = requiredElement<HTMLButtonElement>('[data-detail-back]')
+    expect(document.activeElement).toBe(back)
+
+    mockWorkbench.detail.value = {
+      canonicalName: null,
+      detail: null,
+      loading: false,
+      error: null,
+    }
+    await act(async () => {
+      back.click()
+      search.value = 'pecher'
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(document.activeElement).toBe(origin)
+    expect(search.value).toBe('pecher')
+  })
+
   it('renders Species row names on one line with separate metadata', async () => {
     mockWorkbench.results.value = {
       ...mockWorkbench.results.value,

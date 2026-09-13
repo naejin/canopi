@@ -66,6 +66,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
         <div className={styles.header}>
           <button
             type="button"
+            data-detail-back
             className={styles.backBtn}
             onClick={handleBack}
             aria-label={t('plantDetail.back')}
@@ -93,6 +94,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
         <div className={styles.header}>
           <button
             type="button"
+            data-detail-back
             className={styles.backBtn}
             onClick={handleBack}
             aria-label={t('plantDetail.back')}
@@ -214,6 +216,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
       <div className={styles.header}>
         <button
           type="button"
+          data-detail-back
           className={styles.backBtn}
           onClick={handleBack}
           aria-label={t('plantDetail.back')}

@@ -12,7 +12,7 @@ import {
 
 vi.mock('../components/plant-detail/PlantDetailCard', () => ({
   PlantDetailCard: ({ canonicalName }: { canonicalName: string }) => (
-    <div data-testid="favorite-detail">{canonicalName}</div>
+    <div data-testid="favorite-detail"><button type="button" data-detail-back>{canonicalName}</button></div>
   ),
 }))
 
@@ -287,6 +287,7 @@ describe('FavoritesPanel', () => {
     expect(container.querySelector('[data-favorites-main]')?.getAttribute('aria-hidden')).toBe('true')
     expect(container.querySelector<HTMLElement>('[data-favorites-main]')?.hidden).toBe(true)
     expect(container.querySelector('[data-testid="favorite-detail"]')).not.toBeNull()
+    expect(document.activeElement).toBe(container.querySelector('[data-detail-back]'))
     await act(async () => workbench.closeSpeciesDetail())
     expect(document.activeElement).toBe(info)
     expect(input.value).toBe('Malus')
