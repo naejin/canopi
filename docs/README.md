@@ -18,7 +18,7 @@ Start with the narrowest authority for the task. Current implementation guidance
 
 Implementation specifications and completed design records live under `docs/design/`. Proposed work must not override current operating guides before implementation. The [completed Desktop/Web convergence record](design/edition-convergence/handoff.md) points to the delivered [edition development guide](agent/edition-development.md); its implementation history remains in bd epic `canopi-dp4s`.
 
-The [LiDAR agroecology study](design/lidar-agroecology/report.md) assesses the supplied MNH/MNT/MNS rasters, terrain and water analysis, optional soil context, and proposed extensions to the LiDAR library. Its recommendations await review.
+The [LiDAR agroecology study](design/lidar-agroecology/report.md) assesses the supplied MNH/MNT/MNS rasters, terrain and water analysis, optional soil context, and proposed extensions to the LiDAR library. The companion [delivery strategy](design/lidar-agroecology/delivery-strategy.md) compares official downloads, hosted prepared results, national mirrors and local custom analysis. Their recommendations await review.
 
 Release notes in [`release-notes/`](release-notes/) describe shipped versions. PDF validation, canvas-performance reports, Web Catalog performance evidence, and the Windows compression benchmark are dated evidence for decisions or release gates. They do not override current agent guides or ADRs. Files under `docs/assets/` and `docs/evidence/` support those records and must not become runtime or test dependencies.
 
