@@ -564,6 +564,53 @@ describe('browser Design Session lifecycle', () => {
     }
   })
 
+  it('restores the newest Browser Draft into an empty Design Session', () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({
+      id: 'draft-older',
+      file: makeCanopiFile({ name: 'Older Garden' }),
+      now: '2026-07-04T10:00:00.000Z',
+    })
+    appDataStore.saveDraft({
+      id: 'draft-newer',
+      file: makeCanopiFile({ name: 'Recovered Garden' }),
+      now: '2026-07-04T11:00:00.000Z',
+    })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+
+    expect(controller.restoreLatestDraft()).toBe(true)
+    expect(store.readDesignName()).toBe('Recovered Garden')
+    expect(store.readCurrentDesign()?.name).toBe('Recovered Garden')
+    expect(store.isDesignDirty()).toBe(false)
+  })
+
+  it('does not replace an active Design while checking startup Draft recovery', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({
+      id: 'draft-persisted',
+      file: makeCanopiFile({ name: 'Persisted Garden' }),
+      now: NOW.toISOString(),
+    })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => 'draft-active',
+    })
+    await controller.newDesign()
+
+    expect(controller.restoreLatestDraft()).toBe(false)
+    expect(store.readDesignName()).toBe('Untitled')
+  })
+
   it('autosaves a Design that is already dirty when autosave installs', async () => {
     const initial = makeCanopiFile({
       name: 'Already Dirty Garden',

@@ -82,6 +82,7 @@ export interface BrowserDesignSessionController {
   saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null;
   listDrafts(): readonly BrowserDraftSummary[];
   openDraft(id: string): boolean;
+  restoreLatestDraft(): boolean;
   attachCanvasSession(session: CanvasDocumentSurface): () => void;
   installAutosave(options?: BrowserDesignSessionAutosaveOptions): () => void;
 }
@@ -333,6 +334,12 @@ export function createBrowserDesignSessionController({
     return true;
   }
 
+  function restoreLatestDraft(): boolean {
+    if (store.hasCurrentDesign()) return false;
+    const latestDraft = appDataStore.listDrafts()[0];
+    return latestDraft ? openDraft(latestDraft.id) : false;
+  }
+
   function attachCanvasSession(session: CanvasDocumentSurface): () => void {
     if (canvasSession === session) {
       throw new DesignPersistenceLeaseError("Browser Canvas session is already attached");
@@ -468,6 +475,7 @@ export function createBrowserDesignSessionController({
     saveCurrentDraft,
     listDrafts: () => appDataStore.listDrafts(),
     openDraft,
+    restoreLatestDraft,
     attachCanvasSession,
     installAutosave,
   };

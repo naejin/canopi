@@ -41,7 +41,14 @@ export function WebApp({
     capabilities: shellCapabilities,
   });
 
-  useEffect(() => controller.installAutosave(), [controller]);
+  useEffect(() => {
+    try {
+      controller.restoreLatestDraft();
+    } catch (error) {
+      logWebAppCommandError(error);
+    }
+    return controller.installAutosave();
+  }, [controller]);
 
   return (
     <div className={styles.root} data-canopi-web-root>
