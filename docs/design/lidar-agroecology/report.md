@@ -4,6 +4,8 @@
 
 This extends the [LiDAR library study](../lidar-library.md). The library remains a prototype; production import, persistence and analysis are not implemented. This report inspects the supplied files and evaluates methods. It does not claim to have calculated or validated flow, wetness, shade or vegetation classification on the site.
 
+**Product focus clarified:** the primary user imports their own drone-derived TIFFs and runs analysis locally. Follow the [revised delivery recommendation](delivery-strategy.md) and [IGN-backed POC](ign-poc.md) for sequencing; the scientific distinctions below still apply. IGN is initial test data and optional context, not a hosted-baseline prerequisite.
+
 ## 1. Recommendation
 
 Build a **site analysis capability** on the numeric raster library, beginning with terrain and existing height structure, then potential water pathways. Add soil information as optional context. Introduce actual soil-water or rainfall-event simulation only after suitable inputs and field validation exist.
