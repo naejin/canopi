@@ -62,19 +62,32 @@ export function GalleryCanvasSurface({
         onReadyChange(false)
       }
     }
+    const runtimeIsActive = () => !cancelled && !released
 
     onReadyChange(false)
     void runtime.init(container).then(() => {
-      if (cancelled) return
+      if (!runtimeIsActive()) return
       runtime.surfaces.documents.loadDocument(design)
+      if (!runtimeIsActive()) return
       runtime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
+      if (!runtimeIsActive()) return
       runtime.surfaces.documents.zoomToFit()
       if (dense) {
-        for (let i = 0; i < 6; i++) runtime.surfaces.commands.viewport.zoomOut()
+        for (let i = 0; i < 6; i++) {
+          if (!runtimeIsActive()) return
+          runtime.surfaces.commands.viewport.zoomOut()
+        }
       }
+      if (!runtimeIsActive()) return
       runtime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
+      if (!runtimeIsActive()) return
       resize.observe(container)
+      if (!runtimeIsActive()) return
       setCurrentCanvasSession(runtime.surfaces)
+      if (!runtimeIsActive() || getCurrentCanvasSession() !== runtime.surfaces) {
+        release()
+        return
+      }
       ready.value = true
       onReadyChange(true)
     }).catch(error => {

@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -152,6 +152,41 @@ describe('UI gallery canvas surface', () => {
     expect(first.documents.loadDocument).not.toHaveBeenCalled()
     expect(first.host.destroy).toHaveBeenCalledOnce()
     expect(getCurrentCanvasSession()).toBe(second.host.surfaces)
+  })
+
+  it('keeps readiness false when publication synchronously removes the owner', async () => {
+    const first = fakeRuntimeHost()
+    const onReadyChange = vi.fn()
+    let removed = false
+    const disposePublicationEffect = effect(() => {
+      if (!removed && getCurrentCanvasSession() === first.host.surfaces) {
+        removed = true
+        render(null, container)
+      }
+    })
+
+    try {
+      await act(async () => {
+        render(
+          <GalleryCanvasSurface
+            activeSurface={signal('workspace')}
+            design={designFixture()}
+            dense={false}
+            onReadyChange={onReadyChange}
+            createRuntimeHost={() => first.host}
+          />,
+          container,
+        )
+        await Promise.resolve()
+      })
+
+      expect(first.host.destroy).toHaveBeenCalledOnce()
+      expect(getCurrentCanvasSession()).toBeNull()
+      expect(onReadyChange).not.toHaveBeenCalledWith(true)
+      expect(onReadyChange).toHaveBeenLastCalledWith(false)
+    } finally {
+      disposePublicationEffect()
+    }
   })
 
   it('does not clear a successor published reentrantly during destruction', async () => {
