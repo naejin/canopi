@@ -1,4 +1,5 @@
 import { render } from 'preact'
+import { lazy, Suspense } from 'preact/compat'
 import { effect, signal } from '@preact/signals'
 import '../src/styles/global.css'
 import styles from './gallery.module.css'
@@ -48,6 +49,9 @@ import {
 
 if (!import.meta.env.DEV) throw new Error('Gallery cannot run in production.')
 const params = new URLSearchParams(location.search)
+const lidarPrototypeEnabled = import.meta.env.DEV && params.get('prototype') === 'lidar' && params.get('edition') !== 'web'
+const LidarCanvasPrototype = lazy(() => import('./lidar-prototype/LidarPrototype').then(module => ({ default: module.LidarCanvasPrototype })))
+const LidarPanelPrototype = lazy(() => import('./lidar-prototype/LidarPrototype').then(module => ({ default: module.LidarPanelPrototype })))
 const fixtureState = params.get('state') ?? 'populated'
 const requestedPanelWidth = Number(params.get('panelWidth'))
 const edition = params.get('edition') === 'web' ? 'web' : 'desktop'
@@ -123,6 +127,7 @@ function Gallery() {
 }
 
 function GalleryCanvasWorkspace() {
+  if (lidarPrototypeEnabled) return <Suspense fallback={null}><LidarCanvasPrototype /></Suspense>
   return (
     <GalleryCanvasSurface
       activeSurface={selectedSurface}
@@ -179,6 +184,7 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
 }
 
 function GalleryLayersSurface() {
+  if (lidarPrototypeEnabled) return <Suspense fallback={null}><LidarPanelPrototype /></Suspense>
   return <LayersPanel onLocation={() => {
     designSessionStore.replaceCurrentDesignSnapshot({ ...file, location: { lat: 48.85, lon: 2.35, altitude_m: 35 } })
     activity.value = 'Sample location set in memory.'

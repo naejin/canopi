@@ -1,0 +1,36 @@
+{
+  "gdal": "GDAL 3.8.4, released 2024/02/08",
+  "mosaic": {
+    "shape": [
+      4,
+      8
+    ],
+    "updated_first_row": [
+      10.0,
+      10.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      20.0,
+      20.0
+    ],
+    "nodata_fallback_value": 10.0,
+    "original_unchanged": true
+  },
+  "rtree": {
+    "entries": 100000,
+    "candidates": 25,
+    "warm_repetitions": 1000,
+    "mean_ms": 0.017,
+    "query_plan": [
+      [
+        2,
+        0,
+        0,
+        "SCAN footprints VIRTUAL TABLE INDEX 2:B0D1B2D3"
+      ]
+    ]
+  },
+  "limits": "Synthetic equal-resolution rasters; simple VRT priority/NoData only. Warm in-memory index; no packaged engine, persistent DB, rotated warp, metatile, RSS or cold-disk benchmark."
+}

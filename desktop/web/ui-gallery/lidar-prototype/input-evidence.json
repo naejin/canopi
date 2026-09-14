@@ -1,0 +1,58 @@
+{
+  "MNT": {
+    "filename": "LHD_FXX_0446_6807_MNT_O_0M50_LAMB93_IGN69",
+    "bytes": 16000513,
+    "sha256": "0060ce4a273446a9c3723d1d9d4fdf936e1befe34590ab098431d3bffceefbf4",
+    "size": [
+      2000,
+      2000
+    ],
+    "transform": [
+      445999.75,
+      0.5,
+      0.0,
+      6807000.25,
+      0.0,
+      -0.5
+    ],
+    "nodata": -9999,
+    "valid": 4000000,
+    "min": 141.5030975341797,
+    "max": 181.04556274414062,
+    "percentiles": [
+      142.27684020996094,
+      152.1063690185547,
+      171.66975585937502
+    ],
+    "overview_count": 0,
+    "wkt": "PROJCS[\"EPSG:2154\",GEOGCS[\"unknown\",DATUM[\"unnamed\",SPHEROID[\"unretrievable - using WGS84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",46.5],PARAMETER[\"central_meridian\",3],PARAMETER[\"standard_parallel_1\",49],PARAMETER[\"standard_parallel_2\",44],PARAMETER[\"false_easting\",700000],PARAMETER[\"false_northing\",6600000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]"
+  },
+  "MNS": {
+    "filename": "LHD_FXX_0446_6807_MNS_O_0M50_LAMB93_IGN69",
+    "bytes": 16000513,
+    "sha256": "36440ab8ade753522ae1708283375c02180b655cb5e7d6ba35facb0fa9fb12f1",
+    "size": [
+      2000,
+      2000
+    ],
+    "transform": [
+      445999.75,
+      0.5,
+      0.0,
+      6807000.25,
+      0.0,
+      -0.5
+    ],
+    "nodata": -9999,
+    "valid": 4000000,
+    "min": 141.5030975341797,
+    "max": 199.86244201660156,
+    "percentiles": [
+      142.4174346923828,
+      153.41806030273438,
+      172.8983917236328
+    ],
+    "overview_count": 0,
+    "wkt": "PROJCS[\"EPSG:2154\",GEOGCS[\"unknown\",DATUM[\"unnamed\",SPHEROID[\"unretrievable - using WGS84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",46.5],PARAMETER[\"central_meridian\",3],PARAMETER[\"standard_parallel_1\",49],PARAMETER[\"standard_parallel_2\",44],PARAMETER[\"false_easting\",700000],PARAMETER[\"false_northing\",6600000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]"
+  }
+}
