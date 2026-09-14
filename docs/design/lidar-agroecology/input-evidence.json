@@ -1,0 +1,217 @@
+{
+  "scope": "Supplied 0446-6807 trio only; numerical inspection, not field validation",
+  "gdal_version": "3.8.4",
+  "numpy_version": "1.26.4",
+  "sources": {
+    "MNT": {
+      "filename": "LHD_FXX_0446_6807_MNT_O_0M50_LAMB93_IGN69",
+      "sha256": "0060ce4a273446a9c3723d1d9d4fdf936e1befe34590ab098431d3bffceefbf4",
+      "bytes": 16000513,
+      "size": [
+        2000,
+        2000
+      ],
+      "bands": 1,
+      "type": "Float32",
+      "transform": [
+        445999.75,
+        0.5,
+        0.0,
+        6807000.25,
+        0.0,
+        -0.5
+      ],
+      "wkt": "PROJCS[\"EPSG:2154\",GEOGCS[\"unknown\",DATUM[\"unnamed\",SPHEROID[\"unretrievable - using WGS84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",46.5],PARAMETER[\"central_meridian\",3],PARAMETER[\"standard_parallel_1\",49],PARAMETER[\"standard_parallel_2\",44],PARAMETER[\"false_easting\",700000],PARAMETER[\"false_northing\",6600000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+      "nodata": -9999.0,
+      "valid_cells": 4000000,
+      "block_size": [
+        2000,
+        1
+      ],
+      "overviews": 0,
+      "range_m": [
+        141.5030975341797,
+        181.04556274414062
+      ],
+      "percentiles_m": {
+        "2": 142.27684020996094,
+        "50": 152.1063690185547,
+        "90": 161.8396453857422,
+        "98": 171.66975585937502
+      },
+      "metadata": {
+        "capteur": [
+          "RIEGL VQ-780 II-S:H2223888",
+          "RIEGL VQ-780 II-S:H2227189"
+        ],
+        "code_mission": "24LHDGF2",
+        "date_edition": "2025-07-23",
+        "nombre_points": 17530002,
+        "coordonnees_NW": "0446-6807",
+        "moa_acquisition": "IGN",
+        "moe_acquisition": "Sintegra",
+        "procede_classement": "IGN_AUTO_V5",
+        "date_fin_acquisition": "2025-02-15",
+        "systeme_altimetrique": "IGN69",
+        "moe_classement_manuel": "NR",
+        "systeme_planimetrique": "LAMB93",
+        "date_debut_acquisition": "2025-02-15",
+        "moe_classement_automatique": "IGN"
+      },
+      "download_url": "https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&EXCEPTIONS=text/xml&REQUEST=GetMap&LAYERS=IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93&FORMAT=image/geotiff&STYLES=&CRS=EPSG:2154&BBOX=445999.75,6806000.25,446999.75,6807000.25&WIDTH=2000&HEIGHT=2000&FILENAME=LHD_FXX_0446_6807_MNT_O_0M50_LAMB93_IGN69.tif"
+    },
+    "MNS": {
+      "filename": "LHD_FXX_0446_6807_MNS_O_0M50_LAMB93_IGN69",
+      "sha256": "36440ab8ade753522ae1708283375c02180b655cb5e7d6ba35facb0fa9fb12f1",
+      "bytes": 16000513,
+      "size": [
+        2000,
+        2000
+      ],
+      "bands": 1,
+      "type": "Float32",
+      "transform": [
+        445999.75,
+        0.5,
+        0.0,
+        6807000.25,
+        0.0,
+        -0.5
+      ],
+      "wkt": "PROJCS[\"EPSG:2154\",GEOGCS[\"unknown\",DATUM[\"unnamed\",SPHEROID[\"unretrievable - using WGS84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",46.5],PARAMETER[\"central_meridian\",3],PARAMETER[\"standard_parallel_1\",49],PARAMETER[\"standard_parallel_2\",44],PARAMETER[\"false_easting\",700000],PARAMETER[\"false_northing\",6600000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+      "nodata": -9999.0,
+      "valid_cells": 4000000,
+      "block_size": [
+        2000,
+        1
+      ],
+      "overviews": 0,
+      "range_m": [
+        141.5030975341797,
+        199.86244201660156
+      ],
+      "percentiles_m": {
+        "2": 142.4174346923828,
+        "50": 153.41806030273438,
+        "90": 164.4958511352539,
+        "98": 172.8983917236328
+      },
+      "metadata": {
+        "capteur": [
+          "RIEGL VQ-780 II-S:H2223888",
+          "RIEGL VQ-780 II-S:H2227189"
+        ],
+        "code_mission": "24LHDGF2",
+        "date_edition": "2025-07-23",
+        "nombre_points": 17530002,
+        "coordonnees_NW": "0446-6807",
+        "moa_acquisition": "IGN",
+        "moe_acquisition": "Sintegra",
+        "procede_classement": "IGN_AUTO_V5",
+        "date_fin_acquisition": "2025-02-15",
+        "systeme_altimetrique": "IGN69",
+        "moe_classement_manuel": "NR",
+        "systeme_planimetrique": "LAMB93",
+        "date_debut_acquisition": "2025-02-15",
+        "moe_classement_automatique": "IGN"
+      },
+      "download_url": "https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&EXCEPTIONS=text/xml&REQUEST=GetMap&LAYERS=IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93&FORMAT=image/geotiff&STYLES=&CRS=EPSG:2154&BBOX=445999.75,6806000.25,446999.75,6807000.25&WIDTH=2000&HEIGHT=2000&FILENAME=LHD_FXX_0446_6807_MNS_O_0M50_LAMB93_IGN69.tif"
+    },
+    "MNH": {
+      "filename": "LHD_FXX_0446_6807_MNH_O_0M50_LAMB93_IGN69",
+      "sha256": "9eb6a6aed1654a30b728a5825393707312d801131bb28d0f5c80c7ff9c92f03b",
+      "bytes": 16000513,
+      "size": [
+        2000,
+        2000
+      ],
+      "bands": 1,
+      "type": "Float32",
+      "transform": [
+        445999.75,
+        0.5,
+        0.0,
+        6807000.25,
+        0.0,
+        -0.5
+      ],
+      "wkt": "PROJCS[\"EPSG:2154\",GEOGCS[\"unknown\",DATUM[\"unnamed\",SPHEROID[\"unretrievable - using WGS84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",46.5],PARAMETER[\"central_meridian\",3],PARAMETER[\"standard_parallel_1\",49],PARAMETER[\"standard_parallel_2\",44],PARAMETER[\"false_easting\",700000],PARAMETER[\"false_northing\",6600000],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+      "nodata": -9999.0,
+      "valid_cells": 4000000,
+      "block_size": [
+        2000,
+        1
+      ],
+      "overviews": 0,
+      "range_m": [
+        -0.3288421630859375,
+        34.694976806640625
+      ],
+      "percentiles_m": {
+        "2": 0.0,
+        "50": 0.0,
+        "90": 6.2668045043945355,
+        "98": 16.914047241210938
+      },
+      "metadata": {
+        "capteur": [
+          "RIEGL VQ-780 II-S:H2223888",
+          "RIEGL VQ-780 II-S:H2227189"
+        ],
+        "code_mission": "24LHDGF2",
+        "date_edition": "2025-07-23",
+        "nombre_points": 17530002,
+        "coordonnees_NW": "0446-6807",
+        "moa_acquisition": "IGN",
+        "moe_acquisition": "Sintegra",
+        "procede_classement": "IGN_AUTO_V5",
+        "date_fin_acquisition": "2025-02-15",
+        "systeme_altimetrique": "IGN69",
+        "moe_classement_manuel": "NR",
+        "systeme_planimetrique": "LAMB93",
+        "date_debut_acquisition": "2025-02-15",
+        "moe_classement_automatique": "IGN"
+      },
+      "download_url": "https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&EXCEPTIONS=text/xml&REQUEST=GetMap&LAYERS=IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93&FORMAT=image/geotiff&STYLES=&CRS=EPSG:2154&BBOX=445999.75,6806000.25,446999.75,6807000.25&WIDTH=2000&HEIGHT=2000&FILENAME=LHD_FXX_0446_6807_MNH_O_0M50_LAMB93_IGN69.tif"
+    }
+  },
+  "same_grid_and_wkt": true,
+  "common_valid_cells": 4000000,
+  "common_area_ha": 100.0,
+  "mnh_minus_mns_minus_mnt": {
+    "max_absolute_error_m": 0.0,
+    "mean_absolute_error_m": 0.0,
+    "nonzero_residual_cells": 0
+  },
+  "negative_mnh_cells": 4141,
+  "height_thresholds": {
+    "0": {
+      "fraction_above": 0.16024275,
+      "area_above_ha": 16.024275
+    },
+    "0.5": {
+      "fraction_above": 0.151431,
+      "area_above_ha": 15.1431
+    },
+    "1": {
+      "fraction_above": 0.1458245,
+      "area_above_ha": 14.58245
+    },
+    "2": {
+      "fraction_above": 0.1359815,
+      "area_above_ha": 13.59815
+    },
+    "5": {
+      "fraction_above": 0.11107925,
+      "area_above_ha": 11.107925
+    },
+    "10": {
+      "fraction_above": 0.069701,
+      "area_above_ha": 6.9701
+    },
+    "20": {
+      "fraction_above": 0.0092765,
+      "area_above_ha": 0.92765
+    }
+  }
+}
