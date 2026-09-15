@@ -295,59 +295,92 @@ impl LidarLibrary {
     /// Delete a layer, its analyses and results. Managed originals of dedupe
     /// shared sources stay until explicit cleanup (slice 2).
     pub fn delete_layer(&self, layer_id: &str) -> Result<(), String> {
-        let connection = self.catalogue()?;
-        let definitions = catalogue::list_definitions_for_layer(&connection, layer_id)?;
-        connection
-            .execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| e.to_string())?;
-        let result = (|| -> Result<(), String> {
-            for definition in &definitions {
-                for (table, column) in [
-                    ("lidar_analysis_heads", "definition_id"),
-                    ("lidar_analysis_jobs", "definition_id"),
-                    ("lidar_analysis_generations", "definition_id"),
-                    ("lidar_dependencies", "definition_id"),
-                ] {
-                    connection
-                        .execute(
-                            &format!("DELETE FROM {table} WHERE {column} = ?1"),
-                            [&definition.id],
-                        )
-                        .map_err(|e| e.to_string())?;
-                }
-            }
-            connection
-                .execute(
-                    "DELETE FROM lidar_analysis_definitions WHERE layer_id = ?1",
-                    [layer_id],
+        let (definition_ids, job_ids) = {
+            let connection = self.catalogue()?;
+            let definitions = catalogue::list_definitions_for_layer(&connection, layer_id)?;
+            let definition_ids = definitions
+                .into_iter()
+                .map(|definition| definition.id)
+                .collect::<Vec<_>>();
+            let mut statement = connection
+                .prepare(
+                    "SELECT id FROM lidar_import_jobs WHERE layer_id = ?1
+                     UNION SELECT j.id FROM lidar_analysis_jobs j
+                     JOIN lidar_analysis_definitions d ON d.id = j.definition_id
+                     WHERE d.layer_id = ?1",
                 )
                 .map_err(|e| e.to_string())?;
-            connection
-                .execute(
-                    "DELETE FROM lidar_layer_heads WHERE layer_id = ?1",
-                    [layer_id],
-                )
+            let job_ids = statement
+                .query_map([layer_id], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| e.to_string())?;
-            connection
-                .execute(
-                    "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
-                    [layer_id],
-                )
-                .map_err(|e| e.to_string())?;
-            connection
-                .execute("DELETE FROM lidar_source_layers WHERE id = ?1", [layer_id])
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        })();
-        match result {
-            Ok(()) => connection
-                .execute_batch("COMMIT")
-                .map_err(|e| e.to_string()),
-            Err(error) => {
-                let _ = connection.execute_batch("ROLLBACK");
-                Err(error)
-            }
+            (definition_ids, job_ids)
+        };
+        for job_id in &job_ids {
+            self.cancel_job(job_id);
         }
+
+        let connection = self.catalogue()?;
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        for definition_id in &definition_ids {
+            delete_analysis_rows(&transaction, definition_id)?;
+        }
+        transaction
+            .execute(
+                "DELETE FROM lidar_acceptance_regions WHERE generation_id IN
+                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
+                [layer_id],
+            )
+            .map_err(|e| e.to_string())?;
+        transaction
+            .execute(
+                "DELETE FROM lidar_generation_members WHERE generation_id IN
+                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
+                [layer_id],
+            )
+            .map_err(|e| e.to_string())?;
+        let footprint_ids = {
+            let mut statement = transaction
+                .prepare("SELECT id FROM lidar_source_footprints WHERE layer_id = ?1")
+                .map_err(|e| e.to_string())?;
+            statement
+                .query_map([layer_id], |row| row.get::<_, i64>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
+        for footprint_id in footprint_ids {
+            transaction
+                .execute(
+                    "DELETE FROM lidar_footprint_rtree WHERE id = ?1",
+                    [footprint_id],
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        for sql in [
+            "DELETE FROM lidar_source_footprints WHERE layer_id = ?1",
+            "DELETE FROM lidar_layer_heads WHERE layer_id = ?1",
+            "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
+            "DELETE FROM lidar_layer_generations WHERE layer_id = ?1",
+            "DELETE FROM lidar_source_layers WHERE id = ?1",
+        ] {
+            transaction
+                .execute(sql, [layer_id])
+                .map_err(|e| e.to_string())?;
+        }
+        transaction.commit().map_err(|e| e.to_string())?;
+        drop(connection);
+
+        self.remove_display_entity("source", layer_id);
+        let _ = std::fs::remove_dir_all(self.inner.paths.layer_pipeline_dir(layer_id));
+        for definition_id in definition_ids {
+            self.remove_display_entity("analysis", &definition_id);
+            let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(&definition_id));
+        }
+        Ok(())
     }
 
     /// Immutable publication history of a source layer, oldest first.
@@ -492,6 +525,32 @@ impl LidarLibrary {
         {
             flag.store(true, Ordering::Relaxed);
         }
+        let mut discard_review = false;
+        if let Ok(connection) = self.catalogue() {
+            let import_state = connection
+                .query_row(
+                    "SELECT state FROM lidar_import_jobs WHERE id = ?1",
+                    [job_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok();
+            discard_review = import_state.as_deref() == Some("awaiting_review");
+            let _ = connection.execute(
+                "UPDATE lidar_import_jobs
+                 SET state = 'cancelled', message = 'import cancelled', updated_at = ?2
+                 WHERE id = ?1 AND state IN ('staging', 'awaiting_review', 'applying')",
+                rusqlite::params![job_id, now_iso()],
+            );
+            let _ = connection.execute(
+                "UPDATE lidar_analysis_jobs
+                 SET state = 'cancelled', message = 'analysis cancelled', updated_at = ?2
+                 WHERE id = ?1 AND state IN ('preparing', 'refreshing')",
+                rusqlite::params![job_id, now_iso()],
+            );
+        }
+        if discard_review {
+            let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(job_id));
+        }
     }
 
     /// Record the import job row (short catalogue write; called through the
@@ -550,10 +609,18 @@ impl LidarLibrary {
             match outcome {
                 Ok(output) => {
                     let review_json = serde_json::to_string(&output.review).unwrap_or_default();
-                    let _ = connection.execute(
-                        "UPDATE lidar_import_jobs SET state = 'awaiting_review', review_json = ?2, updated_at = ?3 WHERE id = ?1",
-                        rusqlite::params![job_id, review_json, now_iso()],
-                    );
+                    let changed = connection
+                        .execute(
+                            "UPDATE lidar_import_jobs
+                         SET state = 'awaiting_review', review_json = ?2, message = NULL,
+                             updated_at = ?3
+                         WHERE id = ?1 AND state = 'staging'",
+                            rusqlite::params![job_id, review_json, now_iso()],
+                        )
+                        .unwrap_or(0);
+                    if changed == 0 {
+                        let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(job_id));
+                    }
                 }
                 Err(error) => {
                     let (state, message) = if error == "cancelled" {
@@ -632,6 +699,7 @@ impl LidarLibrary {
 
     fn finish_apply(&self, job_id: &str, outcome: Result<import::ApplyOutcome, String>) {
         let mut published_layer: Option<String> = None;
+        let mut refresh_stale_review = false;
         let connection = self.catalogue();
         if let Ok(connection) = connection {
             match outcome {
@@ -653,22 +721,66 @@ impl LidarLibrary {
                     }
                 }
                 Err(error) => {
-                    let (state, message) = if error == "cancelled" {
+                    let (state, message) = if error.starts_with("import review is stale") {
+                        refresh_stale_review = true;
+                        (
+                            "staging",
+                            "coverage changed; refreshing import review".to_string(),
+                        )
+                    } else if error == "cancelled" {
                         ("cancelled", "import cancelled".to_string())
                     } else {
                         ("failed", error)
                     };
                     let _ = connection.execute(
-                        "UPDATE lidar_import_jobs SET state = ?2, message = ?3, updated_at = ?4 WHERE id = ?1",
+                        "UPDATE lidar_import_jobs
+                         SET state = ?2, message = ?3,
+                             review_json = CASE WHEN ?2 = 'staging' THEN NULL ELSE review_json END,
+                             updated_at = ?4 WHERE id = ?1",
                         rusqlite::params![job_id, state, message, now_iso()],
                     );
                 }
             }
         }
         self.settle_cancel(job_id);
+        if refresh_stale_review {
+            let staging =
+                std::fs::read_to_string(self.inner.paths.job_dir(job_id).join("staging.json"))
+                    .map_err(|error| error.to_string())
+                    .and_then(|json| {
+                        serde_json::from_str::<import::StagedImport>(&json)
+                            .map_err(|error| error.to_string())
+                    });
+            match staging {
+                Ok(staging) => {
+                    let paths = staging
+                        .sources
+                        .into_iter()
+                        .map(|source| source.managed_original)
+                        .collect();
+                    if let Err(error) = self.begin_staging(job_id, &staging.layer_id, paths) {
+                        self.fail_import_job(job_id, &error);
+                    }
+                }
+                Err(error) => self.fail_import_job(
+                    job_id,
+                    &format!("Could not refresh stale import review: {error}"),
+                ),
+            }
+        }
         // Dependency-aware invalidation: enqueue one refresh per definition.
         if let Some(layer_id) = published_layer.filter(|id| !id.is_empty()) {
             self.refresh_dependents(&layer_id);
+        }
+    }
+
+    fn fail_import_job(&self, job_id: &str, message: &str) {
+        if let Ok(connection) = self.catalogue() {
+            let _ = connection.execute(
+                "UPDATE lidar_import_jobs
+                 SET state = 'failed', message = ?2, updated_at = ?3 WHERE id = ?1",
+                rusqlite::params![job_id, message, now_iso()],
+            );
         }
     }
 
@@ -726,12 +838,19 @@ impl LidarLibrary {
             .await;
         match outcome {
             Ok(analysis::AnalysisOutcome { stale: true, .. }) => {
-                let connection = self.catalogue();
-                if let Ok(connection) = connection {
+                let layer_id = self.catalogue().ok().and_then(|connection| {
                     let _ = connection.execute(
                         "UPDATE lidar_analysis_jobs SET state = 'cancelled', message = 'superseded by a newer source generation', updated_at = ?2 WHERE id = ?1",
                         rusqlite::params![job_id, now_iso()],
                     );
+                    connection.query_row(
+                        "SELECT layer_id FROM lidar_analysis_definitions WHERE id = ?1",
+                        [&definition_id],
+                        |row| row.get::<_, String>(0),
+                    ).ok()
+                });
+                if let Some(layer_id) = layer_id {
+                    self.refresh_dependents(&layer_id);
                 }
             }
             Ok(outcome) => {
@@ -812,42 +931,265 @@ impl LidarLibrary {
     }
 
     pub fn delete_analysis(&self, definition_id: &str) -> Result<(), String> {
-        let connection = self.catalogue()?;
-        connection
-            .execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| e.to_string())?;
-        let result = (|| -> Result<(), String> {
-            for table in [
-                "lidar_analysis_heads",
-                "lidar_analysis_jobs",
-                "lidar_analysis_generations",
-                "lidar_dependencies",
-                "lidar_analysis_definitions",
-            ] {
-                connection
-                    .execute(
-                        &format!("DELETE FROM {table} WHERE id = ?1 OR definition_id = ?1"),
-                        [definition_id],
-                    )
-                    .map_err(|e| e.to_string())?;
+        let job_ids = {
+            let connection = self.catalogue()?;
+            let exists = connection
+                .query_row(
+                    "SELECT 1 FROM lidar_analysis_definitions WHERE id = ?1",
+                    [definition_id],
+                    |_| Ok(()),
+                )
+                .is_ok();
+            if !exists {
+                return Err(format!("Analysis {definition_id} does not exist"));
             }
-            Ok(())
-        })();
-        match result {
-            Ok(()) => connection
-                .execute_batch("COMMIT")
-                .map_err(|e| e.to_string()),
-            Err(error) => {
-                let _ = connection.execute_batch("ROLLBACK");
-                Err(error)
-            }
+            let mut statement = connection
+                .prepare("SELECT id FROM lidar_analysis_jobs WHERE definition_id = ?1")
+                .map_err(|e| e.to_string())?;
+            statement
+                .query_map([definition_id], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
+        for job_id in job_ids {
+            self.cancel_job(&job_id);
         }
+        let connection = self.catalogue()?;
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        delete_analysis_rows(&transaction, definition_id)?;
+        transaction.commit().map_err(|e| e.to_string())?;
+        drop(connection);
+        self.remove_display_entity("analysis", definition_id);
+        let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(definition_id));
+        Ok(())
     }
+
+    fn remove_display_entity(&self, entity_kind: &str, entity_id: &str) {
+        if let Ok(display) = self.display() {
+            let _ = display.execute(
+                "DELETE FROM tilesets WHERE entity_kind = ?1 AND entity_id = ?2",
+                rusqlite::params![entity_kind, entity_id],
+            );
+        }
+        let _ = std::fs::remove_dir_all(
+            self.inner
+                .paths
+                .display_dir()
+                .join(entity_kind)
+                .join(entity_id),
+        );
+    }
+}
+
+fn delete_analysis_rows(connection: &Connection, definition_id: &str) -> Result<(), String> {
+    for sql in [
+        "DELETE FROM lidar_analysis_heads WHERE definition_id = ?1",
+        "DELETE FROM lidar_analysis_jobs WHERE definition_id = ?1",
+        "DELETE FROM lidar_analysis_generations WHERE definition_id = ?1",
+        "DELETE FROM lidar_dependencies WHERE definition_id = ?1",
+        "DELETE FROM lidar_analysis_definitions WHERE id = ?1",
+    ] {
+        connection
+            .execute(sql, [definition_id])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn row_count(connection: &Connection, table: &str) -> i64 {
+        connection
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    }
+
+    fn seed_analysis(connection: &Connection, layer_id: &str, definition_id: &str) {
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_definitions
+             (id, layer_id, kind, version, parameters_json, created_at)
+             VALUES (?1, ?2, 'slope', 1, '{}', '0')",
+                rusqlite::params![definition_id, layer_id],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_generations
+             (id, definition_id, source_generation_id, engine_version, state, result_path,
+              quality_mask_path, manifest_json, coverage_cells, min_value, max_value,
+              bounds_3857, published_at)
+             VALUES ('agen-1', ?1, 'source-gen', 'test', 'complete', '', NULL, '{}',
+                     1, 0, 1, '[0,0,1,1]', '0')",
+                [definition_id],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_heads(definition_id, generation_id)
+             VALUES (?1, 'agen-1')",
+                [definition_id],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_jobs
+             (id, definition_id, source_generation_id, state, created_at, updated_at)
+             VALUES ('ajob-1', ?1, 'source-gen', 'complete', '0', '0')",
+                [definition_id],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_dependencies(definition_id, layer_id, kind)
+             VALUES (?1, ?2, 'source')",
+                rusqlite::params![definition_id, layer_id],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn delete_analysis_removes_its_complete_row_graph() {
+        let root = std::env::temp_dir().join(new_id("lidar-delete-analysis-test"));
+        let library = LidarLibrary::open(&root).unwrap();
+        let layer_id = library
+            .create_layer(
+                "Delete analysis fixture",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        {
+            let connection = library.catalogue().unwrap();
+            seed_analysis(&connection, &layer_id, "analysis-1");
+        }
+
+        library.delete_analysis("analysis-1").unwrap();
+        let connection = library.catalogue().unwrap();
+        for table in [
+            "lidar_analysis_heads",
+            "lidar_analysis_jobs",
+            "lidar_analysis_generations",
+            "lidar_dependencies",
+            "lidar_analysis_definitions",
+        ] {
+            assert_eq!(row_count(&connection, table), 0, "{table}");
+        }
+        assert_eq!(row_count(&connection, "lidar_source_layers"), 1);
+        drop(connection);
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn delete_layer_removes_all_referencing_rows_with_foreign_keys_enabled() {
+        let root = std::env::temp_dir().join(new_id("lidar-delete-layer-test"));
+        let library = LidarLibrary::open(&root).unwrap();
+        let layer_id = library
+            .create_layer(
+                "Delete layer fixture",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        {
+            let connection = library.catalogue().unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_sources
+                 (sha256, original_filename, size_bytes, probe_json, imported_at)
+                 VALUES ('sha-delete', 'source', 1, '{}', '0')",
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_interpretations
+                 (id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                  crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                 VALUES ('interp-delete', 'sha-delete', 1, 'ground-elevation', 'm', 1, 0,
+                         'test', 'unknown', -9999, '[0,1,0,1,0,-1]', 1, 1, 'hash-delete')",
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations
+                 (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                  coverage_cells, min_value, max_value, bounds_3857)
+                 VALUES ('source-gen', ?1, '0', '', '', '{}', 1, 0, 1, '[0,0,1,1]')",
+                    [&layer_id],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_generation_members
+                 (generation_id, interpretation_id, role, ordinal)
+                 VALUES ('source-gen', 'interp-delete', 'add', 0)",
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_acceptance_regions
+                 (id, generation_id, interpretation_id, decision, job_id)
+                 VALUES ('accept-delete', 'source-gen', 'interp-delete', 'add', 'import-delete')",
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_heads(layer_id, generation_id)
+                 VALUES (?1, 'source-gen')",
+                    [&layer_id],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_import_jobs
+                 (id, layer_id, state, created_at, updated_at)
+                 VALUES ('import-delete', ?1, 'complete', '0', '0')",
+                    [&layer_id],
+                )
+                .unwrap();
+            catalogue::upsert_footprint(
+                &connection,
+                "interp-delete",
+                &layer_id,
+                [0.0, 0.0, 1.0, 1.0],
+            )
+            .unwrap();
+            seed_analysis(&connection, &layer_id, "analysis-delete");
+        }
+
+        library.delete_layer(&layer_id).unwrap();
+        let connection = library.catalogue().unwrap();
+        for table in [
+            "lidar_source_layers",
+            "lidar_layer_heads",
+            "lidar_layer_generations",
+            "lidar_generation_members",
+            "lidar_acceptance_regions",
+            "lidar_import_jobs",
+            "lidar_source_footprints",
+            "lidar_analysis_heads",
+            "lidar_analysis_jobs",
+            "lidar_analysis_generations",
+            "lidar_dependencies",
+            "lidar_analysis_definitions",
+        ] {
+            assert_eq!(row_count(&connection, table), 0, "{table}");
+        }
+        assert_eq!(row_count(&connection, "lidar_interpretations"), 1);
+        drop(connection);
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn startup_pruning_keeps_live_display_generation_and_removes_stale_one() {
@@ -864,23 +1206,33 @@ mod tests {
         let stale_generation = new_id("gen");
         {
             let connection = library.catalogue().unwrap();
-            connection.execute(
-                "INSERT INTO lidar_layer_generations
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations
                  (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
                   coverage_cells, min_value, max_value, bounds_3857)
                  VALUES (?1, ?2, ?3, '', '', '{}', 1, 0, 1, '[0,0,1,1]')",
-                rusqlite::params![live_generation, layer_id, now_iso()],
-            ).unwrap();
-            connection.execute(
-                "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)",
-                rusqlite::params![layer_id, live_generation],
-            ).unwrap();
+                    rusqlite::params![live_generation, layer_id, now_iso()],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)",
+                    rusqlite::params![layer_id, live_generation],
+                )
+                .unwrap();
         }
         let live_dir = library.inner.paths.display_generation_dir(
-            "source", &layer_id, &live_generation, "elevation",
+            "source",
+            &layer_id,
+            &live_generation,
+            "elevation",
         );
         let stale_dir = library.inner.paths.display_generation_dir(
-            "source", &layer_id, &stale_generation, "elevation",
+            "source",
+            &layer_id,
+            &stale_generation,
+            "elevation",
         );
         std::fs::create_dir_all(&live_dir).unwrap();
         std::fs::create_dir_all(&stale_dir).unwrap();
@@ -892,21 +1244,23 @@ mod tests {
                 (&live_generation, &live_dir),
                 (&stale_generation, &stale_dir),
             ] {
-                display.execute(
-                    "INSERT INTO tilesets
+                display
+                    .execute(
+                        "INSERT INTO tilesets
                      (key, entity_kind, entity_id, generation_id, style, dir, path_template,
                       min_zoom, max_zoom, bounds_3857, tile_count, bytes, created_at)
                      VALUES (?1, 'source', ?2, ?3, 'elevation', ?4, ?5,
                              13, 13, '[0,0,1,1]', 1, 4, ?6)",
-                    rusqlite::params![
-                        format!("source/{layer_id}/{generation}/elevation"),
-                        layer_id,
-                        generation,
-                        dir.display().to_string(),
-                        dir.join("{z}_{x}_{y}.png").display().to_string(),
-                        now_iso(),
-                    ],
-                ).unwrap();
+                        rusqlite::params![
+                            format!("source/{layer_id}/{generation}/elevation"),
+                            layer_id,
+                            generation,
+                            dir.display().to_string(),
+                            dir.join("{z}_{x}_{y}.png").display().to_string(),
+                            now_iso(),
+                        ],
+                    )
+                    .unwrap();
             }
         }
         drop(library);

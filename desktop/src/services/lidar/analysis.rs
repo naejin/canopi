@@ -180,6 +180,7 @@ pub fn run_slope_job(
     }
 
     let generation_id = new_id("agen");
+    super::import::check_cancel(cancel)?;
     let generation_dir = pipeline_dir.join(format!("gen-{generation_id}"));
     std::fs::rename(&staging_dir, &generation_dir)
         .map_err(|e| format!("Failed to publish analysis dir: {e}"))?;
@@ -191,6 +192,34 @@ pub fn run_slope_job(
             .execute_batch("BEGIN IMMEDIATE")
             .map_err(|e| e.to_string())?;
         let publish = (|| -> Result<(), String> {
+            let job_state = connection
+                .query_row(
+                    "SELECT state FROM lidar_analysis_jobs WHERE id = ?1",
+                    [job_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if !matches!(job_state.as_str(), "preparing" | "refreshing") {
+                return Err(if job_state == "cancelled" {
+                    "cancelled".to_string()
+                } else {
+                    format!("analysis job cannot publish from state {job_state}")
+                });
+            }
+            let current_head = connection
+                .query_row(
+                    "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
+                    [&definition.layer_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .map(Some)
+                .or_else(|error| match error {
+                    rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                    other => Err(other.to_string()),
+                })?;
+            if current_head.as_deref() != Some(expected.as_str()) {
+                return Err("source layer changed during analysis publication".to_string());
+            }
             connection
                 .execute(
                     "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at)
@@ -230,6 +259,17 @@ pub fn run_slope_job(
             Ok(()) => connection
                 .execute_batch("COMMIT")
                 .map_err(|e| e.to_string())?,
+            Err(error) if error == "source layer changed during analysis publication" => {
+                let _ = connection.execute_batch("ROLLBACK");
+                let _ = std::fs::remove_dir_all(&generation_dir);
+                return Ok(AnalysisOutcome {
+                    published: false,
+                    stale: true,
+                    message: Some(
+                        "source layer changed during analysis; result discarded".to_string(),
+                    ),
+                });
+            }
             Err(error) => {
                 let _ = connection.execute_batch("ROLLBACK");
                 let _ = std::fs::remove_dir_all(&generation_dir);

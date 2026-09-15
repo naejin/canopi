@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 2;
+pub const CATALOGUE_VERSION: i32 = 3;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -48,24 +48,51 @@ fn migrate(connection: &Connection) -> Result<(), String> {
     let mut applied = version;
     while applied < CATALOGUE_VERSION {
         let next = applied + 1;
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| format!("Failed to start LiDAR catalogue migration v{next}: {e}"))?;
         let script = match next {
             1 => SCHEMA_V1,
             2 => SCHEMA_V2,
+            3 => SCHEMA_V3,
             _ => unreachable!("catalogue migration gap"),
         };
-        connection
+        transaction
             .execute_batch(script)
             .map_err(|e| format!("Failed to apply LiDAR catalogue schema v{next}: {e}"))?;
-        connection
+        if next == 2 && !table_has_column(&transaction, "lidar_acceptance_regions", "job_id")? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_acceptance_regions ADD COLUMN job_id TEXT",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add LiDAR acceptance job identity: {e}"))?;
+        }
+        transaction
             .execute(
                 "INSERT INTO lidar_catalogue_meta(key, value) VALUES('schema_version', ?1)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 [next.to_string()],
             )
             .map_err(|e| format!("Failed to record catalogue version: {e}"))?;
+        transaction
+            .commit()
+            .map_err(|e| format!("Failed to commit LiDAR catalogue migration v{next}: {e}"))?;
         applied = next;
     }
     Ok(())
+}
+
+fn table_has_column(connection: &Connection, table: &str, column: &str) -> Result<bool, String> {
+    let mut statement = connection
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|e| e.to_string())?;
+    let names = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(names.iter().any(|name| name == column))
 }
 
 /// Durable-library additions: exact footprint spatial index and the
@@ -86,7 +113,24 @@ CREATE VIRTUAL TABLE IF NOT EXISTS lidar_footprint_rtree USING rtree(
     id, min_x, max_x, min_y, max_y
 );
 
-ALTER TABLE lidar_acceptance_regions ADD COLUMN job_id TEXT;
+"#;
+
+/// Re-importing the same interpretation is a distinct accepted operation.
+/// Ordinal, rather than interpretation identity, owns generation ordering.
+const SCHEMA_V3: &str = r#"
+CREATE TABLE lidar_generation_members_v3 (
+    generation_id TEXT NOT NULL REFERENCES lidar_layer_generations(id),
+    interpretation_id TEXT NOT NULL REFERENCES lidar_interpretations(id),
+    role TEXT NOT NULL,
+    ordinal INTEGER NOT NULL,
+    PRIMARY KEY (generation_id, ordinal)
+);
+INSERT INTO lidar_generation_members_v3(generation_id, interpretation_id, role, ordinal)
+SELECT generation_id, interpretation_id, role, ordinal
+FROM lidar_generation_members
+ORDER BY generation_id, ordinal;
+DROP TABLE lidar_generation_members;
+ALTER TABLE lidar_generation_members_v3 RENAME TO lidar_generation_members;
 "#;
 
 const SCHEMA_V1: &str = r#"
@@ -686,6 +730,90 @@ pub fn new_id(prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migration_recovers_an_unversioned_v2_column_and_commits_v3_atomically() {
+        let dir = std::env::temp_dir().join(new_id("canopi-migration-test"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("catalogue.sqlite");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+            )
+            .unwrap();
+        connection.execute_batch(SCHEMA_V1).unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_catalogue_meta(key, value) VALUES('schema_version', '1')",
+                [],
+            )
+            .unwrap();
+        // Simulate the old migration failing after its ALTER but before it
+        // advanced the version marker.
+        connection
+            .execute(
+                "ALTER TABLE lidar_acceptance_regions ADD COLUMN job_id TEXT",
+                [],
+            )
+            .unwrap();
+        drop(connection);
+
+        let reopened = open(&path).unwrap();
+        let version: String = reopened
+            .query_row(
+                "SELECT value FROM lidar_catalogue_meta WHERE key = 'schema_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, CATALOGUE_VERSION.to_string());
+        assert!(table_has_column(&reopened, "lidar_acceptance_regions", "job_id",).unwrap());
+        drop(reopened);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn generation_order_allows_the_same_interpretation_to_be_reimported() {
+        let dir = std::env::temp_dir().join(new_id("canopi-reimport-test"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let connection = open(&dir.join("catalogue.sqlite")).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO lidar_sources
+             (sha256, original_filename, size_bytes, probe_json, imported_at)
+             VALUES ('sha', 'source', 1, '{}', '0');
+             INSERT INTO lidar_interpretations
+             (id, source_sha256, band_index, measurement_kind, units, scale, offset,
+              crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+             VALUES ('interp', 'sha', 1, 'ground-elevation', 'm', 1, 0,
+                     'test', 'unknown', -9999, '[0,1,0,1,0,-1]', 1, 1, 'hash');
+             INSERT INTO lidar_source_layers
+             (id, name, measurement_kind, units, created_at)
+             VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+             INSERT INTO lidar_layer_generations
+             (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+              coverage_cells, min_value, max_value, bounds_3857)
+             VALUES ('generation', 'layer', '0', '', '', '{}', 1, 0, 1, '[0,0,1,1]');
+             INSERT INTO lidar_generation_members
+             (generation_id, interpretation_id, role, ordinal)
+             VALUES ('generation', 'interp', 'add', 0);
+             INSERT INTO lidar_generation_members
+             (generation_id, interpretation_id, role, ordinal)
+             VALUES ('generation', 'interp', 'replace', 1);",
+            )
+            .unwrap();
+
+        assert_eq!(
+            generation_members(&connection, "generation").unwrap(),
+            vec![
+                ("interp".to_string(), "add".to_string()),
+                ("interp".to_string(), "replace".to_string()),
+            ]
+        );
+        drop(connection);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn rtree_footprints_narrow_candidates_to_intersecting_cells() {

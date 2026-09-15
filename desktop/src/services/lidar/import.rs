@@ -249,7 +249,31 @@ pub fn stage_import(
         });
     }
 
-    // Fixed-style Before/After previews at one comparison style.
+    // Fixed-style Before/After previews share one value scale. The initial
+    // review reflects the UI's default decision: add uncovered coverage and
+    // preserve overlap.
+    check_cancel(cancel)?;
+    let preview_composed = compose_values(
+        layer_values.as_deref(),
+        layer_mask_on_union.as_ref(),
+        &compatible,
+        &union,
+        layer_nodata,
+        true,
+        false,
+    )?;
+    let preview_min = head
+        .as_ref()
+        .and_then(|row| row.min_value)
+        .unwrap_or(preview_composed.min_value)
+        .min(preview_composed.min_value);
+    let preview_max = head
+        .as_ref()
+        .and_then(|row| row.max_value)
+        .unwrap_or(preview_composed.max_value)
+        .max(preview_composed.max_value)
+        .max(preview_min + 1.0);
+    let preview_ramp = ColorRamp::elevation_range(preview_min, preview_max);
     let before_preview_path = if let Some(head) = &head {
         check_cancel(cancel)?;
         let target = job_dir.join("preview-before.png");
@@ -258,28 +282,14 @@ pub fn stage_import(
             cancel,
             Path::new(&head.mosaic_path),
             Some(layer_nodata),
-            &ColorRamp::elevation_range(
-                head.min_value.unwrap_or(0.0),
-                head.max_value.unwrap_or(1.0),
-            ),
+            &preview_ramp,
             &target,
         )?;
         Some(target)
     } else {
         None
     };
-
-    check_cancel(cancel)?;
     let after_preview_path = {
-        let composed = compose_values(
-            layer_values.as_deref(),
-            layer_mask_on_union.as_ref(),
-            &compatible,
-            &union,
-            layer_nodata,
-            true,
-            true,
-        )?;
         let preview_tif = preview_tif_from_composed(
             engine,
             cancel,
@@ -287,7 +297,7 @@ pub fn stage_import(
             &union,
             &layer_crs_wkt,
             layer_nodata,
-            &composed,
+            &preview_composed,
         )?;
         let target = job_dir.join("preview-after.png");
         display::generate_preview(
@@ -295,10 +305,7 @@ pub fn stage_import(
             cancel,
             &preview_tif,
             Some(layer_nodata),
-            &ColorRamp::elevation_range(
-                composed.min_value,
-                composed.max_value.max(composed.min_value + 1.0),
-            ),
+            &preview_ramp,
             &target,
         )?;
         let _ = std::fs::remove_file(&preview_tif);
@@ -707,7 +714,12 @@ fn replay_members(
         let offset_y = ((union.geotransform[3] - member.grid.geotransform[3])
             / union.geotransform[5].abs())
         .round() as i64;
-        let replace = member.role == "replace";
+        let (add_uncovered, replace_overlap) = match member.role.as_str() {
+            "add" => (true, false),
+            "replace" => (true, true),
+            "replace-overlap" => (false, true),
+            role => return Err(format!("Unsupported stored acceptance role {role}")),
+        };
         for y in 0..member.grid.height {
             let ty = offset_y + y as i64;
             if ty < 0 || ty >= union.height as i64 {
@@ -722,7 +734,7 @@ fn replay_members(
                     continue;
                 }
                 let covered = valid.get(tx as u32, ty as u32);
-                if covered && !replace {
+                if (covered && !replace_overlap) || (!covered && !add_uncovered) {
                     continue;
                 }
                 let sample = samples[(y * member.grid.width + x) as usize];
@@ -839,10 +851,33 @@ pub fn apply_import(
         };
         (head, base)
     };
+    let planned_head = head.as_ref().map(|row| row.id.as_str());
+    if planned_head != staging.planned_against_head.as_deref() {
+        return Err("import review is stale; review the current coverage again".to_string());
+    }
     let head_manifest = head_base.manifest.clone();
 
     // Union grid: layer member grids plus every compatible staged source.
     let compatible: Vec<&StagedSource> = staging.sources.iter().filter(|s| s.compatible).collect();
+    if compatible.is_empty() {
+        return Err("import has no compatible sources to publish".to_string());
+    }
+    let incoming_role = match (add_uncovered, replace_overlap) {
+        (true, true) => "replace",
+        (true, false) => "add",
+        (false, true) => "replace-overlap",
+        (false, false) => {
+            return Ok(ApplyOutcome {
+                generation_id: head.as_ref().map(|row| row.id.clone()).unwrap_or_default(),
+                published_cells: head
+                    .as_ref()
+                    .map(|row| row.coverage_cells.max(0) as u64)
+                    .unwrap_or(0),
+                changed: false,
+                message: Some("no coverage changes selected; existing generation kept".to_string()),
+            });
+        }
+    };
     let mut union = head_base
         .members
         .first()
@@ -861,7 +896,6 @@ pub fn apply_import(
     // Compose the new coverage: replay the member sequence, then paint the
     // incoming sources with the user's decisions. Invalid pixels never erase
     // accepted coverage; overlap is replaced only when explicitly approved.
-    let incoming_role = if replace_overlap { "replace" } else { "add" };
     let composed = match (head_base.legacy_grid.as_ref(), head_base.members.is_empty()) {
         (Some(_), true) => {
             // Legacy head without member assets: seed from the merged
@@ -973,6 +1007,7 @@ pub fn apply_import(
 
     // Atomic publish: rename staging into place, then advance the head in
     // one short transaction.
+    check_cancel(cancel)?;
     let generation_dir = pipeline_dir.join(format!("gen-{generation_id}"));
     std::fs::rename(&staging_dir, &generation_dir)
         .map_err(|e| format!("Failed to publish generation dir: {e}"))?;
@@ -984,6 +1019,24 @@ pub fn apply_import(
             .execute_batch("BEGIN IMMEDIATE")
             .map_err(|e| e.to_string())?;
         let publish = (|| -> Result<(), String> {
+            let job_state = connection
+                .query_row(
+                    "SELECT state FROM lidar_import_jobs WHERE id = ?1",
+                    [&staging.job_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if job_state != "applying" {
+                return Err(if job_state == "cancelled" {
+                    "cancelled".to_string()
+                } else {
+                    format!("import job cannot publish from state {job_state}")
+                });
+            }
+            let current_head = catalogue::head_generation(&connection, &layer_id)?;
+            if current_head.as_ref().map(|row| row.id.as_str()) != planned_head {
+                return Err("import review is stale; review the current coverage again".to_string());
+            }
             connection
                 .execute(
                     "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857)
@@ -1002,8 +1055,22 @@ pub fn apply_import(
                     ],
                 )
                 .map_err(|e| e.to_string())?;
-            for (ordinal, source) in compatible.iter().enumerate() {
+            // Preserve prior operations first, then append this accepted
+            // operation. Duplicate interpretation ids are valid re-imports;
+            // ordinal owns identity within a generation.
+            for (ordinal, member) in head_base.members.iter().enumerate() {
+                connection
+                    .execute(
+                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
+                         VALUES(?1, ?2, ?3, ?4)",
+                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+            let prior_member_count = head_base.members.len();
+            for (incoming_ordinal, source) in compatible.iter().enumerate() {
                 let interpretation_id = format!("interp-{}", source.interp_hash);
+                let ordinal = prior_member_count + incoming_ordinal;
                 connection
                     .execute(
                         "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
@@ -1024,16 +1091,6 @@ pub fn apply_import(
                     &layer_id,
                     grid_for_source(source).bounds(),
                 )?;
-            }
-            // Preserve the full member sequence on the new generation.
-            for (ordinal, member) in head_base.members.iter().enumerate() {
-                connection
-                    .execute(
-                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
-                         VALUES(?1, ?2, ?3, ?4)",
-                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64],
-                    )
-                    .map_err(|e| e.to_string())?;
             }
             connection
                 .execute(
@@ -1835,5 +1892,33 @@ mod tests {
         assert_eq!(sample(&mosaic, &grid, 0, 0), 4.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 6.0);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replay_can_replace_overlap_without_accepting_uncovered_cells() {
+        let base_grid = RasterGrid {
+            width: 1,
+            height: 1,
+            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
+        };
+        let incoming_grid = RasterGrid {
+            width: 2,
+            height: 1,
+            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
+        };
+        let dir = std::env::temp_dir().join(new_id("canopi-replace-overlap-test"));
+        let base = member_fixture(&dir, "base", &base_grid, "add", &[1.0]);
+        let incoming = member_fixture(
+            &dir,
+            "incoming",
+            &incoming_grid,
+            "replace-overlap",
+            &[7.0, 8.0],
+        );
+        let mosaic = replay_members(&[base, incoming], &incoming_grid, -99999.0).unwrap();
+        assert_eq!(sample(&mosaic, &incoming_grid, 0, 0), 7.0);
+        assert_eq!(mosaic.valid.count_valid(), 1);
+        assert!(!mosaic.valid.get(1, 0));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
