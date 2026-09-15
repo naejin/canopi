@@ -504,7 +504,8 @@
         "noOverlap": "Ces fichiers ne chevauchent aucune couverture acceptée.",
         "replaceOverlapHint": "Remplacer les valeurs existantes uniquement aux endroits chevauchés.",
         "noPreviousCoverage": "Cette couche n’a aucune couverture antérieure.",
-        "previewDefaultOnly": "L’aperçu Après montre la décision par défaut d’ajout seul. Appliquer utilise les choix ci-dessus.",
+        "previewUpdating": "Mise à jour de l’aperçu pour ces choix…",
+        "previewFailed": "Impossible de mettre à jour l’aperçu. Modifiez un choix pour réessayer.",
         "sharedScale": "Avant et Après utilisent la même échelle d’altitude.",
         "apply": "Appliquer",
         "cancel": "Annuler"

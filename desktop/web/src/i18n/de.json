@@ -504,7 +504,8 @@
         "noOverlap": "Diese Dateien überlappen keine akzeptierte Abdeckung.",
         "replaceOverlapHint": "Vorhandene Werte nur dort ersetzen, wo diese Dateien sie überlappen.",
         "noPreviousCoverage": "Diese Ebene hat keine vorherige Abdeckung.",
-        "previewDefaultOnly": "Die Nachher-Vorschau zeigt die Standardentscheidung Nur hinzufügen. Anwenden nutzt die obigen Optionen.",
+        "previewUpdating": "Die Vorschau für diese Auswahl wird aktualisiert…",
+        "previewFailed": "Die Vorschau konnte nicht aktualisiert werden. Ändern Sie eine Auswahl, um es erneut zu versuchen.",
         "sharedScale": "Vorher und Nachher verwenden dieselbe Höhenskala.",
         "apply": "Anwenden",
         "cancel": "Abbrechen"

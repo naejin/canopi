@@ -504,7 +504,8 @@
         "noOverlap": "Questi file non si sovrappongono alla copertura accettata.",
         "replaceOverlapHint": "Sostituisci i valori esistenti solo dove questi file si sovrappongono.",
         "noPreviousCoverage": "Questo livello non ha una copertura precedente.",
-        "previewDefaultOnly": "L’anteprima Dopo mostra la scelta predefinita di sola aggiunta. Applica usa le opzioni sopra.",
+        "previewUpdating": "Aggiornamento dell’anteprima per queste scelte…",
+        "previewFailed": "Impossibile aggiornare l’anteprima. Modifica una scelta per riprovare.",
         "sharedScale": "Prima e Dopo usano la stessa scala di elevazione.",
         "apply": "Applica",
         "cancel": "Annulla"

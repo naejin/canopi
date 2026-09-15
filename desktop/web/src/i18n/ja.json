@@ -504,7 +504,8 @@
         "noOverlap": "これらのファイルは承認済み範囲と重複していません。",
         "replaceOverlapHint": "ファイルが重なる場所だけ既存値を置き換えます。",
         "noPreviousCoverage": "このレイヤーには以前の範囲がありません。",
-        "previewDefaultOnly": "変更後のプレビューは既定の追加のみを示します。適用では上の選択を使用します。",
+        "previewUpdating": "この選択内容でプレビューを更新しています…",
+        "previewFailed": "プレビューを更新できませんでした。選択を変更して再試行してください。",
         "sharedScale": "変更前と変更後は同じ標高スケールです。",
         "apply": "適用",
         "cancel": "キャンセル"

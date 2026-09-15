@@ -504,7 +504,8 @@
         "noOverlap": "这些文件与已接受的覆盖范围没有重叠。",
         "replaceOverlapHint": "仅在这些文件重叠的位置替换现有值。",
         "noPreviousCoverage": "此图层没有先前的覆盖范围。",
-        "previewDefaultOnly": "“之后”预览显示默认的仅添加选项。应用时使用上方选择。",
+        "previewUpdating": "正在根据这些选项更新预览…",
+        "previewFailed": "无法更新预览。请更改一个选项后重试。",
         "sharedScale": "“之前”和“之后”使用相同的高程比例。",
         "apply": "应用",
         "cancel": "取消"

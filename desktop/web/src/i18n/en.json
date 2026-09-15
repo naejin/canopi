@@ -504,7 +504,8 @@
         "noOverlap": "These files do not overlap accepted coverage.",
         "replaceOverlapHint": "Replace existing values only where these files overlap them.",
         "noPreviousCoverage": "This layer has no previous coverage.",
-        "previewDefaultOnly": "The After preview shows the default add-only decision. Apply uses the choices above.",
+        "previewUpdating": "Updating the preview for these choices…",
+        "previewFailed": "The preview could not be updated. Change a choice to retry.",
         "sharedScale": "Before and After use the same elevation scale.",
         "apply": "Apply",
         "cancel": "Cancel"

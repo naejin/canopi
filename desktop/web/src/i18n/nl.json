@@ -504,7 +504,8 @@
         "noOverlap": "Deze bestanden overlappen geen geaccepteerde dekking.",
         "replaceOverlapHint": "Bestaande waarden alleen vervangen waar deze bestanden overlappen.",
         "noPreviousCoverage": "Deze laag heeft geen eerdere dekking.",
-        "previewDefaultOnly": "Het voorbeeld Na toont de standaardkeuze Alleen toevoegen. Toepassen gebruikt de keuzes hierboven.",
+        "previewUpdating": "Het voorbeeld voor deze keuzes wordt bijgewerkt…",
+        "previewFailed": "Het voorbeeld kon niet worden bijgewerkt. Wijzig een keuze om opnieuw te proberen.",
         "sharedScale": "Voor en Na gebruiken dezelfde hoogteschaal.",
         "apply": "Toepassen",
         "cancel": "Annuleren"

@@ -21,6 +21,7 @@ import {
   deleteLidarLayer,
   fetchLayerHistory,
   fetchLidarLayerDeleteImpact,
+  previewOpenImportDecision,
   setLidarEntryOpacity,
   setLidarEntryVisibility,
   startImportForLayer,
@@ -32,7 +33,11 @@ import {
   viewLidarCoverage,
 } from '../../../app/lidar/camera-request'
 import { t } from '../../../i18n'
-import type { LidarDeleteImpact, LidarGenerationHistoryEntry } from '../../../ipc/lidar'
+import type {
+  LidarDeleteImpact,
+  LidarGenerationHistoryEntry,
+  LidarImportDecisionPreview,
+} from '../../../ipc/lidar'
 import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import layerStyles from '../../canvas/LayerPanel.module.css'
 import { ActionMenu } from '../../shared/ActionMenu'
@@ -298,6 +303,63 @@ export function LidarImportPanel() {
   const [addUncovered, setAddUncovered] = useState(true)
   const [replaceOverlap, setReplaceOverlap] = useState(false)
   const [preview, setPreview] = useState<'before' | 'after'>('after')
+  const [decisionPreview, setDecisionPreview] = useState<LidarImportDecisionPreview | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewFailed, setPreviewFailed] = useState(false)
+
+  useEffect(() => {
+    setAddUncovered(true)
+    setReplaceOverlap(false)
+    setPreview('after')
+  }, [job?.job_id])
+
+  useEffect(() => {
+    const review = job?.review
+    if (job?.state !== 'AwaitingReview' || !review) {
+      setDecisionPreview(null)
+      setPreviewLoading(false)
+      setPreviewFailed(false)
+      return
+    }
+    if (!addUncovered && !replaceOverlap) {
+      setDecisionPreview(null)
+      setPreviewLoading(false)
+      setPreviewFailed(false)
+      return
+    }
+    if (addUncovered && !replaceOverlap) {
+      setDecisionPreview({
+        add_uncovered: true,
+        replace_overlap: false,
+        before_preview_path: review.before_preview_path,
+        after_preview_path: review.after_preview_path ?? '',
+      })
+      setPreviewLoading(false)
+      setPreviewFailed(false)
+      return
+    }
+
+    let disposed = false
+    setDecisionPreview(null)
+    setPreviewLoading(true)
+    setPreviewFailed(false)
+    const timer = window.setTimeout(() => {
+      void previewOpenImportDecision(addUncovered, replaceOverlap)
+        .then((result) => {
+          if (!disposed) setDecisionPreview(result)
+        })
+        .catch(() => {
+          if (!disposed) setPreviewFailed(true)
+        })
+        .finally(() => {
+          if (!disposed) setPreviewLoading(false)
+        })
+    }, 200)
+    return () => {
+      disposed = true
+      window.clearTimeout(timer)
+    }
+  }, [job?.job_id, job?.state, job?.review, addUncovered, replaceOverlap])
 
   useEffect(() => {
     const cancelOnEscape = (event: KeyboardEvent): void => {
@@ -314,10 +376,11 @@ export function LidarImportPanel() {
   const review = job.review
   const active = job.state === 'Staging' || job.state === 'Applying'
   const terminal = job.state === 'Complete' || job.state === 'Cancelled' || job.state === 'Failed'
-  const defaultPreview = addUncovered && !replaceOverlap
+  const previewMatchesDecision = decisionPreview?.add_uncovered === addUncovered
+    && decisionPreview?.replace_overlap === replaceOverlap
   const previewPath = preview === 'before'
-    ? review?.before_preview_path
-    : defaultPreview ? review?.after_preview_path : null
+    ? decisionPreview?.before_preview_path
+    : decisionPreview?.after_preview_path || null
 
   return (
     <aside className={layerStyles.panel} aria-label={t('canvas.lidar.review.title')}>
@@ -382,13 +445,17 @@ export function LidarImportPanel() {
                 <button type="button" data-active={preview === 'before'} onClick={() => setPreview('before')}>{t('canvas.lidar.review.before')}</button>
                 <button type="button" data-active={preview === 'after'} onClick={() => setPreview('after')}>{t('canvas.lidar.review.after')}</button>
               </div>
-              {previewPath ? (
-                <img className={styles.previewImage} src={convertFileSrc(previewPath)} alt={t(`canvas.lidar.review.${preview}`)} />
+              {previewLoading ? (
+                <p className={styles.previewEmpty} role="status">{t('canvas.lidar.review.previewUpdating')}</p>
+              ) : previewFailed ? (
+                <p className={styles.errorMessage} role="status">{t('canvas.lidar.review.previewFailed')}</p>
+              ) : previewPath ? (
+                <img key={previewPath} className={styles.previewImage} src={convertFileSrc(previewPath)} alt={t(`canvas.lidar.review.${preview}`)} />
               ) : (
                 <p className={styles.previewEmpty}>
                   {preview === 'before'
                     ? t('canvas.lidar.review.noPreviousCoverage')
-                    : t('canvas.lidar.review.previewDefaultOnly')}
+                    : t('canvas.lidar.review.previewUpdating')}
                 </p>
               )}
               <p className={styles.detailSummary}>{t('canvas.lidar.review.sharedScale')}</p>
@@ -409,7 +476,13 @@ export function LidarImportPanel() {
           <button
             type="button"
             className={styles.primaryButton}
-            disabled={!review.compatible || (!addUncovered && !replaceOverlap)}
+            disabled={
+              !review.compatible
+              || (!addUncovered && !replaceOverlap)
+              || previewLoading
+              || previewFailed
+              || !previewMatchesDecision
+            }
             onClick={() => void applyOpenImport(addUncovered, replaceOverlap)}
           >
             {t('canvas.lidar.review.apply')}

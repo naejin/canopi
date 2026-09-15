@@ -504,7 +504,8 @@
         "noOverlap": "Estos archivos no se superponen a la cobertura aceptada.",
         "replaceOverlapHint": "Reemplazar valores existentes solo donde se superpongan estos archivos.",
         "noPreviousCoverage": "Esta capa no tiene cobertura anterior.",
-        "previewDefaultOnly": "La vista Después muestra la decisión predeterminada de solo añadir. Aplicar usa las opciones anteriores.",
+        "previewUpdating": "Actualizando la vista previa para estas opciones…",
+        "previewFailed": "No se pudo actualizar la vista previa. Cambie una opción para reintentarlo.",
         "sharedScale": "Antes y Después usan la misma escala de elevación.",
         "apply": "Aplicar",
         "cancel": "Cancelar"

@@ -183,6 +183,14 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = lidarImportJob.job_id
       break
     case 'lidar_get_import_job': result = lidarImportJob; break
+    case 'lidar_preview_import_decision':
+      result = {
+        add_uncovered: Boolean(args.addUncovered),
+        replace_overlap: Boolean(args.replaceOverlap),
+        before_preview_path: '/lidar-prototype/assets/mnt-elevation-0.png',
+        after_preview_path: '/lidar-prototype/assets/mnt-elevation-1.png',
+      }
+      break
     case 'lidar_apply_import':
       if (lidarImportJob) lidarImportJob = { ...lidarImportJob, state: 'Complete', message: 'Published 4,000,000 cells.' }
       activity.value = 'Applied the LiDAR import in memory.'
