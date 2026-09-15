@@ -63,7 +63,7 @@ try {
     const source = name => new URL(`src/${name}`, base).href
     await import(source('styles/global.css'))
     const { loadMapLibreModule } = await import(source('maplibre/loader.ts'))
-    const { createV2SharedMapSceneLayer } = await import(source('experiments/v2-shared-map-scene/shared-map-scene-layer.ts'))
+    const { createSharedMapSceneLayer } = await import(source('maplibre/shared-scene-layer.ts'))
     const { hydrateScenePersistedState } = await import(source('canvas/runtime/scene/codec.ts'))
     const { createTestSceneRendererSnapshot } = await import(source('__tests__/support/scene-renderer-snapshot.ts'))
     const { worldToGeo, geoToWorld, stageScaleToMapZoom } = await import(source('canvas/projection.ts'))
@@ -137,7 +137,7 @@ try {
       originalClear(mask)
     }
 
-    const adapter = createV2SharedMapSceneLayer({
+    const adapter = createSharedMapSceneLayer({
       id: 'experiment-design',
       anchor,
       northBearingDeg,
@@ -522,7 +522,7 @@ try {
       }
     }
     async function repeatMountCycle() {
-      const repeatAdapter = createV2SharedMapSceneLayer({
+      const repeatAdapter = createSharedMapSceneLayer({
         id: 'experiment-design-remount',
         anchor,
         northBearingDeg,

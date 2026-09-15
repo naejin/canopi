@@ -10,6 +10,8 @@ The adapter uses `WebGLRenderer.init({ canvas, context, ... })`, `resetState()`,
 
 Use the existing Canvas2D scene renderer as the editing fallback when shared WebGL initialization or operation fails. A later production owner must transfer camera ownership once, omit failed geographic contributions, and avoid restart loops. The experiment did not need the focused alternative WebGL renderer.
 
+The qualified code was promoted by `canopi-ltck.6` to `maplibre/shared-scene-layer.ts` and `maplibre/scene-camera-transform.ts`. `maplibre/shared-scene-renderer.ts` now packages the custom layer with the Scene Runtime bridge and mandatory RendererHost failure propagation. The ordinary app composition remains on standalone Pixi plus Canvas2D until the shared workspace lifecycle and camera/input migration are complete.
+
 ## Representative evidence
 
 The private Design receipt remained unchanged before and after every run:

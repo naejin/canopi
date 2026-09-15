@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { deriveV2SharedMapSceneViewport } from '../experiments/v2-shared-map-scene/camera-transform'
+import { deriveSharedMapSceneViewport } from '../maplibre/scene-camera-transform'
 
 const anchor = { lat: 0, lon: 0 }
 
@@ -8,9 +8,9 @@ function pinnedProject(points: readonly { x: number; y: number }[]) {
   return vi.fn(() => points[index++ % points.length]!)
 }
 
-describe('deriveV2SharedMapSceneViewport', () => {
+describe('deriveSharedMapSceneViewport', () => {
   it('derives the existing viewport from pinned MapLibre CSS-pixel points', () => {
-    const result = deriveV2SharedMapSceneViewport({
+    const result = deriveSharedMapSceneViewport({
       project: pinnedProject([{ x: 120, y: 80 }, { x: 124, y: 80 }, { x: 120, y: 84 }]),
       anchor,
       northBearingDeg: 0,
@@ -26,13 +26,13 @@ describe('deriveV2SharedMapSceneViewport', () => {
   })
 
   it('refuses pitch and non-affine local axes', () => {
-    const pitched = deriveV2SharedMapSceneViewport({
+    const pitched = deriveSharedMapSceneViewport({
       project: pinnedProject([{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 2 }]),
       anchor,
       northBearingDeg: 0,
       pitchDeg: 1,
     })
-    const skewed = deriveV2SharedMapSceneViewport({
+    const skewed = deriveSharedMapSceneViewport({
       project: pinnedProject([{ x: 0, y: 0 }, { x: 2, y: 1 }, { x: 0, y: 2 }]),
       anchor,
       northBearingDeg: 0,
@@ -45,20 +45,20 @@ describe('deriveV2SharedMapSceneViewport', () => {
 
   it('uses CSS pixels, so device-pixel ratio cannot change the viewport', () => {
     const points = [{ x: 12, y: 25 }, { x: 15, y: 25 }, { x: 12, y: 28 }] as const
-    const atOne = deriveV2SharedMapSceneViewport({ project: pinnedProject(points), anchor, northBearingDeg: 0, pitchDeg: 0 })
-    const atTwo = deriveV2SharedMapSceneViewport({ project: pinnedProject(points), anchor, northBearingDeg: 0, pitchDeg: 0 })
+    const atOne = deriveSharedMapSceneViewport({ project: pinnedProject(points), anchor, northBearingDeg: 0, pitchDeg: 0 })
+    const atTwo = deriveSharedMapSceneViewport({ project: pinnedProject(points), anchor, northBearingDeg: 0, pitchDeg: 0 })
 
     expect(atTwo).toEqual(atOne)
   })
 
   it('tracks pinned pan and zoom projection changes', () => {
-    const before = deriveV2SharedMapSceneViewport({
+    const before = deriveSharedMapSceneViewport({
       project: pinnedProject([{ x: 10, y: 20 }, { x: 12, y: 20 }, { x: 10, y: 22 }]),
       anchor,
       northBearingDeg: 0,
       pitchDeg: 0,
     })
-    const after = deriveV2SharedMapSceneViewport({
+    const after = deriveSharedMapSceneViewport({
       project: pinnedProject([{ x: 40, y: 60 }, { x: 46, y: 60 }, { x: 40, y: 66 }]),
       anchor,
       northBearingDeg: 0,
@@ -70,14 +70,14 @@ describe('deriveV2SharedMapSceneViewport', () => {
   })
 
   it('bounds the discarded affine residual over the qualified local extent', () => {
-    const accepted = deriveV2SharedMapSceneViewport({
+    const accepted = deriveSharedMapSceneViewport({
       project: pinnedProject([{ x: 0, y: 0 }, { x: 2, y: 0.00001 }, { x: 0, y: 2 }]),
       anchor,
       northBearingDeg: 0,
       pitchDeg: 0,
       maximumWorldExtentMeters: 10_000,
     })
-    const refused = deriveV2SharedMapSceneViewport({
+    const refused = deriveSharedMapSceneViewport({
       project: pinnedProject([{ x: 0, y: 0 }, { x: 2, y: 0.00011 }, { x: 0, y: 2 }]),
       anchor,
       northBearingDeg: 0,

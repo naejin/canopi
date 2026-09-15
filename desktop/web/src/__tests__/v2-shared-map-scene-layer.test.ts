@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createV2SharedMapSceneLayer, type V2SharedMapSceneMap, type V2SharedPixiRenderer } from '../experiments/v2-shared-map-scene/shared-map-scene-layer'
+import { createSharedMapSceneLayer, type SharedMapSceneMap, type SharedPixiRenderer } from '../maplibre/shared-scene-layer'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 function createCanvas(): HTMLCanvasElement {
@@ -13,7 +13,7 @@ function createCanvas(): HTMLCanvasElement {
   return canvas
 }
 
-function createMap(canvas: HTMLCanvasElement): V2SharedMapSceneMap {
+function createMap(canvas: HTMLCanvasElement): SharedMapSceneMap {
   let projectIndex = 0
   const points = [{ x: 40, y: 30 }, { x: 44, y: 30 }, { x: 40, y: 34 }]
   return {
@@ -24,7 +24,7 @@ function createMap(canvas: HTMLCanvasElement): V2SharedMapSceneMap {
   }
 }
 
-function createRenderer(init = vi.fn(async () => {})): V2SharedPixiRenderer {
+function createRenderer(init = vi.fn(async () => {})): SharedPixiRenderer {
   return {
     init,
     render: vi.fn(),
@@ -35,13 +35,13 @@ function createRenderer(init = vi.fn(async () => {})): V2SharedPixiRenderer {
   }
 }
 
-describe('createV2SharedMapSceneLayer', () => {
+describe('createSharedMapSceneLayer', () => {
   it('draws only in MapLibre render after an explicit initialization and repaint request', async () => {
     const canvas = createCanvas()
     const map = createMap(canvas)
     const renderer = createRenderer()
     const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
-    const adapter = createV2SharedMapSceneLayer({
+    const adapter = createSharedMapSceneLayer({
       id: 'v2-scene',
       anchor: { lat: 0, lon: 0 },
       northBearingDeg: 0,
@@ -57,6 +57,8 @@ describe('createV2SharedMapSceneLayer', () => {
     expect(renderer.render).not.toHaveBeenCalled()
 
     adapter.layer.onAdd!(map as never, gl)
+    adapter.requestRender()
+    expect(map.triggerRepaint).toHaveBeenCalledTimes(2)
     adapter.layer.render(gl, {} as never)
 
     expect(presentation.renderScene).toHaveBeenCalledWith(expect.objectContaining({ viewport: { x: 40, y: 30, scale: 4 } }))
@@ -68,7 +70,7 @@ describe('createV2SharedMapSceneLayer', () => {
     expect(presentation.setViewport).toHaveBeenCalledOnce()
     expect(adapter.diagnostics).toMatchObject({
       phase: 'attached', initializeCount: 1, renderCount: 2,
-      sceneSyncCount: 1, viewportSyncCount: 1, repaintCount: 1,
+      sceneSyncCount: 1, viewportSyncCount: 1, repaintCount: 2,
     })
   })
 
@@ -77,7 +79,7 @@ describe('createV2SharedMapSceneLayer', () => {
     const map = createMap(canvas)
     const renderer = createRenderer()
     const remove = vi.spyOn(canvas, 'remove')
-    const adapter = createV2SharedMapSceneLayer({
+    const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
@@ -105,7 +107,7 @@ describe('createV2SharedMapSceneLayer', () => {
   it('disposes an initialization that completes after its final owner has gone away', async () => {
     let resolveInit: (() => void) | undefined
     const renderer = createRenderer(vi.fn(() => new Promise<void>(resolve => { resolveInit = resolve })))
-    const adapter = createV2SharedMapSceneLayer({
+    const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
@@ -126,7 +128,7 @@ describe('createV2SharedMapSceneLayer', () => {
     const map = createMap(canvas)
     const renderer = createRenderer()
     const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
-    const adapter = createV2SharedMapSceneLayer({
+    const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => presentation,
@@ -156,7 +158,7 @@ describe('createV2SharedMapSceneLayer', () => {
   it('requires a detached owner to declare immediate MapLibre removal', async () => {
     const canvas = createCanvas()
     const renderer = createRenderer()
-    const adapter = createV2SharedMapSceneLayer({
+    const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
@@ -167,5 +169,39 @@ describe('createV2SharedMapSceneLayer', () => {
     expect(renderer.destroy).not.toHaveBeenCalled()
     await adapter.dispose({ mapWillBeRemoved: true })
     expect(renderer.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('reports a terminal render failure once to the lifecycle owner', async () => {
+    const canvas = createCanvas()
+    const map = createMap(canvas)
+    const renderer = createRenderer()
+    const onFailure = vi.fn()
+    const adapter = createSharedMapSceneLayer({
+      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
+      createRenderer: () => renderer,
+      createStage: () => ({ destroy: vi.fn() }) as never,
+      createPresentation: () => ({
+        dispose() {}, resize() {}, setViewport() {},
+        renderScene() { throw new Error('presentation failed') },
+      }),
+      onFailure,
+    })
+    const gl = {} as WebGL2RenderingContext
+    await adapter.initialize(map, gl)
+    adapter.layer.onAdd!(map as never, gl)
+    adapter.setSnapshot(createTestSceneRendererSnapshot())
+
+    adapter.layer.render(gl, {} as never)
+    adapter.layer.render(gl, {} as never)
+
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      message: 'presentation failed',
+    }))
+    expect(adapter.diagnostics).toMatchObject({
+      phase: 'failed',
+      skippedRenderCount: 2,
+      lastFailure: 'presentation failed',
+    })
+    await adapter.dispose({ mapWillBeRemoved: true })
   })
 })

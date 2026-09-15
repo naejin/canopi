@@ -13,6 +13,7 @@ import { RendererHost } from '../renderers'
 import { createCanvas2DSceneRenderer } from '../renderers/canvas2d-scene'
 import { createPixiSceneRenderer } from '../renderers/pixi-scene'
 import type { SceneRendererContext, SceneRendererInstance } from '../renderers/scene-types'
+import type { RendererHostOptions } from '../renderers/types'
 import type {
   CanvasPlantLabelSource,
   CanvasSpeciesPresentationCache,
@@ -58,6 +59,10 @@ export interface SceneRuntimeConstructionOptions {
   targetPresentation?: SceneRuntimePanelTargetAdapter
   speciesCache?: CanvasSpeciesPresentationCache
   plantLabels?: CanvasPlantLabelSource
+  renderer?: Pick<
+    RendererHostOptions<SceneRendererContext, SceneRendererInstance>,
+    'backends' | 'capabilities' | 'onBackendFailure' | 'onBackendChange'
+  >
 }
 
 export interface SceneRuntimeConstructionCallbacks {
@@ -126,12 +131,14 @@ export function createSceneRuntimeConstruction(
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
   }
-  let rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>({
-    backends: [
-      createPixiSceneRenderer(),
-      createCanvas2DSceneRenderer(),
-    ],
-  })
+  let rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>(
+    options.renderer ?? {
+      backends: [
+        createPixiSceneRenderer(),
+        createCanvas2DSceneRenderer(),
+      ],
+    },
+  )
   const appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),

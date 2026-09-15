@@ -1,25 +1,25 @@
-import { worldToGeo } from '../../canvas/projection'
-import type { SceneViewportState } from '../../canvas/runtime/scene'
+import { worldToGeo } from '../canvas/projection'
+import type { SceneViewportState } from '../canvas/runtime/scene'
 
-export interface V2SharedMapPoint {
+export interface SharedMapPoint {
   readonly x: number
   readonly y: number
 }
 
-export interface V2SharedMapProjector {
-  project(point: { readonly lng: number; readonly lat: number }): V2SharedMapPoint
+export interface SharedMapProjector {
+  project(point: { readonly lng: number; readonly lat: number }): SharedMapPoint
 }
 
-export interface V2SharedMapCameraTransformInput {
-  readonly project: V2SharedMapProjector['project']
+export interface SharedMapSceneCameraTransformInput {
+  readonly project: SharedMapProjector['project']
   readonly anchor: { readonly lat: number; readonly lon: number }
   readonly northBearingDeg: number
   readonly pitchDeg: number
-  /** Largest local-coordinate distance that the experiment is qualifying. */
+  /** Largest local-coordinate distance covered by the active workspace. */
   readonly maximumWorldExtentMeters?: number
 }
 
-export type V2SharedMapCameraTransform =
+export type SharedMapSceneCameraTransform =
   | {
     readonly accepted: true
     readonly viewport: SceneViewportState
@@ -36,9 +36,9 @@ export type V2SharedMapCameraTransform =
  * MapLibre has already been configured with the inverse design north bearing,
  * so local x/y must project to right/down with a shared scalar scale.
  */
-export function deriveV2SharedMapSceneViewport(
-  input: V2SharedMapCameraTransformInput,
-): V2SharedMapCameraTransform {
+export function deriveSharedMapSceneViewport(
+  input: SharedMapSceneCameraTransformInput,
+): SharedMapSceneCameraTransform {
   if (!Number.isFinite(input.pitchDeg) || Math.abs(input.pitchDeg) > 0.0001) {
     return { accepted: false, reason: 'pitched-camera' }
   }
@@ -81,8 +81,8 @@ export function deriveV2SharedMapSceneViewport(
 }
 
 function maximumAffineResidualPx(
-  xAxis: V2SharedMapPoint,
-  yAxis: V2SharedMapPoint,
+  xAxis: SharedMapPoint,
+  yAxis: SharedMapPoint,
   scale: number,
   maximumWorldExtentMeters: number,
 ): number {
