@@ -11,7 +11,10 @@ use super::LidarLibrary;
 use super::catalogue::{self, new_id, now_iso};
 use super::display::ColorRamp;
 use super::grid::ValidMask;
-use super::import::{publish_display, raw_f32_bytes, read_generation_manifest};
+use super::import::{
+    publish_display, raw_f32_bytes, read_generation_manifest, remove_display_publication,
+    validate_working_grid,
+};
 use common_types::lidar::{LidarAnalysisKind, LidarSlopeUnit};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -79,6 +82,7 @@ pub fn run_slope_job(
         let manifest = read_generation_manifest(&head.manifest_json)?;
         (definition, head, manifest)
     };
+    validate_working_grid(&manifest.grid, "slope analysis")?;
 
     let job_dir_id = new_id("anl");
     let pipeline_dir = paths.analysis_pipeline_dir(definition_id);
@@ -109,7 +113,7 @@ pub fn run_slope_job(
         manifest.grid.width,
         manifest.grid.height,
     )?;
-    let quality = coverage.eroded();
+    let quality = coverage.eroded_checked(|_| super::import::check_cancel(cancel))?;
     let quality_path = staging_dir.join("quality.bin");
     quality.write_to(&quality_path)?;
 
@@ -124,9 +128,13 @@ pub fn run_slope_job(
         &result_path,
         manifest.grid.width,
         manifest.grid.height,
+        cancel,
     )?;
     let (mut min_value, mut max_value, mut result_cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
-    for chunk in raw.chunks_exact(4) {
+    for (index, chunk) in raw.chunks_exact(4).enumerate() {
+        if index % (256 * 1024) == 0 {
+            super::import::check_cancel(cancel)?;
+        }
         let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         if value.is_finite() && Some(value) != result_nodata {
             result_cells += 1;
@@ -186,11 +194,33 @@ pub fn run_slope_job(
         .map_err(|e| format!("Failed to publish analysis dir: {e}"))?;
     let final_result = generation_dir.join("result.tif");
     let final_quality = generation_dir.join("quality.bin");
+    if let Err(error) = publish_display(
+        library,
+        cancel,
+        "analysis",
+        definition_id,
+        &generation_id,
+        &final_result,
+        result_nodata,
+        &ColorRamp::slope_degrees(),
+    ) {
+        let _ = std::fs::remove_dir_all(&generation_dir);
+        return Err(error);
+    }
     {
-        let connection = library.catalogue()?;
-        connection
-            .execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| e.to_string())?;
+        let connection = match library.catalogue() {
+            Ok(connection) => connection,
+            Err(error) => {
+                remove_display_publication(library, "analysis", definition_id, &generation_id);
+                let _ = std::fs::remove_dir_all(&generation_dir);
+                return Err(error);
+            }
+        };
+        if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
+            remove_display_publication(library, "analysis", definition_id, &generation_id);
+            let _ = std::fs::remove_dir_all(&generation_dir);
+            return Err(error.to_string());
+        }
         let publish = (|| -> Result<(), String> {
             let job_state = connection
                 .query_row(
@@ -256,11 +286,17 @@ pub fn run_slope_job(
             Ok(())
         })();
         match publish {
-            Ok(()) => connection
-                .execute_batch("COMMIT")
-                .map_err(|e| e.to_string())?,
+            Ok(()) => {
+                if let Err(error) = connection.execute_batch("COMMIT") {
+                    let _ = connection.execute_batch("ROLLBACK");
+                    remove_display_publication(library, "analysis", definition_id, &generation_id);
+                    let _ = std::fs::remove_dir_all(&generation_dir);
+                    return Err(error.to_string());
+                }
+            }
             Err(error) if error == "source layer changed during analysis publication" => {
                 let _ = connection.execute_batch("ROLLBACK");
+                remove_display_publication(library, "analysis", definition_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Ok(AnalysisOutcome {
                     published: false,
@@ -272,22 +308,12 @@ pub fn run_slope_job(
             }
             Err(error) => {
                 let _ = connection.execute_batch("ROLLBACK");
+                remove_display_publication(library, "analysis", definition_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Err(error);
             }
         }
     }
-
-    publish_display(
-        library,
-        cancel,
-        "analysis",
-        definition_id,
-        &generation_id,
-        &final_result,
-        result_nodata,
-        &ColorRamp::slope_degrees(),
-    );
 
     Ok(AnalysisOutcome {
         published: true,

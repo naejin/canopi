@@ -172,6 +172,24 @@ pub async fn lidar_apply_import(
         .begin_apply(staging, add_uncovered, replace_overlap)
 }
 
+#[tauri::command]
+pub async fn lidar_preview_import_decision(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    job_id: String,
+    add_uncovered: bool,
+    replace_overlap: bool,
+) -> Result<common_types::lidar::LidarImportDecisionPreview, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Local,
+            "lidar import decision preview",
+            move || library.preview_import_decision(&job_id, add_uncovered, replace_overlap),
+        )
+        .await
+}
+
 /// Bounded cancellation signal delivery; must bypass queued executor work so
 /// a busy Local class cannot make Cancel unresponsive.
 #[tauri::command]

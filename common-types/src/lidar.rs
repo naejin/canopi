@@ -190,6 +190,17 @@ pub struct LidarImportReview {
     pub after_preview_path: Option<String>,
 }
 
+/// Decision-specific comparison rendered from the same staged import that
+/// will be applied. Both images use one value scale.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct LidarImportDecisionPreview {
+    pub add_uncovered: bool,
+    pub replace_overlap: bool,
+    pub before_preview_path: Option<String>,
+    pub after_preview_path: String,
+}
+
 /// Immutable published generation of a source layer, for layer history.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

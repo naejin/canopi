@@ -13,17 +13,22 @@ use super::catalogue::{self, new_id, now_iso};
 use super::display::{self, ColorRamp};
 use super::engine::{GdalEngine, GdalProgram};
 use super::grid::{
-    self, GeoTransform, RasterGrid, ValidMask, classify_coverage, remap_mask, union_grid,
+    self, GeoTransform, RasterGrid, ValidMask, classify_coverage, remap_mask_checked, union_grid,
 };
 use super::paths::LidarPaths;
-use common_types::lidar::{LidarImportReview, LidarImportSourceFacts};
+use common_types::lidar::{LidarImportDecisionPreview, LidarImportReview, LidarImportSourceFacts};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Canonical NoData used for a layer whose first source declares none.
 pub const FALLBACK_NODATA: f32 = -99999.0;
+const MAX_SOURCE_FILES_PER_IMPORT: usize = 16;
+const MAX_SOURCE_FILE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_IMPORT_SOURCE_BYTES: u64 = 1024 * 1024 * 1024;
+pub(crate) const MAX_DENSE_WORKING_CELLS: u64 = 25_000_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StagedSource {
@@ -83,6 +88,7 @@ pub fn stage_import(
 ) -> Result<StagingOutput, String> {
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
+    validate_source_selection(source_paths)?;
 
     // Short read: layer identity and current head snapshot.
     let (layer, head) = {
@@ -126,6 +132,7 @@ pub fn stage_import(
             layer_crs_wkt.as_deref(),
             source_path,
             &job_dir,
+            cancel,
         )?);
     }
 
@@ -146,12 +153,14 @@ pub fn stage_import(
     let mut union = layer_grid
         .clone()
         .unwrap_or_else(|| grid_for_source(compatible[0]));
+    validate_working_grid(&union, "import review")?;
     let mut layer_nodata = layer_nodata;
     if head_manifest.is_none() {
         layer_nodata = compatible[0].nodata.unwrap_or(FALLBACK_NODATA);
     }
     for source in &compatible {
         union = union_grid(&union, &grid_for_source(source))?;
+        validate_working_grid(&union, "import review union")?;
     }
 
     // Existing accepted values and coverage on the union grid.
@@ -161,6 +170,7 @@ pub fn stage_import(
         head_manifest.as_ref(),
         &union,
         layer_nodata,
+        cancel,
     )?;
 
     // R-tree candidate guard: when every accepted member has a footprint,
@@ -214,8 +224,11 @@ pub fn stage_import(
     for source in &compatible {
         let source_mask =
             ValidMask::read_from(&source.valid_mask_path, source.width, source.height)?;
-        let remapped = remap_mask(&source_mask, &grid_for_source(source), &union)?;
+        let remapped = remap_mask_checked(&source_mask, &grid_for_source(source), &union, |_| {
+            check_cancel(cancel)
+        })?;
         for y in 0..union.height {
+            check_cancel(cancel)?;
             for x in 0..union.width {
                 if remapped.get(x, y) {
                     combined_incoming.set(x, y, true);
@@ -253,7 +266,7 @@ pub fn stage_import(
     // review reflects the UI's default decision: add uncovered coverage and
     // preserve overlap.
     check_cancel(cancel)?;
-    let preview_composed = compose_values(
+    let preview_composed = compose_values_cancellable(
         layer_values.as_deref(),
         layer_mask_on_union.as_ref(),
         &compatible,
@@ -261,6 +274,7 @@ pub fn stage_import(
         layer_nodata,
         true,
         false,
+        Some(cancel),
     )?;
     let preview_min = head
         .as_ref()
@@ -294,6 +308,7 @@ pub fn stage_import(
             engine,
             cancel,
             &job_dir,
+            "default",
             &union,
             &layer_crs_wkt,
             layer_nodata,
@@ -360,6 +375,295 @@ pub fn stage_import(
     Ok(StagingOutput { review })
 }
 
+pub fn render_decision_preview(
+    library: &LidarLibrary,
+    staging: &StagedImport,
+    add_uncovered: bool,
+    replace_overlap: bool,
+    cancel: &AtomicBool,
+) -> Result<LidarImportDecisionPreview, String> {
+    if !add_uncovered && !replace_overlap {
+        return Err("select at least one coverage change to preview".to_string());
+    }
+    check_cancel(cancel)?;
+    let (head, head_manifest) = {
+        let connection = library.catalogue()?;
+        let head = catalogue::head_generation(&connection, &staging.layer_id)?;
+        let manifest = head
+            .as_ref()
+            .map(|row| read_generation_manifest(&row.manifest_json))
+            .transpose()?;
+        (head, manifest)
+    };
+    if head.as_ref().map(|row| row.id.as_str()) != staging.planned_against_head.as_deref() {
+        return Err("import review is stale; review the current coverage again".to_string());
+    }
+    let compatible: Vec<&StagedSource> = staging
+        .sources
+        .iter()
+        .filter(|source| source.compatible)
+        .collect();
+    if compatible.is_empty() {
+        return Err("import has no compatible sources to preview".to_string());
+    }
+    validate_working_grid(&staging.union_grid, "import decision preview")?;
+    let (layer_values, layer_mask) = head_values_on_union(
+        &library.inner.engine,
+        head.as_ref(),
+        head_manifest.as_ref(),
+        &staging.union_grid,
+        staging.layer_nodata,
+        cancel,
+    )?;
+    let composed = compose_values_cancellable(
+        layer_values.as_deref(),
+        layer_mask.as_ref(),
+        &compatible,
+        &staging.union_grid,
+        staging.layer_nodata,
+        add_uncovered,
+        replace_overlap,
+        Some(cancel),
+    )?;
+    let preview_min = head
+        .as_ref()
+        .and_then(|row| row.min_value)
+        .unwrap_or(composed.min_value)
+        .min(composed.min_value);
+    let preview_max = head
+        .as_ref()
+        .and_then(|row| row.max_value)
+        .unwrap_or(composed.max_value)
+        .max(composed.max_value)
+        .max(preview_min + 1.0);
+    let ramp = ColorRamp::elevation_range(preview_min, preview_max);
+    let decision_key = format!("{}{}", u8::from(add_uncovered), u8::from(replace_overlap));
+    let job_dir = library.inner.paths.job_dir(&staging.job_id);
+    let before_preview_path = if let Some(head) = &head {
+        let target = job_dir.join(format!("preview-before-{decision_key}.png"));
+        display::generate_preview(
+            &library.inner.engine,
+            cancel,
+            Path::new(&head.mosaic_path),
+            Some(staging.layer_nodata),
+            &ramp,
+            &target,
+        )?;
+        Some(target.display().to_string())
+    } else {
+        None
+    };
+    let preview_tif = preview_tif_from_composed(
+        &library.inner.engine,
+        cancel,
+        &job_dir,
+        &format!("decision-{decision_key}"),
+        &staging.union_grid,
+        &staging.layer_crs_wkt,
+        staging.layer_nodata,
+        &composed,
+    )?;
+    let after_target = job_dir.join(format!("preview-after-{decision_key}.png"));
+    let rendered = display::generate_preview(
+        &library.inner.engine,
+        cancel,
+        &preview_tif,
+        Some(staging.layer_nodata),
+        &ramp,
+        &after_target,
+    );
+    let _ = std::fs::remove_file(&preview_tif);
+    rendered?;
+    Ok(LidarImportDecisionPreview {
+        add_uncovered,
+        replace_overlap,
+        before_preview_path,
+        after_preview_path: after_target.display().to_string(),
+    })
+}
+
+fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
+    if source_paths.is_empty() {
+        return Err("select at least one raster source".to_string());
+    }
+    if source_paths.len() > MAX_SOURCE_FILES_PER_IMPORT {
+        return Err(format!(
+            "an import can contain at most {MAX_SOURCE_FILES_PER_IMPORT} source files"
+        ));
+    }
+    let mut total_bytes = 0u64;
+    for path in source_paths {
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| format!("Failed to inspect {}: {e}", path.display()))?;
+        if !metadata.is_file() {
+            return Err(format!("{} is not a regular file", path.display()));
+        }
+        if metadata.len() > MAX_SOURCE_FILE_BYTES {
+            return Err(format!(
+                "{} is larger than the {} MiB per-source limit",
+                path.display(),
+                MAX_SOURCE_FILE_BYTES / (1024 * 1024),
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(metadata.len())
+            .ok_or_else(|| "selected source sizes overflow the import budget".to_string())?;
+    }
+    if total_bytes > MAX_IMPORT_SOURCE_BYTES {
+        return Err(format!(
+            "selected sources exceed the {} MiB import limit",
+            MAX_IMPORT_SOURCE_BYTES / (1024 * 1024),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Result<(), String> {
+    let cells = u64::from(grid.width)
+        .checked_mul(u64::from(grid.height))
+        .ok_or_else(|| format!("{operation} dimensions overflow"))?;
+    if cells > MAX_DENSE_WORKING_CELLS {
+        return Err(format!(
+            "{operation} requires {cells} cells; the current dense raster engine limit is {MAX_DENSE_WORKING_CELLS}"
+        ));
+    }
+    Ok(())
+}
+
+fn stage_managed_original(
+    paths: &LidarPaths,
+    source_path: &Path,
+    job_dir: &Path,
+    filename: &str,
+) -> Result<(String, PathBuf, u64), String> {
+    let temporary = job_dir.join(format!("source-copy-{}.tmp", new_id("copy")));
+    let copied = (|| -> Result<(String, u64), String> {
+        let mut source = std::io::BufReader::new(
+            std::fs::File::open(source_path)
+                .map_err(|e| format!("Failed to open {}: {e}", source_path.display()))?,
+        );
+        let target_file = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temporary)
+            .map_err(|e| format!("Failed to create managed source staging: {e}"))?;
+        let mut target = std::io::BufWriter::new(target_file);
+        let mut hasher = Sha256::new();
+        let mut total = 0u64;
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let read = source
+                .read(&mut buffer)
+                .map_err(|e| format!("Failed to read {}: {e}", source_path.display()))?;
+            if read == 0 {
+                break;
+            }
+            total = total
+                .checked_add(read as u64)
+                .ok_or_else(|| "source byte count overflow".to_string())?;
+            if total > MAX_SOURCE_FILE_BYTES {
+                return Err(format!(
+                    "{} grew beyond the {} MiB per-source limit while being read",
+                    source_path.display(),
+                    MAX_SOURCE_FILE_BYTES / (1024 * 1024),
+                ));
+            }
+            hasher.update(&buffer[..read]);
+            target
+                .write_all(&buffer[..read])
+                .map_err(|e| format!("Failed to stage managed source: {e}"))?;
+        }
+        target
+            .flush()
+            .map_err(|e| format!("Failed to flush managed source: {e}"))?;
+        target
+            .get_ref()
+            .sync_all()
+            .map_err(|e| format!("Failed to sync managed source: {e}"))?;
+        Ok((format!("{:x}", hasher.finalize()), total))
+    })();
+    let (sha256, size_bytes) = match copied {
+        Ok(result) => result,
+        Err(error) => {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(error);
+        }
+    };
+
+    let managed_dir = paths.source_dir(&sha256);
+    std::fs::create_dir_all(&managed_dir)
+        .map_err(|e| format!("Failed to create source dir: {e}"))?;
+    let managed_original = paths.source_original(&sha256);
+    if managed_original.exists() {
+        let (existing_hash, existing_size) = hash_file_limited(&managed_original)?;
+        if existing_hash != sha256 || existing_size != size_bytes {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(format!(
+                "managed source {} failed integrity verification",
+                managed_original.display()
+            ));
+        }
+        let _ = std::fs::remove_file(&temporary);
+    } else {
+        std::fs::rename(&temporary, &managed_original)
+            .map_err(|e| format!("Failed to publish managed source: {e}"))?;
+    }
+
+    let manifest_path = paths.source_manifest(&sha256);
+    if !manifest_path.exists() {
+        let manifest = serde_json::json!({
+            "sha256": sha256,
+            "original_filename": filename,
+            "original_path": source_path.display().to_string(),
+            "size_bytes": size_bytes,
+            "imported_at": now_iso(),
+        });
+        std::fs::write(&manifest_path, manifest.to_string())
+            .map_err(|e| format!("Failed to write source manifest: {e}"))?;
+    }
+    Ok((sha256, managed_original, size_bytes))
+}
+
+fn hash_file_limited(path: &Path) -> Result<(String, u64), String> {
+    let mut file = std::io::BufReader::new(
+        std::fs::File::open(path)
+            .map_err(|e| format!("Failed to verify {}: {e}", path.display()))?,
+    );
+    let mut hasher = Sha256::new();
+    let mut total = 0u64;
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|e| format!("Failed to verify {}: {e}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        total = total
+            .checked_add(read as u64)
+            .ok_or_else(|| "managed source size overflow".to_string())?;
+        if total > MAX_SOURCE_FILE_BYTES {
+            return Err("managed source exceeds the per-source limit".to_string());
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok((format!("{:x}", hasher.finalize()), total))
+}
+
+fn units_compatible(source: &str, layer: &str) -> bool {
+    let normalize = |value: &str| value.trim().to_ascii_lowercase();
+    let source = normalize(source);
+    let layer = normalize(layer);
+    source == layer
+        || matches!(
+            source.as_str(),
+            "m" | "metre" | "metres" | "meter" | "meters"
+        ) && matches!(
+            layer.as_str(),
+            "m" | "metre" | "metres" | "meter" | "meters"
+        )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn stage_source(
     engine: &GdalEngine,
@@ -372,38 +676,21 @@ fn stage_source(
     layer_crs_wkt: Option<&str>,
     source_path: &Path,
     job_dir: &Path,
+    cancel: &AtomicBool,
 ) -> Result<StagedSource, String> {
     let filename = source_path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "unnamed".to_string());
 
-    // Copy accepted originals into managed storage first: exact byte reimports
-    // deduplicate, and Downloads can move or disappear.
-    let bytes = std::fs::read(source_path)
-        .map_err(|e| format!("Failed to read {}: {e}", source_path.display()))?;
-    let sha256 = grid::sha256_hex(&bytes);
-    let managed_dir = paths.source_dir(&sha256);
-    std::fs::create_dir_all(&managed_dir)
-        .map_err(|e| format!("Failed to create source dir: {e}"))?;
-    let managed_original = paths.source_original(&sha256);
-    if !managed_original.exists() {
-        std::fs::write(&managed_original, &bytes)
-            .map_err(|e| format!("Failed to store original: {e}"))?;
-        let manifest = serde_json::json!({
-            "sha256": sha256,
-            "original_filename": filename,
-            "original_path": source_path.display().to_string(),
-            "size_bytes": bytes.len(),
-            "imported_at": now_iso(),
-        });
-        std::fs::write(paths.source_manifest(&sha256), manifest.to_string())
-            .map_err(|e| format!("Failed to write source manifest: {e}"))?;
-    }
-    let size_bytes = bytes.len() as u64;
+    // Stream the source once into job-owned staging while hashing it. This
+    // avoids loading an arbitrary TIFF into memory and lets an existing
+    // deduplicated original be verified before it is trusted.
+    let (sha256, managed_original, size_bytes) =
+        stage_managed_original(paths, source_path, job_dir, &filename)?;
 
     // Probe from the managed copy so the flow survives user-file changes.
-    let probe_json = probe_gdalinfo(engine, &managed_original)?;
+    let probe_json = probe_gdalinfo(engine, &managed_original, cancel)?;
     let probe = super::probe::parse_gdalinfo_json(&probe_json)?;
 
     let mut issues = Vec::new();
@@ -416,6 +703,39 @@ fn stage_source(
     if probe.driver != "GTiff" {
         issues.push(format!("driver {} is not GeoTIFF", probe.driver));
     }
+    if probe.geotransform[1] <= 0.0
+        || probe.geotransform[5] >= 0.0
+        || probe.geotransform[2].abs() > 1e-12
+        || probe.geotransform[4].abs() > 1e-12
+    {
+        issues.push(
+            "rotated, reflected, or south-up rasters are not supported by the current grid engine"
+                .to_string(),
+        );
+    }
+    if (probe.scale - 1.0).abs() > f64::EPSILON || probe.offset.abs() > f64::EPSILON {
+        issues.push(
+            "band scale/offset metadata is not supported; materialize physical values before import"
+                .to_string(),
+        );
+    }
+    if probe
+        .mask_flags
+        .iter()
+        .any(|flag| !flag.eq_ignore_ascii_case("ALL_VALID"))
+    {
+        issues.push(
+            "dataset validity masks are not supported; encode invalid cells as declared NoData"
+                .to_string(),
+        );
+    }
+    if let Some(unit) = probe.unit.as_deref()
+        && !units_compatible(unit, units)
+    {
+        issues.push(format!(
+            "band unit '{unit}' does not match layer unit '{units}'"
+        ));
+    }
     if let Some(expected_wkt) = layer_crs_wkt
         && probe.crs_wkt.trim() != expected_wkt.trim()
     {
@@ -426,19 +746,26 @@ fn stage_source(
     }
 
     // Exact valid mask, value range and raw samples from the numeric buffer.
-    let raw = raw_f32_bytes(engine, &managed_original, probe.width, probe.height)?;
-    let mask = grid::valid_mask_from_f32_raw(probe.width, probe.height, &raw, probe.nodata)?;
-    let mask_path = job_dir.join(format!("valid-{sha256}.bin"));
-    mask.write_to(&mask_path)?;
-    let raw_path = job_dir.join(format!("source-{sha256}.raw"));
-    std::fs::write(&raw_path, &raw).map_err(|e| format!("Failed to stage samples: {e}"))?;
-    let value_range = raw_value_range(&raw);
-
     let source_grid = RasterGrid {
         width: probe.width,
         height: probe.height,
         geotransform: probe.geotransform,
     };
+    validate_working_grid(&source_grid, "source raster")?;
+    let raw = raw_f32_bytes(engine, &managed_original, probe.width, probe.height, cancel)?;
+    let mask = grid::valid_mask_from_f32_raw_checked(
+        probe.width,
+        probe.height,
+        &raw,
+        probe.nodata,
+        |_| check_cancel(cancel),
+    )?;
+    let mask_path = job_dir.join(format!("valid-{sha256}.bin"));
+    mask.write_to(&mask_path)?;
+    let raw_path = job_dir.join(format!("source-{sha256}.raw"));
+    std::fs::write(&raw_path, &raw).map_err(|e| format!("Failed to stage samples: {e}"))?;
+    let value_range = raw_value_range(&raw, cancel)?;
+
     if let Some(expected) = layer_grid
         && let Err(error) = source_grid.compatible(expected)
     {
@@ -524,11 +851,8 @@ pub struct ComposedMosaic {
     pub max_value: f64,
 }
 
-/// Full-value composite including existing raster values. Invalid pixels
-/// never erase accepted coverage; overlap pixels are replaced only when the
-/// user explicitly approved replacement. Later staged sources win where two
-/// of them claim the same previously uncovered cell.
-pub fn compose_values(
+#[allow(clippy::too_many_arguments)]
+fn compose_values_cancellable(
     layer_values_on_union: Option<&[f32]>,
     layer_on_union: Option<&ValidMask>,
     sources: &[&StagedSource],
@@ -536,11 +860,14 @@ pub fn compose_values(
     nodata: f32,
     add_uncovered: bool,
     replace_overlap: bool,
+    cancel: Option<&AtomicBool>,
 ) -> Result<ComposedMosaic, String> {
+    validate_working_grid(union, "raster composition")?;
     let mut values = vec![nodata; (union.width as usize) * (union.height as usize)];
     let mut valid = ValidMask::empty(union.width, union.height);
     if let Some(layer_mask) = layer_on_union {
         for y in 0..union.height {
+            check_optional_cancel(cancel, y)?;
             for x in 0..union.width {
                 if layer_mask.get(x, y) {
                     valid.set(x, y, true);
@@ -571,7 +898,7 @@ pub fn compose_values(
     for source in sources {
         let raw = std::fs::read(&source.raw_samples_path)
             .map_err(|e| format!("Failed to read staged samples: {e}"))?;
-        let samples = read_f32_samples(&raw, source.width, source.height)?;
+        validate_f32_raw(&raw, source.width, source.height)?;
         let source_mask =
             ValidMask::read_from(&source.valid_mask_path, source.width, source.height)?;
         let offset_x = ((source.geotransform[0] - union.geotransform[0]) / union.geotransform[1])
@@ -580,6 +907,7 @@ pub fn compose_values(
             / union.geotransform[5].abs())
         .round() as i64;
         for y in 0..source.height {
+            check_optional_cancel(cancel, y)?;
             let ty = offset_y + y as i64;
             if ty < 0 || ty >= union.height as i64 {
                 continue;
@@ -599,7 +927,7 @@ pub fn compose_values(
                     add_uncovered
                 };
                 if paint {
-                    let sample = samples[(y * source.width + x) as usize];
+                    let sample = f32_sample(&raw, (y * source.width + x) as usize);
                     values[ty as usize * union.width as usize + tx as usize] = sample;
                     valid.set(tx as u32, ty as u32, true);
                     if sample.is_finite() {
@@ -634,6 +962,7 @@ pub fn compose_values(
 pub struct MemberSource {
     pub interpretation_id: String,
     pub role: String,
+    pub job_id: Option<String>,
     pub grid: RasterGrid,
     pub raw_samples_path: PathBuf,
     pub valid_mask_path: PathBuf,
@@ -654,23 +983,27 @@ pub fn write_member_assets(
     source: &StagedSource,
 ) -> Result<PathBuf, String> {
     let dir = member_prepared_dir(paths, &source.interp_hash);
-    if dir.join("values.raw").exists()
-        && dir.join("valid.bin").exists()
-        && dir.join("native.tif").exists()
-    {
+    if prepared_member_is_valid(&dir, source) {
         return Ok(dir);
     }
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create prepared dir: {e}"))?;
-    std::fs::copy(&source.raw_samples_path, dir.join("values.raw"))
+    let parent = dir
+        .parent()
+        .ok_or_else(|| "prepared member path has no parent".to_string())?;
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("Failed to create prepared source root: {e}"))?;
+    let staging = parent.join(format!("staging-{}", new_id("member")));
+    std::fs::create_dir(&staging)
+        .map_err(|e| format!("Failed to create prepared member staging: {e}"))?;
+    std::fs::copy(&source.raw_samples_path, staging.join("values.raw"))
         .map_err(|e| format!("Failed to persist member samples: {e}"))?;
-    std::fs::copy(&source.valid_mask_path, dir.join("valid.bin"))
+    std::fs::copy(&source.valid_mask_path, staging.join("valid.bin"))
         .map_err(|e| format!("Failed to persist member mask: {e}"))?;
     let grid = grid_for_source(source);
     raw_to_tif(
         engine,
         cancel,
-        &dir.join("values.raw"),
-        &dir.join("native.tif"),
+        &staging.join("values.raw"),
+        &staging.join("native.tif"),
         &grid,
         &source.crs_wkt,
         source.nodata.unwrap_or(FALLBACK_NODATA),
@@ -683,9 +1016,43 @@ pub fn write_member_assets(
         "nodata": source.nodata,
         "crs_wkt": source.crs_wkt,
     });
-    std::fs::write(dir.join("meta.json"), meta.to_string())
+    std::fs::write(staging.join("meta.json"), meta.to_string())
         .map_err(|e| format!("Failed to persist member meta: {e}"))?;
+    if !prepared_member_is_valid(&staging, source) {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err("prepared member failed publication validation".to_string());
+    }
+    let backup = parent.join(format!("replaced-{}", new_id("member")));
+    let had_previous = dir.exists();
+    if had_previous {
+        std::fs::rename(&dir, &backup)
+            .map_err(|e| format!("Failed to isolate invalid prepared member: {e}"))?;
+    }
+    if let Err(error) = std::fs::rename(&staging, &dir) {
+        if had_previous {
+            let _ = std::fs::rename(&backup, &dir);
+        }
+        return Err(format!("Failed to publish prepared member: {error}"));
+    }
+    if had_previous {
+        let _ = std::fs::remove_dir_all(backup);
+    }
     Ok(dir)
+}
+
+fn prepared_member_is_valid(dir: &Path, source: &StagedSource) -> bool {
+    let cells = u64::from(source.width) * u64::from(source.height);
+    let raw_size = std::fs::metadata(dir.join("values.raw")).map(|m| m.len());
+    let mask_size = std::fs::metadata(dir.join("valid.bin")).map(|m| m.len());
+    let tif_size = std::fs::metadata(dir.join("native.tif")).map(|m| m.len());
+    let meta_hash = std::fs::read_to_string(dir.join("meta.json"))
+        .ok()
+        .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+        .and_then(|value| value.get("interp_hash")?.as_str().map(str::to_string));
+    raw_size.ok() == Some(cells * 4)
+        && mask_size.ok() == Some(cells)
+        && tif_size.is_ok_and(|size| size > 0)
+        && meta_hash.as_deref() == Some(source.interp_hash.as_str())
 }
 
 /// Replay accepted members in publication order. `add` members paint only
@@ -694,7 +1061,9 @@ fn replay_members(
     members: &[MemberSource],
     union: &RasterGrid,
     nodata: f32,
+    cancel: Option<&AtomicBool>,
 ) -> Result<ComposedMosaic, String> {
+    validate_working_grid(union, "accepted-member replay")?;
     let mut values = vec![nodata; (union.width as usize) * (union.height as usize)];
     let mut valid = ValidMask::empty(union.width, union.height);
     let mut min_value = f64::INFINITY;
@@ -702,7 +1071,7 @@ fn replay_members(
     for member in members {
         let raw = std::fs::read(&member.raw_samples_path)
             .map_err(|e| format!("Failed to read member samples: {e}"))?;
-        let samples = read_f32_samples(&raw, member.grid.width, member.grid.height)?;
+        validate_f32_raw(&raw, member.grid.width, member.grid.height)?;
         let mask = ValidMask::read_from(
             &member.valid_mask_path,
             member.grid.width,
@@ -721,6 +1090,7 @@ fn replay_members(
             role => return Err(format!("Unsupported stored acceptance role {role}")),
         };
         for y in 0..member.grid.height {
+            check_optional_cancel(cancel, y)?;
             let ty = offset_y + y as i64;
             if ty < 0 || ty >= union.height as i64 {
                 continue;
@@ -737,7 +1107,7 @@ fn replay_members(
                 if (covered && !replace_overlap) || (!covered && !add_uncovered) {
                     continue;
                 }
-                let sample = samples[(y * member.grid.width + x) as usize];
+                let sample = f32_sample(&raw, (y * member.grid.width + x) as usize);
                 values[ty as usize * union.width as usize + tx as usize] = sample;
                 valid.set(tx as u32, ty as u32, true);
                 if sample.is_finite() {
@@ -807,8 +1177,9 @@ pub fn apply_import(
                 let manifest = read_generation_manifest(&head_row.manifest_json)?;
                 let members = catalogue::generation_members(&connection, &head_row.id)?;
                 let mut resolved = Vec::new();
-                for (interpretation_id, role) in members.iter() {
-                    let (interpretation_id, role) = (interpretation_id.clone(), role.clone());
+                for (interpretation_id, role, job_id) in members.iter() {
+                    let (interpretation_id, role, job_id) =
+                        (interpretation_id.clone(), role.clone(), job_id.clone());
                     let interp = catalogue::get_interpretation(&connection, &interpretation_id)?
                         .ok_or_else(|| format!("missing interpretation {interpretation_id}"))?;
                     let dir = member_prepared_dir(paths, &interp.interp_hash);
@@ -824,6 +1195,7 @@ pub fn apply_import(
                     resolved.push(MemberSource {
                         interpretation_id,
                         role,
+                        job_id,
                         grid: RasterGrid {
                             width: interp.width as u32,
                             height: interp.height as u32,
@@ -885,11 +1257,14 @@ pub fn apply_import(
         .or_else(|| head_base.legacy_grid.clone())
         .or_else(|| staging.layer_grid.clone())
         .unwrap_or_else(|| grid_for_source(compatible[0]));
+    validate_working_grid(&union, "import publication")?;
     for member in &head_base.members {
         union = union_grid(&union, &member.grid)?;
+        validate_working_grid(&union, "import publication union")?;
     }
     for source in &compatible {
         union = union_grid(&union, &grid_for_source(source))?;
+        validate_working_grid(&union, "import publication union")?;
     }
     let _ = head_manifest;
 
@@ -910,8 +1285,9 @@ pub fn apply_import(
                 head_manifest_for_seed.as_ref(),
                 &union,
                 staging.layer_nodata,
+                cancel,
             )?;
-            compose_values(
+            compose_values_cancellable(
                 layer_values.as_deref(),
                 layer_mask.as_ref(),
                 &compatible,
@@ -919,6 +1295,7 @@ pub fn apply_import(
                 staging.layer_nodata,
                 add_uncovered,
                 replace_overlap,
+                Some(cancel),
             )?
         }
         _ => {
@@ -927,12 +1304,13 @@ pub fn apply_import(
                 sequence.push(MemberSource {
                     interpretation_id: format!("interp-{}", source.interp_hash),
                     role: incoming_role.to_string(),
+                    job_id: Some(staging.job_id.clone()),
                     grid: grid_for_source(source),
                     raw_samples_path: source.raw_samples_path.clone(),
                     valid_mask_path: source.valid_mask_path.clone(),
                 });
             }
-            replay_members(&sequence, &union, staging.layer_nodata)?
+            replay_members(&sequence, &union, staging.layer_nodata, Some(cancel))?
         }
     };
     let published_cells = composed.valid.count_valid();
@@ -1013,11 +1391,36 @@ pub fn apply_import(
         .map_err(|e| format!("Failed to publish generation dir: {e}"))?;
     let final_mosaic = generation_dir.join("mosaic.tif");
     let final_coverage = generation_dir.join("coverage.bin");
+    if let Err(error) = publish_display(
+        library,
+        cancel,
+        "source",
+        &layer_id,
+        &generation_id,
+        &final_mosaic,
+        Some(staging.layer_nodata),
+        &ColorRamp::elevation_range(
+            composed.min_value,
+            composed.max_value.max(composed.min_value + 1.0),
+        ),
+    ) {
+        let _ = std::fs::remove_dir_all(&generation_dir);
+        return Err(error);
+    }
     {
-        let connection = library.catalogue()?;
-        connection
-            .execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| e.to_string())?;
+        let connection = match library.catalogue() {
+            Ok(connection) => connection,
+            Err(error) => {
+                remove_display_publication(library, "source", &layer_id, &generation_id);
+                let _ = std::fs::remove_dir_all(&generation_dir);
+                return Err(error);
+            }
+        };
+        if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
+            remove_display_publication(library, "source", &layer_id, &generation_id);
+            let _ = std::fs::remove_dir_all(&generation_dir);
+            return Err(error.to_string());
+        }
         let publish = (|| -> Result<(), String> {
             let job_state = connection
                 .query_row(
@@ -1061,9 +1464,9 @@ pub fn apply_import(
             for (ordinal, member) in head_base.members.iter().enumerate() {
                 connection
                     .execute(
-                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
-                         VALUES(?1, ?2, ?3, ?4)",
-                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64],
+                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal, job_id)
+                         VALUES(?1, ?2, ?3, ?4, ?5)",
+                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64, member.job_id],
                     )
                     .map_err(|e| e.to_string())?;
             }
@@ -1073,9 +1476,9 @@ pub fn apply_import(
                 let ordinal = prior_member_count + incoming_ordinal;
                 connection
                     .execute(
-                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
-                         VALUES(?1, ?2, ?3, ?4)",
-                        rusqlite::params![generation_id, interpretation_id, incoming_role, ordinal as i64],
+                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal, job_id)
+                         VALUES(?1, ?2, ?3, ?4, ?5)",
+                        rusqlite::params![generation_id, interpretation_id, incoming_role, ordinal as i64, staging.job_id],
                     )
                     .map_err(|e| e.to_string())?;
                 connection
@@ -1108,32 +1511,22 @@ pub fn apply_import(
             Ok(())
         })();
         match publish {
-            Ok(()) => connection
-                .execute_batch("COMMIT")
-                .map_err(|e| e.to_string())?,
+            Ok(()) => {
+                if let Err(error) = connection.execute_batch("COMMIT") {
+                    let _ = connection.execute_batch("ROLLBACK");
+                    remove_display_publication(library, "source", &layer_id, &generation_id);
+                    let _ = std::fs::remove_dir_all(&generation_dir);
+                    return Err(error.to_string());
+                }
+            }
             Err(error) => {
                 let _ = connection.execute_batch("ROLLBACK");
+                remove_display_publication(library, "source", &layer_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Err(error);
             }
         }
     }
-
-    // Display pyramid is a presentation artifact: failures degrade silently
-    // while the numeric result stays authoritative.
-    publish_display(
-        library,
-        cancel,
-        "source",
-        &layer_id,
-        &generation_id,
-        &final_mosaic,
-        Some(staging.layer_nodata),
-        &ColorRamp::elevation_range(
-            composed.min_value,
-            composed.max_value.max(composed.min_value + 1.0),
-        ),
-    );
 
     Ok(ApplyOutcome {
         generation_id,
@@ -1153,33 +1546,60 @@ pub fn undo_import(
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
 
-    // Short read: the import's accepted interpretation and the current head.
-    let (layer_id, interpretation_id, head, head_manifest) = {
+    // Short read: the import's accepted interpretations and the current head.
+    let (layer_id, target_interpretations, head, head_manifest) = {
         let connection = library.catalogue()?;
-        let (layer_id, interpretation_id): (String, String) = connection
+        let layer_id: String = connection
             .query_row(
-                "SELECT g.layer_id, a.interpretation_id
+                "SELECT g.layer_id
                  FROM lidar_acceptance_regions a
                  JOIN lidar_layer_generations g ON g.id = a.generation_id
                  WHERE a.job_id = ?1
                  ORDER BY g.created_at DESC LIMIT 1",
                 [job_id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                |row| row.get(0),
             )
             .map_err(|_| "import has no accepted publication to undo".to_string())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT interpretation_id FROM lidar_acceptance_regions
+                 WHERE job_id = ?1 ORDER BY id",
+            )
+            .map_err(|e| e.to_string())?;
+        let target_interpretations = statement
+            .query_map([job_id], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
         let head = catalogue::head_generation(&connection, &layer_id)?
             .ok_or_else(|| "layer has no accepted coverage".to_string())?;
         let manifest = read_generation_manifest(&head.manifest_json)?;
-        (layer_id, interpretation_id, head, manifest)
+        (layer_id, target_interpretations, head, manifest)
     };
 
     // Resolve the remaining member sequence from durable assets.
     let remaining: Vec<MemberSource> = {
         let connection = library.catalogue()?;
         let members = catalogue::generation_members(&connection, &head.id)?;
+        let has_job_identity = members
+            .iter()
+            .any(|(_, _, member_job_id)| member_job_id.as_deref() == Some(job_id));
+        let mut legacy_targets = target_interpretations.clone();
+        legacy_targets.reverse();
         let mut resolved = Vec::new();
-        for (member_id, role) in members {
-            if member_id == interpretation_id {
+        for (member_id, role, member_job_id) in members.into_iter().rev() {
+            let legacy_match = if has_job_identity || member_job_id.is_some() {
+                false
+            } else if let Some(index) = legacy_targets
+                .iter()
+                .position(|target| target == &member_id)
+            {
+                legacy_targets.remove(index);
+                true
+            } else {
+                false
+            };
+            if member_job_id.as_deref() == Some(job_id) || legacy_match {
                 continue;
             }
             let interp = catalogue::get_interpretation(&connection, &member_id)?
@@ -1194,6 +1614,7 @@ pub fn undo_import(
             resolved.push(MemberSource {
                 interpretation_id: member_id,
                 role,
+                job_id: member_job_id,
                 grid: RasterGrid {
                     width: interp.width as u32,
                     height: interp.height as u32,
@@ -1203,6 +1624,7 @@ pub fn undo_import(
                 valid_mask_path: mask,
             });
         }
+        resolved.reverse();
         resolved
     };
 
@@ -1210,10 +1632,12 @@ pub fn undo_import(
         .first()
         .map(|m| m.grid.clone())
         .unwrap_or_else(|| head_manifest.grid.clone());
+    validate_working_grid(&union, "import undo")?;
     for member in &remaining {
         union = union_grid(&union, &member.grid)?;
+        validate_working_grid(&union, "import undo union")?;
     }
-    let composed = replay_members(&remaining, &union, head_manifest.nodata)?;
+    let composed = replay_members(&remaining, &union, head_manifest.nodata, Some(cancel))?;
     let published_cells = composed.valid.count_valid();
 
     // Publish the new generation without the undone interpretation.
@@ -1263,11 +1687,38 @@ pub fn undo_import(
         .map_err(|e| format!("Failed to publish generation dir: {e}"))?;
     let final_mosaic = generation_dir.join("mosaic.tif");
     let final_coverage = generation_dir.join("coverage.bin");
+    if published_cells > 0
+        && let Err(error) = publish_display(
+            library,
+            cancel,
+            "source",
+            &layer_id,
+            &generation_id,
+            &final_mosaic,
+            Some(head_manifest.nodata),
+            &ColorRamp::elevation_range(
+                composed.min_value,
+                composed.max_value.max(composed.min_value + 1.0),
+            ),
+        )
     {
-        let connection = library.catalogue()?;
-        connection
-            .execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_dir_all(&generation_dir);
+        return Err(error);
+    }
+    {
+        let connection = match library.catalogue() {
+            Ok(connection) => connection,
+            Err(error) => {
+                remove_display_publication(library, "source", &layer_id, &generation_id);
+                let _ = std::fs::remove_dir_all(&generation_dir);
+                return Err(error);
+            }
+        };
+        if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
+            remove_display_publication(library, "source", &layer_id, &generation_id);
+            let _ = std::fs::remove_dir_all(&generation_dir);
+            return Err(error.to_string());
+        }
         let publish = (|| -> Result<(), String> {
             connection
                 .execute(
@@ -1290,9 +1741,9 @@ pub fn undo_import(
             for (ordinal, member) in remaining.iter().enumerate() {
                 connection
                     .execute(
-                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
-                         VALUES(?1, ?2, ?3, ?4)",
-                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64],
+                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal, job_id)
+                         VALUES(?1, ?2, ?3, ?4, ?5)",
+                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64, member.job_id],
                     )
                     .map_err(|e| e.to_string())?;
             }
@@ -1303,40 +1754,38 @@ pub fn undo_import(
                     rusqlite::params![layer_id, generation_id],
                 )
                 .map_err(|e| e.to_string())?;
-            connection
-                .execute(
-                    "DELETE FROM lidar_source_footprints WHERE layer_id = ?1 AND interpretation_id = ?2",
-                    rusqlite::params![layer_id, interpretation_id],
-                )
-                .map_err(|e| e.to_string())?;
+            for interpretation_id in &target_interpretations {
+                if remaining
+                    .iter()
+                    .any(|member| &member.interpretation_id == interpretation_id)
+                {
+                    continue;
+                }
+                connection
+                    .execute(
+                        "DELETE FROM lidar_source_footprints WHERE layer_id = ?1 AND interpretation_id = ?2",
+                        rusqlite::params![layer_id, interpretation_id],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
             Ok(())
         })();
         match publish {
-            Ok(()) => connection
-                .execute_batch("COMMIT")
-                .map_err(|e| e.to_string())?,
+            Ok(()) => {
+                if let Err(error) = connection.execute_batch("COMMIT") {
+                    let _ = connection.execute_batch("ROLLBACK");
+                    remove_display_publication(library, "source", &layer_id, &generation_id);
+                    let _ = std::fs::remove_dir_all(&generation_dir);
+                    return Err(error.to_string());
+                }
+            }
             Err(error) => {
                 let _ = connection.execute_batch("ROLLBACK");
+                remove_display_publication(library, "source", &layer_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Err(error);
             }
         }
-    }
-
-    if published_cells > 0 {
-        publish_display(
-            library,
-            cancel,
-            "source",
-            &layer_id,
-            &generation_id,
-            &final_mosaic,
-            Some(head_manifest.nodata),
-            &ColorRamp::elevation_range(
-                composed.min_value,
-                composed.max_value.max(composed.min_value + 1.0),
-            ),
-        );
     }
 
     Ok(ApplyOutcome {
@@ -1358,14 +1807,14 @@ pub fn publish_display(
     numeric_raster: &Path,
     nodata: Option<f32>,
     ramp: &ColorRamp,
-) {
+) -> Result<(), String> {
     let style = ramp.style_name();
     let dir =
         library
             .inner
             .paths
             .display_generation_dir(entity_kind, entity_id, generation_id, style);
-    match display::generate_pyramid(
+    let pyramid = match display::generate_pyramid(
         &library.inner.engine,
         cancel,
         numeric_raster,
@@ -1373,47 +1822,83 @@ pub fn publish_display(
         ramp,
         &dir,
     ) {
-        Ok(pyramid) => {
-            let display = library.display();
-            let Ok(display) = display else {
-                return;
-            };
-            let key = format!("{entity_kind}/{entity_id}/{generation_id}/{style}");
-            let _ = display.execute(
-                "INSERT INTO tilesets(key, entity_kind, entity_id, generation_id, style, dir, path_template, min_zoom, max_zoom, bounds_3857, tile_count, bytes, created_at)
-                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
-                 ON CONFLICT(key) DO UPDATE SET
-                    dir=excluded.dir, path_template=excluded.path_template,
-                    min_zoom=excluded.min_zoom, max_zoom=excluded.max_zoom,
-                    bounds_3857=excluded.bounds_3857, tile_count=excluded.tile_count,
-                    bytes=excluded.bytes",
-                rusqlite::params![
-                    key,
-                    entity_kind,
-                    entity_id,
-                    generation_id,
-                    style,
-                    dir.display().to_string(),
-                    pyramid.path_template,
-                    pyramid.min_zoom as i64,
-                    pyramid.max_zoom as i64,
-                    serde_json::to_string(&pyramid.bounds_3857).unwrap_or_default(),
-                    pyramid.tile_count as i64,
-                    pyramid.bytes as i64,
-                    now_iso(),
-                ],
-            );
-        }
+        Ok(pyramid) => pyramid,
         Err(error) => {
+            let _ = std::fs::remove_dir_all(&dir);
             tracing::warn!(
                 entity_kind,
                 entity_id,
                 generation_id,
                 error,
-                "LiDAR display rendering failed; presentation degrades without tiles"
+                "LiDAR display rendering failed; generation publication aborted"
             );
+            return Err(format!("LiDAR display rendering failed: {error}"));
         }
+    };
+    if pyramid.tile_count == 0 || pyramid.bytes == 0 {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err("LiDAR display rendering produced no tile content".to_string());
     }
+    let display = library.display().inspect_err(|_| {
+        let _ = std::fs::remove_dir_all(&dir);
+    })?;
+    let key = format!("{entity_kind}/{entity_id}/{generation_id}/{style}");
+    let bounds_json = serde_json::to_string(&pyramid.bounds_3857).map_err(|error| {
+        let _ = std::fs::remove_dir_all(&dir);
+        error.to_string()
+    })?;
+    display
+        .execute(
+            "INSERT INTO tilesets(key, entity_kind, entity_id, generation_id, style, dir, path_template, min_zoom, max_zoom, bounds_3857, tile_count, bytes, created_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+             ON CONFLICT(key) DO UPDATE SET
+                dir=excluded.dir, path_template=excluded.path_template,
+                min_zoom=excluded.min_zoom, max_zoom=excluded.max_zoom,
+                bounds_3857=excluded.bounds_3857, tile_count=excluded.tile_count,
+                bytes=excluded.bytes",
+            rusqlite::params![
+                key,
+                entity_kind,
+                entity_id,
+                generation_id,
+                style,
+                dir.display().to_string(),
+                pyramid.path_template,
+                pyramid.min_zoom as i64,
+                pyramid.max_zoom as i64,
+                bounds_json,
+                pyramid.tile_count as i64,
+                pyramid.bytes as i64,
+                now_iso(),
+            ],
+        )
+        .map_err(|error| {
+            let _ = std::fs::remove_dir_all(&dir);
+            format!("Failed to register LiDAR display tiles: {error}")
+        })?;
+    Ok(())
+}
+
+pub(crate) fn remove_display_publication(
+    library: &LidarLibrary,
+    entity_kind: &str,
+    entity_id: &str,
+    generation_id: &str,
+) {
+    if let Ok(display) = library.display() {
+        let _ = display.execute(
+            "DELETE FROM tilesets WHERE entity_kind = ?1 AND entity_id = ?2 AND generation_id = ?3",
+            rusqlite::params![entity_kind, entity_id, generation_id],
+        );
+    }
+    let generation_dir = library
+        .inner
+        .paths
+        .display_dir()
+        .join(entity_kind)
+        .join(entity_id)
+        .join(generation_id);
+    let _ = std::fs::remove_dir_all(generation_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -1428,18 +1913,22 @@ fn head_values_on_union(
     manifest: Option<&GenerationManifest>,
     union: &RasterGrid,
     nodata: f32,
+    cancel: &AtomicBool,
 ) -> Result<(Option<Vec<f32>>, Option<ValidMask>), String> {
     let Some(head) = head else {
         return Ok((None, None));
     };
     let manifest = manifest.ok_or("generation manifest is missing")?;
+    validate_working_grid(&manifest.grid, "accepted layer raster")?;
+    validate_working_grid(union, "accepted layer union")?;
     let raw = raw_f32_bytes(
         engine,
         Path::new(&head.mosaic_path),
         manifest.grid.width,
         manifest.grid.height,
+        cancel,
     )?;
-    let samples = read_f32_samples(&raw, manifest.grid.width, manifest.grid.height)?;
+    validate_f32_raw(&raw, manifest.grid.width, manifest.grid.height)?;
     let layer_mask = ValidMask::read_from(
         Path::new(&head.coverage_mask_path),
         manifest.grid.width,
@@ -1452,6 +1941,9 @@ fn head_values_on_union(
         / union.geotransform[5].abs())
     .round() as i64;
     for y in 0..manifest.grid.height {
+        if y % 256 == 0 {
+            check_cancel(cancel)?;
+        }
         let ty = offset_y + y as i64;
         if ty < 0 || ty >= union.height as i64 {
             continue;
@@ -1463,27 +1955,30 @@ fn head_values_on_union(
             }
             if layer_mask.get(x, y) {
                 expanded[ty as usize * union.width as usize + tx as usize] =
-                    samples[(y * manifest.grid.width + x) as usize];
+                    f32_sample(&raw, (y * manifest.grid.width + x) as usize);
             }
         }
     }
-    let remapped = remap_mask(&layer_mask, &manifest.grid, union)?;
+    let remapped =
+        remap_mask_checked(&layer_mask, &manifest.grid, union, |_| check_cancel(cancel))?;
     Ok((Some(expanded), Some(remapped)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn preview_tif_from_composed(
     engine: &GdalEngine,
     cancel: &AtomicBool,
     job_dir: &Path,
+    stem: &str,
     union: &RasterGrid,
     crs_wkt: &Option<String>,
     nodata: f32,
     composed: &ComposedMosaic,
 ) -> Result<PathBuf, String> {
-    let raw = job_dir.join("after-preview.raw");
+    let raw = job_dir.join(format!("after-preview-{stem}.raw"));
     write_f32_raw(&raw, &composed.values)?;
-    let tif = job_dir.join("after-preview.tif");
-    raw_to_tif(
+    let tif = job_dir.join(format!("after-preview-{stem}.tif"));
+    let converted = raw_to_tif(
         engine,
         cancel,
         &raw,
@@ -1491,8 +1986,9 @@ fn preview_tif_from_composed(
         union,
         crs_wkt.as_deref().unwrap_or(""),
         nodata,
-    )?;
+    );
     let _ = std::fs::remove_file(&raw);
+    converted?;
     Ok(tif)
 }
 
@@ -1515,7 +2011,16 @@ pub fn raw_f32_bytes(
     raster: &Path,
     width: u32,
     height: u32,
+    cancel: &AtomicBool,
 ) -> Result<Vec<u8>, String> {
+    let grid = RasterGrid {
+        width,
+        height,
+        geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+    };
+    validate_working_grid(&grid, "raw raster extraction")?;
+    let expected = usize::try_from(u64::from(width) * u64::from(height) * 4)
+        .map_err(|_| "raw raster byte count exceeds this platform".to_string())?;
     let token = grid::sha256_hex(raster.display().to_string().as_bytes());
     let token: String = token.chars().take(16).collect();
     let scratch =
@@ -1531,38 +2036,67 @@ pub fn raw_f32_bytes(
             raster.display().to_string(),
             scratch.display().to_string(),
         ],
-        None,
+        Some(cancel),
     )?;
+    let scratch_size = std::fs::metadata(&scratch)
+        .map_err(|e| format!("Failed to inspect raw raster: {e}"))?
+        .len();
+    if scratch_size != expected as u64 {
+        let _ = std::fs::remove_file(&scratch);
+        let _ = std::fs::remove_file(scratch.with_extension("raw.aux.xml"));
+        return Err(format!(
+            "raw raster buffer has {scratch_size} bytes, expected {expected}"
+        ));
+    }
     let bytes = std::fs::read(&scratch).map_err(|e| format!("Failed to read raw raster: {e}"))?;
     let _ = std::fs::remove_file(&scratch);
     let _ = std::fs::remove_file(scratch.with_extension("raw.aux.xml"));
-    let expected = width as usize * height as usize * 4;
-    if bytes.len() < expected {
-        return Err(format!(
-            "raw raster buffer has {} bytes, expected {expected}",
-            bytes.len()
-        ));
-    }
     Ok(bytes)
 }
 
-pub fn read_f32_samples(raw: &[u8], width: u32, height: u32) -> Result<Vec<f32>, String> {
-    let expected = width as usize * height as usize;
-    if raw.len() < expected * 4 {
-        return Err("raw buffer too small".to_string());
+fn validate_f32_raw(raw: &[u8], width: u32, height: u32) -> Result<(), String> {
+    let expected = usize::try_from(u64::from(width) * u64::from(height) * 4)
+        .map_err(|_| "raw buffer dimensions exceed this platform".to_string())?;
+    if raw.len() != expected {
+        return Err(format!(
+            "raw buffer has {} bytes, expected {expected}",
+            raw.len()
+        ));
     }
-    Ok(raw[..expected * 4]
-        .chunks_exact(4)
-        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-        .collect())
+    Ok(())
+}
+
+fn f32_sample(raw: &[u8], index: usize) -> f32 {
+    let offset = index * 4;
+    f32::from_le_bytes([
+        raw[offset],
+        raw[offset + 1],
+        raw[offset + 2],
+        raw[offset + 3],
+    ])
+}
+
+fn check_optional_cancel(cancel: Option<&AtomicBool>, row: u32) -> Result<(), String> {
+    if row.is_multiple_of(256)
+        && let Some(cancel) = cancel
+    {
+        check_cancel(cancel)?;
+    }
+    Ok(())
 }
 
 pub fn write_f32_raw(path: &Path, values: &[f32]) -> Result<(), String> {
-    let mut bytes = Vec::with_capacity(values.len() * 4);
+    let file =
+        std::fs::File::create(path).map_err(|e| format!("Failed to create raw buffer: {e}"))?;
+    let mut output = std::io::BufWriter::new(file);
     for value in values {
-        bytes.extend_from_slice(&value.to_le_bytes());
+        output
+            .write_all(&value.to_le_bytes())
+            .map_err(|e| format!("Failed to write raw buffer: {e}"))?;
     }
-    std::fs::write(path, bytes).map_err(|e| format!("Failed to write raw buffer: {e}"))
+    output
+        .flush()
+        .map_err(|e| format!("Failed to flush raw buffer: {e}"))
 }
 
 /// Convert a raw Float32 buffer into a georeferenced tiled GeoTIFF.
@@ -1638,35 +2172,23 @@ pub fn raster_bounds_3857(
         .iter()
         .map(|(x, y)| format!("{x} {y}\n"))
         .collect::<String>();
-    let tools = engine.discover()?;
-    let mut child = std::process::Command::new(&tools.gdaltransform)
-        .arg("-s_srs")
-        .arg(crs_wkt)
-        .arg("-t_srs")
-        .arg("EPSG:3857")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Failed to start gdaltransform: {e}"))?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        let _ = stdin.write_all(input.as_bytes());
-    }
-    drop(child.stdin.take());
-    let mut output = String::new();
-    if let Some(stdout) = child.stdout.as_mut() {
-        let _ = stdout.read_to_string(&mut output);
-    }
-    let status = child.wait();
-    if !status.map(|s| s.success()).unwrap_or(false) {
-        return Err("gdaltransform failed to project layer bounds".to_string());
-    }
+    let output = engine.run_with_input(
+        GdalProgram::Transform,
+        &[
+            "-s_srs".to_string(),
+            crs_wkt.to_string(),
+            "-t_srs".to_string(),
+            "EPSG:3857".to_string(),
+        ],
+        input.as_bytes(),
+        Some(cancel),
+    )?;
     check_cancel(cancel)?;
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
     let mut max_y = f64::NEG_INFINITY;
-    for line in output.lines() {
+    for line in output.stdout.lines() {
         let parts: Vec<f64> = line
             .split_whitespace()
             .filter_map(|v| v.parse::<f64>().ok())
@@ -1684,19 +2206,26 @@ pub fn raster_bounds_3857(
     Ok([min_x, min_y, max_x, max_y])
 }
 
-fn probe_gdalinfo(engine: &GdalEngine, raster: &Path) -> Result<String, String> {
+fn probe_gdalinfo(
+    engine: &GdalEngine,
+    raster: &Path,
+    cancel: &AtomicBool,
+) -> Result<String, String> {
     let output = engine.run(
         GdalProgram::Info,
         &["-json".to_string(), raster.display().to_string()],
-        None,
+        Some(cancel),
     )?;
     Ok(output.stdout)
 }
 
-fn raw_value_range(raw: &[u8]) -> [f64; 2] {
+fn raw_value_range(raw: &[u8], cancel: &AtomicBool) -> Result<[f64; 2], String> {
     let mut min = f64::INFINITY;
     let mut max = f64::NEG_INFINITY;
-    for chunk in raw.chunks_exact(4) {
+    for (index, chunk) in raw.chunks_exact(4).enumerate() {
+        if index % (256 * 1024) == 0 {
+            check_cancel(cancel)?;
+        }
         let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         if value.is_finite() {
             min = min.min(value as f64);
@@ -1704,9 +2233,9 @@ fn raw_value_range(raw: &[u8]) -> [f64; 2] {
         }
     }
     if !min.is_finite() {
-        [0.0, 0.0]
+        Ok([0.0, 0.0])
     } else {
-        [min, max]
+        Ok([min, max])
     }
 }
 
@@ -1762,6 +2291,61 @@ mod tests {
     use super::*;
 
     #[test]
+    fn dense_grid_limit_rejects_extent_explosion_before_allocation() {
+        let allowed = RasterGrid {
+            width: 5_000,
+            height: 5_000,
+            geotransform: [0.0, 1.0, 0.0, 5_000.0, 0.0, -1.0],
+        };
+        assert!(validate_working_grid(&allowed, "test").is_ok());
+        let oversized = RasterGrid {
+            width: 5_001,
+            ..allowed
+        };
+        let error = validate_working_grid(&oversized, "test").unwrap_err();
+        assert!(error.contains("current dense raster engine limit"));
+    }
+
+    #[test]
+    fn source_selection_caps_count_and_bytes_before_staging() {
+        let too_many = vec![PathBuf::from("unused"); MAX_SOURCE_FILES_PER_IMPORT + 1];
+        assert!(
+            validate_source_selection(&too_many)
+                .unwrap_err()
+                .contains("at most")
+        );
+
+        let path = std::env::temp_dir().join(new_id("canopi-oversized-source"));
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_SOURCE_FILE_BYTES + 1).unwrap();
+        let error = validate_source_selection(std::slice::from_ref(&path)).unwrap_err();
+        assert!(error.contains("per-source limit"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn managed_original_is_streamed_and_existing_content_is_verified() {
+        let root = std::env::temp_dir().join(new_id("canopi-managed-source-test"));
+        let paths = LidarPaths::open(&root).unwrap();
+        let job_dir = paths.job_dir("job");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let source = root.join("extensionless-source");
+        std::fs::write(&source, b"canopi raster bytes").unwrap();
+
+        let (sha256, managed, size) =
+            stage_managed_original(&paths, &source, &job_dir, "extensionless-source").unwrap();
+        assert_eq!(size, 19);
+        assert_eq!(std::fs::read(&managed).unwrap(), b"canopi raster bytes");
+        assert_eq!(hash_file_limited(&managed).unwrap().0, sha256);
+
+        std::fs::write(&managed, b"corrupt").unwrap();
+        let error =
+            stage_managed_original(&paths, &source, &job_dir, "extensionless-source").unwrap_err();
+        assert!(error.contains("failed integrity verification"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn geotransform_storage_round_trips_and_reads_legacy_rows() {
         let transform = [445999.75, 0.5, 0.0, 6807000.25, 0.0, -0.5];
         assert_eq!(
@@ -1803,6 +2387,7 @@ mod tests {
         MemberSource {
             interpretation_id: format!("interp-{name}"),
             role: role.to_string(),
+            job_id: None,
             grid: grid.clone(),
             raw_samples_path: raw,
             valid_mask_path: mask,
@@ -1823,19 +2408,19 @@ mod tests {
         let dir = std::env::temp_dir().join("canopi-replay-test");
         // First member: add covers both cells (1.0, 2.0).
         let first = member_fixture(&dir, "m1", &grid, "add", &[1.0, 2.0]);
-        let mosaic = replay_members(std::slice::from_ref(&first), &grid, -99999.0).unwrap();
+        let mosaic = replay_members(std::slice::from_ref(&first), &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
 
         // Second member: add only paints where the first left invalid.
         let second = member_fixture(&dir, "m2", &grid, "add", &[9.0, 3.0]);
-        let mosaic = replay_members(&[first.clone(), second], &grid, -99999.0).unwrap();
+        let mosaic = replay_members(&[first.clone(), second], &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
 
         // Replace member paints over accepted coverage.
         let third = member_fixture(&dir, "m3", &grid, "replace", &[7.0, 8.0]);
-        let mosaic = replay_members(&[first, third], &grid, -99999.0).unwrap();
+        let mosaic = replay_members(&[first, third], &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 7.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 8.0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -1853,7 +2438,8 @@ mod tests {
         let first = member_fixture(&dir, "a", &grid, "add", &[1.0, -9999.0]);
         // Second import would cover both; accepted as uncovered-additions only.
         let second = member_fixture(&dir, "b", &grid, "add", &[9.0, 3.0]);
-        let with_both = replay_members(&[first.clone(), second.clone()], &grid, -99999.0).unwrap();
+        let with_both =
+            replay_members(&[first.clone(), second.clone()], &grid, -99999.0, None).unwrap();
         assert_eq!(
             sample(&with_both, &grid, 0, 0),
             1.0,
@@ -1867,7 +2453,7 @@ mod tests {
         assert_eq!(with_both.valid.count_valid(), 2);
 
         // Undo the second import: replay only the first member.
-        let after_undo = replay_members(&[first], &grid, -99999.0).unwrap();
+        let after_undo = replay_members(&[first], &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&after_undo, &grid, 0, 0), 1.0);
         assert_eq!(
             after_undo.valid.count_valid(),
@@ -1888,7 +2474,7 @@ mod tests {
         let first = member_fixture(&dir, "base", &grid, "add", &[5.0, 6.0]);
         // Replace member whose second cell is nodata: cell 1 must keep 6.0.
         let replacer = member_fixture(&dir, "repl", &grid, "replace", &[4.0, -9999.0]);
-        let mosaic = replay_members(&[first, replacer], &grid, -99999.0).unwrap();
+        let mosaic = replay_members(&[first, replacer], &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 4.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 6.0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -1915,7 +2501,7 @@ mod tests {
             "replace-overlap",
             &[7.0, 8.0],
         );
-        let mosaic = replay_members(&[base, incoming], &incoming_grid, -99999.0).unwrap();
+        let mosaic = replay_members(&[base, incoming], &incoming_grid, -99999.0, None).unwrap();
         assert_eq!(sample(&mosaic, &incoming_grid, 0, 0), 7.0);
         assert_eq!(mosaic.valid.count_valid(), 1);
         assert!(!mosaic.valid.get(1, 0));

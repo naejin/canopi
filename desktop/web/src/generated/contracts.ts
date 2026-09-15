@@ -221,6 +221,17 @@ export type LidarGenerationHistoryEntry = {
 	is_head: boolean,
 };
 
+/**
+ *  Decision-specific comparison rendered from the same staged import that
+ *  will be applied. Both images use one value scale.
+ */
+export type LidarImportDecisionPreview = {
+	add_uncovered: boolean,
+	replace_overlap: boolean,
+	before_preview_path: string | null,
+	after_preview_path: string,
+};
+
 export type LidarImportJob = {
 	job_id: string,
 	layer_id: string,

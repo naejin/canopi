@@ -339,6 +339,8 @@ impl ZoomGrid {
     }
 }
 
+// GDAL metadata helpers remain beside their consumers below these grid tests.
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;

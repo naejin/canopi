@@ -203,6 +203,8 @@ fn bounds_3857_to_wgs84(bounds: [f64; 4]) -> [f64; 4] {
     ]
 }
 
+// Parsing helpers remain grouped below the presentation regression tests.
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::bounds_3857_to_wgs84;

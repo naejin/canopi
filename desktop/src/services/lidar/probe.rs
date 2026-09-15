@@ -14,6 +14,10 @@ pub struct RasterProbe {
     pub band_count: u32,
     pub band_type: String,
     pub nodata: Option<f32>,
+    pub scale: f64,
+    pub offset: f64,
+    pub unit: Option<String>,
+    pub mask_flags: Vec<String>,
     pub geotransform: [f64; 6],
     pub crs_wkt: String,
 }
@@ -35,6 +39,16 @@ struct ProbeBand {
     #[serde(rename = "type")]
     band_type: Option<String>,
     noDataValue: Option<serde_json::Value>,
+    scale: Option<f64>,
+    offset: Option<f64>,
+    unit: Option<String>,
+    mask: Option<ProbeMask>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProbeMask {
+    #[serde(default)]
+    flags: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -100,6 +114,14 @@ pub fn parse_gdalinfo_json(json: &str) -> Result<RasterProbe, String> {
         band_count: bands.len() as u32,
         band_type,
         nodata,
+        scale: first.scale.unwrap_or(1.0),
+        offset: first.offset.unwrap_or(0.0),
+        unit: first.unit.clone().filter(|unit| !unit.trim().is_empty()),
+        mask_flags: first
+            .mask
+            .as_ref()
+            .map(|mask| mask.flags.clone())
+            .unwrap_or_default(),
         geotransform,
         crs_wkt,
     })
@@ -119,11 +141,6 @@ fn is_numeric_band_type(band_type: &str) -> bool {
             | "Float16"
             | "Float32"
             | "Float64"
-            | "CInt16"
-            | "CInt32"
-            | "CFloat16"
-            | "CFloat32"
-            | "CFloat64"
     )
 }
 
@@ -153,6 +170,9 @@ mod tests {
         assert_eq!(probe.width, 2000);
         assert_eq!(probe.band_type, "Float32");
         assert_eq!(probe.nodata, Some(-9999.0));
+        assert_eq!(probe.scale, 1.0);
+        assert_eq!(probe.offset, 0.0);
+        assert_eq!(probe.mask_flags, vec!["DATASET"]);
         assert_eq!(probe.geotransform[1], 0.5);
         assert_eq!(probe.band_count, 1);
     }
@@ -188,5 +208,43 @@ mod tests {
         }"#;
         let error = parse_gdalinfo_json(json).unwrap_err();
         assert!(error.contains("not georeferenced"));
+    }
+
+    #[test]
+    fn captures_scale_offset_unit_and_mask_metadata() {
+        let json = r#"{
+            "driverShortName": "GTiff",
+            "size": [4, 4],
+            "geoTransform": [0, 1, 0, 4, 0, -1],
+            "coordinateSystem": {"wkt": "x"},
+            "bands": [{
+                "type": "Int16",
+                "scale": 0.01,
+                "offset": 12.0,
+                "unit": "metre",
+                "mask": {"flags": ["PER_DATASET"]}
+            }]
+        }"#;
+        let probe = parse_gdalinfo_json(json).unwrap();
+        assert_eq!(probe.scale, 0.01);
+        assert_eq!(probe.offset, 12.0);
+        assert_eq!(probe.unit.as_deref(), Some("metre"));
+        assert_eq!(probe.mask_flags, vec!["PER_DATASET"]);
+    }
+
+    #[test]
+    fn rejects_complex_numeric_bands() {
+        let json = r#"{
+            "driverShortName": "GTiff",
+            "size": [4, 4],
+            "geoTransform": [0, 1, 0, 4, 0, -1],
+            "coordinateSystem": {"wkt": "x"},
+            "bands": [{"type": "CFloat32"}]
+        }"#;
+        assert!(
+            parse_gdalinfo_json(json)
+                .unwrap_err()
+                .contains("not a supported numeric")
+        );
     }
 }

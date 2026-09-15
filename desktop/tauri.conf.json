@@ -23,7 +23,9 @@
           "$APPDATA/image-cache/**",
           "$APPDATA/lidar/display/**",
           "$APPDATA/lidar/jobs/*/preview-before.png",
-          "$APPDATA/lidar/jobs/*/preview-after.png"
+          "$APPDATA/lidar/jobs/*/preview-after.png",
+          "$APPDATA/lidar/jobs/*/preview-before-??.png",
+          "$APPDATA/lidar/jobs/*/preview-after-??.png"
         ]
       },
       "csp": {

@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 3;
+pub const CATALOGUE_VERSION: i32 = 4;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -55,6 +55,7 @@ fn migrate(connection: &Connection) -> Result<(), String> {
             1 => SCHEMA_V1,
             2 => SCHEMA_V2,
             3 => SCHEMA_V3,
+            4 => "",
             _ => unreachable!("catalogue migration gap"),
         };
         transaction
@@ -67,6 +68,14 @@ fn migrate(connection: &Connection) -> Result<(), String> {
                     [],
                 )
                 .map_err(|e| format!("Failed to add LiDAR acceptance job identity: {e}"))?;
+        }
+        if next == 4 && !table_has_column(&transaction, "lidar_generation_members", "job_id")? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_generation_members ADD COLUMN job_id TEXT",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add LiDAR member job identity: {e}"))?;
         }
         transaction
             .execute(
@@ -529,20 +538,25 @@ pub fn get_interpretation(
         .map_err(|e| e.to_string())
 }
 
-/// Ordered accepted members of a generation with their acceptance roles.
+/// Ordered accepted members of a generation with their acceptance roles and
+/// originating import jobs. Legacy members may not have job identity.
 pub fn generation_members(
     connection: &Connection,
     generation_id: &str,
-) -> Result<Vec<(String, String)>, String> {
+) -> Result<Vec<(String, String, Option<String>)>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT interpretation_id, role FROM lidar_generation_members
+            "SELECT interpretation_id, role, job_id FROM lidar_generation_members
              WHERE generation_id = ?1 ORDER BY ordinal",
         )
         .map_err(|e| e.to_string())?;
     let rows = statement
         .query_map([generation_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
@@ -732,7 +746,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn migration_recovers_an_unversioned_v2_column_and_commits_v3_atomically() {
+    fn migration_recovers_an_unversioned_v2_column_and_commits_followups_atomically() {
         let dir = std::env::temp_dir().join(new_id("canopi-migration-test"));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("catalogue.sqlite");
@@ -769,6 +783,7 @@ mod tests {
             .unwrap();
         assert_eq!(version, CATALOGUE_VERSION.to_string());
         assert!(table_has_column(&reopened, "lidar_acceptance_regions", "job_id",).unwrap());
+        assert!(table_has_column(&reopened, "lidar_generation_members", "job_id",).unwrap());
         drop(reopened);
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -807,8 +822,8 @@ mod tests {
         assert_eq!(
             generation_members(&connection, "generation").unwrap(),
             vec![
-                ("interp".to_string(), "add".to_string()),
-                ("interp".to_string(), "replace".to_string()),
+                ("interp".to_string(), "add".to_string(), None),
+                ("interp".to_string(), "replace".to_string(), None),
             ]
         );
         drop(connection);

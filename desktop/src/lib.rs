@@ -115,6 +115,7 @@ pub fn run() {
             commands::lidar::lidar_delete_layer,
             commands::lidar::lidar_stage_import,
             commands::lidar::lidar_get_import_job,
+            commands::lidar::lidar_preview_import_decision,
             commands::lidar::lidar_apply_import,
             commands::lidar::lidar_cancel_import,
             commands::lidar::lidar_create_analysis,

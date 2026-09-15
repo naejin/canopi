@@ -662,6 +662,30 @@ impl LidarLibrary {
         serde_json::from_str(&staging_json).map_err(|e| format!("Invalid staging data: {e}"))
     }
 
+    pub fn preview_import_decision(
+        &self,
+        job_id: &str,
+        add_uncovered: bool,
+        replace_overlap: bool,
+    ) -> Result<common_types::lidar::LidarImportDecisionPreview, String> {
+        let state = {
+            let connection = self.catalogue()?;
+            catalogue::get_import_job(&connection, job_id)?
+                .ok_or_else(|| format!("Import job {job_id} does not exist"))?
+                .state
+        };
+        if state != "awaiting_review" {
+            return Err(format!("Import job is not awaiting review (state {state})"));
+        }
+        let staging_json =
+            std::fs::read_to_string(self.inner.paths.job_dir(job_id).join("staging.json"))
+                .map_err(|e| format!("Staged import data is missing: {e}"))?;
+        let staging: import::StagedImport = serde_json::from_str(&staging_json)
+            .map_err(|e| format!("Invalid staging data: {e}"))?;
+        let cancel = AtomicBool::new(false);
+        import::render_decision_preview(self, &staging, add_uncovered, replace_overlap, &cancel)
+    }
+
     /// Spawn apply: compose the mosaic, publish the generation and refresh
     /// dependent analyses.
     pub fn begin_apply(
@@ -999,6 +1023,9 @@ fn delete_analysis_rows(connection: &Connection, definition_id: &str) -> Result<
     Ok(())
 }
 
+// Runtime helpers remain below this large in-file regression module so the
+// production service implementation above stays contiguous.
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;

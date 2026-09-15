@@ -109,11 +109,21 @@ impl ValidMask {
 
     /// Morphological erosion by one cell: cells whose full 3×3 neighborhood is
     /// not valid become invalid. Used for neighborhood-operator quality masks.
+    #[cfg(test)]
     pub fn eroded(&self) -> ValidMask {
+        self.eroded_checked(|_| Ok(()))
+            .expect("the infallible erosion checkpoint cannot fail")
+    }
+
+    pub fn eroded_checked(
+        &self,
+        mut checkpoint: impl FnMut(u32) -> Result<(), String>,
+    ) -> Result<ValidMask, String> {
         let mut out = ValidMask::empty(self.width, self.height);
         let width = self.width;
         let height = self.height;
         for y in 0..height {
+            checkpoint(y)?;
             for x in 0..width {
                 let mut complete = true;
                 for dy in -1i64..=1 {
@@ -133,7 +143,7 @@ impl ValidMask {
                 out.set(x, y, complete);
             }
         }
-        out
+        Ok(out)
     }
 
     pub fn write_to(&self, path: &std::path::Path) -> Result<(), String> {
@@ -151,14 +161,25 @@ impl ValidMask {
 /// Build the exact valid-data mask from a little-endian Float32 raw buffer
 /// (ENVI BSQ single band). Validity order: finite check, then declared NoData
 /// comparison in raw value space.
+#[cfg(test)]
 pub fn valid_mask_from_f32_raw(
     width: u32,
     height: u32,
     raw: &[u8],
     nodata: Option<f32>,
 ) -> Result<ValidMask, String> {
+    valid_mask_from_f32_raw_checked(width, height, raw, nodata, |_| Ok(()))
+}
+
+pub fn valid_mask_from_f32_raw_checked(
+    width: u32,
+    height: u32,
+    raw: &[u8],
+    nodata: Option<f32>,
+    mut checkpoint: impl FnMut(u32) -> Result<(), String>,
+) -> Result<ValidMask, String> {
     let expected = width as usize * height as usize * 4;
-    if raw.len() < expected {
+    if raw.len() != expected {
         return Err(format!(
             "raw raster buffer has {} bytes, expected {expected}",
             raw.len()
@@ -166,6 +187,7 @@ pub fn valid_mask_from_f32_raw(
     }
     let mut mask = ValidMask::empty(width, height);
     for y in 0..height {
+        checkpoint(y)?;
         for x in 0..width {
             let index = y as usize * width as usize + x as usize;
             let sample = f32::from_le_bytes([
@@ -261,10 +283,20 @@ pub fn union_grid(a: &RasterGrid, b: &RasterGrid) -> Result<RasterGrid, String> 
 
 /// Place a mask defined on `from` into a buffer defined on `to`; cells of
 /// `to` outside `from` stay invalid.
+#[cfg(test)]
 pub fn remap_mask(
     mask: &ValidMask,
     from: &RasterGrid,
     to: &RasterGrid,
+) -> Result<ValidMask, String> {
+    remap_mask_checked(mask, from, to, |_| Ok(()))
+}
+
+pub fn remap_mask_checked(
+    mask: &ValidMask,
+    from: &RasterGrid,
+    to: &RasterGrid,
+    mut checkpoint: impl FnMut(u32) -> Result<(), String>,
 ) -> Result<ValidMask, String> {
     to.compatible(from)?;
     let mut out = ValidMask::empty(to.width, to.height);
@@ -272,6 +304,7 @@ pub fn remap_mask(
     let offset_x = ((from.geotransform[0] - to.geotransform[0]) / px_w).round() as i64;
     let offset_y = ((to.geotransform[3] - from.geotransform[3]) / px_h).round() as i64;
     for y in 0..mask.height {
+        checkpoint(y)?;
         let ty = offset_y + y as i64;
         if ty < 0 || ty >= to.height as i64 {
             continue;

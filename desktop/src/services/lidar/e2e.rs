@@ -9,6 +9,107 @@ use super::*;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
+fn assert_png_has_visible_pixels(engine: &engine::GdalEngine, path: &std::path::Path) {
+    assert!(path.is_file(), "PNG is missing: {}", path.display());
+    let output = engine
+        .run(
+            engine::GdalProgram::Info,
+            &[
+                "-json".to_string(),
+                "-stats".to_string(),
+                path.display().to_string(),
+            ],
+            None,
+        )
+        .expect("PNG opens through GDAL");
+    let info: serde_json::Value = serde_json::from_str(&output.stdout).expect("PNG info is JSON");
+    let alpha = info["bands"]
+        .as_array()
+        .and_then(|bands| {
+            bands
+                .iter()
+                .find(|band| band["colorInterpretation"].as_str() == Some("Alpha"))
+        })
+        .expect("PNG has an alpha band");
+    let maximum = alpha["metadata"][""]["STATISTICS_MAXIMUM"]
+        .as_str()
+        .and_then(|value| value.parse::<f64>().ok())
+        .or_else(|| alpha["maximum"].as_f64())
+        .expect("alpha statistics include a maximum");
+    assert!(
+        maximum > 0.0,
+        "PNG is fully transparent: {}",
+        path.display()
+    );
+}
+
+fn assert_tileset_has_visible_pixels(
+    engine: &engine::GdalEngine,
+    tileset: &common_types::lidar::LidarTileset,
+) {
+    let directory = std::path::Path::new(&tileset.path_template)
+        .parent()
+        .expect("tileset template has a parent");
+    let mut pngs = std::fs::read_dir(directory)
+        .expect("tileset directory exists")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("png"))
+        .collect::<Vec<_>>();
+    assert!(!pngs.is_empty(), "tileset directory contains PNG files");
+    pngs.sort_by_key(|path| {
+        std::fs::metadata(path)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0)
+    });
+    assert_png_has_visible_pixels(engine, pngs.last().expect("largest tile exists"));
+}
+
+fn assert_known_slope(engine: &engine::GdalEngine, root: &std::path::Path, cancel: &AtomicBool) {
+    let raw_path = root.join("known-slope.raw");
+    let source_path = root.join("known-slope.tif");
+    let result_path = root.join("known-slope-result.tif");
+    let values = (0..5)
+        .flat_map(|_| (0..5).map(|x| x as f32))
+        .collect::<Vec<_>>();
+    import::write_f32_raw(&raw_path, &values).expect("known plane raw writes");
+    import::raw_to_tif(
+        engine,
+        cancel,
+        &raw_path,
+        &source_path,
+        &grid::RasterGrid {
+            width: 5,
+            height: 5,
+            geotransform: [0.0, 1.0, 0.0, 5.0, 0.0, -1.0],
+        },
+        "EPSG:3857",
+        -9999.0,
+    )
+    .expect("known plane converts to GeoTIFF");
+    engine
+        .run(
+            engine::GdalProgram::Dem,
+            &[
+                "slope".to_string(),
+                "-s".to_string(),
+                "1".to_string(),
+                "-q".to_string(),
+                source_path.display().to_string(),
+                result_path.display().to_string(),
+            ],
+            Some(cancel),
+        )
+        .expect("known slope computes");
+    let raw =
+        import::raw_f32_bytes(engine, &result_path, 5, 5, cancel).expect("known slope reads back");
+    let center = f32::from_le_bytes(raw[48..52].try_into().unwrap());
+    assert!(
+        (center - 45.0).abs() < 0.01,
+        "one metre rise per horizontal metre must produce 45°, got {center}"
+    );
+}
+
 fn fixture_mnt() -> Option<PathBuf> {
     let downloads = dirs_home().join("Downloads");
     let dir = downloads.join("LHD_FXX_0446_6807_MNT_O_0M50_LAMB93_IGN69");
@@ -34,6 +135,8 @@ fn e2e_import_publish_slope_restart_reuse() {
     let work = std::env::temp_dir().join(format!("canopi-lidar-e2e-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
+    let cancel = AtomicBool::new(false);
+    assert_known_slope(&engine, &work, &cancel);
 
     // Open the library (slice 1: catalogue + assets under app data root).
     let library = LidarLibrary::open(&work).expect("library opens");
@@ -47,7 +150,6 @@ fn e2e_import_publish_slope_restart_reuse() {
         .expect("layer created");
 
     // 2. Stage the real TIFF: probe, valid mask, classification, previews.
-    let cancel = AtomicBool::new(false);
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
     let output = import::stage_import(
         &library,
@@ -75,6 +177,10 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert!(
         review.after_preview_path.is_some(),
         "after preview rendered"
+    );
+    assert_png_has_visible_pixels(
+        &engine,
+        std::path::Path::new(review.after_preview_path.as_deref().unwrap()),
     );
     println!(
         "staged: uncovered={} overlap={} invalid={}",
@@ -115,6 +221,7 @@ fn e2e_import_publish_slope_restart_reuse() {
             .any(|t| t.style == "elevation" && t.max_zoom >= t.min_zoom)
     );
     assert!(!layer.tilesets.is_empty(), "display pyramid registered");
+    assert_tileset_has_visible_pixels(&engine, &layer.tilesets[0]);
 
     // 4. One persisted slope result via the analysis pipeline.
     let receipt = library
@@ -178,6 +285,7 @@ fn e2e_import_publish_slope_restart_reuse() {
         analysis.tilesets.iter().any(|t| t.style == "slope"),
         "slope tileset registered"
     );
+    assert_tileset_has_visible_pixels(&engine, &analysis.tilesets[0]);
     println!("analysis ready: {:?}", analysis.value_range);
 
     // 5. Restart reuse: reopen the library; layers, results, tilesets and
@@ -195,6 +303,8 @@ fn e2e_import_publish_slope_restart_reuse() {
         !snapshot.analyses[0].tilesets.is_empty(),
         "tilesets survive restart"
     );
+    assert_tileset_has_visible_pixels(&engine, &snapshot.layers[0].tilesets[0]);
+    assert_tileset_has_visible_pixels(&engine, &snapshot.analyses[0].tilesets[0]);
     let engine_status = reopened.engine_status();
     assert!(engine_status.available);
     assert_eq!(
@@ -209,6 +319,97 @@ fn e2e_import_publish_slope_restart_reuse() {
     let snapshot = reopened.library_snapshot().expect("snapshot after rename");
     assert_eq!(snapshot.layers[0].name, "IGN ground renamed");
     assert_eq!(snapshot.analyses[0].source_layer_id, layer_id);
+
+    // Reimport the identical source as overlap-only replacement. The
+    // decision preview must match those choices and use readable images.
+    let replacement_job = reopened
+        .record_import_job(&layer_id)
+        .expect("replacement job");
+    let replacement = import::stage_import(
+        &reopened,
+        &replacement_job,
+        &layer_id,
+        std::slice::from_ref(&fixture),
+        &cancel,
+    )
+    .expect("replacement staging succeeds");
+    assert_eq!(replacement.review.uncovered_cells, 0);
+    assert!(replacement.review.overlap_cells > 3_000_000);
+    reopened.finish_staging(
+        &replacement_job,
+        Ok(import::StagingOutput {
+            review: replacement.review.clone(),
+        }),
+    );
+    let staged_replacement: import::StagedImport = serde_json::from_str(
+        &std::fs::read_to_string(
+            reopened
+                .inner
+                .paths
+                .job_dir(&replacement_job)
+                .join("staging.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let decision = reopened
+        .preview_import_decision(&replacement_job, false, true)
+        .expect("overlap-only decision preview renders");
+    assert!(!decision.add_uncovered);
+    assert!(decision.replace_overlap);
+    assert_png_has_visible_pixels(
+        &engine,
+        std::path::Path::new(decision.before_preview_path.as_deref().unwrap()),
+    );
+    assert_png_has_visible_pixels(&engine, std::path::Path::new(&decision.after_preview_path));
+    reopened
+        .prepare_apply(&replacement_job)
+        .expect("replacement review accepted");
+    let replacement_outcome =
+        import::apply_import(&reopened, &staged_replacement, false, true, &cancel)
+            .expect("same-file replacement publishes");
+    assert!(replacement_outcome.changed);
+    let replacement_head = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .unwrap()
+    };
+    let members = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::generation_members(&connection, &replacement_head.id).unwrap()
+    };
+    assert_eq!(members.len(), 2);
+    assert_eq!(members[0].2.as_deref(), Some(job_id.as_str()));
+    assert_eq!(members[1].2.as_deref(), Some(replacement_job.as_str()));
+
+    // Undo removes the selected replacement occurrence and keeps the first
+    // identical import, including its spatial footprint and visible tiles.
+    let undo = import::undo_import(&reopened, &replacement_job, &cancel)
+        .expect("replacement undo publishes");
+    assert!(undo.changed);
+    let after_undo = reopened.library_snapshot().expect("snapshot after undo");
+    assert!(after_undo.layers[0].coverage_cells > 3_000_000);
+    assert_tileset_has_visible_pixels(&engine, &after_undo.layers[0].tilesets[0]);
+    let undo_head = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .unwrap()
+    };
+    let remaining = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::generation_members(&connection, &undo_head.id).unwrap()
+    };
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].2.as_deref(), Some(job_id.as_str()));
+
+    reopened
+        .delete_layer(&layer_id)
+        .expect("complete layer graph deletes");
+    let deleted = reopened.library_snapshot().expect("snapshot after delete");
+    assert!(deleted.layers.is_empty());
+    assert!(deleted.analyses.is_empty());
 
     let _ = std::fs::remove_dir_all(&work);
 }

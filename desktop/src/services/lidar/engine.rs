@@ -6,6 +6,7 @@
 //! cancellation flag while a child process runs. Engine detection results are
 //! recorded so manifests can prove which engine produced a numeric output.
 
+use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +15,7 @@ use std::time::{Duration, Instant};
 
 const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(600);
 const MAX_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
+const MAX_OUTPUT_FILE_BYTES: u64 = (MAX_OUTPUT_BYTES as u64) * 2;
 const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone)]
@@ -90,6 +92,7 @@ impl GdalEngine {
             &gdalinfo,
             &["--version".to_string()],
             None,
+            None,
             DEFAULT_PROCESS_TIMEOUT,
         )?;
         let mut tools = tools;
@@ -114,13 +117,39 @@ impl GdalEngine {
             GdalProgram::Translate => tools.gdal_translate,
             GdalProgram::Warp => tools.gdalwarp,
             GdalProgram::Dem => tools.gdaldem,
+            GdalProgram::Transform => tools.gdaltransform,
         };
-        Self::run_once(&path, args, cancel, DEFAULT_PROCESS_TIMEOUT)
+        Self::run_once(&path, args, None, cancel, DEFAULT_PROCESS_TIMEOUT)
+    }
+
+    /// Run a GDAL tool with a small caller-owned stdin payload. This keeps
+    /// transform operations under the same timeout, cancellation and output
+    /// limits as every other engine command.
+    pub fn run_with_input(
+        &self,
+        program: GdalProgram,
+        args: &[String],
+        input: &[u8],
+        cancel: Option<&AtomicBool>,
+    ) -> Result<RunOutput, String> {
+        if input.len() > MAX_OUTPUT_BYTES {
+            return Err("raster process input exceeds the adapter limit".to_string());
+        }
+        let tools = self.discover()?;
+        let path = match program {
+            GdalProgram::Info => tools.gdalinfo,
+            GdalProgram::Translate => tools.gdal_translate,
+            GdalProgram::Warp => tools.gdalwarp,
+            GdalProgram::Dem => tools.gdaldem,
+            GdalProgram::Transform => tools.gdaltransform,
+        };
+        Self::run_once(&path, args, Some(input), cancel, DEFAULT_PROCESS_TIMEOUT)
     }
 
     fn run_once(
         path: &std::path::Path,
         args: &[String],
+        input: Option<&[u8]>,
         cancel: Option<&AtomicBool>,
         timeout: Duration,
     ) -> Result<RunOutput, String> {
@@ -139,14 +168,38 @@ impl GdalEngine {
             .map_err(|e| format!("Failed to create engine error file: {e}"))?;
         let child = Command::new(path)
             .args(args)
-            .stdin(Stdio::null())
+            .stdin(if input.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::from(stdout_file))
             .stderr(Stdio::from(stderr_file))
             .spawn()
             .map_err(|e| format!("Failed to start {}: {e}", path.display()))?;
         let mut child = child;
+        if let Some(input) = input {
+            let write_result = match child.stdin.as_mut() {
+                Some(stdin) => stdin.write_all(input),
+                None => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let _ = std::fs::remove_file(&stdout_path);
+                    let _ = std::fs::remove_file(&stderr_path);
+                    return Err("Failed to open raster process input".to_string());
+                }
+            };
+            drop(child.stdin.take());
+            if let Err(error) = write_result {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = std::fs::remove_file(&stdout_path);
+                let _ = std::fs::remove_file(&stderr_path);
+                return Err(format!("Failed to write raster process input: {error}"));
+            }
+        }
 
-        let status = wait_cancellable(&mut child, cancel, timeout);
+        let status = wait_cancellable(&mut child, cancel, timeout, [&stdout_path, &stderr_path]);
         let status = match status {
             Ok(status) => status,
             Err(error) => {
@@ -192,6 +245,7 @@ pub enum GdalProgram {
     Translate,
     Warp,
     Dem,
+    Transform,
 }
 
 #[derive(Debug)]
@@ -207,6 +261,7 @@ fn wait_cancellable(
     child: &mut Child,
     cancel: Option<&AtomicBool>,
     timeout: Duration,
+    output_paths: [&std::path::Path; 2],
 ) -> Result<std::process::ExitStatus, String> {
     let started = Instant::now();
     loop {
@@ -224,6 +279,15 @@ fn wait_cancellable(
             let _ = child.kill();
             let _ = child.wait();
             return Err("raster process timed out".to_string());
+        }
+        if output_paths.iter().any(|path| {
+            std::fs::metadata(path)
+                .map(|metadata| metadata.len() > MAX_OUTPUT_FILE_BYTES)
+                .unwrap_or(false)
+        }) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("raster process output exceeds the adapter limit".to_string());
         }
         std::thread::sleep(CANCEL_POLL_INTERVAL);
     }
