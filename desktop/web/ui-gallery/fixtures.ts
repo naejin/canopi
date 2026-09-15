@@ -211,7 +211,14 @@ export function designFixture(state = 'populated'): CanopiFile {
       plantSpeciesSymbols: Object.fromEntries(specimens.map(([name, , symbol]) => [name, symbol])),
     }, { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',
-    location: state === 'located' ? { lat: 48.85, lon: 2.35, altitude_m: 35 } : null,
+    location: state === 'located' ? { lat: 48.220272, lon: 0.033854, altitude_m: 118 } : null,
+    lidar: state === 'empty' ? null : {
+      schema_version: 1,
+      entries: [
+        { kind: 'Source', id: 'lidar-ground', visible: true, opacity: 0.82, order: 0, style: null },
+        { kind: 'Analysis', id: 'lidar-slope', visible: true, opacity: 0.66, order: 1, style: null },
+      ],
+    },
     budget_currency: 'EUR',
     budget: activeSpecies.slice(0, 5).flatMap((canonicalName, index) => index === 4 ? [] : [{
       target: { kind: 'species' as const, canonical_name: canonicalName },

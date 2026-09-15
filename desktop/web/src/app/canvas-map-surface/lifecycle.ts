@@ -53,6 +53,8 @@ export type { CanvasMapSurfaceSnapshot } from './types'
 export interface CanvasMapSurfaceLifecycle {
   attach(container: HTMLElement): void
   update(snapshot: CanvasMapSurfaceSnapshot): void
+  showLidarCoverage(bounds: [number, number, number, number]): void
+  showDesignLocation(): void
   destroy(nextState?: MapLibreCanvasSurfaceStateInput): void
 }
 
@@ -60,9 +62,23 @@ export interface CanvasMapSurfaceDeps {
   readonly loadMapLibre?: () => Promise<MapLibreApi>
   readonly loadTerrainSupport: (maplibre: MapLibreApi) => Promise<TerrainProtocolSupport>
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
+  readonly onViewBoundsChange?: (bounds: [number, number, number, number] | null) => void
   readonly publishDiagnostics?: (frame: MapFrame | null, designExtentMeters: number | null) => void
   readonly createResizeObserver?: (callback: ResizeObserverCallback) => MapLibreHostResizeObserver | null
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
+}
+
+interface CanvasMapLibreMapInstance extends MapLibreMapInstance {
+  fitBounds?(
+    bounds: [[number, number], [number, number]],
+    options: { padding: number; maxZoom: number; duration: number },
+  ): void
+  getBounds?(): {
+    getWest(): number
+    getSouth(): number
+    getEast(): number
+    getNorth(): number
+  }
 }
 
 export function createCanvasMapSurfaceLifecycle(
@@ -82,6 +98,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   private terrainState: TerrainLayerState | null = null
   private activeBasemapStyle: BasemapStyle | null = null
   private state: MapLibreCanvasSurfaceState = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
+  private pendingLidarBounds: [number, number, number, number] | null = null
 
   constructor(deps: CanvasMapSurfaceDeps) {
     this.deps = deps
@@ -106,6 +123,22 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     this.snapshot = snapshot
     this.syncPrecisionState()
     void this.ensureMap()
+  }
+
+  showLidarCoverage(bounds: [number, number, number, number]): void {
+    this.pendingLidarBounds = bounds
+    const map = this.surface.current()?.map as CanvasMapLibreMapInstance | undefined
+    map?.fitBounds?.(
+      [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+      { padding: 48, maxZoom: 18, duration: 0 },
+    )
+    if (map) this.publishViewBounds(map)
+  }
+
+  showDesignLocation(): void {
+    this.pendingLidarBounds = null
+    const map = this.surface.current()?.map
+    if (map && this.snapshot) this.applyCamera(map, this.snapshot)
   }
 
   destroy(
@@ -133,6 +166,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       this.surface.clearMap()
     }
     this.activeBasemapStyle = null
+    this.deps.onViewBoundsChange?.(null)
     this.publishDiagnostics(null, null)
     this.camera = null
     this.terrainState = null
@@ -155,6 +189,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     if (!frame) return
     this.camera = frame
     this.publishDiagnostics(frame, this.state.designExtentMeters)
+    this.publishViewBounds(map)
   }
 
   private syncBasemapPresentation(
@@ -316,8 +351,12 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
         this.installCanvasMapAdapter(context, reconciliation.basemapStyle)
       },
       onResize: (context) => {
-        const currentSnapshot = this.snapshot
-        if (currentSnapshot) this.applyCamera(context.map, currentSnapshot)
+        if (this.pendingLidarBounds) {
+          this.showLidarCoverage(this.pendingLidarBounds)
+        } else {
+          const currentSnapshot = this.snapshot
+          if (currentSnapshot) this.applyCamera(context.map, currentSnapshot)
+        }
       },
       onDestroy: (context) => {
         clearLidarSync(context.map, this.appliedLidarLayers)
@@ -381,6 +420,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       if (!currentSnapshot) return
       this.syncBasemapPresentation(map, currentSnapshot)
       this.syncLidar(map, currentSnapshot.lidar)
+      if (this.pendingLidarBounds) this.showLidarCoverage(this.pendingLidarBounds)
       this.syncOverlays(currentSnapshot)
       void this.syncTerrain(currentSnapshot)
     }
@@ -418,9 +458,14 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       clearCanvasMapSurfaceOverlays(map)
     }
 
+    const handleMoveEnd = (): void => {
+      if (context.isCurrent()) this.publishViewBounds(map)
+    }
+
     context.lifetime.on('load', handleLoad)
     context.lifetime.on('sourcedata', maybeMarkBasemapReady)
     context.lifetime.on('error', handleError)
+    context.lifetime.on('moveend', handleMoveEnd)
 
     const currentSnapshot = this.snapshot
     if (currentSnapshot) this.applyCamera(map, currentSnapshot)
@@ -434,6 +479,17 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   ): void {
     const publish = this.deps.publishDiagnostics ?? publishMapDiagnostics
     publish(frame, designExtentMeters)
+  }
+
+  private publishViewBounds(map: MapLibreMapInstance): void {
+    const bounds = (map as CanvasMapLibreMapInstance).getBounds?.()
+    if (!bounds) return
+    this.deps.onViewBoundsChange?.([
+      bounds.getWest(),
+      bounds.getSouth(),
+      bounds.getEast(),
+      bounds.getNorth(),
+    ])
   }
 
   private logError(message?: unknown, ...optionalParams: unknown[]): void {

@@ -30,7 +30,9 @@ import '../src/i18n'
 import { invalidateCssVarCache } from '../src/canvas/canvas2d-utils'
 import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
-import { activity } from './memory-backend'
+import { activity, galleryInitialLidarImportJob } from './memory-backend'
+import { importPanelOpen, openImportJob } from '../src/app/lidar/library-store'
+import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { readPlanningViewState } from '../src/app/planning-view/state'
 import { appCommandGraphPanelProjection } from '../src/commands/registry'
@@ -60,6 +62,13 @@ const selectedSurface = signal<GallerySurface>(initial)
 const galleryCanvasReady = signal(false)
 const file = designFixture(fixtureState)
 designSessionStore.replaceCurrentDesignState(file, null, file.name)
+if (galleryInitialLidarImportJob) {
+  openImportJob.value = galleryInitialLidarImportJob
+  importPanelOpen.value = true
+}
+lidarMapViewBounds.value = fixtureState === 'located'
+  ? [0.02, 48.21, 0.05, 48.23]
+  : null
 const planningView = readPlanningViewState()
 planningView.calendarMonth.value = '2026-09-01'
 planningView.calendarExpanded.value = initial === 'calendar-expanded'
@@ -111,7 +120,7 @@ function Gallery() {
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
       <span>Edition:</span>
       {(['desktop', 'web'] as const).map((nextEdition) => <a aria-current={edition === nextEdition ? 'page' : undefined} href={editionUrl(nextEdition)}>{nextEdition}</a>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'lidar-review'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
     {selectedSurface.value === 'workspace' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
@@ -186,7 +195,7 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
 function GalleryLayersSurface() {
   if (lidarPrototypeEnabled) return <Suspense fallback={null}><LidarPanelPrototype /></Suspense>
   return <LayersPanel onLocation={() => {
-    designSessionStore.replaceCurrentDesignSnapshot({ ...file, location: { lat: 48.85, lon: 2.35, altitude_m: 35 } })
+    designSessionStore.replaceCurrentDesignSnapshot({ ...file, location: { lat: 48.220272, lon: 0.033854, altitude_m: 118 } })
     activity.value = 'Sample location set in memory.'
   }} />
 }

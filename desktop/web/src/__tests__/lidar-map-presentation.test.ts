@@ -27,6 +27,7 @@ function layerSummary(overrides: Partial<LidarLayerSummary> = {}): LidarLayerSum
     measurement_kind: 'GroundElevation',
     units: 'm',
     state: 'Ready',
+    resolution_m: 0.5,
     coverage_cells: '4000000',
     bounds: [-0.43, 48.3, -0.41, 48.31],
     value_range: [12, 88],

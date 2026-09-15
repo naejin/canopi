@@ -24,23 +24,27 @@ pub fn library_snapshot(
         let head = catalogue::head_generation(connection, &layer.id)?;
         let analysis_count =
             catalogue::list_definitions_for_layer(connection, &layer.id)?.len() as u32;
-        let (coverage_cells, bounds, value_range, tilesets) = match &head {
+        let (coverage_cells, resolution_m, bounds, value_range, tilesets) = match &head {
             Some(head) => {
                 let bounds = serde_json::from_str::<Vec<f64>>(&head.bounds_3857)
                     .ok()
-                    .and_then(|v| <[f64; 4]>::try_from(v).ok());
+                    .and_then(|v| <[f64; 4]>::try_from(v).ok())
+                    .map(bounds_3857_to_wgs84);
                 let range = match (head.min_value, head.max_value) {
                     (Some(min), Some(max)) => Some([min, max]),
                     _ => None,
                 };
                 (
                     head.coverage_cells as u64,
+                    super::import::read_generation_manifest(&head.manifest_json)
+                        .ok()
+                        .map(|manifest| manifest.grid.pixel_size().0),
                     bounds,
                     range,
                     tilesets_for(display_connection, "source", &layer.id, head.id.clone()),
                 )
             }
-            None => (0, None, None, Vec::new()),
+            None => (0, None, None, None, Vec::new()),
         };
         layer_summaries.push(LidarLayerSummary {
             id: layer.id.clone(),
@@ -52,6 +56,7 @@ pub fn library_snapshot(
             } else {
                 LidarResultState::Preparing
             },
+            resolution_m,
             coverage_cells,
             bounds,
             value_range,
@@ -81,7 +86,8 @@ pub fn library_snapshot(
             Some(result) => {
                 let bounds = serde_json::from_str::<Vec<f64>>(&result.bounds_3857)
                     .ok()
-                    .and_then(|v| <[f64; 4]>::try_from(v).ok());
+                    .and_then(|v| <[f64; 4]>::try_from(v).ok())
+                    .map(bounds_3857_to_wgs84);
                 let range = match (result.min_value, result.max_value) {
                     (Some(min), Some(max)) => Some([min, max]),
                     _ => None,

@@ -279,6 +279,8 @@ export type LidarLayerSummary = {
 	measurement_kind: LidarMeasurementKind,
 	units: string,
 	state: LidarResultState,
+	// Native source-grid resolution in metres for accepted coverage.
+	resolution_m: number | null,
 	coverage_cells: string,
 	bounds: [number, number, number, number] | null,
 	value_range: [number, number] | null,

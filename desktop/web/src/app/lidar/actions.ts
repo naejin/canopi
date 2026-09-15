@@ -8,20 +8,22 @@ import {
   lidarDeleteAnalysis,
   lidarDeleteLayer,
   lidarDeleteLayerImpact,
-  lidarGetImportJob,
   lidarRenameLayer,
   lidarLayerHistory,
   lidarStageImport,
   lidarUndoImport,
   type LidarGenerationHistoryEntry,
-  type LidarImportJob,
 } from '../../ipc/lidar'
 import { patchLidarEntryById, removeLidarEntries, upsertLidarEntry } from '../design-edit/lidar'
 import {
   ensureLidarPolling,
+  lidarStatusMessage,
   openImportJob,
+  refreshOpenImportJob,
   refreshLidarLibrary,
+  trackImportJob,
 } from './library-store'
+import { designSessionStore } from '../document-session/store'
 
 /**
  * Leaf action module for the LiDAR workbench: every UI mutation flows
@@ -32,14 +34,19 @@ export async function createLidarLayer(
   name: string,
   kind: 'GroundElevation' | 'SurfaceElevation' | 'AboveGroundHeight' | 'OtherContinuous',
 ): Promise<void> {
-  const layerId = await lidarCreateLayer(name, kind)
-  await refreshLidarLibrary()
-  presentEntity('Source', layerId)
+  const identity = designSessionStore.sessionIdentity.value
+  await withLidarError(async () => {
+    const layerId = await lidarCreateLayer(name, kind)
+    await refreshLidarLibrary()
+    if (designSessionStore.sessionIdentity.value === identity) presentEntity('Source', layerId)
+  })
 }
 
 export async function renameLidarLayer(layerId: string, name: string): Promise<void> {
-  await lidarRenameLayer(layerId, name)
-  await refreshLidarLibrary()
+  await withLidarError(async () => {
+    await lidarRenameLayer(layerId, name)
+    await refreshLidarLibrary()
+  })
 }
 
 export async function presentEntity(
@@ -50,36 +57,17 @@ export async function presentEntity(
 }
 
 export async function startImportForLayer(layerId: string): Promise<void> {
-  const selection = await open({
-    multiple: true,
-    title: 'Add TIFF sources',
+  await withLidarError(async () => {
+    const selection = await open({
+      multiple: true,
+      title: 'Add TIFF sources',
+    })
+    if (selection === null) return
+    const paths = Array.isArray(selection) ? selection : [selection]
+    if (paths.length === 0) return
+    const jobId = await lidarStageImport(layerId, paths)
+    await trackImportJob(jobId)
   })
-  if (selection === null) {
-    return
-  }
-  const paths = Array.isArray(selection) ? selection : [selection]
-  if (paths.length === 0) {
-    return
-  }
-  const jobId = await lidarStageImport(layerId, paths)
-  await pollImportJob(jobId)
-}
-
-async function pollImportJob(jobId: string): Promise<void> {
-  ensureLidarPolling()
-  // The staging job settles within seconds at fixture scale; poll until the
-  // review is ready, the job fails, or the user gave up on this dialog.
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    const job: LidarImportJob | null = await lidarGetImportJob(jobId)
-    if (job === null) {
-      return
-    }
-    openImportJob.value = job
-    if (job.state === 'AwaitingReview' || job.state === 'Failed' || job.state === 'Cancelled') {
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
 }
 
 export async function applyOpenImport(
@@ -90,10 +78,11 @@ export async function applyOpenImport(
   if (job === null) {
     return
   }
-  await lidarApplyImport(job.job_id, addUncovered, replaceOverlap)
-  openImportJob.value = null
-  ensureLidarPolling()
-  await refreshLidarLibrary()
+  await withLidarError(async () => {
+    await lidarApplyImport(job.job_id, addUncovered, replaceOverlap)
+    await refreshOpenImportJob()
+    ensureLidarPolling()
+  })
 }
 
 export async function cancelOpenImport(): Promise<void> {
@@ -101,34 +90,51 @@ export async function cancelOpenImport(): Promise<void> {
   if (job === null) {
     return
   }
-  await lidarCancelImport(job.job_id)
-  openImportJob.value = null
-  await refreshLidarLibrary()
+  await withLidarError(async () => {
+    await lidarCancelImport(job.job_id)
+    await refreshOpenImportJob()
+    await refreshLidarLibrary()
+  })
 }
 
 export async function analyseLayerAsSlope(layerId: string): Promise<void> {
-  const receipt = await lidarCreateAnalysis(layerId, 'Slope', {
-    slope_unit: 'Degrees',
+  const identity = designSessionStore.sessionIdentity.value
+  await withLidarError(async () => {
+    const receipt = await lidarCreateAnalysis(layerId, 'Slope', {
+      slope_unit: 'Degrees',
+    })
+    await refreshLidarLibrary()
+    if (designSessionStore.sessionIdentity.value === identity) {
+      await presentEntity('Analysis', receipt.definition_id)
+    }
+    ensureLidarPolling()
   })
-  await refreshLidarLibrary()
-  await presentEntity('Analysis', receipt.definition_id)
-  ensureLidarPolling()
 }
 
-export async function deleteLidarLayer(layerId: string): Promise<void> {
-  const impact = await lidarDeleteLayerImpact(layerId)
-  // The impact summary gates the deletion: analysis layers and saved Design
-  // references are removed together with the source layer.
-  await lidarDeleteLayer(layerId)
-  await refreshLidarLibrary()
-  const ids = [layerId, ...impact.analysis_ids]
-  removePresentedEntities(ids)
+export async function fetchLidarLayerDeleteImpact(layerId: string) {
+  return lidarDeleteLayerImpact(layerId)
+}
+
+export async function deleteLidarLayer(layerId: string, analysisIds: string[]): Promise<void> {
+  const identity = designSessionStore.sessionIdentity.value
+  await withLidarError(async () => {
+    await lidarDeleteLayer(layerId)
+    await refreshLidarLibrary()
+    if (designSessionStore.sessionIdentity.value === identity) {
+      removePresentedEntities([layerId, ...analysisIds])
+    }
+  })
 }
 
 export async function deleteLidarAnalysis(definitionId: string): Promise<void> {
-  await lidarDeleteAnalysis(definitionId)
-  await refreshLidarLibrary()
-  removePresentedEntities([definitionId])
+  const identity = designSessionStore.sessionIdentity.value
+  await withLidarError(async () => {
+    await lidarDeleteAnalysis(definitionId)
+    await refreshLidarLibrary()
+    if (designSessionStore.sessionIdentity.value === identity) {
+      removePresentedEntities([definitionId])
+    }
+  })
 }
 
 export async function fetchLayerHistory(
@@ -139,9 +145,11 @@ export async function fetchLayerHistory(
 
 /** Undo one accepted import; republishes the layer without it. */
 export async function undoAcceptedImport(jobId: string): Promise<void> {
-  await lidarUndoImport(jobId)
-  ensureLidarPolling()
-  await refreshLidarLibrary()
+  await withLidarError(async () => {
+    await lidarUndoImport(jobId)
+    ensureLidarPolling()
+    await refreshLidarLibrary()
+  })
 }
 
 export function setLidarEntryVisibility(id: string, visible: boolean): void {
@@ -154,4 +162,13 @@ export function setLidarEntryOpacity(id: string, opacity: number): void {
 
 function removePresentedEntities(ids: string[]): void {
   removeLidarEntries(ids)
+}
+
+async function withLidarError(work: () => Promise<void>): Promise<void> {
+  lidarStatusMessage.value = null
+  try {
+    await work()
+  } catch (error) {
+    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+  }
 }

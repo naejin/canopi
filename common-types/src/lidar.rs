@@ -122,6 +122,8 @@ pub struct LidarLayerSummary {
     pub measurement_kind: LidarMeasurementKind,
     pub units: String,
     pub state: LidarResultState,
+    /// Native source-grid resolution in metres for accepted coverage.
+    pub resolution_m: Option<f64>,
     pub coverage_cells: u64,
     pub bounds: Option<[f64; 4]>,
     pub value_range: Option<[f64; 2]>,

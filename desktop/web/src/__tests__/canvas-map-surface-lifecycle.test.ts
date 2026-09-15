@@ -21,7 +21,7 @@ import {
 } from '../maplibre/terrain'
 import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-state'
 
-type MapEventType = 'load' | 'error' | 'sourcedata'
+type MapEventType = 'load' | 'error' | 'sourcedata' | 'moveend'
 type MapEventHandler = (event?: unknown) => void
 
 type TestCanvasQuerySurface = CanvasQuerySurface & {
@@ -46,6 +46,13 @@ async function flushPromises(): Promise<void> {
 class FakeMap implements MapLibreMapInstance {
   readonly options: MapLibreMapConstructorOptions
   readonly jumpTo = vi.fn()
+  readonly fitBounds = vi.fn()
+  readonly getBounds = vi.fn(() => ({
+    getWest: () => -0.43,
+    getSouth: () => 48.3,
+    getEast: () => -0.41,
+    getNorth: () => 48.32,
+  }))
   readonly resize = vi.fn()
   readonly remove = vi.fn()
   readonly on = vi.fn((type: MapEventType, listener: MapEventHandler) => {
@@ -83,6 +90,7 @@ class FakeMap implements MapLibreMapInstance {
     ['load', new Set()],
     ['error', new Set()],
     ['sourcedata', new Set()],
+    ['moveend', new Set()],
   ])
 
   constructor(options: MapLibreMapConstructorOptions) {
@@ -332,6 +340,29 @@ describe('Canvas map surface lifecycle', () => {
 
     expect(map.jumpTo.mock.calls.length).toBeGreaterThan(initialJumpCount)
     expect(map.jumpTo.mock.calls.at(-1)?.[0]).not.toEqual(initialFrame)
+  })
+
+  it('shows LiDAR coverage without changing the saved Design camera and can return', async () => {
+    const lifecycle = createLifecycle()
+    lifecycle.attach(container)
+    lifecycle.update(createSnapshot())
+    await flushPromises()
+
+    const map = mapAt()
+    const savedCameraCalls = map.jumpTo.mock.calls.length
+    const bounds: [number, number, number, number] = [-0.43, 48.3, -0.41, 48.32]
+    lifecycle.showLidarCoverage(bounds)
+
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      [[-0.43, 48.3], [-0.41, 48.32]],
+      { padding: 48, maxZoom: 18, duration: 0 },
+    )
+    expect(map.jumpTo).toHaveBeenCalledTimes(savedCameraCalls)
+
+    observerAt().emit()
+    expect(map.fitBounds).toHaveBeenCalledTimes(2)
+    lifecycle.showDesignLocation()
+    expect(map.jumpTo.mock.calls.length).toBeGreaterThan(savedCameraCalls)
   })
 
   it('waits for the basemap source before publishing ready', async () => {

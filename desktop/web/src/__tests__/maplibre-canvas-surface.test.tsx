@@ -16,13 +16,23 @@ import {
 } from '../maplibre/canvas-surface-state'
 import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import {
+  lidarCameraRequest,
+  lidarMapViewBounds,
+  viewDesignLocation,
+  viewLidarCoverage,
+} from '../app/lidar/camera-request'
 
 const attachMock = vi.hoisted(() => vi.fn())
 const updateMock = vi.hoisted(() => vi.fn())
 const destroyMock = vi.hoisted(() => vi.fn())
+const showLidarCoverageMock = vi.hoisted(() => vi.fn())
+const showDesignLocationMock = vi.hoisted(() => vi.fn())
 const createLifecycleMock = vi.hoisted(() => vi.fn((_deps: unknown) => ({
   attach: attachMock,
   update: updateMock,
+  showLidarCoverage: showLidarCoverageMock,
+  showDesignLocation: showDesignLocationMock,
   destroy: destroyMock,
 })))
 
@@ -89,7 +99,11 @@ describe('MapLibreCanvasSurface adapter', () => {
     attachMock.mockClear()
     updateMock.mockClear()
     destroyMock.mockClear()
+    showLidarCoverageMock.mockClear()
+    showDesignLocationMock.mockClear()
     createLifecycleMock.mockClear()
+    lidarCameraRequest.value = null
+    lidarMapViewBounds.value = null
     designSessionFixture.file = {
       version: 2,
       name: 'Demo',
@@ -185,11 +199,28 @@ describe('MapLibreCanvasSurface adapter', () => {
 
     const deps = createLifecycleMock.mock.calls[0]?.[0] as unknown as {
       onStateChange: (state: MapLibreCanvasSurfaceState) => void
+      onViewBoundsChange: (bounds: [number, number, number, number] | null) => void
     }
     deps.onStateChange(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
     expect(onStateChange).toHaveBeenCalledWith(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
+    deps.onViewBoundsChange([-0.43, 48.3, -0.41, 48.32])
+    expect(lidarMapViewBounds.value).toEqual([-0.43, 48.3, -0.41, 48.32])
 
     render(null, container)
     expect(destroyMock).toHaveBeenCalled()
+  })
+
+  it('forwards LiDAR coverage and return camera requests to the mounted lifecycle', async () => {
+    setQuerySurfaceForTest(createRuntime())
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    const bounds: [number, number, number, number] = [-0.43, 48.3, -0.41, 48.32]
+    await act(async () => viewLidarCoverage(bounds))
+    expect(showLidarCoverageMock).toHaveBeenCalledWith(bounds)
+
+    await act(async () => viewDesignLocation())
+    expect(showDesignLocationMock).toHaveBeenCalled()
   })
 })

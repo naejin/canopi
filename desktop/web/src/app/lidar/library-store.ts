@@ -5,6 +5,7 @@ import type {
   LidarPresentationEntryKind,
 } from '../../generated/contracts'
 import {
+  lidarGetImportJob,
   lidarListLibrary,
   type LidarAnalysisSummary,
   type LidarLayerSummary,
@@ -21,6 +22,8 @@ export const lidarLibrary = signal<LidarLibrarySnapshot | null>(null)
 
 /** The import job currently open for review, if any. */
 export const openImportJob = signal<LidarImportJob | null>(null)
+export const importPanelOpen = signal(false)
+export const lidarStatusMessage = signal<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight = false
@@ -33,9 +36,11 @@ export async function refreshLidarLibrary(): Promise<void> {
   try {
     const snapshot = await lidarListLibrary()
     lidarLibrary.value = snapshot
-  } catch {
+    lidarStatusMessage.value = null
+  } catch (error) {
     // Passive library read failures leave the previous snapshot in place;
     // the rest of the app keeps working (Web Edition has no library at all).
+    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
     refreshInFlight = false
   }
@@ -48,10 +53,32 @@ function hasActiveWork(snapshot: LidarLibrarySnapshot | null): boolean {
   return snapshot.analyses.some(
     (analysis) =>
       analysis.state === 'Preparing' ||
-      analysis.state === 'Refreshing' ||
-      analysis.state === 'Failed' ||
-      analysis.state === 'Incomplete',
+      analysis.state === 'Refreshing',
   )
+}
+
+function importIsActive(job: LidarImportJob | null): boolean {
+  return job?.state === 'Staging' || job?.state === 'Applying'
+}
+
+export async function refreshOpenImportJob(): Promise<void> {
+  const tracked = openImportJob.value
+  if (tracked === null) return
+  try {
+    const next = await lidarGetImportJob(tracked.job_id)
+    if (openImportJob.value?.job_id !== tracked.job_id) return
+    openImportJob.value = next
+    if (next?.state === 'AwaitingReview') importPanelOpen.value = true
+  } catch (error) {
+    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function pollLidarState(): Promise<void> {
+  await Promise.all([refreshLidarLibrary(), refreshOpenImportJob()])
+  if (!hasActiveWork(lidarLibrary.value) && !importIsActive(openImportJob.value)) {
+    stopLidarPolling()
+  }
 }
 
 /**
@@ -59,16 +86,31 @@ function hasActiveWork(snapshot: LidarLibrarySnapshot | null): boolean {
  * user action; idle libraries stop polling to stay cheap.
  */
 export function ensureLidarPolling(): void {
-  if (pollTimer !== null) {
-    return
-  }
+  void pollLidarState()
+  if (pollTimer !== null) return
   pollTimer = setInterval(() => {
-    void refreshLidarLibrary().then(() => {
-      if (!hasActiveWork(lidarLibrary.value)) {
-        stopLidarPolling()
-      }
-    })
+    void pollLidarState()
   }, LIDAR_POLL_INTERVAL_MS)
+}
+
+export async function trackImportJob(jobId: string): Promise<void> {
+  const job = await lidarGetImportJob(jobId)
+  openImportJob.value = job
+  importPanelOpen.value = true
+  ensureLidarPolling()
+}
+
+export function showTrackedImport(): void {
+  if (openImportJob.value !== null) importPanelOpen.value = true
+}
+
+export function hideTrackedImport(): void {
+  importPanelOpen.value = false
+}
+
+export function dismissTrackedImport(): void {
+  importPanelOpen.value = false
+  openImportJob.value = null
 }
 
 export function stopLidarPolling(): void {
@@ -80,7 +122,10 @@ export function stopLidarPolling(): void {
 
 export function installLidarLibraryObserver(): () => void {
   void refreshLidarLibrary()
-  return stopLidarPolling
+  return () => {
+    stopLidarPolling()
+    importPanelOpen.value = false
+  }
 }
 
 export interface LidarPresentationItem {

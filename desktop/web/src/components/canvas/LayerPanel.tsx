@@ -15,7 +15,7 @@ function LayerIcon({ id }: { id: string }) {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>
 }
 
-function EyeIcon({ open }: { open: boolean }) {
+export function LayerVisibilityIcon({ open }: { open: boolean }) {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
@@ -96,7 +96,7 @@ export function LayerPanel({ rows, actions, trailingSection }: {
                     actions.visibility(row.id, !row.visible)
                   }}
                 >
-                  <EyeIcon open={row.visible} />
+                  <LayerVisibilityIcon open={row.visible} />
                   <ButtonTooltip label={`${t('canvas.layers.visibility')}: ${row.label}`} side="left" />
                 </button>
                 <button
