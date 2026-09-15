@@ -455,7 +455,11 @@
         "replaceOverlap": "Remplacer le chevauchement",
         "apply": "Appliquer",
         "cancel": "Annuler"
-      }
+      },
+      "history": "Historique",
+      "historyCells": "cellules",
+      "historyHead": "actuel",
+      "historyUndo": "Annuler l’import"
     }
   },
   "worldMap": {

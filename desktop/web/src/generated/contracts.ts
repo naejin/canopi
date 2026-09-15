@@ -206,6 +206,21 @@ export type LidarEngineStatus = {
 	detail: string | null,
 };
 
+// Immutable published generation of a source layer, for layer history.
+export type LidarGenerationHistoryEntry = {
+	id: string,
+	created_at: string,
+	coverage_cells: string,
+	members: string[],
+	roles: string[],
+	/**
+	 *  Import jobs whose acceptance produced this generation; each can be
+	 *  undone by republishing without its interpretation.
+	 */
+	job_ids: string[],
+	is_head: boolean,
+};
+
 export type LidarImportJob = {
 	job_id: string,
 	layer_id: string,

@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 1;
+pub const CATALOGUE_VERSION: i32 = 2;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -45,20 +45,49 @@ fn migrate(connection: &Connection) -> Result<(), String> {
             "LiDAR catalogue schema version {version} is newer than supported {CATALOGUE_VERSION}"
         ));
     }
-    if version < CATALOGUE_VERSION {
+    let mut applied = version;
+    while applied < CATALOGUE_VERSION {
+        let next = applied + 1;
+        let script = match next {
+            1 => SCHEMA_V1,
+            2 => SCHEMA_V2,
+            _ => unreachable!("catalogue migration gap"),
+        };
         connection
-            .execute_batch(SCHEMA_V1)
-            .map_err(|e| format!("Failed to apply LiDAR catalogue schema v1: {e}"))?;
+            .execute_batch(script)
+            .map_err(|e| format!("Failed to apply LiDAR catalogue schema v{next}: {e}"))?;
         connection
             .execute(
                 "INSERT INTO lidar_catalogue_meta(key, value) VALUES('schema_version', ?1)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                [CATALOGUE_VERSION.to_string()],
+                [next.to_string()],
             )
             .map_err(|e| format!("Failed to record catalogue version: {e}"))?;
+        applied = next;
     }
     Ok(())
 }
+
+/// Durable-library additions: exact footprint spatial index and the
+/// import-job link on acceptance decisions.
+const SCHEMA_V2: &str = r#"
+CREATE TABLE IF NOT EXISTS lidar_source_footprints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    interpretation_id TEXT NOT NULL REFERENCES lidar_interpretations(id),
+    layer_id TEXT NOT NULL,
+    min_x REAL NOT NULL,
+    max_x REAL NOT NULL,
+    min_y REAL NOT NULL,
+    max_y REAL NOT NULL,
+    UNIQUE(layer_id, interpretation_id)
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS lidar_footprint_rtree USING rtree(
+    id, min_x, max_x, min_y, max_y
+);
+
+ALTER TABLE lidar_acceptance_regions ADD COLUMN job_id TEXT;
+"#;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS lidar_sources (
@@ -426,6 +455,212 @@ pub fn get_import_job(
         .map_err(|e| e.to_string())
 }
 
+#[derive(Debug, Clone)]
+pub struct InterpretationRow {
+    pub geotransform: String,
+    pub width: i64,
+    pub height: i64,
+    pub interp_hash: String,
+}
+
+pub fn get_interpretation(
+    connection: &Connection,
+    interpretation_id: &str,
+) -> Result<Option<InterpretationRow>, String> {
+    connection
+        .query_row(
+            "SELECT geotransform, width, height, interp_hash
+             FROM lidar_interpretations WHERE id = ?1",
+            [interpretation_id],
+            |row| {
+                Ok(InterpretationRow {
+                    geotransform: row.get(0)?,
+                    width: row.get(1)?,
+                    height: row.get(2)?,
+                    interp_hash: row.get(3)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// Ordered accepted members of a generation with their acceptance roles.
+pub fn generation_members(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT interpretation_id, role FROM lidar_generation_members
+             WHERE generation_id = ?1 ORDER BY ordinal",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map([generation_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+// ---------------------------------------------------------------------------
+// Footprints (R-tree indexed candidate lookup)
+// ---------------------------------------------------------------------------
+
+pub fn upsert_footprint(
+    connection: &Connection,
+    interpretation_id: &str,
+    layer_id: &str,
+    bounds: [f64; 4],
+) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT INTO lidar_source_footprints(interpretation_id, layer_id, min_x, max_x, min_y, max_y)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(layer_id, interpretation_id) DO UPDATE SET
+                min_x = excluded.min_x, max_x = excluded.max_x,
+                min_y = excluded.min_y, max_y = excluded.max_y",
+            rusqlite::params![
+                interpretation_id,
+                layer_id,
+                bounds[0],
+                bounds[2],
+                bounds[1],
+                bounds[3]
+            ],
+        )
+        .map_err(|e| format!("Failed to record footprint: {e}"))?;
+    let rowid: i64 = connection
+        .query_row(
+            "SELECT id FROM lidar_source_footprints WHERE layer_id = ?1 AND interpretation_id = ?2",
+            rusqlite::params![layer_id, interpretation_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?;
+    // R-tree virtual tables do not support UPSERT; replace the shadow row.
+    connection
+        .execute("DELETE FROM lidar_footprint_rtree WHERE id = ?1", [rowid])
+        .map_err(|e| format!("Failed to reindex footprint: {e}"))?;
+    connection
+        .execute(
+            "INSERT INTO lidar_footprint_rtree(id, min_x, max_x, min_y, max_y)
+             VALUES(?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![rowid, bounds[0], bounds[2], bounds[1], bounds[3]],
+        )
+        .map(|_| ())
+        .map_err(|e| format!("Failed to index footprint: {e}"))
+}
+
+/// Interpretation ids whose footprints intersect the given rect; the exact
+/// mask decides admission, this only narrows candidates.
+pub fn footprint_candidates(
+    connection: &Connection,
+    bounds: [f64; 4],
+) -> Result<Vec<String>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT f.interpretation_id FROM lidar_source_footprints f
+             JOIN lidar_footprint_rtree r ON r.id = f.id
+             WHERE r.min_x <= ?1 AND r.max_x >= ?2 AND r.min_y <= ?3 AND r.max_y >= ?4",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map(
+            rusqlite::params![bounds[2], bounds[0], bounds[3], bounds[1]],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+// ---------------------------------------------------------------------------
+// Generation history
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct GenerationHistoryEntry {
+    pub id: String,
+    pub created_at: String,
+    pub coverage_cells: i64,
+    pub members: Vec<String>,
+    pub roles: Vec<String>,
+    pub job_ids: Vec<String>,
+    pub is_head: bool,
+}
+
+pub fn layer_history(
+    connection: &Connection,
+    layer_id: &str,
+) -> Result<Vec<GenerationHistoryEntry>, String> {
+    let head_id: Option<String> = connection
+        .query_row(
+            "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
+            [layer_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let mut statement = connection
+        .prepare(
+            "SELECT g.id, g.created_at, g.coverage_cells FROM lidar_layer_generations g
+             WHERE g.layer_id = ?1 ORDER BY g.created_at, g.id",
+        )
+        .map_err(|e| e.to_string())?;
+    let mut entries = statement
+        .query_map([layer_id], |row| {
+            Ok(GenerationHistoryEntry {
+                id: row.get(0)?,
+                created_at: row.get(1)?,
+                coverage_cells: row.get(2)?,
+                members: Vec::new(),
+                roles: Vec::new(),
+                job_ids: Vec::new(),
+                is_head: false,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    drop(statement);
+    let mut member_statement = connection
+        .prepare(
+            "SELECT m.interpretation_id, m.role FROM lidar_generation_members m
+             WHERE m.generation_id = ?1 ORDER BY m.ordinal",
+        )
+        .map_err(|e| e.to_string())?;
+    let mut job_statement = connection
+        .prepare(
+            "SELECT DISTINCT job_id FROM lidar_acceptance_regions
+             WHERE generation_id = ?1 AND job_id IS NOT NULL",
+        )
+        .map_err(|e| e.to_string())?;
+    for entry in &mut entries {
+        entry.is_head = head_id.as_deref() == Some(entry.id.as_str());
+        let rows = member_statement
+            .query_map([&entry.id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            let (interp, role) = row.map_err(|e| e.to_string())?;
+            entry.members.push(interp);
+            entry.roles.push(role);
+        }
+        let jobs = job_statement
+            .query_map([&entry.id], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        for job in jobs {
+            entry.job_ids.push(job.map_err(|e| e.to_string())?);
+        }
+    }
+    Ok(entries)
+}
+
 pub fn now_iso() -> String {
     // Unix milliseconds; identity fields are UUIDs, timestamps are ordering
     // hints only, so wall-clock precision is sufficient.
@@ -446,4 +681,69 @@ pub fn new_id(prefix: &str) -> String {
         .map(|d| d.as_nanos() as u64)
         .unwrap_or(0);
     format!("{prefix}-{nanos:016x}{counter:04x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rtree_footprints_narrow_candidates_to_intersecting_cells() {
+        let dir = std::env::temp_dir().join(format!("canopi-footprints-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let connection = open(&dir.join("catalogue.sqlite")).expect("catalogue opens");
+
+        connection
+            .execute(
+                "INSERT INTO lidar_sources(sha256, original_filename, size_bytes, probe_json, imported_at)
+                 VALUES('sha-a', 'a.tif', 1, '{}', '0')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_sources(sha256, original_filename, size_bytes, probe_json, imported_at)
+                 VALUES('sha-b', 'b.tif', 1, '{}', '0')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_interpretations(
+                    id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                    crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                 VALUES('interp-a', 'sha-a', 1, 'ground-elevation', 'm', 1, 0, 'x', 'u', -9999,
+                        '[0,1,0,0,0,-1]', 10, 10, 'hash-a')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_interpretations(
+                    id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                    crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                 VALUES('interp-b', 'sha-b', 1, 'ground-elevation', 'm', 1, 0, 'x', 'u', -9999,
+                        '[100,1,0,100,0,-1]', 10, 10, 'hash-b')",
+                [],
+            )
+            .unwrap();
+
+        upsert_footprint(&connection, "interp-a", "lyr-1", [0.0, 0.0, 10.0, 10.0]).unwrap();
+        upsert_footprint(
+            &connection,
+            "interp-b",
+            "lyr-1",
+            [100.0, 100.0, 110.0, 110.0],
+        )
+        .unwrap();
+
+        let near_a = footprint_candidates(&connection, [5.0, 5.0, 6.0, 6.0]).unwrap();
+        assert_eq!(near_a, vec!["interp-a".to_string()]);
+        let near_b = footprint_candidates(&connection, [101.0, 101.0, 102.0, 102.0]).unwrap();
+        assert_eq!(near_b, vec!["interp-b".to_string()]);
+        let empty = footprint_candidates(&connection, [500.0, 500.0, 501.0, 501.0]).unwrap();
+        assert!(empty.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

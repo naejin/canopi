@@ -187,6 +187,21 @@ pub struct LidarImportReview {
     pub after_preview_path: Option<String>,
 }
 
+/// Immutable published generation of a source layer, for layer history.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct LidarGenerationHistoryEntry {
+    pub id: String,
+    pub created_at: String,
+    pub coverage_cells: u64,
+    pub members: Vec<String>,
+    pub roles: Vec<String>,
+    /// Import jobs whose acceptance produced this generation; each can be
+    /// undone by republishing without its interpretation.
+    pub job_ids: Vec<String>,
+    pub is_head: bool,
+}
+
 /// Impact summary shown before a layer deletion is confirmed.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

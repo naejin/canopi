@@ -205,6 +205,40 @@ pub async fn lidar_create_analysis(
 }
 
 #[tauri::command]
+pub async fn lidar_layer_history(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+) -> Result<Vec<common_types::lidar::LidarGenerationHistoryEntry>, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar layer history",
+            move || library.layer_history(&layer_id),
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn lidar_undo_import(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    job_id: String,
+) -> Result<(), String> {
+    let library_for_validate = library.inner().clone();
+    let job_id_for_validate = job_id.clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar undo admission",
+            move || library_for_validate.validate_undo(&job_id_for_validate),
+        )
+        .await?;
+    library.inner().begin_undo(&job_id)
+}
+
+#[tauri::command]
 pub async fn lidar_get_analysis_job_status(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,

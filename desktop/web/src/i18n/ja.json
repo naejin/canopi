@@ -455,7 +455,11 @@
         "replaceOverlap": "重複領域を置き換え",
         "apply": "適用",
         "cancel": "キャンセル"
-      }
+      },
+      "history": "履歴",
+      "historyCells": "セル",
+      "historyHead": "現行",
+      "historyUndo": "取り込みを取り消す"
     }
   },
   "worldMap": {

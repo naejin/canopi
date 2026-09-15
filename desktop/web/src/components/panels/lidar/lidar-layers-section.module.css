@@ -288,3 +288,28 @@
   color: var(--color-danger);
   border-color: var(--color-danger);
 }
+
+.historyList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  border-top: var(--space-0-25) dotted var(--color-border);
+  padding-top: var(--space-1);
+}
+
+.historyEntry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.historyId {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+

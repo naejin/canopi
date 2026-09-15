@@ -158,6 +158,51 @@ pub fn stage_import(
         layer_nodata,
     )?;
 
+    // R-tree candidate guard: when every accepted member has a footprint,
+    // an incoming extent intersecting none of them must classify without
+    // overlap. This cross-checks exact masks against the spatial index.
+    let incoming_bounds =
+        compatible
+            .iter()
+            .map(|s| grid_for_source(s).bounds())
+            .fold(union.bounds(), |acc, b| {
+                [
+                    acc[0].min(b[0]),
+                    acc[1].min(b[1]),
+                    acc[2].max(b[2]),
+                    acc[3].max(b[3]),
+                ]
+            });
+    let (all_members_footprinted, member_count) = if let Some(head_row) = &head {
+        let connection = library.catalogue()?;
+        let member_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_generation_members WHERE generation_id = ?1",
+                [&head_row.id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let footprint_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_source_footprints WHERE layer_id = ?1",
+                [layer_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        (
+            member_count > 0 && footprint_count >= member_count,
+            member_count,
+        )
+    } else {
+        (false, 0)
+    };
+    let footprint_candidates: Vec<String> = if member_count == 0 || all_members_footprinted {
+        let connection = library.catalogue()?;
+        catalogue::footprint_candidates(&connection, incoming_bounds)?
+    } else {
+        Vec::new()
+    };
+
     // Classify the combined incoming validity against existing coverage, so
     // cells claimed by two staged files are counted once.
     let mut combined_incoming = ValidMask::empty(union.width, union.height);
@@ -174,6 +219,14 @@ pub fn stage_import(
         }
     }
     let classification = classify_coverage(&combined_incoming, layer_mask_on_union.as_ref())?;
+    if all_members_footprinted
+        && footprint_candidates.is_empty()
+        && classification.overlap_cells > 0
+    {
+        return Err(
+            "spatial index reports no overlapping members but exact masks disagree".to_string(),
+        );
+    }
 
     let mut facts: Vec<LidarImportSourceFacts> = Vec::new();
     for source in &staged {
@@ -557,6 +610,138 @@ pub fn compose_values(
 }
 
 // ---------------------------------------------------------------------------
+// Durable member assets and replay composition
+// ---------------------------------------------------------------------------
+
+/// One accepted member of the layer coverage with its durable prepared
+/// assets. Member rasters make history, undo and replacement exact: every
+/// publication replays the member sequence instead of editing a merged
+/// raster in place.
+#[derive(Debug, Clone)]
+pub struct MemberSource {
+    pub interpretation_id: String,
+    pub role: String,
+    pub grid: RasterGrid,
+    pub raw_samples_path: PathBuf,
+    pub valid_mask_path: PathBuf,
+}
+
+/// Directory of the durable prepared assets for one interpretation.
+pub fn member_prepared_dir(paths: &LidarPaths, interp_hash: &str) -> PathBuf {
+    paths.prepared_dir().join("sources").join(interp_hash)
+}
+
+/// Persist the durable per-interpretation assets for a staged source. The
+/// staged raw samples and valid mask move from the job dir into managed
+/// storage; GeoTIFF conversion is metadata-stable and idempotent.
+pub fn write_member_assets(
+    engine: &GdalEngine,
+    paths: &LidarPaths,
+    cancel: &AtomicBool,
+    source: &StagedSource,
+) -> Result<PathBuf, String> {
+    let dir = member_prepared_dir(paths, &source.interp_hash);
+    if dir.join("values.raw").exists()
+        && dir.join("valid.bin").exists()
+        && dir.join("native.tif").exists()
+    {
+        return Ok(dir);
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create prepared dir: {e}"))?;
+    std::fs::copy(&source.raw_samples_path, dir.join("values.raw"))
+        .map_err(|e| format!("Failed to persist member samples: {e}"))?;
+    std::fs::copy(&source.valid_mask_path, dir.join("valid.bin"))
+        .map_err(|e| format!("Failed to persist member mask: {e}"))?;
+    let grid = grid_for_source(source);
+    raw_to_tif(
+        engine,
+        cancel,
+        &dir.join("values.raw"),
+        &dir.join("native.tif"),
+        &grid,
+        &source.crs_wkt,
+        source.nodata.unwrap_or(FALLBACK_NODATA),
+    )?;
+    let meta = serde_json::json!({
+        "interp_hash": source.interp_hash,
+        "geotransform": source.geotransform,
+        "width": source.width,
+        "height": source.height,
+        "nodata": source.nodata,
+        "crs_wkt": source.crs_wkt,
+    });
+    std::fs::write(dir.join("meta.json"), meta.to_string())
+        .map_err(|e| format!("Failed to persist member meta: {e}"))?;
+    Ok(dir)
+}
+
+/// Replay accepted members in publication order. `add` members paint only
+/// cells the sequence has not accepted yet; `replace` members paint over.
+fn replay_members(
+    members: &[MemberSource],
+    union: &RasterGrid,
+    nodata: f32,
+) -> Result<ComposedMosaic, String> {
+    let mut values = vec![nodata; (union.width as usize) * (union.height as usize)];
+    let mut valid = ValidMask::empty(union.width, union.height);
+    let mut min_value = f64::INFINITY;
+    let mut max_value = f64::NEG_INFINITY;
+    for member in members {
+        let raw = std::fs::read(&member.raw_samples_path)
+            .map_err(|e| format!("Failed to read member samples: {e}"))?;
+        let samples = read_f32_samples(&raw, member.grid.width, member.grid.height)?;
+        let mask = ValidMask::read_from(
+            &member.valid_mask_path,
+            member.grid.width,
+            member.grid.height,
+        )?;
+        let offset_x = ((member.grid.geotransform[0] - union.geotransform[0])
+            / union.geotransform[1])
+            .round() as i64;
+        let offset_y = ((union.geotransform[3] - member.grid.geotransform[3])
+            / union.geotransform[5].abs())
+        .round() as i64;
+        let replace = member.role == "replace";
+        for y in 0..member.grid.height {
+            let ty = offset_y + y as i64;
+            if ty < 0 || ty >= union.height as i64 {
+                continue;
+            }
+            for x in 0..member.grid.width {
+                let tx = offset_x + x as i64;
+                if tx < 0 || tx >= union.width as i64 {
+                    continue;
+                }
+                if !mask.get(x, y) {
+                    continue;
+                }
+                let covered = valid.get(tx as u32, ty as u32);
+                if covered && !replace {
+                    continue;
+                }
+                let sample = samples[(y * member.grid.width + x) as usize];
+                values[ty as usize * union.width as usize + tx as usize] = sample;
+                valid.set(tx as u32, ty as u32, true);
+                if sample.is_finite() {
+                    min_value = min_value.min(sample as f64);
+                    max_value = max_value.max(sample as f64);
+                }
+            }
+        }
+    }
+    if !min_value.is_finite() {
+        min_value = 0.0;
+        max_value = 0.0;
+    }
+    Ok(ComposedMosaic {
+        values,
+        valid,
+        min_value,
+        max_value,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Apply / publish
 // ---------------------------------------------------------------------------
 
@@ -588,35 +773,133 @@ pub fn apply_import(
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
     let layer_id = staging.layer_id.clone();
-    let union = staging.union_grid.clone();
 
-    // Short read: head snapshot, then release the catalogue before computing.
-    let head = {
+    // Short read: head snapshot, member sequence and interpretation rows;
+    // the catalogue is released before any raster computation.
+    struct HeadBase {
+        manifest: Option<GenerationManifest>,
+        members: Vec<MemberSource>,
+        legacy_grid: Option<RasterGrid>,
+    }
+    let (head, head_base) = {
         let connection = library.catalogue()?;
-        catalogue::head_generation(&connection, &layer_id)?
+        let head = catalogue::head_generation(&connection, &layer_id)?;
+        let base = match &head {
+            Some(head_row) => {
+                let manifest = read_generation_manifest(&head_row.manifest_json)?;
+                let members = catalogue::generation_members(&connection, &head_row.id)?;
+                let mut resolved = Vec::new();
+                for (interpretation_id, role) in members.iter() {
+                    let (interpretation_id, role) = (interpretation_id.clone(), role.clone());
+                    let interp = catalogue::get_interpretation(&connection, &interpretation_id)?
+                        .ok_or_else(|| format!("missing interpretation {interpretation_id}"))?;
+                    let dir = member_prepared_dir(paths, &interp.interp_hash);
+                    let raw = dir.join("values.raw");
+                    let mask = dir.join("valid.bin");
+                    if !raw.exists() || !mask.exists() {
+                        // History written before durable member assets existed:
+                        // fall back to the legacy head-snapshot composition.
+                        resolved.clear();
+                        break;
+                    }
+                    let mut gt = [0.0f64; 6];
+                    let parsed: Vec<f64> =
+                        serde_json::from_str(&interp.geotransform).unwrap_or_default();
+                    for (slot, value) in parsed.iter().take(6).enumerate() {
+                        gt[slot] = *value;
+                    }
+                    resolved.push(MemberSource {
+                        interpretation_id,
+                        role,
+                        grid: RasterGrid {
+                            width: interp.width as u32,
+                            height: interp.height as u32,
+                            geotransform: gt,
+                        },
+                        raw_samples_path: raw,
+                        valid_mask_path: mask,
+                    });
+                }
+                let legacy = resolved.is_empty() && !members.is_empty();
+                HeadBase {
+                    manifest: Some(manifest),
+                    members: resolved,
+                    legacy_grid: legacy
+                        .then(|| read_generation_manifest(&head_row.manifest_json).ok())
+                        .flatten()
+                        .map(|m| m.grid.clone()),
+                }
+            }
+            None => HeadBase {
+                manifest: None,
+                members: Vec::new(),
+                legacy_grid: None,
+            },
+        };
+        (head, base)
     };
-    let head_manifest = match &head {
-        Some(head) => Some(read_generation_manifest(&head.manifest_json)?),
-        None => None,
-    };
-    let (layer_values, layer_mask_on_union) = head_values_on_union(
-        engine,
-        head.as_ref(),
-        head_manifest.as_ref(),
-        &union,
-        staging.layer_nodata,
-    )?;
+    let head_manifest = head_base.manifest.clone();
 
+    // Union grid: layer member grids plus every compatible staged source.
     let compatible: Vec<&StagedSource> = staging.sources.iter().filter(|s| s.compatible).collect();
-    let composed = compose_values(
-        layer_values.as_deref(),
-        layer_mask_on_union.as_ref(),
-        &compatible,
-        &union,
-        staging.layer_nodata,
-        add_uncovered,
-        replace_overlap,
-    )?;
+    let mut union = head_base
+        .members
+        .first()
+        .map(|m| m.grid.clone())
+        .or_else(|| head_base.legacy_grid.clone())
+        .or_else(|| staging.layer_grid.clone())
+        .unwrap_or_else(|| grid_for_source(compatible[0]));
+    for member in &head_base.members {
+        union = union_grid(&union, &member.grid)?;
+    }
+    for source in &compatible {
+        union = union_grid(&union, &grid_for_source(source))?;
+    }
+    let _ = head_manifest;
+
+    // Compose the new coverage: replay the member sequence, then paint the
+    // incoming sources with the user's decisions. Invalid pixels never erase
+    // accepted coverage; overlap is replaced only when explicitly approved.
+    let incoming_role = if replace_overlap { "replace" } else { "add" };
+    let composed = match (head_base.legacy_grid.as_ref(), head_base.members.is_empty()) {
+        (Some(_), true) => {
+            // Legacy head without member assets: seed from the merged
+            // snapshot, then paint the incoming sources.
+            let head_manifest_for_seed = head
+                .as_ref()
+                .map(|h| read_generation_manifest(&h.manifest_json))
+                .transpose()?;
+            let (layer_values, layer_mask) = head_values_on_union(
+                engine,
+                head.as_ref(),
+                head_manifest_for_seed.as_ref(),
+                &union,
+                staging.layer_nodata,
+            )?;
+            compose_values(
+                layer_values.as_deref(),
+                layer_mask.as_ref(),
+                &compatible,
+                &union,
+                staging.layer_nodata,
+                add_uncovered,
+                replace_overlap,
+            )?
+        }
+        _ => {
+            let mut sequence = head_base.members.clone();
+            for source in &compatible {
+                sequence.push(MemberSource {
+                    interpretation_id: format!("interp-{}", source.interp_hash),
+                    role: incoming_role.to_string(),
+                    grid: grid_for_source(source),
+                    raw_samples_path: source.raw_samples_path.clone(),
+                    valid_mask_path: source.valid_mask_path.clone(),
+                });
+            }
+            replay_members(&sequence, &union, staging.layer_nodata)?
+        }
+    };
     let published_cells = composed.valid.count_valid();
     let previous_cells = head.as_ref().map(|h| h.coverage_cells).unwrap_or(0);
 
@@ -637,6 +920,12 @@ pub fn apply_import(
                 "selection added no accepted coverage; existing generation kept".to_string(),
             ),
         });
+    }
+
+    // Durable per-interpretation assets for the incoming sources.
+    for source in &compatible {
+        check_cancel(cancel)?;
+        write_member_assets(engine, paths, cancel, source)?;
     }
 
     // Write the prepared mosaic + coverage mask into staging.
@@ -714,19 +1003,34 @@ pub fn apply_import(
                 .map_err(|e| e.to_string())?;
             for (ordinal, source) in compatible.iter().enumerate() {
                 let interpretation_id = format!("interp-{}", source.interp_hash);
-                let role = if replace_overlap { "replace" } else { "add" };
                 connection
                     .execute(
                         "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
                          VALUES(?1, ?2, ?3, ?4)",
-                        rusqlite::params![generation_id, interpretation_id, role, ordinal as i64],
+                        rusqlite::params![generation_id, interpretation_id, incoming_role, ordinal as i64],
                     )
                     .map_err(|e| e.to_string())?;
                 connection
                     .execute(
-                        "INSERT INTO lidar_acceptance_regions(id, generation_id, interpretation_id, decision)
+                        "INSERT INTO lidar_acceptance_regions(id, generation_id, interpretation_id, decision, job_id)
+                         VALUES(?1, ?2, ?3, ?4, ?5)",
+                        rusqlite::params![new_id("acc"), generation_id, interpretation_id, incoming_role, staging.job_id],
+                    )
+                    .map_err(|e| e.to_string())?;
+                catalogue::upsert_footprint(
+                    &connection,
+                    &interpretation_id,
+                    &layer_id,
+                    grid_for_source(source).bounds(),
+                )?;
+            }
+            // Preserve the full member sequence on the new generation.
+            for (ordinal, member) in head_base.members.iter().enumerate() {
+                connection
+                    .execute(
+                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
                          VALUES(?1, ?2, ?3, ?4)",
-                        rusqlite::params![new_id("acc"), generation_id, interpretation_id, role],
+                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64],
                     )
                     .map_err(|e| e.to_string())?;
             }
@@ -781,9 +1085,215 @@ pub fn apply_import(
     })
 }
 
-/// Best-effort display publication; presentation degrades silently when the
-/// engine or disk fails. Tile generation happens without any lock; only the
-/// cache row write takes the display-cache mutex.
+/// Undo one accepted import: republish the layer coverage without the
+/// interpretation that import introduced. Immutable history stays on disk.
+pub fn undo_import(
+    library: &LidarLibrary,
+    job_id: &str,
+    cancel: &AtomicBool,
+) -> Result<ApplyOutcome, String> {
+    let engine = &library.inner.engine;
+    let paths = &library.inner.paths;
+
+    // Short read: the import's accepted interpretation and the current head.
+    let (layer_id, interpretation_id, head, head_manifest) = {
+        let connection = library.catalogue()?;
+        let (layer_id, interpretation_id): (String, String) = connection
+            .query_row(
+                "SELECT g.layer_id, a.interpretation_id
+                 FROM lidar_acceptance_regions a
+                 JOIN lidar_layer_generations g ON g.id = a.generation_id
+                 WHERE a.job_id = ?1
+                 ORDER BY g.created_at DESC LIMIT 1",
+                [job_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .map_err(|_| "import has no accepted publication to undo".to_string())?;
+        let head = catalogue::head_generation(&connection, &layer_id)?
+            .ok_or_else(|| "layer has no accepted coverage".to_string())?;
+        let manifest = read_generation_manifest(&head.manifest_json)?;
+        (layer_id, interpretation_id, head, manifest)
+    };
+
+    // Resolve the remaining member sequence from durable assets.
+    let remaining: Vec<MemberSource> = {
+        let connection = library.catalogue()?;
+        let members = catalogue::generation_members(&connection, &head.id)?;
+        let mut resolved = Vec::new();
+        for (member_id, role) in members {
+            if member_id == interpretation_id {
+                continue;
+            }
+            let interp = catalogue::get_interpretation(&connection, &member_id)?
+                .ok_or_else(|| format!("missing interpretation {member_id}"))?;
+            let dir = member_prepared_dir(paths, &interp.interp_hash);
+            let raw = dir.join("values.raw");
+            let mask = dir.join("valid.bin");
+            if !raw.exists() || !mask.exists() {
+                return Err("cannot undo: this import predates durable member history".to_string());
+            }
+            let mut gt = [0.0f64; 6];
+            let parsed: Vec<f64> = serde_json::from_str(&interp.geotransform).unwrap_or_default();
+            for (slot, value) in parsed.iter().take(6).enumerate() {
+                gt[slot] = *value;
+            }
+            resolved.push(MemberSource {
+                interpretation_id: member_id,
+                role,
+                grid: RasterGrid {
+                    width: interp.width as u32,
+                    height: interp.height as u32,
+                    geotransform: gt,
+                },
+                raw_samples_path: raw,
+                valid_mask_path: mask,
+            });
+        }
+        resolved
+    };
+
+    let mut union = remaining
+        .first()
+        .map(|m| m.grid.clone())
+        .unwrap_or_else(|| head_manifest.grid.clone());
+    for member in &remaining {
+        union = union_grid(&union, &member.grid)?;
+    }
+    let composed = replay_members(&remaining, &union, head_manifest.nodata)?;
+    let published_cells = composed.valid.count_valid();
+
+    // Publish the new generation without the undone interpretation.
+    let generation_id = new_id("gen");
+    let pipeline_dir = paths.layer_pipeline_dir(&layer_id);
+    let staging_dir = pipeline_dir.join(format!("staging-{generation_id}"));
+    std::fs::create_dir_all(&staging_dir)
+        .map_err(|e| format!("Failed to create staging dir: {e}"))?;
+    let raw_path = staging_dir.join("mosaic.raw");
+    write_f32_raw(&raw_path, &composed.values)?;
+    let mosaic_path = staging_dir.join("mosaic.tif");
+    let crs_wkt = head_manifest.crs_wkt.clone();
+    raw_to_tif(
+        engine,
+        cancel,
+        &raw_path,
+        &mosaic_path,
+        &union,
+        &crs_wkt,
+        head_manifest.nodata,
+    )?;
+    let coverage_path = staging_dir.join("coverage.bin");
+    composed.valid.write_to(&coverage_path)?;
+    let _ = std::fs::remove_file(&raw_path);
+    let manifest = GenerationManifest {
+        grid: union.clone(),
+        nodata: head_manifest.nodata,
+        crs_wkt: crs_wkt.clone(),
+        members: remaining
+            .iter()
+            .map(|m| {
+                m.interpretation_id
+                    .trim_start_matches("interp-")
+                    .to_string()
+            })
+            .collect(),
+        engine_version: engine.discover().map(|t| t.version).unwrap_or_default(),
+        created_at: now_iso(),
+    };
+    let manifest_json = serde_json::to_string(&manifest).map_err(|e| e.to_string())?;
+    std::fs::write(staging_dir.join("manifest.json"), &manifest_json)
+        .map_err(|e| format!("Failed to write manifest: {e}"))?;
+    let bounds_3857 = raster_bounds_3857(engine, cancel, &union, &crs_wkt)?;
+
+    let generation_dir = pipeline_dir.join(format!("gen-{generation_id}"));
+    std::fs::rename(&staging_dir, &generation_dir)
+        .map_err(|e| format!("Failed to publish generation dir: {e}"))?;
+    let final_mosaic = generation_dir.join("mosaic.tif");
+    let final_coverage = generation_dir.join("coverage.bin");
+    {
+        let connection = library.catalogue()?;
+        connection
+            .execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| e.to_string())?;
+        let publish = (|| -> Result<(), String> {
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    rusqlite::params![
+                        generation_id,
+                        layer_id,
+                        now_iso(),
+                        final_mosaic.display().to_string(),
+                        final_coverage.display().to_string(),
+                        manifest_json,
+                        published_cells as i64,
+                        composed.min_value,
+                        composed.max_value,
+                        serde_json::to_string(&bounds_3857).map_err(|e| e.to_string())?,
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
+            for (ordinal, member) in remaining.iter().enumerate() {
+                connection
+                    .execute(
+                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal)
+                         VALUES(?1, ?2, ?3, ?4)",
+                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES(?1, ?2)
+                     ON CONFLICT(layer_id) DO UPDATE SET generation_id = excluded.generation_id",
+                    rusqlite::params![layer_id, generation_id],
+                )
+                .map_err(|e| e.to_string())?;
+            connection
+                .execute(
+                    "DELETE FROM lidar_source_footprints WHERE layer_id = ?1 AND interpretation_id = ?2",
+                    rusqlite::params![layer_id, interpretation_id],
+                )
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        })();
+        match publish {
+            Ok(()) => connection
+                .execute_batch("COMMIT")
+                .map_err(|e| e.to_string())?,
+            Err(error) => {
+                let _ = connection.execute_batch("ROLLBACK");
+                let _ = std::fs::remove_dir_all(&generation_dir);
+                return Err(error);
+            }
+        }
+    }
+
+    if published_cells > 0 {
+        publish_display(
+            library,
+            cancel,
+            "source",
+            &layer_id,
+            &generation_id,
+            &final_mosaic,
+            Some(head_manifest.nodata),
+            &ColorRamp::elevation_range(
+                composed.min_value,
+                composed.max_value.max(composed.min_value + 1.0),
+            ),
+        );
+    }
+
+    Ok(ApplyOutcome {
+        message: Some(format!(
+            "import undone; generation {generation_id} published"
+        )),
+        generation_id: generation_id.clone(),
+        published_cells,
+        changed: true,
+    })
+}
 #[allow(clippy::too_many_arguments)]
 pub fn publish_display(
     library: &LidarLibrary,
@@ -1170,4 +1680,123 @@ pub fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
         return Err("cancelled".to_string());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn member_fixture(
+        dir: &std::path::Path,
+        name: &str,
+        grid: &RasterGrid,
+        role: &str,
+        values: &[f32],
+    ) -> MemberSource {
+        std::fs::create_dir_all(dir).unwrap();
+        let raw = dir.join(format!("{name}.raw"));
+        let mut bytes = Vec::new();
+        for value in values {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        std::fs::write(&raw, &bytes).unwrap();
+        let mask_values: Vec<u8> = values
+            .iter()
+            .map(|v| if v.is_finite() && *v != -9999.0 { 1 } else { 0 })
+            .collect();
+        let mask = dir.join(format!("{name}.bin"));
+        std::fs::write(&mask, &mask_values).unwrap();
+        MemberSource {
+            interpretation_id: format!("interp-{name}"),
+            role: role.to_string(),
+            grid: grid.clone(),
+            raw_samples_path: raw,
+            valid_mask_path: mask,
+        }
+    }
+
+    fn sample(mosaic: &ComposedMosaic, grid: &RasterGrid, x: u32, y: u32) -> f32 {
+        mosaic.values[y as usize * grid.width as usize + x as usize]
+    }
+
+    #[test]
+    fn replay_adds_then_replaces_in_publication_order() {
+        let grid = RasterGrid {
+            width: 2,
+            height: 1,
+            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
+        };
+        let dir = std::env::temp_dir().join("canopi-replay-test");
+        // First member: add covers both cells (1.0, 2.0).
+        let first = member_fixture(&dir, "m1", &grid, "add", &[1.0, 2.0]);
+        let mosaic = replay_members(std::slice::from_ref(&first), &grid, -99999.0).unwrap();
+        assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
+        assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
+
+        // Second member: add only paints where the first left invalid.
+        let second = member_fixture(&dir, "m2", &grid, "add", &[9.0, 3.0]);
+        let mosaic = replay_members(&[first.clone(), second], &grid, -99999.0).unwrap();
+        assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
+        assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
+
+        // Replace member paints over accepted coverage.
+        let third = member_fixture(&dir, "m3", &grid, "replace", &[7.0, 8.0]);
+        let mosaic = replay_members(&[first, third], &grid, -99999.0).unwrap();
+        assert_eq!(sample(&mosaic, &grid, 0, 0), 7.0);
+        assert_eq!(sample(&mosaic, &grid, 1, 0), 8.0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replay_undoes_a_member_by_dropping_it_from_the_sequence() {
+        let grid = RasterGrid {
+            width: 2,
+            height: 1,
+            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
+        };
+        let dir = std::env::temp_dir().join("canopi-replay-undo");
+        // First import covers only the left cell.
+        let first = member_fixture(&dir, "a", &grid, "add", &[1.0, -9999.0]);
+        // Second import would cover both; accepted as uncovered-additions only.
+        let second = member_fixture(&dir, "b", &grid, "add", &[9.0, 3.0]);
+        let with_both = replay_members(&[first.clone(), second.clone()], &grid, -99999.0).unwrap();
+        assert_eq!(
+            sample(&with_both, &grid, 0, 0),
+            1.0,
+            "existing value wins the overlap"
+        );
+        assert_eq!(
+            sample(&with_both, &grid, 1, 0),
+            3.0,
+            "uncovered cell is filled"
+        );
+        assert_eq!(with_both.valid.count_valid(), 2);
+
+        // Undo the second import: replay only the first member.
+        let after_undo = replay_members(&[first], &grid, -99999.0).unwrap();
+        assert_eq!(sample(&after_undo, &grid, 0, 0), 1.0);
+        assert_eq!(
+            after_undo.valid.count_valid(),
+            1,
+            "the undone coverage disappears"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replay_invalid_member_cells_never_erase_accepted_coverage() {
+        let grid = RasterGrid {
+            width: 2,
+            height: 1,
+            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
+        };
+        let dir = std::env::temp_dir().join("canopi-replay-invalid");
+        let first = member_fixture(&dir, "base", &grid, "add", &[5.0, 6.0]);
+        // Replace member whose second cell is nodata: cell 1 must keep 6.0.
+        let replacer = member_fixture(&dir, "repl", &grid, "replace", &[4.0, -9999.0]);
+        let mosaic = replay_members(&[first, replacer], &grid, -99999.0).unwrap();
+        assert_eq!(sample(&mosaic, &grid, 0, 0), 4.0);
+        assert_eq!(sample(&mosaic, &grid, 1, 0), 6.0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

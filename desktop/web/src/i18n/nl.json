@@ -455,7 +455,11 @@
         "replaceOverlap": "Overlap vervangen",
         "apply": "Toepassen",
         "cancel": "Annuleren"
-      }
+      },
+      "history": "Geschiedenis",
+      "historyCells": "cellen",
+      "historyHead": "huidig",
+      "historyUndo": "Import ongedaan maken"
     }
   },
   "worldMap": {

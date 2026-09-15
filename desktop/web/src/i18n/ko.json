@@ -455,7 +455,11 @@
         "replaceOverlap": "중복 영역 교체",
         "apply": "적용",
         "cancel": "취소"
-      }
+      },
+      "history": "기록",
+      "historyCells": "셀",
+      "historyHead": "현재",
+      "historyUndo": "가져오기 취소"
     }
   },
   "worldMap": {

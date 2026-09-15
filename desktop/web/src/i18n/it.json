@@ -455,7 +455,11 @@
         "replaceOverlap": "Sostituisci sovrapposizione",
         "apply": "Applica",
         "cancel": "Annulla"
-      }
+      },
+      "history": "Cronologia",
+      "historyCells": "celle",
+      "historyHead": "attuale",
+      "historyUndo": "Annulla importazione"
     }
   },
   "worldMap": {

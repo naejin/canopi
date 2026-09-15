@@ -10,7 +10,10 @@ import {
   lidarDeleteLayerImpact,
   lidarGetImportJob,
   lidarRenameLayer,
+  lidarLayerHistory,
   lidarStageImport,
+  lidarUndoImport,
+  type LidarGenerationHistoryEntry,
   type LidarImportJob,
 } from '../../ipc/lidar'
 import { patchLidarEntryById, removeLidarEntries, upsertLidarEntry } from '../design-edit/lidar'
@@ -126,6 +129,19 @@ export async function deleteLidarAnalysis(definitionId: string): Promise<void> {
   await lidarDeleteAnalysis(definitionId)
   await refreshLidarLibrary()
   removePresentedEntities([definitionId])
+}
+
+export async function fetchLayerHistory(
+  layerId: string,
+): Promise<LidarGenerationHistoryEntry[]> {
+  return lidarLayerHistory(layerId)
+}
+
+/** Undo one accepted import; republishes the layer without it. */
+export async function undoAcceptedImport(jobId: string): Promise<void> {
+  await lidarUndoImport(jobId)
+  ensureLidarPolling()
+  await refreshLidarLibrary()
 }
 
 export function setLidarEntryVisibility(id: string, visible: boolean): void {

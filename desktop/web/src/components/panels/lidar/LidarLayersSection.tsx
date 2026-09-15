@@ -14,10 +14,13 @@ import {
   createLidarLayer,
   deleteLidarAnalysis,
   deleteLidarLayer,
+  fetchLayerHistory,
   setLidarEntryOpacity,
   setLidarEntryVisibility,
   startImportForLayer,
+  undoAcceptedImport,
 } from '../../../app/lidar/actions'
+import type { LidarGenerationHistoryEntry } from '../../../ipc/lidar'
 import { currentDesign } from '../../../app/document-session/store'
 import styles from './lidar-layers-section.module.css'
 
@@ -107,9 +110,18 @@ function LidarSourceRow({
   readonly results: readonly LidarPresentationItem[]
 }) {
   const [impactText, setImpactText] = useState<string | null>(null)
+  const [history, setHistory] = useState<LidarGenerationHistoryEntry[] | null>(null)
   const library = lidarLibrary.value
   const layer = library?.layers.find((candidate) => candidate.id === item.id)
   const referencedCount = countDesignReferences(item.id)
+
+  const toggleHistory = (): void => {
+    if (history !== null) {
+      setHistory(null)
+      return
+    }
+    void fetchLayerHistory(item.id).then(setHistory)
+  }
 
   const armDelete = (): void => {
     const analysisCount = library?.analyses.filter(
@@ -147,6 +159,9 @@ function LidarSourceRow({
             {t('canvas.lidar.analyse')}
           </button>
         )}
+        <button type="button" className={styles.action} onClick={toggleHistory}>
+          {t('canvas.lidar.history')}
+        </button>
         {impactText === null ? (
           <button type="button" className={styles.action} onClick={armDelete}>
             {t('canvas.lidar.delete')}
@@ -169,6 +184,26 @@ function LidarSourceRow({
       {results.map((result) => (
         <LidarAnalysisRow key={result.id} item={result} />
       ))}
+      {history !== null && (
+        <ul className={styles.historyList}>
+          {history.map((entry) => (
+            <li key={entry.id} className={styles.historyEntry}>
+              <span className={styles.historyId}>{entry.id.slice(-8)}</span>
+              <span>{Number(entry.coverage_cells).toLocaleString()} {t('canvas.lidar.historyCells')}</span>
+              {entry.is_head && <span className={styles.chip}>{t('canvas.lidar.historyHead')}</span>}
+              {!entry.is_head && entry.job_ids.length > 0 && (
+                <button
+                  type="button"
+                  className={styles.action}
+                  onClick={() => void undoAcceptedImport(entry.job_ids[0] as string)}
+                >
+                  {t('canvas.lidar.historyUndo')}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

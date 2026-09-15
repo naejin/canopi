@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
   LidarDeleteImpact,
+  LidarGenerationHistoryEntry,
   LidarEngineStatus,
   LidarImportJob,
   LidarAnalysisJobStatus,
@@ -13,6 +14,7 @@ import type {
 
 export type {
   LidarTileset,
+  LidarGenerationHistoryEntry,
   LidarAnalysisSummary,
   LidarLayerSummary,
   LidarDeleteImpact,
@@ -93,4 +95,14 @@ export async function lidarCancelAnalysisJob(jobId: string): Promise<void> {
 
 export async function lidarDeleteAnalysis(definitionId: string): Promise<void> {
   return invoke('lidar_delete_analysis', { definitionId })
+}
+
+export async function lidarLayerHistory(
+  layerId: string,
+): Promise<LidarGenerationHistoryEntry[]> {
+  return invoke('lidar_layer_history', { layerId })
+}
+
+export async function lidarUndoImport(jobId: string): Promise<void> {
+  return invoke('lidar_undo_import', { jobId })
 }

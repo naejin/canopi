@@ -455,7 +455,11 @@
         "replaceOverlap": "Заменить перекрытия",
         "apply": "Применить",
         "cancel": "Отмена"
-      }
+      },
+      "history": "История",
+      "historyCells": "ячеек",
+      "historyHead": "текущий",
+      "historyUndo": "Отменить импорт"
     }
   },
   "worldMap": {

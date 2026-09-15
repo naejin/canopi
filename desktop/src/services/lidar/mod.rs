@@ -68,6 +68,7 @@ impl LidarLibrary {
             let connection = library.catalogue()?;
             analysis::recover_interrupted_jobs(&connection)?;
         }
+        library.prune_transient_artifacts()?;
         Ok(library)
     }
 
@@ -99,6 +100,118 @@ impl LidarLibrary {
             .display_cache
             .lock()
             .map_err(|_| "LiDAR display cache lock poisoned".to_string())
+    }
+
+    /// Best-effort bounded cleanup at startup: job scratch dirs for settled
+    /// jobs, abandoned analysis staging dirs, and display tilesets of
+    /// superseded generations (they can be re-rendered on demand).
+    fn prune_transient_artifacts(&self) -> Result<(), String> {
+        let connection = self.catalogue()?;
+        let settled: Vec<(String, String)> = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, state FROM lidar_import_jobs WHERE state != 'staging'
+                     AND state != 'awaiting_review' AND state != 'applying'",
+                )
+                .map_err(|e| e.to_string())?;
+            statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
+        drop(connection);
+        for (job_id, _state) in settled {
+            let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(&job_id));
+        }
+        // Superseded generations keep their immutable numeric history but
+        // lose their display tilesets (re-renderable on demand).
+        let live_generation_ids: Vec<String> = {
+            let connection = self.catalogue()?;
+            let mut statement = connection
+                .prepare(
+                    "SELECT generation_id FROM lidar_layer_heads
+                     UNION SELECT generation_id FROM lidar_analysis_heads",
+                )
+                .map_err(|e| e.to_string())?;
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(statement);
+            rows
+        };
+        {
+            let display = self.display()?;
+            if live_generation_ids.is_empty() {
+                display
+                    .execute_batch("DELETE FROM tilesets")
+                    .map_err(|e| format!("Failed to prune display tilesets: {e}"))?;
+            } else {
+                let placeholders = vec!["?"; live_generation_ids.len()].join(", ");
+                let sql =
+                    format!("DELETE FROM tilesets WHERE generation_id NOT IN ({placeholders})");
+                let mut statement = display
+                    .prepare(&sql)
+                    .map_err(|e| format!("Failed to prune display tilesets: {e}"))?;
+                statement
+                    .execute(rusqlite::params_from_iter(live_generation_ids.iter()))
+                    .map_err(|e| format!("Failed to prune display tilesets: {e}"))?;
+            }
+        }
+        // Remove on-disk display generation dirs that have no tileset row.
+        let live: std::collections::HashSet<String> = {
+            let display = self.display()?;
+            let mut statement = display
+                .prepare(
+                    "SELECT entity_kind || '/' || entity_id || '/' || generation_id FROM tilesets",
+                )
+                .map_err(|e| e.to_string())?;
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            rows.into_iter().collect()
+        };
+        let display_root = self.inner.paths.display_dir();
+        for kind_dir in std::fs::read_dir(&display_root)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            for entity_dir in std::fs::read_dir(kind_dir.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                for gen_dir in std::fs::read_dir(entity_dir.path())
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                {
+                    let relative = format!(
+                        "{}/{}",
+                        entity_dir.file_name().to_string_lossy(),
+                        gen_dir.file_name().to_string_lossy()
+                    );
+                    let _ = gen_dir; // style subdirs live inside; drop whole generation
+                    let key_prefix = relative.clone();
+                    let has_live_row = live.iter().any(|entry| entry.starts_with(&key_prefix));
+                    if !has_live_row {
+                        let _ = std::fs::remove_dir_all(gen_dir.path());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn refresh_snapshot_quiet(&self) {
+        let _ = self.library_snapshot();
     }
 
     pub fn engine_status(&self) -> common_types::lidar::LidarEngineStatus {
@@ -234,6 +347,77 @@ impl LidarLibrary {
                 Err(error)
             }
         }
+    }
+
+    /// Immutable publication history of a source layer, oldest first.
+    pub fn layer_history(
+        &self,
+        layer_id: &str,
+    ) -> Result<Vec<common_types::lidar::LidarGenerationHistoryEntry>, String> {
+        let connection = self.catalogue()?;
+        let entries = catalogue::layer_history(&connection, layer_id)?;
+        Ok(entries
+            .into_iter()
+            .map(|entry| common_types::lidar::LidarGenerationHistoryEntry {
+                id: entry.id,
+                created_at: entry.created_at,
+                coverage_cells: entry.coverage_cells.max(0) as u64,
+                members: entry.members,
+                roles: entry.roles,
+                job_ids: entry.job_ids,
+                is_head: entry.is_head,
+            })
+            .collect())
+    }
+
+    /// Validate that an import job has an accepted publication to undo
+    /// (short catalogue read; called through the executor from the command).
+    pub fn validate_undo(&self, job_id: &str) -> Result<String, String> {
+        let connection = self.catalogue()?;
+        connection
+            .query_row(
+                "SELECT g.layer_id FROM lidar_acceptance_regions a
+                 JOIN lidar_layer_generations g ON g.id = a.generation_id
+                 WHERE a.job_id = ?1 LIMIT 1",
+                [job_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|_| "import has no accepted publication to undo".to_string())
+    }
+
+    /// Spawn the undo: republish the layer without the import's
+    /// interpretation. Immutable history stays on disk.
+    pub fn begin_undo(&self, job_id: &str) -> Result<(), String> {
+        let executor = self.executor()?;
+        let flag = self.register_cancel(job_id);
+        let library = self.clone();
+        let job_id_for_work = job_id.to_string();
+        let job_id_owned = job_id.to_string();
+        tauri::async_runtime::spawn(async move {
+            let library_for_work = library.clone();
+            let outcome = executor
+                .run(
+                    crate::native_operation::NativeOperationClass::Local,
+                    "lidar import undo",
+                    move || import::undo_import(&library_for_work, &job_id_for_work, &flag),
+                )
+                .await;
+            match outcome {
+                Ok(applied) => {
+                    tracing::info!(
+                        job_id = job_id_owned,
+                        summary = applied.summary(),
+                        "LiDAR import undone"
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(job_id = job_id_owned, error, "LiDAR import undo failed");
+                }
+            }
+            library.settle_cancel(&job_id_owned);
+            library.refresh_snapshot_quiet();
+        });
+        Ok(())
     }
 
     pub fn get_import_job(&self, job_id: &str) -> Result<Option<LidarImportJob>, String> {

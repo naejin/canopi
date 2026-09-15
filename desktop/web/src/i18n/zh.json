@@ -455,7 +455,11 @@
         "replaceOverlap": "替换重叠区域",
         "apply": "应用",
         "cancel": "取消"
-      }
+      },
+      "history": "历史",
+      "historyCells": "个像元",
+      "historyHead": "当前",
+      "historyUndo": "撤销导入"
     }
   },
   "worldMap": {
