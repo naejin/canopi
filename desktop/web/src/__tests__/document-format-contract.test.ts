@@ -99,6 +99,17 @@ describe('document format contract', () => {
         currency: 'USD',
       }],
       budget_currency: 'USD',
+      lidar: {
+        schema_version: 1,
+        entries: [{
+          kind: 'Source',
+          id: 'document-lidar',
+          visible: true,
+          opacity: 0.65,
+          order: 0,
+          style: null,
+        }],
+      },
       created_at: '2026-04-13T01:00:00.000Z',
       extra: {
         future_panel_field: { source: 'document' },
@@ -385,6 +396,17 @@ describe('document format contract', () => {
         currency: 'USD',
       }],
       budget_currency: 'USD',
+      lidar: {
+        schema_version: 1,
+        entries: [{
+          kind: 'Source',
+          id: 'saved-lidar',
+          visible: true,
+          opacity: 0.8,
+          order: 0,
+          style: null,
+        }],
+      },
       extra: {
         guides: [{ id: 'old-guide', axis: 'h', position: 12 }],
         future_panel_field: { preserve: true },
@@ -455,6 +477,7 @@ describe('document format contract', () => {
     expect(saved.timeline).toEqual(document.timeline)
     expect(saved.budget).toEqual(document.budget)
     expect(saved.budget_currency).toBe('USD')
+    expect(saved.lidar).toEqual(document.lidar)
     expect(saved.plant_species_colors).toEqual(canvas.plant_species_colors)
     expect(saved.layers).toEqual(canvas.layers)
     expect(saved.plants).toEqual(canvas.plants)

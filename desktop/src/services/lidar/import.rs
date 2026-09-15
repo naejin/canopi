@@ -808,12 +808,7 @@ pub fn apply_import(
                         resolved.clear();
                         break;
                     }
-                    let mut gt = [0.0f64; 6];
-                    let parsed: Vec<f64> =
-                        serde_json::from_str(&interp.geotransform).unwrap_or_default();
-                    for (slot, value) in parsed.iter().take(6).enumerate() {
-                        gt[slot] = *value;
-                    }
+                    let gt = parse_geotransform(&interp.geotransform)?;
                     resolved.push(MemberSource {
                         interpretation_id,
                         role,
@@ -1138,11 +1133,7 @@ pub fn undo_import(
             if !raw.exists() || !mask.exists() {
                 return Err("cannot undo: this import predates durable member history".to_string());
             }
-            let mut gt = [0.0f64; 6];
-            let parsed: Vec<f64> = serde_json::from_str(&interp.geotransform).unwrap_or_default();
-            for (slot, value) in parsed.iter().take(6).enumerate() {
-                gt[slot] = *value;
-            }
+            let gt = parse_geotransform(&interp.geotransform)?;
             resolved.push(MemberSource {
                 interpretation_id: member_id,
                 role,
@@ -1671,10 +1662,31 @@ fn grid_for_source(source: &StagedSource) -> RasterGrid {
 }
 
 fn format_geotransform(gt: GeoTransform) -> String {
-    gt.iter()
-        .map(|v| format!("{v}"))
-        .collect::<Vec<_>>()
-        .join(",")
+    format!(
+        "[{},{},{},{},{},{}]",
+        gt[0], gt[1], gt[2], gt[3], gt[4], gt[5]
+    )
+}
+
+fn parse_geotransform(raw: &str) -> Result<GeoTransform, String> {
+    let values = match serde_json::from_str::<Vec<f64>>(raw) {
+        Ok(values) => values,
+        Err(json_error) => raw
+            .split(',')
+            .map(|value| value.trim().parse::<f64>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| format!("Invalid stored geotransform: {json_error}"))?,
+    };
+    let transform: GeoTransform = values.try_into().map_err(|values: Vec<f64>| {
+        format!(
+            "Invalid stored geotransform: expected 6 values, found {}",
+            values.len()
+        )
+    })?;
+    if !transform.iter().all(|value| value.is_finite()) {
+        return Err("Invalid stored geotransform: values must be finite".to_string());
+    }
+    Ok(transform)
 }
 
 fn engine_version(engine: &GdalEngine) -> String {
@@ -1691,6 +1703,25 @@ pub fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn geotransform_storage_round_trips_and_reads_legacy_rows() {
+        let transform = [445999.75, 0.5, 0.0, 6807000.25, 0.0, -0.5];
+        assert_eq!(
+            parse_geotransform(&format_geotransform(transform)).unwrap(),
+            transform
+        );
+        assert_eq!(
+            parse_geotransform("445999.75,0.5,0,6807000.25,0,-0.5").unwrap(),
+            transform
+        );
+    }
+
+    #[test]
+    fn geotransform_storage_rejects_missing_or_non_finite_values() {
+        assert!(parse_geotransform("[1,2,3]").is_err());
+        assert!(parse_geotransform("0,1,0,1,0,NaN").is_err());
+    }
 
     fn member_fixture(
         dir: &std::path::Path,

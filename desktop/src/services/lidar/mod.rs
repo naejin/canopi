@@ -193,15 +193,16 @@ impl LidarLibrary {
                     .flatten()
                     .flatten()
                 {
-                    let relative = format!(
-                        "{}/{}",
+                    let key = format!(
+                        "{}/{}/{}",
+                        kind_dir.file_name().to_string_lossy(),
                         entity_dir.file_name().to_string_lossy(),
                         gen_dir.file_name().to_string_lossy()
                     );
-                    let _ = gen_dir; // style subdirs live inside; drop whole generation
-                    let key_prefix = relative.clone();
-                    let has_live_row = live.iter().any(|entry| entry.starts_with(&key_prefix));
-                    if !has_live_row {
+                    // Style subdirectories live inside a generation. Keep the
+                    // directory only when the display registry owns that exact
+                    // entity generation.
+                    if !live.contains(&key) {
                         let _ = std::fs::remove_dir_all(gen_dir.path());
                     }
                 }
@@ -841,6 +842,86 @@ impl LidarLibrary {
                 Err(error)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn startup_pruning_keeps_live_display_generation_and_removes_stale_one() {
+        let root = std::env::temp_dir().join(new_id("lidar-prune-test"));
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+        let layer_id = library
+            .create_layer(
+                "Pruning fixture",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let live_generation = new_id("gen");
+        let stale_generation = new_id("gen");
+        {
+            let connection = library.catalogue().unwrap();
+            connection.execute(
+                "INSERT INTO lidar_layer_generations
+                 (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                  coverage_cells, min_value, max_value, bounds_3857)
+                 VALUES (?1, ?2, ?3, '', '', '{}', 1, 0, 1, '[0,0,1,1]')",
+                rusqlite::params![live_generation, layer_id, now_iso()],
+            ).unwrap();
+            connection.execute(
+                "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)",
+                rusqlite::params![layer_id, live_generation],
+            ).unwrap();
+        }
+        let live_dir = library.inner.paths.display_generation_dir(
+            "source", &layer_id, &live_generation, "elevation",
+        );
+        let stale_dir = library.inner.paths.display_generation_dir(
+            "source", &layer_id, &stale_generation, "elevation",
+        );
+        std::fs::create_dir_all(&live_dir).unwrap();
+        std::fs::create_dir_all(&stale_dir).unwrap();
+        std::fs::write(live_dir.join("13_0_0.png"), b"live").unwrap();
+        std::fs::write(stale_dir.join("13_0_0.png"), b"stale").unwrap();
+        {
+            let display = library.display().unwrap();
+            for (generation, dir) in [
+                (&live_generation, &live_dir),
+                (&stale_generation, &stale_dir),
+            ] {
+                display.execute(
+                    "INSERT INTO tilesets
+                     (key, entity_kind, entity_id, generation_id, style, dir, path_template,
+                      min_zoom, max_zoom, bounds_3857, tile_count, bytes, created_at)
+                     VALUES (?1, 'source', ?2, ?3, 'elevation', ?4, ?5,
+                             13, 13, '[0,0,1,1]', 1, 4, ?6)",
+                    rusqlite::params![
+                        format!("source/{layer_id}/{generation}/elevation"),
+                        layer_id,
+                        generation,
+                        dir.display().to_string(),
+                        dir.join("{z}_{x}_{y}.png").display().to_string(),
+                        now_iso(),
+                    ],
+                ).unwrap();
+            }
+        }
+        drop(library);
+
+        let reopened = LidarLibrary::open(&root).unwrap();
+        assert!(live_dir.join("13_0_0.png").is_file());
+        assert!(!stale_dir.exists());
+        let display = reopened.display().unwrap();
+        let remaining: i64 = display
+            .query_row("SELECT COUNT(*) FROM tilesets", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(remaining, 1);
+        drop(display);
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
 

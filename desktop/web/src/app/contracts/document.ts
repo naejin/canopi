@@ -110,7 +110,9 @@ function composeKnownDocumentFields(
 
   for (const key of DOCUMENT_FILE_KNOWN_KEYS) {
     if (key === 'extra') continue
-    output[key] = ownedFieldSource(key, document, canvas)[key]
+    const value = ownedFieldSource(key, document, canvas)[key]
+    if (key === 'lidar' && value == null) continue
+    output[key] = value
   }
 
   output.extra = composeDocumentExtra(document.extra, canvas.extra)
@@ -145,6 +147,7 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     timeline: file.timeline ?? [],
     budget: file.budget ?? [],
     budget_currency: file.budget_currency ?? DEFAULT_BUDGET_CURRENCY,
+    ...(file.lidar == null ? {} : { lidar: file.lidar }),
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),
