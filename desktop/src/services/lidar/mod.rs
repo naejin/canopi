@@ -20,7 +20,7 @@ pub mod probe;
 use catalogue::{new_id, now_iso};
 use common_types::lidar::{
     LidarAnalysisJobStatus, LidarAnalysisKind, LidarAnalysisParameters, LidarImportJob,
-    LidarImportJobState, LidarResultState,
+    LidarImportJobState, LidarImportProgress, LidarImportProgressPhase, LidarResultState,
 };
 use engine::GdalEngine;
 use paths::LidarPaths;
@@ -465,13 +465,45 @@ impl LidarLibrary {
             .map(serde_json::from_str)
             .transpose()
             .map_err(|e| format!("Invalid stored review: {e}"))?;
+        let progress = row
+            .progress_phase
+            .as_deref()
+            .and_then(parse_import_progress_phase)
+            .zip(row.progress_percent)
+            .and_then(|(phase, percent)| {
+                u8::try_from(percent)
+                    .ok()
+                    .filter(|percent| *percent <= 100)
+                    .map(|percent| LidarImportProgress { phase, percent })
+            });
         Ok(Some(LidarImportJob {
             job_id: row.id,
             layer_id: row.layer_id,
             state: parse_import_state(&row.state),
             review,
             message: row.message,
+            progress,
         }))
+    }
+
+    pub(crate) fn record_import_progress(
+        &self,
+        job_id: &str,
+        phase: LidarImportProgressPhase,
+        percent: u8,
+    ) {
+        let result = self.catalogue().and_then(|connection| {
+            catalogue::update_import_progress(
+                &connection,
+                job_id,
+                import_progress_phase_key(phase),
+                percent,
+            )
+            .map(|_| ())
+        });
+        if let Err(error) = result {
+            tracing::warn!(job_id, error, "LiDAR import progress update failed");
+        }
     }
 
     pub fn analysis_job_status(
@@ -613,6 +645,7 @@ impl LidarLibrary {
                         .execute(
                             "UPDATE lidar_import_jobs
                          SET state = 'awaiting_review', review_json = ?2, message = NULL,
+                             progress_phase = NULL, progress_percent = NULL,
                              updated_at = ?3
                          WHERE id = ?1 AND state = 'staging'",
                             rusqlite::params![job_id, review_json, now_iso()],
@@ -629,7 +662,9 @@ impl LidarLibrary {
                         ("failed", error)
                     };
                     let _ = connection.execute(
-                        "UPDATE lidar_import_jobs SET state = ?2, message = ?3, updated_at = ?4 WHERE id = ?1",
+                        "UPDATE lidar_import_jobs
+                         SET state = ?2, message = ?3, progress_phase = NULL,
+                             progress_percent = NULL, updated_at = ?4 WHERE id = ?1",
                         rusqlite::params![job_id, state, message, now_iso()],
                     );
                 }
@@ -652,7 +687,10 @@ impl LidarLibrary {
         }
         connection
             .execute(
-                "UPDATE lidar_import_jobs SET state = 'applying', updated_at = ?2 WHERE id = ?1",
+                "UPDATE lidar_import_jobs
+                 SET state = 'applying', message = NULL,
+                     progress_phase = 'composing_layer', progress_percent = 0,
+                     updated_at = ?2 WHERE id = ?1",
                 rusqlite::params![job_id, now_iso()],
             )
             .map_err(|e| e.to_string())?;
@@ -737,10 +775,13 @@ impl LidarLibrary {
                                 |row| row.get::<_, String>(0),
                             )
                             .ok();
-                    } else if let Some(message) = applied.message {
+                    } else {
                         let _ = connection.execute(
-                            "UPDATE lidar_import_jobs SET message = ?2, updated_at = ?3 WHERE id = ?1",
-                            rusqlite::params![job_id, message, now_iso()],
+                            "UPDATE lidar_import_jobs
+                             SET state = 'complete', message = ?2,
+                                 progress_phase = 'finalizing', progress_percent = 100,
+                                 updated_at = ?3 WHERE id = ?1 AND state = 'applying'",
+                            rusqlite::params![job_id, applied.message, now_iso()],
                         );
                     }
                 }
@@ -760,6 +801,8 @@ impl LidarLibrary {
                         "UPDATE lidar_import_jobs
                          SET state = ?2, message = ?3,
                              review_json = CASE WHEN ?2 = 'staging' THEN NULL ELSE review_json END,
+                             progress_phase = CASE WHEN ?2 = 'staging' THEN NULL ELSE progress_phase END,
+                             progress_percent = CASE WHEN ?2 = 'staging' THEN NULL ELSE progress_percent END,
                              updated_at = ?4 WHERE id = ?1",
                         rusqlite::params![job_id, state, message, now_iso()],
                     );
@@ -1349,6 +1392,25 @@ fn parse_import_state(raw: &str) -> LidarImportJobState {
         "cancelled" => LidarImportJobState::Cancelled,
         "failed" => LidarImportJobState::Failed,
         _ => LidarImportJobState::Staging,
+    }
+}
+
+fn import_progress_phase_key(phase: LidarImportProgressPhase) -> &'static str {
+    match phase {
+        LidarImportProgressPhase::ComposingLayer => "composing_layer",
+        LidarImportProgressPhase::PreparingRaster => "preparing_raster",
+        LidarImportProgressPhase::RenderingMap => "rendering_map",
+        LidarImportProgressPhase::Finalizing => "finalizing",
+    }
+}
+
+fn parse_import_progress_phase(raw: &str) -> Option<LidarImportProgressPhase> {
+    match raw {
+        "composing_layer" => Some(LidarImportProgressPhase::ComposingLayer),
+        "preparing_raster" => Some(LidarImportProgressPhase::PreparingRaster),
+        "rendering_map" => Some(LidarImportProgressPhase::RenderingMap),
+        "finalizing" => Some(LidarImportProgressPhase::Finalizing),
+        _ => None,
     }
 }
 

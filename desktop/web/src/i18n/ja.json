@@ -434,7 +434,13 @@
       "collapsedResults": "{{count}} 件中 {{visible}} 件の結果を表示",
       "emptyState": "空",
       "backToLayers": "レイヤーに戻る",
-      "progressNoEstimate": "バックグラウンドで処理中です。キャンセルせずにレイヤーへ戻れます。",
+      "progressBackground": "バックグラウンドで処理中です。キャンセルせずにレイヤーへ戻れます。",
+      "progressPhase": {
+        "ComposingLayer": "レイヤーを合成中",
+        "PreparingRaster": "ラスターを準備中",
+        "RenderingMap": "マップを生成中",
+        "Finalizing": "完了処理中"
+      },
       "importFailed": "取り込みを完了できませんでした。",
       "addAgain": "レイヤーに戻る",
       "cancelledAcknowledgement": "この取り込みからデータは公開されませんでした。",

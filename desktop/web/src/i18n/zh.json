@@ -434,7 +434,13 @@
       "collapsedResults": "{{count}} 个结果中有 {{visible}} 个可见",
       "emptyState": "空",
       "backToLayers": "返回图层",
-      "progressNoEstimate": "正在后台处理。返回图层不会取消任务。",
+      "progressBackground": "正在后台处理。返回图层不会取消任务。",
+      "progressPhase": {
+        "ComposingLayer": "正在合成图层",
+        "PreparingRaster": "正在准备栅格",
+        "RenderingMap": "正在生成地图",
+        "Finalizing": "正在完成"
+      },
       "importFailed": "无法完成导入。",
       "addAgain": "返回图层",
       "cancelledAcknowledgement": "此次导入未发布任何数据。",

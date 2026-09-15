@@ -551,6 +551,21 @@
   background: var(--color-border);
 }
 
+.progressMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.progressMeta strong {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .progress span {
   display: block;
   width: 40%;
@@ -558,6 +573,12 @@
   border-radius: inherit;
   background: var(--color-primary);
   animation: lidar-progress 1.2s ease-in-out infinite;
+}
+
+.progressDeterminate span {
+  animation: none;
+  transform: none;
+  transition: width var(--transition-fast);
 }
 
 .reviewFooter {

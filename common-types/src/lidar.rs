@@ -87,6 +87,23 @@ pub enum LidarImportJobState {
     Failed,
 }
 
+/// Backend-owned phases for determinate import publication progress.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarImportProgressPhase {
+    ComposingLayer,
+    PreparingRaster,
+    RenderingMap,
+    Finalizing,
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct LidarImportProgress {
+    pub phase: LidarImportProgressPhase,
+    pub percent: u8,
+}
+
 /// Detected external raster engine used behind the narrow LiDAR adapter.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -233,6 +250,7 @@ pub struct LidarImportJob {
     pub state: LidarImportJobState,
     pub review: Option<LidarImportReview>,
     pub message: Option<String>,
+    pub progress: Option<LidarImportProgress>,
 }
 
 /// Receipt returned when an analysis definition is created and its first

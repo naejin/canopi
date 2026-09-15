@@ -32,6 +32,7 @@ function importJob(state: LidarImportJob['state']): LidarImportJob {
     state,
     review: null,
     message: null,
+    progress: null,
   }
 }
 

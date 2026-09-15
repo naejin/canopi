@@ -49,6 +49,7 @@ type DetailMode = 'settings' | 'history' | 'delete'
 
 export function LidarLayersSection() {
   const library = lidarLibrary.value
+  const trackedImport = openImportJob.value
   const items = readLidarPresentation(currentDesign.value, library)
   const sources = items.filter((item) => item.kind === 'Source')
   const analysesById = new Map(
@@ -152,9 +153,13 @@ export function LidarLayersSection() {
           </button>
         </div>
       )}
-      {openImportJob.value !== null && !importPanelOpen.value && (
+      {trackedImport !== null && !importPanelOpen.value && (
         <button type="button" className={styles.pendingReview} onClick={showTrackedImport}>
-          <span>{t(`canvas.lidar.jobState.${openImportJob.value.state}`)}</span>
+          <span>
+            {trackedImport.progress
+              ? `${t(`canvas.lidar.progressPhase.${trackedImport.progress.phase}`)} · ${trackedImport.progress.percent}%`
+              : t(`canvas.lidar.jobState.${trackedImport.state}`)}
+          </span>
           <span>{t('canvas.lidar.openImport')}</span>
         </button>
       )}
@@ -375,6 +380,13 @@ export function LidarImportPanel() {
   if (job === null) return null
   const review = job.review
   const active = job.state === 'Staging' || job.state === 'Applying'
+  const progress = active ? job.progress : null
+  const progressPercent = progress === null
+    ? null
+    : Math.max(0, Math.min(100, Math.round(progress.percent)))
+  const progressLabel = progress === null
+    ? t(`canvas.lidar.jobState.${job.state}`)
+    : t(`canvas.lidar.progressPhase.${progress.phase}`)
   const terminal = job.state === 'Complete' || job.state === 'Cancelled' || job.state === 'Failed'
   const previewMatchesDecision = decisionPreview?.add_uncovered === addUncovered
     && decisionPreview?.replace_overlap === replaceOverlap
@@ -396,8 +408,25 @@ export function LidarImportPanel() {
         <section className={styles.reviewSection}>
           <h3>{t(`canvas.lidar.jobState.${job.state}`)}</h3>
           {job.message && <p className={styles.detailSummary}>{job.message}</p>}
-          {active && <div className={styles.progress} role="status"><span /></div>}
-          {active && <p className={styles.detailSummary}>{t('canvas.lidar.progressNoEstimate')}</p>}
+          {active && (
+            <>
+              <div className={styles.progressMeta}>
+                <span>{progressLabel}</span>
+                {progressPercent !== null && <strong>{progressPercent}%</strong>}
+              </div>
+              <div
+                className={`${styles.progress} ${progressPercent !== null ? styles.progressDeterminate : ''}`}
+                role="progressbar"
+                aria-label={progressLabel}
+                aria-valuemin={progressPercent !== null ? 0 : undefined}
+                aria-valuemax={progressPercent !== null ? 100 : undefined}
+                aria-valuenow={progressPercent ?? undefined}
+              >
+                <span style={progressPercent !== null ? { width: `${progressPercent}%` } : undefined} />
+              </div>
+              <p className={styles.detailSummary}>{t('canvas.lidar.progressBackground')}</p>
+            </>
+          )}
         </section>
         {review && (
           <>

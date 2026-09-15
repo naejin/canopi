@@ -434,7 +434,13 @@
       "collapsedResults": "{{visible}} de {{count}} resultados visibles",
       "emptyState": "vacía",
       "backToLayers": "Volver a capas",
-      "progressNoEstimate": "Procesando en segundo plano. Puede volver a Capas sin cancelar.",
+      "progressBackground": "Procesando en segundo plano. Puede volver a Capas sin cancelar.",
+      "progressPhase": {
+        "ComposingLayer": "Componiendo la capa",
+        "PreparingRaster": "Preparando el ráster",
+        "RenderingMap": "Generando el mapa",
+        "Finalizing": "Finalizando"
+      },
       "importFailed": "No se pudo completar la importación.",
       "addAgain": "Volver a capas",
       "cancelledAcknowledgement": "No se publicaron datos de esta importación.",

@@ -434,7 +434,13 @@
       "collapsedResults": "{{visible}} de {{count}} resultados visíveis",
       "emptyState": "vazia",
       "backToLayers": "Voltar às camadas",
-      "progressNoEstimate": "A processar em segundo plano. Pode voltar às camadas sem cancelar.",
+      "progressBackground": "A processar em segundo plano. Pode voltar às camadas sem cancelar.",
+      "progressPhase": {
+        "ComposingLayer": "A compor a camada",
+        "PreparingRaster": "A preparar o raster",
+        "RenderingMap": "A gerar o mapa",
+        "Finalizing": "A finalizar"
+      },
       "importFailed": "Não foi possível concluir a importação.",
       "addAgain": "Voltar às camadas",
       "cancelledAcknowledgement": "Nenhum dado desta importação foi publicado.",

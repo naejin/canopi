@@ -434,7 +434,13 @@
       "collapsedResults": "Видимо {{visible}} из {{count}} результатов",
       "emptyState": "пусто",
       "backToLayers": "Назад к слоям",
-      "progressNoEstimate": "Обработка идёт в фоне. Можно вернуться к слоям без отмены.",
+      "progressBackground": "Обработка идёт в фоне. Можно вернуться к слоям без отмены.",
+      "progressPhase": {
+        "ComposingLayer": "Формирование слоя",
+        "PreparingRaster": "Подготовка растра",
+        "RenderingMap": "Создание карты",
+        "Finalizing": "Завершение"
+      },
       "importFailed": "Не удалось завершить импорт.",
       "addAgain": "Назад к слоям",
       "cancelledAcknowledgement": "Данные из этого импорта не опубликованы.",

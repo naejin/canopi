@@ -434,7 +434,13 @@
       "collapsedResults": "{{visible}} of {{count}} results visible",
       "emptyState": "empty",
       "backToLayers": "Back to layers",
-      "progressNoEstimate": "Working in the background. You can return to Layers without cancelling.",
+      "progressBackground": "Working in the background. You can return to Layers without cancelling.",
+      "progressPhase": {
+        "ComposingLayer": "Composing layer",
+        "PreparingRaster": "Preparing raster",
+        "RenderingMap": "Rendering map",
+        "Finalizing": "Finalizing"
+      },
       "importFailed": "The import could not be completed.",
       "addAgain": "Back to layers",
       "cancelledAcknowledgement": "No data was published from this import.",

@@ -23,13 +23,13 @@ La Maignannerie remains the synthetic Design Location at `48.220272, 0.033854`. 
 | Replay lost decision semantics and order | `add`, `replace`, and `replace-overlap` remain distinct ordered member roles. Schema v4 ties each member occurrence to its import job, so identical reimports and multi-file undo preserve operation identity. |
 | Stale checks had publication races | Import and analysis compare expected heads inside the publishing transaction. Stale reviews restage; stale analysis work queues the current snapshot. |
 | Source and analysis deletion failed | Transactional deletion follows foreign-key ownership and is covered with complete row graphs. |
-| UI polling/cancellation could stop early | One session job coordinator includes imports, stops on terminal failure/incomplete states, persists review/apply/cancel outcomes, reports errors, and guards Design identity across asynchronous mutations. Ready is published only after display registration succeeds. |
+| UI polling/cancellation could stop early | One session job coordinator includes imports, stops on terminal failure/incomplete states, persists review/apply/cancel outcomes and monotonic publication progress, reports errors, and guards Design identity across asynchronous mutations. Ready is published only after display registration succeeds. |
 
 ## Implemented Layers dock proposal
 
 The production Layers dock now uses the existing compact ruled-row language. A source row has disclosure, the shared visibility icon, a wrapping identity block and one `ActionMenu`; analysis rows indent beneath it with independent visibility. The complete list stays visible while the selected source or result inspector owns opacity and contextual actions.
 
-The import workbench is a dock subview with persistent staging/applying/terminal states, Escape cancellation, source facts, area summaries plus exact counts, independent uncovered/replacement choices, shared-scale Before/After tabs, and a sticky action footer. Returning to Layers does not cancel work. Changed decisions request a backend preview revision; stale responses are ignored and Apply remains unavailable until the matching preview is ready.
+The import workbench is a dock subview with persistent staging/applying/terminal states, Escape cancellation, source facts, area summaries plus exact counts, independent uncovered/replacement choices, shared-scale Before/After tabs, and a sticky action footer. Applying shows a localized phase and durable percentage driven by completed backend work, including display-pyramid operations; source staging remains honestly indeterminate. Returning to Layers does not cancel work. Changed decisions request a backend preview revision; stale responses are ignored and Apply remains unavailable until the matching preview is ready.
 
 Deletion impact is visible with an explicit cancel path. History identifies import operations and offers targeted undo. Deterministic gallery states cover La Maignannerie, the remote Normandy footprint, long French content, light/dark themes and the import review at 352 px and the 320 px minimum without horizontal overflow.
 

@@ -434,7 +434,13 @@
       "collapsedResults": "{{count}}개 결과 중 {{visible}}개 표시",
       "emptyState": "비어 있음",
       "backToLayers": "레이어로 돌아가기",
-      "progressNoEstimate": "백그라운드에서 처리 중입니다. 취소하지 않고 레이어로 돌아갈 수 있습니다.",
+      "progressBackground": "백그라운드에서 처리 중입니다. 취소하지 않고 레이어로 돌아갈 수 있습니다.",
+      "progressPhase": {
+        "ComposingLayer": "레이어 구성 중",
+        "PreparingRaster": "래스터 준비 중",
+        "RenderingMap": "지도 생성 중",
+        "Finalizing": "마무리 중"
+      },
       "importFailed": "가져오기를 완료할 수 없습니다.",
       "addAgain": "레이어로 돌아가기",
       "cancelledAcknowledgement": "이 가져오기에서는 데이터가 게시되지 않았습니다.",

@@ -238,6 +238,7 @@ export type LidarImportJob = {
 	state: LidarImportJobState,
 	review: LidarImportReview | null,
 	message: string | null,
+	progress: LidarImportProgress | null,
 };
 
 /**
@@ -245,6 +246,14 @@ export type LidarImportJob = {
  *  an explicit apply publishes a generation.
  */
 export type LidarImportJobState = "Staging" | "AwaitingReview" | "Applying" | "Complete" | "Cancelled" | "Failed";
+
+export type LidarImportProgress = {
+	phase: LidarImportProgressPhase,
+	percent: number,
+};
+
+// Backend-owned phases for determinate import publication progress.
+export type LidarImportProgressPhase = "ComposingLayer" | "PreparingRaster" | "RenderingMap" | "Finalizing";
 
 /**
  *  Review payload for one staged import. Coverage counts are exact valid

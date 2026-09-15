@@ -16,7 +16,9 @@ use super::grid::{
     self, GeoTransform, RasterGrid, ValidMask, classify_coverage, remap_mask_checked, union_grid,
 };
 use super::paths::LidarPaths;
-use common_types::lidar::{LidarImportDecisionPreview, LidarImportReview, LidarImportSourceFacts};
+use common_types::lidar::{
+    LidarImportDecisionPreview, LidarImportProgressPhase, LidarImportReview, LidarImportSourceFacts,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{Read as _, Write as _};
@@ -1161,6 +1163,7 @@ pub fn apply_import(
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
     let layer_id = staging.layer_id.clone();
+    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::ComposingLayer, 2);
 
     // Short read: head snapshot, member sequence and interpretation rows;
     // the catalogue is released before any raster computation.
@@ -1228,6 +1231,7 @@ pub fn apply_import(
         return Err("import review is stale; review the current coverage again".to_string());
     }
     let head_manifest = head_base.manifest.clone();
+    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::ComposingLayer, 6);
 
     // Union grid: layer member grids plus every compatible staged source.
     let compatible: Vec<&StagedSource> = staging.sources.iter().filter(|s| s.compatible).collect();
@@ -1267,6 +1271,11 @@ pub fn apply_import(
         validate_working_grid(&union, "import publication union")?;
     }
     let _ = head_manifest;
+    library.record_import_progress(
+        &staging.job_id,
+        LidarImportProgressPhase::ComposingLayer,
+        10,
+    );
 
     // Compose the new coverage: replay the member sequence, then paint the
     // incoming sources with the user's decisions. Invalid pixels never erase
@@ -1314,6 +1323,11 @@ pub fn apply_import(
         }
     };
     let published_cells = composed.valid.count_valid();
+    library.record_import_progress(
+        &staging.job_id,
+        LidarImportProgressPhase::ComposingLayer,
+        40,
+    );
     let previous_cells = head.as_ref().map(|h| h.coverage_cells).unwrap_or(0);
 
     if published_cells == 0 {
@@ -1336,9 +1350,22 @@ pub fn apply_import(
     }
 
     // Durable per-interpretation assets for the incoming sources.
-    for source in &compatible {
+    library.record_import_progress(
+        &staging.job_id,
+        LidarImportProgressPhase::PreparingRaster,
+        42,
+    );
+    for (index, source) in compatible.iter().enumerate() {
         check_cancel(cancel)?;
         write_member_assets(engine, paths, cancel, source)?;
+        let completed = u64::try_from(index + 1).unwrap_or(u64::MAX);
+        let total = u64::try_from(compatible.len()).unwrap_or(u64::MAX).max(1);
+        let percent = 42 + u8::try_from(completed.saturating_mul(8) / total).unwrap_or(8);
+        library.record_import_progress(
+            &staging.job_id,
+            LidarImportProgressPhase::PreparingRaster,
+            percent.min(50),
+        );
     }
 
     // Write the prepared mosaic + coverage mask into staging.
@@ -1349,6 +1376,11 @@ pub fn apply_import(
         .map_err(|e| format!("Failed to create staging dir: {e}"))?;
     let raw_path = staging_dir.join("mosaic.raw");
     write_f32_raw(&raw_path, &composed.values)?;
+    library.record_import_progress(
+        &staging.job_id,
+        LidarImportProgressPhase::PreparingRaster,
+        53,
+    );
     let mosaic_path = staging_dir.join("mosaic.tif");
     let crs_wkt = staging.layer_crs_wkt.clone().unwrap_or_else(|| {
         compatible
@@ -1365,6 +1397,11 @@ pub fn apply_import(
         &crs_wkt,
         staging.layer_nodata,
     )?;
+    library.record_import_progress(
+        &staging.job_id,
+        LidarImportProgressPhase::PreparingRaster,
+        60,
+    );
     let coverage_path = staging_dir.join("coverage.bin");
     composed.valid.write_to(&coverage_path)?;
     let _ = std::fs::remove_file(&raw_path);
@@ -1382,6 +1419,11 @@ pub fn apply_import(
         .map_err(|e| format!("Failed to write manifest: {e}"))?;
 
     let bounds_3857 = raster_bounds_3857(engine, cancel, &union, &crs_wkt)?;
+    library.record_import_progress(
+        &staging.job_id,
+        LidarImportProgressPhase::PreparingRaster,
+        64,
+    );
 
     // Atomic publish: rename staging into place, then advance the head in
     // one short transaction.
@@ -1391,6 +1433,24 @@ pub fn apply_import(
         .map_err(|e| format!("Failed to publish generation dir: {e}"))?;
     let final_mosaic = generation_dir.join("mosaic.tif");
     let final_coverage = generation_dir.join("coverage.bin");
+    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::RenderingMap, 65);
+    let last_display_percent = std::cell::Cell::new(65u8);
+    let display_progress = |progress: display::DisplayProgress| {
+        let percent = 65
+            + u8::try_from(
+                progress.completed_steps.saturating_mul(31) / progress.total_steps.max(1),
+            )
+            .unwrap_or(31)
+            .min(31);
+        if percent > last_display_percent.get() {
+            last_display_percent.set(percent);
+            library.record_import_progress(
+                &staging.job_id,
+                LidarImportProgressPhase::RenderingMap,
+                percent,
+            );
+        }
+    };
     if let Err(error) = publish_display(
         library,
         cancel,
@@ -1403,10 +1463,12 @@ pub fn apply_import(
             composed.min_value,
             composed.max_value.max(composed.min_value + 1.0),
         ),
+        Some(&display_progress),
     ) {
         let _ = std::fs::remove_dir_all(&generation_dir);
         return Err(error);
     }
+    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::Finalizing, 98);
     {
         let connection = match library.catalogue() {
             Ok(connection) => connection,
@@ -1504,7 +1566,9 @@ pub fn apply_import(
                 .map_err(|e| e.to_string())?;
             connection
                 .execute(
-                    "UPDATE lidar_import_jobs SET state = 'complete', updated_at = ?2 WHERE id = ?1",
+                    "UPDATE lidar_import_jobs
+                     SET state = 'complete', progress_phase = 'finalizing',
+                         progress_percent = 100, updated_at = ?2 WHERE id = ?1",
                     rusqlite::params![staging.job_id, now_iso()],
                 )
                 .map_err(|e| e.to_string())?;
@@ -1700,6 +1764,7 @@ pub fn undo_import(
                 composed.min_value,
                 composed.max_value.max(composed.min_value + 1.0),
             ),
+            None,
         )
     {
         let _ = std::fs::remove_dir_all(&generation_dir);
@@ -1807,6 +1872,7 @@ pub fn publish_display(
     numeric_raster: &Path,
     nodata: Option<f32>,
     ramp: &ColorRamp,
+    progress: Option<&dyn Fn(display::DisplayProgress)>,
 ) -> Result<(), String> {
     let style = ramp.style_name();
     let dir =
@@ -1821,6 +1887,7 @@ pub fn publish_display(
         nodata,
         ramp,
         &dir,
+        progress,
     ) {
         Ok(pyramid) => pyramid,
         Err(error) => {

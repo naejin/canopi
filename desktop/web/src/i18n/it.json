@@ -434,7 +434,13 @@
       "collapsedResults": "{{visible}} risultati visibili su {{count}}",
       "emptyState": "vuoto",
       "backToLayers": "Torna ai livelli",
-      "progressNoEstimate": "Elaborazione in background. Puoi tornare ai livelli senza annullare.",
+      "progressBackground": "Elaborazione in background. Puoi tornare ai livelli senza annullare.",
+      "progressPhase": {
+        "ComposingLayer": "Composizione del livello",
+        "PreparingRaster": "Preparazione del raster",
+        "RenderingMap": "Generazione della mappa",
+        "Finalizing": "Finalizzazione"
+      },
       "importFailed": "Impossibile completare l’importazione.",
       "addAgain": "Torna ai livelli",
       "cancelledAcknowledgement": "Nessun dato di questa importazione è stato pubblicato.",

@@ -434,7 +434,13 @@
       "collapsedResults": "{{visible}} van {{count}} resultaten zichtbaar",
       "emptyState": "leeg",
       "backToLayers": "Terug naar lagen",
-      "progressNoEstimate": "Verwerking op de achtergrond. U kunt terug naar Lagen zonder te annuleren.",
+      "progressBackground": "Verwerking op de achtergrond. U kunt terug naar Lagen zonder te annuleren.",
+      "progressPhase": {
+        "ComposingLayer": "Laag samenstellen",
+        "PreparingRaster": "Raster voorbereiden",
+        "RenderingMap": "Kaart genereren",
+        "Finalizing": "Afronden"
+      },
       "importFailed": "De import kon niet worden voltooid.",
       "addAgain": "Terug naar lagen",
       "cancelledAcknowledgement": "Er zijn geen gegevens uit deze import gepubliceerd.",

@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 5;
+pub const CATALOGUE_VERSION: i32 = 6;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -57,6 +57,7 @@ fn migrate(connection: &Connection) -> Result<(), String> {
             3 => SCHEMA_V3,
             4 => "",
             5 => SCHEMA_V5,
+            6 => "",
             _ => unreachable!("catalogue migration gap"),
         };
         transaction
@@ -77,6 +78,25 @@ fn migrate(connection: &Connection) -> Result<(), String> {
                     [],
                 )
                 .map_err(|e| format!("Failed to add LiDAR member job identity: {e}"))?;
+        }
+        if next == 6 {
+            if !table_has_column(&transaction, "lidar_import_jobs", "progress_phase")? {
+                transaction
+                    .execute(
+                        "ALTER TABLE lidar_import_jobs ADD COLUMN progress_phase TEXT",
+                        [],
+                    )
+                    .map_err(|e| format!("Failed to add LiDAR import progress phase: {e}"))?;
+            }
+            if !table_has_column(&transaction, "lidar_import_jobs", "progress_percent")? {
+                transaction
+                    .execute(
+                        "ALTER TABLE lidar_import_jobs ADD COLUMN progress_percent INTEGER
+                         CHECK(progress_percent IS NULL OR progress_percent BETWEEN 0 AND 100)",
+                        [],
+                    )
+                    .map_err(|e| format!("Failed to add LiDAR import progress percent: {e}"))?;
+            }
         }
         transaction
             .execute(
@@ -348,6 +368,8 @@ pub struct ImportJobRow {
     pub state: String,
     pub review_json: Option<String>,
     pub message: Option<String>,
+    pub progress_phase: Option<String>,
+    pub progress_percent: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -516,7 +538,7 @@ pub fn get_import_job(
 ) -> Result<Option<ImportJobRow>, String> {
     connection
         .query_row(
-            "SELECT id, layer_id, state, review_json, message
+            "SELECT id, layer_id, state, review_json, message, progress_phase, progress_percent
              FROM lidar_import_jobs WHERE id = ?1",
             [job_id],
             |row| {
@@ -526,11 +548,31 @@ pub fn get_import_job(
                     state: row.get(2)?,
                     review_json: row.get(3)?,
                     message: row.get(4)?,
+                    progress_phase: row.get(5)?,
+                    progress_percent: row.get(6)?,
                 })
             },
         )
         .optional()
         .map_err(|e| e.to_string())
+}
+
+pub fn update_import_progress(
+    connection: &Connection,
+    job_id: &str,
+    phase: &str,
+    percent: u8,
+) -> Result<bool, String> {
+    connection
+        .execute(
+            "UPDATE lidar_import_jobs
+             SET progress_phase = ?2, progress_percent = ?3, updated_at = ?4
+             WHERE id = ?1 AND state = 'applying'
+               AND COALESCE(progress_percent, -1) < ?3",
+            rusqlite::params![job_id, phase, percent, now_iso()],
+        )
+        .map(|changed| changed > 0)
+        .map_err(|e| format!("Failed to record LiDAR import progress: {e}"))
 }
 
 #[derive(Debug, Clone)]
@@ -771,6 +813,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn import_progress_is_monotonic_and_stops_with_the_job() {
+        let dir = std::env::temp_dir().join(new_id("canopi-import-progress-test"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let connection = open(&dir.join("catalogue.sqlite")).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO lidar_source_layers
+                    (id, name, measurement_kind, units, created_at)
+                 VALUES ('layer', 'Ground', 'ground-elevation', 'm', '0');
+                 INSERT INTO lidar_import_jobs
+                    (id, layer_id, state, created_at, updated_at,
+                     progress_phase, progress_percent)
+                 VALUES ('job', 'layer', 'applying', '0', '0',
+                         'composing_layer', 0);",
+            )
+            .unwrap();
+
+        assert!(update_import_progress(&connection, "job", "composing_layer", 10).unwrap());
+        assert!(!update_import_progress(&connection, "job", "composing_layer", 9).unwrap());
+        assert!(update_import_progress(&connection, "job", "rendering_map", 72).unwrap());
+        let row = get_import_job(&connection, "job").unwrap().unwrap();
+        assert_eq!(row.progress_phase.as_deref(), Some("rendering_map"));
+        assert_eq!(row.progress_percent, Some(72));
+
+        connection
+            .execute(
+                "UPDATE lidar_import_jobs SET state = 'complete', progress_percent = 100
+                 WHERE id = 'job'",
+                [],
+            )
+            .unwrap();
+        assert!(!update_import_progress(&connection, "job", "rendering_map", 80).unwrap());
+        assert_eq!(
+            get_import_job(&connection, "job")
+                .unwrap()
+                .unwrap()
+                .progress_percent,
+            Some(100)
+        );
+
+        drop(connection);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn migration_repairs_legacy_footprint_uniqueness_and_is_idempotent() {
         let dir = std::env::temp_dir().join(new_id("canopi-footprint-migration-test"));
         std::fs::create_dir_all(&dir).unwrap();
@@ -925,6 +1012,8 @@ mod tests {
         assert_eq!(version, CATALOGUE_VERSION.to_string());
         assert!(table_has_column(&reopened, "lidar_acceptance_regions", "job_id",).unwrap());
         assert!(table_has_column(&reopened, "lidar_generation_members", "job_id",).unwrap());
+        assert!(table_has_column(&reopened, "lidar_import_jobs", "progress_phase").unwrap());
+        assert!(table_has_column(&reopened, "lidar_import_jobs", "progress_percent").unwrap());
         drop(reopened);
         std::fs::remove_dir_all(dir).unwrap();
     }

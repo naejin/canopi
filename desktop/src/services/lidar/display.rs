@@ -30,6 +30,25 @@ pub struct DisplayPyramid {
     pub bytes: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DisplayProgress {
+    pub completed_steps: u64,
+    pub total_steps: u64,
+}
+
+fn report_progress(
+    progress: Option<&dyn Fn(DisplayProgress)>,
+    completed_steps: u64,
+    total_steps: u64,
+) {
+    if let Some(report) = progress {
+        report(DisplayProgress {
+            completed_steps,
+            total_steps,
+        });
+    }
+}
+
 /// A color ramp rendered by `gdaldem color-relief`.
 #[derive(Debug, Clone)]
 pub struct ColorRamp {
@@ -101,6 +120,7 @@ pub fn generate_pyramid(
     nodata: Option<f32>,
     ramp: &ColorRamp,
     out_dir: &Path,
+    progress: Option<&dyn Fn(DisplayProgress)>,
 ) -> Result<DisplayPyramid, String> {
     std::fs::create_dir_all(out_dir)
         .map_err(|e| format!("Failed to create display dir {}: {e}", out_dir.display()))?;
@@ -147,10 +167,21 @@ pub fn generate_pyramid(
     let color_file = scratch.join("ramp.txt");
     ramp.write_color_file(&color_file)?;
 
+    let zoom_grids = (min_zoom..=max_zoom)
+        .map(|zoom| (zoom, ZoomGrid::for_bounds(bounds, zoom)))
+        .collect::<Vec<_>>();
+    let total_steps = 2 + zoom_grids
+        .iter()
+        .map(|(_, grid)| {
+            2 + u64::from(grid.max_tx - grid.min_tx + 1) * u64::from(grid.max_ty - grid.min_ty + 1)
+        })
+        .sum::<u64>();
+    let mut completed_steps = 2;
+    report_progress(progress, completed_steps, total_steps);
+
     let mut tile_count = 0u64;
     let mut bytes = 0u64;
-    for zoom in min_zoom..=max_zoom {
-        let grid = ZoomGrid::for_bounds(bounds, zoom);
+    for (zoom, grid) in zoom_grids {
         let level_png = scratch.join(format!("level-{zoom}.png"));
         // Reproject the colorized surface onto the exact XYZ tile grid so
         // tiles slice losslessly without edge stretching.
@@ -180,6 +211,8 @@ pub fn generate_pyramid(
             ],
             Some(cancel),
         )?;
+        completed_steps += 1;
+        report_progress(progress, completed_steps, total_steps);
         engine.run(
             GdalProgram::Dem,
             &[
@@ -194,6 +227,8 @@ pub fn generate_pyramid(
             ],
             Some(cancel),
         )?;
+        completed_steps += 1;
+        report_progress(progress, completed_steps, total_steps);
 
         for ty in grid.min_ty..=grid.max_ty {
             for tx in grid.min_tx..=grid.max_tx {
@@ -214,6 +249,8 @@ pub fn generate_pyramid(
                 )?;
                 tile_count += 1;
                 bytes += std::fs::metadata(&tile).map(|m| m.len()).unwrap_or(0);
+                completed_steps += 1;
+                report_progress(progress, completed_steps, total_steps);
             }
         }
         let _ = std::fs::remove_file(&level_png);

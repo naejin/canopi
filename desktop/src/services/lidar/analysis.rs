@@ -203,6 +203,7 @@ pub fn run_slope_job(
         &final_result,
         result_nodata,
         &ColorRamp::slope_degrees(),
+        None,
     ) {
         let _ = std::fs::remove_dir_all(&generation_dir);
         return Err(error);

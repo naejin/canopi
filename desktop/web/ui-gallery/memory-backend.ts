@@ -62,6 +62,7 @@ function createGalleryLidarReview(layerId: string): LidarImportJob {
     layer_id: layerId,
     state: 'AwaitingReview',
     message: null,
+    progress: null,
     review: {
       job_id: 'gallery-import',
       layer_id: layerId,
@@ -90,9 +91,17 @@ function createGalleryLidarReview(layerId: string): LidarImportJob {
   }
 }
 
-let lidarImportJob: LidarImportJob | null = state === 'lidar-review'
-  ? createGalleryLidarReview('lidar-ground')
-  : null
+let lidarImportJob: LidarImportJob | null = null
+if (state === 'lidar-review' || state === 'lidar-progress') {
+  lidarImportJob = createGalleryLidarReview('lidar-ground')
+}
+if (state === 'lidar-progress' && lidarImportJob) {
+  lidarImportJob = {
+    ...lidarImportJob,
+    state: 'Applying',
+    progress: { phase: 'RenderingMap', percent: 68 },
+  }
+}
 export const galleryInitialLidarImportJob = lidarImportJob
 export const activity = signal('All changes stay in memory. Reload to reset.')
 export function convertFileSrc(path: string) { return path }

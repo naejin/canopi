@@ -206,6 +206,21 @@ fn e2e_import_publish_slope_restart_reuse() {
     let outcome =
         import::apply_import(&library, &staging, true, false, &cancel).expect("apply publishes");
     assert!(outcome.changed);
+    let completed_job = library
+        .get_import_job(&job_id)
+        .unwrap()
+        .expect("completed import job remains queryable");
+    assert_eq!(
+        completed_job.state,
+        common_types::lidar::LidarImportJobState::Complete
+    );
+    assert_eq!(
+        completed_job.progress,
+        Some(common_types::lidar::LidarImportProgress {
+            phase: common_types::lidar::LidarImportProgressPhase::Finalizing,
+            percent: 100,
+        })
+    );
     println!("published: {}", outcome.summary());
 
     // Snapshot shows the layer with an elevation tileset.

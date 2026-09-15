@@ -434,7 +434,13 @@
       "collapsedResults": "{{visible}} von {{count}} Ergebnissen sichtbar",
       "emptyState": "leer",
       "backToLayers": "Zurück zu Ebenen",
-      "progressNoEstimate": "Verarbeitung im Hintergrund. Sie können zu Ebenen zurückkehren, ohne abzubrechen.",
+      "progressBackground": "Verarbeitung im Hintergrund. Sie können zu Ebenen zurückkehren, ohne abzubrechen.",
+      "progressPhase": {
+        "ComposingLayer": "Ebene wird zusammengesetzt",
+        "PreparingRaster": "Raster wird vorbereitet",
+        "RenderingMap": "Karte wird erstellt",
+        "Finalizing": "Wird abgeschlossen"
+      },
       "importFailed": "Der Import konnte nicht abgeschlossen werden.",
       "addAgain": "Zurück zu Ebenen",
       "cancelledAcknowledgement": "Aus diesem Import wurden keine Daten veröffentlicht.",

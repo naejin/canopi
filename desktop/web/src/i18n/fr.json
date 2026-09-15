@@ -434,7 +434,13 @@
       "collapsedResults": "{{visible}} résultat(s) visible(s) sur {{count}}",
       "emptyState": "vide",
       "backToLayers": "Retour aux couches",
-      "progressNoEstimate": "Traitement en arrière-plan. Vous pouvez revenir aux couches sans annuler.",
+      "progressBackground": "Traitement en arrière-plan. Vous pouvez revenir aux couches sans annuler.",
+      "progressPhase": {
+        "ComposingLayer": "Composition de la couche",
+        "PreparingRaster": "Préparation du raster",
+        "RenderingMap": "Génération de la carte",
+        "Finalizing": "Finalisation"
+      },
       "importFailed": "L’import n’a pas pu aboutir.",
       "addAgain": "Retour aux couches",
       "cancelledAcknowledgement": "Aucune donnée de cet import n’a été publiée.",
