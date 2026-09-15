@@ -82,4 +82,4 @@ Full MapLibre frame wall-time p95 values were 72.3 ms pan and 93.8 ms zoom at DP
 - `scripts/canvas-performance/interactions.mjs --backend canvas2d`: passed.
 - Fixture receipt after validation: unchanged.
 
-Measured lead wall-clock effort from bead claim through accepted evidence was about 70 minutes. Two bounded delegated attempts ran inside that elapsed window and ended at the service usage limit; the integration owner completed and verified the accepted implementation locally.
+Measured lead wall-clock effort from bead claim through accepted evidence and ADR reconciliation was about 75 minutes. Two bounded delegated attempts ran inside that elapsed window and ended at the service usage limit; the integration owner completed and verified the accepted implementation locally.

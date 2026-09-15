@@ -13,8 +13,9 @@ active.
 
 This decision fixes the domain and ownership contracts needed by the bounded
 rendering experiment. Its status remains planned until the v2 document format,
-workspace lifecycle, and fallback are shipped and qualified. The renderer
-choice remains open until the experiment records its evidence.
+workspace lifecycle, and fallback are shipped and qualified. The Phase B
+experiment qualified the non-owning Pixi shared-context adapter; see the
+[feasibility evidence](../v2-shared-renderer-experiment.md).
 
 ## Document contract
 
@@ -153,19 +154,20 @@ late asynchronous work. Empty geographic presentation uses a local empty style.
 
 Pixi 8.17.1 accepts an injected WebGL2 context, but its normal renderer destroy
 path calls `WEBGL_lose_context.loseContext()`. Therefore ordinary Pixi
-`Application` ownership is disqualified for a shared map context. The Phase B
-experiment must prove a non-owning adapter with explicit state reset and
-resource-only teardown, or reject Pixi and evaluate a bounded focused renderer
-behind the same scene interface. MapLibre 6.4.1 custom rendering receives
+`Application` ownership is disqualified for a shared map context. The qualified
+adapter uses a direct `WebGLRenderer`, explicit state reset, MapLibre-frame-only
+submission, and resource-only teardown after suppressing Pixi's context-loss
+extension reference. MapLibre 6.4.1 custom rendering receives
 `(gl, CustomRenderMethodInput)` and requires premultiplied-alpha and context-loss
 handling; implementation must follow those installed types rather than older
 examples.
 
-The renderer decision requires the real 2,201-Plant Design, botanical symbols
-and labels, Zones, grid, selection, real map layers, LiDAR ordering, live
-alignment within one CSS pixel, DPR 1 and 2, resize, style reload, context
+The accepted renderer checkpoint used the real 2,201-Plant Design, botanical
+symbols and labels, Zones, grid, selection, real map layers, LiDAR ordering,
+live alignment within one CSS pixel, DPR 1 and 2, resize, style reload, context
 restore, input arbitration, teardown, offline empty style, and matched timing
-evidence. A point-only demonstration cannot change this ADR to accepted.
+evidence. Final performance and production-lifecycle gates still control this
+ADR's transition from planned to accepted.
 
 ## Consequences
 
