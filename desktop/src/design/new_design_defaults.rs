@@ -8,12 +8,20 @@ pub(crate) struct NewDesignLayerDefaults {
     pub(crate) opacity: f32,
 }
 
-pub(crate) const NEW_DESIGN_NORTH_BEARING_DEG: Option<f64> = None;
+pub(crate) fn new_design_spatial_frame() -> common_types::design::SpatialFrame {
+    common_types::design::SpatialFrame {
+        anchor_longitude_deg: 13.0_f64,
+        anchor_latitude_deg: 23.0_f64,
+        north_bearing_deg: 0.0_f64,
+        placement_status: common_types::design::PlacementStatus::Provisional,
+        location_metadata: common_types::design::LocationMetadata { altitude_m: None },
+    }
+}
 
 pub(crate) const NEW_DESIGN_LAYER_DEFAULTS: &[NewDesignLayerDefaults] = &[
     NewDesignLayerDefaults {
         name: "base",
-        visible: true,
+        visible: false,
         locked: false,
         opacity: 1.0_f32,
     },

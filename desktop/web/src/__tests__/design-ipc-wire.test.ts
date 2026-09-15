@@ -43,7 +43,7 @@ describe('native Design IPC wire format', () => {
       path: '/designs/garden.canopi',
       content: expect.objectContaining({
         name: 'Garden',
-        version: 5,
+        version: 6,
         future_top_level: { keep: true },
       }),
     })
@@ -99,11 +99,10 @@ function invokedContent(): unknown {
 
 function testDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 5,
+    version: 6,
     name: 'Garden',
     description: null,
-    location: null,
-    north_bearing_deg: null,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],

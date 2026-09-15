@@ -1,4 +1,5 @@
 import type { CanopiFile } from '../../types/design'
+import { cloneSpatialFrame } from '../../spatial-frame'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../plant-spacing-interval'
 import type {
   CanvasPlantLabelSource,
@@ -6,7 +7,6 @@ import type {
 } from './presentation-data'
 import type { ScenePersistedState } from './scene'
 import type { CanvasDesignObjectSelectionModel, CanvasRuntimeDocumentMetadata } from './runtime'
-import { resolvePersistedNorthBearingDeg } from './document-metadata'
 
 export interface CanvasRuntimeLayerProjectionSource {
   readonly name: string
@@ -158,11 +158,7 @@ function composeDetachedCanvasDocument({
     ...canvas,
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
-    location: normalizeMetadataLocation(metadata.location, document.location),
-    north_bearing_deg: resolvePersistedNorthBearingDeg(
-      metadata.northBearingDeg,
-      document.north_bearing_deg,
-    ),
+    spatial_frame: cloneSpatialFrame(metadata.spatialFrame ?? document.spatial_frame),
     consortiums: document.consortiums,
     timeline: document.timeline,
     budget: document.budget,
@@ -191,16 +187,4 @@ function composeDetachedDocumentExtra(
 function normalizeDetachedExtra(extra: CanopiFile['extra']): Record<string, unknown> {
   if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {}
   return { ...extra }
-}
-
-function normalizeMetadataLocation(
-  location: CanvasRuntimeDocumentMetadata['location'],
-  fallback: CanopiFile['location'],
-): CanopiFile['location'] {
-  if (!location) return fallback ?? null
-  return {
-    lat: location.lat,
-    lon: location.lon,
-    altitude_m: location.altitude_m ?? null,
-  }
 }

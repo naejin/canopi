@@ -18,18 +18,17 @@ import {
 import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
-import { designSessionFixture } from './support/design-session-state'
+import { currentDesign, designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 describe('Canvas Map Surface snapshot seam', () => {
   beforeEach(() => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Map seam',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
-      north_bearing_deg: 18,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 18, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -121,6 +120,28 @@ describe('Canvas Map Surface snapshot seam', () => {
     } finally {
       dispose()
     }
+  })
+
+  it('does not expose a provisional frame as a geographic map location', () => {
+    const design = currentDesign.value
+    if (!design) throw new Error('expected the test Design')
+    designSessionFixture.file = {
+      ...design,
+      spatial_frame: {
+        anchor_longitude_deg: 13,
+        anchor_latitude_deg: 23,
+        north_bearing_deg: 0,
+        placement_status: 'provisional',
+        location_metadata: { altitude_m: null },
+      },
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+
+    expect(readCanvasMapSurfaceCoreSnapshot()).toMatchObject({
+      location: null,
+      northBearingDeg: 0,
+      hasVisibleMapLayer: true,
+    })
   })
 
   it('assembles terrain and Target Presentation inputs into the full map snapshot', () => {

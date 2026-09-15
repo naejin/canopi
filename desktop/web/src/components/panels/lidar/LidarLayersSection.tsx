@@ -577,7 +577,10 @@ function SourceActions({ item, coverageCells, bounds, engineUnavailable, showRet
   readonly showReturn: boolean
   onViewedCoverage(): void
 }) {
-  const location = currentDesign.value?.location
+  const frame = currentDesign.value?.spatial_frame
+  const location = frame?.placement_status === 'confirmed'
+    ? { lat: frame.anchor_latitude_deg, lon: frame.anchor_longitude_deg }
+    : null
   const distance = location && bounds ? distanceToBoundsKm(location.lat, location.lon, bounds) : null
   const outsideView = bounds !== null && lidarMapViewBounds.value !== null
     && !boundsIntersect(bounds, lidarMapViewBounds.value)

@@ -7,16 +7,15 @@ import type {
   DocumentFileFieldOwner,
   KnownCanopiKey,
 } from '../../generated/known-canopi-keys'
-import type { CanopiFile } from '../../types/design'
-import { resolvePersistedNorthBearingDeg } from '../../canvas/runtime/document-metadata'
+import type { CanopiFile, SpatialFrame } from '../../types/design'
+import { cloneSpatialFrame } from '../../spatial-frame'
 
 export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
 
 export interface DocumentFileSaveMetadata {
   name: string
   description?: string | null
-  location?: { lat: number; lon: number; altitude_m?: number | null } | null
-  northBearingDeg?: number | null
+  spatialFrame?: SpatialFrame
 }
 
 export interface ComposeDocumentForSaveOptions {
@@ -94,11 +93,7 @@ export function composeDocumentForSave({
     ...composed,
     name: metadata.name,
     description: metadata.description ?? composed.description ?? null,
-    location: normalizeMetadataLocation(metadata.location, composed.location),
-    north_bearing_deg: resolvePersistedNorthBearingDeg(
-      metadata.northBearingDeg,
-      document.north_bearing_deg,
-    ),
+    spatial_frame: cloneSpatialFrame(metadata.spatialFrame ?? composed.spatial_frame),
   }
 }
 
@@ -132,8 +127,7 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     version: file.version,
     name: file.name,
     description: file.description ?? null,
-    location: file.location ?? null,
-    north_bearing_deg: file.north_bearing_deg ?? null,
+    spatial_frame: cloneSpatialFrame(file.spatial_frame),
     plant_species_colors: file.plant_species_colors,
     plant_species_symbols: file.plant_species_symbols ?? {},
     plant_species_codes: file.plant_species_codes ?? {},
@@ -151,18 +145,6 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),
-  }
-}
-
-function normalizeMetadataLocation(
-  location: DocumentFileSaveMetadata['location'],
-  documentLocation: CanopiFile['location'],
-): CanopiFile['location'] {
-  if (!location) return documentLocation ?? null
-  return {
-    lat: location.lat,
-    lon: location.lon,
-    altitude_m: location.altitude_m ?? null,
   }
 }
 

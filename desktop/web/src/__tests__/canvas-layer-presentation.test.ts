@@ -73,11 +73,10 @@ describe('Canvas Layer Presentation', () => {
       plant_spacing_interval_m: 0.5,
     })
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Layer presentation',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],

@@ -30,11 +30,10 @@ vi.mock('maplibre-gl', () => ({
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 2,
+    version: 6,
     name: 'Location map editing host test',
     description: null,
-    location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-    north_bearing_deg: null,
+    spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -219,7 +218,7 @@ describe('Location map editing host', () => {
     act(() => {
       currentHost().commitMapLocation()
     })
-    expect(currentDesign.value?.location).toEqual({ lat: 52.52, lon: 13.405, altitude_m: 35 })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
 
     act(() => {
       currentHost().previewSearchResult({ displayName: 'Ignored', lat: 1, lon: 1 })
@@ -227,12 +226,12 @@ describe('Location map editing host', () => {
       currentMap().fire('dragstart')
       currentHost().commitMapLocation()
     })
-    expect(currentDesign.value?.location).toEqual({ lat: 40.7128, lon: -74.006, altitude_m: 35 })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 40.7128, anchor_longitude_deg: -74.006, location_metadata: { altitude_m: 35 } })
 
     act(() => {
       currentMap().fire('click', { lngLat: { lng: -0.1276, lat: 51.5072 } })
     })
-    expect(currentDesign.value?.location).toEqual({ lat: 51.5072, lon: -0.1276, altitude_m: 35 })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 51.5072, anchor_longitude_deg: -0.1276, location_metadata: { altitude_m: 35 } })
 
     act(() => {
       currentMap().projected = { x: 230, y: 170 }
@@ -266,7 +265,7 @@ describe('Location map editing host', () => {
 
     act(() => {
       designSessionFixture.file = makeDesign({
-        location: { lat: 52.52, lon: 13.405, altitude_m: 45 },
+        spatial_frame: { anchor_longitude_deg: 13.405, anchor_latitude_deg: 52.52, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 45 } },
       })
     })
 

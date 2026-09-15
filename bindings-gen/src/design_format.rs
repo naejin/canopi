@@ -158,6 +158,11 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
     )?;
     writeln!(
         file,
+        "export const WEB_MERCATOR_MAX_LATITUDE_DEG = {:?}",
+        common_types::design::WEB_MERCATOR_MAX_LATITUDE_DEG,
+    )?;
+    writeln!(
+        file,
         "export const FUTURE_CANOPI_FILE_VERSION_POLICY = {:?} as const\n",
         common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
     )?;
@@ -222,6 +227,7 @@ fn validate_supported_canopi_schema_node(
         "enum",
         "format",
         "items",
+        "maximum",
         "minimum",
         "oneOf",
         "properties",

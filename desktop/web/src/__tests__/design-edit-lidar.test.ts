@@ -14,11 +14,10 @@ import type { CanopiFile } from '../types/design'
 
 function design(name: string): CanopiFile {
   return {
-    version: 5,
+    version: 6,
     name,
     description: null,
-    location: null,
-    north_bearing_deg: 0,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     plant_species_codes: {},

@@ -36,11 +36,10 @@ function action(overrides: Partial<TimelineAction> = {}): TimelineAction {
 
 function design(name: string, timeline: TimelineAction[] = [action()]): CanopiFile {
   return {
-    version: 5,
+    version: 6,
     name,
     description: null,
-    location: null,
-    north_bearing_deg: null,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],

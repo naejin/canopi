@@ -42,11 +42,10 @@ describe('Saved Object Stamp Workbench', () => {
   }
 
   const importableFile = (): CanopiFile => ({
-    version: 3,
+    version: 6,
     name: 'Imported stamp',
     description: null,
-    location: null,
-    north_bearing_deg: 0,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],
@@ -761,7 +760,13 @@ describe('Saved Object Stamp Workbench', () => {
     expect(defaultName).toBe('Apple guild.canopi')
     expect(file).toMatchObject({
       name: 'Apple guild',
-      location: null,
+      spatial_frame: {
+        anchor_longitude_deg: 13,
+        anchor_latitude_deg: 23,
+        north_bearing_deg: 0,
+        placement_status: 'provisional',
+        location_metadata: { altitude_m: null },
+      },
       description: null,
       plants: [{
         id: 'plant-1',
@@ -779,11 +784,10 @@ describe('Saved Object Stamp Workbench', () => {
 
   it('imports a Canopi file as a saved stamp without touching the Design Session', async () => {
     const file: CanopiFile = {
-      version: 3,
+      version: 6,
       name: 'Imported design',
       description: 'Ignored description',
-      location: { lat: 45, lon: 3, altitude_m: null },
-      north_bearing_deg: 12,
+      spatial_frame: { anchor_longitude_deg: 3, anchor_latitude_deg: 45, north_bearing_deg: 12, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [{ name: 'plants', visible: true, locked: true, opacity: 1 }],
@@ -877,11 +881,10 @@ describe('Saved Object Stamp Workbench', () => {
 
   it('does not create a saved stamp from an empty Canopi import', async () => {
     const importSavedObjectStampFile = vi.fn(async (): Promise<CanopiFile> => ({
-      version: 3,
+      version: 6,
       name: 'Empty design',
       description: null,
-      location: null,
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [],

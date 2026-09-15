@@ -3,6 +3,7 @@ import { effect } from "@preact/signals";
 import { useRef } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CanopiFile } from "../types/design";
 
 const mocks = vi.hoisted(() => ({
   autosaveDesignSession: vi.fn(async () => true),
@@ -135,13 +136,12 @@ async function mountHarness(container: HTMLElement): Promise<void> {
   });
 }
 
-function makeDesign(name = "Demo") {
+function makeDesign(name = "Demo"): CanopiFile {
   return {
-    version: 2,
+    version: 6,
     name,
     description: null,
-    location: null,
-    north_bearing_deg: 0,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],

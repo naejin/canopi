@@ -719,11 +719,10 @@ function replaceLegacySettings(
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 5,
+    version: 6,
     name: 'Draft',
     description: null,
-    location: null,
-    north_bearing_deg: 0,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     plant_species_codes: {},

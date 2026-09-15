@@ -52,7 +52,6 @@ import type {
   CanvasRuntimeDocumentCompositionInput,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
-import { resolvePersistedNorthBearingDeg } from './document-metadata'
 import { getCommonNames } from '../../ipc/species'
 import { t } from '../../i18n'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
@@ -62,11 +61,10 @@ const zoneTarget = (id: string) => ({ kind: 'zone' as const, id })
 
 function makeFile(): CanopiFile {
   return {
-    version: 1,
+    version: 6,
     name: 'Runtime demo',
     description: null,
-    location: null,
-    north_bearing_deg: 0,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -348,27 +346,16 @@ function composeTestDocumentForSave({
     ...canvas,
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
-    location: normalizeTestMetadataLocation(metadata.location, document.location),
-    north_bearing_deg: resolvePersistedNorthBearingDeg(
-      metadata.northBearingDeg,
-      document.north_bearing_deg,
-    ),
+    spatial_frame: {
+      ...(metadata.spatialFrame ?? document.spatial_frame),
+      location_metadata: {
+        ...(metadata.spatialFrame ?? document.spatial_frame).location_metadata,
+      },
+    },
     extra: {
       ...document.extra,
       ...canvas.extra,
     },
-  }
-}
-
-function normalizeTestMetadataLocation(
-  location: CanvasRuntimeDocumentCompositionInput['metadata']['location'],
-  fallback: CanopiFile['location'],
-): CanopiFile['location'] {
-  if (!location) return fallback ?? null
-  return {
-    lat: location.lat,
-    lon: location.lon,
-    altitude_m: location.altitude_m ?? null,
   }
 }
 
@@ -2040,8 +2027,7 @@ describe('scene canvas runtime', () => {
     const file = {
       ...makeFile(),
       description: 'Loaded description',
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 18,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 18, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       consortiums: [{
         target: { kind: 'species', canonical_name: 'Malus domestica' },
         stratum: 'canopy',
@@ -2089,8 +2075,7 @@ describe('scene canvas runtime', () => {
 
     expect(serialized.name).toBe('Detached save')
     expect(serialized.description).toBe('Loaded description')
-    expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
-    expect(serialized.north_bearing_deg).toBe(18)
+    expect(serialized.spatial_frame).toEqual(file.spatial_frame)
     expect(serialized.consortiums).toEqual(file.consortiums)
     expect(serialized.timeline).toEqual(file.timeline)
     expect(serialized.budget).toEqual(file.budget)
@@ -2100,26 +2085,23 @@ describe('scene canvas runtime', () => {
     expect(serialized.plants[0]?.color).toBe('#228833')
   })
 
-  it('canonicalizes explicit null and omitted north bearings in detached composition', () => {
+  it('preserves the required spatial frame in detached composition', () => {
     const runtime = new SceneCanvasRuntime()
-    const withoutBearing = { ...makeFile(), north_bearing_deg: null }
-    runtime.documentSurface.loadDocument(withoutBearing)
+    const file = {
+      ...makeFile(),
+      spatial_frame: {
+        ...makeFile().spatial_frame,
+        north_bearing_deg: 315,
+      },
+    }
+    runtime.documentSurface.loadDocument(file)
 
-    const explicitNull = runtime.documentSurface.captureForPersistence(
-      { name: 'No bearing' },
-      withoutBearing,
+    const serialized = runtime.documentSurface.captureForPersistence(
+      { name: 'Required frame' },
+      file,
     ).content
 
-    const legacyWithoutBearing = { ...makeFile() }
-    delete (legacyWithoutBearing as Partial<CanopiFile>).north_bearing_deg
-    runtime.documentSurface.loadDocument(legacyWithoutBearing as CanopiFile)
-    const omitted = runtime.documentSurface.captureForPersistence(
-      { name: 'Legacy bearing' },
-      legacyWithoutBearing as CanopiFile,
-    ).content
-
-    expect(explicitNull.north_bearing_deg).toBeNull()
-    expect(omitted.north_bearing_deg).toBeNull()
+    expect(serialized.spatial_frame).toEqual(file.spatial_frame)
   })
 
   it('publishes canvas-origin species hover targets without mutating selection', async () => {

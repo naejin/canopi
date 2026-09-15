@@ -2,6 +2,7 @@ import type { SavedObjectStampPayload } from '../../canvas/saved-object-stamp-pa
 import type { ObjectGroup, CanopiFile } from '../../types/design'
 import { resolvePlantSymbolId, type ScenePoint } from '../../canvas/runtime/scene'
 import { getZoneWorldBounds } from '../../canvas/runtime/zone-geometry'
+import { newDesignSpatialFrame } from '../../spatial-frame'
 
 interface ComposeSavedObjectStampCanopiFileOptions {
   readonly name: string
@@ -22,11 +23,10 @@ export function composeSavedObjectStampCanopiFile({
 }: ComposeSavedObjectStampCanopiFileOptions): CanopiFile {
   const timestamp = now.toISOString()
   return {
-    version: 4,
+    version: 6,
     name,
     description: null,
-    location: null,
-    north_bearing_deg: null,
+    spatial_frame: newDesignSpatialFrame(),
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: STAMP_FILE_LAYERS.map((layer) => ({ ...layer })),

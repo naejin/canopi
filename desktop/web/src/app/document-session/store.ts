@@ -1,5 +1,6 @@
 import { batch, computed, signal, type ReadonlySignal, type Signal } from '@preact/signals'
-import type { CanopiFile } from '../../types/design'
+import type { CanopiFile, SpatialFrame } from '../../types/design'
+import { cloneSpatialFrame } from '../../spatial-frame'
 import {
   DesignEditBusyError,
   DesignEditUnavailableError,
@@ -26,7 +27,7 @@ export interface DesignSessionIdentity {
 }
 
 export interface DesignSessionMetadataSnapshot {
-  readonly northBearingDeg: number | null
+  readonly spatialFrame: SpatialFrame | null
 }
 
 export interface DesignSessionStore {
@@ -290,7 +291,9 @@ function createDesignSessionStore(
 
     readMetadata() {
       return {
-        northBearingDeg: signals.currentDesign.value?.north_bearing_deg ?? null,
+        spatialFrame: signals.currentDesign.value
+          ? cloneSpatialFrame(signals.currentDesign.value.spatial_frame)
+          : null,
       }
     },
 

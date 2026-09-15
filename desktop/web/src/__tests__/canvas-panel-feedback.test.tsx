@@ -100,11 +100,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('does not show a Location Notice when no design location is saved', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: null,
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -130,11 +129,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('places loading feedback as a bottom-left Location Notice above the scale bar', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -174,11 +172,10 @@ describe('CanvasPanel basemap feedback', () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -221,11 +218,10 @@ describe('CanvasPanel basemap feedback', () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -268,11 +264,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('shows a loading basemap notice until the map becomes active', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -308,11 +303,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('hides the clean ready Location Notice once the basemap becomes active', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -346,11 +340,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('keeps the canvas map surface active for terrain-only visibility', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -386,11 +379,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('shows a basemap error when the surface reports a load failure', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -425,11 +417,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('surfaces terrain degradation while keeping the basemap ready', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -465,11 +456,10 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('surfaces a precision warning for large designs', async () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plant_species_colors: {},
       layers: [],
       plants: [],

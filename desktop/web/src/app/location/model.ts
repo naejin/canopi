@@ -1,5 +1,6 @@
-import type { Location } from '../../types/design'
+import type { Location, PlacementStatus, SpatialFrame } from '../../types/design'
 import { formatLocationSummary } from '../../utils/location'
+import { locationFromSpatialFrame } from '../../spatial-frame'
 import { currentDesign } from '../document-session/store'
 
 const PIN_EDGE_MARGIN = 24
@@ -8,6 +9,7 @@ export interface SavedLocationPresentation {
   readonly hasDesign: boolean
   readonly location: Location | null
   readonly northBearingDeg: number | null
+  readonly placementStatus: PlacementStatus | null
   readonly hasLocation: boolean
   readonly summary: string | null
   readonly key: string | null
@@ -23,14 +25,16 @@ export interface PinOverlayState {
 
 export function getSavedLocationPresentation(
   hasDesign: boolean,
-  location: Location | null,
-  northBearingDeg: number | null = null,
+  spatialFrame: SpatialFrame | null,
 ): SavedLocationPresentation {
+  const confirmed = spatialFrame?.placement_status === 'confirmed'
+  const location = confirmed && spatialFrame ? locationFromSpatialFrame(spatialFrame) : null
   return {
     hasDesign,
     location,
-    northBearingDeg,
-    hasLocation: location !== null,
+    northBearingDeg: spatialFrame?.north_bearing_deg ?? null,
+    placementStatus: spatialFrame?.placement_status ?? null,
+    hasLocation: confirmed,
     summary: location ? formatLocationSummary(location) : null,
     key: location ? `${location.lat}:${location.lon}:${location.altitude_m ?? ''}` : null,
   }
@@ -90,5 +94,5 @@ export function useSavedLocationPresentation(): SavedLocationPresentation {
 
 export function readSavedLocationPresentation(): SavedLocationPresentation {
   const design = currentDesign.value
-  return getSavedLocationPresentation(design !== null, design?.location ?? null, design?.north_bearing_deg ?? null)
+  return getSavedLocationPresentation(design !== null, design?.spatial_frame ?? null)
 }

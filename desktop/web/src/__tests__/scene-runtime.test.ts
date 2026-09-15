@@ -9,11 +9,10 @@ import {
 } from './support/live-canvas-runtime'
 
 const BASE_FILE: CanopiFile = {
-  version: 2,
+  version: 6,
   name: 'Demo',
   description: null,
-  location: null,
-  north_bearing_deg: 0,
+  spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
   plant_species_colors: {},
   layers: [
     { name: 'base', visible: true, locked: false, opacity: 1 },
@@ -460,8 +459,7 @@ describe('Canvas runtime surfaces', () => {
       const serialized = documents.captureForPersistence(
         {
           name: 'Updated',
-          location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-          northBearingDeg: 14,
+          spatialFrame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 14, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
         },
         {
           ...BASE_FILE,
@@ -501,8 +499,7 @@ describe('Canvas runtime surfaces', () => {
       ).content
 
       expect(serialized.name).toBe('Updated')
-      expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
-      expect(serialized.north_bearing_deg).toBe(14)
+      expect(serialized.spatial_frame).toEqual({ anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 14, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } })
       expect(serialized.timeline).toHaveLength(1)
       expect(serialized.budget).toHaveLength(1)
       expect(serialized.consortiums).toHaveLength(1)
@@ -523,8 +520,7 @@ describe('Canvas runtime surfaces', () => {
     const documentCopy: CanopiFile = {
       ...BASE_FILE,
       description: 'Document authority description',
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 27,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 27, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plants: [createPlant('plant-1', 10, 20)],
       extra: {
         guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
@@ -542,15 +538,13 @@ describe('Canvas runtime surfaces', () => {
         {
           name: 'Updated',
           description: documentCopy.description,
-          location: documentCopy.location,
-          northBearingDeg: documentCopy.north_bearing_deg,
+          spatialFrame: documentCopy.spatial_frame,
         },
         documentCopy,
       ).content
 
       expect(afterUndo.description).toBe(documentCopy.description)
-      expect(afterUndo.location).toEqual(documentCopy.location)
-      expect(afterUndo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
+      expect(afterUndo.spatial_frame).toEqual(documentCopy.spatial_frame)
       expect(afterUndo.extra).toEqual(documentCopy.extra)
       expect(afterUndo.plants[0]?.color).toBeNull()
 
@@ -560,15 +554,13 @@ describe('Canvas runtime surfaces', () => {
         {
           name: 'Updated',
           description: documentCopy.description,
-          location: documentCopy.location,
-          northBearingDeg: documentCopy.north_bearing_deg,
+          spatialFrame: documentCopy.spatial_frame,
         },
         documentCopy,
       ).content
 
       expect(afterRedo.description).toBe(documentCopy.description)
-      expect(afterRedo.location).toEqual(documentCopy.location)
-      expect(afterRedo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
+      expect(afterRedo.spatial_frame).toEqual(documentCopy.spatial_frame)
       expect(afterRedo.extra).toEqual(documentCopy.extra)
       expect(afterRedo.plants[0]?.color).toBe('#228833')
     } finally {
@@ -594,8 +586,6 @@ describe('Canvas runtime surfaces', () => {
       const serialized = documents.captureForPersistence(
         {
           name: 'Updated',
-          location: null,
-          northBearingDeg: 0,
         },
         {
           ...BASE_FILE,

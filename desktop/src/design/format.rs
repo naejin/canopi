@@ -1,11 +1,12 @@
 use common_types::design::{
     CURRENT_CANOPI_FILE_VERSION, CanopiDesignIngestionErrorKind, CanopiFile,
-    DEFAULT_BUDGET_CURRENCY, Layer, MIN_SUPPORTED_CANOPI_FILE_VERSION, MISSING_CANOPI_FILE_VERSION,
+    DEFAULT_BUDGET_CURRENCY, Layer, MISSING_CANOPI_FILE_VERSION,
+    validate_and_normalize_spatial_frame,
 };
 use std::fmt;
 use std::path::Path;
 
-use super::new_design_defaults::{NEW_DESIGN_LAYER_DEFAULTS, NEW_DESIGN_NORTH_BEARING_DEG};
+use super::new_design_defaults::{NEW_DESIGN_LAYER_DEFAULTS, new_design_spatial_frame};
 
 #[derive(Debug)]
 struct CanopiDesignIngestionError {
@@ -75,8 +76,8 @@ fn save_to_file_admitted(path: &Path, backup: &Path, json: &str) -> Result<(), S
 
 /// Load a `CanopiFile` from disk.
 ///
-/// Reads the file, deserializes as `serde_json::Value` first (allowing
-/// future migration hooks), then deserializes into `CanopiFile`.
+/// Reads the file, deserializes as `serde_json::Value` first for strict
+/// version admission, then deserializes into `CanopiFile`.
 /// Unknown fields are preserved in `CanopiFile::extra` via `#[serde(flatten)]`.
 pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
     let content = std::fs::read_to_string(path)
@@ -86,7 +87,6 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("Invalid JSON in {}: {e}", path.display()))?;
 
-    report_legacy_object_group_migration_issues(path, &value);
     decode_design_value(value)
         .map_err(|error| format!("Failed to parse design from {}: {error}", path.display()))
 }
@@ -95,7 +95,7 @@ fn decode_design_value(
     mut value: serde_json::Value,
 ) -> Result<CanopiFile, CanopiDesignIngestionError> {
     let version = read_design_version(&value)?;
-    if version > CURRENT_CANOPI_FILE_VERSION as u64 {
+    if version != CURRENT_CANOPI_FILE_VERSION as u64 {
         return Err(CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::UnsupportedVersion,
             format!(
@@ -104,14 +104,25 @@ fn decode_design_value(
         ));
     }
 
+    let object = value
+        .as_object()
+        .expect("version admission requires an object");
+    if object.contains_key("location") || object.contains_key("north_bearing_deg") {
+        return Err(CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::InvalidDocument,
+            "$: v6 replaces root location and north_bearing_deg with spatial_frame",
+        ));
+    }
+
     value["version"] = serde_json::json!(version);
-    migrate_design_value(&mut value);
-    migrate_legacy_object_groups(&mut value)?;
     let mut file: CanopiFile = serde_json::from_value(value).map_err(|error| {
         CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidDocument,
             format!("$: {error}"),
         )
+    })?;
+    validate_and_normalize_spatial_frame(&mut file.spatial_frame).map_err(|error| {
+        CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
     })?;
     normalize_loaded_extra(&mut file);
     Ok(file)
@@ -147,9 +158,7 @@ fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIng
     };
     let version = raw_version.as_u64().or_else(|| {
         raw_version.as_f64().and_then(|version| {
-            (version.is_finite()
-                && version.fract() == 0.0
-                && version >= MIN_SUPPORTED_CANOPI_FILE_VERSION as f64)
+            (version.is_finite() && version.fract() == 0.0 && version >= 1.0)
                 .then_some(version as u64)
         })
     });
@@ -159,514 +168,13 @@ fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIng
             "$.version: expected a positive integer",
         ));
     };
-    if version < MIN_SUPPORTED_CANOPI_FILE_VERSION as u64 {
+    if version == 0 {
         return Err(CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidVersion,
             "$.version: expected a positive integer",
         ));
     }
     Ok(version)
-}
-
-fn migrate_design_value(value: &mut serde_json::Value) {
-    loop {
-        let version = value
-            .get("version")
-            .and_then(|version| version.as_u64())
-            .unwrap_or(MISSING_CANOPI_FILE_VERSION as u64) as u32;
-        if version >= CURRENT_CANOPI_FILE_VERSION {
-            break;
-        }
-        match version {
-            1 => migrate_v1_to_v2(value),
-            2 => migrate_v2_to_v3(value),
-            3 => migrate_v3_to_v4(value),
-            4 => migrate_v4_to_v5(value),
-            _ => {
-                tracing::warn!("Unknown file version {version} during migration, stopping");
-                break;
-            }
-        }
-    }
-}
-
-fn migrate_legacy_object_groups(
-    value: &mut serde_json::Value,
-) -> Result<(), CanopiDesignIngestionError> {
-    let plant_ids = collect_string_field_set(value, "plants", "id");
-    let zone_ids = collect_string_field_set(value, "zones", "name");
-    let annotation_ids = collect_string_field_set(value, "annotations", "id");
-    let Some(groups) = value.get_mut("groups") else {
-        return Ok(());
-    };
-    let Some(groups) = groups.as_array_mut() else {
-        return Ok(());
-    };
-
-    let mut migrated = Vec::with_capacity(groups.len());
-    for (group_index, mut group) in std::mem::take(groups).into_iter().enumerate() {
-        let Some(group_object) = group.as_object_mut() else {
-            migrated.push(group);
-            continue;
-        };
-
-        if let Some(members) = group_object.get_mut("members")
-            && !members.is_null()
-        {
-            let Some(members) = members.as_array_mut() else {
-                return Err(invalid_document(format!(
-                    "$.groups[{group_index}].members: expected an array",
-                )));
-            };
-            dedupe_typed_group_members(members);
-            migrated.push(group);
-            continue;
-        }
-
-        let member_ids = match group_object.get("member_ids") {
-            None | Some(serde_json::Value::Null) => Vec::new(),
-            Some(serde_json::Value::Array(member_ids)) => member_ids.clone(),
-            Some(_) => {
-                return Err(invalid_document(format!(
-                    "$.groups[{group_index}].member_ids: expected an array",
-                )));
-            }
-        };
-        let mut resolved = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for (member_index, member_id) in member_ids.iter().enumerate() {
-            let Some(member_id) = member_id.as_str() else {
-                return Err(invalid_document(format!(
-                    "$.groups[{group_index}].member_ids[{member_index}]: expected a string",
-                )));
-            };
-            let Some((kind, id)) =
-                resolve_legacy_group_member(member_id, &plant_ids, &zone_ids, &annotation_ids)
-            else {
-                continue;
-            };
-            if seen.insert((kind, id.to_owned())) {
-                resolved.push(serde_json::json!({ "kind": kind, "id": id }));
-            }
-        }
-        if resolved.len() < 2 {
-            continue;
-        }
-        group_object.insert("members".to_owned(), serde_json::Value::Array(resolved));
-        migrated.push(group);
-    }
-    *groups = migrated;
-    Ok(())
-}
-
-fn invalid_document(message: impl Into<String>) -> CanopiDesignIngestionError {
-    CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, message)
-}
-
-fn resolve_legacy_group_member<'a>(
-    id: &'a str,
-    plant_ids: &std::collections::HashSet<String>,
-    zone_ids: &std::collections::HashSet<String>,
-    annotation_ids: &std::collections::HashSet<String>,
-) -> Option<(&'static str, &'a str)> {
-    let matches = [
-        ("plant", plant_ids.contains(id)),
-        ("zone", zone_ids.contains(id)),
-        ("annotation", annotation_ids.contains(id)),
-    ]
-    .into_iter()
-    .filter(|(_, matched)| *matched)
-    .collect::<Vec<_>>();
-    if matches.len() == 1 {
-        Some((matches[0].0, id))
-    } else {
-        None
-    }
-}
-
-fn dedupe_typed_group_members(members: &mut Vec<serde_json::Value>) {
-    let mut seen = std::collections::HashSet::<(String, String)>::new();
-    members.retain(|member| {
-        let Some(object) = member.as_object() else {
-            return true;
-        };
-        let (Some(kind), Some(id)) = (
-            object.get("kind").and_then(|value| value.as_str()),
-            object.get("id").and_then(|value| value.as_str()),
-        ) else {
-            return true;
-        };
-        if !matches!(kind, "plant" | "zone" | "annotation") {
-            return true;
-        }
-        seen.insert((kind.to_owned(), id.to_owned()))
-    });
-}
-
-fn migrate_v1_to_v2(value: &mut serde_json::Value) {
-    migrate_legacy_timeline_targets(value);
-    migrate_legacy_budget_targets(value);
-    migrate_legacy_consortiums(value);
-    value["version"] = serde_json::json!(2);
-}
-
-fn migrate_v2_to_v3(value: &mut serde_json::Value) {
-    if value.get("plant_species_symbols").is_none() {
-        value["plant_species_symbols"] = serde_json::json!({});
-    }
-    value["version"] = serde_json::json!(3);
-}
-
-fn migrate_v3_to_v4(value: &mut serde_json::Value) {
-    if let Some(plants) = value
-        .get_mut("plants")
-        .and_then(|plants| plants.as_array_mut())
-    {
-        for plant in plants {
-            let Some(plant) = plant.as_object_mut() else {
-                continue;
-            };
-            if plant.get("pinned_name").is_none() {
-                plant.insert("pinned_name".to_owned(), serde_json::json!(false));
-            }
-        }
-    }
-    value["version"] = serde_json::json!(4);
-}
-
-fn migrate_v4_to_v5(value: &mut serde_json::Value) {
-    if value.get("measurement_guides").is_none() {
-        value["measurement_guides"] = serde_json::json!([]);
-    }
-    ensure_measurement_guides_layer(value);
-    value["version"] = serde_json::json!(5);
-}
-
-fn ensure_measurement_guides_layer(value: &mut serde_json::Value) {
-    let Some(layers) = value
-        .get_mut("layers")
-        .and_then(|layers| layers.as_array_mut())
-    else {
-        return;
-    };
-    if layers
-        .iter()
-        .any(|layer| layer.get("name").and_then(|name| name.as_str()) == Some("measurement-guides"))
-    {
-        return;
-    }
-
-    let insert_index = layers
-        .iter()
-        .position(|layer| layer.get("name").and_then(|name| name.as_str()) == Some("annotations"))
-        .unwrap_or(layers.len());
-    layers.insert(
-        insert_index,
-        serde_json::json!({
-            "name": "measurement-guides",
-            "visible": true,
-            "locked": false,
-            "opacity": 1.0,
-        }),
-    );
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-struct LegacyObjectGroupMigrationReport {
-    ambiguous_members: Vec<String>,
-    missing_members: Vec<String>,
-    dropped_groups: Vec<String>,
-}
-
-fn report_legacy_object_group_migration_issues(path: &Path, value: &serde_json::Value) {
-    let report = collect_legacy_object_group_migration_report(value);
-    if report == LegacyObjectGroupMigrationReport::default() {
-        return;
-    }
-
-    tracing::warn!(
-        "Migrated legacy Object Groups while loading {}: ambiguous members [{}], missing members [{}], dropped groups [{}]",
-        path.display(),
-        report.ambiguous_members.join(", "),
-        report.missing_members.join(", "),
-        report.dropped_groups.join(", "),
-    );
-}
-
-fn collect_legacy_object_group_migration_report(
-    value: &serde_json::Value,
-) -> LegacyObjectGroupMigrationReport {
-    let plant_ids = collect_string_field_set(value, "plants", "id");
-    let zone_names = collect_string_field_set(value, "zones", "name");
-    let annotation_ids = collect_string_field_set(value, "annotations", "id");
-    let mut report = LegacyObjectGroupMigrationReport::default();
-
-    let Some(groups) = value.get("groups").and_then(|groups| groups.as_array()) else {
-        return report;
-    };
-
-    for group in groups {
-        if group.get("members").is_some() {
-            continue;
-        }
-        let group_id = group
-            .get("id")
-            .and_then(|id| id.as_str())
-            .unwrap_or("<missing group id>");
-        let Some(member_ids) = group
-            .get("member_ids")
-            .and_then(|member_ids| member_ids.as_array())
-        else {
-            continue;
-        };
-
-        let mut resolved = std::collections::HashSet::<String>::new();
-        for member_id in member_ids {
-            let Some(member_id) = member_id.as_str() else {
-                continue;
-            };
-            let matches = [
-                plant_ids.contains(member_id),
-                zone_names.contains(member_id),
-                annotation_ids.contains(member_id),
-            ]
-            .into_iter()
-            .filter(|matched| *matched)
-            .count();
-            match matches {
-                0 => report
-                    .missing_members
-                    .push(format!("{group_id}:{member_id}")),
-                1 => {
-                    let kind = if plant_ids.contains(member_id) {
-                        "plant"
-                    } else if zone_names.contains(member_id) {
-                        "zone"
-                    } else {
-                        "annotation"
-                    };
-                    resolved.insert(format!("{kind}:{member_id}"));
-                }
-                _ => report
-                    .ambiguous_members
-                    .push(format!("{group_id}:{member_id}")),
-            }
-        }
-
-        if resolved.len() < 2 {
-            report.dropped_groups.push(group_id.to_owned());
-        }
-    }
-
-    report
-}
-
-fn collect_string_field_set(
-    value: &serde_json::Value,
-    collection_key: &str,
-    field_key: &str,
-) -> std::collections::HashSet<String> {
-    value
-        .get(collection_key)
-        .and_then(|entries| entries.as_array())
-        .into_iter()
-        .flatten()
-        .filter_map(|entry| entry.get(field_key).and_then(|field| field.as_str()))
-        .map(str::to_owned)
-        .collect()
-}
-
-fn species_target(canonical_name: &str) -> serde_json::Value {
-    serde_json::json!({ "kind": "species", "canonical_name": canonical_name })
-}
-
-fn manual_target() -> serde_json::Value {
-    serde_json::json!({ "kind": "manual" })
-}
-
-fn migrate_legacy_timeline_targets(value: &mut serde_json::Value) {
-    let plant_ids: std::collections::HashSet<String> = value
-        .get("plants")
-        .and_then(|plants| plants.as_array())
-        .into_iter()
-        .flatten()
-        .filter_map(|plant| plant.get("id").and_then(|id| id.as_str()))
-        .filter(|id| !id.is_empty())
-        .map(str::to_owned)
-        .collect();
-
-    let Some(timeline) = value
-        .get_mut("timeline")
-        .and_then(|timeline| timeline.as_array_mut())
-    else {
-        return;
-    };
-
-    for action in timeline {
-        let Some(action) = action.as_object_mut() else {
-            continue;
-        };
-        if action
-            .get("targets")
-            .and_then(|targets| targets.as_array())
-            .is_some()
-        {
-            continue;
-        }
-
-        let mut targets = Vec::<serde_json::Value>::new();
-        if let Some(plants) = action.get("plants").and_then(|plants| plants.as_array()) {
-            for plant_ref in plants {
-                let Some(raw_ref) = plant_ref
-                    .as_str()
-                    .map(str::trim)
-                    .filter(|raw_ref| !raw_ref.is_empty())
-                else {
-                    continue;
-                };
-                if plant_ids.contains(raw_ref) {
-                    targets
-                        .push(serde_json::json!({ "kind": "placed_plant", "plant_id": raw_ref }));
-                } else {
-                    targets.push(species_target(raw_ref));
-                }
-            }
-        }
-
-        if let Some(zone) = action
-            .get("zone")
-            .and_then(|zone| zone.as_str())
-            .map(str::trim)
-            .filter(|zone| !zone.is_empty())
-        {
-            targets.push(serde_json::json!({ "kind": "zone", "zone_name": zone }));
-        }
-
-        if targets.is_empty() {
-            targets.push(manual_target());
-        }
-        action.insert("targets".to_owned(), serde_json::Value::Array(targets));
-    }
-}
-
-fn migrate_legacy_budget_targets(value: &mut serde_json::Value) {
-    let Some(budget) = value
-        .get_mut("budget")
-        .and_then(|budget| budget.as_array_mut())
-    else {
-        return;
-    };
-
-    for item in budget {
-        let Some(item) = item.as_object_mut() else {
-            continue;
-        };
-        if item.get("target").is_some() {
-            continue;
-        }
-        let category = item.get("category").and_then(|category| category.as_str());
-        let description = item
-            .get("description")
-            .and_then(|description| description.as_str())
-            .map(str::trim)
-            .unwrap_or_default();
-        let target = if category == Some("plants") && !description.is_empty() {
-            species_target(description)
-        } else {
-            manual_target()
-        };
-        item.insert("target".to_owned(), target);
-    }
-}
-
-fn migrate_legacy_consortiums(value: &mut serde_json::Value) {
-    let mut plant_lookup = std::collections::HashMap::<String, String>::new();
-    if let Some(plants) = value.get("plants").and_then(|plants| plants.as_array()) {
-        for plant in plants {
-            let Some(canonical) = plant.get("canonical_name").and_then(|name| name.as_str()) else {
-                continue;
-            };
-            if let Some(id) = plant.get("id").and_then(|id| id.as_str())
-                && !id.is_empty()
-            {
-                plant_lookup.insert(id.to_string(), canonical.to_string());
-            }
-            plant_lookup.insert(canonical.to_string(), canonical.to_string());
-        }
-    }
-
-    let Some(consortiums) = value
-        .get_mut("consortiums")
-        .and_then(|consortiums| consortiums.as_array_mut())
-    else {
-        return;
-    };
-
-    let mut migrated = Vec::with_capacity(consortiums.len());
-    let mut seen_species = std::collections::HashSet::<String>::new();
-    for entry in consortiums.iter() {
-        if entry.get("canonical_name").is_some() {
-            if let Some(canonical) = entry
-                .get("canonical_name")
-                .and_then(|canonical| canonical.as_str())
-            {
-                seen_species.insert(canonical.trim().to_string());
-            }
-            let mut next = entry.clone();
-            if next.get("target").is_none()
-                && let Some(canonical) = next
-                    .get("canonical_name")
-                    .and_then(|canonical| canonical.as_str())
-                    .map(str::trim)
-            {
-                next["target"] = species_target(canonical);
-            }
-            migrated.push(next);
-            continue;
-        }
-
-        if entry.get("target").is_some() {
-            if let Some(canonical) = entry
-                .get("target")
-                .and_then(|target| target.get("canonical_name"))
-                .and_then(|canonical| canonical.as_str())
-            {
-                seen_species.insert(canonical.trim().to_string());
-            }
-            migrated.push(entry.clone());
-            continue;
-        }
-
-        let species_refs = entry
-            .get("plant_ids")
-            .or_else(|| entry.get("plants"))
-            .and_then(|refs| refs.as_array());
-        let Some(species_refs) = species_refs else {
-            continue;
-        };
-
-        for raw_ref in species_refs {
-            let Some(raw_ref) = raw_ref.as_str() else {
-                continue;
-            };
-            let canonical = plant_lookup
-                .get(raw_ref)
-                .map(String::as_str)
-                .unwrap_or(raw_ref)
-                .trim();
-            if canonical.is_empty() || !seen_species.insert(canonical.to_string()) {
-                continue;
-            }
-            migrated.push(serde_json::json!({
-                "target": species_target(canonical),
-                "stratum": "unassigned",
-                "start_phase": 0,
-                "end_phase": 2,
-            }));
-        }
-    }
-
-    *consortiums = migrated;
 }
 
 /// Compose a new Design from caller-owned identity and generated static defaults.
@@ -690,8 +198,7 @@ pub(crate) fn create_new_design(
         version: CURRENT_CANOPI_FILE_VERSION,
         name: name.into(),
         description: None,
-        location: None,
-        north_bearing_deg: NEW_DESIGN_NORTH_BEARING_DEG,
+        spatial_frame: new_design_spatial_frame(),
         plant_species_colors: std::collections::HashMap::new(),
         plant_species_symbols: std::collections::HashMap::new(),
         plant_species_codes: std::collections::HashMap::new(),
@@ -714,7 +221,7 @@ pub(crate) fn create_new_design(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_types::design::PanelTarget;
+    use common_types::design::{MIN_SUPPORTED_CANOPI_FILE_VERSION, PanelTarget};
     use std::path::PathBuf;
 
     fn create_default() -> CanopiFile {
@@ -823,8 +330,16 @@ mod tests {
     #[test]
     fn test_create_default_has_eight_layers() {
         let design = create_default();
-        assert_eq!(design.version, 5);
+        assert_eq!(design.version, CURRENT_CANOPI_FILE_VERSION);
         assert_eq!(design.name, "Untitled");
+        assert_eq!(design.spatial_frame.anchor_longitude_deg, 13.0);
+        assert_eq!(design.spatial_frame.anchor_latitude_deg, 23.0);
+        assert_eq!(design.spatial_frame.north_bearing_deg, 0.0);
+        assert!(matches!(
+            design.spatial_frame.placement_status,
+            common_types::design::PlacementStatus::Provisional
+        ));
+        assert_eq!(design.spatial_frame.location_metadata.altitude_m, None);
         assert_eq!(design.layers.len(), 8);
         assert!(design.measurement_guides.is_empty());
     }
@@ -854,7 +369,7 @@ mod tests {
         assert_eq!(
             by_name,
             std::collections::HashMap::from([
-                ("base", true),
+                ("base", false),
                 ("contours", false),
                 ("climate", false),
                 ("zones", true),
@@ -1150,201 +665,20 @@ mod tests {
     }
 
     #[test]
-    fn legacy_object_group_migration_report_identifies_dropped_members_and_groups() {
+    fn test_v6_panel_sections_spatial_frame_and_unknown_fields_round_trip() {
         use serde_json::json;
 
-        let value = json!({
-            "plants": [
-                { "id": "plant-1" },
-                { "id": "shared-id" }
-            ],
-            "zones": [
-                { "name": "zone-1" },
-                { "name": "shared-id" }
-            ],
-            "annotations": [
-                { "id": "annotation-1" }
-            ],
-            "groups": [
-                {
-                    "id": "group-1",
-                    "member_ids": ["plant-1", "zone-1", "annotation-1", "shared-id", "missing-id"]
-                },
-                {
-                    "id": "dropped-group",
-                    "member_ids": ["shared-id", "missing-id"]
-                }
-            ]
+        let dir = std::env::temp_dir();
+        let path: PathBuf = dir.join("canopi_test_v6_panel_round_trip.canopi");
+
+        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
+        value["spatial_frame"] = json!({
+            "anchor_longitude_deg": 2.3522,
+            "anchor_latitude_deg": 48.8566,
+            "north_bearing_deg": -14.0,
+            "placement_status": "confirmed",
+            "location_metadata": { "altitude_m": 35.0 }
         });
-
-        let report = collect_legacy_object_group_migration_report(&value);
-
-        assert_eq!(
-            report,
-            LegacyObjectGroupMigrationReport {
-                ambiguous_members: vec![
-                    "group-1:shared-id".to_owned(),
-                    "dropped-group:shared-id".to_owned(),
-                ],
-                missing_members: vec![
-                    "group-1:missing-id".to_owned(),
-                    "dropped-group:missing-id".to_owned(),
-                ],
-                dropped_groups: vec!["dropped-group".to_owned()],
-            },
-        );
-    }
-
-    #[test]
-    fn test_load_migrates_legacy_consortiums() {
-        use serde_json::json;
-
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_legacy_consortiums.canopi");
-
-        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["version"] = json!(1);
-        value["plants"] = json!([
-            {
-                "id": "plant-1",
-                "canonical_name": "Quercus robur",
-                "common_name": "English oak",
-                "position": { "x": 0.0, "y": 0.0 },
-                "rotation": null,
-                "scale": null,
-                "notes": null,
-                "planted_date": null,
-                "quantity": null
-            },
-            {
-                "id": "plant-2",
-                "canonical_name": "Acer campestre",
-                "common_name": "Field maple",
-                "position": { "x": 1.0, "y": 1.0 },
-                "rotation": null,
-                "scale": null,
-                "notes": null,
-                "planted_date": null,
-                "quantity": null
-            }
-        ]);
-        value["consortiums"] = json!([
-            {
-                "id": "legacy",
-                "name": "Old group",
-                "plant_ids": ["plant-1", "Acer campestre", "plant-1"],
-                "notes": null
-            }
-        ]);
-
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write legacy file");
-        let loaded = load_from_file(&path).expect("legacy consortiums should migrate");
-        let names: std::collections::HashSet<_> = loaded
-            .consortiums
-            .iter()
-            .map(|entry| entry.target.canonical_name.as_str())
-            .collect();
-
-        assert_eq!(loaded.consortiums.len(), 2);
-        assert_eq!(
-            names,
-            std::collections::HashSet::from(["Quercus robur", "Acer campestre"]),
-        );
-        assert!(
-            loaded
-                .consortiums
-                .iter()
-                .all(|entry| entry.stratum == "unassigned"
-                    && entry.start_phase == 0
-                    && entry.end_phase == 2),
-        );
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_load_migrates_legacy_timeline_and_budget_targets() {
-        use serde_json::json;
-
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_panel_targets.canopi");
-
-        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["version"] = json!(1);
-        value["plants"] = json!([
-            {
-                "id": "plant-1",
-                "canonical_name": "Quercus robur",
-                "common_name": "English oak",
-                "position": { "x": 0.0, "y": 0.0 },
-                "rotation": null,
-                "scale": null,
-                "notes": null,
-                "planted_date": null,
-                "quantity": null
-            }
-        ]);
-        value["timeline"] = json!([
-            {
-                "id": "task-1",
-                "action_type": "planting",
-                "description": "Plant oak",
-                "start_date": "2026-04-01",
-                "end_date": null,
-                "recurrence": null,
-                "plants": ["plant-1", "Malus domestica"],
-                "zone": "North bed",
-                "depends_on": null,
-                "completed": false,
-                "order": 0
-            }
-        ]);
-        value["budget"] = json!([
-            {
-                "category": "plants",
-                "description": "Quercus robur",
-                "quantity": 1,
-                "unit_cost": 25,
-                "currency": "EUR"
-            }
-        ]);
-
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write legacy file");
-        let loaded = load_from_file(&path).expect("legacy panel targets should migrate");
-
-        assert_eq!(loaded.version, 5);
-        assert_eq!(loaded.timeline[0].targets.len(), 3);
-        assert!(matches!(
-            loaded.timeline[0].targets[0],
-            PanelTarget::PlacedPlant { .. }
-        ));
-        assert!(matches!(
-            loaded.timeline[0].targets[1],
-            PanelTarget::Species { .. }
-        ));
-        assert!(matches!(
-            loaded.timeline[0].targets[2],
-            PanelTarget::Zone { .. }
-        ));
-        assert!(matches!(
-            loaded.budget[0].target,
-            PanelTarget::Species { .. }
-        ));
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_v2_panel_sections_and_unknown_fields_round_trip() {
-        use serde_json::json;
-
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_v2_panel_round_trip.canopi");
-
-        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["location"] = json!({ "lat": 48.8566, "lon": 2.3522, "altitude_m": 35 });
         value["future_panel_field"] = json!({ "preserve": true });
         value["consortiums"] = json!([
             {
@@ -1383,13 +717,15 @@ mod tests {
         ]);
 
         std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write v2 file");
-        let loaded = load_from_file(&path).expect("v2 file should load");
-        save_to_file(&path, &loaded).expect("v2 file should save");
-        let reloaded = load_from_file(&path).expect("saved v2 file should reload");
+            .expect("write v6 file");
+        let loaded = load_from_file(&path).expect("v6 file should load");
+        save_to_file(&path, &loaded).expect("v6 file should save");
+        let reloaded = load_from_file(&path).expect("saved v6 file should reload");
 
-        assert_eq!(reloaded.version, 5);
-        assert_eq!(reloaded.location.as_ref().map(|l| l.lat), Some(48.8566));
+        assert_eq!(reloaded.version, CURRENT_CANOPI_FILE_VERSION);
+        assert_eq!(reloaded.spatial_frame.anchor_latitude_deg, 48.8566);
+        assert_eq!(reloaded.spatial_frame.anchor_longitude_deg, 2.3522);
+        assert_eq!(reloaded.spatial_frame.north_bearing_deg, 346.0);
         assert_eq!(reloaded.consortiums.len(), 1);
         assert_eq!(reloaded.timeline.len(), 1);
         assert_eq!(reloaded.timeline[0].targets.len(), 2);
@@ -1413,117 +749,6 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
-    }
-
-    #[test]
-    fn test_v2_files_migrate_to_current_with_empty_plant_symbol_defaults() {
-        use serde_json::json;
-
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_v3_plant_symbols.canopi");
-
-        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["version"] = json!(2);
-        value
-            .as_object_mut()
-            .expect("default design serializes to object")
-            .remove("plant_species_symbols");
-
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write v2 file");
-        let loaded = load_from_file(&path).expect("v2 file should load");
-
-        assert_eq!(loaded.version, 5);
-        assert!(loaded.plant_species_symbols.is_empty());
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_v3_files_migrate_to_v4_with_unpinned_plant_names() {
-        use serde_json::json;
-
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_v4_pinned_names.canopi");
-
-        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["version"] = json!(3);
-        value["plants"] = json!([
-            {
-                "id": "plant-1",
-                "locked": false,
-                "canonical_name": "Malus domestica",
-                "common_name": "Apple",
-                "position": { "x": 0.0, "y": 0.0 },
-                "rotation": null,
-                "scale": null,
-                "notes": null,
-                "planted_date": null,
-                "quantity": 1
-            },
-            {
-                "id": "plant-2",
-                "locked": false,
-                "canonical_name": "Pyrus communis",
-                "common_name": "Pear",
-                "pinned_name": true,
-                "position": { "x": 1.0, "y": 0.0 },
-                "rotation": null,
-                "scale": null,
-                "notes": null,
-                "planted_date": null,
-                "quantity": 1
-            }
-        ]);
-
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write v3 file");
-        let loaded = load_from_file(&path).expect("v3 file should load");
-
-        assert_eq!(loaded.version, 5);
-        assert!(!loaded.plants[0].pinned_name);
-        assert!(loaded.plants[1].pinned_name);
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_v4_files_migrate_to_v5_with_measurement_guides_layer() {
-        use serde_json::json;
-
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_v5_measurement_guides.canopi");
-
-        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["version"] = json!(4);
-        value
-            .as_object_mut()
-            .expect("default design serializes to object")
-            .remove("measurement_guides");
-        value["layers"] = json!([
-            { "name": "base", "visible": true, "locked": false, "opacity": 1.0 },
-            { "name": "zones", "visible": true, "locked": false, "opacity": 1.0 },
-            { "name": "plants", "visible": true, "locked": false, "opacity": 1.0 },
-            { "name": "annotations", "visible": true, "locked": false, "opacity": 1.0 }
-        ]);
-
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write v4 file");
-        let loaded = load_from_file(&path).expect("v4 file should load");
-
-        assert_eq!(loaded.version, 5);
-        assert!(loaded.measurement_guides.is_empty());
-        assert!(
-            loaded.layers.iter().any(|layer| {
-                layer.name == "measurement-guides"
-                    && layer.visible
-                    && !layer.locked
-                    && (layer.opacity - 1.0).abs() < f32::EPSILON
-            }),
-            "migration should add a visible unlocked Measurement Guides layer",
-        );
-
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

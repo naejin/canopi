@@ -4,11 +4,12 @@ use specta::Type;
 pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
 pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
 /// Current `.canopi` format version shared by native loading and generated Web facts.
-pub const CURRENT_CANOPI_FILE_VERSION: u32 = 5;
+pub const CURRENT_CANOPI_FILE_VERSION: u32 = 6;
 /// Missing versions are interpreted as the first public `.canopi` format.
 pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
-pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 1;
+pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 6;
 pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
+pub const WEB_MERCATOR_MAX_LATITUDE_DEG: f64 = 85.051_128_779_806_6;
 
 fn deserialize_json_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
@@ -148,11 +149,7 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
-        key: "location",
-        owner: DesignFileFieldOwner::Document,
-    },
-    DesignFileField {
-        key: "north_bearing_deg",
+        key: "spatial_frame",
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
@@ -233,10 +230,7 @@ pub struct CanopiFile {
     pub name: String,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub description: Option<String>,
-    #[cfg_attr(feature = "design-schema", schemars(default))]
-    pub location: Option<Location>,
-    #[cfg_attr(feature = "design-schema", schemars(default))]
-    pub north_bearing_deg: Option<f64>,
+    pub spatial_frame: SpatialFrame,
     pub plant_species_colors: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub plant_species_symbols: std::collections::HashMap<String, String>,
@@ -280,11 +274,117 @@ pub fn canopi_file_json_schema() -> serde_json::Value {
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct Location {
-    pub lat: f64,
-    pub lon: f64,
-    #[cfg_attr(feature = "design-schema", schemars(default))]
+pub struct SpatialFrame {
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -180.0, max = 180.0))
+    )]
+    pub anchor_longitude_deg: f64,
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
+    )]
+    pub anchor_latitude_deg: f64,
+    pub north_bearing_deg: f64,
+    pub placement_status: PlacementStatus,
+    pub location_metadata: LocationMetadata,
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PlacementStatus {
+    Provisional,
+    Confirmed,
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct LocationMetadata {
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(required, schema_with = "required_nullable_f64_schema")
+    )]
     pub altitude_m: Option<f64>,
+}
+
+#[cfg(feature = "design-schema")]
+fn required_nullable_f64_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    generator.subschema_for::<Option<f64>>()
+}
+
+impl<'de> Deserialize<'de> for LocationMetadata {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct LocationMetadataVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for LocationMetadataVisitor {
+            type Value = LocationMetadata;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a location metadata object with altitude_m")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut altitude_m: Option<Option<f64>> = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    if key == "altitude_m" {
+                        if altitude_m.is_some() {
+                            return Err(serde::de::Error::duplicate_field("altitude_m"));
+                        }
+                        altitude_m = Some(map.next_value()?);
+                    } else {
+                        map.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+
+                Ok(LocationMetadata {
+                    altitude_m: altitude_m
+                        .ok_or_else(|| serde::de::Error::missing_field("altitude_m"))?,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(LocationMetadataVisitor)
+    }
+}
+
+/// Validate a v6 spatial frame and canonicalize its clockwise north bearing.
+pub fn validate_and_normalize_spatial_frame(frame: &mut SpatialFrame) -> Result<(), &'static str> {
+    if !frame.anchor_longitude_deg.is_finite()
+        || !(-180.0..=180.0).contains(&frame.anchor_longitude_deg)
+    {
+        return Err(
+            "$.spatial_frame.anchor_longitude_deg: expected a finite longitude in [-180, 180]",
+        );
+    }
+    if !frame.anchor_latitude_deg.is_finite()
+        || !(-WEB_MERCATOR_MAX_LATITUDE_DEG..=WEB_MERCATOR_MAX_LATITUDE_DEG)
+            .contains(&frame.anchor_latitude_deg)
+    {
+        return Err("$.spatial_frame.anchor_latitude_deg: expected a finite Web Mercator latitude");
+    }
+    if !frame.north_bearing_deg.is_finite() {
+        return Err("$.spatial_frame.north_bearing_deg: expected a finite number");
+    }
+    if frame
+        .location_metadata
+        .altitude_m
+        .is_some_and(|altitude| !altitude.is_finite())
+    {
+        return Err(
+            "$.spatial_frame.location_metadata.altitude_m: expected a finite number or null",
+        );
+    }
+
+    let normalized = frame.north_bearing_deg.rem_euclid(360.0);
+    frame.north_bearing_deg = if normalized == 0.0 { 0.0 } else { normalized };
+    Ok(())
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
@@ -661,13 +761,48 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn spatial_frame_validation_rejects_non_finite_values_and_normalizes_bearing() {
+        let mut frame = SpatialFrame {
+            anchor_longitude_deg: 13.0,
+            anchor_latitude_deg: 23.0,
+            north_bearing_deg: -450.0,
+            placement_status: PlacementStatus::Provisional,
+            location_metadata: LocationMetadata { altitude_m: None },
+        };
+
+        validate_and_normalize_spatial_frame(&mut frame).expect("valid frame should normalize");
+        assert_eq!(frame.north_bearing_deg, 270.0);
+
+        frame.location_metadata.altitude_m = Some(f64::INFINITY);
+        assert_eq!(
+            validate_and_normalize_spatial_frame(&mut frame),
+            Err("$.spatial_frame.location_metadata.altitude_m: expected a finite number or null"),
+        );
+    }
+
+    #[test]
+    fn location_metadata_requires_explicit_nullable_altitude() {
+        let result = serde_json::from_value::<LocationMetadata>(json!({}));
+
+        assert!(
+            result.is_err(),
+            "v6 metadata must name its nullable altitude"
+        );
+    }
+
+    #[test]
     fn design_objects_missing_lock_state_load_unlocked_and_serialize_explicitly() {
         let file: CanopiFile = serde_json::from_value(json!({
-            "version": 1,
+            "version": 6,
             "name": "Legacy locks",
             "description": null,
-            "location": null,
-            "north_bearing_deg": 0.0,
+            "spatial_frame": {
+                "anchor_longitude_deg": 13.0,
+                "anchor_latitude_deg": 23.0,
+                "north_bearing_deg": 0.0,
+                "placement_status": "provisional",
+                "location_metadata": { "altitude_m": null }
+            },
             "plant_species_colors": {},
             "layers": [
                 { "name": "plants", "visible": true, "locked": false, "opacity": 1.0 }
@@ -742,10 +877,17 @@ mod tests {
     }
 
     #[test]
-    fn general_deserialization_does_not_hide_legacy_object_group_migration() {
+    fn general_deserialization_rejects_obsolete_object_group_shape() {
         let result = serde_json::from_value::<CanopiFile>(json!({
-            "version": 5,
+            "version": 6,
             "name": "Legacy groups require ingestion",
+            "spatial_frame": {
+                "anchor_longitude_deg": 13.0,
+                "anchor_latitude_deg": 23.0,
+                "north_bearing_deg": 0.0,
+                "placement_status": "provisional",
+                "location_metadata": { "altitude_m": null }
+            },
             "plant_species_colors": {},
             "layers": [],
             "plants": [{
@@ -768,7 +910,7 @@ mod tests {
 
         assert!(
             result.is_err(),
-            "legacy Object Groups must be admitted only through the Design ingestion boundary",
+            "obsolete Object Groups must not enter the v6 runtime",
         );
     }
 }

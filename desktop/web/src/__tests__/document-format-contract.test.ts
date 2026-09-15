@@ -5,17 +5,15 @@ import {
   DOCUMENT_FILE_FIELD_OWNERS,
   normalizeLoadedDocument,
 } from '../app/contracts/document'
-import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import { KNOWN_CANOPI_KEYS } from '../generated/known-canopi-keys'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 import type { CanopiFile } from '../types/design'
 
 const RAW_DOCUMENT = {
-  version: 2,
+  version: 6,
   name: 'Format contract',
   description: null,
-  location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
-  north_bearing_deg: 9,
+  spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 9, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
   plant_species_colors: {},
   layers: [],
   plants: [],
@@ -40,11 +38,10 @@ const RAW_DOCUMENT = {
 } as const
 
 const BASE_DOCUMENT: CanopiFile = {
-  version: 2,
+  version: 6,
   name: 'Contract base',
   description: null,
-  location: null,
-  north_bearing_deg: 0,
+  spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
   plant_species_colors: {},
   layers: [],
   plants: [],
@@ -70,8 +67,7 @@ describe('document format contract', () => {
       ...BASE_DOCUMENT,
       version: 101,
       description: 'Document-owned description',
-      location: { lat: 1, lon: 2, altitude_m: 3 },
-      north_bearing_deg: 11,
+      spatial_frame: { anchor_longitude_deg: 2, anchor_latitude_deg: 1, north_bearing_deg: 11, placement_status: 'confirmed', location_metadata: { altitude_m: 3 } },
       consortiums: [{
         target: consortiumTarget('Document species'),
         stratum: 'document',
@@ -179,7 +175,7 @@ describe('document format contract', () => {
     }) as unknown as Record<string, unknown>
     const documentRecord = document as unknown as Record<string, unknown>
     const canvasRecord = canvas as unknown as Record<string, unknown>
-    const metadataOwned = new Set(['name', 'description', 'location', 'north_bearing_deg', 'extra'])
+    const metadataOwned = new Set(['name', 'description', 'extra'])
 
     for (const key of KNOWN_CANOPI_KEYS) {
       if (metadataOwned.has(key)) continue
@@ -191,50 +187,40 @@ describe('document format contract', () => {
 
     expect(saved.name).toBe('Metadata name')
     expect(saved.description).toBe('Document-owned description')
-    expect(saved.location).toEqual({ lat: 1, lon: 2, altitude_m: 3 })
-    expect(saved.north_bearing_deg).toBe(11)
+    expect(saved.spatial_frame).toEqual(document.spatial_frame)
     expect(saved.extra).toEqual({
       future_panel_field: { source: 'document' },
       guides: [{ id: 'canvas-guide', axis: 'v', position: 2 }],
     })
   })
 
-  it('canonicalizes absent north bearings and preserves explicit null through composition', () => {
-    const explicitDocumentNull = composeDocumentForSave({
-      metadata: { name: 'No bearing' },
-      document: { ...BASE_DOCUMENT, north_bearing_deg: null },
+  it('preserves the document spatial frame unless metadata supplies a complete replacement', () => {
+    const document = {
+      ...BASE_DOCUMENT,
+      spatial_frame: { ...BASE_DOCUMENT.spatial_frame, north_bearing_deg: 18 },
+    }
+    const preserved = composeDocumentForSave({
+      metadata: { name: 'Existing frame' },
+      document,
       canvas: BASE_DOCUMENT,
     })
-    const explicitMetadataNull = composeDocumentForSave({
-      metadata: { name: 'Cleared bearing', northBearingDeg: null },
-      document: { ...BASE_DOCUMENT, north_bearing_deg: 18 },
-      canvas: BASE_DOCUMENT,
-    })
-    const omittedMetadata = composeDocumentForSave({
-      metadata: { name: 'Existing bearing' },
-      document: { ...BASE_DOCUMENT, north_bearing_deg: 18 },
-      canvas: BASE_DOCUMENT,
-    })
-    const legacyWithoutBearing = { ...BASE_DOCUMENT }
-    delete (legacyWithoutBearing as Partial<CanopiFile>).north_bearing_deg
-    const ingestedLegacy = decodeCanopiDesign(legacyWithoutBearing)
-    const composedIngestedLegacy = composeDocumentForSave({
-      metadata: { name: 'Ingested legacy bearing' },
-      document: ingestedLegacy,
-      canvas: BASE_DOCUMENT,
-    })
-    const omittedEverywhere = composeDocumentForSave({
-      metadata: { name: 'Legacy bearing' },
-      document: legacyWithoutBearing as CanopiFile,
+    const replacement = {
+      anchor_longitude_deg: -73.6,
+      anchor_latitude_deg: 45.5,
+      north_bearing_deg: 27,
+      placement_status: 'confirmed' as const,
+      location_metadata: { altitude_m: 12 },
+    }
+    const replaced = composeDocumentForSave({
+      metadata: { name: 'Replaced frame', spatialFrame: replacement },
+      document,
       canvas: BASE_DOCUMENT,
     })
 
-    expect(explicitDocumentNull.north_bearing_deg).toBeNull()
-    expect(explicitMetadataNull.north_bearing_deg).toBeNull()
-    expect(omittedMetadata.north_bearing_deg).toBe(18)
-    expect(ingestedLegacy.north_bearing_deg).toBeNull()
-    expect(composedIngestedLegacy.north_bearing_deg).toBeNull()
-    expect(omittedEverywhere.north_bearing_deg).toBeNull()
+    expect(preserved.spatial_frame).toEqual(document.spatial_frame)
+    expect(replaced.spatial_frame).toEqual(replacement)
+    expect(replaced.spatial_frame).not.toBe(replacement)
+    expect(replaced.spatial_frame.location_metadata).not.toBe(replacement.location_metadata)
   })
 
   it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {
@@ -367,8 +353,7 @@ describe('document format contract', () => {
       ...BASE_DOCUMENT,
       name: 'Document copy',
       description: 'Document description',
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 22,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 22, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       consortiums: [{
         target: consortiumTarget('Quercus robur'),
         stratum: 'high',
@@ -462,15 +447,17 @@ describe('document format contract', () => {
     } satisfies CanopiFile
 
     const saved = composeDocumentForSave({
-      metadata: { name: 'Saved document', northBearingDeg: 14 },
+      metadata: {
+        name: 'Saved document',
+        spatialFrame: { ...document.spatial_frame, north_bearing_deg: 14 },
+      },
       document,
       canvas,
     })
 
     expect(saved.name).toBe('Saved document')
     expect(saved.description).toBe('Document description')
-    expect(saved.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
-    expect(saved.north_bearing_deg).toBe(14)
+    expect(saved.spatial_frame).toEqual({ ...document.spatial_frame, north_bearing_deg: 14 })
     expect(saved.created_at).toBe(document.created_at)
     expect(saved.updated_at).toBe(canvas.updated_at)
     expect(saved.consortiums).toEqual(document.consortiums)

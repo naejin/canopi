@@ -66,11 +66,10 @@ describe('LayerPanel', () => {
     saveSettings.mockReset().mockResolvedValue(undefined)
     resetSettingsProjectionForTests()
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -161,7 +160,10 @@ describe('LayerPanel', () => {
   })
 
   it('shows Design Location buttons in map layer details when no Location is saved', async () => {
-    designSessionFixture.file = { ...currentDesign.value!, location: null }
+    designSessionFixture.file = {
+      ...currentDesign.value!,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
+    }
 
     await act(async () => {
       render(<LayerPanel />, container)

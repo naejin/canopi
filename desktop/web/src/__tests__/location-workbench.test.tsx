@@ -14,11 +14,10 @@ import type { CanopiFile } from '../types/design'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 2,
+    version: 6,
     name: 'Location workbench test',
     description: null,
-    location: null,
-    north_bearing_deg: null,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -79,7 +78,13 @@ describe('Location Workbench', () => {
   it('presents saved location summary and stable location key', () => {
     const location = { lat: 48.8566, lon: 2.3522, altitude_m: 35 }
 
-    expect(getSavedLocationPresentation(true, location)).toMatchObject({
+    expect(getSavedLocationPresentation(true, {
+      anchor_longitude_deg: location.lon,
+      anchor_latitude_deg: location.lat,
+      north_bearing_deg: 0,
+      placement_status: 'confirmed',
+      location_metadata: { altitude_m: location.altitude_m },
+    })).toMatchObject({
       hasDesign: true,
       hasLocation: true,
       location,
@@ -90,7 +95,7 @@ describe('Location Workbench', () => {
 
   it('preserves saved altitude when committing a map result or map center', () => {
     designSessionFixture.file = makeDesign({
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
     })
     renderProbe()
 
@@ -99,7 +104,7 @@ describe('Location Workbench', () => {
       currentWorkbench().commitMapLocation({ lat: 0, lon: 0 })
     })
 
-    expect(currentDesign.value?.location).toEqual({ lat: 52.52, lon: 13.405, altitude_m: 35 })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
 
     act(() => {
       currentWorkbench().previewSearchResultOnMap({ displayName: 'Ignored', lat: 1, lon: 1 })
@@ -107,7 +112,7 @@ describe('Location Workbench', () => {
       currentWorkbench().commitMapLocation({ lat: 40.7128, lon: -74.006 })
     })
 
-    expect(currentDesign.value?.location).toEqual({ lat: 40.7128, lon: -74.006, altitude_m: 35 })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 40.7128, anchor_longitude_deg: -74.006, location_metadata: { altitude_m: 35 } })
   })
 
   it('owns search dropdown outside-click close behavior and disposal', () => {

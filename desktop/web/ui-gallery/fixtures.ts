@@ -211,7 +211,9 @@ export function designFixture(state = 'populated'): CanopiFile {
       plantSpeciesSymbols: Object.fromEntries(specimens.map(([name, , symbol]) => [name, symbol])),
     }, { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',
-    location: state === 'located' ? { lat: 48.220272, lon: 0.033854, altitude_m: 118 } : null,
+    spatial_frame: state === 'located'
+      ? { anchor_longitude_deg: 0.033854, anchor_latitude_deg: 48.220272, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 118 } }
+      : { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     lidar: state === 'empty' ? null : {
       schema_version: 1,
       entries: [

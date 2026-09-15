@@ -19,11 +19,10 @@ import {
 
 function makeFile(): CanopiFile {
   return {
-    version: 1,
+    version: 6,
     name: 'Transaction demo',
     description: null,
-    location: null,
-    north_bearing_deg: 0,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -2118,14 +2117,14 @@ describe('Settled Scene presentation maintenance', () => {
     const { coordinator, store } = createAdmissionHarness()
     const next = makeFile()
     next.name = 'Callback-safe hydration'
-    next.north_bearing_deg = 15
+    next.spatial_frame.north_bearing_deg = 15
     next.plants[0]!.position = { x: 55, y: 66 }
     let callbackAttempts = 0
     const projectedBearings: number[] = []
     const syncDocumentSignals = (hydratedFile: CanopiFile): void => {
       callbackAttempts += 1
-      projectedBearings.push(hydratedFile.north_bearing_deg ?? 0)
-      hydratedFile.north_bearing_deg = 270
+      projectedBearings.push(hydratedFile.spatial_frame.north_bearing_deg)
+      hydratedFile.spatial_frame.north_bearing_deg = 270
       if (callbackAttempts === 1) throw new Error('document projection failed')
     }
 
@@ -2134,7 +2133,7 @@ describe('Settled Scene presentation maintenance', () => {
     coordinator.hydrate(JSON.parse(JSON.stringify(next)) as CanopiFile)
 
     expect(projectedBearings).toEqual([15, 15])
-    expect(next.north_bearing_deg).toBe(15)
+    expect(next.spatial_frame.north_bearing_deg).toBe(15)
     expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
   })
 

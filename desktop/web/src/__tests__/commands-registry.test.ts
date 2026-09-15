@@ -208,11 +208,10 @@ describe('command registry canvas tool switching', () => {
 
   it('routes file commands through document-session actions', () => {
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'test',
       description: null,
-      location: null,
-      north_bearing_deg: null,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -260,11 +259,10 @@ describe('command registry canvas tool switching', () => {
     expect(saveCommand.disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'test',
       description: null,
-      location: null,
-      north_bearing_deg: null,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -318,11 +316,10 @@ describe('command registry canvas tool switching', () => {
     expect(zoomIn().disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'test',
       description: null,
-      location: null,
-      north_bearing_deg: null,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -394,11 +391,10 @@ describe('command registry canvas tool switching', () => {
     expect(sidePanel.value).toBe(null)
 
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'test',
       description: null,
-      location: null,
-      north_bearing_deg: null,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],

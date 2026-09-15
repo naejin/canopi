@@ -31,8 +31,7 @@ export type CanopiFile = {
 	version: number,
 	name: string,
 	description: string | null,
-	location: Location | null,
-	north_bearing_deg: number | null,
+	spatial_frame: SpatialFrame,
 	plant_species_colors: { [key in string]: string },
 	plant_species_symbols?: { [key in string]: string },
 	plant_species_codes?: { [key in string]: string },
@@ -378,9 +377,7 @@ export type LidarTileset = {
 
 export type Locale = "en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru";
 
-export type Location = {
-	lat: number,
-	lon: number,
+export type LocationMetadata = {
 	altitude_m: number | null,
 };
 
@@ -423,6 +420,8 @@ export type PlacedPlant = {
 	planted_date: string | null,
 	quantity: number | null,
 };
+
+export type PlacementStatus = "provisional" | "confirmed";
 
 export type PlantDbStatus = "available" | "missing" | "corrupt";
 
@@ -477,6 +476,14 @@ export type Settings = {
 };
 
 export type Sort = "Name" | "Family" | "Height" | "Hardiness" | "GrowthRate" | "Relevance";
+
+export type SpatialFrame = {
+	anchor_longitude_deg: number,
+	anchor_latitude_deg: number,
+	north_bearing_deg: number,
+	placement_status: PlacementStatus,
+	location_metadata: LocationMetadata,
+};
 
 export type SpeciesDetail = {
 	canonical_name: string,

@@ -26,9 +26,11 @@ function translate(key: string): string {
 describe('Location Notice read model', () => {
   it('builds ready notice text from actionable MapLibre readiness facts', () => {
     const saved = getSavedLocationPresentation(true, {
-      lat: 48.8566,
-      lon: 2.3522,
-      altitude_m: 35,
+      anchor_longitude_deg: 2.3522,
+      anchor_latitude_deg: 48.8566,
+      north_bearing_deg: 0,
+      placement_status: 'confirmed',
+      location_metadata: { altitude_m: 35 },
     })
 
     const model = getLocationNoticeReadModel({
@@ -54,9 +56,11 @@ describe('Location Notice read model', () => {
 
   it('hides for a ready map with no actionable map status', () => {
     const saved = getSavedLocationPresentation(true, {
-      lat: 48.8566,
-      lon: 2.3522,
-      altitude_m: 35,
+      anchor_longitude_deg: 2.3522,
+      anchor_latitude_deg: 48.8566,
+      north_bearing_deg: 0,
+      placement_status: 'confirmed',
+      location_metadata: { altitude_m: 35 },
     })
 
     const model = getLocationNoticeReadModel({

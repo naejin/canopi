@@ -71,8 +71,11 @@ try {
     const pixiVersion = '8.17.1'
 
     const container = document.querySelector('#scene')
-    const anchor = { lat: file.location.lat, lon: file.location.lon }
-    const northBearingDeg = file.north_bearing_deg ?? 0
+    const anchor = {
+      lat: file.spatial_frame.anchor_latitude_deg,
+      lon: file.spatial_frame.anchor_longitude_deg,
+    }
+    const northBearingDeg = file.spatial_frame.north_bearing_deg
     const scene = hydrateScenePersistedState(file)
     if (!scene.plants.length) throw new Error('Representative scene has no Plants')
 

@@ -93,15 +93,16 @@ describe('scene store', () => {
 
   it('hydrates and serializes CanopiFile data without crossing the session boundary', () => {
     const file: CanopiFile = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: 'sample',
-      location: {
-        lat: 48.8566,
-        lon: 2.3522,
-        altitude_m: 35,
+      spatial_frame: {
+        anchor_longitude_deg: 2.3522,
+        anchor_latitude_deg: 48.8566,
+        north_bearing_deg: 12,
+        placement_status: 'confirmed',
+        location_metadata: { altitude_m: 35 },
       },
-      north_bearing_deg: 12,
       plant_species_colors: {
         oak: '#228833',
       },
@@ -207,9 +208,14 @@ describe('scene store', () => {
     expect(roundTripped.extra).toEqual({ guides: file.extra?.guides })
     expect(roundTripped.name).toBe('Untitled')
     expect(roundTripped.description).toBeNull()
-    expect(roundTripped.location).toBeNull()
-    expect(roundTripped.north_bearing_deg).toBeNull()
-    expect(roundTripped.version).toBe(5)
+    expect(roundTripped.spatial_frame).toEqual({
+      anchor_longitude_deg: 13,
+      anchor_latitude_deg: 23,
+      north_bearing_deg: 0,
+      placement_status: 'provisional',
+      location_metadata: { altitude_m: null },
+    })
+    expect(roundTripped.version).toBe(6)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
     expect(roundTripped.timeline).toEqual([])
@@ -228,7 +234,7 @@ describe('scene store', () => {
     expect(firstLayer).not.toBe(secondLayer)
     expect(persisted.plantSpeciesSymbols).toEqual({})
     expect(persisted.layers.map((layer: { name: string; visible: boolean }) => [layer.name, layer.visible])).toEqual([
-      ['base', true],
+      ['base', false],
       ['contours', false],
       ['climate', false],
       ['zones', true],
@@ -237,14 +243,14 @@ describe('scene store', () => {
       ['measurement-guides', true],
       ['annotations', true],
     ])
-    firstLayer.visible = false
-    expect(secondLayer.visible).toBe(true)
+    firstLayer.visible = true
+    expect(secondLayer.visible).toBe(false)
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])
     expect(session).not.toHaveProperty('activeEntityId')
     expect(session).not.toHaveProperty('activeLayerName')
-    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(5)
+    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(6)
   })
 
   it('normalizes and round-trips a legacy Design without Measurement Guides', () => {
@@ -263,11 +269,10 @@ describe('scene store', () => {
 
   it('hydrates and serializes embedded Design Object lock state', () => {
     const file: CanopiFile = {
-      version: 2,
+      version: 6,
       name: 'Locked objects',
       description: null,
-      location: null,
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [
@@ -334,11 +339,10 @@ describe('scene store', () => {
 
   it('hydrates and serializes shaped Zone orientation', () => {
     const file = {
-      version: 2,
+      version: 6,
       name: 'Oriented zones',
       description: null,
-      location: null,
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -377,11 +381,10 @@ describe('scene store', () => {
 
   it('serializes runtime plant presentation metadata back into the existing placed-plant fields only', () => {
     const file: CanopiFile = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: null,
-      north_bearing_deg: 0,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [

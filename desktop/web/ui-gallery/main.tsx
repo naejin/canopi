@@ -195,7 +195,16 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
 function GalleryLayersSurface() {
   if (lidarPrototypeEnabled) return <Suspense fallback={null}><LidarPanelPrototype /></Suspense>
   return <LayersPanel onLocation={() => {
-    designSessionStore.replaceCurrentDesignSnapshot({ ...file, location: { lat: 48.220272, lon: 0.033854, altitude_m: 118 } })
+    designSessionStore.replaceCurrentDesignSnapshot({
+      ...file,
+      spatial_frame: {
+        anchor_longitude_deg: 0.033854,
+        anchor_latitude_deg: 48.220272,
+        north_bearing_deg: 0,
+        placement_status: 'confirmed',
+        location_metadata: { altitude_m: 118 },
+      },
+    })
     activity.value = 'Sample location set in memory.'
   }} />
 }

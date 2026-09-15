@@ -51,15 +51,14 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignName()).toBe('Untitled')
     expect(store.isDesignDirty()).toBe(false)
     expect(design).toMatchObject({
-      version: 5,
+      version: 6,
       name: 'Untitled',
       description: null,
-      location: null,
-      north_bearing_deg: null,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [
-        { name: 'base', visible: true, locked: false, opacity: 1 },
+        { name: 'base', visible: false, locked: false, opacity: 1 },
         { name: 'contours', visible: false, locked: false, opacity: 1 },
         { name: 'climate', visible: false, locked: false, opacity: 1 },
         { name: 'zones', visible: true, locked: false, opacity: 1 },
@@ -100,11 +99,11 @@ describe('browser Design Session lifecycle', () => {
     if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
     expect(firstLayer).not.toBe(secondLayer)
-    firstLayer.visible = false
-    expect(secondLayer.visible).toBe(true)
+    firstLayer.visible = true
+    expect(secondLayer.visible).toBe(false)
   })
 
-  it('preserves a new browser Design without a north bearing through draft and download composition', async () => {
+  it('preserves a new browser Design provisional spatial frame through draft and download composition', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const downloadCanopiFile = vi.fn<(download: BrowserCanopiDownload) => Promise<void>>(
@@ -116,7 +115,7 @@ describe('browser Design Session lifecycle', () => {
         lastComposed.current = composeDocumentForSave({
           metadata,
           document,
-          canvas: { ...document, north_bearing_deg: 0 },
+          canvas: document,
         })
         return persistenceCapture(lastComposed.current)
       }),
@@ -133,13 +132,20 @@ describe('browser Design Session lifecycle', () => {
     try {
       await controller.newDesign()
 
-      expect(lastComposed.current?.north_bearing_deg).toBeNull()
-      expect(appDataStore.loadDraft('draft-canonical-new-design')?.north_bearing_deg).toBeNull()
+      const expectedFrame = {
+        anchor_longitude_deg: 13,
+        anchor_latitude_deg: 23,
+        north_bearing_deg: 0,
+        placement_status: 'provisional',
+        location_metadata: { altitude_m: null },
+      }
+      expect(lastComposed.current?.spatial_frame).toEqual(expectedFrame)
+      expect(appDataStore.loadDraft('draft-canonical-new-design')?.spatial_frame).toEqual(expectedFrame)
 
       await controller.downloadCanopi()
       const download = downloadCanopiFile.mock.calls[0]?.[0]
       if (!download) throw new Error('browser download was not captured')
-      expect((JSON.parse(download.text) as CanopiFile).north_bearing_deg).toBeNull()
+      expect((JSON.parse(download.text) as CanopiFile).spatial_frame).toEqual(expectedFrame)
     } finally {
       detach()
     }
@@ -195,6 +201,31 @@ describe('browser Design Session lifecycle', () => {
     })
 
     await expect(controller.openCanopi()).rejects.toThrow('$.plants: expected an array')
+    expect(store.readDesignName()).toBe('Working Garden')
+    expect(store.readCurrentDesign()).toEqual(original)
+  })
+
+  it('rejects an older Design before replacing the active session', async () => {
+    const original = makeCanopiFile({ name: 'Working Garden' })
+    const store = createMemoryDesignSessionStore({
+      file: original,
+      path: null,
+      name: original.name,
+    })
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter: testFileAdapter({
+        openCanopiFile: vi.fn(async () => ({
+          fileName: 'version-5.canopi',
+          text: JSON.stringify({ ...makeCanopiFile(), version: 5 }),
+        })),
+      }),
+      now: () => NOW,
+    })
+
+    await expect(controller.openCanopi()).rejects.toThrow(
+      '$.version: unsupported Canopi Design version 5; current version is 6',
+    )
     expect(store.readDesignName()).toBe('Working Garden')
     expect(store.readCurrentDesign()).toEqual(original)
   })
@@ -341,7 +372,7 @@ describe('browser Design Session lifecycle', () => {
     const templateFile = makeCanopiFile({
       name: 'Downloaded Template',
       description: 'Bundled example',
-      location: { lat: 45.5, lon: -73.6, altitude_m: null },
+      spatial_frame: { anchor_longitude_deg: -73.6, anchor_latitude_deg: 45.5, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
     })
     const store = createMemoryDesignSessionStore()
     const controller = createBrowserDesignSessionController({
@@ -2108,11 +2139,10 @@ function memoryStorage(): MemoryStorage {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 5,
+    version: 6,
     name: 'Test Design',
     description: null,
-    location: null,
-    north_bearing_deg: 0,
+    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],

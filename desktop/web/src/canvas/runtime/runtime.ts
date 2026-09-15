@@ -2,7 +2,7 @@ import type { SpeciesFocus, SpeciesFocusCommands } from './species-key'
 import type { CanvasPrintSnapshot } from '../print'
 import type { CanvasInspectionHandle } from '../inspection'
 import type { ReadonlySignal } from '@preact/signals'
-import type { CanopiFile, PlacedPlant } from '../../types/design'
+import type { CanopiFile, PlacedPlant, SpatialFrame } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { PlantSymbolId, SceneDesignObjectTarget, ScenePoint } from './scene'
@@ -12,8 +12,7 @@ import type { ScenePersistedState } from './scene'
 export interface CanvasRuntimeDocumentMetadata {
   name: string
   description?: string | null
-  location?: { lat: number; lon: number; altitude_m?: number | null } | null
-  northBearingDeg?: number | null
+  spatialFrame?: SpatialFrame
 }
 
 export type CanvasDesignObjectSelectionTarget = SceneDesignObjectTarget

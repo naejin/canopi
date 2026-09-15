@@ -24,8 +24,8 @@ function syncCanvasSignalsFromDocument(
     layerProjections.syncFromLayers(file.layers)
     syncPlantSpeciesColorDefaults(file.plant_species_colors)
     guides.value = Array.isArray(file.extra?.guides) ? file.extra.guides as never[] : []
-    northBearingDeg.value = file.north_bearing_deg ?? 0
-    northBearingAvailable.value = file.north_bearing_deg != null
+    northBearingDeg.value = file.spatial_frame.north_bearing_deg
+    northBearingAvailable.value = true
   })
 }
 

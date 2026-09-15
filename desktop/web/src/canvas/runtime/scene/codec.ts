@@ -10,6 +10,7 @@ import type {
 } from '../../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import { DEFAULT_BUDGET_CURRENCY } from '../../../generated/known-canopi-keys'
+import { newDesignSpatialFrame } from '../../../spatial-frame'
 import type {
   SceneAnnotationEntity,
   SceneGuide,
@@ -56,8 +57,7 @@ export function serializeScenePersistedState(
     version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Untitled',
     description: null,
-    location: null,
-    north_bearing_deg: null,
+    spatial_frame: newDesignSpatialFrame(),
     plant_species_colors: { ...state.plantSpeciesColors },
     plant_species_symbols: { ...state.plantSpeciesSymbols },
     plant_species_codes: { ...state.plantSpeciesCodes },

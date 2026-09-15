@@ -9,11 +9,10 @@ import type { CanopiFile } from '../types/design'
 
 function canopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 3,
+    version: 6,
     name: 'Imported guild',
     description: 'Do not import this as stamp metadata',
-    location: { lat: 45, lon: 3, altitude_m: 20 },
-    north_bearing_deg: 15,
+    spatial_frame: { anchor_longitude_deg: 3, anchor_latitude_deg: 45, north_bearing_deg: 15, placement_status: 'confirmed', location_metadata: { altitude_m: 20 } },
     plant_species_colors: { 'Malus domestica': '#112233' },
     plant_species_symbols: { 'Malus domestica': 'canopy' },
     layers: [
@@ -85,11 +84,10 @@ describe('Saved Object Stamp file composition', () => {
     })
 
     expect(file).toMatchObject({
-      version: 4,
+      version: 6,
       name: 'Apple guild',
       description: null,
-      location: null,
-      north_bearing_deg: null,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       consortiums: [],

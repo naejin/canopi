@@ -105,11 +105,10 @@ describe('MapLibreCanvasSurface adapter', () => {
     lidarCameraRequest.value = null
     lidarMapViewBounds.value = null
     designSessionFixture.file = {
-      version: 2,
+      version: 6,
       name: 'Demo',
       description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
-      north_bearing_deg: 12,
+      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 12, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],

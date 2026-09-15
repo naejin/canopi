@@ -5,11 +5,10 @@ import type { CanopiFile } from '../types/design'
 // Minimal fixture covering one of each entity type, with both populated and null optional fields.
 // Non-canvas sections are placeholders here because the scene codec no longer owns them.
 const FIXTURE: CanopiFile = {
-  version: 5,
+  version: 6,
   name: 'Round-trip test',
   description: 'A test design',
-  location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
-  north_bearing_deg: 14,
+  spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 14, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
   plant_species_colors: {
     'Quercus robur': '#228833',
     'Malus domestica': '#AA4422',
@@ -116,11 +115,10 @@ describe('file format round-trip', () => {
     expect(serialized.updated_at).toBe(now.toISOString())
     expect(serialized).toEqual({
       ...FIXTURE,
-      version: 5,
+      version: 6,
       name: 'Untitled',
       description: null,
-      location: null,
-      north_bearing_deg: null,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
       extra: { guides: [{ id: 'guide-1', axis: 'h', position: 42 }] },

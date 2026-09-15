@@ -6,6 +6,7 @@ interface JsonSchemaNode {
   readonly type?: string | readonly string[]
   readonly format?: string
   readonly minimum?: number
+  readonly maximum?: number
   readonly default?: unknown
   readonly const?: unknown
   readonly enum?: readonly unknown[]
@@ -31,6 +32,7 @@ const SUPPORTED_SCHEMA_KEYS = new Set([
   'enum',
   'format',
   'items',
+  'maximum',
   'minimum',
   'oneOf',
   'properties',
@@ -211,6 +213,9 @@ function validateNumber(
   if (integer && !Number.isInteger(value)) fail(path, 'expected an integer')
   if (schema.minimum !== undefined && value < schema.minimum) {
     fail(path, `expected a number greater than or equal to ${schema.minimum}`)
+  }
+  if (schema.maximum !== undefined && value > schema.maximum) {
+    fail(path, `expected a number less than or equal to ${schema.maximum}`)
   }
   switch (schema.format) {
     case 'uint32':
