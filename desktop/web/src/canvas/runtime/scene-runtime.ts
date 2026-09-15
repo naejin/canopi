@@ -225,6 +225,11 @@ export class SceneCanvasRuntime {
     return this._querySurface
   }
 
+  /** Internal workspace-lifecycle control; intentionally excluded from CanvasRuntimeSurfaces. */
+  async reportRendererFailure(id: string, error: unknown): Promise<void> {
+    await this._rendering.reportRendererFailure(id, error)
+  }
+
   destroy(): void {
     this._documentSurface.destroy()
   }

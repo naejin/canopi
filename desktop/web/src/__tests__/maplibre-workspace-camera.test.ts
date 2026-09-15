@@ -240,6 +240,34 @@ describe('MapLibreWorkspaceCameraOwner', () => {
     consoleError.mockRestore()
   })
 
+  it('notifies attachment subscribers and restores the last frame when listener removal fails', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    const map = new FakeMap()
+    owner.attach(attachmentFor(map))
+    const lastFrame = owner.snapshot.value
+    const failure = vi.fn()
+    owner.attachment.subscribeFailure(failure)
+    map.off.mockImplementation(() => { throw new Error('off failed') })
+    map.pitch = 1
+
+    expect(() => map.emit('move')).not.toThrow()
+    expect(failure).toHaveBeenCalledWith({ kind: 'invalid-projection', reason: 'pitched-camera' })
+    expect(map.off).toHaveBeenCalledTimes(2)
+    expect(owner.snapshot.value).toBe(lastFrame)
+  })
+
+  it('surfaces listener cleanup errors from explicit detach after trying both removals', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    const map = new FakeMap()
+    owner.attach(attachmentFor(map))
+    map.off.mockImplementation(() => { throw new Error('off failed') })
+
+    expect(() => owner.detach()).toThrow('MapLibre workspace camera cleanup failed.')
+    expect(map.off).toHaveBeenCalledTimes(2)
+  })
+
   it('makes disposal idempotent and fences all late events', () => {
     const owner = new MapLibreWorkspaceCameraOwner()
     owner.initialize({ width: 400, height: 300 })

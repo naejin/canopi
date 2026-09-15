@@ -32,6 +32,16 @@ export class MapLibreSceneRendererBridge {
   private activeBackendGeneration: number | null = null
   private latestSnapshot: SceneRendererSnapshot | null = null
   private targetFailure: unknown | null = null
+  private backendFailure: unknown | null = null
+
+  /**
+   * Fences the bridge backend even when no custom-layer target made it far
+   * enough to connect. Workspace admission uses this for failures before
+   * MapLibre calls the custom layer's onAdd hook.
+   */
+  failActiveBackend(error: unknown): void {
+    this.backendFailure = normalizeFailure(error)
+  }
 
   connect(target: MapLibreSceneRenderTarget): MapLibreSceneRenderTargetConnection {
     const generation = ++this.targetGeneration
@@ -72,6 +82,7 @@ export class MapLibreSceneRendererBridge {
             if (this.activeBackendGeneration !== generation) return
             this.activeBackendGeneration = null
             this.latestSnapshot = null
+            this.backendFailure = null
           },
           resize: () => {
             // MapLibre owns both CSS and backing-store dimensions.
@@ -100,6 +111,7 @@ export class MapLibreSceneRendererBridge {
   }
 
   private throwTargetFailure(): void {
+    if (this.backendFailure !== null) throw this.backendFailure
     if (this.targetFailure !== null) throw this.targetFailure
   }
 }

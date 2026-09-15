@@ -218,6 +218,30 @@ describe('MapLibre scene renderer bridge', () => {
     await host.dispose()
   })
 
+  it('retains an admission failure that happens before any layer target connects', async () => {
+    const composition = createSharedMapSceneRendererComposition()
+    const fallbackRenderScene = vi.fn()
+    const host = new RendererHost<SceneRendererContext, SceneRendererInstance>({
+      capabilities: TEST_CAPABILITIES,
+      backends: [composition.renderer, {
+        id: 'canvas2d',
+        initialize: async () => ({
+          id: 'canvas2d', dispose: vi.fn(), resize: vi.fn(),
+          renderScene: fallbackRenderScene, setViewport: vi.fn(),
+        }),
+      }],
+    })
+    composition.failActiveLayer(new Error('WebGL2 context unavailable'))
+    await host.initialize({ container: document.createElement('div') })
+    const snapshot = createTestSceneRendererSnapshot()
+
+    await host.run((active) => active.renderScene(snapshot))
+
+    expect(host.snapshot.activeBackendId).toBe('canvas2d')
+    expect(fallbackRenderScene).toHaveBeenCalledExactlyOnceWith(snapshot)
+    await host.dispose()
+  })
+
   it('unregisters runtime ownership without disposing the map-owned target', async () => {
     const bridge = new MapLibreSceneRendererBridge()
     const disposeTarget = vi.fn()

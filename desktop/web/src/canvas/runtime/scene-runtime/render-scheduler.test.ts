@@ -98,6 +98,39 @@ describe('SceneRuntimeRenderScheduler', () => {
     scheduler.dispose()
   })
 
+  it('replays the complete current snapshot after a named backend fails outside rendering', async () => {
+    const shared = createRenderer('maplibre-pixi')
+    const fallback = createRenderer('canvas2d')
+    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
+      backends: [
+        { id: 'maplibre-pixi', initialize: async () => shared },
+        { id: 'canvas2d', initialize: async () => fallback },
+      ],
+    })
+    const snapshot = createTestSceneRendererSnapshot({
+      scene: {
+        annotations: [{} as never], measurementGuides: [{} as never],
+        groups: [{} as never], guides: [{} as never],
+      },
+      pinnedPlantNameLabels: [{} as never],
+      selectionLabels: [{} as never],
+    })
+    const scheduler = new SceneRuntimeRenderScheduler({
+      getRendererHost: () => host,
+      getViewport: () => snapshot.viewport,
+      prepareSceneRender: async () => ({ publish: () => snapshot }),
+      renderChrome: vi.fn(),
+    })
+
+    await scheduler.initialize(document.createElement('div'))
+    await scheduler.renderScene()
+    await scheduler.reportRendererFailure('maplibre-pixi', new Error('context lost'))
+
+    expect(host.snapshot.activeBackendId).toBe('canvas2d')
+    expect(fallback.renderScene).toHaveBeenLastCalledWith(snapshot)
+    scheduler.dispose()
+  })
+
   it('coalesces scene edits with camera events, and cancels the pending frame on disposal', async () => {
     let frame!: FrameRequestCallback
     const request = vi.fn((callback: FrameRequestCallback) => { frame = callback; return 7 })

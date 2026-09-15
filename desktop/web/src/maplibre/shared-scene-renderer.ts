@@ -26,6 +26,9 @@ export function createSharedMapSceneRendererComposition(): SharedMapSceneRendere
   return {
     renderer: bridge.createRenderer(),
     failActiveLayer(error) {
+      // An admission failure can happen before createLayer() has connected a
+      // target. Keep it visible to the active renderer in that case too.
+      bridge.failActiveBackend(error)
       activeConnection?.fail(error)
     },
     createLayer(options) {

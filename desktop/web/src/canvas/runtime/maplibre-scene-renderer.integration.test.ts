@@ -49,4 +49,28 @@ describe('SceneCanvasRuntime MapLibre renderer composition', () => {
 
     runtime.destroy()
   })
+
+  it('eagerly replaces an externally failed shared backend with Canvas2D', async () => {
+    const bridge = new MapLibreSceneRendererBridge()
+    const runtime = new SceneCanvasRuntime({
+      renderer: {
+        capabilities: TEST_CAPABILITIES,
+        backends: [bridge.createRenderer(), createCanvas2DSceneRenderer()],
+      },
+    })
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 800 },
+      clientHeight: { value: 600 },
+    })
+    bridge.connect({ setSnapshot: vi.fn(), requestRender: vi.fn() })
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+
+    await runtime.init(container)
+    await runtime.reportRendererFailure('maplibre-pixi', new Error('map context lost'))
+
+    expect(container.querySelector('[data-canopi-renderer="canvas2d"]')).not.toBeNull()
+    getContext.mockRestore()
+    runtime.destroy()
+  })
 })

@@ -90,6 +90,24 @@ export class SceneRuntimeRenderScheduler {
     this._options.renderChrome()
   }
 
+  /**
+   * A map-owned renderer can fail outside a normal renderer operation. Force
+   * the named active backend through RendererHost's existing runtime-failure
+   * path, then publish the latest authoritative Scene to its replacement.
+   */
+  async reportRendererFailure(id: string, error: unknown): Promise<void> {
+    const container = this._container
+    if (!container) return
+
+    await this._options.getRendererHost().run((renderer) => {
+      if (renderer.id === id) throw error
+    }, {
+      operationName: `reported ${id} failure`,
+    })
+    if (container !== this._container) return
+    await this.renderScene()
+  }
+
   resize(width: number, height: number): void {
     if (!this._container) return
     this._runDetached(this._options.getRendererHost().run((renderer) => {

@@ -44,8 +44,10 @@ export interface MapLibreWorkspaceCameraOwnerOptions {
  * It never owns or replaces the camera's stable frame signal.
  */
 export interface WorkspaceCameraAttachmentControl {
-  attach(attachment: MapLibreWorkspaceCameraAttachment): void
+  attach(attachment: MapLibreWorkspaceCameraAttachment): boolean
   detach(): void
+  /** Workspace owners may observe failures without taking over camera ownership. */
+  subscribeFailure(observer: (failure: MapLibreWorkspaceCameraFailure) => void): () => void
 }
 
 interface ActiveAttachment {
@@ -67,18 +69,20 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   private active: ActiveAttachment | null = null
   private generation = 0
   private disposed = false
+  private readonly failureObservers = new Set<(failure: MapLibreWorkspaceCameraFailure) => void>()
 
   readonly attachment: WorkspaceCameraAttachmentControl = {
     attach: (next) => this.attach(next),
     detach: () => this.detach(),
+    subscribeFailure: (observer) => this.subscribeFailure(observer),
   }
 
   constructor(private readonly options: MapLibreWorkspaceCameraOwnerOptions = {}) {
     super()
   }
 
-  attach(attachment: MapLibreWorkspaceCameraAttachment): void {
-    if (this.disposed) return
+  attach(attachment: MapLibreWorkspaceCameraAttachment): boolean {
+    if (this.disposed) return false
     this.detach()
 
     const generation = ++this.generation
@@ -110,8 +114,10 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
         bearing: initialFrame.bearing,
       })
       this.publishAttachedFrame(active)
+      return this.active === active
     } catch (error) {
       this.failAttachment(active, { kind: 'attachment-error', error })
+      return false
     }
   }
 
@@ -119,6 +125,14 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     const active = this.active
     if (!active) return
     this.deactivate(active)
+  }
+
+  private subscribeFailure(
+    observer: (failure: MapLibreWorkspaceCameraFailure) => void,
+  ): () => void {
+    if (this.disposed) return () => {}
+    this.failureObservers.add(observer)
+    return () => this.failureObservers.delete(observer)
   }
 
   override initialize(screen: CameraScreenMetrics): SceneViewportState {
@@ -238,14 +252,15 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     failure: MapLibreWorkspaceCameraFailure,
   ): void {
     if (!this.isCurrent(active)) return
-    this.deactivate(active)
+    try {
+      this.deactivate(active)
+    } catch {
+      // Failure observers still own the workspace fallback even when MapLibre
+      // listener cleanup itself fails. Explicit detach retains that error.
+    }
     if (active.failureReported) return
     active.failureReported = true
-    try {
-      this.options.onAttachmentFailure?.(failure)
-    } catch (observerError) {
-      console.error('MapLibre workspace camera failure observer failed:', observerError)
-    }
+    this.notifyFailureObservers(failure)
   }
 
   private deactivate(active: ActiveAttachment): void {
@@ -253,16 +268,45 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     // listeners are being removed, so both cleanup order and generation matter.
     if (this.active === active) this.active = null
     this.generation += 1
-    this.removeListeners(active)
-    this.publishFrame(active.lastValidFrame)
+    const errors: unknown[] = []
+    try {
+      this.removeListeners(active)
+    } catch (error) {
+      errors.push(error)
+    }
+    try {
+      this.publishFrame(active.lastValidFrame)
+    } catch (error) {
+      errors.push(error)
+    }
+    throwCameraCleanupErrors(errors)
   }
 
   private removeListeners(active: ActiveAttachment): void {
     const { map } = active.attachment
+    const errors: unknown[] = []
     try {
       map.off('move', active.moveListener)
-    } finally {
+    } catch (error) {
+      errors.push(error)
+    }
+    try {
       map.off('resize', active.resizeListener)
+    } catch (error) {
+      errors.push(error)
+    }
+    throwCameraCleanupErrors(errors)
+  }
+
+  private notifyFailureObservers(failure: MapLibreWorkspaceCameraFailure): void {
+    const observers = [this.options.onAttachmentFailure, ...this.failureObservers]
+    for (const observer of observers) {
+      if (!observer) continue
+      try {
+        observer(failure)
+      } catch (observerError) {
+        console.error('MapLibre workspace camera failure observer failed:', observerError)
+      }
     }
   }
 
@@ -273,4 +317,15 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
 
 function finitePositive(value: number): number | null {
   return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function throwCameraCleanupErrors(errors: readonly unknown[]): void {
+  if (errors.length === 1) throw errors[0]
+  if (errors.length > 1) throw new MapLibreWorkspaceCameraCleanupError(errors)
+}
+
+class MapLibreWorkspaceCameraCleanupError extends Error {
+  constructor(readonly errors: readonly unknown[]) {
+    super('MapLibre workspace camera cleanup failed.')
+  }
 }
