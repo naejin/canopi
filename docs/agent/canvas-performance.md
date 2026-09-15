@@ -35,6 +35,22 @@ Add `--backend canvas2d` to emulate unavailable WebGL on HTML and Offscreen canv
 
 This mounts the real SceneCanvasRuntime with its detached app adapter, exercises pointer pan, wheel zoom, selection, plant dragging, undo and teardown, and asserts their state transitions. It changes only the isolated in-memory scene. It is a correctness check rather than a native input-latency benchmark.
 
+For the isolated v2 MapLibre-owned renderer experiment, run the production Pixi baseline first and pass its JSON back to the shared runner. The shared runner requires the real fixture and uses an offline style. It fails when alignment, ordering, input ownership, context ownership, style/context recovery, teardown, or repeat-mount checks fail:
+
+```bash
+DISPLAY=:0 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
+  node scripts/canvas-performance/run.mjs \
+  --file '/path/to/design.canopi' --backend pixi --dpr 1 --headed \
+  --output /tmp/canopi-pixi-dpr1.json
+
+DISPLAY=:0 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
+  node scripts/canvas-performance/shared-map-scene.mjs \
+  --file '/path/to/design.canopi' --baseline /tmp/canopi-pixi-dpr1.json \
+  --dpr 1 --headed --output /tmp/canopi-shared-dpr1.json
+```
+
+Repeat at DPR 2. `performanceComparison` compares synchronous botanical renderer submission for the same local-metre viewports, dimensions, warm-up, and 30 samples. `performance` also records full MapLibre frame wall time. Neither duration is GPU completion or input-to-visible latency. The global WebGL context count includes MapLibre's detached capability probe; `connectedWebglCanvasCount` and `mapCanvasContextCount` are the ownership checks. Read the private fixture with `fixture-receipt.mjs` before and after the run, and keep all JSON and screenshots outside the repository.
+
 Use separate worktrees and servers for before/after runs. Keep browser, GPU, DPR, dimensions, fixture, warm-up and sample counts equal. Run serially on an otherwise quiet machine; repeat if results vary. Check `metadata.backend` and `metadata.gpu` before interpreting timings. Never present SwiftShader results as native hardware frame rates. The trace JSON can be opened in Perfetto.
 
 ## Private fixture receipts and capacity derivatives

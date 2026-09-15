@@ -50,6 +50,25 @@ const ZONE_STROKE_PX = 2
 const PLANT_STROKE_PX = 1.5
 const graphicsKeys = new WeakMap<Graphics, string>()
 
+/**
+ * Retained botanical presentation. The render-surface owner supplies the
+ * stage and frame submission, which lets an Application and a shared WebGL
+ * context use the same scene graph without sharing lifecycle ownership.
+ */
+export interface PixiScenePresentation {
+  dispose(): void
+  resize(width: number, height: number): void
+  renderScene(snapshot: SceneRendererSnapshot): void
+  setViewport(viewport: SceneRendererSnapshot['viewport']): void
+}
+
+export interface PixiScenePresentationOptions {
+  readonly stage: Container
+  readonly createText: () => Text
+  readonly requestDraw: () => void
+  readonly viewSize: { width: number; height: number }
+}
+
 export function createPixiSceneRenderer(): SceneRendererDefinition {
   return {
     id: 'pixi',
@@ -85,43 +104,12 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       canvas.style.zIndex = '1'
       context.container.appendChild(canvas)
 
-      const world = new Container()
-      const zonesLayer = new Container()
-      const measurementGuideLayer = new Container()
-      const plantsLayer = new Container()
-      const plantsOverlayLayer = new Container()
-      const annotationTextLayer = new Container()
-      const annotationHighlightLayer = new Container()
-      world.addChild(zonesLayer)
-      world.addChild(measurementGuideLayer)
-      // Rasterize text and tessellate symbols at their readable CSS-pixel size.
-      // Tiny world-unit primitives lose detail before the camera enlarges them.
-      const screen = new Container()
-      screen.addChild(plantsLayer)
-      screen.addChild(plantsOverlayLayer)
-      screen.addChild(annotationTextLayer)
-      screen.addChild(annotationHighlightLayer)
-      const measurementGuideLabelLayer = new Container()
-      const pinnedPlantNameLabelLayer = new Container()
-      const selectionLabelLayer = new Container()
-      app.stage.addChild(world)
-      app.stage.addChild(screen)
-      app.stage.addChild(measurementGuideLabelLayer)
-      app.stage.addChild(pinnedPlantNameLabelLayer)
-      app.stage.addChild(selectionLabelLayer)
-
-      const viewSize = { width: context.container.clientWidth, height: context.container.clientHeight }
-      const presentation = new SceneViewportPresentation()
-      const zoneGraphicsByName = new Map<string, Graphics>()
-      const measurementGuideGraphicsById = new Map<string, Graphics>()
-      const measurementGuideLabelById = new Map<string, Text>()
-      const plantGraphicsById = new Map<string, Graphics>()
-      const plantBadgeGraphicsById = new Map<string, Graphics>()
-      const plantBadgeTextById = new Map<string, Text>()
-      const annotationTextById = new Map<string, Text>()
-      const annotationHighlightById = new Map<string, Graphics>()
-      const pinnedPlantNameLabelById = new Map<string, Text>()
-      const selectionLabelBySpecies = new Map<string, Text>()
+      const presentation = createPixiScenePresentation({
+        stage: app.stage,
+        createText,
+        requestDraw: () => app.render(),
+        viewSize: { width: context.container.clientWidth, height: context.container.clientHeight },
+      })
 
       const instance: SceneRendererInstance = {
         id: 'pixi',
@@ -131,91 +119,146 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           canvas.remove()
         },
         resize(width, height) {
-          viewSize.width = width
-          viewSize.height = height
+          presentation.resize(width, height)
           app.renderer.resize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
         },
-        renderScene(nextSnapshot) {
-          const { plantNameLabels } = presentation.setScene(nextSnapshot)
-          syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
-          syncMeasurementGuides(
-            createText,
-            measurementGuideLayer,
-            measurementGuideLabelLayer,
-            measurementGuideGraphicsById,
-            measurementGuideLabelById,
-            nextSnapshot,
-            true,
-          )
-          syncPlants(
-            createText,
-            plantsLayer,
-            plantsOverlayLayer,
-            plantGraphicsById,
-            plantBadgeGraphicsById,
-            plantBadgeTextById,
-            viewSize,
-            nextSnapshot,
-            true,
-          )
-          syncAnnotations(
-            createText,
-            annotationTextLayer,
-            annotationHighlightLayer,
-            annotationTextById,
-            annotationHighlightById,
-            nextSnapshot,
-            true,
-          )
-          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot, plantNameLabels)
-          syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
-          world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
-          world.scale.set(nextSnapshot.viewport.scale)
-          app.render()
+        renderScene(snapshot) {
+          presentation.renderScene(snapshot)
         },
         setViewport(viewport) {
-          const current = presentation.setViewport(viewport)
-          if (!current) return
-          const { snapshot, plantNameLabels } = current
-          syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
-          syncMeasurementGuides(
-            createText,
-            measurementGuideLayer,
-            measurementGuideLabelLayer,
-            measurementGuideGraphicsById,
-            measurementGuideLabelById,
-            snapshot,
-            false,
-          )
-          syncPlants(
-            createText,
-            plantsLayer,
-            plantsOverlayLayer,
-            plantGraphicsById,
-            plantBadgeGraphicsById,
-            plantBadgeTextById,
-            viewSize,
-            snapshot,
-            false,
-          )
-          syncAnnotations(
-            createText,
-            annotationTextLayer,
-            annotationHighlightLayer,
-            annotationTextById,
-            annotationHighlightById,
-            snapshot,
-            false,
-          )
-          syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot, plantNameLabels)
-          syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, snapshot)
-          world.position.set(viewport.x, viewport.y)
-          world.scale.set(viewport.scale)
-          app.render()
+          presentation.setViewport(viewport)
         },
       }
 
       return import.meta.env.DEV ? instrumentSceneRenderer(canvas, instance) : instance
+    },
+  }
+}
+
+export function createPixiScenePresentation(options: PixiScenePresentationOptions): PixiScenePresentation {
+  const { stage, createText, requestDraw, viewSize } = options
+  const world = new Container()
+  const zonesLayer = new Container()
+  const measurementGuideLayer = new Container()
+  const plantsLayer = new Container()
+  const plantsOverlayLayer = new Container()
+  const annotationTextLayer = new Container()
+  const annotationHighlightLayer = new Container()
+  world.addChild(zonesLayer)
+  world.addChild(measurementGuideLayer)
+  // Rasterize text and tessellate symbols at their readable CSS-pixel size.
+  // Tiny world-unit primitives lose detail before the camera enlarges them.
+  const screen = new Container()
+  screen.addChild(plantsLayer)
+  screen.addChild(plantsOverlayLayer)
+  screen.addChild(annotationTextLayer)
+  screen.addChild(annotationHighlightLayer)
+  const measurementGuideLabelLayer = new Container()
+  const pinnedPlantNameLabelLayer = new Container()
+  const selectionLabelLayer = new Container()
+  stage.addChild(world)
+  stage.addChild(screen)
+  stage.addChild(measurementGuideLabelLayer)
+  stage.addChild(pinnedPlantNameLabelLayer)
+  stage.addChild(selectionLabelLayer)
+
+  const presentation = new SceneViewportPresentation()
+  const zoneGraphicsByName = new Map<string, Graphics>()
+  const measurementGuideGraphicsById = new Map<string, Graphics>()
+  const measurementGuideLabelById = new Map<string, Text>()
+  const plantGraphicsById = new Map<string, Graphics>()
+  const plantBadgeGraphicsById = new Map<string, Graphics>()
+  const plantBadgeTextById = new Map<string, Text>()
+  const annotationTextById = new Map<string, Text>()
+  const annotationHighlightById = new Map<string, Graphics>()
+  const pinnedPlantNameLabelById = new Map<string, Text>()
+  const selectionLabelBySpecies = new Map<string, Text>()
+
+  return {
+    dispose() {
+      presentation.dispose()
+    },
+    resize(width, height) {
+      viewSize.width = width
+      viewSize.height = height
+    },
+    renderScene(nextSnapshot) {
+      const { plantNameLabels } = presentation.setScene(nextSnapshot)
+      syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
+      syncMeasurementGuides(
+        createText,
+        measurementGuideLayer,
+        measurementGuideLabelLayer,
+        measurementGuideGraphicsById,
+        measurementGuideLabelById,
+        nextSnapshot,
+        true,
+      )
+      syncPlants(
+        createText,
+        plantsLayer,
+        plantsOverlayLayer,
+        plantGraphicsById,
+        plantBadgeGraphicsById,
+        plantBadgeTextById,
+        viewSize,
+        nextSnapshot,
+        true,
+      )
+      syncAnnotations(
+        createText,
+        annotationTextLayer,
+        annotationHighlightLayer,
+        annotationTextById,
+        annotationHighlightById,
+        nextSnapshot,
+        true,
+      )
+      syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot, plantNameLabels)
+      syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
+      world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
+      world.scale.set(nextSnapshot.viewport.scale)
+      requestDraw()
+    },
+    setViewport(viewport) {
+      const current = presentation.setViewport(viewport)
+      if (!current) return
+      const { snapshot, plantNameLabels } = current
+      syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
+      syncMeasurementGuides(
+        createText,
+        measurementGuideLayer,
+        measurementGuideLabelLayer,
+        measurementGuideGraphicsById,
+        measurementGuideLabelById,
+        snapshot,
+        false,
+      )
+      syncPlants(
+        createText,
+        plantsLayer,
+        plantsOverlayLayer,
+        plantGraphicsById,
+        plantBadgeGraphicsById,
+        plantBadgeTextById,
+        viewSize,
+        snapshot,
+        false,
+      )
+      syncAnnotations(
+        createText,
+        annotationTextLayer,
+        annotationHighlightLayer,
+        annotationTextById,
+        annotationHighlightById,
+        snapshot,
+        false,
+      )
+      syncPinnedPlantNameLabels(createText, pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot, plantNameLabels)
+      syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, snapshot)
+      world.position.set(viewport.x, viewport.y)
+      world.scale.set(viewport.scale)
+      requestDraw()
     },
   }
 }
