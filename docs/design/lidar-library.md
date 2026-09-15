@@ -1,6 +1,6 @@
 # LiDAR layers and local agroecological analysis — implementation plan
 
-Status: **accepted product plan; no production implementation**. Updated 2026-09-15. Implementation bead: `canopi-j571`. Scientific evidence and limits: [LiDAR agroecology evidence](lidar-agroecology/report.md).
+Status: **foundation implemented and Linux-qualified; later slices remain tracked**. Updated 2026-09-15. Implementation beads: `canopi-j571`, foundation audit `canopi-cldf`. See the [foundation review and implementation report](lidar-foundation-review.md) and [LiDAR agroecology evidence](lidar-agroecology/report.md).
 
 This is the single implementation authority for the feature. Historical alternatives and review notes have been removed. The coding agent must implement the slices in order, keep the bead current, and create follow-up beads instead of expanding a slice silently.
 
@@ -9,6 +9,8 @@ This is the single implementation authority for the feature. Historical alternat
 Canopi behaves like a local map application for numeric LiDAR rasters. A user creates a named LiDAR layer, assigns one measurement kind, adds one or more compatible TIFF files, and sees their accepted valid coverage as a seamless background. The user can apply compatible agroecological analyses to that layer. Numeric results are persisted and rendered efficiently without recomputing on pan, zoom, restart, or use from another Design.
 
 The primary workflow uses user-owned drone-derived TIFFs and runs locally. Files are never uploaded implicitly. IGN MNT/MNS/MNH data are initial POC fixtures and may later provide optional context; Canopi does not mirror or host the national IGN archive.
+
+The qualified foundation currently admits a deliberately narrow subset: north-up, single-band numeric GeoTIFF sources with identity scale/offset, declared NoData instead of a dataset mask, compatible metre units, and grids aligned to the layer. It caps one source at 512 MiB, one import at 16 files/1 GiB, and every dense working grid at 25 million cells. These limits prevent unbounded allocation while `canopi-kqpp` owns out-of-core processing, genuine drone-scale evidence, disk quotas, and packaged-OS qualification.
 
 Fixed decisions:
 
@@ -21,7 +23,7 @@ Fixed decisions:
 - Multiple source and analysis layers can be visible concurrently and reordered within the LiDAR background band.
 - Shared library mutations do not dirty a Design. A `.canopi` document stores ordered layer/result references and presentation settings only.
 - Passive LiDAR read/render failures silently omit the affected contribution while the rest of the app works. An explicitly requested import or analysis reports its direct outcome.
-- No Fit control, automatic recentering, revision chooser, file-by-file display selector, point-inspection tool, reopening notice, relink prompt, or automatic “newest wins” replacement.
+- Coverage fit is an explicit Layers action when accepted bounds exist. There is no automatic recentering, revision chooser, file-by-file display selector, point-inspection tool, reopening notice, relink prompt, or automatic “newest wins” replacement.
 
 Required draw order, back to front:
 
@@ -229,4 +231,4 @@ The files are strip-organized with no overviews and use an imperfect embedded CR
 
 The scientific report defines which outputs are geometry, indicators or simulations. SoilGrids is optional coarse context and is not required for the initial analyses. Do not label MNH as canopy, topographic wetness as measured moisture, contributing area as discharge, or LiDAR-derived terrain as field-validated drainage.
 
-No production code exists for this plan. Current prototype checks establish UI behavior only; they do not validate native import, persistence, tiling, engine packaging, analysis correctness or drone-scale performance.
+The current foundation validates real extensionless IGN MNT import, decision-specific shared-scale previews, atomic publication, decoded display pixels, one independently known slope, restart reuse, same-file replacement, targeted undo, deletion, and Design presentation round-trip on Linux with GDAL 3.8.4. It does not establish packaged Windows/macOS support, genuine drone-scale performance, broader numeric interpretation, hydrology, or the later analysis catalogue. Those claims remain with the ordered slice beads rather than this qualified result.

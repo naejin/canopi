@@ -229,13 +229,16 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 
 - `beforeDevCommand` uses object form with cwd `web` relative to `desktop/`.
 - Review `desktop/tauri.conf.json` CSP when adding resource types or origins. Scripts are restricted to the app; image and connection directives currently allow HTTPS sources. Keep native asset access scoped to the image cache.
-- Asset protocol scope is limited to app data image-cache paths.
+- Asset protocol scope is limited to the app-data image cache, LiDAR display cache, and exact LiDAR import-preview PNG filename patterns.
 - Window dragging with `decorations: false` requires window permissions in `capabilities/main-window.json`.
 - `core:window:allow-destroy` is required for discard-without-save close behavior.
 
 ## LiDAR Raster Engine
 
-- The LiDAR library shells out to the GDAL command-line tools (`gdalinfo`, `gdal_translate`, `gdalwarp`, `gdaldem`, `gdaltransform`) behind the narrow adapter in `desktop/src/services/lidar/engine.rs`. Fixed argv, no shell, bounded output and duration, cancellable while running; engine discovery is cached and its version is recorded in manifests.
+- The LiDAR library shells out to the GDAL command-line tools (`gdalinfo`, `gdal_translate`, `gdalwarp`, `gdaldem`, `gdaltransform`) behind the narrow adapter in `desktop/src/services/lidar/engine.rs`. Fixed argv, no shell, bounded stdin/captured-output/temp-output growth and duration, cancellable while running; engine discovery is cached and its version is recorded in manifests.
 - Development OSes need GDAL CLI tools on `PATH` (or `CANOPI_LIDAR_GDAL_BIN` pointing at a directory containing them). Slice 1 validated GDAL 3.8.4 on Linux; packaged-OS bundling of the engine is tracked as a follow-up bead and is required before release.
 - All LiDAR raster work runs through the Native Operation Executor (`Local` class); the two sync cancel commands are reviewed bounded-signal allowances in `native_command_policy.rs`.
-- The real-fixture vertical-slice test runs with: `cargo test -p canopi-desktop lidar::e2e -- --ignored --nocapture` (requires the GDAL tools and the IGN MNT fixture under `~/Downloads`).
+- Admission currently caps a source at 512 MiB, an import at 16 files/1 GiB, and a dense working grid at 25 million cells. These are safety limits for the current dense engine, not drone-scale performance claims.
+- Numeric admission rejects complex bands, rotated/reflected/south-up grids, non-identity scale/offset, explicit dataset masks, incompatible units, and grids that do not align with the destination layer. Add support only with a recorded interpretation and numerical qualification.
+- A generation becomes Ready only after its numeric files, display pyramid, display registration, and catalogue head publish successfully. Failure removes the unpublished generation and keeps the prior head.
+- The real-fixture lifecycle test runs with: `cargo test -p canopi-desktop services::lidar::e2e::e2e_import_publish_slope_restart_reuse -- --ignored --exact --nocapture` (requires the GDAL tools and the IGN MNT fixture under `~/Downloads`). It checks decoded preview/tile alpha, restart files, same-file replacement, targeted undo, deletion, and a 45° analytical plane.
