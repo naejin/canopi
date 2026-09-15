@@ -1,4 +1,6 @@
+import { effect } from '@preact/signals'
 import type { CanvasRuntimeSettingsAdapter } from '../app-adapter'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import {
   runCanvasRuntimeCleanups,
   throwCanvasRuntimeCleanupErrors,
@@ -9,6 +11,8 @@ interface SceneRuntimeEffectsDeps {
   onLocale: () => void
   onChromeOverlay: () => void
   onPanelTargetHover: () => void
+  camera: Pick<WorkspaceCameraFrameReader, 'snapshot'>
+  onCameraFrame: () => void
   settings: Pick<
     CanvasRuntimeSettingsAdapter,
     'subscribeTheme' | 'subscribeLocale' | 'subscribeChromeOverlay'
@@ -19,6 +23,15 @@ interface SceneRuntimeEffectsDeps {
 export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array<() => void> {
   const disposers: Array<() => void> = []
   try {
+    let initialCameraFrame = true
+    disposers.push(effect(() => {
+      void deps.camera.snapshot.value
+      if (initialCameraFrame) {
+        initialCameraFrame = false
+        return
+      }
+      deps.onCameraFrame()
+    }))
     disposers.push(deps.settings.subscribeTheme(deps.onTheme))
     disposers.push(deps.settings.subscribeLocale(deps.onLocale))
     disposers.push(deps.settings.subscribeChromeOverlay(deps.onChromeOverlay))

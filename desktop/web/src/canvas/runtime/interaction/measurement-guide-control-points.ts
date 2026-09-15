@@ -1,4 +1,4 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import { createMeasurementGuideDraftMeasurements } from '../measurement-guides'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { SceneMeasurementGuideEntity, ScenePoint, SceneStateReader } from '../scene'
@@ -13,7 +13,7 @@ import { createZoneMeasurementOverlay } from './zone-measurement-overlay'
 
 interface MeasurementGuideControlPointOptions {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly sceneEdits: SceneEditCoordinator

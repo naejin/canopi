@@ -6,7 +6,7 @@ import type {
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
-import type { CameraController } from './camera'
+import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
@@ -35,7 +35,8 @@ type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opa
 interface SceneCanvasCommandSurfaceOptions {
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
-  readonly camera: Pick<CameraController, 'zoomIn' | 'zoomOut' | 'zoomToFit' | 'viewport'>
+  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
+  readonly cameraNavigation: Pick<WorkspaceCameraNavigation, 'zoomIn' | 'zoomOut' | 'zoomToFit'>
   readonly history: SceneHistoryCommands
   readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly commandAdmission: SceneCommandAdmission
@@ -216,17 +217,17 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private zoomIn(): void {
-    this.options.camera.zoomIn()
+    this.options.cameraNavigation.zoomIn()
     this.options.invalidate('viewport')
   }
 
   private zoomOut(): void {
-    this.options.camera.zoomOut()
+    this.options.cameraNavigation.zoomOut()
     this.options.invalidate('viewport')
   }
 
   private zoomToFit(): void {
-    this.options.camera.zoomToFit(this.options.sceneStore.persisted, {
+    this.options.cameraNavigation.zoomToFit(this.options.sceneStore.persisted, {
       plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
     })
     this.options.invalidate('viewport')

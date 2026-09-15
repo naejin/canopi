@@ -1,10 +1,10 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint } from '../scene'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export interface PolygonDraftOverlayController {
-  update(vertices: readonly ScenePoint[], activePoint: ScenePoint | null, camera: CameraController): void
+  update(vertices: readonly ScenePoint[], activePoint: ScenePoint | null, camera: WorkspaceCameraFrameReader): void
   hide(): void
   dispose(): void
 }

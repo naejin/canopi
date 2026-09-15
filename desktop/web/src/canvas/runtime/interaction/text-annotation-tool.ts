@@ -1,4 +1,4 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { appendTextAnnotationToDraft } from './tool-actions'
@@ -7,7 +7,7 @@ import { isSceneLayerOpenForCreation } from './layer-guards'
 
 export interface TextAnnotationToolContext {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
 }

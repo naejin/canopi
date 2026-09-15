@@ -1,5 +1,5 @@
 import type { CanvasRuntimeTranslator } from '../app-adapter'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint } from '../scene'
 import { resolveCanvasNoticePlacement } from '../../canvas-notice-layout'
 
@@ -39,13 +39,13 @@ type PlantSpacingSourcePickingReason = 'select-source' | 'source-missed'
 
 export interface PlantSpacingOverlayController {
   showSourcePicking(reason?: PlantSpacingSourcePickingReason): void
-  showSourceSelected(source: PlantSpacingSourceView, camera: CameraController, interval: PlantSpacingIntervalView): void
+  showSourceSelected(source: PlantSpacingSourceView, camera: WorkspaceCameraFrameReader, interval: PlantSpacingIntervalView): void
   setIntervalValidity(valid: boolean): void
   setGeneratedCount(count: number | null, options?: { dense?: boolean; blocked?: boolean }): void
-  showPreview(preview: PlantSpacingPreviewView, camera: CameraController): void
+  showPreview(preview: PlantSpacingPreviewView, camera: WorkspaceCameraFrameReader): void
   hidePreview(): void
   focusIntervalInput(): void
-  refreshSourceHighlight(source: PlantSpacingSourceView | null, camera: CameraController): void
+  refreshSourceHighlight(source: PlantSpacingSourceView | null, camera: WorkspaceCameraFrameReader): void
   refreshTranslations(): void
   hide(): void
   dispose(): void
@@ -318,7 +318,7 @@ export function createPlantSpacingOverlay(
     count.style.display = 'block'
   }
 
-  function updateSourceHighlight(sourceView: PlantSpacingSourceView, camera: CameraController): void {
+  function updateSourceHighlight(sourceView: PlantSpacingSourceView, camera: WorkspaceCameraFrameReader): void {
     const start = camera.worldToScreen({ x: sourceView.bounds.x, y: sourceView.bounds.y })
     const end = camera.worldToScreen({
       x: sourceView.bounds.x + sourceView.bounds.width,

@@ -4,7 +4,12 @@ import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
 } from '../app-adapter'
-import { CameraController } from '../camera'
+import {
+  CameraController,
+  type WorkspaceCameraFrameReader,
+  type WorkspaceCameraNavigation,
+  type WorkspaceCameraOwner,
+} from '../camera'
 import { createSceneCanvasCommandSurface } from '../command-surface'
 import { createSceneCanvasDocumentSurface } from '../document-surface'
 import { createSceneCanvasQuerySurface } from '../query-surface'
@@ -56,6 +61,7 @@ type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
 export interface SceneRuntimeConstructionOptions {
   appAdapter?: CanvasRuntimeAppAdapter
+  camera?: WorkspaceCameraOwner
   targetPresentation?: SceneRuntimePanelTargetAdapter
   speciesCache?: CanvasSpeciesPresentationCache
   plantLabels?: CanvasPlantLabelSource
@@ -94,7 +100,8 @@ export interface SceneRuntimeConstructionCallbacks {
 export interface SceneRuntimeConstruction {
   readonly sceneState: SceneStateReader
   readonly sceneSession: SceneSessionWriter
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
+  readonly cameraNavigation: WorkspaceCameraNavigation
   readonly sceneRevision: Signal<number>
   readonly plantNamesQueryRevision: Signal<number>
   readonly transientHistoryRevision: Signal<number>
@@ -122,7 +129,9 @@ export function createSceneRuntimeConstruction(
   callbacks: SceneRuntimeConstructionCallbacks,
 ): SceneRuntimeConstruction {
   const sceneStore = new SceneStore()
-  const camera = new CameraController()
+  const cameraOwner = options.camera ?? new CameraController()
+  const camera = cameraOwner.frame
+  const cameraNavigation = cameraOwner.navigation
   const sceneRevision = signal(0)
   const plantNamesQueryRevision = signal(0)
   const transientHistoryRevision = signal(0)
@@ -204,6 +213,7 @@ export function createSceneRuntimeConstruction(
     inspection,
     documents,
     camera,
+    cameraNavigation,
     chrome,
     rendering,
     getSceneSnapshot: () => sceneStore.persisted,
@@ -218,6 +228,7 @@ export function createSceneRuntimeConstruction(
       sceneEdits.disposePersistence()
     },
     disposeInteraction: callbacks.disposeInteraction,
+    disposeCamera: () => cameraOwner.dispose(),
     disposeEffects: () => {
       runCanvasRuntimeCleanups(
         disposeEffects.splice(0),
@@ -260,6 +271,7 @@ export function createSceneRuntimeConstruction(
     },
     sceneStore,
     camera,
+    cameraNavigation,
     history: sceneEdits,
     coordinatedHistory: appAdapter.coordinatedHistory,
     commandAdmission: sceneEdits,
@@ -295,6 +307,7 @@ export function createSceneRuntimeConstruction(
     sceneState: sceneStore,
     sceneSession: sceneStore,
     camera,
+    cameraNavigation,
     sceneRevision,
     plantNamesQueryRevision,
     transientHistoryRevision,

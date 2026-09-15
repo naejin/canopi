@@ -126,6 +126,7 @@ function createInteractionDeps(
     container,
     getSceneStore: () => store,
     camera,
+    cameraNavigation: camera,
     getSpeciesCache: () => new Map(),
     getPlantPresentationContext: overrides.getPlantPresentationContext ?? createPlantPresentationContext,
     getSelection: () => selection.map((target) => ({ ...target })),

@@ -12,7 +12,7 @@ import {
   resolveSceneObjectGroupMembers,
   sceneObjectGroupMemberLayerName,
 } from './scene'
-import type { CameraController } from './camera'
+import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 import { hitTestTopLevel, hitTestVisibleTopLevel, type TopLevelTarget } from './interaction/hit-testing'
@@ -114,7 +114,8 @@ interface SceneInteractionCancellationOptions extends SceneToolTransientOptions 
 export interface SceneInteractionSessionDeps {
   container: HTMLElement
   getSceneStore: () => SceneStateReader
-  camera: CameraController
+  camera: WorkspaceCameraFrameReader
+  cameraNavigation: Pick<WorkspaceCameraNavigation, 'panBy' | 'zoomAroundScreenPoint'>
   getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   getSelection: () => SceneDesignObjectSelection
@@ -242,6 +243,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         container: this._deps.container,
         preview: this._preview,
         camera: this._deps.camera,
+        cameraNavigation: this._deps.cameraNavigation,
         getSceneStore: this._deps.getSceneStore,
         getSelection: this._deps.getSelection,
         getDesignObjectSelection: this._deps.getDesignObjectSelection,
@@ -697,9 +699,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const beforeRevision = this._deps.camera.snapshot.peek().revision
     if (!event.shiftKey || event.ctrlKey || event.metaKey) {
       const factor = Math.exp(Math.max(-1, Math.min(1, -deltaY * 0.002)))
-      this._deps.camera.zoomAroundScreenPoint(screen, factor)
+      this._deps.cameraNavigation.zoomAroundScreenPoint(screen, factor)
     } else {
-      this._deps.camera.panBy({ x: -deltaX, y: -deltaY })
+      this._deps.cameraNavigation.panBy({ x: -deltaX, y: -deltaY })
     }
     if (this._deps.camera.snapshot.peek().revision === beforeRevision) return
     this._deps.render('viewport')

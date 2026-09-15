@@ -14,7 +14,7 @@ import {
   resolveSceneObjectGroupMembers,
   sceneObjectGroupMemberLayerName,
 } from '../scene'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import {
   getPlantWorldBounds,
   type PlantPresentationContext,
@@ -73,7 +73,7 @@ type ObjectStampSource =
 
 export interface ObjectStampToolContext {
   readonly preview: HTMLDivElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext

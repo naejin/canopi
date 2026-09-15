@@ -23,7 +23,7 @@ interface ViewportPresentation {
   readonly plantNameLabels: readonly PlantNameLabel[]
 }
 
-/** Retains renderer projection only; CameraController remains viewport authority. */
+/** Retains renderer projection only; the active WorkspaceCameraOwner remains viewport authority. */
 export class SceneViewportPresentation {
   private retained: ViewportPresentation | null = null
 

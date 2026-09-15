@@ -2,7 +2,7 @@ import { buildCanvasPrintSnapshot } from './print-snapshot'
 import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
-import type { CameraController } from './camera'
+import type { WorkspaceCameraFrameReader } from './camera'
 import type { CanvasDesignObjectSelectionModel, CanvasQueryRevision, CanvasQuerySurface } from './runtime'
 import type {
   SceneDocumentReader,
@@ -18,7 +18,7 @@ import type { SettledSceneReader } from './scene-runtime/transactions'
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
   readonly sceneStore: SceneStateReader & SceneDocumentReader
-  readonly camera: Pick<CameraController, 'viewport' | 'snapshot'>
+  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport' | 'snapshot'>
   readonly settledReader: SettledSceneReader
   readonly mutations: Pick<
     SceneRuntimeMutationController,
@@ -40,7 +40,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {}
 
   get revision(): CanvasQueryRevision { return this.options.revision }
-  get viewport(): CameraController['snapshot'] { return this.options.camera.snapshot }
+  get viewport(): WorkspaceCameraFrameReader['snapshot'] { return this.options.camera.snapshot }
   capturePrintSnapshot() {
     void this.options.settledReader.revision.value
     return this.options.settledReader.readWhenSettled(() => {

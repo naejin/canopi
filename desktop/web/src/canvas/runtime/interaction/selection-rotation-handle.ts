@@ -1,5 +1,5 @@
 import type { CanvasRuntimeTranslator } from '../app-adapter'
-import type { CameraController, SceneBounds } from '../camera'
+import type { WorkspaceCameraFrameReader, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStateReader } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
@@ -8,7 +8,7 @@ import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter
 
 interface SelectionRotationHandleOptions {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly sceneEdits: SceneEditCoordinator
@@ -526,7 +526,7 @@ function radiansToDegrees(radians: number): number {
 
 function resolveHandlePlacement(
   bounds: SceneBounds,
-  camera: CameraController,
+  camera: WorkspaceCameraFrameReader,
   container: HTMLElement,
 ): { left: number; top: number } {
   const topLeft = camera.worldToScreen({ x: bounds.minX, y: bounds.minY })

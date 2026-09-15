@@ -1,5 +1,5 @@
 import { computeSelectionRect } from '../../operations'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type {
@@ -46,7 +46,8 @@ const DOUBLE_CLICK_DISTANCE_PX = 6
 export interface SceneInteractionSharedGestureContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
+  readonly cameraNavigation: Pick<WorkspaceCameraNavigation, 'panBy'>
   readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
@@ -260,7 +261,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
 
   pointerMove({ screen, rawWorld }: SharedGesturePointerMoveContext): boolean {
     if (this.mode === 'panning' && this.startScreen) {
-      this.context.camera.panBy({
+      this.context.cameraNavigation.panBy({
         x: screen.x - this.startScreen.x,
         y: screen.y - this.startScreen.y,
       })

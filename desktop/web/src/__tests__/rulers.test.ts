@@ -23,6 +23,7 @@ function cameraSnapshot(overrides: {
       width: overrides.width ?? 424,
       height: overrides.height ?? 324,
     },
+    devicePixelRatio: 1,
     referenceScale: 8,
     revision: overrides.revision ?? 1,
   }

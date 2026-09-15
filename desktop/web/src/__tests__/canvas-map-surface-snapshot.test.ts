@@ -81,6 +81,7 @@ describe('Canvas Map Surface snapshot seam', () => {
     const viewport = signal<CameraViewportSnapshot>({
       viewport: { x: 0, y: 0, scale: 1 },
       screenSize: { width: 400, height: 300 },
+      devicePixelRatio: 1,
       referenceScale: 1,
       revision: 0,
     })
@@ -111,6 +112,7 @@ describe('Canvas Map Surface snapshot seam', () => {
       viewport.value = {
         viewport: { x: 10, y: 20, scale: 2 },
         screenSize: { width: 400, height: 300 },
+        devicePixelRatio: 1,
         referenceScale: 1,
         revision: 1,
       }

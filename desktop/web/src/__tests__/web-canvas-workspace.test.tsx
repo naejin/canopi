@@ -620,6 +620,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     viewport: signal<CameraViewportSnapshot>({
       viewport: { x: 0, y: 0, scale: 1 },
       screenSize: { width: 800, height: 600 },
+      devicePixelRatio: 1,
       referenceScale: 1,
       revision: 0,
     }),

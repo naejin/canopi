@@ -55,6 +55,7 @@ import type {
 import { getCommonNames } from '../../ipc/species'
 import { t } from '../../i18n'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
+import { CameraController } from './camera'
 
 const plantTarget = (id: string) => ({ kind: 'plant' as const, id })
 const zoneTarget = (id: string) => ({ kind: 'zone' as const, id })
@@ -1233,15 +1234,39 @@ describe('scene canvas runtime', () => {
   })
 
   it('publishes viewport-only camera changes through the canonical snapshot', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const camera = new CameraController()
+    const runtime = new SceneCanvasRuntime({ camera })
     await initRuntimeWithStubbedRenderer(runtime)
-    expect(runtime.querySurface.viewport).toBe((runtime as any)._camera.snapshot)
+    expect(runtime.querySurface.viewport).toBe(camera.snapshot)
 
     const before = runtime.querySurface.viewport.value.revision
     runtime.commandSurface.viewport.zoomIn()
 
     expect(runtime.querySurface.viewport.value.revision).toBe(before + 1)
     runtime.destroy()
+  })
+
+  it('renders externally published camera frames and releases the owner on destroy', async () => {
+    const camera = new CameraController()
+    const disposeCamera = vi.spyOn(camera, 'dispose')
+    const runtime = new SceneCanvasRuntime({ camera })
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    renderer.setViewport.mockClear()
+
+    camera.panBy({ x: 12, y: -8 })
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await Promise.resolve()
+
+    expect(renderer.setViewport).toHaveBeenCalledWith(camera.viewport)
+
+    runtime.destroy()
+    expect(disposeCamera).toHaveBeenCalledOnce()
+    renderer.setViewport.mockClear()
+
+    camera.panBy({ x: 1, y: 1 })
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+    expect(renderer.setViewport).not.toHaveBeenCalled()
   })
 
   it('does not publish a viewport change when document hydration leaves the camera unchanged', async () => {

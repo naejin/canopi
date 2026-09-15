@@ -1,4 +1,4 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type {
   PlantPresentationContext,
 } from '../plant-presentation'
@@ -45,7 +45,7 @@ import {
 export interface SceneToolRegistryContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext

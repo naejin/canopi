@@ -1,5 +1,5 @@
 import type { CanopiFile } from '../../types/design'
-import type { CameraController } from './camera'
+import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import {
   CanvasAuthorityBusyError,
@@ -24,7 +24,8 @@ interface SceneCanvasDocumentSurfaceOptions {
     SceneRuntimeDocumentBridge,
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
-  readonly camera: Pick<CameraController, 'initialize' | 'resize' | 'zoomToFit' | 'viewport'>
+  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
+  readonly cameraNavigation: Pick<WorkspaceCameraNavigation, 'initialize' | 'resize' | 'zoomToFit'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
   readonly getSceneSnapshot: () => ScenePersistedState
@@ -35,6 +36,7 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly clearHoveredEntity: () => void
   readonly disposeRuntime: () => void
   readonly disposeInteraction: () => void
+  readonly disposeCamera: () => void
   readonly disposeEffects: () => void
 }
 
@@ -56,7 +58,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   initializeViewport(): void {
     const container = this.options.rendering.container
     if (!container) return
-    this.options.camera.initialize({
+    this.options.cameraNavigation.initialize({
       width: Math.max(1, container.clientWidth),
       height: Math.max(1, container.clientHeight),
     })
@@ -81,7 +83,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   zoomToFit(): void {
-    this.options.camera.zoomToFit(this.options.getSceneSnapshot(), {
+    this.options.cameraNavigation.zoomToFit(this.options.getSceneSnapshot(), {
       plantContext: this.options.createPlantPresentationContext(this.options.camera.viewport.scale),
     })
     this.options.invalidateViewport()
@@ -129,7 +131,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   resize(width: number, height: number): void {
-    this.options.camera.resize({ width, height })
+    this.options.cameraNavigation.resize({ width, height })
     this.options.rendering.resize(width, height)
   }
 
@@ -141,6 +143,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
       () => this.options.disposeInteraction(),
       () => this.options.chrome.destroy(),
       () => this.options.disposeEffects(),
+      () => this.options.disposeCamera(),
       () => this.options.rendering.dispose(),
     ], 'Scene Canvas document surface disposal failed')
   }

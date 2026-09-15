@@ -1,5 +1,5 @@
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from '../cleanup'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePersistedState, ScenePoint } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter'
@@ -36,7 +36,7 @@ export interface ControlPointOverlayAdapter<
 
 export interface ControlPointOverlayOptions {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly render: (kind: 'scene' | 'viewport') => void

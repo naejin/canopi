@@ -1,7 +1,7 @@
 import { effect, signal } from '@preact/signals'
 import type { CanvasInspectionHandle, CanvasInspectionState, InspectionPoint } from '../inspection'
 import type { CanvasQueryRevision } from './runtime'
-import type { CameraController } from './camera'
+import type { WorkspaceCameraFrameReader } from './camera'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
 import { renderCanvas2DSceneSnapshot } from './renderers/canvas2d-scene'
@@ -10,7 +10,7 @@ import { inspectionLayout } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
 
 interface InspectionOwnerOptions {
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly revision: CanvasQueryRevision
   getSnapshot(): SceneRendererSnapshot
   setHoveredTarget(target: SceneDesignObjectTarget | null): void

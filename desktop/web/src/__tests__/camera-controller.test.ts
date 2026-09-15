@@ -58,6 +58,7 @@ describe('CameraController', () => {
     expect(camera.snapshot.value).toEqual({
       viewport: { x: 0, y: 0, scale: 1 },
       screenSize: { width: 0, height: 0 },
+      devicePixelRatio: 1,
       referenceScale: 20,
       revision: 0,
     })
@@ -78,10 +79,34 @@ describe('CameraController', () => {
       {
         viewport: { x: 100, y: 0, scale: 8 },
         screenSize: { width: 1000, height: 800 },
+        devicePixelRatio: 1,
         referenceScale: 20,
         revision: 1,
       },
     ])
+  })
+
+  it('publishes device-pixel ratio changes as part of the immutable frame', () => {
+    const camera = new CameraController()
+
+    camera.initialize({ width: 1000, height: 800, devicePixelRatio: 2 })
+    const initial = camera.snapshot.value
+    expect(initial.devicePixelRatio).toBe(2)
+    expect(initial.screenSize).toEqual({ width: 1000, height: 800 })
+
+    camera.resize({ width: 1000, height: 800, devicePixelRatio: 3 })
+    expect(camera.snapshot.value.revision).toBe(initial.revision + 1)
+    expect(camera.snapshot.value.devicePixelRatio).toBe(3)
+  })
+
+  it('normalizes invalid screen metrics before publishing a frame', () => {
+    const camera = new CameraController()
+
+    camera.initialize({ width: Number.NaN, height: Number.POSITIVE_INFINITY, devicePixelRatio: 0 })
+
+    expect(camera.snapshot.value.screenSize).toEqual({ width: 0, height: 0 })
+    expect(camera.snapshot.value.devicePixelRatio).toBe(1)
+    expect(Object.values(camera.snapshot.value.viewport).every(Number.isFinite)).toBe(true)
   })
 
   it('increments once for each effective pan, zoom, resize, and reinitialization', () => {

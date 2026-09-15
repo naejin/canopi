@@ -1,4 +1,4 @@
-import type { CameraController, SceneBounds } from '../camera'
+import type { WorkspaceCameraFrameReader, SceneBounds } from '../camera'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
 import { canSaveSelectionAsObjectStamp } from './contextual-selection-actions'
@@ -19,7 +19,7 @@ type SelectionActionCommandSurface = Pick<
 
 interface SelectionActionToolbarOptions {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly commands: SelectionActionCommandSurface
   readonly translate: CanvasRuntimeTranslator
@@ -539,7 +539,7 @@ function createIcon(paths: readonly SvgPath[]): SVGSVGElement {
 function resolveToolbarPlacement(
   selection: CanvasDesignObjectSelectionModel,
   bounds: SceneBounds,
-  camera: CameraController,
+  camera: WorkspaceCameraFrameReader,
   container: HTMLElement,
   toolbarWidth: number,
 ): { left: number; top: number } {

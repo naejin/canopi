@@ -1,7 +1,7 @@
 import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../../saved-object-stamp-source'
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import { getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import {
   buildPlantPresentationEntries,
   type PlantPresentationEntry,
@@ -38,7 +38,7 @@ const ZONE_STROKE_WIDTH_PX = 2
 
 export interface SavedObjectStampPlacementContext {
   readonly preview: HTMLDivElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly sceneEdits: SceneEditCoordinator
@@ -301,7 +301,7 @@ function appendZoneGhost(
   svg.appendChild(element)
 }
 
-function zoneScreenPoints(zone: SceneZoneEntity, camera: CameraController): ScenePoint[] {
+function zoneScreenPoints(zone: SceneZoneEntity, camera: WorkspaceCameraFrameReader): ScenePoint[] {
   if (zone.zoneType === 'rect') {
     return (getRectangularZoneCorners(zone) ?? []).map((point) => camera.worldToScreen(point))
   }
@@ -337,7 +337,7 @@ function renderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
 
 function appendPlantSymbolCommands(
   group: SVGGElement,
-  camera: CameraController,
+  camera: WorkspaceCameraFrameReader,
   entry: PlantPresentationEntry,
   symbol: PlantSymbolId,
 ): void {

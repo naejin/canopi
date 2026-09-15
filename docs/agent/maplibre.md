@@ -24,7 +24,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 
 ## Camera And Projection
 
-- MapLibre follows canvas camera state one-way. The canvas camera is the authority.
+- Until the shared workspace lifecycle is activated, MapLibre follows the standalone `CameraController` one-way. The Canvas Runtime already admits one renderer-neutral `WorkspaceCameraOwner`; the map-backed adapter must occupy that single slot and publish its immutable live frame instead of synchronizing two writable cameras.
 - The current in-canvas basemap is non-interactive and must not mutate document or canvas state.
 - Map/canvas projection is bearing-aware, Mercator-backed, and shared.
 - Spatial-frame `north_bearing_deg` participates in camera derivation and world-to-geo feature projection.

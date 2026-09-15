@@ -1,4 +1,4 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint, SceneStateReader } from '../scene'
 import type {
   SceneEditCoordinator,
@@ -20,7 +20,7 @@ interface ActiveMeasurementGuideDraft {
 export interface MeasurementGuideToolContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint

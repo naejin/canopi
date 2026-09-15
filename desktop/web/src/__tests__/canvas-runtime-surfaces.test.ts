@@ -25,6 +25,7 @@ function createQuerySurface() {
     viewport: signal({
       viewport: { x: 0, y: 0, scale: 1 },
       screenSize: { width: 400, height: 300 },
+      devicePixelRatio: 1,
       referenceScale: 1,
       revision: 0,
     }),
@@ -292,7 +293,8 @@ describe('canvas runtime surfaces', () => {
     expect(runtimeSource).toContain("from './scene-runtime/construction'")
     expect(constructionSource).toContain('createSceneRuntimeConstruction')
     expect(constructionSource).toContain('new SceneStore()')
-    expect(constructionSource).toContain('new CameraController()')
+    expect(constructionSource).toContain('camera?: WorkspaceCameraOwner')
+    expect(constructionSource).toContain('options.camera ?? new CameraController()')
     expect(constructionSource).toContain('new SceneRuntimeDocumentBridge')
     expect(constructionSource).toContain('new SceneRuntimeEditCoordinator')
     expect(constructionSource).toContain('createSceneCanvasCommandSurface')

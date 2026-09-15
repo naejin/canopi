@@ -1,10 +1,10 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ZoneMeasurementLabel } from '../zone-measurements'
 
 const MIN_EDGE_LABEL_PX = 36
 
 export interface ZoneMeasurementOverlayController {
-  update(labels: readonly ZoneMeasurementLabel[], camera: CameraController): void
+  update(labels: readonly ZoneMeasurementLabel[], camera: WorkspaceCameraFrameReader): void
   hide(): void
   dispose(): void
 }

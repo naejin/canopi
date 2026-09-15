@@ -7,6 +7,7 @@ function cameraSnapshot(): CameraViewportSnapshot {
   return {
     viewport: { x: 10, y: 20, scale: 2 },
     screenSize: { width: 320, height: 240 },
+    devicePixelRatio: 1,
     referenceScale: 2,
     revision: 1,
   }

@@ -18,11 +18,45 @@ export interface CameraScreenSize {
   height: number
 }
 
+export interface CameraScreenMetrics extends CameraScreenSize {
+  /** Optional source hint; an owner must publish the density of its active surface. */
+  devicePixelRatio?: number
+}
+
+/** Screen dimensions and viewport offsets use CSS pixels. */
 export interface CameraViewportSnapshot {
   readonly viewport: Readonly<SceneViewportState>
   readonly screenSize: Readonly<CameraScreenSize>
+  readonly devicePixelRatio: number
   readonly referenceScale: number
   readonly revision: number
+}
+
+/** Converts between local metres and CSS-pixel screen coordinates for one frame. */
+export interface WorkspaceCameraFrameReader {
+  readonly snapshot: ReadonlySignal<CameraViewportSnapshot>
+  readonly viewport: SceneViewportState
+  readonly screenSize: CameraScreenSize
+  worldToScreen(point: ScenePoint): ScenePoint
+  screenToWorld(point: ScenePoint): ScenePoint
+}
+
+export interface WorkspaceCameraNavigation {
+  initialize(screen: CameraScreenMetrics): SceneViewportState
+  resize(screen: CameraScreenMetrics): SceneViewportState
+  zoomIn(): SceneViewportState
+  zoomOut(): SceneViewportState
+  zoomAroundScreenPoint(pointer: ScenePoint, factor: number): SceneViewportState
+  zoomToFit(scene: ScenePersistedState, options?: SceneBoundsOptions): SceneViewportState
+  panBy(delta: ScenePoint): SceneViewportState
+}
+
+/** Owns the paired read and command roles admitted into one active workspace. */
+export interface WorkspaceCameraOwner {
+  readonly frame: WorkspaceCameraFrameReader
+  readonly navigation: WorkspaceCameraNavigation
+  /** Must detach owner-specific listeners and be safe to call during failed setup. */
+  dispose(): void
 }
 
 export interface SceneBounds {
@@ -37,15 +71,21 @@ export interface SceneBoundsOptions {
   plantContext?: PlantPresentationContext
 }
 
-export class CameraController {
+export class CameraController implements
+  WorkspaceCameraFrameReader,
+  WorkspaceCameraNavigation,
+  WorkspaceCameraOwner {
   private readonly _snapshot = signal<CameraViewportSnapshot>(createCameraViewportSnapshot({
     viewport: { x: 0, y: 0, scale: 1 },
     screenSize: { width: 0, height: 0 },
+    devicePixelRatio: 1,
     referenceScale: ZOOM_REFERENCE_SCALE,
     revision: 0,
   }))
 
   readonly snapshot: ReadonlySignal<CameraViewportSnapshot> = this._snapshot
+  readonly frame: WorkspaceCameraFrameReader = this
+  readonly navigation: WorkspaceCameraNavigation = this
 
   get viewport(): SceneViewportState {
     return { ...this._snapshot.peek().viewport }
@@ -55,24 +95,28 @@ export class CameraController {
     return { ...this._snapshot.peek().screenSize }
   }
 
-  initialize(screen: CameraScreenSize): SceneViewportState {
-    const scale = Math.min(screen.width, screen.height) / DEFAULT_VIEWPORT_METERS
+  initialize(screen: CameraScreenMetrics): SceneViewportState {
+    const metrics = normalizeScreenMetrics(screen)
+    const scale = Math.min(metrics.width, metrics.height) / DEFAULT_VIEWPORT_METERS
     return this._publish({
       viewport: {
-        x: screen.width / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
-        y: screen.height / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
+        x: metrics.width / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
+        y: metrics.height / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
         scale,
       },
-      screenSize: screen,
+      screenSize: metrics,
+      devicePixelRatio: metrics.devicePixelRatio,
       referenceScale: ZOOM_REFERENCE_SCALE,
     })
   }
 
-  resize(screen: CameraScreenSize): SceneViewportState {
+  resize(screen: CameraScreenMetrics): SceneViewportState {
     const current = this._snapshot.peek()
+    const metrics = normalizeScreenMetrics(screen)
     return this._publish({
       viewport: current.viewport,
-      screenSize: screen,
+      screenSize: metrics,
+      devicePixelRatio: metrics.devicePixelRatio,
       referenceScale: current.referenceScale,
     })
   }
@@ -82,6 +126,7 @@ export class CameraController {
     return this._publish({
       viewport: next,
       screenSize: current.screenSize,
+      devicePixelRatio: current.devicePixelRatio,
       referenceScale: current.referenceScale,
     })
   }
@@ -188,9 +233,12 @@ export class CameraController {
     }
   }
 
+  dispose(): void {}
+
   private _publish(next: {
     readonly viewport: Readonly<SceneViewportState>
     readonly screenSize: Readonly<CameraScreenSize>
+    readonly devicePixelRatio: number
     readonly referenceScale: number
   }): SceneViewportState {
     const current = this._snapshot.peek()
@@ -209,6 +257,7 @@ export class CameraController {
       && current.viewport.scale === viewport.scale
       && current.screenSize.width === screenSize.width
       && current.screenSize.height === screenSize.height
+      && current.devicePixelRatio === next.devicePixelRatio
       && current.referenceScale === next.referenceScale
     ) {
       return this.viewport
@@ -217,6 +266,7 @@ export class CameraController {
     this._snapshot.value = createCameraViewportSnapshot({
       viewport,
       screenSize,
+      devicePixelRatio: next.devicePixelRatio,
       referenceScale: next.referenceScale,
       revision: current.revision + 1,
     })
@@ -298,10 +348,30 @@ function createCameraViewportSnapshot(
 ): CameraViewportSnapshot {
   return Object.freeze({
     viewport: Object.freeze({ ...snapshot.viewport }),
-    screenSize: Object.freeze({ ...snapshot.screenSize }),
+    screenSize: Object.freeze({
+      width: snapshot.screenSize.width,
+      height: snapshot.screenSize.height,
+    }),
+    devicePixelRatio: snapshot.devicePixelRatio,
     referenceScale: snapshot.referenceScale,
     revision: snapshot.revision,
   })
+}
+
+function normalizeScreenMetrics(screen: CameraScreenMetrics): Required<CameraScreenMetrics> {
+  const devicePixelRatio = screen.devicePixelRatio
+    ?? (typeof window === 'undefined' ? 1 : window.devicePixelRatio)
+  return {
+    width: finiteNonNegative(screen.width),
+    height: finiteNonNegative(screen.height),
+    devicePixelRatio: Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
+      ? devicePixelRatio
+      : 1,
+  }
+}
+
+function finiteNonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
 function clampScale(scale: number): number {

@@ -1,4 +1,4 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePersistedState, ScenePlantEntity, ScenePoint } from '../scene'
 import { formatMetricDistance } from '../zone-measurements'
 
@@ -10,7 +10,7 @@ export interface PlantDragDistanceOverlayController {
     scene: ScenePersistedState
     activePlantId: string | null
     draggedPlantIds: ReadonlySet<string>
-    camera: CameraController
+    camera: WorkspaceCameraFrameReader
   }): void
   hide(): void
   dispose(): void

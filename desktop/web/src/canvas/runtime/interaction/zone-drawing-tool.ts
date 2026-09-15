@@ -1,5 +1,5 @@
 import { computeSelectionRect } from '../../operations'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { SceneDesignObjectSelection, ScenePoint, SceneStateReader } from '../scene'
 import { isSceneObjectGroupMemberTarget } from '../scene'
 import type {
@@ -44,7 +44,7 @@ interface ActiveDragZoneDraft {
 export interface ZoneDrawingToolContext {
   readonly container: HTMLElement
   readonly preview: HTMLDivElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getSelection: () => SceneDesignObjectSelection
   readonly clearSelection: () => void

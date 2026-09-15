@@ -49,6 +49,7 @@ describe('ZoomControls', () => {
     const viewport = signal<CameraViewportSnapshot>({
       viewport: { x: 0, y: 0, scale: 8 },
       screenSize: { width: 800, height: 600 },
+      devicePixelRatio: 1,
       referenceScale: 8,
       revision: 1,
     })

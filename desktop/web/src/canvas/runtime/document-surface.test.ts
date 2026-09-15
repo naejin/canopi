@@ -15,6 +15,7 @@ function createTestDocumentSurface(
     Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
   > & { invalidate?: (kind: 'scene' | 'viewport' | 'chrome') => void } = {},
 ): CanvasDocumentSurface {
+  const camera = new CameraController()
   const rendering = {
     container: null,
     invalidate: vi.fn(),
@@ -25,7 +26,8 @@ function createTestDocumentSurface(
   return createSceneCanvasDocumentSurface({
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
     documents,
-    camera: new CameraController(),
+    camera,
+    cameraNavigation: camera,
     chrome: {
       attach: vi.fn(),
       show: vi.fn(),
@@ -41,6 +43,7 @@ function createTestDocumentSurface(
     clearHoveredEntity: vi.fn(),
     disposeRuntime: vi.fn(),
     disposeInteraction: vi.fn(),
+    disposeCamera: vi.fn(),
     disposeEffects: vi.fn(),
   })
 }
@@ -71,6 +74,7 @@ describe('Scene Canvas document surface lifecycle', () => {
 
   it('continues destroying every owner after interaction disposal fails', () => {
     const calls: string[] = []
+    const camera = new CameraController()
     const surface = createSceneCanvasDocumentSurface({
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
       documents: {
@@ -85,7 +89,8 @@ describe('Scene Canvas document surface lifecycle', () => {
           acknowledgeSaved: () => 'applied',
         })),
       },
-      camera: new CameraController(),
+      camera,
+      cameraNavigation: camera,
       chrome: {
         attach: vi.fn(),
         show: vi.fn(),
@@ -122,10 +127,13 @@ describe('Scene Canvas document surface lifecycle', () => {
       disposeEffects: () => {
         calls.push('effects')
       },
+      disposeCamera: () => {
+        calls.push('camera')
+      },
     })
 
     expect(() => surface.destroy()).toThrow('interaction disposal failed')
-    expect(calls).toEqual(['runtime', 'hover', 'interaction', 'chrome', 'effects', 'rendering'])
+    expect(calls).toEqual(['runtime', 'hover', 'interaction', 'chrome', 'effects', 'camera', 'rendering'])
   })
 
   it('keeps first hydration authority-owned and persistence-busy until settlement succeeds', () => {

@@ -42,6 +42,7 @@ export function createTestCanvasQuerySurface({
   const viewportSnapshot = signal<CameraViewportSnapshot>({
     viewport,
     screenSize: { width: 400, height: 300 },
+    devicePixelRatio: 1,
     referenceScale: 1,
     revision: 0,
   })

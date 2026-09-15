@@ -85,6 +85,10 @@ export class SceneCanvasRuntime {
     return this._construction.camera
   }
 
+  private get _cameraNavigation(): SceneRuntimeConstruction['cameraNavigation'] {
+    return this._construction.cameraNavigation
+  }
+
   private get _sceneRevision(): SceneRuntimeConstruction['sceneRevision'] {
     return this._construction.sceneRevision
   }
@@ -145,7 +149,7 @@ export class SceneCanvasRuntime {
     try {
       refreshCanvasColorCache(container)
       await this._rendering.initialize(container)
-      this._camera.initialize({
+      this._cameraNavigation.initialize({
         width: Math.max(1, container.clientWidth),
         height: Math.max(1, container.clientHeight),
       })
@@ -153,6 +157,7 @@ export class SceneCanvasRuntime {
         container,
         getSceneStore: () => this._sceneState,
         camera: this._camera,
+        cameraNavigation: this._cameraNavigation,
         getSpeciesCache: () => this._presentation.getSpeciesCache(),
         getPlantPresentationContext: (viewportScale) =>
           this._presentation.createPlantPresentationContext(viewportScale),
@@ -305,6 +310,10 @@ export class SceneCanvasRuntime {
       },
       onPanelTargetHover: () => {
         this._invalidate('scene')
+      },
+      camera: this._camera,
+      onCameraFrame: () => {
+        this._invalidate('viewport')
       },
       settings: this._appAdapter.settings,
       subscribePanelOriginTargetChanges: (onChange) =>

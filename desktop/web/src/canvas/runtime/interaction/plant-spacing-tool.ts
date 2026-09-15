@@ -9,7 +9,7 @@ import {
   createPlantSpacingGeneratedPlants,
 } from '../../plant-spacing-sequence'
 import { createUuid } from '../../../utils/ids'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import {
   getPlantWorldBounds,
   resolvePlantDisplayColor,
@@ -45,7 +45,7 @@ export interface PlantSpacingPointerDownResult {
 
 export interface PlantSpacingToolContext {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext

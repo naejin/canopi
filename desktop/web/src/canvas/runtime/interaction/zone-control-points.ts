@@ -1,4 +1,4 @@
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint, SceneStateReader, SceneZoneEntity } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
@@ -12,7 +12,7 @@ import {
 
 interface ZoneControlPointOptions {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly sceneEdits: SceneEditCoordinator

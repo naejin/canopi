@@ -1,11 +1,11 @@
 import { getAnnotationScreenFrame } from '../annotation-layout'
-import type { CameraController } from '../camera'
+import type { WorkspaceCameraFrameReader } from '../camera'
 import type { SceneAnnotationEntity, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 
 export interface AnnotationInlineEditorContext {
   readonly container: HTMLElement
-  readonly camera: CameraController
+  readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
   readonly canEditAnnotation: (annotationId: string) => boolean
