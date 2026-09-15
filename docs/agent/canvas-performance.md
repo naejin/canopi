@@ -37,6 +37,28 @@ This mounts the real SceneCanvasRuntime with its detached app adapter, exercises
 
 Use separate worktrees and servers for before/after runs. Keep browser, GPU, DPR, dimensions, fixture, warm-up and sample counts equal. Run serially on an otherwise quiet machine; repeat if results vary. Check `metadata.backend` and `metadata.gpu` before interpreting timings. Never present SwiftShader results as native hardware frame rates. The trace JSON can be opened in Perfetto.
 
+## Private fixture receipts and capacity derivatives
+
+Use the aggregate-only receipt tool before and after measuring a private Design. Supply the accepted hash and every relevant expected count so the run stops on the wrong input:
+
+```bash
+node scripts/canvas-performance/fixture-receipt.mjs \
+  --file '/path/to/design.canopi' \
+  --expected-sha256 '<accepted-sha256>' \
+  --expected-plants 2201 \
+  --expected-zones 24 \
+  --expected-annotations 106 \
+  --expected-measurement-guides 134 \
+  --expected-layers 8 \
+  --expected-guides 2 \
+  --expected-consortiums 124 \
+  --expected-budget 117
+```
+
+The receipt contains only hash, byte size, version, aggregate counts, and reference-integrity totals. Errors omit the supplied path. Do not commit the source, receipt path, screenshots, traces, or generated content from a private Design.
+
+Add `--derivative dense` or `--derivative dispersed` to create a deterministic 10,000-Plant capacity fixture in a fresh operating-system temporary directory. The derivative preserves source Plant appearance, assigns unique IDs, remaps Plant references, and changes local positions according to the requested layout. Use its returned path only for the bounded measurement, then delete the file and its generated temporary directory. Recheck the original receipt afterward. Never move the derivative into the repository or treat it as representative correctness evidence.
+
 ## Native development profiling
 
 In a development app, open the native Web Inspector (`Ctrl+Shift+I` on Linux/Windows). The canvas has a `data-canopi-renderer` attribute for backend identification in all builds. Development builds additionally register mounted renderers in `window.__CANOPI_CANVAS_PROFILING__`.
