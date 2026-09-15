@@ -108,7 +108,8 @@ pub struct LidarTileset {
     pub min_zoom: u32,
     pub max_zoom: u32,
     pub tile_size: u32,
-    /// Geographic bounds in EPSG:3857 map units (projected during preparation).
+    /// Geographic bounds as `[west, south, east, north]` WGS84 degrees for
+    /// direct use by MapLibre. Prepared catalogue rows remain EPSG:3857.
     pub bounds: [f64; 4],
 }
 

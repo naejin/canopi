@@ -171,10 +171,42 @@ fn tilesets_for(
                 min_zoom: min_zoom.clamp(0, 30) as u32,
                 max_zoom: max_zoom.clamp(0, 30) as u32,
                 tile_size: 256,
-                bounds,
+                bounds: bounds_3857_to_wgs84(bounds),
             })
         })
         .collect()
+}
+
+fn bounds_3857_to_wgs84(bounds: [f64; 4]) -> [f64; 4] {
+    fn longitude(x: f64) -> f64 {
+        (x / 20_037_508.342_789_244 * 180.0).clamp(-180.0, 180.0)
+    }
+    fn latitude(y: f64) -> f64 {
+        let radius = 20_037_508.342_789_244 / std::f64::consts::PI;
+        (y / radius)
+            .sinh()
+            .atan()
+            .to_degrees()
+            .clamp(-85.051_128_78, 85.051_128_78)
+    }
+    [
+        longitude(bounds[0]),
+        latitude(bounds[1]),
+        longitude(bounds[2]),
+        latitude(bounds[3]),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bounds_3857_to_wgs84;
+
+    #[test]
+    fn map_bounds_are_projected_to_longitude_and_latitude() {
+        let bounds = bounds_3857_to_wgs84([-47_546.0, 6_157_700.0, -45_981.0, 6_159_269.0]);
+        assert!(bounds[0] > -0.5 && bounds[2] < -0.4, "{bounds:?}");
+        assert!(bounds[1] > 48.2 && bounds[3] < 48.4, "{bounds:?}");
+    }
 }
 
 fn parse_measurement_kind(raw: &str) -> common_types::lidar::LidarMeasurementKind {

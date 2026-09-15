@@ -303,7 +303,7 @@ struct ZoomGrid {
 
 impl ZoomGrid {
     fn for_bounds(bounds: [f64; 4], zoom: u32) -> Self {
-        let tiles = 2u64 << zoom;
+        let tiles = 1u64 << zoom;
         let tile_size = WEB_MERCATOR_WORLD / tiles as f64;
         let min_tx = (((bounds[0] + WEB_MERCATOR_HALF) / tile_size).floor() as i64)
             .clamp(0, tiles as i64 - 1) as u32;
@@ -314,8 +314,8 @@ impl ZoomGrid {
             .clamp(0, tiles as i64 - 1) as u32;
         let max_ty = (((WEB_MERCATOR_HALF - bounds[1]) / tile_size).floor() as i64)
             .clamp(0, tiles as i64 - 1) as u32;
-        let min_x = WEB_MERCATOR_HALF + (min_tx as f64) * tile_size;
-        let max_x = WEB_MERCATOR_HALF + ((max_tx as u64 + 1) as f64) * tile_size;
+        let min_x = -WEB_MERCATOR_HALF + (min_tx as f64) * tile_size;
+        let max_x = -WEB_MERCATOR_HALF + ((max_tx as u64 + 1) as f64) * tile_size;
         let max_y = WEB_MERCATOR_HALF - (min_ty as f64) * tile_size;
         let min_y = WEB_MERCATOR_HALF - ((max_ty as u64 + 1) as f64) * tile_size;
         Self {
@@ -336,6 +336,36 @@ impl ZoomGrid {
 
     fn pixels_y(&self) -> u32 {
         (self.max_ty - self.min_ty + 1) * TILE_PIXELS
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xyz_grid_uses_the_standard_world_extent_and_origin() {
+        let world = ZoomGrid::for_bounds(
+            [
+                -WEB_MERCATOR_HALF,
+                -WEB_MERCATOR_HALF,
+                WEB_MERCATOR_HALF,
+                WEB_MERCATOR_HALF,
+            ],
+            0,
+        );
+        assert_eq!(
+            (world.min_tx, world.max_tx, world.min_ty, world.max_ty),
+            (0, 0, 0, 0)
+        );
+        assert!((world.min_x + WEB_MERCATOR_HALF).abs() < 0.001);
+        assert!((world.max_x - WEB_MERCATOR_HALF).abs() < 0.001);
+
+        let northwest = ZoomGrid::for_bounds([-10.0, 10.0, -1.0, 20.0], 1);
+        assert_eq!((northwest.min_tx, northwest.max_tx), (0, 0));
+        assert_eq!((northwest.min_ty, northwest.max_ty), (0, 0));
+        assert!(northwest.min_x < 0.0);
+        assert!(northwest.max_y > 0.0);
     }
 }
 

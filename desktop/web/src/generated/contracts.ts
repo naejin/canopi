@@ -347,7 +347,10 @@ export type LidarTileset = {
 	min_zoom: number,
 	max_zoom: number,
 	tile_size: number,
-	// Geographic bounds in EPSG:3857 map units (projected during preparation).
+	/**
+	 *  Geographic bounds as `[west, south, east, north]` WGS84 degrees for
+	 *  direct use by MapLibre. Prepared catalogue rows remain EPSG:3857.
+	 */
 	bounds: [number, number, number, number],
 };
 
