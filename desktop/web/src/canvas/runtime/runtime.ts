@@ -6,7 +6,11 @@ import type { CanopiFile, PlacedPlant, SpatialFrame } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { PlantSymbolId, SceneDesignObjectTarget, ScenePoint } from './scene'
-import type { CameraViewportSnapshot, SceneBounds } from './camera'
+import type {
+  CameraViewportSnapshot,
+  SceneBounds,
+  TemporaryBoundsFocusOptions,
+} from './camera'
 import type { ScenePersistedState } from './scene'
 
 export interface CanvasRuntimeDocumentMetadata {
@@ -56,6 +60,8 @@ export interface CanvasViewportCommandSurface {
   zoomIn(): void
   zoomOut(): void
   zoomToFit(): void
+  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
+  returnFromTemporaryFocus(): boolean
 }
 
 export interface CanvasHistoryCommandSurface {

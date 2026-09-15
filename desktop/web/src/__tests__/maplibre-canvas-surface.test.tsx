@@ -16,23 +16,14 @@ import {
 } from '../maplibre/canvas-surface-state'
 import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
-import {
-  lidarCameraRequest,
-  lidarMapViewBounds,
-  viewDesignLocation,
-  viewLidarCoverage,
-} from '../app/lidar/camera-request'
+import { lidarMapViewBounds } from '../app/lidar/camera-request'
 
 const attachMock = vi.hoisted(() => vi.fn())
 const updateMock = vi.hoisted(() => vi.fn())
 const destroyMock = vi.hoisted(() => vi.fn())
-const showLidarCoverageMock = vi.hoisted(() => vi.fn())
-const showDesignLocationMock = vi.hoisted(() => vi.fn())
 const createLifecycleMock = vi.hoisted(() => vi.fn((_deps: unknown) => ({
   attach: attachMock,
   update: updateMock,
-  showLidarCoverage: showLidarCoverageMock,
-  showDesignLocation: showDesignLocationMock,
   destroy: destroyMock,
 })))
 
@@ -100,10 +91,7 @@ describe('MapLibreCanvasSurface adapter', () => {
     attachMock.mockClear()
     updateMock.mockClear()
     destroyMock.mockClear()
-    showLidarCoverageMock.mockClear()
-    showDesignLocationMock.mockClear()
     createLifecycleMock.mockClear()
-    lidarCameraRequest.value = null
     lidarMapViewBounds.value = null
     designSessionFixture.file = {
       version: 6,
@@ -210,17 +198,13 @@ describe('MapLibreCanvasSurface adapter', () => {
     expect(destroyMock).toHaveBeenCalled()
   })
 
-  it('forwards LiDAR coverage and return camera requests to the mounted lifecycle', async () => {
+  it('does not install a separate LiDAR camera-request consumer', async () => {
     setQuerySurfaceForTest(createRuntime())
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
     })
 
-    const bounds: [number, number, number, number] = [-0.43, 48.3, -0.41, 48.32]
-    await act(async () => viewLidarCoverage(bounds))
-    expect(showLidarCoverageMock).toHaveBeenCalledWith(bounds)
-
-    await act(async () => viewDesignLocation())
-    expect(showDesignLocationMock).toHaveBeenCalled()
+    expect(createLifecycleMock.mock.results[0]?.value).not.toHaveProperty('showLidarCoverage')
+    expect(createLifecycleMock.mock.results[0]?.value).not.toHaveProperty('showDesignLocation')
   })
 })

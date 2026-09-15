@@ -14,8 +14,8 @@ function createTestDocumentSurface(
   renderingOverrides: Partial<
     Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
   > & { invalidate?: (kind: 'scene' | 'viewport' | 'chrome') => void } = {},
+  camera = new CameraController(),
 ): CanvasDocumentSurface {
-  const camera = new CameraController()
   const rendering = {
     container: null,
     invalidate: vi.fn(),
@@ -49,6 +49,47 @@ function createTestDocumentSurface(
 }
 
 describe('Scene Canvas document surface lifecycle', () => {
+  it('clears a temporary focus after successful load or replacement but retains it when replacement is rejected', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 400, height: 300 })
+    const file = new SceneStore().toCanopiFile()
+    const surface = createTestDocumentSurface({
+      loadDocument: vi.fn(),
+      replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
+        finalizeReplacement()
+        return { callerFinalizerInvoked: true }
+      }),
+      captureForPersistence: vi.fn((_metadata, document) => ({
+        content: document,
+        isCurrent: () => true,
+        acknowledgeSaved: () => 'applied' as const,
+      })),
+    }, {}, camera)
+
+    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    surface.loadDocument(file)
+    expect(camera.returnFromTemporaryFocus()).toBe(false)
+
+    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    surface.replaceDocument(file, createCanvasDocumentReplacementToken(), vi.fn())
+    expect(camera.returnFromTemporaryFocus()).toBe(false)
+
+    const rejected = createTestDocumentSurface({
+      loadDocument: vi.fn(),
+      replaceDocument: vi.fn(() => {
+        throw new CanvasDocumentReplacementNotAdmittedError(new Error('not admitted'))
+      }),
+      captureForPersistence: vi.fn((_metadata, document) => ({
+        content: document,
+        isCurrent: () => true,
+        acknowledgeSaved: () => 'applied' as const,
+      })),
+    }, {}, camera)
+    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    expect(() => rejected.replaceDocument(file, createCanvasDocumentReplacementToken(), vi.fn())).toThrow('not admitted')
+    expect(camera.returnFromTemporaryFocus()).toBe(true)
+  })
+
   it('routes viewport initialization rendering through contained invalidation', () => {
     const invalidate = vi.fn()
     const surface = createTestDocumentSurface({

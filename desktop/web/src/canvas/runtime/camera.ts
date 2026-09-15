@@ -57,6 +57,9 @@ export interface WorkspaceCameraNavigation {
   zoomAroundScreenPoint(pointer: ScenePoint, factor: number): SceneViewportState
   zoomToFit(scene: ScenePersistedState, options?: SceneBoundsOptions): SceneViewportState
   panBy(delta: ScenePoint): SceneViewportState
+  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
+  returnFromTemporaryFocus(): boolean
+  clearTemporaryFocus(): void
 }
 
 /** Owns the paired read and command roles admitted into one active workspace. */
@@ -79,6 +82,13 @@ export interface SceneBoundsOptions {
   plantContext?: PlantPresentationContext
 }
 
+export interface TemporaryBoundsFocusOptions {
+  /** Symmetric CSS-pixel padding reserved by the caller's presentation. */
+  readonly paddingCssPx: number
+  /** Optional external ceiling, such as a MapLibre zoom-limit equivalent. */
+  readonly maximumScale?: number
+}
+
 export class CameraController implements
   WorkspaceCameraFrameReader,
   WorkspaceCameraNavigation,
@@ -90,6 +100,7 @@ export class CameraController implements
     referenceScale: ZOOM_REFERENCE_SCALE,
     revision: 0,
   }))
+  private temporaryFocusBookmark: SceneViewportState | null = null
 
   readonly snapshot: ReadonlySignal<CameraViewportSnapshot> = this._snapshot
   readonly frame: WorkspaceCameraFrameReader = this
@@ -104,6 +115,7 @@ export class CameraController implements
   }
 
   initialize(screen: CameraScreenMetrics): SceneViewportState {
+    this.clearTemporaryFocus()
     return this.publishFrame(createInitialCameraFrame(screen))
   }
 
@@ -165,6 +177,29 @@ export class CameraController implements
     })
   }
 
+  focusTemporaryBounds(
+    bounds: SceneBounds,
+    options: TemporaryBoundsFocusOptions,
+  ): boolean {
+    const focusedViewport = fitTemporaryBoundsViewport(this._snapshot.peek(), bounds, options)
+    if (!focusedViewport) return false
+    if (!this.temporaryFocusBookmark) this.temporaryFocusBookmark = { ...this._snapshot.peek().viewport }
+    this.setViewport(focusedViewport)
+    return true
+  }
+
+  returnFromTemporaryFocus(): boolean {
+    const bookmark = this.temporaryFocusBookmark
+    if (!bookmark) return false
+    this.temporaryFocusBookmark = null
+    this.setViewport(bookmark)
+    return true
+  }
+
+  clearTemporaryFocus(): void {
+    this.temporaryFocusBookmark = null
+  }
+
   worldToScreen(point: ScenePoint): ScenePoint {
     const viewport = this._snapshot.peek().viewport
     return {
@@ -181,7 +216,9 @@ export class CameraController implements
     }
   }
 
-  dispose(): void {}
+  dispose(): void {
+    this.clearTemporaryFocus()
+  }
 
   /** Lets a specialized owner publish its externally-derived active frame. */
   protected publishFrame(next: CameraViewportPublication): SceneViewportState {
@@ -310,6 +347,48 @@ export function fitCameraViewport(
   return {
     x: (screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
     y: (screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
+    scale,
+  }
+}
+
+/**
+ * Fits finite local-world bounds inside the current CSS-pixel frame. The
+ * calculation is renderer-neutral; callers choose their own presentation
+ * padding and any external scale ceiling.
+ */
+export function fitTemporaryBoundsViewport(
+  snapshot: CameraViewportSnapshot,
+  bounds: SceneBounds,
+  options: TemporaryBoundsFocusOptions,
+): SceneViewportState | null {
+  const { width, height } = snapshot.screenSize
+  const { minX, minY, maxX, maxY } = bounds
+  const padding = options.paddingCssPx
+  const maximumScale = options.maximumScale ?? ZOOM_MAX
+  if (
+    ![width, height, minX, minY, maxX, maxY, padding, maximumScale].every(Number.isFinite)
+    || width <= 0
+    || height <= 0
+    || minX >= maxX
+    || minY >= maxY
+    || padding < 0
+    || maximumScale < ZOOM_MIN
+  ) return null
+
+  const availableWidth = width - padding * 2
+  const availableHeight = height - padding * 2
+  if (availableWidth <= 0 || availableHeight <= 0) return null
+
+  const scale = clampCameraScale(Math.min(
+    availableWidth / (maxX - minX),
+    availableHeight / (maxY - minY),
+    maximumScale,
+  ))
+  if (!Number.isFinite(scale) || scale > maximumScale) return null
+
+  return {
+    x: width / 2 - ((minX + maxX) / 2) * scale,
+    y: height / 2 - ((minY + maxY) / 2) * scale,
     scale,
   }
 }

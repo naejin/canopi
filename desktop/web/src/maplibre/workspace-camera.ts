@@ -122,6 +122,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   }
 
   override initialize(screen: CameraScreenMetrics): SceneViewportState {
+    this.clearTemporaryFocus()
     const active = this.active
     if (!active) return super.initialize(screen)
     return this.jumpAttachedMap(
@@ -145,6 +146,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   override dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    this.clearTemporaryFocus()
     this.detach()
   }
 
@@ -175,9 +177,12 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
         zoom: frame.zoom,
         bearing: frame.bearing,
       })
-      return this.publishAttachedFrame(active)
+      const published = this.publishAttachedFrame(active)
+      if (!this.disposed && this.active === null) return super.setViewport(viewport)
+      return published
     } catch (error) {
       this.failAttachment(active, { kind: 'attachment-error', error })
+      if (!this.disposed && this.active === null) return super.setViewport(viewport)
       return this.viewport
     }
   }

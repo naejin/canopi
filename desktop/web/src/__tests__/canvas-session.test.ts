@@ -7,6 +7,7 @@ import {
   getCurrentCanvasCommandSurface,
   getCurrentCanvasSession,
   getCurrentCanvasToolCommandSurface,
+  getCurrentCanvasViewportCommandSurface,
   setCurrentCanvasSession,
   setCurrentCanvasTool,
 } from '../canvas/session'
@@ -79,6 +80,7 @@ describe('canvas session seam', () => {
 
     expect(getCurrentCanvasCommandSurface()).toBe(currentCanvasSession.value?.commands)
     expect(getCurrentCanvasToolCommandSurface()).toBe(currentCanvasSession.value?.commands.tools)
+    expect(getCurrentCanvasViewportCommandSurface()).toBe(currentCanvasSession.value?.commands.viewport)
     expect(setTool).toHaveBeenCalledWith('hand')
     expect(currentCanvasTool.value).toBe('hand')
   })

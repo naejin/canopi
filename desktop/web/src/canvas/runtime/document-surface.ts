@@ -25,7 +25,10 @@ interface SceneCanvasDocumentSurfaceOptions {
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
   readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
-  readonly cameraNavigation: Pick<WorkspaceCameraNavigation, 'initialize' | 'resize' | 'zoomToFit'>
+  readonly cameraNavigation: Pick<
+    WorkspaceCameraNavigation,
+    'initialize' | 'resize' | 'zoomToFit' | 'clearTemporaryFocus'
+  >
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
   readonly getSceneSnapshot: () => ScenePersistedState
@@ -93,6 +96,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this._documentState = 'settling'
     this.options.documents.loadDocument(file)
     this._documentState = 'loaded'
+    this.options.cameraNavigation.clearTemporaryFocus()
     this.options.inspection.reset()
   }
 
@@ -106,6 +110,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     try {
       const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
       this._documentState = 'loaded'
+      this.options.cameraNavigation.clearTemporaryFocus()
       this.options.inspection.reset()
       return receipt
     } catch (error) {

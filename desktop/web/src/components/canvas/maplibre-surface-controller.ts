@@ -10,10 +10,7 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
-import {
-  lidarCameraRequest,
-  publishLidarMapViewBounds,
-} from '../../app/lidar/camera-request'
+import { publishLidarMapViewBounds } from '../../app/lidar/camera-request'
 
 interface UseMapLibreCanvasSurfaceControllerOptions {
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
@@ -39,12 +36,6 @@ export function useMapLibreCanvasSurfaceController({
 
   useSignalEffect(() => {
     lifecycleRef.current?.update(readCanvasMapSurfaceSnapshot())
-  })
-
-  useSignalEffect(() => {
-    const request = lidarCameraRequest.value
-    if (request?.type === 'coverage') lifecycleRef.current?.showLidarCoverage(request.bounds)
-    if (request?.type === 'design-location') lifecycleRef.current?.showDesignLocation()
   })
 
   useEffect(() => {

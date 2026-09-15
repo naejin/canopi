@@ -157,6 +157,49 @@ describe('MapLibreWorkspaceCameraOwner', () => {
     expect(owner.snapshot.value.devicePixelRatio).toBe(3)
   })
 
+  it('routes temporary focus and return through attached map jumps and clears it on initialize', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    const map = new FakeMap()
+    owner.attach(attachmentFor(map))
+    const jumps = map.jumpTo.mock.calls.length
+
+    expect(owner.focusTemporaryBounds(
+      { minX: 0, minY: 0, maxX: 100, maxY: 50 },
+      { paddingCssPx: 48 },
+    )).toBe(true)
+    expect(owner.returnFromTemporaryFocus()).toBe(true)
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps + 2)
+
+    owner.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 })
+    owner.initialize({ width: 1, height: 1 })
+    expect(owner.returnFromTemporaryFocus()).toBe(false)
+  })
+
+  it('replays a failed attached return through the Canvas2D fallback', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    const map = new FakeMap()
+    owner.attach(attachmentFor(map))
+    const bookmark = owner.viewport
+
+    expect(owner.focusTemporaryBounds(
+      { minX: 0, minY: 0, maxX: 100, maxY: 50 },
+      { paddingCssPx: 48 },
+    )).toBe(true)
+    map.setProjection({ x: 240, y: 160 }, 5)
+    map.emit('move')
+    expect(owner.viewport).not.toEqual(bookmark)
+    map.jumpTo.mockImplementationOnce(() => { throw new Error('map navigation failed') })
+
+    expect(owner.returnFromTemporaryFocus()).toBe(true)
+    expect(owner.viewport).toEqual(bookmark)
+    expect(map.off).toHaveBeenCalledWith('move', expect.any(Function))
+
+    owner.panBy({ x: 10, y: 0 })
+    expect(owner.viewport.x).toBe(bookmark.x + 10)
+  })
+
   it('removes listeners, restores the last valid frame, and reports an invalid map once', () => {
     const failure = vi.fn()
     const owner = new MapLibreWorkspaceCameraOwner({ onAttachmentFailure: failure })

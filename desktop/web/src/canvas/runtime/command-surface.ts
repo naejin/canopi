@@ -6,7 +6,12 @@ import type {
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
-import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
+import type {
+  SceneBounds,
+  TemporaryBoundsFocusOptions,
+  WorkspaceCameraFrameReader,
+  WorkspaceCameraNavigation,
+} from './camera'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
@@ -36,7 +41,10 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
   readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
-  readonly cameraNavigation: Pick<WorkspaceCameraNavigation, 'zoomIn' | 'zoomOut' | 'zoomToFit'>
+  readonly cameraNavigation: Pick<
+    WorkspaceCameraNavigation,
+    'zoomIn' | 'zoomOut' | 'zoomToFit' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus'
+  >
   readonly history: SceneHistoryCommands
   readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly commandAdmission: SceneCommandAdmission
@@ -139,6 +147,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       zoomIn: () => this.zoomIn(),
       zoomOut: () => this.zoomOut(),
       zoomToFit: () => this.zoomToFit(),
+      focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
+      returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
     }
     this.history = {
       canUndo,
@@ -231,6 +241,21 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
     })
     this.options.invalidate('viewport')
+  }
+
+  private focusTemporaryBounds(
+    bounds: SceneBounds,
+    options: TemporaryBoundsFocusOptions,
+  ): boolean {
+    const changed = this.options.cameraNavigation.focusTemporaryBounds(bounds, options)
+    if (changed) this.options.invalidate('viewport')
+    return changed
+  }
+
+  private returnFromTemporaryFocus(): boolean {
+    const changed = this.options.cameraNavigation.returnFromTemporaryFocus()
+    if (changed) this.options.invalidate('viewport')
+    return changed
   }
 
   private undo(): void {

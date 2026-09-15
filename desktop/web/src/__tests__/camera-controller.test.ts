@@ -1,6 +1,10 @@
 import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
-import { CameraController, computeSceneBounds } from '../canvas/runtime/camera'
+import {
+  CameraController,
+  computeSceneBounds,
+  fitTemporaryBoundsViewport,
+} from '../canvas/runtime/camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 
 function createScene(): ScenePersistedState {
@@ -203,6 +207,77 @@ describe('CameraController', () => {
 
     expect(camera.zoomIn().scale).toBe(1000)
     expect(camera.zoomIn().scale).toBe(1000)
+  })
+
+  it('focuses temporary bounds with one retained bookmark and restores it once', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 400, height: 300 })
+    camera.setViewport({ x: 10, y: 20, scale: 2 })
+    const before = camera.snapshot.value
+
+    expect(camera.focusTemporaryBounds(
+      { minX: 0, minY: 0, maxX: 100, maxY: 50 },
+      { paddingCssPx: 48, maximumScale: 5 },
+    )).toBe(true)
+    expect(camera.viewport).toEqual({ x: 48, y: 74, scale: 3.04 })
+
+    expect(camera.focusTemporaryBounds(
+      { minX: 300, minY: 100, maxX: 350, maxY: 150 },
+      { paddingCssPx: 48, maximumScale: 5 },
+    )).toBe(true)
+    expect(camera.returnFromTemporaryFocus()).toBe(true)
+    expect(camera.snapshot.value.viewport).toEqual(before.viewport)
+    const returnedRevision = camera.snapshot.value.revision
+    expect(camera.returnFromTemporaryFocus()).toBe(false)
+    expect(camera.snapshot.value.revision).toBe(returnedRevision)
+  })
+
+  it('rejects invalid temporary bounds without publishing a frame', () => {
+    const camera = new CameraController()
+    expect(camera.focusTemporaryBounds(
+      { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+      { paddingCssPx: 0 },
+    )).toBe(false)
+    expect(camera.snapshot.value.revision).toBe(0)
+
+    camera.initialize({ width: 400, height: 300 })
+    const revision = camera.snapshot.value.revision
+
+    expect(camera.focusTemporaryBounds(
+      { minX: 1, minY: 0, maxX: 1, maxY: 10 },
+      { paddingCssPx: 48 },
+    )).toBe(false)
+    expect(camera.focusTemporaryBounds(
+      { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+      { paddingCssPx: 201 },
+    )).toBe(false)
+    expect(camera.snapshot.value.revision).toBe(revision)
+  })
+
+  it('fits temporary bounds with CSS-pixel padding and both scale ceilings', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 400, height: 300 })
+
+    expect(fitTemporaryBoundsViewport(camera.snapshot.value,
+      { minX: 0, minY: 0, maxX: 0.001, maxY: 0.001 },
+      { paddingCssPx: 48 },
+    )).toEqual({ x: 199.5, y: 149.5, scale: 1000 })
+    expect(fitTemporaryBoundsViewport(camera.snapshot.value,
+      { minX: 0, minY: 0, maxX: 1, maxY: 1 },
+      { paddingCssPx: 48, maximumScale: 2 },
+    )).toEqual({ x: 199, y: 149, scale: 2 })
+  })
+
+  it('clears a temporary bookmark during initialization and disposal', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 400, height: 300 })
+    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.initialize({ width: 400, height: 300 })
+    expect(camera.returnFromTemporaryFocus()).toBe(false)
+
+    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.dispose()
+    expect(camera.returnFromTemporaryFocus()).toBe(false)
   })
 
   it('fits to the scene bounds', () => {
