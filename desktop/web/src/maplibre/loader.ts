@@ -25,8 +25,11 @@ export interface MapLibreMapInstance {
   jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
   resize(): void
   remove(): void
-  on(type: 'load' | 'error' | 'sourcedata' | 'moveend', listener: (event?: unknown) => void): void
-  off(type: 'load' | 'error' | 'sourcedata' | 'moveend', listener: (event?: unknown) => void): void
+  on(type: 'load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize', listener: (event?: unknown) => void): void
+  off(type: 'load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize', listener: (event?: unknown) => void): void
+  project?(lnglat: [number, number]): { x: number; y: number }
+  getPitch?(): number
+  getCanvas?(): HTMLCanvasElement
   loaded?(): boolean
   isStyleLoaded?(): boolean
   isSourceLoaded?(id: string): boolean

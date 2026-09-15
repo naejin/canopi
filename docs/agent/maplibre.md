@@ -24,7 +24,8 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 
 ## Camera And Projection
 
-- Until the shared workspace lifecycle is activated, MapLibre follows the standalone `CameraController` one-way. The Canvas Runtime already admits one renderer-neutral `WorkspaceCameraOwner`; the map-backed adapter must occupy that single slot and publish its immutable live frame instead of synchronizing two writable cameras.
+- `maplibre/workspace-camera.ts` implements the renderer-neutral `WorkspaceCameraOwner` for the shared workspace. It starts with `CameraController` fallback behavior, then its narrow attachment control transfers the current local viewport to one MapLibre map and publishes every accepted live `move` or `resize` frame through the same stable signal. Navigation commands target only the attached map. Detach, replacement, projection rejection, and attachment errors fence stale callbacks, remove listeners, and retain the last valid local-metre frame for fallback. The attachment owner does not create or remove the map.
+- The shared workspace lifecycle has not activated that owner yet. Until it does, the current Canvas Map Surface still follows the standalone `CameraController` one-way; do not compose both paths into one mounted workspace.
 - The current in-canvas basemap is non-interactive and must not mutate document or canvas state.
 - Map/canvas projection is bearing-aware, Mercator-backed, and shared.
 - Spatial-frame `north_bearing_deg` participates in camera derivation and world-to-geo feature projection.

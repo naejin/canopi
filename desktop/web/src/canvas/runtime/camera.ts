@@ -32,6 +32,14 @@ export interface CameraViewportSnapshot {
   readonly revision: number
 }
 
+/** The complete immutable-frame payload published by a workspace camera owner. */
+export interface CameraViewportPublication {
+  readonly viewport: Readonly<SceneViewportState>
+  readonly screenSize: Readonly<CameraScreenSize>
+  readonly devicePixelRatio: number
+  readonly referenceScale: number
+}
+
 /** Converts between local metres and CSS-pixel screen coordinates for one frame. */
 export interface WorkspaceCameraFrameReader {
   readonly snapshot: ReadonlySignal<CameraViewportSnapshot>
@@ -96,24 +104,13 @@ export class CameraController implements
   }
 
   initialize(screen: CameraScreenMetrics): SceneViewportState {
-    const metrics = normalizeScreenMetrics(screen)
-    const scale = Math.min(metrics.width, metrics.height) / DEFAULT_VIEWPORT_METERS
-    return this._publish({
-      viewport: {
-        x: metrics.width / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
-        y: metrics.height / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
-        scale,
-      },
-      screenSize: metrics,
-      devicePixelRatio: metrics.devicePixelRatio,
-      referenceScale: ZOOM_REFERENCE_SCALE,
-    })
+    return this.publishFrame(createInitialCameraFrame(screen))
   }
 
   resize(screen: CameraScreenMetrics): SceneViewportState {
     const current = this._snapshot.peek()
     const metrics = normalizeScreenMetrics(screen)
-    return this._publish({
+    return this.publishFrame({
       viewport: current.viewport,
       screenSize: metrics,
       devicePixelRatio: metrics.devicePixelRatio,
@@ -123,7 +120,7 @@ export class CameraController implements
 
   setViewport(next: SceneViewportState): SceneViewportState {
     const current = this._snapshot.peek()
-    return this._publish({
+    return this.publishFrame({
       viewport: next,
       screenSize: current.screenSize,
       devicePixelRatio: current.devicePixelRatio,
@@ -148,64 +145,15 @@ export class CameraController implements
   }
 
   zoomAroundScreenPoint(pointer: ScenePoint, factor: number): SceneViewportState {
-    const currentViewport = this._snapshot.peek().viewport
-    const oldScale = currentViewport.scale
-    const newScale = clampScale(oldScale * factor)
-    if (newScale === oldScale) return this.viewport
-    const worldPoint = this.screenToWorld(pointer)
-
-    return this.setViewport({
-      x: pointer.x - worldPoint.x * newScale,
-      y: pointer.y - worldPoint.y * newScale,
-      scale: newScale,
-    })
+    return this.setViewport(zoomCameraViewport(
+      this._snapshot.peek(),
+      pointer,
+      factor,
+    ))
   }
 
   zoomToFit(scene: ScenePersistedState, options: SceneBoundsOptions = {}): SceneViewportState {
-    const snapshot = this._snapshot.peek()
-    const screen = snapshot.screenSize
-    if (screen.width <= 0 || screen.height <= 0) {
-      return this.viewport
-    }
-
-    // Annotations and default-mode plants have screen-space dimensions, so their
-    // world-space footprint is inversely proportional to scale. Computing bounds
-    // once with the current scale and deriving a new scale creates a circular
-    // dependency - each call only moves partway toward the true fit. Iterate
-    // until the scale converges (typically 2-3 rounds).
-    let currentScale = options.annotationViewportScale ?? snapshot.viewport.scale
-    let bounds: SceneBounds | null = null
-    let scale = currentScale
-
-    for (let i = 0; i < FIT_MAX_ITERATIONS; i++) {
-      bounds = computeSceneBounds(scene, {
-        annotationViewportScale: currentScale,
-        plantContext: options.plantContext,
-      })
-      if (!bounds) return this.viewport
-
-      const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
-      const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
-      scale = clampScale(Math.min(
-        (screen.width * (1 - DEFAULT_FIT_PADDING * 2)) / contentWidth,
-        (screen.height * (1 - DEFAULT_FIT_PADDING * 2)) / contentHeight,
-      ))
-
-      if (Math.abs(scale - currentScale) / Math.max(scale, currentScale) < FIT_CONVERGENCE_THRESHOLD) {
-        break
-      }
-      currentScale = scale
-    }
-
-    const finalBounds = bounds!
-    const contentWidth = Math.max(finalBounds.maxX - finalBounds.minX, 1)
-    const contentHeight = Math.max(finalBounds.maxY - finalBounds.minY, 1)
-
-    return this.setViewport({
-      x: (screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
-      y: (screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
-      scale,
-    })
+    return this.setViewport(fitCameraViewport(this._snapshot.peek(), scene, options))
   }
 
   panBy(delta: ScenePoint): SceneViewportState {
@@ -235,42 +183,134 @@ export class CameraController implements
 
   dispose(): void {}
 
-  private _publish(next: {
-    readonly viewport: Readonly<SceneViewportState>
-    readonly screenSize: Readonly<CameraScreenSize>
-    readonly devicePixelRatio: number
-    readonly referenceScale: number
-  }): SceneViewportState {
+  /** Lets a specialized owner publish its externally-derived active frame. */
+  protected publishFrame(next: CameraViewportPublication): SceneViewportState {
     const current = this._snapshot.peek()
-    const viewport = {
-      x: next.viewport.x,
-      y: next.viewport.y,
-      scale: clampScale(next.viewport.scale),
-    }
-    const screenSize = {
-      width: next.screenSize.width,
-      height: next.screenSize.height,
-    }
-    if (
-      current.viewport.x === viewport.x
-      && current.viewport.y === viewport.y
-      && current.viewport.scale === viewport.scale
-      && current.screenSize.width === screenSize.width
-      && current.screenSize.height === screenSize.height
-      && current.devicePixelRatio === next.devicePixelRatio
-      && current.referenceScale === next.referenceScale
-    ) {
-      return this.viewport
-    }
-
-    this._snapshot.value = createCameraViewportSnapshot({
-      viewport,
-      screenSize,
-      devicePixelRatio: next.devicePixelRatio,
-      referenceScale: next.referenceScale,
-      revision: current.revision + 1,
-    })
+    this._snapshot.value = nextCameraViewportSnapshot(current, next)
     return this.viewport
+  }
+}
+
+/** Creates the shared default local-metre frame without publishing it. */
+export function createInitialCameraFrame(
+  screen: CameraScreenMetrics,
+): CameraViewportPublication {
+  const metrics = normalizeScreenMetrics(screen)
+  const scale = Math.min(metrics.width, metrics.height) / DEFAULT_VIEWPORT_METERS
+  return {
+    viewport: {
+      x: metrics.width / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
+      y: metrics.height / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
+      scale,
+    },
+    screenSize: metrics,
+    devicePixelRatio: metrics.devicePixelRatio,
+    referenceScale: ZOOM_REFERENCE_SCALE,
+  }
+}
+
+/**
+ * Applies one frame transition while preserving immutable nested values,
+ * monotonic revisions, and exact no-op identity. Shared camera owners use this
+ * instead of keeping a second mutable viewport representation.
+ */
+export function nextCameraViewportSnapshot(
+  current: CameraViewportSnapshot,
+  next: CameraViewportPublication,
+): CameraViewportSnapshot {
+  const viewport = {
+    x: next.viewport.x,
+    y: next.viewport.y,
+    scale: clampCameraScale(next.viewport.scale),
+  }
+  const screenSize = {
+    width: next.screenSize.width,
+    height: next.screenSize.height,
+  }
+  if (
+    current.viewport.x === viewport.x
+    && current.viewport.y === viewport.y
+    && current.viewport.scale === viewport.scale
+    && current.screenSize.width === screenSize.width
+    && current.screenSize.height === screenSize.height
+    && current.devicePixelRatio === next.devicePixelRatio
+    && current.referenceScale === next.referenceScale
+  ) {
+    return current
+  }
+
+  return createCameraViewportSnapshot({
+    viewport,
+    screenSize,
+    devicePixelRatio: next.devicePixelRatio,
+    referenceScale: next.referenceScale,
+    revision: current.revision + 1,
+  })
+}
+
+/** Derives a pointer-anchored zoom without publishing a second frame. */
+export function zoomCameraViewport(
+  snapshot: CameraViewportSnapshot,
+  pointer: ScenePoint,
+  factor: number,
+): SceneViewportState {
+  const currentViewport = snapshot.viewport
+  const newScale = clampCameraScale(currentViewport.scale * factor)
+  if (newScale === currentViewport.scale) return { ...currentViewport }
+  const worldPoint = {
+    x: (pointer.x - currentViewport.x) / currentViewport.scale,
+    y: (pointer.y - currentViewport.y) / currentViewport.scale,
+  }
+  return {
+    x: pointer.x - worldPoint.x * newScale,
+    y: pointer.y - worldPoint.y * newScale,
+    scale: newScale,
+  }
+}
+
+/** Derives the fit viewport using the same scale-dependent bounds policy as Canvas2D. */
+export function fitCameraViewport(
+  snapshot: CameraViewportSnapshot,
+  scene: ScenePersistedState,
+  options: SceneBoundsOptions = {},
+): SceneViewportState {
+  const screen = snapshot.screenSize
+  if (screen.width <= 0 || screen.height <= 0) return { ...snapshot.viewport }
+
+  // Annotations and default-mode plants have screen-space dimensions, so their
+  // world-space footprint is inversely proportional to scale. Computing bounds
+  // once with the current scale and deriving a new scale creates a circular
+  // dependency - each call only moves partway toward the true fit. Iterate
+  // until the scale converges (typically 2-3 rounds).
+  let currentScale = options.annotationViewportScale ?? snapshot.viewport.scale
+  let bounds: SceneBounds | null = null
+  let scale = currentScale
+
+  for (let i = 0; i < FIT_MAX_ITERATIONS; i++) {
+    bounds = computeSceneBounds(scene, {
+      annotationViewportScale: currentScale,
+      plantContext: options.plantContext,
+    })
+    if (!bounds) return { ...snapshot.viewport }
+
+    const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
+    const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
+    scale = clampCameraScale(Math.min(
+      (screen.width * (1 - DEFAULT_FIT_PADDING * 2)) / contentWidth,
+      (screen.height * (1 - DEFAULT_FIT_PADDING * 2)) / contentHeight,
+    ))
+
+    if (Math.abs(scale - currentScale) / Math.max(scale, currentScale) < FIT_CONVERGENCE_THRESHOLD) break
+    currentScale = scale
+  }
+
+  const finalBounds = bounds!
+  const contentWidth = Math.max(finalBounds.maxX - finalBounds.minX, 1)
+  const contentHeight = Math.max(finalBounds.maxY - finalBounds.minY, 1)
+  return {
+    x: (screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
+    y: (screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
+    scale,
   }
 }
 
@@ -374,6 +414,6 @@ function finiteNonNegative(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
-function clampScale(scale: number): number {
+export function clampCameraScale(scale: number): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, scale))
 }
