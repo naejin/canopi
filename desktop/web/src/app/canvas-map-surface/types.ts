@@ -1,5 +1,6 @@
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import type { BasemapStyle } from '../../generated/contracts'
+import type { LidarMapLayer } from './lidar'
 import type { TerrainLayerState } from '../../maplibre/terrain'
 import type { PanelTarget } from '../../types/design'
 
@@ -11,6 +12,7 @@ export interface CanvasMapSurfaceSnapshot {
   readonly hasVisibleMapLayer: boolean
   readonly layerVisibility: Record<string, boolean>
   readonly layerOpacity: Record<string, number>
+  readonly lidar: readonly LidarMapLayer[]
   readonly terrain: TerrainLayerState
   readonly hoveredTargets: readonly PanelTarget[]
   readonly selectedTargets: readonly PanelTarget[]

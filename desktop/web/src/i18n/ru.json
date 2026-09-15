@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Легенда"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Добавить слой",
+      "cancelCreate": "Отмена",
+      "layerNamePlaceholder": "Название слоя",
+      "createLayer": "Создать слой рельефа",
+      "engineUnavailable": "Растровый движок недоступен; импорт и анализ отключены.",
+      "empty": "В этом Design пока нет слоёв LiDAR.",
+      "kind": {
+        "GroundElevation": "Рельеф",
+        "SurfaceElevation": "Поверхность",
+        "AboveGroundHeight": "Высота",
+        "OtherContinuous": "Число"
+      },
+      "state": {
+        "Preparing": "подготовка",
+        "Ready": "готово",
+        "Refreshing": "обновление",
+        "Incomplete": "неполный",
+        "Failed": "ошибка",
+        "unavailable": "недоступно"
+      },
+      "addTiffs": "Добавить TIFF",
+      "analyse": "Анализ",
+      "delete": "Удалить",
+      "confirmDelete": "Удалить?",
+      "deleteLayerImpact": "Удаляет {{analyses}} слоёв анализа",
+      "deleteReferenceImpact": "и {{references}} сохранённых ссылок Design",
+      "opacity": "Непрозрачность",
+      "hide": "Скрыть",
+      "show": "Показать",
+      "review": {
+        "title": "Проверка импорта",
+        "uncovered": "Не покрыто",
+        "overlap": "Перекрытие",
+        "invalid": "Недействительно",
+        "before": "До",
+        "after": "После",
+        "addUncovered": "Добавить непокрытые области",
+        "replaceOverlap": "Заменить перекрытия",
+        "apply": "Применить",
+        "cancel": "Отмена"
+      }
     }
   },
   "worldMap": {

@@ -25,6 +25,7 @@ function snapshot(
     hasVisibleMapLayer: true,
     layerVisibility: { base: true, contours: false },
     layerOpacity: { base: 1, contours: 1 },
+    lidar: [],
     terrain: {
       contourIntervalMeters: 0,
       contoursVisible: false,

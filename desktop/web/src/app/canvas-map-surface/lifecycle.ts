@@ -27,6 +27,12 @@ import {
 } from '../../maplibre/terrain-sync'
 import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
 import {
+  applyLidarSync,
+  clearLidarSync,
+  classifyLidarSync,
+  type LidarMapLayer,
+} from './lidar'
+import {
   type MapLibreApi,
   type MapLibreHostResizeObserver,
   type MapLibreMapInstance,
@@ -71,6 +77,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   private container: HTMLElement | null = null
   private snapshot: CanvasMapSurfaceSnapshot | null = null
   private terrainGeneration = 0
+  private appliedLidarLayers: LidarMapLayer[] = []
   private camera: MapFrame | null = null
   private terrainState: TerrainLayerState | null = null
   private activeBasemapStyle: BasemapStyle | null = null
@@ -160,6 +167,17 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       snapshot.layerVisibility.base ?? true,
       snapshot.layerOpacity.base ?? 1,
     )
+  }
+
+  private syncLidar(map: MapLibreMapInstance, layers: readonly LidarMapLayer[]): void {
+    try {
+      const actions = classifyLidarSync(this.appliedLidarLayers, [...layers])
+      applyLidarSync(map, actions)
+      this.appliedLidarLayers = [...layers]
+    } catch (error) {
+      // Passive LiDAR render failures omit the contribution silently.
+      this.logError('Failed to sync LiDAR layers:', error)
+    }
   }
 
   private syncOverlays(snapshot: CanvasMapSurfaceSnapshot): void {
@@ -302,6 +320,8 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
         if (currentSnapshot) this.applyCamera(context.map, currentSnapshot)
       },
       onDestroy: (context) => {
+        clearLidarSync(context.map, this.appliedLidarLayers)
+        this.appliedLidarLayers = []
         clearCanvasMapSurfaceOverlays(context.map)
       },
       onCreateError: (error) => {
@@ -334,6 +354,9 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   ): void {
     this.surface.resize()
     this.syncBasemapPresentation(context.map, snapshot)
+    // LiDAR raster bands render directly above the basemap and below every
+    // overlay/terrain layer; insertion order inside the map is z-order.
+    this.syncLidar(context.map, snapshot.lidar)
     this.syncOverlays(snapshot)
     void this.syncTerrain(snapshot)
   }
@@ -357,6 +380,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       const currentSnapshot = this.snapshot
       if (!currentSnapshot) return
       this.syncBasemapPresentation(map, currentSnapshot)
+      this.syncLidar(map, currentSnapshot.lidar)
       this.syncOverlays(currentSnapshot)
       void this.syncTerrain(currentSnapshot)
     }

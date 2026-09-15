@@ -107,6 +107,20 @@ pub fn run() {
             commands::problem_report::create_problem_report,
             commands::problem_report::show_problem_report_folder,
             commands::geocoding::geocode_address,
+            commands::lidar::lidar_engine_status,
+            commands::lidar::lidar_list_library,
+            commands::lidar::lidar_create_layer,
+            commands::lidar::lidar_rename_layer,
+            commands::lidar::lidar_delete_layer_impact,
+            commands::lidar::lidar_delete_layer,
+            commands::lidar::lidar_stage_import,
+            commands::lidar::lidar_get_import_job,
+            commands::lidar::lidar_apply_import,
+            commands::lidar::lidar_cancel_import,
+            commands::lidar::lidar_create_analysis,
+            commands::lidar::lidar_get_analysis_job_status,
+            commands::lidar::lidar_cancel_analysis_job,
+            commands::lidar::lidar_delete_analysis,
         ])
         .setup(|app| {
             // Logging
@@ -115,7 +129,8 @@ pub fn run() {
             logging::init(&log_dir);
             tracing::info!("Canopi starting");
 
-            app.manage(native_operation::NativeOperationExecutor::production());
+            let native_executor = native_operation::NativeOperationExecutor::production();
+            app.manage(native_executor.clone());
             tracing::info!("Native operation executor initialized");
 
             // User DB (writable, in app data dir)
@@ -127,6 +142,13 @@ pub fn run() {
             app.manage(user_db);
 
             tracing::info!("User DB initialized at {}", user_db_path.display());
+
+            // LiDAR library (dedicated catalogue, managed raster assets)
+            let lidar_library = services::lidar::LidarLibrary::open(&data_dir)
+                .map_err(|e| format!("Failed to initialize LiDAR library: {e}"))?;
+            lidar_library.attach_executor(native_executor);
+            app.manage(lidar_library);
+            tracing::info!("LiDAR library initialized");
 
             // Image cache (disk-backed, in app data dir)
             let image_cache = image_cache::ImageCache::new(&data_dir)

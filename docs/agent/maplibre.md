@@ -55,9 +55,17 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Terrain paint-only changes, such as opacity and theme, should stay incremental through `maplibre/terrain-sync.ts`.
 - Rebuild terrain sources/layers only when source-shape inputs change.
 
+## LiDAR Raster Band
+
+- LiDAR source and analysis rasters render as MapLibre raster layers inside the Canvas Map Surface, between the basemap and every overlay/terrain layer. `app/canvas-map-surface/lifecycle.ts` calls `syncLidar` before overlay and terrain sync in both the ready path and `syncExistingMap`, because insertion order inside the map is z-order. A LiDAR layer added after overlays exist inserts with the first known overlay/terrain layer id as `beforeId` (`app/canvas-map-surface/lidar.ts`).
+- `app/canvas-map-surface/lidar.ts` is the pure seam: `lidarMapLayers` projects the joined LiDAR presentation into map layers, and `classifyLidarSync` classifies each update into add/remove/paint actions. Opacity changes are paint-only (`setPaintProperty raster-opacity`) so opacity drags never reload tiles; tile-template changes remove and re-add. Visibility toggles are document presentation edits (`app/design-edit/lidar.ts`), not settings keys.
+- LiDAR presentation joins live behind `app/lidar/library-store.ts` (`readCurrentLidarPresentation`); the map snapshot must read the design through that seam, not through `document-session/store` directly — the snapshot is policy-forbidden from importing the store.
+- LiDAR display tiles are served by the scoped Tauri asset protocol (`$APPDATA/lidar/display/**` only). `app/lidar/tile-urls.ts` converts the Rust-returned filesystem path template (`{z}_{x}_{y}.png` marker) into the platform asset URL; `connect-src` in `desktop/tauri.conf.json` admits `asset:` and `http://asset.localhost` for MapLibre worker tile fetches. Do not widen the asset protocol scope beyond the display cache — library originals and prepared numeric rasters stay webview-inaccessible.
+- Passive LiDAR display failures degrade silently: missing tiles, engine failures, or unavailable library entities omit their contribution while the rest of the band keeps rendering. `hasVisibleMapLayer` includes visible LiDAR layers that actually have tiles so the surface mounts when the first band entry becomes renderable.
+
 ## Tauri And Network
 
-- Review CSP in `tauri.conf.json` when adding tile or image sources; connection and image directives currently allow HTTPS sources. Keep native asset access restricted to the image cache.
+- Review CSP in `tauri.conf.json` when adding tile or image sources; connection and image directives currently allow HTTPS sources plus the scoped asset protocol for LiDAR display tiles. Keep native asset access restricted to the image cache and the LiDAR display cache.
 - MapLibre's worker is emitted as a self-hosted asset by Vite. Keep both `worker-src` and the WebKit fallback `child-src` admitting self-hosted workers and `blob:`; other canvas/PDF/terrain workers still use blob URLs. Never broaden CSP to compensate for a missing worker bundle.
 - Linux desktop startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` before Tauri initializes WebKitGTK. Keep this in process startup, not in developer shell instructions, because MapLibre/WebGL can freeze the WebKitGTK webview on affected systems when the default DMA-BUF renderer is used.
 - Blocking HTTP/file work must run through the managed Native Operation Executor: use `Network` for remote requests and `Local` for local file work. Direct `spawn_blocking` calls belong only in `desktop/src/native_operation.rs`; see the [executor guide](build-release.md#native-operation-executor).

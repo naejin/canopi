@@ -686,6 +686,7 @@ pub(crate) fn create_new_design(
         .collect();
 
     CanopiFile {
+        lidar: None,
         version: CURRENT_CANOPI_FILE_VERSION,
         name: name.into(),
         description: None,

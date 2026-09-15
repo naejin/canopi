@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Leyenda"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Añadir capa",
+      "cancelCreate": "Cancelar",
+      "layerNamePlaceholder": "Nombre de la capa",
+      "createLayer": "Crear capa de terreno",
+      "engineUnavailable": "Motor ráster no disponible; importaciones y análisis desactivados.",
+      "empty": "Todavía no hay capas LiDAR en este Design.",
+      "kind": {
+        "GroundElevation": "Terreno",
+        "SurfaceElevation": "Superficie",
+        "AboveGroundHeight": "Altura",
+        "OtherContinuous": "Numérico"
+      },
+      "state": {
+        "Preparing": "preparando",
+        "Ready": "listo",
+        "Refreshing": "actualizando",
+        "Incomplete": "incompleto",
+        "Failed": "error",
+        "unavailable": "no disponible"
+      },
+      "addTiffs": "Añadir TIFF",
+      "analyse": "Analizar",
+      "delete": "Eliminar",
+      "confirmDelete": "¿Eliminar?",
+      "deleteLayerImpact": "Elimina {{analyses}} capas de análisis",
+      "deleteReferenceImpact": "y {{references}} referencias de Design guardadas",
+      "opacity": "Opacidad",
+      "hide": "Ocultar",
+      "show": "Mostrar",
+      "review": {
+        "title": "Revisión de importación",
+        "uncovered": "Sin cubrir",
+        "overlap": "Superposición",
+        "invalid": "Inválido",
+        "before": "Antes",
+        "after": "Después",
+        "addUncovered": "Añadir zonas sin cubrir",
+        "replaceOverlap": "Reemplazar superposición",
+        "apply": "Aplicar",
+        "cancel": "Cancelar"
+      }
     }
   },
   "worldMap": {

@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Legenda"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Adicionar camada",
+      "cancelCreate": "Cancelar",
+      "layerNamePlaceholder": "Nome da camada",
+      "createLayer": "Criar camada de terreno",
+      "engineUnavailable": "Motor raster indisponível; importações e análises desativadas.",
+      "empty": "Ainda não há camadas LiDAR neste Design.",
+      "kind": {
+        "GroundElevation": "Terreno",
+        "SurfaceElevation": "Superfície",
+        "AboveGroundHeight": "Altura",
+        "OtherContinuous": "Numérico"
+      },
+      "state": {
+        "Preparing": "a preparar",
+        "Ready": "pronto",
+        "Refreshing": "a atualizar",
+        "Incomplete": "incompleto",
+        "Failed": "falhou",
+        "unavailable": "indisponível"
+      },
+      "addTiffs": "Adicionar TIFFs",
+      "analyse": "Analisar",
+      "delete": "Eliminar",
+      "confirmDelete": "Eliminar?",
+      "deleteLayerImpact": "Remove {{analyses}} camadas de análise",
+      "deleteReferenceImpact": "e {{references}} referências de Design guardadas",
+      "opacity": "Opacidade",
+      "hide": "Ocultar",
+      "show": "Mostrar",
+      "review": {
+        "title": "Revisão de importação",
+        "uncovered": "Não coberto",
+        "overlap": "Sobreposição",
+        "invalid": "Inválido",
+        "before": "Antes",
+        "after": "Depois",
+        "addUncovered": "Adicionar áreas não cobertas",
+        "replaceOverlap": "Substituir sobreposição",
+        "apply": "Aplicar",
+        "cancel": "Cancelar"
+      }
     }
   },
   "worldMap": {

@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Légende"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Ajouter une couche",
+      "cancelCreate": "Annuler",
+      "layerNamePlaceholder": "Nom de la couche",
+      "createLayer": "Créer la couche terrain",
+      "engineUnavailable": "Moteur raster indisponible ; imports et analyses désactivés.",
+      "empty": "Aucune couche LiDAR dans ce Design.",
+      "kind": {
+        "GroundElevation": "Terrain",
+        "SurfaceElevation": "Surface",
+        "AboveGroundHeight": "Hauteur",
+        "OtherContinuous": "Numérique"
+      },
+      "state": {
+        "Preparing": "préparation",
+        "Ready": "prêt",
+        "Refreshing": "actualisation",
+        "Incomplete": "incomplet",
+        "Failed": "échec",
+        "unavailable": "indisponible"
+      },
+      "addTiffs": "Ajouter TIFF",
+      "analyse": "Analyser",
+      "delete": "Supprimer",
+      "confirmDelete": "Supprimer ?",
+      "deleteLayerImpact": "Supprime {{analyses}} couches d’analyse",
+      "deleteReferenceImpact": "et {{references}} références de Design enregistrées",
+      "opacity": "Opacité",
+      "hide": "Masquer",
+      "show": "Afficher",
+      "review": {
+        "title": "Revue d’import",
+        "uncovered": "Non couvert",
+        "overlap": "Chevauchement",
+        "invalid": "Invalide",
+        "before": "Avant",
+        "after": "Après",
+        "addUncovered": "Ajouter les zones non couvertes",
+        "replaceOverlap": "Remplacer le chevauchement",
+        "apply": "Appliquer",
+        "cancel": "Annuler"
+      }
     }
   },
   "worldMap": {

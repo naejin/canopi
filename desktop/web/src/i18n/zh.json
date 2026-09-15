@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "图例"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "添加图层",
+      "cancelCreate": "取消",
+      "layerNamePlaceholder": "图层名称",
+      "createLayer": "创建地形图层",
+      "engineUnavailable": "栅格引擎不可用；导入与分析已禁用。",
+      "empty": "此设计还没有 LiDAR 图层。",
+      "kind": {
+        "GroundElevation": "地形",
+        "SurfaceElevation": "表面",
+        "AboveGroundHeight": "高度",
+        "OtherContinuous": "数值"
+      },
+      "state": {
+        "Preparing": "准备中",
+        "Ready": "就绪",
+        "Refreshing": "刷新中",
+        "Incomplete": "不完整",
+        "Failed": "失败",
+        "unavailable": "不可用"
+      },
+      "addTiffs": "添加 TIFF",
+      "analyse": "分析",
+      "delete": "删除",
+      "confirmDelete": "确认删除？",
+      "deleteLayerImpact": "将移除 {{analyses}} 个分析图层",
+      "deleteReferenceImpact": "以及 {{references}} 个已保存的设计引用",
+      "opacity": "不透明度",
+      "hide": "隐藏",
+      "show": "显示",
+      "review": {
+        "title": "导入审阅",
+        "uncovered": "未覆盖",
+        "overlap": "重叠",
+        "invalid": "无效",
+        "before": "之前",
+        "after": "之后",
+        "addUncovered": "添加未覆盖区域",
+        "replaceOverlap": "替换重叠区域",
+        "apply": "应用",
+        "cancel": "取消"
+      }
     }
   },
   "worldMap": {

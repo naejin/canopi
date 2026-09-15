@@ -208,6 +208,10 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
+        key: "lidar",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
         key: "created_at",
         owner: DesignFileFieldOwner::Document,
     },
@@ -255,6 +259,10 @@ pub struct CanopiFile {
     pub budget: Vec<BudgetItem>,
     #[serde(default = "default_budget_currency")]
     pub budget_currency: String,
+    // Ordered LiDAR presentation references owned by the shared library; the
+    // document stores display settings only, never raster bytes or paths.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lidar: Option<crate::lidar::LidarPresentationSection>,
     pub created_at: String,
     pub updated_at: String,
     /// Preserves unknown fields for forward compatibility — round-trips fields

@@ -1,9 +1,11 @@
 import { readCanvasMapLayerPresentation } from '../canvas-layer-presentation/presentation'
 import { readSavedLocationPresentation } from '../location'
+import { readCurrentLidarPresentation } from '../lidar/library-store'
 import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { basemapStyle, theme } from '../settings/state'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import type { CanvasMapSurfaceSnapshot } from './types'
+import { lidarMapLayers } from './lidar'
 
 export type CanvasMapSurfaceCoreSnapshot = Pick<
   CanvasMapSurfaceSnapshot,
@@ -42,8 +44,12 @@ export function readCanvasMapSurfaceSnapshot(): CanvasMapSurfaceSnapshot {
   const coreSnapshot = readCanvasMapSurfaceCoreSnapshot()
   const { hoveredTargets, selectedTargets } = readPanelTargetOverlaySnapshot()
 
+  const lidar = lidarMapLayers(readCurrentLidarPresentation())
+
   return {
     ...coreSnapshot,
+    hasVisibleMapLayer: coreSnapshot.hasVisibleMapLayer || lidar.length > 0,
+    lidar,
     terrain: {
       ...readCanvasMapLayerPresentation().terrain,
       isDark: coreSnapshot.theme === 'dark',

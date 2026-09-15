@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "凡例"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "レイヤーを追加",
+      "cancelCreate": "キャンセル",
+      "layerNamePlaceholder": "レイヤー名",
+      "createLayer": "地表レイヤーを作成",
+      "engineUnavailable": "ラスターエンジンが利用できないため、取り込みと解析は無効です。",
+      "empty": "このデザインにはまだLiDARレイヤーがありません。",
+      "kind": {
+        "GroundElevation": "地表面",
+        "SurfaceElevation": "表層",
+        "AboveGroundHeight": "高さ",
+        "OtherContinuous": "数値"
+      },
+      "state": {
+        "Preparing": "準備中",
+        "Ready": "準備完了",
+        "Refreshing": "更新中",
+        "Incomplete": "不完全",
+        "Failed": "失敗",
+        "unavailable": "利用不可"
+      },
+      "addTiffs": "TIFFを追加",
+      "analyse": "解析",
+      "delete": "削除",
+      "confirmDelete": "削除しますか？",
+      "deleteLayerImpact": "{{analyses}} 個の解析レイヤーを削除します",
+      "deleteReferenceImpact": "保存されたデザイン参照 {{references}} 件も削除します",
+      "opacity": "不透明度",
+      "hide": "非表示",
+      "show": "表示",
+      "review": {
+        "title": "取り込み確認",
+        "uncovered": "未カバー",
+        "overlap": "重複",
+        "invalid": "無効",
+        "before": "変更前",
+        "after": "変更後",
+        "addUncovered": "未カバー領域を追加",
+        "replaceOverlap": "重複領域を置き換え",
+        "apply": "適用",
+        "cancel": "キャンセル"
+      }
     }
   },
   "worldMap": {

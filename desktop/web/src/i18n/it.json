@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Legenda"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Aggiungi livello",
+      "cancelCreate": "Annulla",
+      "layerNamePlaceholder": "Nome del livello",
+      "createLayer": "Crea livello terreno",
+      "engineUnavailable": "Motore raster non disponibile; importazioni e analisi disattivate.",
+      "empty": "Nessun livello LiDAR in questo Design.",
+      "kind": {
+        "GroundElevation": "Terreno",
+        "SurfaceElevation": "Superficie",
+        "AboveGroundHeight": "Altezza",
+        "OtherContinuous": "Numerico"
+      },
+      "state": {
+        "Preparing": "in preparazione",
+        "Ready": "pronto",
+        "Refreshing": "in aggiornamento",
+        "Incomplete": "incompleto",
+        "Failed": "errore",
+        "unavailable": "non disponibile"
+      },
+      "addTiffs": "Aggiungi TIFF",
+      "analyse": "Analizza",
+      "delete": "Elimina",
+      "confirmDelete": "Eliminare?",
+      "deleteLayerImpact": "Rimuove {{analyses}} livelli di analisi",
+      "deleteReferenceImpact": "e {{references}} riferimenti del Design salvati",
+      "opacity": "Opacità",
+      "hide": "Nascondi",
+      "show": "Mostra",
+      "review": {
+        "title": "Verifica importazione",
+        "uncovered": "Non coperto",
+        "overlap": "Sovrapposizione",
+        "invalid": "Non valido",
+        "before": "Prima",
+        "after": "Dopo",
+        "addUncovered": "Aggiungi aree non coperte",
+        "replaceOverlap": "Sostituisci sovrapposizione",
+        "apply": "Applica",
+        "cancel": "Annulla"
+      }
     }
   },
   "worldMap": {

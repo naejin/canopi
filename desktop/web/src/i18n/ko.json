@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "범례"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "레이어 추가",
+      "cancelCreate": "취소",
+      "layerNamePlaceholder": "레이어 이름",
+      "createLayer": "지표 레이어 만들기",
+      "engineUnavailable": "래스터 엔진을 사용할 수 없어 가져오기와 분석이 비활성화되었습니다.",
+      "empty": "이 디자인에는 아직 LiDAR 레이어가 없습니다.",
+      "kind": {
+        "GroundElevation": "지형",
+        "SurfaceElevation": "표면",
+        "AboveGroundHeight": "높이",
+        "OtherContinuous": "수치"
+      },
+      "state": {
+        "Preparing": "준비 중",
+        "Ready": "준비됨",
+        "Refreshing": "갱신 중",
+        "Incomplete": "불완전",
+        "Failed": "실패",
+        "unavailable": "사용 불가"
+      },
+      "addTiffs": "TIFF 추가",
+      "analyse": "분석",
+      "delete": "삭제",
+      "confirmDelete": "삭제할까요?",
+      "deleteLayerImpact": "분석 레이어 {{analyses}}개를 삭제합니다",
+      "deleteReferenceImpact": "저장된 디자인 참조 {{references}}개도 삭제합니다",
+      "opacity": "불투명도",
+      "hide": "숨기기",
+      "show": "표시",
+      "review": {
+        "title": "가져오기 검토",
+        "uncovered": "미커버",
+        "overlap": "중복",
+        "invalid": "무효",
+        "before": "이전",
+        "after": "이후",
+        "addUncovered": "미커버 영역 추가",
+        "replaceOverlap": "중복 영역 교체",
+        "apply": "적용",
+        "cancel": "취소"
+      }
     }
   },
   "worldMap": {

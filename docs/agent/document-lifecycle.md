@@ -210,3 +210,11 @@ Lifecycle coverage is split by the same boundary. `use-canvas-document-session.t
 - Events emitted in `setup()` are lost because frontend JS has not loaded yet.
 - `tauri.conf.json` uses `beforeDevCommand` with `{ script: "npm run dev", cwd: "web" }` relative to `desktop/`.
 - The shell plugin is removed. Problem Report folder reveal uses fixed platform commands through Rust `std::process::Command` inside the managed Native Operation Executor's `Local` class. Keep process execution behind admitted native services; do not add arbitrary shell execution or blocking process work in a command body.
+
+## LiDAR Presentation Section
+
+- The `.canopi` `lidar` field (additive optional, `common-types/src/lidar.rs`) stores ordered presentation entries that reference shared LiDAR library identities: `{ schema_version, entries: [{ kind: Source | Analysis, id, visible, opacity, order, style }] }`. It never stores raster bytes, paths or generations.
+- Library identities live in `lidar-library.sqlite` plus managed app-data assets under `desktop`-app data `lidar/`. Library mutations (create/rename/delete layer or analysis, import publication, analysis refresh) never dirty a Design and never rewrite the document.
+- Presentation edits (visibility, opacity, order, style) flow through `app/design-edit/lidar.ts` via `editCurrentDesign` and participate in save/autosave/discard like any other document section. The projector must return the identical design reference when nothing changed.
+- Entries referencing deleted library entities persist (unavailable) and are skipped by rendering; they are removed only by an explicit, impact-confirmed layer deletion. Web Edition preserves the section without rendering: the per-entry `#[serde(flatten)] extra` keeps unknown entry fields round-tripping through the schema decoder, and unknown `kind`s only require the core fields to decode.
+- Additive field rules: `lidar` is registered in `DESIGN_FILE_FIELDS` with `Document` owner and `skip_serializing_if` so absent stays absent; the generated schema exposes per-entry `additionalProperties` for forward compatibility.

@@ -3,6 +3,7 @@ pub mod design_notebook;
 pub mod export;
 pub mod geocoding;
 pub mod health;
+pub mod lidar;
 pub mod plant_browser;
 pub mod problem_report;
 pub mod saved_object_stamps;

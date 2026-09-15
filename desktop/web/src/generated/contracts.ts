@@ -46,6 +46,7 @@ export type CanopiFile = {
 	timeline?: TimelineAction[],
 	budget?: BudgetItem[],
 	budget_currency: string,
+	lidar?: LidarPresentationSection | null,
 	created_at: string,
 	updated_at: string,
 };
@@ -145,6 +146,194 @@ export type Layer = {
 	visible: boolean,
 	locked: boolean,
 	opacity: number,
+};
+
+export type LidarAnalysisJobStatus = {
+	job_id: string,
+	definition_id: string,
+	state: LidarResultState,
+	message: string | null,
+};
+
+/**
+ *  Registered analysis capability. Slice 1 ships slope only; later slices add
+ *  the remaining ground-elevation and height analyses.
+ */
+export type LidarAnalysisKind = 
+// Terrain slope from a ground-elevation layer.
+"Slope";
+
+/**
+ *  Analysis parameters. Slope output unit is selected in the definition per
+ *  the plan (§5); other parameters arrive with later slices.
+ */
+export type LidarAnalysisParameters = {
+	slope_unit: LidarSlopeUnit | null,
+};
+
+/**
+ *  Receipt returned when an analysis definition is created and its first
+ *  job is enqueued.
+ */
+export type LidarAnalysisReceipt = {
+	definition_id: string,
+	job_id: string,
+};
+
+// Library-side summary of an analysis definition and its current result.
+export type LidarAnalysisSummary = {
+	id: string,
+	source_layer_id: string,
+	kind: LidarAnalysisKind,
+	state: LidarResultState,
+	detail: string | null,
+	bounds: [number, number, number, number] | null,
+	value_range: [number, number] | null,
+	tilesets: LidarTileset[],
+};
+
+// Impact summary shown before a layer deletion is confirmed.
+export type LidarDeleteImpact = {
+	layer_name: string,
+	analysis_count: number,
+	analysis_ids: string[],
+};
+
+// Detected external raster engine used behind the narrow LiDAR adapter.
+export type LidarEngineStatus = {
+	available: boolean,
+	version: string | null,
+	detail: string | null,
+};
+
+export type LidarImportJob = {
+	job_id: string,
+	layer_id: string,
+	state: LidarImportJobState,
+	review: LidarImportReview | null,
+	message: string | null,
+};
+
+/**
+ *  Import job states. `awaiting_review` carries the Before/After plan; only
+ *  an explicit apply publishes a generation.
+ */
+export type LidarImportJobState = "Staging" | "AwaitingReview" | "Applying" | "Complete" | "Cancelled" | "Failed";
+
+/**
+ *  Review payload for one staged import. Coverage counts are exact valid
+ *  pixels classified against the destination layer over the union grid.
+ */
+export type LidarImportReview = {
+	job_id: string,
+	layer_id: string,
+	sources: LidarImportSourceFacts[],
+	uncovered_cells: string,
+	overlap_cells: string,
+	invalid_cells: string,
+	compatible: boolean,
+	issues: string[],
+	/**
+	 *  Filesystem paths of the fixed-style Before/After preview images; the
+	 *  frontend resolves them to local asset URLs. `before` is absent when
+	 *  the destination layer has no accepted coverage yet.
+	 */
+	before_preview_path: string | null,
+	after_preview_path: string | null,
+};
+
+// Admission facts for one staged source file.
+export type LidarImportSourceFacts = {
+	filename: string,
+	sha256: string,
+	size_bytes: string,
+	width: number,
+	height: number,
+	pixel_size_m: number,
+	nodata: number | null,
+	value_range: [number, number],
+	// Accepted into this staging; false entries carry `issues`.
+	compatible: boolean,
+	issues: string[],
+};
+
+// Library-side summary of a source layer.
+export type LidarLayerSummary = {
+	id: string,
+	name: string,
+	measurement_kind: LidarMeasurementKind,
+	units: string,
+	state: LidarResultState,
+	coverage_cells: string,
+	bounds: [number, number, number, number] | null,
+	value_range: [number, number] | null,
+	tilesets: LidarTileset[],
+	analysis_count: number,
+};
+
+export type LidarLibrarySnapshot = {
+	layers: LidarLayerSummary[],
+	analyses: LidarAnalysisSummary[],
+	engine: LidarEngineStatus,
+};
+
+/**
+ *  Immutable measurement definition of a source layer.
+ * 
+ *  Measurement kind, units and reference establish capability; layer names,
+ *  filenames and providers do not.
+ */
+export type LidarMeasurementKind = 
+// Bare-earth elevation (MNT/DTM).
+"GroundElevation" | 
+// Top surface including vegetation and buildings (MNS/DSM).
+"SurfaceElevation" | 
+// Height relative to compatible terrain (MNH).
+"AboveGroundHeight" | 
+// User-described continuous numeric value; numeric display only.
+"OtherContinuous";
+
+export type LidarPresentationEntry = {
+	kind: LidarPresentationEntryKind,
+	id: string,
+	visible: boolean,
+	opacity: number,
+	order: number,
+	style: string | null,
+};
+
+export type LidarPresentationEntryKind = "Source" | "Analysis";
+
+export type LidarPresentationSection = {
+	schema_version: number,
+	entries: LidarPresentationEntry[],
+};
+
+/**
+ *  Result states defined by the product plan (§4). `refreshing` keeps the last
+ *  complete result visible; `incomplete` distinguishes unknown areas from
+ *  low/zero measured values.
+ */
+export type LidarResultState = "Preparing" | "Ready" | "Refreshing" | "Incomplete" | "Failed";
+
+export type LidarSlopeUnit = "Degrees" | "Percent";
+
+/**
+ *  Display tile pyramid metadata. `url_template` is a platform-resolved local
+ *  asset URL with MapLibre `{z}_{x}_{y}` substitution and `.png` extension.
+ */
+export type LidarTileset = {
+	style: string,
+	/**
+	 *  Absolute filesystem tile path template ending in `{z}_{x}_{y}.png`;
+	 *  the frontend resolves it to a local asset URL for MapLibre.
+	 */
+	path_template: string,
+	min_zoom: number,
+	max_zoom: number,
+	tile_size: number,
+	// Geographic bounds in EPSG:3857 map units (projected during preparation).
+	bounds: [number, number, number, number],
 };
 
 export type Locale = "en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru";

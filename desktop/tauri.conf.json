@@ -19,19 +19,24 @@
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/image-cache/**"]
+        "scope": [
+          "$APPDATA/image-cache/**",
+          "$APPDATA/lidar/display/**"
+        ]
       },
       "csp": {
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' asset: http://asset.localhost blob: data: https:",
-        "connect-src": "'self' ipc: http://ipc.localhost https:",
+        "connect-src": "'self' ipc: http://ipc.localhost https: asset: http://asset.localhost",
         "worker-src": "'self' blob:",
         "child-src": "'self' blob:",
         "font-src": "'self' data:"
       },
-      "capabilities": ["main-window"]
+      "capabilities": [
+        "main-window"
+      ]
     },
     "windows": [
       {
@@ -54,13 +59,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/canopi-core.db"],
+    "resources": [
+      "resources/canopi-core.db"
+    ],
     "shortDescription": "Agroecological garden design tool",
     "longDescription": "Canopi is an agroecological design application for planning and managing gardens, food forests, and permaculture systems.",
     "linux": {
       "deb": {
         "section": "science",
-        "depends": ["libwebkit2gtk-4.1-0 | libwebkit2gtk-4.1-0t64", "libgtk-3-0 | libgtk-3-0t64"]
+        "depends": [
+          "libwebkit2gtk-4.1-0 | libwebkit2gtk-4.1-0t64",
+          "libgtk-3-0 | libgtk-3-0t64"
+        ]
       }
     }
   },

@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Legende"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Ebene hinzufügen",
+      "cancelCreate": "Abbrechen",
+      "layerNamePlaceholder": "Ebenenname",
+      "createLayer": "Geländeebene erstellen",
+      "engineUnavailable": "Raster-Engine nicht verfügbar; Import und Analyse deaktiviert.",
+      "empty": "Noch keine LiDAR-Ebenen in diesem Design.",
+      "kind": {
+        "GroundElevation": "Gelände",
+        "SurfaceElevation": "Oberfläche",
+        "AboveGroundHeight": "Höhe",
+        "OtherContinuous": "Numerisch"
+      },
+      "state": {
+        "Preparing": "wird vorbereitet",
+        "Ready": "bereit",
+        "Refreshing": "wird aktualisiert",
+        "Incomplete": "unvollständig",
+        "Failed": "fehlgeschlagen",
+        "unavailable": "nicht verfügbar"
+      },
+      "addTiffs": "TIFFs hinzufügen",
+      "analyse": "Analysieren",
+      "delete": "Löschen",
+      "confirmDelete": "Löschen?",
+      "deleteLayerImpact": "Entfernt {{analyses}} Analyseelemente",
+      "deleteReferenceImpact": "und {{references}} gespeicherte Design-Verweise",
+      "opacity": "Deckkraft",
+      "hide": "Ausblenden",
+      "show": "Einblenden",
+      "review": {
+        "title": "Import-Prüfung",
+        "uncovered": "Unbedeckt",
+        "overlap": "Überlappung",
+        "invalid": "Ungültig",
+        "before": "Vorher",
+        "after": "Nachher",
+        "addUncovered": "Unbedeckte Bereiche hinzufügen",
+        "replaceOverlap": "Überlappung ersetzen",
+        "apply": "Anwenden",
+        "cancel": "Abbrechen"
+      }
     }
   },
   "worldMap": {

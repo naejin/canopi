@@ -48,3 +48,13 @@ export {
   upsertConsortiumEntryInArray,
   type ConsortiumDocumentEditTransaction,
 } from './consortium'
+export {
+  patchLidarEntryById,
+  readLidarEntries,
+  readLidarSection,
+  removeLidarEntries,
+  upsertLidarEntry,
+  type LidarEntryPatch,
+  type LidarPresentationEntry,
+  type LidarPresentationSection,
+} from './lidar'

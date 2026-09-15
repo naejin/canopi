@@ -232,3 +232,10 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 - Asset protocol scope is limited to app data image-cache paths.
 - Window dragging with `decorations: false` requires window permissions in `capabilities/main-window.json`.
 - `core:window:allow-destroy` is required for discard-without-save close behavior.
+
+## LiDAR Raster Engine
+
+- The LiDAR library shells out to the GDAL command-line tools (`gdalinfo`, `gdal_translate`, `gdalwarp`, `gdaldem`, `gdaltransform`) behind the narrow adapter in `desktop/src/services/lidar/engine.rs`. Fixed argv, no shell, bounded output and duration, cancellable while running; engine discovery is cached and its version is recorded in manifests.
+- Development OSes need GDAL CLI tools on `PATH` (or `CANOPI_LIDAR_GDAL_BIN` pointing at a directory containing them). Slice 1 validated GDAL 3.8.4 on Linux; packaged-OS bundling of the engine is tracked as a follow-up bead and is required before release.
+- All LiDAR raster work runs through the Native Operation Executor (`Local` class); the two sync cancel commands are reviewed bounded-signal allowances in `native_command_policy.rs`.
+- The real-fixture vertical-slice test runs with: `cargo test -p canopi-desktop lidar::e2e -- --ignored --nocapture` (requires the GDAL tools and the IGN MNT fixture under `~/Downloads`).

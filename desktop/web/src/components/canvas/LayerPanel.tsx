@@ -62,7 +62,11 @@ export interface LayerPanelActions {
   location?(): void
 }
 
-export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLayerPresentationRow[]; readonly actions: LayerPanelActions }) {
+export function LayerPanel({ rows, actions, trailingSection }: {
+  readonly rows: readonly CanvasLayerPresentationRow[]
+  readonly actions: LayerPanelActions
+  readonly trailingSection?: preact.ComponentChildren
+}) {
 
   const active = rows.find(row => row.active)
   const firstReference = rows.find(row => row.detail.type !== 'scene')?.id
@@ -133,6 +137,7 @@ export function LayerPanel({ rows, actions }: { readonly rows: readonly CanvasLa
           <span>{t(active.visible ? 'canvas.layers.visible' : 'canvas.layers.hidden')}{active.canLock && ` · ${t(active.locked ? 'canvas.layers.locked' : 'canvas.layers.unlocked')}`}</span></div>
         <LayerDetail row={active} actions={actions} />
       </section>}
+      {trailingSection}
     </aside>
   )
 }

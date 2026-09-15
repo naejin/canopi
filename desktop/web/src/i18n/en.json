@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Legend"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Add layer",
+      "cancelCreate": "Cancel",
+      "layerNamePlaceholder": "Layer name",
+      "createLayer": "Create ground layer",
+      "engineUnavailable": "Raster engine unavailable; imports and analyses are disabled.",
+      "empty": "No LiDAR layers in this Design yet.",
+      "kind": {
+        "GroundElevation": "Ground",
+        "SurfaceElevation": "Surface",
+        "AboveGroundHeight": "Height",
+        "OtherContinuous": "Numeric"
+      },
+      "state": {
+        "Preparing": "preparing",
+        "Ready": "ready",
+        "Refreshing": "refreshing",
+        "Incomplete": "incomplete",
+        "Failed": "failed",
+        "unavailable": "unavailable"
+      },
+      "addTiffs": "Add TIFFs",
+      "analyse": "Analyse",
+      "delete": "Delete",
+      "confirmDelete": "Delete?",
+      "deleteLayerImpact": "Removes {{analyses}} analysis layers",
+      "deleteReferenceImpact": "and {{references}} saved Design references",
+      "opacity": "Opacity",
+      "hide": "Hide",
+      "show": "Show",
+      "review": {
+        "title": "Import review",
+        "uncovered": "Uncovered",
+        "overlap": "Overlap",
+        "invalid": "Invalid",
+        "before": "Before",
+        "after": "After",
+        "addUncovered": "Add uncovered regions",
+        "replaceOverlap": "Replace overlap",
+        "apply": "Apply",
+        "cancel": "Cancel"
+      }
     }
   },
   "worldMap": {

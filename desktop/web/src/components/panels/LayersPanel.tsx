@@ -1,4 +1,5 @@
 import { LayerPanel } from '../canvas/LayerPanel'
+import { LidarLayersSection } from './lidar/LidarLayersSection'
 import { runAppCommand } from '../../commands/registry'
 import {
   readCanvasLayerPresentation,
@@ -13,6 +14,7 @@ export function LayersPanel({ onLocation = () => runAppCommand('nav.location') }
   return (
     <LayerPanel
       rows={readCanvasLayerPresentation().rows}
+      trailingSection={<LidarLayersSection />}
       actions={{
         active: setCanvasLayerPresentationActiveLayer,
         visibility: setCanvasLayerPresentationVisibility,

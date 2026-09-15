@@ -412,6 +412,50 @@
     },
     "pinnedPlantNames": {
       "legend": "Legenda"
+    },
+    "lidar": {
+      "section": "LiDAR",
+      "addLayer": "Laag toevoegen",
+      "cancelCreate": "Annuleren",
+      "layerNamePlaceholder": "Laagnaam",
+      "createLayer": "Terreinlaag maken",
+      "engineUnavailable": "Raster-engine niet beschikbaar; import en analyse uitgeschakeld.",
+      "empty": "Nog geen LiDAR-lagen in dit Design.",
+      "kind": {
+        "GroundElevation": "Terrein",
+        "SurfaceElevation": "Oppervlak",
+        "AboveGroundHeight": "Hoogte",
+        "OtherContinuous": "Numeriek"
+      },
+      "state": {
+        "Preparing": "voorbereiden",
+        "Ready": "gereed",
+        "Refreshing": "verversen",
+        "Incomplete": "onvolledig",
+        "Failed": "mislukt",
+        "unavailable": "niet beschikbaar"
+      },
+      "addTiffs": "TIFFs toevoegen",
+      "analyse": "Analyseren",
+      "delete": "Verwijderen",
+      "confirmDelete": "Verwijderen?",
+      "deleteLayerImpact": "Verwijdert {{analyses}} analyse-lagen",
+      "deleteReferenceImpact": "en {{references}} opgeslagen Design-verwijzingen",
+      "opacity": "Dekking",
+      "hide": "Verbergen",
+      "show": "Tonen",
+      "review": {
+        "title": "Importcontrole",
+        "uncovered": "Onbedekt",
+        "overlap": "Overlap",
+        "invalid": "Ongeldig",
+        "before": "Voor",
+        "after": "Na",
+        "addUncovered": "Onbedekte gebieden toevoegen",
+        "replaceOverlap": "Overlap vervangen",
+        "apply": "Toepassen",
+        "cancel": "Annuleren"
+      }
     }
   },
   "worldMap": {

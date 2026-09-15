@@ -192,6 +192,7 @@ function createSnapshot(
     hasVisibleMapLayer: true,
     layerVisibility: { base: true, contours: false },
     layerOpacity: { base: 0.6, contours: 0.5 },
+    lidar: [],
     terrain: {
       contourIntervalMeters: 0,
       contoursVisible: false,

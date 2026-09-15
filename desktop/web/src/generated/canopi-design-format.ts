@@ -141,6 +141,71 @@ export const CANOPI_FILE_SCHEMA = {
       ],
       "type": "object"
     },
+    "LidarPresentationEntry": {
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/LidarPresentationEntryKind"
+        },
+        "opacity": {
+          "format": "float",
+          "type": "number"
+        },
+        "order": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "style": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "visible",
+        "opacity",
+        "order"
+      ],
+      "type": "object"
+    },
+    "LidarPresentationEntryKind": {
+      "enum": [
+        "Source",
+        "Analysis"
+      ],
+      "type": "string"
+    },
+    "LidarPresentationSection": {
+      "additionalProperties": true,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/LidarPresentationEntry"
+          },
+          "type": "array"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "entries"
+      ],
+      "type": "object"
+    },
     "Location": {
       "properties": {
         "altitude_m": {
@@ -637,6 +702,16 @@ export const CANOPI_FILE_SCHEMA = {
         "$ref": "#/$defs/Layer"
       },
       "type": "array"
+    },
+    "lidar": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LidarPresentationSection"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "location": {
       "anyOf": [
