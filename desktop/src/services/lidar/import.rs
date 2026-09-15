@@ -48,6 +48,11 @@ pub struct StagedSource {
 pub struct StagedImport {
     pub job_id: String,
     pub layer_id: String,
+    /// Head generation the review was planned against; apply detects a
+    /// changed head and recomputes the plan instead of publishing stale
+    /// decisions.
+    #[serde(default)]
+    pub planned_against_head: Option<String>,
     pub layer_grid: Option<RasterGrid>,
     pub layer_crs_wkt: Option<String>,
     pub layer_nodata: f32,
@@ -245,7 +250,7 @@ pub fn stage_import(
     }
 
     // Fixed-style Before/After previews at one comparison style.
-    let before_preview_path = if let Some(head) = head {
+    let before_preview_path = if let Some(head) = &head {
         check_cancel(cancel)?;
         let target = job_dir.join("preview-before.png");
         display::generate_preview(
@@ -308,6 +313,7 @@ pub fn stage_import(
     let staging = StagedImport {
         job_id: job_id.to_string(),
         layer_id: layer_id.to_string(),
+        planned_against_head: head.as_ref().map(|h| h.id.clone()),
         layer_grid,
         layer_crs_wkt,
         layer_nodata,
