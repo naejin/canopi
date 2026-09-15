@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 4;
+pub const CATALOGUE_VERSION: i32 = 5;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -56,6 +56,7 @@ fn migrate(connection: &Connection) -> Result<(), String> {
             2 => SCHEMA_V2,
             3 => SCHEMA_V3,
             4 => "",
+            5 => SCHEMA_V5,
             _ => unreachable!("catalogue migration gap"),
         };
         transaction
@@ -140,6 +141,30 @@ FROM lidar_generation_members
 ORDER BY generation_id, ordinal;
 DROP TABLE lidar_generation_members;
 ALTER TABLE lidar_generation_members_v3 RENAME TO lidar_generation_members;
+"#;
+
+/// Early v2 catalogues made an interpretation globally unique, which prevents
+/// the same source from participating in more than one user-owned layer. Keep
+/// footprint ids stable while replacing that constraint so the R-tree remains
+/// valid throughout the transactional migration.
+const SCHEMA_V5: &str = r#"
+CREATE TABLE lidar_source_footprints_v5 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    interpretation_id TEXT NOT NULL REFERENCES lidar_interpretations(id),
+    layer_id TEXT NOT NULL,
+    min_x REAL NOT NULL,
+    max_x REAL NOT NULL,
+    min_y REAL NOT NULL,
+    max_y REAL NOT NULL,
+    UNIQUE(layer_id, interpretation_id)
+);
+INSERT INTO lidar_source_footprints_v5(
+    id, interpretation_id, layer_id, min_x, max_x, min_y, max_y
+)
+SELECT id, interpretation_id, layer_id, min_x, max_x, min_y, max_y
+FROM lidar_source_footprints;
+DROP TABLE lidar_source_footprints;
+ALTER TABLE lidar_source_footprints_v5 RENAME TO lidar_source_footprints;
 "#;
 
 const SCHEMA_V1: &str = r#"
@@ -744,6 +769,122 @@ pub fn new_id(prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migration_repairs_legacy_footprint_uniqueness_and_is_idempotent() {
+        let dir = std::env::temp_dir().join(new_id("canopi-footprint-migration-test"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("catalogue.sqlite");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+            )
+            .unwrap();
+        connection.execute_batch(SCHEMA_V1).unwrap();
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE lidar_source_footprints (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    interpretation_id TEXT NOT NULL UNIQUE REFERENCES lidar_interpretations(id),
+                    layer_id TEXT NOT NULL,
+                    min_x REAL NOT NULL,
+                    max_x REAL NOT NULL,
+                    min_y REAL NOT NULL,
+                    max_y REAL NOT NULL
+                );
+                CREATE VIRTUAL TABLE lidar_footprint_rtree USING rtree(
+                    id, min_x, max_x, min_y, max_y
+                );
+                ALTER TABLE lidar_acceptance_regions ADD COLUMN job_id TEXT;
+                "#,
+            )
+            .unwrap();
+        connection.execute_batch(SCHEMA_V3).unwrap();
+        connection
+            .execute(
+                "ALTER TABLE lidar_generation_members ADD COLUMN job_id TEXT",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO lidar_sources
+                    (sha256, original_filename, size_bytes, probe_json, imported_at)
+                 VALUES ('sha', 'source', 1, '{}', '0');
+                 INSERT INTO lidar_interpretations
+                    (id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                     crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                 VALUES ('interp', 'sha', 1, 'ground-elevation', 'm', 1, 0,
+                         'test', 'unknown', -9999, '[0,1,0,1,0,-1]', 1, 1, 'hash');
+                 INSERT INTO lidar_source_footprints
+                    (id, interpretation_id, layer_id, min_x, max_x, min_y, max_y)
+                 VALUES (41, 'interp', 'layer-a', 0, 10, 0, 10);
+                 INSERT INTO lidar_footprint_rtree(id, min_x, max_x, min_y, max_y)
+                 VALUES (41, 0, 10, 0, 10);
+                 INSERT INTO lidar_catalogue_meta(key, value)
+                 VALUES ('schema_version', '4');",
+            )
+            .unwrap();
+
+        let error =
+            upsert_footprint(&connection, "interp", "layer-a", [1.0, 1.0, 9.0, 9.0]).unwrap_err();
+        assert!(error.contains("ON CONFLICT clause"));
+        drop(connection);
+
+        let migrated = open(&path).unwrap();
+        upsert_footprint(&migrated, "interp", "layer-a", [1.0, 1.0, 9.0, 9.0]).unwrap();
+        upsert_footprint(&migrated, "interp", "layer-b", [20.0, 20.0, 30.0, 30.0]).unwrap();
+        assert_eq!(
+            migrated
+                .query_row("SELECT COUNT(*) FROM lidar_source_footprints", [], |row| {
+                    row.get::<_, i64>(0)
+                },)
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            migrated
+                .query_row(
+                    "SELECT id FROM lidar_source_footprints
+                     WHERE layer_id = 'layer-a' AND interpretation_id = 'interp'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            41
+        );
+        assert_eq!(
+            migrated
+                .query_row("SELECT COUNT(*) FROM lidar_footprint_rtree", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .unwrap(),
+            2
+        );
+        drop(migrated);
+
+        let reopened = open(&path).unwrap();
+        let version: String = reopened
+            .query_row(
+                "SELECT value FROM lidar_catalogue_meta WHERE key = 'schema_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, CATALOGUE_VERSION.to_string());
+        assert_eq!(
+            reopened
+                .query_row("SELECT COUNT(*) FROM lidar_source_footprints", [], |row| {
+                    row.get::<_, i64>(0)
+                },)
+                .unwrap(),
+            2
+        );
+        drop(reopened);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn migration_recovers_an_unversioned_v2_column_and_commits_followups_atomically() {
