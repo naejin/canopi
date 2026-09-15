@@ -207,14 +207,20 @@
     },
     "location": {
       "title": "Ubicación del diseño",
-      "save": "Establecer ubicación",
-      "clear": "Borrar",
+      "preview": "Revisar ubicación",
+      "confirm": "Confirmar ubicación",
+      "cancel": "Cancelar",
+      "clear": "Usar sitio provisional",
       "current": "Actual",
       "searchPlaceholder": "Buscar ubicación...",
       "searching": "Buscando...",
       "noResults": "Sin resultados",
       "geocodeError": "Error de geocodificación",
-      "mapUnavailable": "Mapa no disponible"
+      "mapUnavailable": "Mapa no disponible",
+      "provisionalTitle": "Sitio provisional",
+      "provisionalBody": "La edición local está disponible. Confirma un sitio antes de la evaluación específica del lugar.",
+      "confirmedTitle": "Sitio confirmado",
+      "reviewTitle": "Revisar ubicación"
     },
     "file": {
       "new": "Nuevo diseño",

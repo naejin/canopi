@@ -3,7 +3,11 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
 import { LocationTab } from '../components/canvas/LocationTab'
-import { designSessionFixture } from './support/design-session-state'
+import {
+  currentDesign,
+  designSessionFixture,
+  nonCanvasRevision,
+} from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 
 const maplibreMock = vi.hoisted(() => ({
@@ -105,6 +109,7 @@ describe('LocationTab map failures', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     designSessionFixture.file = makeDesign()
+    designSessionFixture.nonCanvasRevision = 0
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     maplibreMock.mapConstructor.mockReset()
     maplibreMock.navigationControlConstructor.mockReset()
@@ -130,6 +135,8 @@ describe('LocationTab map failures', () => {
       expect(container.querySelector('[role="alert"]')?.textContent).toContain('Map unavailable')
     })
     expect(container.querySelector('input')?.getAttribute('placeholder')).toBe('Search for a location...')
+    expect(container.textContent).toContain('Provisional site')
+    expect(container.textContent).toContain('Review placement')
     expect(maplibreMock.navigationControlConstructor).not.toHaveBeenCalled()
   })
 
@@ -183,5 +190,44 @@ describe('LocationTab map failures', () => {
 
     expect(container.querySelector('[role="alert"]')).toBeNull()
     expect(currentMap.remove).not.toHaveBeenCalled()
+  })
+
+  it('reviews a clicked placement before confirming it', async () => {
+    let map: FakeLocationTabMap | null = null
+    maplibreMock.mapConstructor.mockImplementation(function (options: { container: HTMLElement }) {
+      map = new FakeLocationTabMap(options.container)
+      map.loaded.mockReturnValue(true)
+      return map
+    })
+
+    await act(async () => {
+      render(<LocationTab />, container)
+    })
+    await vi.waitFor(() => expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      requireFakeLocationTabMap(map).fire('click', {
+        lngLat: { lng: 2.3522, lat: 48.8566 },
+      })
+    })
+
+    expect(container.textContent).toContain('Review placement')
+    expect(container.textContent).toContain('Confirm placement')
+    expect(currentDesign.value?.spatial_frame.placement_status).toBe('confirmed')
+    expect(nonCanvasRevision.value).toBe(0)
+
+    const confirm = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Confirm placement')
+    await act(async () => {
+      confirm?.click()
+    })
+
+    expect(currentDesign.value?.spatial_frame).toMatchObject({
+      anchor_longitude_deg: 2.3522,
+      anchor_latitude_deg: 48.8566,
+      placement_status: 'confirmed',
+    })
+    expect(container.textContent).toContain('Confirmed site')
+    expect(nonCanvasRevision.value).toBe(1)
   })
 })

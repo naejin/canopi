@@ -18,6 +18,7 @@ import { mutateSettingsProjection } from '../settings/projection'
 import { locale, plantSpacingIntervalM, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
+import { getDesignHistoryParticipant } from '../design-edit/core'
 import { t } from '../../i18n'
 
 const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
@@ -30,8 +31,10 @@ export interface CanvasRuntimeAppCapabilities {
 export function createAppCanvasRuntimeAppAdapter(
   capabilities: CanvasRuntimeAppCapabilities,
 ): CanvasRuntimeAppAdapter {
+  const coordinatedHistory = getDesignHistoryParticipant()
   return {
     cleanState: { setCanvasClean },
+    coordinatedHistory,
     document: { composeDocumentForSave },
     ...(capabilities.savedObjectStamps
       ? { savedObjectStamps: capabilities.savedObjectStamps }

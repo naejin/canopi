@@ -207,14 +207,20 @@
     },
     "location": {
       "title": "Design Location",
-      "save": "Set Location",
-      "clear": "Clear",
+      "preview": "Review placement",
+      "confirm": "Confirm placement",
+      "cancel": "Cancel",
+      "clear": "Use provisional site",
       "current": "Current",
       "searchPlaceholder": "Search for a location...",
       "searching": "Searching...",
       "noResults": "No results found",
       "geocodeError": "Geocoding failed",
-      "mapUnavailable": "Map unavailable"
+      "mapUnavailable": "Map unavailable",
+      "provisionalTitle": "Provisional site",
+      "provisionalBody": "Local editing is available. Confirm a site before site-specific evaluation.",
+      "confirmedTitle": "Confirmed site",
+      "reviewTitle": "Review placement"
     },
     "file": {
       "new": "New Design",

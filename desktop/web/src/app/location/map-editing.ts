@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { BasemapStyle } from '../../generated/contracts'
+import type { SpatialFrame } from '../../types/design'
 import { basemapStyle } from '../settings/state'
 import {
   createMapLibreSurfaceAdapter,
@@ -21,9 +22,11 @@ const DEFAULT_CENTER: [number, number] = [0, 20]
 
 interface LocationMapEditingWorkbench {
   readonly saved: SavedLocationPresentation
-  readonly clearLocation: () => boolean
-  readonly clearPendingMapResult: () => void
-  readonly commitMapLocation: (center: { lat: number; lon: number } | null) => boolean
+  readonly pendingPlacement: SpatialFrame | null
+  readonly previewMapCenter: (center: { lat: number; lon: number } | null) => boolean
+  readonly previewProvisionalPlacement: () => boolean
+  readonly confirmPlacement: () => boolean
+  readonly cancelPlacement: () => boolean
   readonly previewMapLocation: (coords: { lat: number; lon: number }) => { lat: number; lon: number }
   readonly previewSearchResultOnMap?: (result: LocationMapSearchResult) => { lat: number; lon: number }
 }
@@ -50,9 +53,12 @@ export interface LocationMapEditingHost {
   readonly mapUnavailable: boolean
   readonly pin: PinOverlayState
   readonly committedLocation: SavedLocationPresentation['location']
+  readonly hasPendingPlacement: boolean
   readonly previewSearchResult: (result: LocationMapSearchResult) => void
-  readonly commitMapLocation: () => boolean
-  readonly clearLocation: () => boolean
+  readonly previewMapCenter: () => boolean
+  readonly previewProvisionalPlacement: () => boolean
+  readonly confirmPlacement: () => boolean
+  readonly cancelPlacement: () => boolean
 }
 
 export function useLocationMapEditingHost(
@@ -81,8 +87,7 @@ export function useLocationMapEditingHost(
     surface.attach(container)
 
     const onMove = () => updateCurrentPinPosition()
-    const onDragStart = () => workbenchRef.current.clearPendingMapResult()
-    const onClick = (event?: unknown) => commitClickedLocation(event)
+    const onClick = (event?: unknown) => previewClickedLocation(event)
 
     surface.requestMap({
       key: preferredBasemapStyle,
@@ -93,7 +98,13 @@ export function useLocationMapEditingHost(
           target,
           {
             basemapStyle: preferredBasemapStyle,
-            center: preservedView?.center ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER),
+            center: preservedView?.center
+              ?? (workbenchRef.current.saved.anchorLocation
+                ? [
+                    workbenchRef.current.saved.anchorLocation.lon,
+                    workbenchRef.current.saved.anchorLocation.lat,
+                  ]
+                : DEFAULT_CENTER),
             zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
           },
         )
@@ -118,7 +129,6 @@ export function useLocationMapEditingHost(
         context.lifetime.on('error', onMapRuntimeError)
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
-        context.lifetime.on('dragstart', onDragStart)
         context.lifetime.on('click', onClick)
         updatePinPosition(context.map)
       },
@@ -154,18 +164,17 @@ export function useLocationMapEditingHost(
     })
   }
 
-  function commitMapLocation(): boolean {
+  function previewMapCenter(): boolean {
     const center = surfaceRef.current?.map?.getCenter()
-    return workbench.commitMapLocation(center ? { lat: center.lat, lon: center.lng } : null)
+    return workbench.previewMapCenter(center ? { lat: center.lat, lon: center.lng } : null)
   }
 
-  function commitClickedLocation(event?: unknown): void {
+  function previewClickedLocation(event?: unknown): void {
     const lngLat = isLocationMapClickEvent(event) ? event.lngLat : undefined
     const lng = lngLat?.lng
     const lat = lngLat?.lat
     if (typeof lng !== 'number' || typeof lat !== 'number') return
-    workbenchRef.current.clearPendingMapResult()
-    workbenchRef.current.commitMapLocation({ lat, lon: lng })
+    workbenchRef.current.previewMapLocation({ lat, lon: lng })
   }
 
   function isLocationMapClickEvent(event: unknown): event is LocationMapClickEvent {
@@ -205,9 +214,12 @@ export function useLocationMapEditingHost(
     mapUnavailable: mapInitFailed.value,
     pin: pinState.value,
     committedLocation: workbench.saved.location,
+    hasPendingPlacement: workbench.pendingPlacement !== null,
     previewSearchResult,
-    commitMapLocation,
-    clearLocation: workbench.clearLocation,
+    previewMapCenter,
+    previewProvisionalPlacement: workbench.previewProvisionalPlacement,
+    confirmPlacement: workbench.confirmPlacement,
+    cancelPlacement: workbench.cancelPlacement,
   }
 }
 

@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearCanvasSelection, selectedObjectIds } from '../canvas/session-state'
 import { createDesktopCanvasRuntimeAppAdapter } from '../app/canvas-runtime/desktop-adapter'
+import { beginDesignPlacementEdit } from '../app/design-edit'
+import { confirmedSpatialFrame } from '../spatial-frame'
 import type { CanopiFile } from '../types/design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 import {
   createLiveTestCanvasRuntimeHost,
   type TestCanvasRuntimeHostOptions,
 } from './support/live-canvas-runtime'
+import {
+  currentDesign,
+  designSessionFixture,
+} from './support/design-session-state'
 
 const BASE_FILE: CanopiFile = {
   version: 6,
@@ -278,6 +284,94 @@ describe('Canvas runtime surfaces', () => {
       expect(queries.getPlacedPlants()).toHaveLength(3)
     } finally {
       host.destroy()
+    }
+  })
+
+  it('orders Design placement and later Scene edits through the global undo commands', () => {
+    designSessionFixture.file = {
+      ...BASE_FILE,
+      plants: [createPlant('plant-1', 10, 20)],
+    }
+    const placement = beginDesignPlacementEdit()
+    placement.preview(confirmedSpatialFrame(placement.original, {
+      lat: 48.8566,
+      lon: 2.3522,
+      altitude_m: 35,
+    }))
+    placement.commit()
+
+    const host = createRuntimeHostWithAppComposition()
+    const { commands, documents, queries } = host.surfaces
+    try {
+      documents.loadDocument(currentDesign.value!)
+      expect(commands.layers.setSceneLayerVisibility('plants', false)).toBe(true)
+
+      commands.history.undo()
+      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible).toBe(true)
+      expect(currentDesign.value?.spatial_frame.placement_status).toBe('confirmed')
+
+      commands.history.undo()
+      expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
+      expect(queries.getPlacedPlants()).toHaveLength(1)
+
+      commands.history.redo()
+      expect(currentDesign.value?.spatial_frame.placement_status).toBe('confirmed')
+      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible).toBe(true)
+
+      commands.history.redo()
+      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible).toBe(false)
+    } finally {
+      host.destroy()
+      designSessionFixture.file = null
+    }
+  })
+
+  it('discards redo from both participants when global history branches', () => {
+    designSessionFixture.file = {
+      ...BASE_FILE,
+      plants: [createPlant('plant-1', 10, 20)],
+    }
+    const placement = beginDesignPlacementEdit()
+    placement.preview(confirmedSpatialFrame(placement.original, {
+      lat: 48.8566,
+      lon: 2.3522,
+      altitude_m: 35,
+    }))
+    placement.commit()
+
+    const host = createRuntimeHostWithAppComposition()
+    const { commands, documents, queries } = host.surfaces
+    try {
+      documents.loadDocument(currentDesign.value!)
+
+      commands.history.undo()
+      expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
+      expect(commands.history.canRedo.value).toBe(true)
+
+      commands.layers.setSceneLayerVisibility('plants', false)
+      expect(commands.history.canRedo.value).toBe(false)
+      commands.history.redo()
+      expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
+
+      commands.history.undo()
+      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
+        .toBe(true)
+      expect(commands.history.canRedo.value).toBe(true)
+
+      const replacementPlacement = beginDesignPlacementEdit()
+      replacementPlacement.preview(confirmedSpatialFrame(replacementPlacement.original, {
+        lat: 51.5072,
+        lon: -0.1276,
+        altitude_m: 11,
+      }))
+      replacementPlacement.commit()
+      expect(commands.history.canRedo.value).toBe(false)
+      commands.history.redo()
+      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
+        .toBe(true)
+    } finally {
+      host.destroy()
+      designSessionFixture.file = null
     }
   })
 

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   designSessionFixture,
   currentDesign,
+  nonCanvasRevision,
 } from './support/design-session-state'
 import {
   getSavedLocationPresentation,
@@ -93,7 +94,7 @@ describe('Location Workbench', () => {
     })
   })
 
-  it('preserves saved altitude when committing a map result or map center', () => {
+  it('preserves saved altitude while previewing, committing, and cancelling placement', () => {
     designSessionFixture.file = makeDesign({
       spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
     })
@@ -101,18 +102,28 @@ describe('Location Workbench', () => {
 
     act(() => {
       currentWorkbench().previewSearchResultOnMap({ displayName: 'Berlin', lat: 52.52, lon: 13.405 })
-      currentWorkbench().commitMapLocation({ lat: 0, lon: 0 })
     })
 
     expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
+    expect(nonCanvasRevision.value).toBe(0)
+
+    act(() => {
+      expect(currentWorkbench().confirmPlacement()).toBe(true)
+    })
+    expect(nonCanvasRevision.value).toBe(1)
 
     act(() => {
       currentWorkbench().previewSearchResultOnMap({ displayName: 'Ignored', lat: 1, lon: 1 })
-      currentWorkbench().clearPendingMapResult()
-      currentWorkbench().commitMapLocation({ lat: 40.7128, lon: -74.006 })
+      currentWorkbench().previewMapCenter({ lat: 40.7128, lon: -74.006 })
     })
 
     expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 40.7128, anchor_longitude_deg: -74.006, location_metadata: { altitude_m: 35 } })
+
+    act(() => {
+      expect(currentWorkbench().cancelPlacement()).toBe(true)
+    })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
+    expect(nonCanvasRevision.value).toBe(1)
   })
 
   it('owns search dropdown outside-click close behavior and disposal', () => {
@@ -149,5 +160,28 @@ describe('Location Workbench', () => {
       render(null, container)
     })
     expect(search.isSearching.value).toBe(false)
+  })
+
+  it('aborts a placement preview on Escape and on unmount without dirtying', () => {
+    renderProbe()
+
+    act(() => {
+      currentWorkbench().previewMapLocation({ lat: 48.8566, lon: 2.3522 })
+    })
+    expect(currentDesign.value?.spatial_frame.placement_status).toBe('confirmed')
+    expect(nonCanvasRevision.value).toBe(0)
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
+    expect(nonCanvasRevision.value).toBe(0)
+
+    act(() => {
+      currentWorkbench().previewMapLocation({ lat: 52.52, lon: 13.405 })
+      render(null, container)
+    })
+    expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
+    expect(nonCanvasRevision.value).toBe(0)
   })
 })

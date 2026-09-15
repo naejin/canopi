@@ -12,8 +12,8 @@ export {
   DesignEditUnavailableError,
 } from './authority-capability'
 export {
-  clearDesignLocation,
-  setDesignLocation,
+  beginDesignPlacementEdit,
+  type DesignPlacementEditTransaction,
 } from './location'
 export {
   setBudgetCurrency,

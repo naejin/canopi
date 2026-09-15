@@ -207,14 +207,20 @@
     },
     "location": {
       "title": "Entwurfsstandort",
-      "save": "Standort festlegen",
-      "clear": "Löschen",
+      "preview": "Platzierung prüfen",
+      "confirm": "Platzierung bestätigen",
+      "cancel": "Abbrechen",
+      "clear": "Provisorischen Standort verwenden",
       "current": "Aktuell",
       "searchPlaceholder": "Standort suchen...",
       "searching": "Suche...",
       "noResults": "Keine Ergebnisse",
       "geocodeError": "Geokodierung fehlgeschlagen",
-      "mapUnavailable": "Karte nicht verfügbar"
+      "mapUnavailable": "Karte nicht verfügbar",
+      "provisionalTitle": "Provisorischer Standort",
+      "provisionalBody": "Lokale Bearbeitung ist verfügbar. Bestätigen Sie vor standortbezogenen Auswertungen einen Standort.",
+      "confirmedTitle": "Bestätigter Standort",
+      "reviewTitle": "Platzierung prüfen"
     },
     "file": {
       "new": "Neuer Entwurf",

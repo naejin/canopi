@@ -1,8 +1,15 @@
-import { useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
+import { useEffect, useRef } from 'preact/hooks'
 import {
-  clearDesignLocation,
-  setDesignLocation,
+  confirmedSpatialFrame,
+  locationFromSpatialFrame,
+  newDesignSpatialFrame,
+} from '../../spatial-frame'
+import type { SpatialFrame } from '../../types/design'
+import { designSessionStore } from '../document-session/store'
+import {
+  beginDesignPlacementEdit,
+  type DesignPlacementEditTransaction,
 } from './controller'
 import {
   buildLocationCommit,
@@ -12,48 +19,88 @@ import {
 
 export interface LocationCoordinateWorkbench {
   readonly saved: SavedLocationPresentation
-  readonly pendingMapResult: { lat: number; lon: number } | null
-  readonly clearLocation: () => boolean
+  readonly pendingPlacement: SpatialFrame | null
   readonly previewMapLocation: (coords: { lat: number; lon: number }) => { lat: number; lon: number }
-  readonly clearPendingMapResult: () => void
-  readonly commitMapLocation: (center: { lat: number; lon: number } | null) => boolean
+  readonly previewMapCenter: (center: { lat: number; lon: number } | null) => boolean
+  readonly previewProvisionalPlacement: () => boolean
+  readonly confirmPlacement: () => boolean
+  readonly cancelPlacement: () => boolean
 }
 
 export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
   const saved = useSavedLocationPresentation()
-  const savedLocationRef = useRef(saved.location)
-  savedLocationRef.current = saved.location
+  const sessionIdentity = designSessionStore.sessionIdentity.value
+  const placementEditRef = useRef<DesignPlacementEditTransaction | null>(null)
+  const pendingPlacement = useSignal<SpatialFrame | null>(null)
 
-  const pendingMapResult = useSignal<{ lat: number; lon: number } | null>(null)
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key !== 'Escape' || !placementEditRef.current) return
+      event.preventDefault()
+      cancelPlacement()
+    }
 
-  function clearLocationFromWorkbench(): boolean {
-    pendingMapResult.value = null
-    return clearDesignLocation()
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      cancelPlacement()
+    }
+  }, [sessionIdentity])
+
+  function ensurePlacementEdit(): DesignPlacementEditTransaction {
+    placementEditRef.current ??= beginDesignPlacementEdit()
+    return placementEditRef.current
+  }
+
+  function previewFrame(frame: SpatialFrame): void {
+    const edit = ensurePlacementEdit()
+    edit.preview(frame)
+    pendingPlacement.value = frame
   }
 
   function previewMapLocation(coords: { lat: number; lon: number }): { lat: number; lon: number } {
     const next = { lat: coords.lat, lon: coords.lon }
-    pendingMapResult.value = next
+    const edit = ensurePlacementEdit()
+    const location = buildLocationCommit(next, locationFromSpatialFrame(edit.original))
+    previewFrame(confirmedSpatialFrame(edit.original, location))
     return next
   }
 
-  function clearPendingMapResult(): void {
-    pendingMapResult.value = null
+  function previewMapCenter(center: { lat: number; lon: number } | null): boolean {
+    if (!center) return false
+    previewMapLocation(center)
+    return true
   }
 
-  function commitMapLocation(center: { lat: number; lon: number } | null): boolean {
-    const coords = pendingMapResult.value ?? center
-    if (!coords) return false
-    pendingMapResult.value = null
-    return setDesignLocation(buildLocationCommit(coords, savedLocationRef.current))
+  function previewProvisionalPlacement(): boolean {
+    previewFrame(newDesignSpatialFrame())
+    return true
+  }
+
+  function confirmPlacement(): boolean {
+    const edit = placementEditRef.current
+    if (!edit) return false
+    placementEditRef.current = null
+    pendingPlacement.value = null
+    const outcome = edit.commit()
+    return outcome.status === 'committed' && outcome.changed
+  }
+
+  function cancelPlacement(): boolean {
+    const edit = placementEditRef.current
+    if (!edit) return false
+    placementEditRef.current = null
+    pendingPlacement.value = null
+    return edit.abort().status === 'aborted'
   }
 
   return {
     saved,
-    pendingMapResult: pendingMapResult.value,
-    clearLocation: clearLocationFromWorkbench,
+    pendingPlacement: pendingPlacement.value,
     previewMapLocation,
-    clearPendingMapResult,
-    commitMapLocation,
+    previewMapCenter,
+    previewProvisionalPlacement,
+    confirmPlacement,
+    cancelPlacement,
   }
 }

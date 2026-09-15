@@ -23,6 +23,14 @@ Read the [design contract](../system.md) first.
 - Primary commands switch workspace; side commands toggle the corresponding panel
 
 
+## Location Workspace
+- Keep the search field and placement actions together at the upper left of the map.
+- A search result, map click, or **Review placement** from the map center enters one review state. Use **Confirm placement** and **Cancel** for that state; Escape has the same result as Cancel.
+- A compact bordered status surface at the lower left identifies **Provisional placement**, **Review placement**, or **Placement confirmed**. Provisional copy must state that local Design editing remains available.
+- Show the saved pin only for a confirmed or pending-confirmed frame. Resetting a confirmed site uses **Use provisional site** and enters review before it changes the saved Design.
+- Preserve the map failure overlay while leaving search, actions, status, and Canvas return available.
+
+
 ## Slider Controls
 - Inline layout: value/bound label — track — value/bound label (all one 24px row)
 - Track: 2px `--color-border` line, fill in `--color-primary`

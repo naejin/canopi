@@ -3,8 +3,13 @@ import { designSessionStore } from '../document-session/store'
 import {
   designEditAuthorityCapability,
   disposeDesignEditAuthority,
+  type DesignPreviewOptions,
+  type DesignPreviewOutcome,
   type DesignPreviewTransaction,
 } from './authority-capability'
+import type { DesignHistoryParticipant } from './history'
+
+export type { DesignPreviewOutcome, DesignPreviewTransaction }
 
 export type DesignArrayEditKey = 'timeline' | 'consortiums'
 
@@ -25,6 +30,17 @@ export function reconcileCurrentDesign(
   updater: (design: CanopiFile) => CanopiFile,
 ): CanopiFile | null {
   return designEditAuthorityCapability(designSessionStore).reconcileCommitted(updater)
+}
+
+export function beginDesignPreview(
+  intent: string,
+  options?: DesignPreviewOptions,
+): DesignPreviewTransaction {
+  return designEditAuthorityCapability(designSessionStore).beginPreview(intent, options)
+}
+
+export function getDesignHistoryParticipant(): DesignHistoryParticipant {
+  return designEditAuthorityCapability(designSessionStore).history
 }
 
 export function setDesignName(name: string): void {
@@ -50,8 +66,7 @@ class StoreDesignArrayEditTransaction<K extends DesignArrayEditKey>
   private readonly transaction: DesignPreviewTransaction
 
   constructor(private readonly key: K) {
-    this.transaction = designEditAuthorityCapability(designSessionStore)
-      .beginPreview(`Design ${key} preview`)
+    this.transaction = beginDesignPreview(`Design ${key} preview`)
   }
 
   get hasMutated(): boolean {

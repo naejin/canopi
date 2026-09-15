@@ -1,4 +1,5 @@
 import type { CanopiFile } from '../../types/design'
+import type { ReadonlySignal } from '@preact/signals'
 import { cloneSpatialFrame } from '../../spatial-frame'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../plant-spacing-interval'
 import type {
@@ -22,6 +23,19 @@ export interface CanvasRuntimeChromeSettingsSnapshot {
 
 export interface CanvasRuntimeCleanStateAdapter {
   setCanvasClean(clean: boolean): void
+}
+
+export interface CanvasRuntimeCoordinatedHistoryAdapter {
+  readonly revision: ReadonlySignal<number>
+  readonly canUndo: ReadonlySignal<boolean>
+  readonly canRedo: ReadonlySignal<boolean>
+  readonly nextUndoSequence: ReadonlySignal<number | null>
+  readonly nextRedoSequence: ReadonlySignal<number | null>
+  reserveSequence(): number
+  announceBranch(): void
+  subscribeToBranches(onBranch: () => void): () => void
+  undo(): boolean
+  redo(): boolean
 }
 
 export interface CanvasRuntimeDocumentCompositionInput {
@@ -78,6 +92,7 @@ export type CanvasRuntimeTranslator = (
 
 export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
+  readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly document: CanvasRuntimeDocumentAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
   readonly presentationData?: CanvasRuntimePresentationDataAdapter

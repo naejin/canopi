@@ -16,16 +16,26 @@ export function LocationTab() {
     mapHost.previewSearchResult(result)
   }
 
-  function handleSet() {
-    mapHost.commitMapLocation()
+  function handlePlacementAction() {
+    if (mapHost.hasPendingPlacement) {
+      mapHost.confirmPlacement()
+      return
+    }
+    mapHost.previewMapCenter()
   }
 
   function handleClear() {
-    mapHost.clearLocation()
+    mapHost.previewProvisionalPlacement()
   }
 
   const pin = mapHost.pin
   const mapUnavailable = mapHost.mapUnavailable
+  const placementStatus = workbench.saved.placementStatus
+  const statusTitle = mapHost.hasPendingPlacement
+    ? t('canvas.location.reviewTitle')
+    : placementStatus === 'confirmed'
+      ? t('canvas.location.confirmedTitle')
+      : t('canvas.location.provisionalTitle')
 
   return (
     <div className={styles.container}>
@@ -46,14 +56,20 @@ export function LocationTab() {
             onInput={(e) => { search.setQuery(e.currentTarget.value) }}
             placeholder={t('canvas.location.searchPlaceholder')}
           />
-          <button type="button" className={styles.setBtn} onClick={handleSet}>
-            {t('canvas.location.save')}
+          <button type="button" className={styles.setBtn} onClick={handlePlacementAction}>
+            {mapHost.hasPendingPlacement
+              ? t('canvas.location.confirm')
+              : t('canvas.location.preview')}
           </button>
-          {mapHost.committedLocation && (
+          {mapHost.hasPendingPlacement ? (
+            <button type="button" className={styles.clearBtn} onClick={mapHost.cancelPlacement}>
+              {t('canvas.location.cancel')}
+            </button>
+          ) : mapHost.committedLocation ? (
             <button type="button" className={styles.clearBtn} onClick={handleClear}>
               {t('canvas.location.clear')}
             </button>
-          )}
+          ) : null}
         </div>
 
         {search.isSearching.value && (
@@ -81,6 +97,17 @@ export function LocationTab() {
           </div>
         )}
       </div>
+
+      <section className={styles.placementStatus} aria-live="polite">
+        <strong>{statusTitle}</strong>
+        <span>
+          {mapHost.hasPendingPlacement
+            ? workbench.saved.anchorSummary
+            : placementStatus === 'confirmed'
+              ? workbench.saved.summary
+              : t('canvas.location.provisionalBody')}
+        </span>
+      </section>
 
       {/* Back to canvas */}
       <button

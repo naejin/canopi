@@ -7,11 +7,13 @@ const PIN_EDGE_MARGIN = 24
 
 export interface SavedLocationPresentation {
   readonly hasDesign: boolean
+  readonly anchorLocation: Location | null
   readonly location: Location | null
   readonly northBearingDeg: number | null
   readonly placementStatus: PlacementStatus | null
   readonly hasLocation: boolean
   readonly summary: string | null
+  readonly anchorSummary: string | null
   readonly key: string | null
 }
 
@@ -28,15 +30,20 @@ export function getSavedLocationPresentation(
   spatialFrame: SpatialFrame | null,
 ): SavedLocationPresentation {
   const confirmed = spatialFrame?.placement_status === 'confirmed'
-  const location = confirmed && spatialFrame ? locationFromSpatialFrame(spatialFrame) : null
+  const anchorLocation = spatialFrame ? locationFromSpatialFrame(spatialFrame) : null
+  const location = confirmed ? anchorLocation : null
   return {
     hasDesign,
+    anchorLocation,
     location,
     northBearingDeg: spatialFrame?.north_bearing_deg ?? null,
     placementStatus: spatialFrame?.placement_status ?? null,
     hasLocation: confirmed,
     summary: location ? formatLocationSummary(location) : null,
-    key: location ? `${location.lat}:${location.lon}:${location.altitude_m ?? ''}` : null,
+    anchorSummary: anchorLocation ? formatLocationSummary(anchorLocation) : null,
+    key: spatialFrame && anchorLocation
+      ? `${confirmed ? '' : 'provisional:'}${anchorLocation.lat}:${anchorLocation.lon}:${anchorLocation.altitude_m ?? ''}`
+      : null,
   }
 }
 

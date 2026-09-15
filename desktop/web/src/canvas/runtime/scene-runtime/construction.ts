@@ -135,6 +135,9 @@ export function createSceneRuntimeConstruction(
   const appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
+    reserveSequence: appAdapter.coordinatedHistory?.reserveSequence,
+    announceBranch: appAdapter.coordinatedHistory?.announceBranch,
+    subscribeToBranches: appAdapter.coordinatedHistory?.subscribeToBranches,
   })
   const sceneEdits = new SceneRuntimeEditCoordinator({
     sceneStore,
@@ -159,6 +162,7 @@ export function createSceneRuntimeConstruction(
   })
   const chrome = new SceneRuntimeChromeCoordinator()
   const disposeEffects: Array<() => void> = []
+  disposeEffects.push(() => history.dispose())
   const rendering = new SceneRuntimeRenderScheduler({
     getRendererHost: () => rendererHost,
     getViewport: () => camera.viewport,
@@ -250,6 +254,7 @@ export function createSceneRuntimeConstruction(
     sceneStore,
     camera,
     history: sceneEdits,
+    coordinatedHistory: appAdapter.coordinatedHistory,
     commandAdmission: sceneEdits,
     settledReader,
     savedObjectStamps: appAdapter.savedObjectStamps,

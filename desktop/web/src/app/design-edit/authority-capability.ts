@@ -1,4 +1,5 @@
 import type { CanopiFile } from '../../types/design'
+import type { DesignHistoryParticipant } from './history'
 
 export type DesignProjector = (design: CanopiFile) => CanopiFile
 
@@ -14,11 +15,19 @@ export interface DesignPreviewTransaction {
   abort(): DesignPreviewOutcome
 }
 
+export interface DesignPreviewOptions {
+  readonly history?: {
+    readonly type: string
+    readonly field: 'spatial_frame'
+  }
+}
+
 export interface DesignEditAuthorityCapability {
+  readonly history: DesignHistoryParticipant
   editCommitted(projector: DesignProjector): CanopiFile | null
   reconcileCommitted(projector: DesignProjector): CanopiFile | null
   markCommittedDirty(): void
-  beginPreview(intent: string): DesignPreviewTransaction
+  beginPreview(intent: string, options?: DesignPreviewOptions): DesignPreviewTransaction
 }
 
 export class DesignEditBusyError extends Error {

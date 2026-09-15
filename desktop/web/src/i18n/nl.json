@@ -207,14 +207,20 @@
     },
     "location": {
       "title": "Ontwerplocatie",
-      "save": "Locatie instellen",
-      "clear": "Wissen",
+      "preview": "Plaatsing controleren",
+      "confirm": "Plaatsing bevestigen",
+      "cancel": "Annuleren",
+      "clear": "Voorlopige locatie gebruiken",
       "current": "Huidig",
       "searchPlaceholder": "Locatie zoeken...",
       "searching": "Zoeken...",
       "noResults": "Geen resultaten",
       "geocodeError": "Geocodering mislukt",
-      "mapUnavailable": "Kaart niet beschikbaar"
+      "mapUnavailable": "Kaart niet beschikbaar",
+      "provisionalTitle": "Voorlopige locatie",
+      "provisionalBody": "Lokaal bewerken is beschikbaar. Bevestig een locatie vóór locatiespecifieke evaluatie.",
+      "confirmedTitle": "Bevestigde locatie",
+      "reviewTitle": "Plaatsing controleren"
     },
     "file": {
       "new": "Nieuw ontwerp",

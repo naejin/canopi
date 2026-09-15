@@ -216,22 +216,31 @@ describe('Location map editing host', () => {
     }))
 
     act(() => {
-      currentHost().commitMapLocation()
+      currentHost().confirmPlacement()
     })
     expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
 
     act(() => {
-      currentHost().previewSearchResult({ displayName: 'Ignored', lat: 1, lon: 1 })
       currentMap().center = { lng: -74.006, lat: 40.7128 }
-      currentMap().fire('dragstart')
-      currentHost().commitMapLocation()
+      currentHost().previewMapCenter()
     })
     expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 40.7128, anchor_longitude_deg: -74.006, location_metadata: { altitude_m: 35 } })
+    expect(nonCanvasRevision.value).toBe(1)
+
+    act(() => {
+      currentHost().cancelPlacement()
+    })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
 
     act(() => {
       currentMap().fire('click', { lngLat: { lng: -0.1276, lat: 51.5072 } })
     })
     expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 51.5072, anchor_longitude_deg: -0.1276, location_metadata: { altitude_m: 35 } })
+    expect(nonCanvasRevision.value).toBe(1)
+
+    act(() => {
+      currentHost().confirmPlacement()
+    })
 
     act(() => {
       currentMap().projected = { x: 230, y: 170 }
@@ -239,8 +248,8 @@ describe('Location map editing host', () => {
     })
     expect(currentMap().resize).toHaveBeenCalled()
     expect(currentHost().pin).toMatchObject({ visible: true, x: 216, y: 156, clamped: true })
-    expect(workbench?.pendingMapResult).toBeNull()
-    expect(nonCanvasRevision.value).toBe(3)
+    expect(workbench?.pendingPlacement).toBeNull()
+    expect(nonCanvasRevision.value).toBe(2)
   })
 
   it('preserves the current map view when the basemap style rebuilds', async () => {
@@ -275,5 +284,20 @@ describe('Location map editing host', () => {
       center: [13.405, 52.52],
       zoom: 10,
     })
+  })
+
+  it('centres a provisional Design on its authored anchor without showing a saved pin', async () => {
+    designSessionFixture.file = makeDesign({
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
+    })
+
+    renderProbe()
+    await vi.waitFor(() => expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1))
+
+    expect(maplibreMock.mapConstructor.mock.calls[0]?.[0]).toMatchObject({
+      center: [13, 23],
+      zoom: 3.2,
+    })
+    expect(currentHost().pin.visible).toBe(false)
   })
 })

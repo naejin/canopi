@@ -1,15 +1,19 @@
-import { signal } from '@preact/signals'
+import { batch, computed, signal } from '@preact/signals'
 import type { SceneCommand } from './scene-commands'
 
 const MAX_HISTORY = 500
 
 interface SceneHistoryOptions {
   readonly reportCleanState?: (clean: boolean) => void
+  readonly reserveSequence?: () => number
+  readonly announceBranch?: () => void
+  readonly subscribeToBranches?: (onBranch: () => void) => () => void
 }
 
 interface SceneHistoryRecordState {
   readonly entry: SceneHistoryEntry
   cursorApplied: boolean
+  branchAnnounced: boolean
   publicationApplied: boolean
 }
 
@@ -25,6 +29,7 @@ interface SceneHistoryReplayState {
 
 interface SceneHistoryEntry {
   readonly command: SceneCommand
+  readonly sequence: number
   readonly beforeState: object
   readonly afterState: object
 }
@@ -56,12 +61,33 @@ export class SceneHistory {
   private _directRecord: { command: SceneCommand; token: object } | null = null
   private _directReplay: { direction: SceneHistoryReplayDirection; token: object } | null = null
   private readonly _reportCleanState: (clean: boolean) => void
+  private readonly _reserveSequence: () => number
+  private readonly _announceBranch: () => void
+  private readonly _disposeBranchSubscription: () => void
+  private _localSequence = 0
+  private readonly _revision = signal(0)
 
   readonly canUndo = signal(false)
   readonly canRedo = signal(false)
+  readonly nextUndoSequence = computed(() => {
+    void this._revision.value
+    return this._past.at(-1)?.sequence ?? null
+  })
+  readonly nextRedoSequence = computed(() => {
+    void this._revision.value
+    return this._future.at(-1)?.sequence ?? null
+  })
 
   constructor(options: SceneHistoryOptions = {}) {
     this._reportCleanState = options.reportCleanState ?? (() => {})
+    this._announceBranch = options.announceBranch ?? (() => {})
+    this._reserveSequence = options.reserveSequence ?? (() => {
+      this._localSequence += 1
+      return this._localSequence
+    })
+    this._disposeBranchSubscription = options.subscribeToBranches?.(
+      () => this._discardFuture(),
+    ) ?? (() => {})
   }
 
   get isClean(): boolean {
@@ -75,10 +101,12 @@ export class SceneHistory {
       state = {
         entry: {
           command,
+          sequence: this._reserveSequence(),
           beforeState: this._currentState,
           afterState: {},
         },
         cursorApplied: false,
+        branchAnnounced: false,
         publicationApplied: false,
       }
       this._recordOperations.set(token, state)
@@ -92,10 +120,16 @@ export class SceneHistory {
       this._truncateIfNeeded()
       state.cursorApplied = true
     }
-    if (!state.publicationApplied) {
-      this._updateSignals()
-      state.publicationApplied = true
-    }
+    batch(() => {
+      if (!state.branchAnnounced) {
+        this._announceBranch()
+        state.branchAnnounced = true
+      }
+      if (!state.publicationApplied) {
+        this._updateSignals()
+        state.publicationApplied = true
+      }
+    })
     if (!transaction) this._directRecord = null
     return newlyRecorded
   }
@@ -123,6 +157,10 @@ export class SceneHistory {
     this._currentState = {}
     this._savedState = this._currentState
     this._updateSignals()
+  }
+
+  dispose(): void {
+    this._disposeBranchSubscription()
   }
 
   captureCheckpoint(): SceneHistoryCheckpoint {
@@ -161,6 +199,12 @@ export class SceneHistory {
   private _truncateIfNeeded(): void {
     if (this._past.length <= MAX_HISTORY) return
     this._past.shift()
+  }
+
+  private _discardFuture(): void {
+    if (this._future.length === 0) return
+    this._future = []
+    this._updateSignals()
   }
 
   private _replay(
@@ -246,6 +290,7 @@ export class SceneHistory {
   }
 
   private _updateSignals(): void {
+    this._revision.value += 1
     this.canUndo.value = this._past.length > 0
     this.canRedo.value = this._future.length > 0
     this._reportCleanState(this.isClean)

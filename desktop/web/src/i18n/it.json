@@ -207,14 +207,20 @@
     },
     "location": {
       "title": "Posizione del progetto",
-      "save": "Imposta posizione",
-      "clear": "Cancella",
+      "preview": "Verifica posizione",
+      "confirm": "Conferma posizione",
+      "cancel": "Annulla",
+      "clear": "Usa sito provvisorio",
       "current": "Attuale",
       "searchPlaceholder": "Cerca posizione...",
       "searching": "Ricerca...",
       "noResults": "Nessun risultato",
       "geocodeError": "Geocodifica fallita",
-      "mapUnavailable": "Mappa non disponibile"
+      "mapUnavailable": "Mappa non disponibile",
+      "provisionalTitle": "Sito provvisorio",
+      "provisionalBody": "La modifica locale è disponibile. Conferma un sito prima delle valutazioni specifiche del luogo.",
+      "confirmedTitle": "Sito confermato",
+      "reviewTitle": "Verifica posizione"
     },
     "file": {
       "new": "Nuovo design",

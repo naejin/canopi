@@ -2,6 +2,7 @@ import type { SpeciesFocusCommands } from './species-key'
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
 import type {
+  CanvasRuntimeCoordinatedHistoryAdapter,
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
@@ -36,6 +37,7 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly sceneStore: SceneStateReader
   readonly camera: Pick<CameraController, 'zoomIn' | 'zoomOut' | 'zoomToFit' | 'viewport'>
   readonly history: SceneHistoryCommands
+  readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly commandAdmission: SceneCommandAdmission
   readonly settledReader: SettledSceneReader
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
@@ -108,16 +110,22 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     const canUndo = computed(() => {
       void options.transientHistory.revision.value
       void options.settledReader.revision.value
+      void options.coordinatedHistory?.revision.value
       return options.settledReader.readWhenSettled(
-        () => options.transientHistory.canUndo() || options.history.canUndo.value,
+        () => options.transientHistory.canUndo()
+          || options.history.canUndo.value
+          || options.coordinatedHistory?.canUndo.value === true,
         false,
       )
     })
     const canRedo = computed(() => {
       void options.transientHistory.revision.value
       void options.settledReader.revision.value
+      void options.coordinatedHistory?.revision.value
       return options.settledReader.readWhenSettled(
-        () => options.transientHistory.canRedo() || options.history.canRedo.value,
+        () => options.transientHistory.canRedo()
+          || options.history.canRedo.value
+          || options.coordinatedHistory?.canRedo.value === true,
         false,
       )
     })
@@ -227,6 +235,15 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private undo(): void {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.undo()) return
+      const sceneSequence = this.options.history.nextUndoSequence.value
+      const designSequence = this.options.coordinatedHistory?.nextUndoSequence.value ?? null
+      if (
+        designSequence !== null
+        && (sceneSequence === null || designSequence > sceneSequence)
+      ) {
+        if (this.options.coordinatedHistory?.undo()) this.options.invalidate('scene')
+        return
+      }
       this.options.history.undo()
     }, undefined, { resumePending: true })
   }
@@ -234,6 +251,15 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private redo(): void {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.redo()) return
+      const sceneSequence = this.options.history.nextRedoSequence.value
+      const designSequence = this.options.coordinatedHistory?.nextRedoSequence.value ?? null
+      if (
+        designSequence !== null
+        && (sceneSequence === null || designSequence < sceneSequence)
+      ) {
+        if (this.options.coordinatedHistory?.redo()) this.options.invalidate('scene')
+        return
+      }
       this.options.history.redo()
     }, undefined, { resumePending: true })
   }

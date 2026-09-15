@@ -207,14 +207,20 @@
     },
     "location": {
       "title": "Emplacement du design",
-      "save": "Définir l'emplacement",
-      "clear": "Effacer",
+      "preview": "Vérifier l'emplacement",
+      "confirm": "Confirmer l'emplacement",
+      "cancel": "Annuler",
+      "clear": "Utiliser le site provisoire",
       "current": "Actuel",
       "searchPlaceholder": "Rechercher un lieu...",
       "searching": "Recherche...",
       "noResults": "Aucun résultat",
       "geocodeError": "Échec du géocodage",
-      "mapUnavailable": "Carte indisponible"
+      "mapUnavailable": "Carte indisponible",
+      "provisionalTitle": "Site provisoire",
+      "provisionalBody": "L'édition locale reste disponible. Confirmez un site avant toute évaluation liée au lieu.",
+      "confirmedTitle": "Site confirmé",
+      "reviewTitle": "Vérifier l'emplacement"
     },
     "file": {
       "new": "Nouveau design",
