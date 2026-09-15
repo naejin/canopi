@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createMapLibreBasemapStyle,
+  createMapLibreEmptyStyle,
   normalizeBasemapStyle,
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
   MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
@@ -35,6 +36,15 @@ describe('maplibre config', () => {
     expect(backgroundLayer?.type).toBe('background')
     expect(rasterLayer?.type).toBe('raster')
     expect(rasterLayer).not.toHaveProperty('maxzoom')
+  })
+
+  it('provides a source-free local style for map resource admission', () => {
+    const style = createMapLibreEmptyStyle()
+    expect(style.sources).toEqual({})
+    expect(style.layers).toEqual([
+      expect.objectContaining({ id: MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID, type: 'background' }),
+    ])
+    expect(JSON.stringify(style)).not.toContain('tile.openstreetmap.org')
   })
 
   it('normalizes unknown styles to street', () => {

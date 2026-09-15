@@ -2,6 +2,7 @@ import type { LidarTileset } from '../../ipc/lidar'
 import type { LidarPresentationItem } from '../lidar/library-store'
 import { lidarTileUrlTemplate } from '../lidar/tile-urls'
 import { styleForKind } from '../lidar/library-store'
+import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 
 /**
  * Map-facing description of one LiDAR band entry. Sources and results are
@@ -101,6 +102,7 @@ export function classifyLidarSync(
 // ---------------------------------------------------------------------------
 
 const FIRST_NON_LIDAR_LAYER_CANDIDATES = [
+  MAPLIBRE_SHARED_SCENE_LAYER_ID,
   'panel-target-hover-zones-fill',
   'panel-target-selection-zones-fill',
   'contour-minor',
@@ -121,7 +123,7 @@ export interface LidarMapLike {
   addSource(id: string, source: Record<string, unknown>): void
   getSource(id: string): unknown
   removeSource(id: string): void
-  addLayer(layer: Record<string, unknown>): void
+  addLayer(layer: Record<string, unknown>, beforeId?: string): void
   getLayer(id: string): unknown
   removeLayer(id: string): void
   setPaintProperty?(layerId: string, name: string, value: unknown): void
@@ -155,15 +157,12 @@ function addLidarLayer(map: LidarMapLike, layer: LidarMapLayer): void {
   if (map.getLayer(layer.id) == null) {
     const beforeId = firstNonLidarLayerId(map)
     if (beforeId != null) {
-      ;(map.addLayer as (layer: Record<string, unknown>, beforeId?: string) => void)(
-        {
-          id: layer.id,
-          type: 'raster',
-          source: layer.id,
-          paint: { 'raster-opacity': layer.opacity },
-        },
-        beforeId,
-      )
+      map.addLayer({
+        id: layer.id,
+        type: 'raster',
+        source: layer.id,
+        paint: { 'raster-opacity': layer.opacity },
+      }, beforeId)
     } else {
       map.addLayer({
         id: layer.id,

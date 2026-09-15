@@ -25,8 +25,8 @@ export interface MapLibreMapInstance {
   jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
   resize(): void
   remove(): void
-  on(type: 'load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize', listener: (event?: unknown) => void): void
-  off(type: 'load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize', listener: (event?: unknown) => void): void
+  on(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
+  off(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
   project?(lnglat: [number, number]): { x: number; y: number }
   getPitch?(): number
   getCanvas?(): HTMLCanvasElement
@@ -36,7 +36,7 @@ export interface MapLibreMapInstance {
   addSource(id: string, source: Record<string, unknown>): void
   getSource(id: string): { setData(data: unknown): void } | undefined
   removeSource(id: string): void
-  addLayer(layer: Record<string, unknown>): void
+  addLayer(layer: Record<string, unknown>, beforeId?: string): void
   setPaintProperty?(layerId: string, name: string, value: unknown): void
   getLayer(id: string): unknown
   removeLayer(id: string): void

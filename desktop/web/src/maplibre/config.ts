@@ -42,40 +42,81 @@ function getBasemapSourceDefinition(style: BasemapStyle): { attribution: string;
   }
 }
 
-export function createMapLibreBasemapStyle(
-  preferredStyle: BasemapStyle,
-): MapLibreStyleDefinition {
-  const style = normalizeBasemapStyle(preferredStyle)
-  const source = getBasemapSourceDefinition(style)
-
+/** A local style used while a map-backed surface acquires its rendering context. */
+export function createMapLibreEmptyStyle(): StyleSpecification {
   return {
     version: 8,
-    sources: {
-      [MAPLIBRE_BASEMAP_SOURCE_ID]: {
-        type: 'raster',
-        tiles: source.tiles,
-        tileSize: 256,
-        attribution: source.attribution,
-        maxzoom: MAPLIBRE_BASEMAP_SOURCE_MAX_ZOOM,
-      },
-    },
+    sources: {},
     layers: [
       {
         id: MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
         type: 'background',
-        paint: {
-          'background-color': '#f3efe4',
-        },
+        paint: { 'background-color': '#f3efe4' },
       },
-      {
-        id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        type: 'raster',
-        source: MAPLIBRE_BASEMAP_SOURCE_ID,
-        minzoom: 0,
-        // Keep the raster layer visible beyond the source max zoom so
-        // MapLibre can overzoom tiles while the canvas camera continues
-        // to track the scene exactly at high zoom levels.
-      },
+    ],
+  }
+}
+
+export interface MapLibreBasemapContribution {
+  readonly sourceId: typeof MAPLIBRE_BASEMAP_SOURCE_ID
+  readonly source: {
+    readonly type: 'raster'
+    readonly tiles: string[]
+    readonly tileSize: 256
+    readonly attribution: string
+    readonly maxzoom: typeof MAPLIBRE_BASEMAP_SOURCE_MAX_ZOOM
+  }
+  readonly layer: {
+    readonly id: typeof MAPLIBRE_BASEMAP_RASTER_LAYER_ID
+    readonly type: 'raster'
+    readonly source: typeof MAPLIBRE_BASEMAP_SOURCE_ID
+    readonly minzoom: 0
+  }
+}
+
+/**
+ * Returns the remote basemap contribution separately from the local map style
+ * so callers can defer every network-backed source until they are admitted.
+ */
+export function createMapLibreBasemapContribution(
+  preferredStyle: BasemapStyle,
+): MapLibreBasemapContribution {
+  const source = getBasemapSourceDefinition(normalizeBasemapStyle(preferredStyle))
+  return {
+    sourceId: MAPLIBRE_BASEMAP_SOURCE_ID,
+    source: {
+      type: 'raster',
+      tiles: source.tiles,
+      tileSize: 256,
+      attribution: source.attribution,
+      maxzoom: MAPLIBRE_BASEMAP_SOURCE_MAX_ZOOM,
+    },
+    layer: {
+      id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      type: 'raster',
+      source: MAPLIBRE_BASEMAP_SOURCE_ID,
+      minzoom: 0,
+    },
+  }
+}
+
+export function createMapLibreBasemapStyle(
+  preferredStyle: BasemapStyle,
+): MapLibreStyleDefinition {
+  const emptyStyle = createMapLibreEmptyStyle()
+  const contribution = createMapLibreBasemapContribution(preferredStyle)
+
+  return {
+    ...emptyStyle,
+    sources: {
+      [contribution.sourceId]: contribution.source,
+    },
+    layers: [
+      ...emptyStyle.layers,
+      contribution.layer,
+      // Keep the raster layer visible beyond the source max zoom so
+      // MapLibre can overzoom tiles while the canvas camera continues
+      // to track the scene exactly at high zoom levels.
     ],
   }
 }

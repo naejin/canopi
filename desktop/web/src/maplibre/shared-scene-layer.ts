@@ -4,6 +4,9 @@ import { createPixiScenePresentation, type PixiScenePresentation } from '../canv
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import { deriveSharedMapSceneViewport, type SharedMapProjector } from './scene-camera-transform'
 
+/** The one production custom layer which all map-owned raster bands sit below. */
+export const MAPLIBRE_SHARED_SCENE_LAYER_ID = 'canopi-shared-scene'
+
 export interface SharedMapSceneMap extends SharedMapProjector {
   getCanvas(): HTMLCanvasElement
   getPitch(): number

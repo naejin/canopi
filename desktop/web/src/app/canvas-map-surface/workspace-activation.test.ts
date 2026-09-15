@@ -9,7 +9,11 @@ import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
 import { createCanvas2DSceneRenderer } from '../../canvas/runtime/renderers/canvas2d-scene'
 import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import type { RendererCapabilities } from '../../canvas/runtime/renderers/types'
-import { type SharedMapSceneLayer, type SharedPixiRenderer } from '../../maplibre/shared-scene-layer'
+import {
+  MAPLIBRE_SHARED_SCENE_LAYER_ID,
+  type SharedMapSceneLayer,
+  type SharedPixiRenderer,
+} from '../../maplibre/shared-scene-layer'
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 
 const TEST_CAPABILITIES: RendererCapabilities = {
@@ -111,8 +115,8 @@ function createComposition(options: {
 
 function createCoordinator(input: {
   map?: FakeMap
-  createMap?: () => Promise<WorkspaceActivationMap>
-  composition?: ReturnType<typeof createComposition>['composition']
+  createMap?: (signal: AbortSignal) => Promise<WorkspaceActivationMap>
+  composition?: SharedMapSceneRendererComposition
   runtime?: WorkspaceActivationRuntime
   context?: WebGL2RenderingContext | null
   unwatchFailure?: () => void
@@ -123,17 +127,19 @@ function createCoordinator(input: {
   camera.initialize({ width: 400, height: 300 })
   const runtime = input.runtime ?? createRuntime()
   const composition = input.composition ?? createComposition().composition
+  const mapControls: WorkspaceActivationMapControls = {
+    createMap: input.createMap ?? (async () => map as unknown as WorkspaceActivationMap),
+    releaseMap: vi.fn((candidate) => (candidate as unknown as FakeMap).remove()),
+    getWebGL2Context: () => input.context === undefined ? map.context : input.context,
+    watchFailure: input.watchFailure
+      ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
+  }
   const coordinator = new WorkspaceActivationCoordinator({
     container: document.createElement('div'), runtime, camera, composition,
-    map: {
-      createMap: input.createMap ?? (async () => map as unknown as WorkspaceActivationMap),
-      getWebGL2Context: () => input.context === undefined ? map.context : input.context,
-      watchFailure: input.watchFailure
-        ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
-    },
-    layer: { id: 'shared-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0 },
+    map: mapControls,
+    layer: { anchor: { lat: 0, lon: 0 }, northBearingDeg: 0 },
   })
-  return { coordinator, camera, composition, runtime, map }
+  return { coordinator, camera, composition, runtime, map, mapControls }
 }
 
 describe('WorkspaceActivationCoordinator', () => {
@@ -148,6 +154,9 @@ describe('WorkspaceActivationCoordinator', () => {
 
     initialized.resolve()
     await expect(activation).resolves.toBe('shared-ready')
+    expect(composed.composition.createLayer).toHaveBeenCalledWith(expect.objectContaining({
+      id: MAPLIBRE_SHARED_SCENE_LAYER_ID,
+    }))
     expect(map.addLayer).toHaveBeenCalledOnce()
     expect(runtime.init).toHaveBeenCalledOnce()
   })
@@ -247,6 +256,17 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).toHaveBeenCalledOnce()
   })
 
+  it('falls back when map acquisition rejects before a map is admitted', async () => {
+    const failure = new Error('MapLibre loader failed')
+    const { coordinator, runtime, composition } = createCoordinator({
+      createMap: async () => { throw failure },
+    })
+
+    await expect(coordinator.activate()).resolves.toBe('fallback-ready')
+    expect(composition.failActiveLayer).toHaveBeenCalledWith(failure)
+    expect(runtime.init).toHaveBeenCalledOnce()
+  })
+
   it('eagerly fails only the active shared backend and retains the last camera frame', async () => {
     const { coordinator, runtime, camera, map } = createCoordinator()
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
@@ -274,24 +294,117 @@ describe('WorkspaceActivationCoordinator', () => {
 
   it('fences a stale asynchronous map creation after cancellation and tears down once', async () => {
     const created = deferred<WorkspaceActivationMap>()
-    const { coordinator, runtime } = createCoordinator({ createMap: () => created.promise })
+    const captured = { signal: null as AbortSignal | null }
+    const { coordinator, runtime, mapControls } = createCoordinator({
+      createMap: (nextSignal) => {
+        captured.signal = nextSignal
+        return created.promise
+      },
+    })
     const activation = coordinator.activate()
 
+    await vi.waitFor(() => expect(captured.signal).not.toBeNull())
     await coordinator.teardown()
+    expect(captured.signal?.aborted).toBe(true)
     const staleMap = new FakeMap()
     created.resolve(staleMap as unknown as WorkspaceActivationMap)
 
     await expect(activation).resolves.toBe('cancelled')
     await coordinator.teardown()
     expect(staleMap.remove).toHaveBeenCalledOnce()
+    expect(mapControls.releaseMap).toHaveBeenCalledWith(staleMap)
     expect(runtime.init).not.toHaveBeenCalled()
   })
 
-  it('reports a stale map removal failure without rejecting cancelled activation', async () => {
+  it('keeps the newest activation when an older replacement is still cleaning up', async () => {
+    const firstDisposal = deferred<void>()
+    const first = createComposition({ dispose: () => firstDisposal.promise })
+    const newest = createComposition()
+    const composition: SharedMapSceneRendererComposition = {
+      renderer: {} as never,
+      createLayer: vi.fn()
+        .mockReturnValueOnce(first.layer)
+        .mockReturnValue(newest.layer),
+      failActiveLayer: vi.fn(),
+    }
+    const firstMap = new FakeMap()
+    const newestMap = new FakeMap()
+    const maps = [firstMap, newestMap]
+    const signals: AbortSignal[] = []
+    const createMap = vi.fn(async (signal: AbortSignal) => {
+      signals.push(signal)
+      return maps[signals.length - 1] as unknown as WorkspaceActivationMap
+    })
+    const { coordinator, mapControls } = createCoordinator({ createMap, composition })
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+
+    const superseded = coordinator.activate()
+    await vi.waitFor(() => expect(first.dispose).toHaveBeenCalledOnce())
+    const latest = coordinator.activate()
+
+    await Promise.resolve()
+    expect(signals).toHaveLength(1)
+    expect(signals[0]?.aborted).toBe(true)
+    expect(firstMap.remove).not.toHaveBeenCalled()
+    expect(newestMap.remove).not.toHaveBeenCalled()
+
+    firstDisposal.resolve()
+    await expect(superseded).resolves.toBe('cancelled')
+    await expect(latest).resolves.toBe('shared-ready')
+    expect(signals).toHaveLength(2)
+    expect(signals[1]?.aborted).toBe(false)
+    expect(firstMap.remove).toHaveBeenCalledOnce()
+    expect(mapControls.releaseMap).toHaveBeenCalledWith(firstMap)
+
+    await coordinator.teardown()
+    expect(newest.dispose).toHaveBeenCalledOnce()
+    expect(newestMap.remove).toHaveBeenCalledOnce()
+  })
+
+  it('lets public teardown cancel a replacement waiting on prior cleanup', async () => {
+    const firstDisposal = deferred<void>()
+    const composed = createComposition({ dispose: () => firstDisposal.promise })
+    const map = new FakeMap()
+    const signals: AbortSignal[] = []
+    const createMap = vi.fn(async (signal: AbortSignal) => {
+      signals.push(signal)
+      return map as unknown as WorkspaceActivationMap
+    })
+    const { coordinator, runtime } = createCoordinator({
+      createMap,
+      composition: composed.composition,
+    })
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+
+    const replacement = coordinator.activate()
+    await vi.waitFor(() => expect(composed.dispose).toHaveBeenCalledOnce())
+    const teardown = coordinator.teardown()
+
+    await Promise.resolve()
+    expect(createMap).toHaveBeenCalledOnce()
+    expect(map.remove).not.toHaveBeenCalled()
+
+    firstDisposal.resolve()
+    await expect(replacement).resolves.toBe('cancelled')
+    await expect(teardown).resolves.toBeUndefined()
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(runtime.init).toHaveBeenCalledOnce()
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+    expect(signals[0]?.aborted).toBe(true)
+  })
+
+  it('reports a stale map release failure without rejecting cancelled activation', async () => {
     const created = deferred<WorkspaceActivationMap>()
-    const { coordinator } = createCoordinator({ createMap: () => created.promise })
+    let capturedSignal: AbortSignal | null = null
+    const { coordinator } = createCoordinator({
+      createMap: (signal) => {
+        capturedSignal = signal
+        return created.promise
+      },
+    })
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const activation = coordinator.activate()
+    await vi.waitFor(() => expect(capturedSignal).not.toBeNull())
     await coordinator.teardown()
     const staleMap = new FakeMap()
     staleMap.remove.mockImplementation(() => { throw new Error('stale remove failed') })
@@ -300,20 +413,22 @@ describe('WorkspaceActivationCoordinator', () => {
 
     await expect(activation).resolves.toBe('cancelled')
     expect(consoleError).toHaveBeenCalledWith(
-      'Failed to remove stale MapLibre workspace map:',
+      'Failed to release stale MapLibre workspace map:',
       expect.any(Error),
     )
     consoleError.mockRestore()
   })
 
   it('makes repeated active teardown idempotent', async () => {
-    const { coordinator, runtime, map } = createCoordinator()
+    const { coordinator, runtime, map, mapControls } = createCoordinator()
     await coordinator.activate()
 
     await coordinator.teardown()
     await coordinator.teardown()
 
     expect(map.remove).toHaveBeenCalledOnce()
+    expect(mapControls.releaseMap).toHaveBeenCalledOnce()
+    expect(mapControls.releaseMap).toHaveBeenCalledWith(map)
     expect(runtime.destroy).toHaveBeenCalledOnce()
   })
 
@@ -452,10 +567,11 @@ describe('WorkspaceActivationCoordinator', () => {
       container, runtime, camera, composition,
       map: {
         createMap: async () => map as unknown as WorkspaceActivationMap,
+        releaseMap: () => map.remove(),
         getWebGL2Context: () => map.context,
       },
       layer: {
-        id: 'shared-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
+        anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
         createRenderer: () => renderer,
         createStage: () => ({ destroy: vi.fn() }) as never,
         createPresentation: () => ({ dispose() {}, resize() {}, setViewport() {}, renderScene() {} }),

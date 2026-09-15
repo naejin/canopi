@@ -3,6 +3,7 @@ import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
 import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
+  MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
   type SharedMapSceneLayerOptions,
   type SharedMapSceneMap,
@@ -19,11 +20,12 @@ export type WorkspaceActivationOutcome = 'shared-ready' | 'fallback-ready' | 'ca
 /** One map that is suitable for both the shared graphics layer and camera owner. */
 export type WorkspaceActivationMap = MapLibreWorkspaceCameraMap & Pick<
   MapLibreMapInstance,
-  'addLayer' | 'remove'
+  'addLayer' | 'addSource' | 'getSource' | 'getLayer' | 'setPaintProperty'
 >
 
 export interface WorkspaceActivationMapControls {
-  createMap(): Promise<WorkspaceActivationMap>
+  createMap(signal: AbortSignal): Promise<WorkspaceActivationMap>
+  releaseMap(map: WorkspaceActivationMap): void
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
   /** Map/context failures that happen outside the custom layer. */
   watchFailure?(
@@ -44,7 +46,7 @@ export interface WorkspaceActivationOptions {
   readonly camera: MapLibreWorkspaceCameraOwner
   readonly composition: SharedMapSceneRendererComposition
   readonly map: WorkspaceActivationMapControls
-  readonly layer: Omit<SharedMapSceneLayerOptions, 'onFailure'>
+  readonly layer: Omit<SharedMapSceneLayerOptions, 'id' | 'onFailure'>
 }
 
 interface ActivationGeneration {
@@ -60,6 +62,7 @@ interface ActivationGeneration {
   cancelled: boolean
   cleanupResult: Promise<void> | null
   failure: Promise<WorkspaceActivationOutcome> | null
+  readonly abortController: AbortController
 }
 
 /**
@@ -69,12 +72,16 @@ interface ActivationGeneration {
  */
 export class WorkspaceActivationCoordinator {
   private generation = 0
+  private activationRequest = 0
   private active: ActivationGeneration | null = null
+  private teardownInFlight: Promise<void> | null = null
 
   constructor(private readonly options: WorkspaceActivationOptions) {}
 
   async activate(): Promise<WorkspaceActivationOutcome> {
-    if (this.active) await this.teardown()
+    const request = ++this.activationRequest
+    await this.teardownActive()
+    if (request !== this.activationRequest) return 'cancelled'
     const current: ActivationGeneration = {
       id: ++this.generation,
       map: null,
@@ -88,14 +95,15 @@ export class WorkspaceActivationCoordinator {
       cancelled: false,
       cleanupResult: null,
       failure: null,
+      abortController: new AbortController(),
     }
     this.active = current
 
     let sharedRuntimeInitializationFailed = false
     try {
-      const map = await this.options.map.createMap()
+      const map = await this.options.map.createMap(current.abortController.signal)
       if (!this.isCurrent(current)) {
-        this.removeStaleMap(map)
+        this.releaseStaleMap(map)
         return 'cancelled'
       }
       current.map = map
@@ -109,6 +117,7 @@ export class WorkspaceActivationCoordinator {
 
       const layer = this.options.composition.createLayer({
         ...this.options.layer,
+        id: MAPLIBRE_SHARED_SCENE_LAYER_ID,
         onFailure: (error) => {
           this.observeFailure(current, error)
         },
@@ -171,19 +180,41 @@ export class WorkspaceActivationCoordinator {
   }
 
   async teardown(): Promise<void> {
+    ++this.activationRequest
+    return this.teardownActive()
+  }
+
+  private teardownActive(): Promise<void> {
+    if (this.teardownInFlight) return this.teardownInFlight
     const current = this.active
-    if (!current) return
+    if (!current) return Promise.resolve()
     this.active = null
     current.cancelled = true
     ++this.generation
-    const errors: unknown[] = []
-    this.destroyRuntime(current, errors)
-    try {
-      await this.cleanup(current)
-    } catch (error) {
-      errors.push(error)
-    }
-    throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace teardown failed')
+    let tracked!: Promise<void>
+    tracked = Promise.resolve().then(async () => {
+      const errors: unknown[] = []
+      this.destroyRuntime(current, errors)
+      try {
+        await this.cleanup(current)
+      } catch (error) {
+        errors.push(error)
+      }
+      throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace teardown failed')
+    }).then(
+      () => {
+        if (this.teardownInFlight === tracked) this.teardownInFlight = null
+      },
+      (error: unknown) => {
+        if (this.teardownInFlight === tracked) this.teardownInFlight = null
+        throw error
+      },
+    )
+    this.teardownInFlight = tracked
+    // Publish the shared cleanup transaction before aborting acquisition.
+    // Abort listeners are external code and may reenter activate/teardown.
+    current.abortController.abort()
+    return tracked
   }
 
   private reportFailureFor(
@@ -338,7 +369,7 @@ export class WorkspaceActivationCoordinator {
     const map = current.map
     current.map = null
     try {
-      map?.remove()
+      if (map) this.options.map.releaseMap(map)
     } catch (error) {
       errors.push(error)
     }
@@ -374,11 +405,11 @@ export class WorkspaceActivationCoordinator {
     }
   }
 
-  private removeStaleMap(map: WorkspaceActivationMap): void {
+  private releaseStaleMap(map: WorkspaceActivationMap): void {
     try {
-      map.remove()
+      this.options.map.releaseMap(map)
     } catch (error) {
-      console.error('Failed to remove stale MapLibre workspace map:', error)
+      console.error('Failed to release stale MapLibre workspace map:', error)
     }
   }
 
