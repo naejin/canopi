@@ -30,6 +30,12 @@ export interface MapLibreMapInstance {
   project?(lnglat: [number, number]): { x: number; y: number }
   getPitch?(): number
   getCanvas?(): HTMLCanvasElement
+  getBounds?(): {
+    getWest(): number
+    getSouth(): number
+    getEast(): number
+    getNorth(): number
+  }
   loaded?(): boolean
   isStyleLoaded?(): boolean
   isSourceLoaded?(id: string): boolean

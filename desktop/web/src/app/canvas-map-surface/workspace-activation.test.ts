@@ -1,3 +1,4 @@
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import { describe, expect, it, vi } from 'vitest'
 import {
   WorkspaceActivationCoordinator,
@@ -188,6 +189,7 @@ function createCoordinator(input: {
     releaseMap: vi.fn((candidate) => (candidate as unknown as FakeMap).remove()),
     getWebGL2Context: input.getWebGL2Context
       ?? (() => input.context === undefined ? map.context : input.context),
+    updateMapContributions: vi.fn(),
     updateBasemapPresentation: vi.fn(),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
     watchFailure: input.watchFailure
@@ -202,6 +204,47 @@ function createCoordinator(input: {
 }
 
 describe('WorkspaceActivationCoordinator', () => {
+  it.each([new Error('shared renderer failed'), new DOMException('renderer cancelled internally', 'AbortError')])('passes the original terminal renderer failure through map release: %s', async (error) => {
+    const f = createCoordinator()
+    await f.coordinator.activate(createActivationSnapshot())
+    await expect(f.coordinator.reportFailure(error)).resolves.toBe('fallback-ready')
+    expect(f.mapControls.releaseMap).toHaveBeenCalledExactlyOnceWith(f.map, error)
+    await f.coordinator.teardown()
+    expect(f.mapControls.releaseMap).toHaveBeenCalledOnce()
+  })
+
+  it('does not attach a stale pending failure to ordinary generation cancellation', async () => {
+    const f = createCoordinator()
+    await f.coordinator.activate(createActivationSnapshot())
+    const failure = f.coordinator.reportFailure(new Error('stale failure'))
+    await f.coordinator.requestGenerationDisconnect()
+    await expect(failure).resolves.toBe('cancelled')
+    expect(f.mapControls.releaseMap).toHaveBeenCalledExactlyOnceWith(f.map)
+  })
+
+  it('binds buffered contributions to the session and clears them synchronously before map removal', async () => {
+    const f = createCoordinator()
+    const activation = createActivationSnapshot()
+    const contribution: WorkspaceMapContributionSnapshot = {
+      sessionIdentity: activation.sessionIdentity, lidar: [],
+      terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
+      overlays: { runtime: null, location: null, northBearingDeg: 0, hoveredTargets: [], selectedTargets: [] },
+      frame: null, designExtentMeters: 0,
+    }
+    f.coordinator.updateMapContributions(contribution)
+    expect(f.mapControls.updateMapContributions).not.toHaveBeenCalled()
+    await f.coordinator.activate(activation)
+    expect(f.mapControls.updateMapContributions).toHaveBeenLastCalledWith(contribution)
+    vi.mocked(f.mapControls.updateMapContributions).mockClear()
+    f.coordinator.updateMapContributions({ ...contribution, sessionIdentity: {} })
+    expect(f.mapControls.updateMapContributions).not.toHaveBeenCalled()
+    const disconnect = f.coordinator.requestGenerationDisconnect()
+    expect(f.mapControls.updateMapContributions).toHaveBeenLastCalledWith(null)
+    expect(f.map.remove).not.toHaveBeenCalled()
+    await disconnect
+    expect(f.map.remove).toHaveBeenCalledOnce()
+  })
+
   it('destroys its constructed runtime once when torn down before activation', async () => {
     const runtime = createRuntime()
     const { coordinator } = createCoordinator({ runtime })
@@ -1579,6 +1622,7 @@ describe('WorkspaceActivationCoordinator', () => {
         createMap: async () => map as unknown as WorkspaceActivationMap,
         releaseMap: () => map.remove(),
         getWebGL2Context: () => map.context,
+        updateMapContributions: () => {},
         updateBasemapPresentation: () => {},
         installStyleRestorer: () => () => {},
       },

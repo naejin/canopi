@@ -33,6 +33,8 @@ import {
 } from './workspace-generation-reconciler'
 import { WorkspaceMapControls } from './workspace-map-controls'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
+import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 
 export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-design'
 
@@ -46,6 +48,8 @@ export interface WorkspaceRuntimeCompositionOptions {
   readonly container: HTMLElement
   readonly appAdapter: CanvasRuntimeAppAdapter
   readonly targetPresentation: SceneRuntimePanelTargetAdapter
+  readonly mapContributions: WorkspaceMapContributionAdapter
+  readonly onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
   readonly onFailure?: (error: unknown) => void
   readonly readSnapshot?: () => WorkspaceActivationSnapshot | null
   readonly readBasemapPresentation?: () => ReturnType<typeof readWorkspaceBasemapPresentation>
@@ -59,6 +63,7 @@ interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
 
 interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
   updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void
+  updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
 }
 
 /** Constructor-only test seam. Production callers use the default cohesive assembly. */
@@ -66,7 +71,7 @@ interface WorkspaceRuntimeCompositionDependencies {
   readonly createRendererComposition: () => SharedMapSceneRendererComposition
   readonly createCamera: () => MapLibreWorkspaceCameraOwner
   readonly createRuntime: (options: SceneCanvasRuntimeOptions) => WorkspaceCompositionRuntime
-  readonly createControls: (container: HTMLElement) => WorkspaceActivationMapControls
+  readonly createControls: (options: ConstructorParameters<typeof WorkspaceMapControls>[0]) => WorkspaceActivationMapControls
   readonly createWorkspace: (options: WorkspaceActivationOptions) => WorkspaceCompositionLifecycle
   readonly installEffect: (callback: () => void) => () => void
 }
@@ -75,7 +80,7 @@ const DEFAULT_DEPENDENCIES: WorkspaceRuntimeCompositionDependencies = {
   createRendererComposition: createSharedMapSceneRendererComposition,
   createCamera: () => new MapLibreWorkspaceCameraOwner(),
   createRuntime: (options) => new SceneCanvasRuntime(options),
-  createControls: (container) => new WorkspaceMapControls({ container }),
+  createControls: (options) => new WorkspaceMapControls(options),
   createWorkspace: (options) => new WorkspaceActivationCoordinator(options),
   installEffect: effect,
 }
@@ -99,7 +104,14 @@ export function createWorkspaceRuntimeComposition(
       backends: [rendererComposition.renderer, createCanvas2DSceneRenderer()],
     },
   })
-  const controls = dependencies.createControls(options.container)
+  const controls = dependencies.createControls({
+    container: options.container,
+    contributions: {
+      loadTerrainSupport: options.mapContributions.loadTerrainSupport,
+      publishViewBounds: options.mapContributions.publishViewBounds,
+      onStateChange: options.onMapStateChange,
+    },
+  })
   const workspace = dependencies.createWorkspace({
     container: options.container,
     runtime,
@@ -155,6 +167,7 @@ export function createWorkspaceRuntimeComposition(
       })
       try {
         disposePresentationEffect = dependencies.installEffect(() => {
+          workspace.updateMapContributions(options.mapContributions.read(runtime.querySurface))
           workspace.updateBasemapPresentation(
             (options.readBasemapPresentation ?? readWorkspaceBasemapPresentation)(),
           )

@@ -1890,6 +1890,28 @@ describe('declarative frontend architecture policies', () => {
     )
   })
 
+  it('keeps browser map contributions free of Desktop runtime dependencies', () => {
+    // Type-only Scene query contracts do not enter either edition's runtime bundle.
+    const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+      .map((source) => ({ ...source, imports: source.imports.filter((edge) => !edge.typeOnly) }))
+    expect(collectArchitecturePolicyViolations(graph, [
+      {
+        kind: 'forbid-transitive-imports',
+        name: 'Shared map contributions and browser adapter stay free of Desktop capabilities',
+        from: [
+          'src/web/browser-workspace-map-contribution-adapter.ts',
+          'src/app/canvas-map-surface/workspace-map-contributions.ts',
+        ],
+        targets: [
+          '@tauri-apps/**', 'src/ipc/**',
+          'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
+          'src/app/canvas-map-surface/lidar.ts',
+          'src/app/lidar/library-store.ts', 'src/app/lidar/tile-urls.ts',
+        ],
+      },
+    ])).toEqual([])
+  }, 20_000)
+
   it('keeps every discovered TypeScript source within its owned dependency seams', () => {
     const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
     const paths = graph.map(({ path }) => path)

@@ -10,6 +10,7 @@ import {
   type CanvasDocumentSurface,
 } from '../../canvas/runtime/runtime'
 import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
+import type { WorkspaceMapContributionSnapshot, WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
 import type { WorkspaceBasemapPresentation } from '../../maplibre/workspace-map'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import {
@@ -206,6 +207,29 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.workspace.updateBasemapPresentation).toHaveBeenCalledOnce()
   })
 
+  it('forwards reactive contribution snapshots through the lifecycle and disposes the reader effect', async () => {
+    const contribution = signal<WorkspaceMapContributionSnapshot | null>(null)
+    const read = vi.fn<WorkspaceMapContributionAdapter['read']>(() => contribution.value)
+    const initial = workspaceSnapshot()
+    const fixture = compositionFixture({ readSnapshot: () => initial, mapContributions: { read } })
+    await fixture.composition.start()
+    expect(read.mock.calls[0]?.[0]).toBe(fixture.runtime.querySurface)
+    const next: WorkspaceMapContributionSnapshot = {
+      sessionIdentity: initial.sessionIdentity, lidar: [],
+      terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
+      overlays: { runtime: null, location: null, northBearingDeg: 0, hoveredTargets: [], selectedTargets: [] },
+      frame: null, designExtentMeters: 0,
+    }
+    contribution.value = next
+    await vi.waitFor(() => expect(fixture.workspace.updateMapContributions).toHaveBeenLastCalledWith(next))
+    expect(fixture.workspace.activate).toHaveBeenCalledOnce()
+    await fixture.composition.dispose()
+    read.mockClear()
+    contribution.value = null
+    await Promise.resolve()
+    expect(read).not.toHaveBeenCalled()
+  })
+
   it('publishes memoized disposal before cleanup, joins teardown, and aggregates failures', async () => {
     const effectError = new Error('effect cleanup failed')
     const teardownError = new Error('workspace teardown failed')
@@ -247,6 +271,7 @@ describe('createWorkspaceRuntimeComposition', () => {
 })
 
 interface CompositionFixtureOptions {
+  readonly mapContributions?: WorkspaceMapContributionAdapter
   readonly readSnapshot: () => WorkspaceActivationSnapshot | null
   readonly readBasemapPresentation?: () => WorkspaceBasemapPresentation
   readonly onFailure?: (error: unknown) => void
@@ -291,6 +316,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     createMap: vi.fn(),
     releaseMap: vi.fn(),
     getWebGL2Context: vi.fn(() => null),
+    updateMapContributions: vi.fn(),
     updateBasemapPresentation: vi.fn(),
     installStyleRestorer: vi.fn(() => () => {}),
   }
@@ -298,8 +324,10 @@ function compositionFixture(options: CompositionFixtureOptions) {
     requestGenerationDisconnect: vi.fn(async () => {}),
     activate: vi.fn(options.activate ?? (async () => 'shared-ready' as const)),
     teardown: vi.fn(options.teardown ?? (async () => {})),
+    updateMapContributions: vi.fn(),
     updateBasemapPresentation: vi.fn(),
   } satisfies WorkspaceGenerationLifecycle & {
+    updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
     updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void
   }
   const createRuntime = vi.fn((_options: SceneCanvasRuntimeOptions) => runtime)
@@ -316,6 +344,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     container: document.createElement('div'),
     appAdapter: createDetachedCanvasRuntimeAppAdapter(),
     targetPresentation: createDetachedSceneRuntimePanelTargetAdapter(),
+    mapContributions: options.mapContributions ?? { read: () => null },
     onFailure: options.onFailure,
     readSnapshot: options.readSnapshot,
     readBasemapPresentation: options.readBasemapPresentation,

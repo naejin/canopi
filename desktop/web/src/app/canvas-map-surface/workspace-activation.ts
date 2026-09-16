@@ -1,3 +1,4 @@
+import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/maplibre-scene'
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
 import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
@@ -48,9 +49,11 @@ export interface WorkspaceActivationMapControls {
   createMap(
     signal: AbortSignal,
     snapshot: WorkspaceMapSnapshot,
+    sessionIdentity: object,
   ): Promise<WorkspaceActivationMap>
-  releaseMap(map: WorkspaceActivationMap): void
+  releaseMap(map: WorkspaceActivationMap, failure?: unknown): void
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
+  updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
   updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
@@ -95,6 +98,7 @@ interface ActivationGeneration {
   finishCleanup: ((errors: unknown[]) => void) | null
   setupResult: Promise<void> | null
   failure: Promise<WorkspaceActivationOutcome> | null
+  terminalMapFailure?: unknown
   readonly abortController: AbortController
 }
 
@@ -110,6 +114,7 @@ interface PendingBasemapPresentation {
  * Pixi/Canvas2D renderer path until input and workspace lifetime migration are complete.
  */
 export class WorkspaceActivationCoordinator {
+  private contributions: WorkspaceMapContributionSnapshot | null = null
   private generation = 0
   private activationRequest = 0
   private pendingBasemapPresentation: PendingBasemapPresentation | null = null
@@ -191,12 +196,16 @@ export class WorkspaceActivationCoordinator {
           () => this.options.map.createMap(
             current.abortController.signal,
             current.snapshot.map,
+            current.snapshot.sessionIdentity,
           ),
         )
       } finally {
         finishMapCreation()
       }
       this.flushPendingPresentation(current, request)
+      if (this.isCurrent(current) && this.contributions?.sessionIdentity === current.snapshot.sessionIdentity) {
+        this.options.map.updateMapContributions(this.contributions)
+      }
       const map = await mapPromise
       if (!this.isCurrent(current)) {
         this.releaseStaleMap(map)
@@ -341,6 +350,7 @@ export class WorkspaceActivationCoordinator {
         if (!this.isCurrent(current)) return 'cancelled'
         if (current.failure) return current.failure
         sharedRuntimeInitializationFailed = true
+        current.terminalMapFailure = error
         const errors: unknown[] = [error]
         this.sharedBackendTerminal = true
         this.destroyRuntime(errors)
@@ -367,6 +377,15 @@ export class WorkspaceActivationCoordinator {
   reportFailure(error: unknown): Promise<WorkspaceActivationOutcome> {
     const current = this.active
     return current ? this.reportFailureFor(current, error) : Promise.resolve('cancelled')
+  }
+
+  updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
+    if (this.disposed || this.sharedBackendTerminal || this.terminalTeardownResult) return
+    this.contributions = snapshot && captureWorkspaceMapContributions(snapshot)
+    const current = this.active
+    if (!current || !this.isCurrent(current)) return
+    if (snapshot && snapshot.sessionIdentity !== current.snapshot.sessionIdentity) return
+    this.options.map.updateMapContributions(this.contributions)
   }
 
   updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void {
@@ -503,6 +522,7 @@ export class WorkspaceActivationCoordinator {
     // cleanup code. Those boundaries may synchronously report another failure.
     current.failure = Promise.resolve().then(() => {
       if (!this.isCurrent(current)) return 'cancelled'
+      current.terminalMapFailure = error
       this.sharedBackendTerminal = true
       return this.runtimeInitialized
         ? this.failActiveRenderer(current, error)
@@ -715,6 +735,11 @@ export class WorkspaceActivationCoordinator {
   }
 
   private cleanupGenerationCallbacks(current: ActivationGeneration, errors: unknown[]): void {
+    try {
+      this.runOwnedCallback('map contributions disconnect', () => this.options.map.updateMapContributions(null))
+    } catch (error) {
+      errors.push(error)
+    }
     const unwatchFailure = current.unwatchFailure
     current.unwatchFailure = null
     const unsubscribeCameraFailure = current.unsubscribeCameraFailure
@@ -765,10 +790,10 @@ export class WorkspaceActivationCoordinator {
     const map = current.map
     current.map = null
     void layerDisposal.then(
-      () => this.releaseCleanupMap(map, errors),
+      () => this.releaseCleanupMap(map, errors, current.terminalMapFailure),
       (error) => {
         errors.push(error)
-        this.releaseCleanupMap(map, errors)
+        this.releaseCleanupMap(map, errors, current.terminalMapFailure)
       },
     ).then(
       () => current.finishCleanup?.(errors),
@@ -779,9 +804,12 @@ export class WorkspaceActivationCoordinator {
   private releaseCleanupMap(
     map: WorkspaceActivationMap | null,
     errors: unknown[],
+    failure?: unknown,
   ): void {
     try {
-      if (map) this.runOwnedCallback('map release', () => this.options.map.releaseMap(map))
+      if (map) this.runOwnedCallback('map release', () => failure === undefined
+        ? this.options.map.releaseMap(map)
+        : this.options.map.releaseMap(map, failure))
     } catch (error) {
       errors.push(error)
     }

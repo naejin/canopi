@@ -1,3 +1,5 @@
+import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
+import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import {
@@ -24,6 +26,9 @@ import type {
 } from './workspace-activation'
 
 interface WorkspaceMapAttempt {
+  readonly sessionIdentity: object
+  readonly contributions: WorkspaceMapContributions
+  contributionSnapshot: WorkspaceMapContributionSnapshot | null
   readonly signal: AbortSignal
   readonly snapshot: WorkspaceMapSnapshot
   presentation: WorkspaceBasemapPresentation
@@ -45,6 +50,7 @@ interface WorkspaceMapAttempt {
 }
 
 export interface WorkspaceActivationMapControlsOptions {
+  readonly contributions?: Omit<WorkspaceMapContributionsOptions, 'sessionIdentity' | 'onFailure'>
   readonly container: HTMLElement
   readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
@@ -67,6 +73,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   createMap(
     signal: AbortSignal,
     snapshot: WorkspaceMapSnapshot,
+    sessionIdentity: object,
   ): Promise<WorkspaceActivationMap> {
     const ownedSnapshot = captureMapSnapshot(snapshot)
     const previous = this.attempt
@@ -79,6 +86,14 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
 
     return new Promise<WorkspaceActivationMap>((resolve, reject) => {
       const attempt: WorkspaceMapAttempt = {
+        sessionIdentity,
+        contributions: new WorkspaceMapContributions({
+          ...this.options.contributions,
+          sessionIdentity,
+          logError: this.logError,
+          onFailure: (error) => this.reportRestorationFailure(attempt, error),
+        }),
+        contributionSnapshot: null,
         signal,
         snapshot: ownedSnapshot,
         presentation: workspaceBasemapPresentationFromSnapshot(ownedSnapshot),
@@ -118,9 +133,12 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         onCreate: (context) => {
           const map = context.map as WorkspaceActivationMap
           attempt.map = map
+          attempt.contributions.attach(context)
           const isLive = () => !attempt.released && !attempt.signal.aborted && context.isCurrent()
+          if (!isLive()) return
           const reportMapError = (event: unknown) => {
             if (!isLive()) return
+            if (attempt.admitted && attempt.contributions.handleSourceError(event)) return
             if (attempt.admitted && isPassiveBasemapError(event)) {
               this.logError('Passive MapLibre workspace basemap error:', event)
               return
@@ -130,8 +148,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
               this.rejectAttempt(attempt, error)
               return
             }
-            attempt.pendingFailure = error
-            attempt.failureReporter?.(error)
+            this.reportRestorationFailure(attempt, error)
           }
           const handleContextLoss = (event?: unknown) => {
             const error = contextLossError(event)
@@ -140,8 +157,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
               this.rejectAttempt(attempt, error)
               return
             }
-            attempt.pendingFailure = error
-            attempt.failureReporter?.(error)
+            this.reportRestorationFailure(attempt, error)
           }
           const handleStyleLoad = () => {
             if (!isLive()) return
@@ -158,6 +174,9 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             attempt.admitted = true
             try {
               this.applyBasemapPresentation(attempt)
+              if (attempt.failureReported || attempt.released) return
+              attempt.contributions.restoreStyle()
+              if (attempt.failureReported || attempt.released) return
               attempt.settled = true
               signal.removeEventListener('abort', abort)
               resolve(map)
@@ -184,9 +203,10 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     })
   }
 
-  releaseMap(map: WorkspaceActivationMap): void {
+  releaseMap(map: WorkspaceActivationMap, failure?: unknown): void {
     const attempt = this.attempt
     if (!attempt || attempt.map !== map) return
+    if (failure !== undefined) attempt.pendingFailure ??= mapError(failure)
     this.releaseAttempt(attempt)
   }
 
@@ -201,6 +221,14 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     if (!attempt.map || !attempt.admitted) return
     attempt.pendingPresentationSync = true
     this.drainReconciliation(attempt)
+  }
+
+  updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
+    const attempt = this.attempt
+    if (!attempt || attempt.released || attempt.failureReported) return
+    if (snapshot && snapshot.sessionIdentity !== attempt.sessionIdentity) return
+    attempt.contributionSnapshot = snapshot && captureWorkspaceMapContributions(snapshot)
+    attempt.contributions.update(attempt.contributionSnapshot)
   }
 
   watchFailure(
@@ -331,7 +359,11 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         if (syncPresentation) attempt.pendingPresentationSync = false
         this.applyBasemapPresentation(attempt)
         if (attempt.failureReported) break
-        if (restoreScene) attempt.styleRestorer?.()
+        if (restoreScene) {
+          attempt.contributions.restoreStyle()
+          if (attempt.released || attempt.failureReported) break
+          attempt.styleRestorer?.()
+        }
         if (attempt.failureReported) break
         this.reconcileLayerStack(attempt)
       }
@@ -354,7 +386,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     if (!attempt.map || attempt.released) return
     reconcileMapLayerStack(
       attempt.map,
-      createMapLayerStackDescriptors([]),
+      createMapLayerStackDescriptors(attempt.contributionSnapshot?.lidar.map((layer) => layer.id) ?? []),
     )
   }
 
@@ -365,12 +397,18 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     attempt.pendingPresentationSync = false
     const failure = mapError(error)
     attempt.pendingFailure = failure
+    attempt.contributions.dispose(failure)
+    if (!attempt.settled) {
+      this.rejectAttempt(attempt, failure)
+      return
+    }
     attempt.failureReporter?.(failure)
   }
 
   private rejectAttempt(attempt: WorkspaceMapAttempt, error: unknown): void {
     if (attempt.settled) return
     attempt.settled = true
+    if (!(error instanceof WorkspaceAcquisitionCancelled)) attempt.pendingFailure ??= mapError(error)
     attempt.signal.removeEventListener('abort', attempt.abort)
     attempt.reject(error)
     this.releaseAttempt(attempt)
@@ -383,7 +421,11 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     if (this.attempt === attempt) this.attempt = null
     // Host/Surface Adapter performs listener cleanup, observer disconnect, and
     // final map removal. No app-layer code calls map.remove().
-    this.surface.destroy()
+    try {
+      attempt.contributions.dispose(attempt.pendingFailure ?? undefined)
+    } finally {
+      this.surface.destroy()
+    }
   }
 }
 
@@ -402,7 +444,11 @@ function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapsho
 }
 
 function abortError(): Error {
-  return new DOMException('Shared workspace map acquisition was cancelled.', 'AbortError')
+  return new WorkspaceAcquisitionCancelled('Shared workspace map acquisition was cancelled.')
+}
+
+class WorkspaceAcquisitionCancelled extends Error {
+  override readonly name = 'AbortError'
 }
 
 function contextLossError(event: unknown): Error {
@@ -422,13 +468,18 @@ function isPassiveBasemapError(event: unknown): boolean {
 
 function mapError(event: unknown): Error {
   if (event instanceof Error) return event
+  if (typeof event === 'string' && event.length > 0) return new Error(event)
+  if (typeof event === 'object' && event !== null && 'message' in event
+    && typeof event.message === 'string' && event.message.length > 0) {
+    return new Error(event.message)
+  }
   if (
     typeof event === 'object'
     && event !== null
     && 'error' in event
-    && event.error instanceof Error
+    && event.error !== event
   ) {
-    return event.error
+    return mapError(event.error)
   }
   return new Error('MapLibre failed while preparing the shared workspace.')
 }

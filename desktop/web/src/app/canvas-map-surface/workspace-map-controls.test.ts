@@ -1,3 +1,5 @@
+import { createDefaultScenePersistedState } from '../../canvas/runtime/scene'
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import { describe, expect, it, vi } from 'vitest'
 import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import type {
@@ -100,6 +102,7 @@ function createApi(
 }
 
 function createControls(options: {
+  contributions?: ConstructorParameters<typeof WorkspaceMapControls>[0]['contributions']
   placementStatus?: 'provisional' | 'confirmed'
   basemapVisible?: boolean
   load?: () => Promise<MapLibreApi>
@@ -127,11 +130,13 @@ function createControls(options: {
   const controls = new TestWorkspaceMapControls({
     container: document.createElement('div'),
     surface,
+    contributions: options.contributions,
   }, snapshot)
   return { controls, maps, observers }
 }
 
 class TestWorkspaceMapControls extends WorkspaceMapControls {
+  readonly sessionIdentity = {}
   constructor(
     options: ConstructorParameters<typeof WorkspaceMapControls>[0],
     private readonly defaultSnapshot: WorkspaceMapSnapshot,
@@ -140,7 +145,7 @@ class TestWorkspaceMapControls extends WorkspaceMapControls {
   }
 
   override createMap(signal: AbortSignal, snapshot = this.defaultSnapshot) {
-    return super.createMap(signal, snapshot)
+    return super.createMap(signal, snapshot, this.sessionIdentity)
   }
 }
 
@@ -149,7 +154,216 @@ async function waitForMap(maps: FakeMap[]): Promise<FakeMap> {
   return maps[0]!
 }
 
+function targetContribution(sessionIdentity: object): WorkspaceMapContributionSnapshot {
+  const scene = createDefaultScenePersistedState()
+  scene.zones = [{ kind: 'zone', locked: false, name: 'plot', zoneType: 'polygon', rotationDeg: 0, points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], fillColor: null, notes: null }]
+  return {
+    sessionIdentity, lidar: [],
+    terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, northBearingDeg: 0, hoveredTargets: [{ kind: 'zone', zone_name: 'plot' }], selectedTargets: [] },
+    frame: null, designExtentMeters: 0,
+  }
+}
+
 describe('WorkspaceMapControls', () => {
+  it.each([
+    ['LiDAR', 'removeLayer'], ['LiDAR', 'removeSource'],
+    ['terrain', 'removeLayer'], ['terrain', 'removeSource'],
+  ] as const)('releases the map after %s rollback cannot %s', async (kind, removeMethod) => {
+    const states = vi.fn()
+    const { controls, maps } = createControls({ contributions: {
+      onStateChange: states,
+      loadTerrainSupport: async () => ({ sharedDemProtocolUrl: 'dem://tiles', contourProtocolUrl: () => 'contour://tiles' }),
+    } })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    const failure = vi.fn((error: unknown) => controls.releaseMap(admitted, error))
+    controls.watchFailure(admitted, failure)
+    const partialLayer = kind === 'LiDAR' ? 'lidar-partial' : 'hillshade-layer'
+    const partialSource = kind === 'LiDAR' ? 'lidar-partial' : 'terrain-dem'
+    const add = map.addLayer.getMockImplementation()!
+    map.addLayer.mockImplementation((candidate, before) => {
+      add(candidate, before)
+      if (candidate.id === partialLayer) throw new Error('partial contribution add')
+    })
+    const cleanup = new Error(`${kind} rollback failed`)
+    const remove = map[removeMethod].getMockImplementation()!
+    map[removeMethod].mockImplementation((id) => {
+      if (id === partialLayer || id === partialSource) throw cleanup
+      remove(id)
+    })
+    const input: WorkspaceMapContributionSnapshot = {
+      ...targetContribution(controls.sessionIdentity),
+      terrain: { ...targetContribution(controls.sessionIdentity).terrain, hillshadeVisible: kind === 'terrain' },
+      lidar: kind === 'terrain' ? [] : [{ id: 'lidar-partial', name: 'partial', visible: true, opacity: 1, urlTemplate: 'local/{z}/{x}/{y}', minZoom: 1, maxZoom: 18, bounds: [1, 2, 3, 4] }],
+    }
+    controls.updateMapContributions(input)
+    await vi.waitFor(() => expect(failure).toHaveBeenCalledExactlyOnceWith(cleanup))
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: cleanup.message })
+    const mutations = map.addSource.mock.calls.length
+    controls.updateMapContributions(input)
+    expect(map.addSource).toHaveBeenCalledTimes(mutations)
+  })
+
+  it('rejects and releases initial contribution failure before any failure watcher is installed', async () => {
+    const states = vi.fn()
+    const { controls, maps } = createControls({ contributions: { onStateChange: states } })
+    const acquisition = controls.createMap(new AbortController().signal)
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    const map = await waitForMap(maps)
+    const error = new Error('target layer failed')
+    const add = map.addLayer.getMockImplementation()!
+    map.addLayer.mockImplementation((layer, before) => {
+      if (layer.id?.startsWith('panel-target-')) throw error
+      add(layer, before)
+    })
+    const remove = map.removeSource.getMockImplementation()!
+    map.removeSource.mockImplementation((id) => {
+      remove(id)
+      if (id.startsWith('panel-target-')) map.emit('error', { error: new Error('cleanup failed') })
+    })
+    const rejected = expect(acquisition).rejects.toBe(error)
+    map.emit('style.load')
+    await rejected
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: error.message })
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    expect(map.remove).toHaveBeenCalledOnce()
+  })
+
+  it.each(['live', 'reload'] as const)('reports contribution failure once during %s work and retains error through release', async (phase) => {
+    const states = vi.fn()
+    const { controls, maps } = createControls({ contributions: { onStateChange: states } })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    const failure = vi.fn()
+    controls.watchFailure(admitted, failure)
+    controls.installStyleRestorer(admitted, () => {})
+    if (phase === 'reload') controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    const error = new Error('target source failed')
+    const add = map.addSource.getMockImplementation()!
+    map.addSource.mockImplementation((id, source) => {
+      if (id.startsWith('panel-target-')) throw error
+      add(id, source)
+    })
+    if (phase === 'reload') {
+      map.clearStyle()
+      map.emit('style.load')
+    } else controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    expect(failure).toHaveBeenCalledExactlyOnceWith(error)
+    const mutations = map.addSource.mock.calls.length
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    map.emit('style.load')
+    expect(map.addSource).toHaveBeenCalledTimes(mutations)
+    controls.releaseMap(admitted)
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: error.message })
+    expect(failure).toHaveBeenCalledOnce()
+  })
+
+  it.each(['loader', 'constructor', 'webgl', 'pre-admission'] as const)('publishes the acquisition error for %s failure', async (stage) => {
+    const states = vi.fn()
+    const error = new Error(`${stage} failed`)
+    const { controls, maps } = createControls({
+      contributions: { onStateChange: states },
+      ...(stage === 'loader' ? { load: async () => { throw error } } : {}),
+      ...(stage === 'constructor' ? { load: async () => ({ Map: class { constructor() { throw error } } as never, addProtocol: vi.fn() }) } : {}),
+      ...(stage === 'webgl' ? { webgl2: null } : {}),
+    })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const rejection = expect(acquisition).rejects.toThrow(stage === 'webgl' ? 'WebGL2' : error.message)
+    if (stage === 'pre-admission') (await waitForMap(maps)).emit('error', { error })
+    await rejection
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: stage === 'webgl' ? expect.stringContaining('WebGL2') : error.message })
+  })
+
+  it('keeps an ordinary acquisition abort idle', async () => {
+    const states = vi.fn()
+    const { controls, maps } = createControls({ contributions: { onStateChange: states } })
+    const abort = new AbortController()
+    const acquisition = controls.createMap(abort.signal)
+    await waitForMap(maps)
+    const rejected = expect(acquisition).rejects.toMatchObject({ name: 'AbortError' })
+    abort.abort()
+    await rejected
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'idle', errorMessage: null })
+  })
+
+  it.each(['loader rejected', new DOMException('access denied', 'SecurityError'), new DOMException('loader cancelled internally', 'AbortError')])(
+    'preserves a non-Error acquisition failure message: %s', async (error) => {
+      const states = vi.fn()
+      const { controls } = createControls({
+        contributions: { onStateChange: states },
+        load: async () => { throw error },
+      })
+      const abort = new AbortController()
+      await expect(controls.createMap(abort.signal)).rejects.toBe(error)
+      expect(abort.signal.aborted).toBe(false)
+      expect(states.mock.lastCall?.[0]).toMatchObject({
+        status: 'error', errorMessage: typeof error === 'string' ? error : error.message,
+      })
+    },
+  )
+
+  it.each([new Error('shared renderer failed'), new DOMException('renderer cancelled internally', 'AbortError')])('retains an external camera or shared-renderer failure on final map release: %s', async (error) => {
+    const states = vi.fn()
+    const { controls, maps } = createControls({ contributions: { onStateChange: states } })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    controls.releaseMap(admitted, error)
+    controls.releaseMap(admitted)
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: error.message })
+    expect(map.remove).toHaveBeenCalledOnce()
+  })
+
+  it('rebuilds contribution layers after style reload on one map and clears them before removal', async () => {
+    const bounds = vi.fn()
+    const diagnostics = vi.fn()
+    const states = vi.fn()
+    const { controls, maps, observers } = createControls({
+      contributions: { publishViewBounds: bounds, publishDiagnostics: diagnostics, onStateChange: states },
+    })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const input: WorkspaceMapContributionSnapshot = {
+      sessionIdentity: controls.sessionIdentity,
+      lidar: [{ id: 'lidar-test', name: 'test', visible: true, opacity: 1, urlTemplate: 'local/{z}/{x}/{y}', minZoom: 1, maxZoom: 18, bounds: [1, 2, 3, 4] }],
+      terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
+      overlays: { runtime: null, location: null, northBearingDeg: 0, hoveredTargets: [], selectedTargets: [] },
+      frame: null, designExtentMeters: 0,
+    }
+    controls.updateMapContributions(input)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    const scene = { id: MAPLIBRE_SHARED_SCENE_LAYER_ID, type: 'custom' }
+    map.addLayer(scene)
+    controls.installStyleRestorer(admitted, () => map.addLayer(scene))
+    controls.updateMapContributions({ ...input, lidar: [{ ...input.lidar[0]!, opacity: 0.2 }] })
+    expect(maps).toHaveLength(1)
+    expect(map.setPaintProperty).toHaveBeenCalledWith('lidar-test', 'raster-opacity', 0.2)
+    map.clearStyle()
+    map.emit('style.load')
+    expect(map.getLayersOrder()).toEqual([MAPLIBRE_BASEMAP_RASTER_LAYER_ID, 'lidar-test', MAPLIBRE_SHARED_SCENE_LAYER_ID])
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_BASEMAP_RASTER_LAYER_ID, 'raster-opacity', 0.4)
+    map.remove.mockImplementation(() => {
+      expect(map.getSource('lidar-test')).toBeUndefined()
+      expect([...map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
+      expect(bounds).toHaveBeenLastCalledWith(null)
+      expect(diagnostics).toHaveBeenLastCalledWith(null, null)
+      expect(states.mock.lastCall?.[0].status).toBe('idle')
+    })
+    controls.releaseMap(admitted)
+    controls.releaseMap(admitted)
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(observers[0]?.disconnect).toHaveBeenCalledOnce()
+  })
+
   it.each([
     ['provisional', true],
     ['confirmed', false],
@@ -897,7 +1111,7 @@ describe('WorkspaceMapControls', () => {
     await expect(controls.createMap(new AbortController().signal, {
       anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, placementStatus: 'confirmed',
       basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
-    })).rejects.toBe(error)
+    }, {})).rejects.toBe(error)
   })
 
   it('rejects and releases when the constructed map has no public WebGL2 context', async () => {
@@ -935,7 +1149,7 @@ describe('WorkspaceMapControls', () => {
     controls.watchFailure(map as never, reportFailure)
     expect(reportFailure).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('WebGL context was lost') }))
     map.emit('webglcontextlost')
-    expect(reportFailure).toHaveBeenCalledTimes(2)
+    expect(reportFailure).toHaveBeenCalledOnce()
   })
 
   it('retains a generic post-admission map failure until the watcher registers', async () => {
