@@ -19,6 +19,13 @@ export interface SceneInteractionPointerOptions extends MouseEventInit {
 export interface SceneInteractionEventHarnessOptions {
   readonly bounds?: SceneInteractionBounds
   readonly trackListeners?: boolean
+  readonly pointerCapture?: {
+    readonly available?: boolean
+    readonly setThrows?: Error
+    readonly releaseThrows?: Error
+    readonly synchronousLossOnSet?: boolean
+    readonly synchronousLossOnRelease?: boolean
+  }
 }
 
 export interface SceneInteractionKeyboardOptions extends KeyboardEventInit {
@@ -36,6 +43,11 @@ type ListenerSpy = ReturnType<typeof vi.spyOn>
 
 export interface SceneInteractionEventHarness {
   readonly listenerLog: SceneInteractionListenerLog | null
+  readonly pointerCapture: {
+    readonly setCalls: ReturnType<typeof vi.fn>
+    readonly releaseCalls: ReturnType<typeof vi.fn>
+    has(pointerId: number): boolean
+  }
   setBounds(bounds: SceneInteractionBounds): void
   boundsReads(): number
   clientPoint(screen: ScenePoint): ScenePoint
@@ -52,6 +64,7 @@ export interface SceneInteractionEventHarness {
   pointerUp(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   pointerUpClient(client: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   pointerCancel(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
+  lostPointerCapture(pointerId: number): PointerEvent
   pointerLeave(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   wheel(screen: ScenePoint, options?: WheelEventInit): WheelEvent
   keyDown(options: string | SceneInteractionKeyboardOptions): KeyboardEvent
@@ -85,6 +98,7 @@ export function createSceneInteractionEventHarness(
   })
 
   const listenerSpies = options.trackListeners ? createListenerSpies(container) : null
+  const pointerCapture = installPointerCaptureHarness(container, options.pointerCapture)
 
   function setBounds(next: SceneInteractionBounds): void {
     bounds = next
@@ -144,6 +158,10 @@ export function createSceneInteractionEventHarness(
     return dispatchPointer(window, 'pointercancel', clientPoint(screen), eventOptions)
   }
 
+  function lostPointerCapture(pointerId: number): PointerEvent {
+    return dispatchPointer(container, 'lostpointercapture', clientPoint({ x: 0, y: 0 }), { pointerId })
+  }
+
   function pointerLeave(screen: ScenePoint, eventOptions: SceneInteractionPointerOptions = {}): PointerEvent {
     return dispatchPointer(container, 'pointerleave', clientPoint(screen), eventOptions)
   }
@@ -179,6 +197,7 @@ export function createSceneInteractionEventHarness(
 
   return {
     listenerLog: listenerSpies?.log ?? null,
+    pointerCapture: pointerCapture.api,
     setBounds,
     boundsReads: () => boundsReadCount,
     clientPoint,
@@ -191,6 +210,7 @@ export function createSceneInteractionEventHarness(
     pointerUp,
     pointerUpClient,
     pointerCancel,
+    lostPointerCapture,
     pointerLeave,
     wheel,
     keyDown,
@@ -200,11 +220,80 @@ export function createSceneInteractionEventHarness(
     windowBlur,
     dispose: () => {
       listenerSpies?.restore()
+      pointerCapture.restore()
       Object.defineProperty(container, 'getBoundingClientRect', {
         configurable: true,
         value: originalGetBoundingClientRect,
       })
     },
+  }
+}
+
+function installPointerCaptureHarness(
+  container: HTMLElement,
+  options: SceneInteractionEventHarnessOptions['pointerCapture'],
+): {
+  readonly api: SceneInteractionEventHarness['pointerCapture']
+  readonly restore: () => void
+} {
+  const setCalls = vi.fn()
+  const releaseCalls = vi.fn()
+  const captured = new Set<number>()
+  const descriptors = {
+    setPointerCapture: Object.getOwnPropertyDescriptor(container, 'setPointerCapture'),
+    hasPointerCapture: Object.getOwnPropertyDescriptor(container, 'hasPointerCapture'),
+    releasePointerCapture: Object.getOwnPropertyDescriptor(container, 'releasePointerCapture'),
+  }
+  const available = options?.available ?? true
+
+  if (available) {
+    Object.defineProperties(container, {
+      setPointerCapture: {
+        configurable: true,
+        value: (pointerId: number) => {
+          setCalls(pointerId)
+          if (options?.setThrows) throw options.setThrows
+          captured.add(pointerId)
+          if (options?.synchronousLossOnSet) {
+            captured.delete(pointerId)
+            dispatchPointer(container, 'lostpointercapture', { x: 0, y: 0 }, { pointerId })
+          }
+        },
+      },
+      hasPointerCapture: {
+        configurable: true,
+        value: (pointerId: number) => captured.has(pointerId),
+      },
+      releasePointerCapture: {
+        configurable: true,
+        value: (pointerId: number) => {
+          releaseCalls(pointerId)
+          captured.delete(pointerId)
+          if (options?.synchronousLossOnRelease) {
+            dispatchPointer(container, 'lostpointercapture', { x: 0, y: 0 }, { pointerId })
+          }
+          if (options?.releaseThrows) throw options.releaseThrows
+        },
+      },
+    })
+  } else {
+    Object.defineProperties(container, {
+      setPointerCapture: { configurable: true, value: undefined },
+      hasPointerCapture: { configurable: true, value: undefined },
+      releasePointerCapture: { configurable: true, value: undefined },
+    })
+  }
+
+  const restore = (): void => {
+    for (const [name, descriptor] of Object.entries(descriptors)) {
+      if (descriptor) Object.defineProperty(container, name, descriptor)
+      else delete (container as unknown as Record<string, unknown>)[name]
+    }
+  }
+
+  return {
+    api: { setCalls, releaseCalls, has: (pointerId) => captured.has(pointerId) },
+    restore,
   }
 }
 

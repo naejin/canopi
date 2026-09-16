@@ -18,6 +18,10 @@ import { plantSpacingIntervalM } from '../app/settings/state'
 import { t } from '../i18n'
 import { CameraController } from '../canvas/runtime/camera'
 import {
+  MapLibreWorkspaceCameraOwner,
+  type MapLibreWorkspaceCameraMap,
+} from '../maplibre/workspace-camera'
+import {
   SceneStore,
   type SceneAnnotationEntity,
   type SceneDesignObjectTarget,
@@ -54,6 +58,29 @@ function createPlantPresentationContext(viewportScale: number) {
   return {
     viewport: { x: 0, y: 0, scale: viewportScale },
     speciesCache: new Map(),
+  }
+}
+
+class AttachedInteractionMap implements MapLibreWorkspaceCameraMap {
+  readonly canvas = document.createElement('canvas')
+  readonly jumpTo = vi.fn()
+  readonly resize = vi.fn()
+  readonly on = vi.fn()
+  readonly off = vi.fn()
+  readonly project = vi.fn(() => this.projection[this.projectIndex++ % this.projection.length]!)
+  readonly getPitch = vi.fn(() => 0)
+  readonly getCanvas = vi.fn(() => this.canvas)
+
+  private projectIndex = 0
+  private readonly projection = [{ x: 100, y: 50 }, { x: 102, y: 50 }, { x: 100, y: 52 }]
+
+  constructor() {
+    Object.defineProperties(this.canvas, {
+      clientWidth: { configurable: true, value: 400 },
+      clientHeight: { configurable: true, value: 300 },
+      width: { configurable: true, value: 800 },
+      height: { configurable: true, value: 600 },
+    })
   }
 }
 
@@ -750,6 +777,265 @@ describe('SceneInteractionSession', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 25, y: 35 })
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
     session.dispose()
+  })
+
+  it('captures an admitted pointer and fences release-generated loss after committing its edit', () => {
+    events.dispose()
+    events = createSceneInteractionEventHarness(container, {
+      pointerCapture: { synchronousLossOnRelease: true },
+    })
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 17 })
+    expect(events.pointerCapture.setCalls).toHaveBeenCalledWith(17)
+    expect(events.pointerCapture.has(17)).toBe(true)
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 17 })
+    events.pointerUp({ x: 35, y: 45 }, { pointerId: 17 })
+
+    expect(events.pointerCapture.releaseCalls).toHaveBeenCalledWith(17)
+    expect(events.pointerCapture.has(17)).toBe(false)
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    session.dispose()
+  })
+
+  it('rolls back a matching unexpected capture loss without history and accepts the next gesture', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 18 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 18 })
+    events.lostPointerCapture(18)
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 19 })
+    events.pointerMove({ x: 40, y: 50 }, { pointerId: 19 })
+    events.pointerUp({ x: 40, y: 50 }, { pointerId: 19 })
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 40, y: 50 })
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    session.dispose()
+  })
+
+  it('stops pointer-down routing when capture is lost synchronously during acquisition', () => {
+    events.dispose()
+    events = createSceneInteractionEventHarness(container, {
+      pointerCapture: { synchronousLossOnSet: true },
+    })
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 24 })
+
+    expect(events.pointerCapture.setCalls).toHaveBeenCalledWith(24)
+    expect(events.pointerCapture.has(24)).toBe(false)
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
+    expect(deps.setSelection).not.toHaveBeenCalled()
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    events.dispose()
+    events = createSceneInteractionEventHarness(container)
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 25 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 25 })
+    events.pointerUp({ x: 35, y: 45 }, { pointerId: 25 })
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    session.dispose()
+  })
+
+  it('does not dispatch a Plant Stamp after synchronous capture loss', () => {
+    events.dispose()
+    events = createSceneInteractionEventHarness(container, {
+      pointerCapture: { synchronousLossOnSet: true },
+    })
+    selectPlantStampSource({
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      stratum: 'high',
+      width_max_m: 4,
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('plant-stamp')
+
+    events.pointerDown({ x: 50, y: 70 }, { pointerId: 26 })
+
+    expect(events.pointerCapture.setCalls).toHaveBeenCalledWith(26)
+    expect(events.pointerCapture.has(26)).toBe(false)
+    expect(store.persisted.plants).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    session.dispose()
+  })
+
+  it('ignores stale capture loss and competing pointer IDs while one captured edit is active', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 20 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 20 })
+    events.lostPointerCapture(21)
+    events.pointerDown({ x: 200, y: 150 }, { pointerId: 21 })
+    events.pointerMove({ x: 220, y: 170 }, { pointerId: 21 })
+    events.pointerUp({ x: 220, y: 170 }, { pointerId: 21 })
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    events.pointerUp({ x: 35, y: 45 }, { pointerId: 20 })
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    session.dispose()
+  })
+
+  it.each([
+    ['is unavailable', { available: false }],
+    ['throws during acquisition', { setThrows: new Error('capture unavailable') }],
+  ] as const)('retains window-listener pointer completion when container capture %s', (_name, pointerCapture) => {
+    events.dispose()
+    events = createSceneInteractionEventHarness(container, { pointerCapture })
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 22 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 22 })
+    events.pointerUp({ x: 35, y: 45 }, { pointerId: 22 })
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    expect(events.pointerCapture.releaseCalls).not.toHaveBeenCalled()
+    session.dispose()
+  })
+
+  it('finishes edit cleanup and listener removal when capture release throws', () => {
+    events.dispose()
+    events = createSceneInteractionEventHarness(container, {
+      trackListeners: true,
+      pointerCapture: { releaseThrows: new Error('capture release failed') },
+    })
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 23 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 23 })
+    events.pointerUp({ x: 35, y: 45 }, { pointerId: 23 })
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    expect(events.pointerCapture.releaseCalls).toHaveBeenCalledWith(23)
+    expect(() => session.dispose()).not.toThrow()
+    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
+    expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
+  })
+
+  it.each([
+    ['pointer cancellation', (_session: SceneInteractionSession) => events.pointerCancel({ x: 35, y: 45 }, { pointerId: 25 })],
+    ['Escape', (_session: SceneInteractionSession) => events.keyDown({ key: 'Escape', code: 'Escape' })],
+    ['window blur', (_session: SceneInteractionSession) => events.windowBlur()],
+    ['tool change', (session: SceneInteractionSession) => session.setTool('rectangle')],
+    ['document replacement', (session: SceneInteractionSession) => session.prepareForDocumentReplacement()],
+    ['Session disposal', (session: SceneInteractionSession) => session.dispose()],
+  ] as const)('releases capture and rolls back an unfinished edit on %s', (_name, cancel) => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 25 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 25 })
+    cancel(session)
+
+    expect(events.pointerCapture.releaseCalls).toHaveBeenCalledWith(25)
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+  })
+
+  it('routes navigation through an attached MapLibre camera while tool drags change only the Scene and detach restores fallback navigation', () => {
+    const attachedCamera = new MapLibreWorkspaceCameraOwner()
+    attachedCamera.initialize({ width: 400, height: 300 })
+    const map = new AttachedInteractionMap()
+    expect(attachedCamera.attach({
+      map,
+      anchor: { lat: 48.8566, lon: 2.3522 },
+      northBearingDeg: 0,
+    })).toBe(true)
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(
+      container,
+      store,
+      attachedCamera,
+      { onSceneEditCommit },
+    ))
+    session.setTool('select')
+
+    const mapCallsBeforeNavigation = map.jumpTo.mock.calls.length
+    const plantBeforeNavigation = store.persisted.plants[0]?.position
+    events.pointerDown({ x: 200, y: 150 }, { button: 1, pointerId: 26 })
+    events.pointerMove({ x: 230, y: 170 }, { button: 1, pointerId: 26 })
+    events.pointerUp({ x: 230, y: 170 }, { button: 1, pointerId: 26 })
+    events.wheel({ x: 200, y: 150 }, { deltaY: -120 })
+
+    expect(map.jumpTo.mock.calls.length).toBeGreaterThan(mapCallsBeforeNavigation)
+    expect(store.persisted.plants[0]?.position).toEqual(plantBeforeNavigation)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    const mapCallsBeforeToolDrag = map.jumpTo.mock.calls.length
+    const viewportBeforeToolDrag = attachedCamera.viewport
+    events.pointerDown({ x: 140, y: 110 }, { pointerId: 27 })
+    events.pointerMove({ x: 180, y: 150 }, { pointerId: 27 })
+    events.pointerUp({ x: 180, y: 150 }, { pointerId: 27 })
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 40, y: 50 })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
+    expect(attachedCamera.viewport).toEqual(viewportBeforeToolDrag)
+    expect(map.jumpTo).toHaveBeenCalledTimes(mapCallsBeforeToolDrag)
+
+    attachedCamera.detach()
+    const mapCallsBeforeDetachPan = map.jumpTo.mock.calls.length
+    const viewportBeforeDetachPan = attachedCamera.viewport
+    events.pointerDown({ x: 200, y: 150 }, { button: 1, pointerId: 28 })
+    events.pointerMove({ x: 220, y: 165 }, { button: 1, pointerId: 28 })
+    events.pointerUp({ x: 220, y: 165 }, { button: 1, pointerId: 28 })
+
+    expect(attachedCamera.viewport).toEqual({
+      x: viewportBeforeDetachPan.x + 20,
+      y: viewportBeforeDetachPan.y + 15,
+      scale: viewportBeforeDetachPan.scale,
+    })
+    expect(map.jumpTo).toHaveBeenCalledTimes(mapCallsBeforeDetachPan)
+    session.dispose()
+    attachedCamera.dispose()
   })
 
   it('does not let a second pointer replace the active Scene Edit gesture', () => {
@@ -9971,6 +10257,7 @@ describe('SceneInteractionSession', () => {
     for (const eventName of [
       'pointerdown',
       'pointerleave',
+      'lostpointercapture',
       'contextmenu',
       'wheel',
       'dragover',
@@ -9989,6 +10276,7 @@ describe('SceneInteractionSession', () => {
     for (const eventName of [
       'pointerdown',
       'pointerleave',
+      'lostpointercapture',
       'contextmenu',
       'wheel',
       'dragover',

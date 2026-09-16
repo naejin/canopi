@@ -35,6 +35,16 @@ Add `--backend canvas2d` to emulate unavailable WebGL on HTML and Offscreen canv
 
 This mounts the real SceneCanvasRuntime with its detached app adapter, exercises pointer pan, wheel zoom, selection, plant dragging, undo and teardown, and asserts their state transitions. It changes only the isolated in-memory scene. It is a correctness check rather than a native input-latency benchmark.
 
+Run the isolated shared-workspace interaction check against a temporary v2 Design with editable Plants:
+
+```bash
+CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
+  node scripts/canvas-performance/workspace-interactions.mjs \
+  --file '/path/to/temporary-v2-design.canopi'
+```
+
+It composes the real `SceneCanvasRuntime`, `WorkspaceActivationCoordinator`, `MapLibreWorkspaceCameraOwner`, and the production non-interactive workspace map shell. It uses an offline map contribution, changes only in-memory Scene state, and reports aggregate pass names for pointer pan, wheel, selection, tool drag, undo, capture loss, and teardown. It does not qualify physical two-contact pinch, `touch-action`, edition mounting, native WebKit input delivery, or input-to-visible latency.
+
 For the isolated v2 MapLibre-owned renderer experiment, run the production Pixi baseline first and pass its JSON back to the shared runner. The shared runner requires the real fixture and uses an offline style. It fails when alignment, ordering, input ownership, context ownership, style/context recovery, teardown, or repeat-mount checks fail:
 
 ```bash

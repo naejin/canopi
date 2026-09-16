@@ -188,6 +188,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _tool: InteractionTool = 'select'
   private _pointerGesture: SceneInteractionPointerGesture | null = null
   private _toolPointerDrag: SceneToolPointerDrag | null = null
+  /** The container owns this admitted sequence; window listeners remain the fallback. */
+  private _capturedPointerId: number | null = null
+  /** Covers the synchronous `lostpointercapture` edge while capture is being acquired. */
+  private _captureAttemptPointerId: number | null = null
   private _spaceHeld = false
   private _attached = false
   private _disposed = false
@@ -486,6 +490,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       containerRect,
     }
     this._toolPointerDrag = null
+    // Publish the gesture before capture: a browser may synchronously report loss.
+    this._captureInteractionPointer(event.pointerId)
+    if (this._pointerGesture?.pointerId !== event.pointerId) return
 
     if (event.button === 0 && this._rotationHandle.contains(event.target)) {
       const rotationDrag = this._rotationHandle.pointerDown({ event, rawWorld: world })
@@ -667,6 +674,20 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _onPointerCancel = (event: PointerEvent): void => {
     if (this._retryPendingTransientCancellation(event)) return
     if (!this._pointerGesture || this._pointerGesture.pointerId !== event.pointerId) return
+    this._cancelInterruptedInteraction()
+  }
+
+  private readonly _onLostPointerCapture = (event: PointerEvent): void => {
+    const pointerGesture = this._pointerGesture
+    if (!pointerGesture || pointerGesture.pointerId !== event.pointerId) return
+    if (
+      this._capturedPointerId !== event.pointerId
+      && this._captureAttemptPointerId !== event.pointerId
+    ) return
+
+    // Fence first: explicit release may synchronously dispatch this event after commit.
+    this._capturedPointerId = null
+    this._captureAttemptPointerId = null
     this._cancelInterruptedInteraction()
   }
 
@@ -1188,6 +1209,40 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _clearPointerGesture(): void {
     this._pointerGesture = null
     this._toolPointerDrag = null
+    this._captureAttemptPointerId = null
+    const capturedPointerId = this._capturedPointerId
+    // Clear ownership before release: loss dispatched from release is stale by design.
+    this._capturedPointerId = null
+    if (capturedPointerId === null) return
+    try {
+      this._deps.container.releasePointerCapture(capturedPointerId)
+    } catch {
+      // Pointer capture is an optional delivery aid. State is already fenced and
+      // window listeners retain ownership, so a failed release cannot strand an edit.
+    }
+  }
+
+  private _captureInteractionPointer(pointerId: number): void {
+    const container = this._deps.container
+    if (
+      typeof container.setPointerCapture !== 'function'
+      || typeof container.hasPointerCapture !== 'function'
+    ) return
+
+    this._captureAttemptPointerId = pointerId
+    try {
+      container.setPointerCapture(pointerId)
+      if (
+        this._pointerGesture?.pointerId === pointerId
+        && container.hasPointerCapture(pointerId)
+      ) {
+        this._capturedPointerId = pointerId
+      }
+    } catch {
+      // Window capture listeners are retained for unsupported or failed capture.
+    } finally {
+      if (this._captureAttemptPointerId === pointerId) this._captureAttemptPointerId = null
+    }
   }
 
   private _retryPendingTransientCancellation(event: Event): boolean {
@@ -1208,6 +1263,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     try {
       container.addEventListener('pointerdown', this._onPointerDown, { capture: true })
       container.addEventListener('pointerleave', this._onPointerLeave)
+      container.addEventListener('lostpointercapture', this._onLostPointerCapture)
       window.addEventListener('pointermove', this._onPointerMove, { capture: true })
       window.addEventListener('pointerup', this._onPointerUp, { capture: true })
       window.addEventListener('pointercancel', this._onPointerCancel, { capture: true })
@@ -1238,6 +1294,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     runCanvasRuntimeCleanups([
       () => container.removeEventListener('pointerdown', this._onPointerDown, { capture: true }),
       () => container.removeEventListener('pointerleave', this._onPointerLeave),
+      () => container.removeEventListener('lostpointercapture', this._onLostPointerCapture),
       () => window.removeEventListener('pointermove', this._onPointerMove, { capture: true }),
       () => window.removeEventListener('pointerup', this._onPointerUp, { capture: true }),
       () => window.removeEventListener('pointercancel', this._onPointerCancel, { capture: true }),
