@@ -108,11 +108,7 @@ interface PendingBasemapPresentation {
   readonly hasUpdate: boolean
 }
 
-/**
- * Transactionally admits map-owned scene rendering. It is deliberately not
- * mounted by either edition yet: production composition still uses the default
- * Pixi/Canvas2D renderer path until input and workspace lifetime migration are complete.
- */
+/** Transactionally admits production map-owned scene rendering. */
 export class WorkspaceActivationCoordinator {
   private contributions: WorkspaceMapContributionSnapshot | null = null
   private generation = 0

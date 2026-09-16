@@ -2,6 +2,8 @@
 
 Status: **foundation implemented and Linux-qualified; later slices remain tracked**. Updated 2026-09-15. Implementation beads: `canopi-j571`, foundation audit `canopi-cldf`. See the [foundation review and implementation report](lidar-foundation-review.md) and [LiDAR agroecology evidence](lidar-agroecology/report.md).
 
+For v2.0.0 spatial behavior, the [unified workspace implementation plan](geolibre-spatial-review.md) and active `canopi-ltck` epic own the required Design Spatial Frame, shared camera/render lifecycle, v2 document admission, placement and navigation. That clean v2 contract supersedes compatibility requirements in this plan for those surfaces. This document continues to own raster import, coverage, library persistence and scientific analysis. LiDAR contributions enter the production Shared Spatial Workspace above the basemap and below geographic references, grid, Design objects and interaction overlays; camera movement never changes numeric analysis.
+
 This is the single implementation authority for the feature. Historical alternatives and review notes have been removed. The coding agent must implement the slices in order, keep the bead current, and create follow-up beads instead of expanding a slice silently.
 
 ## 1. Product outcome and fixed decisions
@@ -219,7 +221,7 @@ Implementation should concentrate complexity behind four deep modules:
 | Numeric resolver | Immutable generation windows, exact masks, provenance and analysis-domain reads |
 | Presentation | Ordered source/result snapshots, display tile lifecycle and legends |
 
-Likely seams: native work under `desktop/src/services/lidar/`; frontend orchestration under `desktop/web/src/app/lidar/`; document preferences through `app/design-edit/`; rendering through the existing Canvas Map Surface and low-level MapLibre adapters. Controller/action modules remain leaves. The map host owns map lifetime; the LiDAR subsystem owns files, jobs, engines and caches.
+Current seams: native work under `desktop/src/services/lidar/`; frontend orchestration under `desktop/web/src/app/lidar/`; document preferences through `app/design-edit/`; rendering contributions through `app/canvas-map-surface/` and the low-level MapLibre adapters. Controller/action modules remain leaves. The Shared Spatial Workspace owns map/camera/render lifetime; the LiDAR subsystem owns files, jobs, engines, numeric results and caches.
 
 When implementing, update `docs/agent/maplibre.md`, `docs/agent/document-lifecycle.md`, `docs/agent/build-release.md`, `.interface-design/patterns/dock-panels.md`, and domain vocabulary only when the corresponding behavior lands. Remove the temporary gallery prototype once production reproduces its accepted behaviors; until then it remains historical interaction evidence and does not define the new multi-layer analysis UI.
 

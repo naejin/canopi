@@ -1,28 +1,28 @@
 ---
-status: planned
+status: accepted
 ---
 
 # Always-anchored spatial workspace
 
-Canopi v2 will use one spatial workspace for botanical drawing and geographic
-data. Every admitted Design will contain one authored spatial frame, including
-Designs whose geographic backgrounds are hidden. MapLibre will own the live
+Canopi v2 uses one spatial workspace for botanical drawing and geographic
+data. Every admitted Design contains one authored spatial frame, including
+Designs whose geographic backgrounds are hidden. MapLibre owns the live
 camera and presentation clock while the primary shared renderer is active. The
 existing canvas camera may own navigation only while the Canvas2D fallback is
 active.
 
-This decision fixes the domain and ownership contracts needed by the bounded
-rendering experiment. Its status remains planned until the v2 document format,
-workspace lifecycle, and fallback are shipped and qualified. The Phase B
-experiment qualified the non-owning Pixi shared-context adapter; see the
+This decision records the shipped domain and ownership contracts. Format v6,
+the production workspace lifecycle, and Canvas2D fallback are implemented in
+both editions. The Phase B experiment qualified the non-owning Pixi
+shared-context adapter; see the
 [feasibility evidence](../v2-shared-renderer-experiment.md).
 
 ## Document contract
 
-The v2 application will admit only `.canopi` format version 6. Format version 6
+The v2 application admits only `.canopi` format version 6. Format version 6
 is a document admission discriminator; it is independent of the application
-version `2.0.0`. Native and Web ingestion will reject every earlier, missing,
-invalid, or future format before replacing the active Design. Canopi will not
+version `2.0.0`. Native and Web ingestion reject every earlier, missing,
+invalid, or future format before replacing the active Design. Canopi does not
 ship a legacy reader, migration, dual-write format, or automatic default-anchor
 conversion. Development tools may convert a disposable private fixture outside
 the shipping ingestion boundary.
@@ -133,7 +133,7 @@ Design objects in existing Layer order
 interaction chrome
 ```
 
-A Canopi-owned ordered descriptor list will reconcile stable source/layer IDs,
+A Canopi-owned ordered descriptor list reconciles stable source/layer IDs,
 incremental data and paint changes, explicit moves, late insertion, and complete
 reconstruction after style reload. LiDAR source and analysis visibility remain
 independent. Hard-coded possible insertion anchors are not an ordering model.
@@ -162,19 +162,26 @@ extension reference. MapLibre 6.4.1 custom rendering receives
 handling; implementation must follow those installed types rather than older
 examples.
 
-The accepted renderer checkpoint used the real 2,201-Plant Design, botanical
-symbols and labels, Zones, grid, selection, real map layers, LiDAR ordering,
+The accepted renderer and production checkpoints used the real 2,201-Plant
+Design, botanical symbols and labels, Zones, grid, selection, real map layers,
+LiDAR ordering,
 live alignment within one CSS pixel, DPR 1 and 2, resize, style reload, context
 restore, input arbitration, teardown, offline empty style, and matched timing
-evidence. Final performance and production-lifecycle gates still control this
-ADR's transition from planned to accepted.
+evidence. Temporary 10,000-Plant derivatives also passed functional interaction,
+data-integrity, fallback, and lifecycle checks. The stable 60 Hz, input-latency,
+and stall references remain missed and are documented in the
+[production capacity evidence](../v2-production-workspace-capacity.md). Under
+the accepted correctness-first qualification, those misses are product limits
+rather than blockers. `canopi-ltck.26` remains the accepted bounded optimization;
+the follow-up candidates rejected in `canopi-ltck.27` are not part of the
+architecture.
 
 ## Consequences
 
 - Version 6 intentionally breaks older Design admission. Existing files and app
   data remain untouched when rejected.
-- The current canvas-owned camera and noninteractive following map are temporary
-  implementation state to remove after the qualified lifecycle is integrated.
+- The retired canvas-owned camera follower and standalone production map surface
+  remain absent. Both editions mount the shared workspace composition.
 - The Canvas2D renderer stays as the editing fallback and export-related scene
   projections stay independent of interactive WebGL.
 - GeoLibre contributes selected ordering, resize, and lifecycle behavior rather

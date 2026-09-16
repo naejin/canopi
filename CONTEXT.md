@@ -23,7 +23,7 @@ _Avoid_: Document session, file session, canvas session
 **Web Edition**:
 A browser-accessible Canopi experience that creates, opens, edits, and exports real Designs. A web edition may omit desktop-only or planning-heavy surfaces, but it is not a separate sketch format, static catalog, or website-only demo.
 _Avoid_: Web sketch, catalog site, demo app
-_Note_: Web Edition v1 omits the visible Location Workbench and Recent Design list while preserving real Design data such as saved Location values and browser-local autosave state behind the app surface.
+_Note_: Web Edition v1 omits the visible Location Workbench and Recent Design list while preserving the saved Spatial Frame and browser-local autosave state behind the app surface.
 
 **Browser App Shell**:
 The Web Edition workspace chrome for starting, opening, resuming, downloading, and navigating Designs in a browser. A browser app shell presents web-appropriate commands around the shared Canopi app core rather than reproducing desktop window or native file-management chrome.
@@ -74,20 +74,32 @@ _Avoid_: Raw runtime, canvas service, renderer API
 A concrete adapter that connects Canvas Runtime Surface implementation to app-owned state such as settings projection, Design Session dirty-state, Design file composition, and Target Presentation. Canvas runtime app adapters belong at the app/canvas seam and must not become canvas scene authority.
 _Avoid_: Runtime helper, app bridge, global canvas state
 
+**Spatial Frame**:
+The required geographic placement of a Design: one WGS84 anchor, the Design's north bearing, Placement Status, and site metadata. Design objects retain local-metre geometry; changing the spatial frame intentionally changes their geographic placement without changing that geometry.
+_Avoid_: Optional Location, map center, viewport
+
+**Placement Status**:
+Whether a Design's Spatial Frame is `provisional` or `confirmed`. Provisional placement supports local editing and independently georeferenced raster work without claiming a real site. Visibility of geographic layers and camera movement never confirm placement.
+_Avoid_: Location visibility, map readiness
+
+**Shared Spatial Workspace**:
+The active Canvas composition that presents local botanical editing and geographic contributions through one camera and render lifecycle. MapLibre owns the live camera and frame while the shared renderer is active; Canvas2D owns the fallback camera only after an explicit handoff. The workspace derives presentation from Design, Scene, LiDAR, settings, and Target authorities without owning them.
+_Avoid_: Second map canvas, camera follower, map-owned Design state
+
 **Canvas Map Surface**:
-The in-canvas map visualization seam that turns Location, canvas query state, layer settings, terrain settings, Target Presentation, theme, and map bearing into one MapLibre-ready snapshot. The canvas map surface is derived presentation and must not own Design data, Scene Edit state, Location drafts, or settings persistence.
-_Avoid_: MapLibre controller, basemap helper, map overlay state
+A historical implementation name retained in some module paths and map-status types. The previous standalone follower surface is retired; use Shared Spatial Workspace for the active composition and do not introduce another map or camera authority under this name.
+_Avoid_: Active workspace authority, second renderer surface
 
 **MapLibre Host**:
-The app runtime seam for MapLibre resource lifetime across map-backed surfaces, including lazy loading, map creation, teardown, resize observation, basemap style rebuilds, preserved view state, and initialization failure state. The maplibre host does not own Design data, Location edits, Design Template selection, Canvas Map Surface camera sync, terrain, or Target Presentation overlays; those remain in surface-specific adapters.
+The app runtime seam for MapLibre resource lifetime across map-backed surfaces, including lazy loading, map creation, teardown, resize observation, basemap style rebuilds, preserved view state, and initialization failure state. The MapLibre Host does not own Design data, Spatial Frame edits, Design Template selection, workspace camera commands, terrain, or Target Presentation overlays; those remain in caller-specific adapters.
 _Avoid_: Map component, map helper, direct maplibregl ownership
 
 **MapLibre Surface Adapter**:
-The typed adapter seam above the MapLibre Host for map-backed surfaces. A maplibre surface adapter owns typed current-map access, per-map event listener cleanup, map-lifetime cleanup callbacks, and forwarding host lifecycle events to a surface-specific adapter. It does not own Design data, Location edits, Design Template selection, Canvas Map Surface camera sync, terrain, markers, or Target Presentation overlays.
+The typed adapter seam above the MapLibre Host for map-backed surfaces. A MapLibre Surface Adapter owns typed current-map access, per-map event listener cleanup, map-lifetime cleanup callbacks, and forwarding host lifecycle events to a caller-specific adapter. It does not own Design data, Spatial Frame edits, Design Template selection, workspace camera commands, terrain, markers, or Target Presentation overlays.
 _Avoid_: Map component helper, host wrapper, map ref state
 
 **Canvas Layer Presentation**:
-The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, Location readiness cues, and layer-related commands. Canvas layer presentation turns scene Layer state, settings-backed map layer preferences, terrain settings, and saved Location readiness into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, Location drafts, Canvas Map Surface lifecycle, or settings persistence.
+The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, Placement Status cues, and layer-related commands. Canvas Layer Presentation turns scene Layer state, settings-backed map layer preferences, terrain settings, and Spatial Frame readiness into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, placement drafts, Shared Spatial Workspace lifecycle, or settings persistence.
 _Avoid_: Layer panel state, map layer helper, terrain UI state
 
 **Problem Report**:
@@ -295,11 +307,11 @@ The positive center-to-center distance between placed plants in plant spacing. A
 _Avoid_: Gap, radius, endpoint spacing
 
 **Location**:
-The real-world site associated with a design, expressed as latitude, longitude, and optionally altitude. A design has zero or one location.
-_Avoid_: Map pin, address
+The user-facing actual site projected from a confirmed Spatial Frame, expressed as latitude, longitude, and optionally altitude. Every Design has a Spatial Frame; a provisional frame supplies a computational anchor without asserting a Location.
+_Avoid_: Optional coordinate authority, map pin, camera center
 
 **Location Workbench**:
-The interaction surface for setting, clearing, presenting, and validating a design's location. A location workbench may support address search, coordinate entry, map picking, and altitude where the product surface offers them, but it does not own canvas scene data.
+The interaction surface for previewing, confirming, resetting, presenting, and validating a Design's Spatial Frame and Location. A Location Workbench may support address search, coordinate entry, map picking, and altitude where the product surface offers them, but it does not own canvas scene data.
 _Avoid_: Map panel state, location input state, basemap status helper
 
 **Location Notice**:
@@ -449,11 +461,11 @@ A **Layer** lock prevents editing every design object in that layer. A **Design 
 **Layer vs Canvas Layer Presentation**:
 A **Layer** is a visibility and locking group in the Design. **Canvas Layer Presentation** is runtime presentation that combines Layer state with map and terrain controls for app chrome.
 
-**Canvas Layer Presentation vs Canvas Map Surface**:
-**Canvas Layer Presentation** decides which layer controls and layer commands app chrome exposes. The **Canvas Map Surface** renders the in-canvas map snapshot derived from those controls and other authorities.
+**Canvas Layer Presentation vs Shared Spatial Workspace**:
+**Canvas Layer Presentation** decides which layer controls and layer commands app chrome exposes. The **Shared Spatial Workspace** presents the resulting geographic contributions with the botanical Scene through its single camera and render lifecycle.
 
-**MapLibre Host vs Canvas Map Surface**:
-The **MapLibre Host** owns MapLibre resource lifetime. The **Canvas Map Surface** owns the in-canvas map snapshot and app/canvas authority inputs that one MapLibre adapter renders.
+**MapLibre Host vs Shared Spatial Workspace**:
+The **MapLibre Host** owns low-level MapLibre resource lifetime. The **Shared Spatial Workspace** owns composition and coordinates derived inputs from app, Scene, and LiDAR authorities without becoming their data authority.
 
 **Climate Zone vs Hardiness Zone**:
 Use **Climate Zone** for broad site/template classification. Use **Hardiness Zone** for species cold-tolerance compatibility.
@@ -467,9 +479,11 @@ A **Target** is the stored or derived subject a planning entry refers to. **Targ
 **Scene Edit vs Design Edit**:
 A **Scene Edit** changes canvas-owned Design state and should be handled by the canvas runtime. A **Design Edit** changes non-canvas Design state such as Budget Items, Timeline Actions, Consortiums, Location, description, or extra fields.
 
+**Spatial Frame vs Location**:
+The **Spatial Frame** is always saved and may be provisional. **Location** is the confirmed-site projection presented to the user.
+
 **Location vs Location Workbench**:
-A **Location** is the saved site in a Design. The **Location Workbench** is the interaction surface that edits and presents that saved site.
-In Web Edition v1, Location may remain present in saved Design data, but no visible Location Workbench is mounted.
+A **Location** is the confirmed site. The **Location Workbench** previews and commits the Spatial Frame that establishes it. The Web Edition preserves the Spatial Frame but does not mount the visible Location Workbench.
 
 **Planning Projection vs Design Authority**:
 A **Planning Projection** is derived runtime state for planning surfaces. It must not become the authority for Design planning entries, placed plants, or canvas scene state.
