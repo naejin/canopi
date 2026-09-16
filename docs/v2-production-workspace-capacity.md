@@ -185,3 +185,47 @@ gate still fails. The browser proxy cannot partition the remaining time into
 MapLibre CPU work, driver/GPU completion, or frame scheduling, and this run had
 no real tiles or raster/LiDAR workload. Phase E remains blocked pending a fresh,
 bounded rendering slice; the reference thresholds remain unchanged.
+
+## Rejected exact-batching experiments
+
+`canopi-ltck.27` tested two bounded public Pixi v8 batching candidates without
+changing renderer ownership or botanical semantics.
+
+First, forcing `GraphicsContext.batchMode = 'batch'` retained the current exact
+vector recipes. Its representative CPU medians moved only slightly: shared
+layer 31.4 to 30.6 ms, Pixi submission 11.5 to 10.5 ms, and Plant draw stayed
+at 11.0 ms. Two consecutive dense 10,000-Plant batch runs then failed at the
+harness `interaction` stage with no cleanup failure, while the matched
+automatic-batch run passed. The aggregate harness does not expose a safe cause
+for that failure. The control was rejected and fully rolled back after the
+second failure.
+
+Second, a disposable public-API prototype compared direct Pixi Graphics with
+an exact-size, padded atlas rendered through one ordered `ParticleContainer`.
+It covered all 16 Plant symbols, dot/round LOD, recipe and edge-width
+boundaries, close colours, focus opacity, selected and hover rings, cutouts,
+fractional positions, coincident order, translucent layers, and DPR 1 and 2.
+All 156 frames shared one texture source and cleanup left no connected canvas.
+
+The atlas did not produce an equivalent raster result, so the experiment's
+appearance-equivalence checkpoint remained unproven. On the 1200 x 800 DPR 1
+comparison, 33,824 pixels changed; 22,502 had a channel delta above 4, 1,079
+above 32, and the maximum was 72. At DPR 2, 80,775 physical pixels changed;
+38,090 exceeded 4, 3,454 exceeded 32, and the maximum was 79. The 1024 x 640
+CSS-pixel atlas had 2.5 MiB and 10 MiB of nominal RGBA pixel storage at DPR 1
+and 2; those figures exclude antialias buffers, driver allocation and other GPU
+resources. Rasterizing this single 156-glyph generation took 29.6 ms and 47.9
+ms respectively in one lead verification run, before representative or
+10,000-Plant particle updates. The generation spans exceed the unchanged frame
+reference, but a synthetic setup run does not establish production steady-state
+or continuous-zoom p95.
+
+The prototype was deleted as required after capturing the decision. An
+instanced vector mesh was also rejected at architecture review: Pixi's public
+path builder does not reproduce the existing stroked/cutout recipes, while the
+usable tessellation and GPU-context helpers are explicitly internal APIs.
+Reimplementing that tessellator or depending on internals would be an unbounded
+renderer rewrite. Neither evaluated candidate qualified, and broader rendering
+designs are outside this bounded slice. The Phase E capacity gate therefore
+remains failed; downstream implementation and release publication must not
+claim qualification.
