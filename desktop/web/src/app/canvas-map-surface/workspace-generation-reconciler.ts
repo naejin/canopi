@@ -12,8 +12,10 @@ export interface WorkspaceGenerationLifecycle {
 
 export interface WorkspaceGenerationReconcilerOptions {
   /** Reads the current Design-owned workspace input after Scene settlement. */
-  readonly readSnapshot: () => WorkspaceActivationSnapshot
+  readonly readSnapshot: () => WorkspaceActivationSnapshot | null
   readonly workspace: WorkspaceGenerationLifecycle
+  readonly onFailure?: (error: unknown) => void
+  readonly onOutcome?: (outcome: WorkspaceActivationOutcome) => void
 }
 
 const replacementTicketBrand = Symbol('workspace-generation-replacement-ticket')
@@ -41,6 +43,37 @@ export class WorkspaceGenerationReconciler {
   private teardown: Promise<void> | null = null
 
   constructor(private readonly options: WorkspaceGenerationReconcilerOptions) {}
+
+  /** Reconciles the current Design when the app-owned workspace starts. */
+  async reconcileInitialGeneration(): Promise<WorkspaceActivationOutcome | 'no-design'> {
+    if (this.disposed) return 'cancelled'
+    let snapshot: WorkspaceActivationSnapshot | null
+    try {
+      snapshot = this.options.readSnapshot()
+    } catch (error) {
+      this.reportFailure(error)
+      return 'cancelled'
+    }
+    if (this.disposed) return 'cancelled'
+    if (!snapshot) {
+      this.reconciledSnapshot = null
+      return 'no-design'
+    }
+    const activation: ReconciliationActivation = { ticket: null, snapshot }
+    this.activation = activation
+    try {
+      const outcome = await this.options.workspace.activate(snapshot)
+      if (!this.isCurrentActivation(activation)) return 'cancelled'
+      this.activation = null
+      if (outcome !== 'cancelled') this.reconciledSnapshot = snapshot
+      return this.publishOutcome(outcome) ? outcome : 'cancelled'
+    } catch (error) {
+      if (!this.isCurrentActivation(activation)) return 'cancelled'
+      this.activation = null
+      this.reportFailure(error)
+      return 'cancelled'
+    }
+  }
 
   /** Synchronously fences the old generation before Canvas replacement begins. */
   suspendForDocumentReplacement(): WorkspaceGenerationReplacementTicket | null {
@@ -92,8 +125,19 @@ export class WorkspaceGenerationReconciler {
 
     // This is intentionally the first read. Synchronous Scene replacement can
     // publish a successor before this stack unwinds.
-    const snapshot = this.options.readSnapshot()
+    let snapshot: WorkspaceActivationSnapshot | null
+    try {
+      snapshot = this.options.readSnapshot()
+    } catch (error) {
+      this.reportFailure(error)
+      return
+    }
     if (this.disposed || ticket !== this.currentReplacement) return
+    if (!snapshot) {
+      this.replacementSuspended = false
+      this.reconciledSnapshot = null
+      return
+    }
     if (!this.replacementSuspended && this.matchesCurrentSnapshot(snapshot)) return
 
     this.replacementSuspended = false
@@ -120,6 +164,7 @@ export class WorkspaceGenerationReconciler {
         if (!this.isCurrentActivation(activation)) return
         this.activation = null
         if (outcome !== 'cancelled') this.reconciledSnapshot = activation.snapshot
+        this.publishOutcome(outcome)
       },
       (error: unknown) => this.handleActivationFailure(activation, error),
     )
@@ -128,13 +173,36 @@ export class WorkspaceGenerationReconciler {
   private handleActivationFailure(activation: ReconciliationActivation, error: unknown): void {
     if (!this.isCurrentActivation(activation)) return
     this.activation = null
-    console.error('Shared workspace activation failed:', error)
+    this.reportFailure(error)
   }
 
   private isCurrentActivation(activation: ReconciliationActivation): boolean {
     return !this.disposed
-      && activation.ticket === this.currentReplacement
+      && (
+        activation.ticket == null
+          ? this.currentReplacement == null
+          : activation.ticket === this.currentReplacement
+      )
       && this.activation === activation
+  }
+
+  private publishOutcome(outcome: WorkspaceActivationOutcome): boolean {
+    try {
+      this.options.onOutcome?.(outcome)
+      return true
+    } catch (error) {
+      this.reportFailure(error)
+      return false
+    }
+  }
+
+  private reportFailure(error: unknown): void {
+    try {
+      if (this.options.onFailure) this.options.onFailure(error)
+      else console.error('Shared workspace activation failed:', error)
+    } catch (observerError) {
+      console.error('Shared workspace failure observer failed:', observerError)
+    }
   }
 
   private observeTerminalTeardown(result: Promise<void>): void {
@@ -145,7 +213,7 @@ export class WorkspaceGenerationReconciler {
 }
 
 interface ReconciliationActivation {
-  readonly ticket: WorkspaceGenerationReplacementTicket
+  readonly ticket: WorkspaceGenerationReplacementTicket | null
   readonly snapshot: WorkspaceActivationSnapshot
 }
 

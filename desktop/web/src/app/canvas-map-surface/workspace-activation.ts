@@ -865,7 +865,7 @@ export class WorkspaceActivationCoordinator {
   }
 
   private destroyRuntime(errors: unknown[]): void {
-    if (!this.runtimeInit || this.runtimeDestroyed) return
+    if (this.runtimeDestroyed) return
     this.runtimeDestroyed = true
     try {
       this.runOwnedCallback('runtime destruction', () => this.options.runtime.destroy())

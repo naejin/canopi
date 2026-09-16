@@ -202,6 +202,17 @@ function createCoordinator(input: {
 }
 
 describe('WorkspaceActivationCoordinator', () => {
+  it('destroys its constructed runtime once when torn down before activation', async () => {
+    const runtime = createRuntime()
+    const { coordinator } = createCoordinator({ runtime })
+
+    await coordinator.teardown()
+    await coordinator.teardown()
+
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+    expect(runtime.init).not.toHaveBeenCalled()
+  })
+
   it('captures caller-owned activation values before asynchronous admission', async () => {
     const created = deferred<WorkspaceActivationMap>()
     let capturedMapSnapshot: WorkspaceActivationSnapshot['map'] | null = null
