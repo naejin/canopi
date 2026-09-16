@@ -50,6 +50,7 @@ export function createWorkspaceMapLibreMap(
     style: createMapLibreEmptyStyle(),
     center: [snapshot.anchor.lon, snapshot.anchor.lat],
     bearing: snapshot.northBearingDeg,
+    canvasContextAttributes: { antialias: true },
     attributionControl: { compact: true },
     interactive: false,
     pitchWithRotate: false,

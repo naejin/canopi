@@ -6,6 +6,7 @@ export interface MapLibreMapConstructorOptions {
   center?: [number, number]
   zoom?: number
   bearing?: number
+  canvasContextAttributes?: WebGLContextAttributes
   attributionControl?: false | { compact?: boolean }
   interactive: boolean
   pitchWithRotate: boolean

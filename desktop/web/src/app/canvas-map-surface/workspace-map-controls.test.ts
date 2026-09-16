@@ -168,6 +168,20 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
 }
 
 describe('WorkspaceMapControls', () => {
+  it('requests antialiasing before the shared workspace creates its WebGL context', async () => {
+    const { controls, maps } = createControls({ basemapVisible: false })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+
+    try {
+      expect(map.options.canvasContextAttributes).toEqual({ antialias: true })
+    } finally {
+      controls.releaseMap(admitted)
+    }
+  })
+
   it.each([
     ['LiDAR', 'removeLayer'], ['LiDAR', 'removeSource'],
     ['terrain', 'removeLayer'], ['terrain', 'removeSource'],
