@@ -106,6 +106,39 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Production workspace mounts do not restore standalone Canvas hosts or surfaces',
+    from: [
+      'src/app/document-session/lifecycle.ts',
+      'src/app/canvas-map-surface/desktop-workspace-runtime.ts',
+      'src/web/WebCanvasWorkspace.tsx',
+      'src/web/browser-workspace-runtime.ts',
+    ],
+    targets: [
+      'src/canvas/runtime/host.ts',
+      'src/app/canvas-runtime/host.ts',
+      'src/components/canvas/MapLibreCanvasSurface.tsx',
+      'src/components/canvas/maplibre-surface-controller.ts',
+      'src/app/canvas-map-surface/lifecycle.ts',
+      'src/app/canvas-map-surface/snapshot.ts',
+      'src/app/canvas-map-surface/reconciliation.ts',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Browser workspace composition stays free of Desktop capabilities',
+    from: ['src/web/browser-workspace-runtime.ts'],
+    targets: [
+      '@tauri-apps/**',
+      'src/ipc/**',
+      'src/app/canvas-runtime/desktop-adapter.ts',
+      'src/app/canvas-map-surface/desktop-workspace-runtime.ts',
+      'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
+      'src/app/canvas-map-surface/lidar.ts',
+      'src/app/lidar/**',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Neutral shell command catalog stays platform-neutral',
     from: ['src/app/shell-commands/**'],
     targets: [
@@ -156,27 +189,8 @@ const FORBIDDEN_IMPORT_POLICIES = [
   {
     kind: 'forbid-imports',
     name: 'Panel Target adapters do not bypass presentation ownership',
-    from: [
-      'src/app/canvas-runtime/panel-target-adapter.ts',
-      'src/app/canvas-map-surface/snapshot.ts',
-      'src/components/canvas/maplibre-surface-controller.ts',
-    ],
+    from: ['src/app/canvas-runtime/panel-target-adapter.ts'],
     targets: ['src/app/panel-targets/state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Map surface controller reads the app snapshot instead of authorities',
-    from: ['src/components/canvas/maplibre-surface-controller.ts'],
-    targets: [
-      'src/maplibre/loader.ts',
-      'src/canvas/session.ts',
-      'src/app/location/index.ts',
-      'src/app/settings/state.ts',
-      'src/canvas/scene-metadata-state.ts',
-      'src/app/canvas-settings/signals.ts',
-      'src/app/panel-targets/presentation.ts',
-      'src/app/panel-targets/state.ts',
-    ],
   },
   {
     kind: 'forbid-imports',
@@ -189,22 +203,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/document-session/**',
       'src/app/canvas-map-surface/**',
       'src/app/panel-targets/**',
-    ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Canvas Map Surface lifecycle does not depend on retired component loaders',
-    from: ['src/app/canvas-map-surface/lifecycle.ts'],
-    targets: ['src/components/canvas/maplibre-loader.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Canvas Map Surface snapshot does not bypass presentation seams',
-    from: ['src/app/canvas-map-surface/snapshot.ts'],
-    targets: [
-      'src/app/canvas-settings/signals.ts',
-      'src/app/document-session/store.ts',
-      'src/canvas/scene-metadata-state.ts',
     ],
   },
   {
@@ -751,7 +749,7 @@ const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
     name: 'Panel Target adapters consume presentation, not state',
-    from: ['src/app/canvas-runtime/panel-target-adapter.ts', 'src/app/canvas-map-surface/snapshot.ts'],
+    from: ['src/app/canvas-runtime/panel-target-adapter.ts'],
     targets: ['src/app/panel-targets/presentation.ts'],
   },
   {
@@ -759,29 +757,6 @@ const REQUIRED_IMPORT_POLICIES = [
     name: 'Panel Target presentation owns its signal state',
     from: ['src/app/panel-targets/presentation.ts'],
     targets: ['src/app/panel-targets/state.ts'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Canvas Map Surface controller reads the app snapshot',
-    from: ['src/components/canvas/maplibre-surface-controller.ts'],
-    targets: ['src/app/canvas-map-surface/snapshot.ts'],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Canvas Map Surface snapshot composes presentation authorities',
-    from: ['src/app/canvas-map-surface/snapshot.ts'],
-    targets: [
-      'src/canvas/session.ts',
-      'src/app/canvas-layer-presentation/presentation.ts',
-      'src/app/location/index.ts',
-      'src/app/panel-targets/presentation.ts',
-    ],
-  },
-  {
-    kind: 'require-imports',
-    name: 'Canvas Map Surface lifecycle requests low-level map ownership',
-    from: ['src/app/canvas-map-surface/lifecycle.ts'],
-    targets: ['src/maplibre/surface-adapter.ts', 'src/maplibre/host.ts'],
   },
   {
     kind: 'require-imports',
@@ -1020,12 +995,6 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Desktop Canvas Runtime host constructs the Desktop capability adapter',
-    from: ['src/app/canvas-runtime/host.ts'],
-    targets: ['src/app/canvas-runtime/desktop-adapter.ts'],
-  },
-  {
-    kind: 'require-imports',
     name: 'Edition Canvas Runtime adapters delegate shared app policy',
     from: [
       'src/app/canvas-runtime/desktop-adapter.ts',
@@ -1035,12 +1004,35 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Edition Canvas Runtime hosts delegate the concrete runtime wrapper',
-    from: [
-      'src/app/canvas-runtime/host.ts',
-      'src/web/browser-canvas-runtime.ts',
+    name: 'Desktop Design Session mounts the Desktop workspace composition',
+    from: ['src/app/document-session/lifecycle.ts'],
+    targets: ['src/app/canvas-map-surface/desktop-workspace-runtime.ts'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Web Canvas Workspace mounts the browser workspace composition',
+    from: ['src/web/WebCanvasWorkspace.tsx'],
+    targets: ['src/web/browser-workspace-runtime.ts'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Desktop workspace factory binds shared composition and Desktop capabilities',
+    from: ['src/app/canvas-map-surface/desktop-workspace-runtime.ts'],
+    targets: [
+      'src/app/canvas-map-surface/workspace-runtime-composition.ts',
+      'src/app/canvas-runtime/desktop-adapter.ts',
+      'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
     ],
-    targets: ['src/canvas/runtime/host.ts'],
+  },
+  {
+    kind: 'require-imports',
+    name: 'Browser workspace factory binds shared composition and browser capabilities',
+    from: ['src/web/browser-workspace-runtime.ts'],
+    targets: [
+      'src/app/canvas-map-surface/workspace-runtime-composition.ts',
+      'src/web/browser-canvas-runtime.ts',
+      'src/web/browser-workspace-map-contribution-adapter.ts',
+    ],
   },
   {
     kind: 'require-imports',
@@ -1890,15 +1882,16 @@ describe('declarative frontend architecture policies', () => {
     )
   })
 
-  it('keeps browser map contributions free of Desktop runtime dependencies', () => {
+  it('keeps the browser workspace graph free of Desktop runtime dependencies', () => {
     // Type-only Scene query contracts do not enter either edition's runtime bundle.
     const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
       .map((source) => ({ ...source, imports: source.imports.filter((edge) => !edge.typeOnly) }))
     expect(collectArchitecturePolicyViolations(graph, [
       {
         kind: 'forbid-transitive-imports',
-        name: 'Shared map contributions and browser adapter stay free of Desktop capabilities',
+        name: 'Browser workspace and shared map contributions stay free of Desktop capabilities',
         from: [
+          'src/web/browser-workspace-runtime.ts',
           'src/web/browser-workspace-map-contribution-adapter.ts',
           'src/app/canvas-map-surface/workspace-map-contributions.ts',
         ],

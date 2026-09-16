@@ -44,6 +44,17 @@ export interface WorkspaceRuntimeComposition {
   dispose(): Promise<void>
 }
 
+/**
+ * The only details an edition mount supplies to the shared workspace. Edition
+ * factories bind application adapters and contribution policy behind this
+ * small mount-facing contract.
+ */
+export interface WorkspaceRuntimeMountOptions {
+  readonly container: HTMLElement
+  readonly onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
+  readonly onFailure?: (error: unknown) => void
+}
+
 export interface WorkspaceRuntimeCompositionOptions {
   readonly container: HTMLElement
   readonly appAdapter: CanvasRuntimeAppAdapter
@@ -85,10 +96,7 @@ const DEFAULT_DEPENDENCIES: WorkspaceRuntimeCompositionDependencies = {
   installEffect: effect,
 }
 
-/**
- * App-owned composition for the qualified shared MapLibre runtime. It remains
- * unmounted until the edition lifecycle migration adopts this surface.
- */
+/** App-owned composition for the production shared MapLibre runtime. */
 export function createWorkspaceRuntimeComposition(
   options: WorkspaceRuntimeCompositionOptions,
   dependencyOverrides: Partial<WorkspaceRuntimeCompositionDependencies> = {},

@@ -49,21 +49,16 @@ vi.mock('../components/shared/WelcomeScreen', () => ({
   WelcomeScreen: () => <div data-testid="welcome-screen" />,
 }))
 
-vi.mock('../components/canvas/MapLibreCanvasSurface', () => ({
-  MapLibreCanvasSurface: ({
-    onStateChange,
+vi.mock('../app/document-session/use-canvas-document-session', () => ({
+  useCanvasDocumentSession: vi.fn(({
+    onMapStateChange,
   }: {
-    onStateChange?: (state: typeof mockBasemapState) => void
+    onMapStateChange?: (state: typeof mockBasemapState) => void
   }) => {
     useEffect(() => {
-      onStateChange?.(mockBasemapState)
-    }, [onStateChange])
-    return <div data-testid="maplibre-surface" />
-  },
-}))
-
-vi.mock('../app/document-session/use-canvas-document-session', () => ({
-  useCanvasDocumentSession: vi.fn(),
+      onMapStateChange?.(mockBasemapState)
+    }, [onMapStateChange])
+  }),
 }))
 
 describe('CanvasPanel basemap feedback', () => {

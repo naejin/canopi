@@ -1,5 +1,5 @@
 import { activeLayerName, contourIntervalMeters, hillshadeOpacity, hillshadeVisible, layerLockState, layerOpacity, layerVisibility } from '../canvas-settings/signals'
-import { readSavedLocationPresentation } from '../location'
+import { readSavedLocationPresentation } from '../location/model'
 import { mutateSettingsProjection } from '../settings/projection'
 import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'

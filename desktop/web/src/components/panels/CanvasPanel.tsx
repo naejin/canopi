@@ -7,9 +7,6 @@ import { ZoomControls } from '../canvas/ZoomControls'
 import { InspectionLens } from '../canvas/InspectionLens'
 import { DisplayLegend } from '../canvas/DisplayLegend'
 import {
-  MapLibreCanvasSurface,
-} from '../canvas/MapLibreCanvasSurface'
-import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
@@ -50,7 +47,12 @@ export function CanvasPanel() {
   })
   const lastLocationRef = useRef<string | null>(null)
 
-  useCanvasDocumentSession({ canvasAreaRef, containerRef, rulerOverlayRef })
+  useCanvasDocumentSession({
+    canvasAreaRef,
+    containerRef,
+    rulerOverlayRef,
+    onMapStateChange: setBasemapState,
+  })
 
   const savedLocation = useSavedLocationPresentation()
   const hasDesign = savedLocation.hasDesign
@@ -128,13 +130,7 @@ export function CanvasPanel() {
               ref={containerRef}
               className={styles.canvasContainer}
               data-map-active={locationNotice.mapSurfaceVisible ? 'true' : 'false'}
-            >
-              {hasDesign && (
-                <MapLibreCanvasSurface
-                  onStateChange={setBasemapState}
-                />
-              )}
-            </div>
+            />
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
             {hasDesign && <InspectionLens canvasRef={containerRef} />}
           {hasDesign && <SpeciesFocusChip />}

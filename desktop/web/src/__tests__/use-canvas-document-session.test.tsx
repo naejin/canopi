@@ -28,8 +28,8 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("../app/canvas-runtime/host", () => ({
-  createAppCanvasRuntimeHost: vi.fn(() => {
+vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
+  createDesktopWorkspaceRuntimeComposition: vi.fn((options?: { container: HTMLElement }) => {
     let loaded = false;
     const documents = {
       initializeViewport: vi.fn(),
@@ -66,7 +66,15 @@ vi.mock("../app/canvas-runtime/host", () => ({
     (documents as Record<string, unknown>).originalLoadDocument = documents.loadDocument;
     (documents as Record<string, unknown>).originalReplaceDocument = documents.replaceDocument;
     mocks.runtimeInstances.push({ host, documents });
-    return host;
+    return {
+      surfaces: host.surfaces,
+      start: async () => {
+        await host.init(options?.container);
+        documents.initializeViewport();
+        return 'shared-ready' as const;
+      },
+      dispose: () => host.destroy(),
+    };
   }),
 }));
 
@@ -88,7 +96,7 @@ vi.mock("../app/settings/projection", () => ({
 }));
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
-import { createAppCanvasRuntimeHost } from "../app/canvas-runtime/host";
+import { createDesktopWorkspaceRuntimeComposition } from "../app/canvas-map-surface/desktop-workspace-runtime";
 import {
   currentCanvasDocumentSurface,
   currentCanvasReady,
@@ -233,10 +241,10 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("releases a lifecycle created by a host factory that unmounts reentrantly", async () => {
-    const createHost = vi.mocked(createAppCanvasRuntimeHost);
+    const createHost = vi.mocked(createDesktopWorkspaceRuntimeComposition);
     const defaultCreateHost = createHost.getMockImplementation()!;
     createHost.mockImplementationOnce(() => {
-      const host = defaultCreateHost();
+      const host = defaultCreateHost({ container: document.createElement('div') });
       render(null, container);
       return host;
     });

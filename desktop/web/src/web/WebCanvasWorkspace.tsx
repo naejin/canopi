@@ -1,29 +1,36 @@
 import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import {
   designSessionStore,
   type DesignSessionStore,
 } from '../app/document-session/store'
 import { getCurrentCanvasSession, setCanvasRuntimeSurfaces } from '../canvas/session'
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
-import type { CanvasDocumentSurface, CanvasRuntimeHost } from '../canvas/runtime/runtime'
+import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { acquireCanvasRuntimeLifecycle } from '../canvas/runtime/lifecycle-owner'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
-import { createBrowserCanvasRuntimeHost } from './browser-canvas-runtime'
+import {
+  createBrowserWorkspaceRuntimeComposition,
+  type BrowserWorkspaceRuntimeMountOptions,
+} from './browser-workspace-runtime'
+import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
+import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-state'
 import { WebCanvasToolbar } from './WebCanvasToolbar'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
 
 interface WebCanvasWorkspaceProps {
   readonly controller?: BrowserDesignSessionController
   readonly store?: DesignSessionStore
-  readonly createRuntimeHost?: () => CanvasRuntimeHost
+  readonly createRuntimeComposition?: (
+    options: BrowserWorkspaceRuntimeMountOptions,
+  ) => WorkspaceRuntimeComposition
 }
 
 interface MountedRuntime {
-  readonly host: CanvasRuntimeHost
+  readonly composition: WorkspaceRuntimeComposition
   detachCanvasSession: () => void
   resizeObserver: ResizeObserver | null
 }
@@ -31,13 +38,14 @@ interface MountedRuntime {
 export function WebCanvasWorkspace({
   controller = browserDesignSessionController,
   store = designSessionStore,
-  createRuntimeHost = createBrowserCanvasRuntimeHost,
+  createRuntimeComposition = createBrowserWorkspaceRuntimeComposition,
 }: WebCanvasWorkspaceProps) {
   const hasDesign = store.currentDesign.value !== null
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<MountedRuntime | null>(null)
+  const [mapState, setMapState] = useState<MapLibreCanvasSurfaceState | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -46,29 +54,29 @@ export function WebCanvasWorkspace({
 
     let cancelled = false
     let releaseLease: (() => Promise<void>) | null = null
-    let host: CanvasRuntimeHost | null = null
+    let composition: WorkspaceRuntimeComposition | null = null
     let released = false
-    let hostCreationSettlement: Promise<void> | null = null
+    let compositionCreationSettlement: Promise<void> | null = null
     let attachmentSettlement: Promise<void> | null = null
 
     const releaseRuntime = async () => {
       if (released) return
-      const pendingCreation = hostCreationSettlement
+      const pendingCreation = compositionCreationSettlement
       if (pendingCreation) await pendingCreation
       if (released) return
-      const activeHost = host
-      if (!activeHost) {
+      const activeComposition = composition
+      if (!activeComposition) {
         released = true
         return
       }
 
       // A reentrant unmount can happen while browser attachment is still
       // returning its disposer. Keep the lease, then hand off with that exact
-      // disposer before destroying the host.
+      // disposer before disposing the composition.
       const pendingAttachment = attachmentSettlement
       if (pendingAttachment) await pendingAttachment
       if (released) return
-      const mounted = runtimeRef.current?.host === activeHost ? runtimeRef.current : null
+      const mounted = runtimeRef.current?.composition === activeComposition ? runtimeRef.current : null
 
       // Handoff is the loss-prevention boundary. Do it before the first await
       // so a failed capture retains this owner for a later retry.
@@ -84,13 +92,13 @@ export function WebCanvasWorkspace({
         errors.push(error)
       }
       try {
-        await activeHost.destroy()
+        await activeComposition.dispose()
       } catch (error) {
         errors.push(error)
       }
       if (mounted) runtimeRef.current = null
       try {
-        if (getCurrentCanvasSession() === activeHost.surfaces) {
+        if (getCurrentCanvasSession() === activeComposition.surfaces) {
           setCanvasRuntimeSurfaces(null)
         }
       } catch (error) {
@@ -121,19 +129,26 @@ export function WebCanvasWorkspace({
         return
       }
 
-      let finishHostCreation!: () => void
-      hostCreationSettlement = new Promise<void>((resolve) => {
-        finishHostCreation = resolve
+      let finishCompositionCreation!: () => void
+      compositionCreationSettlement = new Promise<void>((resolve) => {
+        finishCompositionCreation = resolve
       })
       try {
-        host = createRuntimeHost()
+        composition = createRuntimeComposition({
+          container,
+          store,
+          onMapStateChange: (state) => {
+            setMapState(state)
+          },
+          onFailure: (error) => console.error('Shared browser workspace failed:', error),
+        })
       } finally {
-        finishHostCreation()
-        hostCreationSettlement = null
+        finishCompositionCreation()
+        compositionCreationSettlement = null
       }
-      const activeHost = host
+      const activeComposition = composition
       runtimeRef.current = {
-        host: activeHost,
+        composition: activeComposition,
         detachCanvasSession: () => {},
         resizeObserver: null,
       }
@@ -142,8 +157,11 @@ export function WebCanvasWorkspace({
         return
       }
 
-      await activeHost.init(container)
-      if (cancelled || released || runtimeRef.current?.host !== activeHost) {
+      const outcome = await activeComposition.start()
+      if (outcome === 'cancelled') {
+        throw new Error('Shared browser workspace initialization was cancelled.')
+      }
+      if (cancelled || released || runtimeRef.current?.composition !== activeComposition) {
         release()
         return
       }
@@ -151,13 +169,8 @@ export function WebCanvasWorkspace({
       const mounted = runtimeRef.current
       const runtimeIsActive = () => !cancelled
         && !released
-        && runtimeRef.current?.host === activeHost
-      const documents = activeHost.surfaces.documents
-      documents.initializeViewport()
-      if (!runtimeIsActive()) {
-        release()
-        return
-      }
+        && runtimeRef.current?.composition === activeComposition
+      const documents = activeComposition.surfaces.documents
       documents.attachRulersTo(rulerOverlayRef.current ?? canvasArea)
       if (!runtimeIsActive()) {
         release()
@@ -184,7 +197,7 @@ export function WebCanvasWorkspace({
         release()
         return
       }
-      setCanvasRuntimeSurfaces(activeHost.surfaces)
+      setCanvasRuntimeSurfaces(activeComposition.surfaces)
       if (!runtimeIsActive()) release()
     })().catch((error: unknown) => {
       release()
@@ -197,7 +210,7 @@ export function WebCanvasWorkspace({
       cancelled = true
       release()
     }
-  }, [controller, createRuntimeHost, store])
+  }, [controller, createRuntimeComposition, store])
 
   return (
     <div className={panelStyles.canvasPanel} data-testid="web-canvas-workspace">
@@ -208,8 +221,8 @@ export function WebCanvasWorkspace({
             <div
               ref={containerRef}
               className={panelStyles.canvasContainer}
-              data-map-active="false"
-              data-testid="web-canvas-runtime-host"
+              data-map-active={mapState?.status === 'ready' ? 'true' : 'false'}
+              data-testid="web-canvas-workspace-surface"
             />
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
             {hasDesign && <InspectionLens canvasRef={containerRef} />}

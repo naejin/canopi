@@ -14,13 +14,16 @@ import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasQuerySurface,
-  CanvasRuntimeHost,
   CanvasRuntimeSurfaces,
 } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
+import type {
+  WorkspaceRuntimeComposition,
+  WorkspaceRuntimeStartOutcome,
+} from '../app/canvas-map-surface/workspace-runtime-composition'
 
 describe('Web Edition canvas workspace', () => {
   let container: HTMLDivElement
@@ -46,7 +49,78 @@ describe('Web Edition canvas workspace', () => {
     layerVisibility.value = createDefaultLayerVisibility()
   })
 
-  it('mounts the shared canvas runtime surface without deferred desktop panels', async () => {
+  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'fallback-ready'])(
+    'mounts the shared canvas runtime surface after %s without deferred desktop panels',
+    async (outcome) => {
+      container = document.createElement('div')
+      document.body.appendChild(container)
+      const store = createMemoryDesignSessionStore()
+      const controller = createBrowserDesignSessionController({
+        store,
+        appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+        now: () => new Date('2026-07-04T12:00:00.000Z'),
+      })
+      const runtime = fakeRuntimeComposition(outcome)
+      const attachCanvasSession = vi.spyOn(controller, 'attachCanvasSession')
+      const observe = vi.fn<(target: Element) => void>()
+      const OriginalResizeObserver = globalThis.ResizeObserver
+      globalThis.ResizeObserver = class {
+        observe = observe
+        unobserve() {}
+        disconnect() {}
+      } as unknown as typeof ResizeObserver
+      const publishSurfaces = vi.fn()
+      const disposePublicationEffect = effect(() => {
+        if (currentCanvasSession.value === runtime.composition.surfaces) publishSurfaces()
+      })
+
+      try {
+        await controller.newDesign()
+        await act(async () => {
+          render(
+            <WebCanvasWorkspace
+              controller={controller}
+              store={store}
+              createRuntimeComposition={() => runtime.composition}
+            />,
+            container,
+          )
+          await flushMicrotasks()
+        })
+        await flushMicrotasks()
+
+        expect(runtime.composition.start).toHaveBeenCalledOnce()
+        expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
+        expect(runtime.documents.loadDocument).toHaveBeenCalledWith(expect.objectContaining({ name: 'Untitled' }))
+        expect(runtime.documents.showCanvasChrome).toHaveBeenCalled()
+        expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
+        const startupOrder = [
+          vi.mocked(runtime.composition.start).mock.invocationCallOrder[0]!,
+          vi.mocked(runtime.documents.attachRulersTo).mock.invocationCallOrder[0]!,
+          attachCanvasSession.mock.invocationCallOrder[0]!,
+          vi.mocked(runtime.documents.resize).mock.invocationCallOrder[0]!,
+          observe.mock.invocationCallOrder[0]!,
+          publishSurfaces.mock.invocationCallOrder[0]!,
+        ]
+        expect(startupOrder).toEqual([...startupOrder].sort((left, right) => left - right))
+        expect(container.querySelector('[data-testid="web-canvas-workspace"]')).not.toBeNull()
+        expect(container.querySelector('[data-testid="web-canvas-workspace-surface"]')).not.toBeNull()
+        expect(container.textContent).not.toContain('Timeline')
+        expect(container.textContent).not.toContain('Budget')
+        expect(container.textContent).not.toContain('Consortium')
+        expect(container.textContent).not.toContain('Display')
+        expect(container.textContent).not.toContain('Color by')
+        expect(container.textContent).not.toContain('Design notebook')
+        expect(container.textContent).not.toContain('Problem Report')
+      } finally {
+        disposePublicationEffect()
+        attachCanvasSession.mockRestore()
+        globalThis.ResizeObserver = OriginalResizeObserver
+      }
+    },
+  )
+
+  it('does not attach or publish a composition whose start is cancelled', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     const store = createMemoryDesignSessionStore()
@@ -55,35 +129,35 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost()
-
+    const runtime = fakeRuntimeComposition('cancelled')
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     await controller.newDesign()
-    await act(async () => {
-      render(
-        <WebCanvasWorkspace
-          controller={controller}
-          store={store}
-          createRuntimeHost={() => runtime.host}
-        />,
-        container,
-      )
-      await flushMicrotasks()
-    })
-    await flushMicrotasks()
 
-    expect(runtime.host.init).toHaveBeenCalledOnce()
-    expect(runtime.documents.loadDocument).toHaveBeenCalledWith(expect.objectContaining({ name: 'Untitled' }))
-    expect(runtime.documents.showCanvasChrome).toHaveBeenCalled()
-    expect(currentCanvasSession.value).toBe(runtime.host.surfaces)
-    expect(container.querySelector('[data-testid="web-canvas-workspace"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="web-canvas-runtime-host"]')).not.toBeNull()
-    expect(container.textContent).not.toContain('Timeline')
-    expect(container.textContent).not.toContain('Budget')
-    expect(container.textContent).not.toContain('Consortium')
-    expect(container.textContent).not.toContain('Display')
-    expect(container.textContent).not.toContain('Color by')
-    expect(container.textContent).not.toContain('Design notebook')
-    expect(container.textContent).not.toContain('Problem Report')
+    try {
+      await act(async () => {
+        render(
+          <WebCanvasWorkspace
+            controller={controller}
+            store={store}
+            createRuntimeComposition={() => runtime.composition}
+          />,
+          container,
+        )
+        await flushMicrotasks()
+      })
+      await flushMicrotasks()
+
+      expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
+      expect(runtime.documents.loadDocument).not.toHaveBeenCalled()
+      expect(currentCanvasSession.value).toBeNull()
+      expect(runtime.composition.dispose).toHaveBeenCalledOnce()
+      expect(logError).toHaveBeenCalledWith(
+        'Failed to initialize browser canvas runtime:',
+        expect.objectContaining({ message: 'Shared browser workspace initialization was cancelled.' }),
+      )
+    } finally {
+      logError.mockRestore()
+    }
   })
 
   it('does not continue initialization after publication synchronously releases the runtime', async () => {
@@ -95,8 +169,8 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const first = fakeRuntimeHost()
-    const second = fakeRuntimeHost()
+    const first = fakeRuntimeComposition()
+    const second = fakeRuntimeComposition()
     const observe = vi.fn()
     const disconnect = vi.fn()
     const OriginalResizeObserver = globalThis.ResizeObserver
@@ -109,7 +183,7 @@ describe('Web Edition canvas workspace', () => {
     const disposePublicationEffect = effect(() => {
       if (
         !releasedFirst
-        && currentCanvasSession.value === first.host.surfaces
+        && currentCanvasSession.value === first.composition.surfaces
       ) {
         releasedFirst = true
         render(null, container)
@@ -124,7 +198,7 @@ describe('Web Edition canvas workspace', () => {
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => first.host}
+            createRuntimeComposition={() => first.composition}
           />,
           container,
         )
@@ -132,8 +206,8 @@ describe('Web Edition canvas workspace', () => {
       })
       await flushMicrotasks()
 
-      const destroyOrder = vi.mocked(first.host.destroy).mock.invocationCallOrder[0] ?? 0
-      expect(first.host.destroy).toHaveBeenCalledOnce()
+      const destroyOrder = vi.mocked(first.composition.dispose).mock.invocationCallOrder[0] ?? 0
+      expect(first.composition.dispose).toHaveBeenCalledOnce()
       expect(vi.mocked(first.documents.resize).mock.invocationCallOrder[0])
         .toBeLessThan(destroyOrder)
       expect(observe.mock.invocationCallOrder[0]).toBeLessThan(destroyOrder)
@@ -146,22 +220,22 @@ describe('Web Edition canvas workspace', () => {
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => second.host}
+            createRuntimeComposition={() => second.composition}
           />,
           container,
         )
         await flushMicrotasks()
       })
       await flushMicrotasks()
-      expect(second.host.init).toHaveBeenCalledOnce()
-      expect(currentCanvasSession.value).toBe(second.host.surfaces)
+      expect(second.composition.start).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBe(second.composition.surfaces)
     } finally {
       disposePublicationEffect()
       globalThis.ResizeObserver = OriginalResizeObserver
     }
   })
 
-  it('releases the old owner before a refreshed host adapter mounts', async () => {
+  it('releases the old owner before a refreshed composition mounts', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     const store = createMemoryDesignSessionStore()
@@ -170,10 +244,10 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const first = fakeRuntimeHost()
-    const second = fakeRuntimeHost()
-    const firstFactory = () => first.host
-    const secondFactory = () => second.host
+    const first = fakeRuntimeComposition()
+    const second = fakeRuntimeComposition()
+    const firstFactory = () => first.composition
+    const secondFactory = () => second.composition
     await controller.newDesign()
 
     await act(async () => {
@@ -181,21 +255,21 @@ describe('Web Edition canvas workspace', () => {
         <WebCanvasWorkspace
           controller={controller}
           store={store}
-          createRuntimeHost={firstFactory}
+          createRuntimeComposition={firstFactory}
         />,
         container,
       )
       await flushMicrotasks()
     })
     await flushMicrotasks()
-    expect(currentCanvasSession.value).toBe(first.host.surfaces)
+    expect(currentCanvasSession.value).toBe(first.composition.surfaces)
 
     await act(async () => {
       render(
         <WebCanvasWorkspace
           controller={controller}
           store={store}
-          createRuntimeHost={secondFactory}
+          createRuntimeComposition={secondFactory}
         />,
         container,
       )
@@ -204,9 +278,9 @@ describe('Web Edition canvas workspace', () => {
     await flushMicrotasks()
 
     expect(first.documents.captureForPersistence).toHaveBeenCalledOnce()
-    expect(first.host.destroy).toHaveBeenCalledOnce()
-    expect(second.host.init).toHaveBeenCalledOnce()
-    expect(currentCanvasSession.value).toBe(second.host.surfaces)
+    expect(first.composition.dispose).toHaveBeenCalledOnce()
+    expect(second.composition.start).toHaveBeenCalledOnce()
+    expect(currentCanvasSession.value).toBe(second.composition.surfaces)
   })
 
   it('does not construct or publish a successor until the prior release settles', async () => {
@@ -218,17 +292,17 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const first = fakeRuntimeHost()
-    const second = fakeRuntimeHost()
+    const first = fakeRuntimeComposition()
+    const second = fakeRuntimeComposition()
     const release = deferred<void>()
-    vi.mocked(first.host.destroy).mockImplementationOnce(() => release.promise)
-    const firstFactory = vi.fn(() => first.host)
-    const secondFactory = vi.fn(() => second.host)
+    vi.mocked(first.composition.dispose).mockImplementationOnce(() => release.promise)
+    const firstFactory = vi.fn(() => first.composition)
+    const secondFactory = vi.fn(() => second.composition)
     await controller.newDesign()
 
     await act(async () => {
       render(
-        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={firstFactory} />,
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeComposition={firstFactory} />,
         container,
       )
       await flushMicrotasks()
@@ -237,7 +311,7 @@ describe('Web Edition canvas workspace', () => {
 
     await act(async () => {
       render(
-        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={secondFactory} />,
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeComposition={secondFactory} />,
         container,
       )
       await flushMicrotasks()
@@ -246,17 +320,17 @@ describe('Web Edition canvas workspace', () => {
 
     expect(firstFactory).toHaveBeenCalledOnce()
     expect(secondFactory).not.toHaveBeenCalled()
-    expect(currentCanvasSession.value).toBe(first.host.surfaces)
+    expect(currentCanvasSession.value).toBe(first.composition.surfaces)
 
     release.resolve()
     await flushMicrotasks()
 
     expect(secondFactory).toHaveBeenCalledOnce()
-    expect(second.host.init).toHaveBeenCalledOnce()
-    expect(currentCanvasSession.value).toBe(second.host.surfaces)
+    expect(second.composition.start).toHaveBeenCalledOnce()
+    expect(currentCanvasSession.value).toBe(second.composition.surfaces)
   })
 
-  it('releases a host without attaching or publishing after unmount during initialization', async () => {
+  it('releases a composition without attaching or publishing after unmount during initialization', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     const store = createMemoryDesignSessionStore()
@@ -265,32 +339,37 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost()
+    const runtime = fakeRuntimeComposition()
     const initialization = deferred<void>()
-    vi.mocked(runtime.host.init).mockImplementationOnce(() => initialization.promise)
+    vi.mocked(runtime.composition.start).mockImplementationOnce(async () => {
+      await initialization.promise
+      return 'shared-ready'
+    })
     await controller.newDesign()
 
     await act(async () => {
       render(
-        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={() => runtime.host} />,
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeComposition={() => runtime.composition} />,
         container,
       )
       await flushMicrotasks()
     })
     await flushMicrotasks()
-    expect(runtime.host.init).toHaveBeenCalledOnce()
+    expect(runtime.composition.start).toHaveBeenCalledOnce()
 
     render(null, container)
     initialization.resolve()
     await flushMicrotasks()
 
+    // The mounted owner cannot attach or publish after the component releases
+    // its lease while composition start is pending.
     expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
     expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
     expect(currentCanvasSession.value).toBeNull()
-    expect(runtime.host.destroy).toHaveBeenCalledOnce()
+    expect(runtime.composition.dispose).toHaveBeenCalledOnce()
   })
 
-  it('releases a host returned by a factory that unmounts reentrantly', async () => {
+  it('releases a composition returned by a factory that unmounts reentrantly', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     const store = createMemoryDesignSessionStore()
@@ -299,25 +378,25 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost()
-    const createRuntimeHost = vi.fn(() => {
+    const runtime = fakeRuntimeComposition()
+    const createRuntimeComposition = vi.fn(() => {
       render(null, container)
-      return runtime.host
+      return runtime.composition
     })
     await controller.newDesign()
 
     await act(async () => {
       render(
-        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={createRuntimeHost} />,
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeComposition={createRuntimeComposition} />,
         container,
       )
       await flushMicrotasks()
     })
     await flushMicrotasks()
 
-    expect(createRuntimeHost).toHaveBeenCalledOnce()
-    expect(runtime.host.init).not.toHaveBeenCalled()
-    expect(runtime.host.destroy).toHaveBeenCalledOnce()
+    expect(createRuntimeComposition).toHaveBeenCalledOnce()
+    expect(runtime.composition.start).not.toHaveBeenCalled()
+    expect(runtime.composition.dispose).toHaveBeenCalledOnce()
     expect(currentCanvasSession.value).toBeNull()
   })
 
@@ -330,7 +409,7 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost()
+    const runtime = fakeRuntimeComposition()
     const attach = controller.attachCanvasSession.bind(controller)
     const detach = vi.fn()
     vi.spyOn(controller, 'attachCanvasSession').mockImplementation((documents) => {
@@ -345,7 +424,7 @@ describe('Web Edition canvas workspace', () => {
 
     await act(async () => {
       render(
-        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={() => runtime.host} />,
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeComposition={() => runtime.composition} />,
         container,
       )
       await flushMicrotasks()
@@ -353,7 +432,7 @@ describe('Web Edition canvas workspace', () => {
     await flushMicrotasks()
 
     expect(detach).toHaveBeenCalledOnce()
-    expect(runtime.host.destroy).toHaveBeenCalledOnce()
+    expect(runtime.composition.dispose).toHaveBeenCalledOnce()
     expect(currentCanvasSession.value).toBeNull()
   })
 
@@ -371,14 +450,14 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost()
+    const runtime = fakeRuntimeComposition('no-design')
 
     await act(async () => {
       render(
         <WebCanvasWorkspace
           controller={controller}
           store={store}
-          createRuntimeHost={() => runtime.host}
+          createRuntimeComposition={() => runtime.composition}
         />,
         container,
       )
@@ -387,6 +466,7 @@ describe('Web Edition canvas workspace', () => {
     await flushMicrotasks()
 
     expect(runtime.documents.hideCanvasChrome).toHaveBeenCalled()
+    expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
     expect(container.querySelector('[data-testid="web-welcome-screen"]')).not.toBeNull()
     expect(container.querySelector('img[alt="Canopi"]')).not.toBeNull()
     expect(container.textContent).toContain('New Design')
@@ -414,7 +494,7 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost()
+    const runtime = fakeRuntimeComposition()
 
     await controller.newDesign()
     await act(async () => {
@@ -422,7 +502,7 @@ describe('Web Edition canvas workspace', () => {
         <WebCanvasWorkspace
           controller={controller}
           store={store}
-          createRuntimeHost={() => runtime.host}
+          createRuntimeComposition={() => runtime.composition}
         />,
         container,
       )
@@ -449,7 +529,7 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const runtime = fakeRuntimeHost()
+    const runtime = fakeRuntimeComposition()
     vi.mocked(runtime.documents.loadDocument).mockImplementation(() => {
       throw new Error('canvas hydration failed')
     })
@@ -462,7 +542,7 @@ describe('Web Edition canvas workspace', () => {
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => runtime.host}
+            createRuntimeComposition={() => runtime.composition}
           />,
           container,
         )
@@ -476,7 +556,7 @@ describe('Web Edition canvas workspace', () => {
           expect.objectContaining({ message: 'canvas hydration failed' }),
         )
       })
-      expect(runtime.host.destroy).toHaveBeenCalledOnce()
+      expect(runtime.composition.dispose).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBeNull()
     } finally {
       logError.mockRestore()
@@ -492,11 +572,11 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const existing = fakeRuntimeHost()
-    const rejected = fakeRuntimeHost()
+    const existing = fakeRuntimeComposition()
+    const rejected = fakeRuntimeComposition()
     await controller.newDesign()
     const detachExisting = controller.attachCanvasSession(existing.documents)
-    currentCanvasSession.value = existing.host.surfaces
+    currentCanvasSession.value = existing.composition.surfaces
     const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     try {
@@ -505,7 +585,7 @@ describe('Web Edition canvas workspace', () => {
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => rejected.host}
+            createRuntimeComposition={() => rejected.composition}
           />,
           container,
         )
@@ -513,8 +593,8 @@ describe('Web Edition canvas workspace', () => {
       })
       await flushMicrotasks()
 
-      await vi.waitFor(() => expect(rejected.host.destroy).toHaveBeenCalledOnce())
-      expect(currentCanvasSession.value).toBe(existing.host.surfaces)
+      await vi.waitFor(() => expect(rejected.composition.dispose).toHaveBeenCalledOnce())
+      expect(currentCanvasSession.value).toBe(existing.composition.surfaces)
       expect(rejected.documents.loadDocument).not.toHaveBeenCalled()
     } finally {
       render(null, container)
@@ -533,8 +613,8 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const first = fakeRuntimeHost()
-    const second = fakeRuntimeHost()
+    const first = fakeRuntimeComposition()
+    const second = fakeRuntimeComposition()
     const disconnect = vi.fn()
     const OriginalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {
@@ -550,7 +630,7 @@ describe('Web Edition canvas workspace', () => {
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => first.host}
+            createRuntimeComposition={() => first.composition}
           />,
           container,
         )
@@ -573,15 +653,15 @@ describe('Web Edition canvas workspace', () => {
       render(null, container)
       await flushMicrotasks()
       expect(disconnect).not.toHaveBeenCalled()
-      expect(first.host.destroy).not.toHaveBeenCalled()
-      expect(currentCanvasSession.value).toBe(first.host.surfaces)
+      expect(first.composition.dispose).not.toHaveBeenCalled()
+      expect(currentCanvasSession.value).toBe(first.composition.surfaces)
 
       await act(async () => {
         render(
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => second.host}
+            createRuntimeComposition={() => second.composition}
           />,
           container,
         )
@@ -590,9 +670,9 @@ describe('Web Edition canvas workspace', () => {
       await flushMicrotasks()
 
       expect(disconnect).toHaveBeenCalledOnce()
-      expect(first.host.destroy).toHaveBeenCalledOnce()
-      expect(second.host.init).toHaveBeenCalledOnce()
-      expect(currentCanvasSession.value).toBe(second.host.surfaces)
+      expect(first.composition.dispose).toHaveBeenCalledOnce()
+      expect(second.composition.start).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBe(second.composition.surfaces)
     } finally {
       globalThis.ResizeObserver = OriginalResizeObserver
     }
@@ -607,15 +687,15 @@ describe('Web Edition canvas workspace', () => {
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => new Date('2026-07-04T12:00:00.000Z'),
     })
-    const first = fakeRuntimeHost()
-    const second = fakeRuntimeHost()
+    const first = fakeRuntimeComposition()
+    const second = fakeRuntimeComposition()
     const disconnectError = new Error('observer disconnect failed')
     const destroyError = new Error('runtime destroy failed')
     const disconnect = vi.fn()
     disconnect.mockImplementationOnce(() => {
       throw disconnectError
     })
-    vi.mocked(first.host.destroy).mockImplementationOnce(() => {
+    vi.mocked(first.composition.dispose).mockImplementationOnce(() => {
       throw destroyError
     })
     const OriginalResizeObserver = globalThis.ResizeObserver
@@ -633,7 +713,7 @@ describe('Web Edition canvas workspace', () => {
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => first.host}
+            createRuntimeComposition={() => first.composition}
           />,
           container,
       )
@@ -646,7 +726,7 @@ describe('Web Edition canvas workspace', () => {
 
       expect(first.documents.captureForPersistence).toHaveBeenCalledOnce()
       expect(disconnect).toHaveBeenCalledOnce()
-      expect(first.host.destroy).toHaveBeenCalledOnce()
+      expect(first.composition.dispose).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBeNull()
       const cleanupError = logError.mock.calls.find(
         ([message]) => message === 'Failed to release browser canvas runtime:',
@@ -663,7 +743,7 @@ describe('Web Edition canvas workspace', () => {
           <WebCanvasWorkspace
             controller={controller}
             store={store}
-            createRuntimeHost={() => second.host}
+            createRuntimeComposition={() => second.composition}
           />,
           container,
         )
@@ -671,8 +751,8 @@ describe('Web Edition canvas workspace', () => {
       })
       await flushMicrotasks()
 
-      expect(second.host.init).toHaveBeenCalledOnce()
-      expect(currentCanvasSession.value).toBe(second.host.surfaces)
+      expect(second.composition.start).toHaveBeenCalledOnce()
+      expect(currentCanvasSession.value).toBe(second.composition.surfaces)
     } finally {
       globalThis.ResizeObserver = OriginalResizeObserver
       logError.mockRestore()
@@ -699,8 +779,10 @@ function memoryStorage(): MemoryStorage {
   }
 }
 
-function fakeRuntimeHost(): {
-  host: CanvasRuntimeHost
+function fakeRuntimeComposition(
+  outcome: WorkspaceRuntimeStartOutcome = 'shared-ready',
+): {
+  composition: WorkspaceRuntimeComposition
   documents: CanvasDocumentSurface
 } {
   let loaded = false
@@ -728,16 +810,16 @@ function fakeRuntimeHost(): {
     resize: vi.fn(),
     destroy: vi.fn(async () => undefined),
   }
-  const host: CanvasRuntimeHost = {
+  const composition: WorkspaceRuntimeComposition = {
     surfaces: {
       commands: fakeCommandSurface(),
       queries: fakeQuerySurface(),
       documents,
     } satisfies CanvasRuntimeSurfaces,
-    init: vi.fn(async () => undefined),
-    destroy: vi.fn(),
+    start: vi.fn(async () => outcome),
+    dispose: vi.fn(),
   }
-  return { host, documents }
+  return { composition, documents }
 }
 
 function fakeCommandSurface(): CanvasCommandSurface {

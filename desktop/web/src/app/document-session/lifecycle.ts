@@ -2,18 +2,20 @@ import {
   getCurrentCanvasSession,
   setCanvasRuntimeSurfaces,
 } from "../../canvas/session";
-import type {
-  CanvasDocumentSurface,
-  CanvasRuntimeHost,
-  CanvasRuntimeSurfaces,
-} from "../../canvas/runtime/runtime";
+import type { CanvasDocumentSurface, CanvasRuntimeSurfaces } from "../../canvas/runtime/runtime";
 import {
   CanvasRuntimeCleanupError,
   runCanvasRuntimeCleanups,
 } from "../../canvas/runtime/cleanup";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
-import { createAppCanvasRuntimeHost } from "../canvas-runtime/host";
+import {
+  createDesktopWorkspaceRuntimeComposition,
+} from "../canvas-map-surface/desktop-workspace-runtime";
+import type {
+  WorkspaceRuntimeComposition,
+  WorkspaceRuntimeMountOptions,
+} from "../canvas-map-surface/workspace-runtime-composition";
 import {
   abortFailedAttachedDesignSessionStart,
   autosaveDesignSession,
@@ -26,6 +28,7 @@ interface DesignSessionLifecycleHost {
   readonly canvasArea: HTMLElement;
   readonly container: HTMLElement;
   readonly rulerOverlay: HTMLElement | null;
+  readonly onMapStateChange?: WorkspaceRuntimeMountOptions['onMapStateChange'];
 }
 
 interface DesignSessionResizeObserver {
@@ -34,7 +37,9 @@ interface DesignSessionResizeObserver {
 }
 
 interface DesignSessionLifecycleDeps {
-  readonly createRuntimeHost: () => CanvasRuntimeHost;
+  readonly createRuntimeComposition: (
+    options: WorkspaceRuntimeMountOptions,
+  ) => WorkspaceRuntimeComposition;
   readonly publishSurfaces: (surfaces: CanvasRuntimeSurfaces | null) => void;
   readonly createResizeObserver: (
     callback: ResizeObserverCallback,
@@ -45,7 +50,7 @@ interface DesignSessionLifecycleDeps {
 }
 
 const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
-  createRuntimeHost: createAppCanvasRuntimeHost,
+  createRuntimeComposition: createDesktopWorkspaceRuntimeComposition,
   publishSurfaces: setCanvasRuntimeSurfaces,
   createResizeObserver: (callback) => {
     if (typeof ResizeObserver === "undefined") return null;
@@ -73,7 +78,7 @@ export function createDesignSessionLifecycle(
 }
 
 class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
-  private readonly runtimeHost: CanvasRuntimeHost;
+  private readonly runtime: WorkspaceRuntimeComposition;
   private readonly surfaces: CanvasRuntimeSurfaces;
   private readonly documents: CanvasDocumentSurface;
   private cancelled = false;
@@ -87,20 +92,25 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     private readonly host: DesignSessionLifecycleHost,
     private readonly deps: DesignSessionLifecycleDeps,
   ) {
-    this.runtimeHost = deps.createRuntimeHost();
-    this.surfaces = this.runtimeHost.surfaces;
+    this.runtime = deps.createRuntimeComposition({
+      container: host.container,
+      onMapStateChange: host.onMapStateChange,
+      onFailure: (error) => deps.logError('Shared desktop workspace failed:', error),
+    });
+    this.surfaces = this.runtime.surfaces;
     this.documents = this.surfaces.documents;
   }
 
   start(): void {
     this.updateAutosaveInterval(this.deps.readInitialAutosaveInterval());
 
-    void this.runtimeHost.init(this.host.container).then(async () => {
+    void this.runtime.start().then(async (outcome) => {
       if (this.cancelled) return;
 
+      if (outcome === 'cancelled') {
+        throw new Error('Shared workspace initialization was cancelled.');
+      }
       this.runtimeInitialized = true;
-      this.documents.initializeViewport();
-      if (this.cancelled) return;
       if (this.host.rulerOverlay) {
         this.documents.attachRulersTo(this.host.rulerOverlay);
         if (this.cancelled) return;
@@ -167,8 +177,8 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     try {
       runCanvasRuntimeCleanups([
         () => this.clearAutosaveTimer(),
-        () => this.disconnectResizeObserver(),
         () => this.cancelPendingDocumentLoad(),
+        () => this.disconnectResizeObserver(),
       ], "Design Session lifecycle cleanup failed");
     } catch (error) {
       synchronousCleanupError = error;
@@ -188,7 +198,7 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
       errors.push(error);
     }
     try {
-      await this.runtimeHost.destroy();
+      await this.runtime.dispose();
     } catch (error) {
       errors.push(error);
     }

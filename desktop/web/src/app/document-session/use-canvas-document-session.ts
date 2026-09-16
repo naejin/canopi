@@ -2,6 +2,7 @@ import { useEffect, useRef } from "preact/hooks";
 import { acquireCanvasRuntimeLifecycle } from "../../canvas/runtime/lifecycle-owner";
 import { autoSaveIntervalMs } from "../settings/state";
 import { createDesignSessionLifecycle, type DesignSessionLifecycle } from "./lifecycle";
+import type { WorkspaceRuntimeMountOptions } from '../canvas-map-surface/workspace-runtime-composition'
 
 interface MutableDomRef<T> {
   current: T | null;
@@ -11,6 +12,7 @@ interface CanvasDocumentSessionRefs {
   canvasAreaRef: MutableDomRef<HTMLDivElement>;
   containerRef: MutableDomRef<HTMLDivElement>;
   rulerOverlayRef: MutableDomRef<HTMLDivElement>;
+  onMapStateChange?: WorkspaceRuntimeMountOptions['onMapStateChange'];
 }
 
 /**
@@ -21,6 +23,7 @@ export function useCanvasDocumentSession({
   canvasAreaRef,
   containerRef,
   rulerOverlayRef,
+  onMapStateChange,
 }: CanvasDocumentSessionRefs): void {
   const lifecycleRef = useRef<DesignSessionLifecycle | null>(null);
 
@@ -64,6 +67,7 @@ export function useCanvasDocumentSession({
             canvasArea,
             container,
             rulerOverlay: rulerOverlayRef.current,
+            onMapStateChange,
           }, {
             onInitializationFailure: release,
           });
