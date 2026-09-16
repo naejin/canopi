@@ -6,6 +6,7 @@ import type {
   MapLibreMapInstance,
 } from '../../maplibre/loader'
 import { MAPLIBRE_BASEMAP_RASTER_LAYER_ID, MAPLIBRE_BASEMAP_SOURCE_ID } from '../../maplibre/config'
+import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
 
 type MapListener = (event?: unknown) => void
@@ -15,13 +16,28 @@ class FakeMap implements MapLibreMapInstance {
   readonly jumpTo = vi.fn()
   readonly resize = vi.fn()
   readonly remove = vi.fn()
-  readonly addSource = vi.fn()
-  readonly getSource = vi.fn()
-  readonly removeSource = vi.fn()
-  readonly addLayer = vi.fn()
+  readonly sources = new Map<string, unknown>()
+  readonly layers = new Map<string, unknown>()
+  readonly layerOrder: string[] = []
+  readonly addSource = vi.fn((id: string, source: unknown) => { this.sources.set(id, source) })
+  readonly getSource = vi.fn((id: string) => this.sources.get(id) as { setData(data: unknown): void } | undefined)
+  readonly removeSource = vi.fn((id: string) => { this.sources.delete(id) })
+  readonly addLayer = vi.fn((layer: { id?: string }, beforeId?: string) => {
+    if (!layer.id) return
+    this.layers.set(layer.id, layer)
+    const existingIndex = this.layerOrder.indexOf(layer.id)
+    if (existingIndex >= 0) this.layerOrder.splice(existingIndex, 1)
+    const beforeIndex = beforeId == null ? -1 : this.layerOrder.indexOf(beforeId)
+    if (beforeIndex >= 0) this.layerOrder.splice(beforeIndex, 0, layer.id)
+    else this.layerOrder.push(layer.id)
+  })
   readonly setPaintProperty = vi.fn()
-  readonly getLayer = vi.fn()
-  readonly removeLayer = vi.fn()
+  readonly getLayer = vi.fn((id: string) => this.layers.get(id))
+  readonly removeLayer = vi.fn((id: string) => {
+    this.layers.delete(id)
+    const index = this.layerOrder.indexOf(id)
+    if (index >= 0) this.layerOrder.splice(index, 1)
+  })
   readonly listeners = new Map<string, Set<MapListener>>()
 
   constructor(
@@ -47,6 +63,11 @@ class FakeMap implements MapLibreMapInstance {
   getCanvas(): HTMLCanvasElement { return this.canvas }
   emit(type: string, event?: unknown): void {
     for (const listener of this.listeners.get(type) ?? []) listener(event)
+  }
+  clearStyle(): void {
+    this.sources.clear()
+    this.layers.clear()
+    this.layerOrder.length = 0
   }
 }
 
@@ -134,6 +155,181 @@ describe('WorkspaceMapControls', () => {
       'raster-opacity',
       0.4,
     )
+  })
+
+  it('uses initial style.load only for admission, then restores the basemap before its restorer', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const restorer = vi.fn()
+    controls.installStyleRestorer(map as never, restorer)
+    expect(restorer).not.toHaveBeenCalled()
+
+    map.clearStyle()
+    map.emit('style.load')
+
+    expect(map.addSource).toHaveBeenCalledTimes(2)
+    expect(map.setPaintProperty).toHaveBeenCalledTimes(2)
+    expect(restorer).toHaveBeenCalledOnce()
+    expect(map.addSource.mock.invocationCallOrder[1]).toBeLessThan(restorer.mock.invocationCallOrder[0]!)
+  })
+
+  it('inserts a restored basemap below a custom scene layer preserved by a diff reload', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
+    const restorer = vi.fn()
+    controls.installStyleRestorer(map as never, restorer)
+
+    map.removeLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
+    map.removeSource(MAPLIBRE_BASEMAP_SOURCE_ID)
+    map.emit('style.load')
+
+    expect(map.layerOrder).toEqual([
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+    ])
+    expect(map.addLayer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID }),
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+    )
+    expect(restorer).toHaveBeenCalledOnce()
+  })
+
+  it('queues a style reload emitted synchronously during restoration', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    let reloadDuringRestoration = true
+    const restorer = vi.fn(() => {
+      if (!reloadDuringRestoration) return
+      reloadDuringRestoration = false
+      map.clearStyle()
+      map.emit('style.load')
+    })
+    controls.installStyleRestorer(map as never, restorer)
+
+    map.clearStyle()
+    map.emit('style.load')
+    await Promise.resolve()
+
+    expect(restorer).toHaveBeenCalledTimes(2)
+    expect(map.addSource).toHaveBeenCalledTimes(3)
+    expect(map.addLayer).toHaveBeenCalledTimes(3)
+    expect(map.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)).toBeDefined()
+  })
+
+  it.each([
+    ['provisional', true],
+    ['confirmed', false],
+  ] as const)('does not restore a remote basemap for %s or hidden presentation', async (placementStatus, basemapVisible) => {
+    const { controls, maps } = createControls({ placementStatus, basemapVisible })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const restorer = vi.fn()
+    controls.installStyleRestorer(map as never, restorer)
+
+    map.clearStyle()
+    map.emit('style.load')
+
+    expect(map.addSource).not.toHaveBeenCalled()
+    expect(restorer).toHaveBeenCalledOnce()
+  })
+
+  it('replays one coalesced style reload that arrived before registration', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    map.clearStyle()
+    map.emit('style.load')
+    map.emit('style.load')
+    const restorer = vi.fn()
+
+    controls.installStyleRestorer(map as never, restorer)
+
+    expect(restorer).toHaveBeenCalledOnce()
+    expect(map.addSource).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops style reconstruction as soon as its registration is disposed', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const restorer = vi.fn()
+    const dispose = controls.installStyleRestorer(map as never, restorer)
+
+    dispose()
+    map.clearStyle()
+    map.emit('style.load')
+
+    expect(map.addSource).toHaveBeenCalledOnce()
+    expect(restorer).not.toHaveBeenCalled()
+  })
+
+  it('reports a post-admission restoration failure through the existing watcher', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const reportFailure = vi.fn()
+    controls.watchFailure(map as never, reportFailure)
+    controls.installStyleRestorer(map as never, vi.fn())
+    const failure = new Error('restored source rejected')
+    map.clearStyle()
+    map.addSource.mockImplementation(() => { throw failure })
+
+    map.emit('style.load')
+
+    expect(reportFailure).toHaveBeenCalledWith(failure)
+  })
+
+  it('reports a restored basemap paint failure through the existing watcher', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const reportFailure = vi.fn()
+    controls.watchFailure(map as never, reportFailure)
+    controls.installStyleRestorer(map as never, vi.fn())
+    const failure = new Error('restored opacity rejected')
+    map.clearStyle()
+    map.setPaintProperty.mockImplementation(() => { throw failure })
+
+    map.emit('style.load')
+
+    expect(reportFailure).toHaveBeenCalledWith(failure)
+  })
+
+  it('reports a scene restorer failure through the existing watcher', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const reportFailure = vi.fn()
+    controls.watchFailure(map as never, reportFailure)
+    const failure = new Error('scene layer rejected')
+    controls.installStyleRestorer(map as never, () => { throw failure })
+
+    map.clearStyle()
+    map.emit('style.load')
+
+    expect(reportFailure).toHaveBeenCalledWith(failure)
   })
 
   it('treats a synchronous source event as passive after the local style is admitted', async () => {

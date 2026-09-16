@@ -45,9 +45,12 @@ class FakeMap {
     this.listeners.set(type, listeners)
   })
   readonly off = vi.fn((type: string, listener: () => void) => this.listeners.get(type)?.delete(listener))
-  readonly addLayer = vi.fn((layer: { onAdd?: (map: unknown, context: WebGL2RenderingContext) => void }) => {
+  readonly layers = new Map<string, { onAdd?: (map: unknown, context: WebGL2RenderingContext) => void; onRemove?: (map: unknown, context: WebGL2RenderingContext) => void }>()
+  readonly addLayer = vi.fn((layer: { id?: string; onAdd?: (map: unknown, context: WebGL2RenderingContext) => void; onRemove?: (map: unknown, context: WebGL2RenderingContext) => void }) => {
+    if (layer.id) this.layers.set(layer.id, layer)
     layer.onAdd?.(this, this.context)
   })
+  readonly getLayer = vi.fn((id: string) => this.layers.get(id))
   readonly triggerRepaint = vi.fn()
   pitch = 0
 
@@ -62,6 +65,11 @@ class FakeMap {
   getPitch() { return this.pitch }
   project([lon, lat]: [number, number]) { return { x: 200 + lon * 4, y: 150 - lat * 4 } }
   emit(type: string) { this.listeners.get(type)?.forEach((listener) => listener()) }
+  clearStyleLayer(id: string) {
+    const layer = this.layers.get(id)
+    this.layers.delete(id)
+    layer?.onRemove?.(this, this.context)
+  }
 }
 
 function createRuntime(): WorkspaceActivationRuntime {
@@ -84,7 +92,7 @@ function createComposition(options: {
   })
   const layer: SharedMapSceneLayer = {
     layer: {
-      id: 'shared-scene', type: 'custom', renderingMode: '2d',
+      id: MAPLIBRE_SHARED_SCENE_LAYER_ID, type: 'custom', renderingMode: '2d',
       onAdd: () => {
         phase = 'attached'
         options.onAdd?.()
@@ -121,6 +129,7 @@ function createCoordinator(input: {
   context?: WebGL2RenderingContext | null
   unwatchFailure?: () => void
   watchFailure?: WorkspaceActivationMapControls['watchFailure']
+  installStyleRestorer?: WorkspaceActivationMapControls['installStyleRestorer']
 } = {}) {
   const map = input.map ?? new FakeMap()
   const camera = new MapLibreWorkspaceCameraOwner()
@@ -131,6 +140,7 @@ function createCoordinator(input: {
     createMap: input.createMap ?? (async () => map as unknown as WorkspaceActivationMap),
     releaseMap: vi.fn((candidate) => (candidate as unknown as FakeMap).remove()),
     getWebGL2Context: () => input.context === undefined ? map.context : input.context,
+    installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
     watchFailure: input.watchFailure
       ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
   }
@@ -159,6 +169,156 @@ describe('WorkspaceActivationCoordinator', () => {
     }))
     expect(map.addLayer).toHaveBeenCalledOnce()
     expect(runtime.init).toHaveBeenCalledOnce()
+  })
+
+  it('reuses one initialized layer, map, camera, and runtime after a style reload', async () => {
+    let restore: (() => void) | null = null
+    const disposeRestorer = vi.fn()
+    const installStyleRestorer = vi.fn((_map, nextRestore) => {
+      restore = nextRestore
+      return disposeRestorer
+    })
+    const composed = createComposition()
+    const { coordinator, camera, map, runtime } = createCoordinator({
+      composition: composed.composition,
+      installStyleRestorer,
+    })
+    const attach = vi.spyOn(camera.attachment, 'attach')
+
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    expect(restore).not.toBeNull()
+    map.clearStyleLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)
+    restore!()
+
+    expect(map.addLayer).toHaveBeenCalledTimes(2)
+    expect(map.addLayer.mock.calls[1]?.[0]).toBe(map.addLayer.mock.calls[0]?.[0])
+    expect(composed.layer.initialize).toHaveBeenCalledOnce()
+    expect(runtime.init).toHaveBeenCalledOnce()
+    expect(attach).toHaveBeenCalledOnce()
+    expect(installStyleRestorer).toHaveBeenCalledOnce()
+
+    restore!()
+    expect(map.addLayer).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not reattach or reinitialize a custom layer preserved by a diff reload', async () => {
+    let restore: (() => void) | null = null
+    const onAdd = vi.fn()
+    const composed = createComposition({ onAdd })
+    const { coordinator, map } = createCoordinator({
+      composition: composed.composition,
+      installStyleRestorer: vi.fn((_map, nextRestore) => {
+        restore = nextRestore
+        return () => {}
+      }),
+    })
+
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    restore!()
+
+    expect(map.addLayer).toHaveBeenCalledOnce()
+    expect(onAdd).toHaveBeenCalledOnce()
+    expect(composed.layer.initialize).toHaveBeenCalledOnce()
+  })
+
+  it('replays a pending reload only after layer initialization and avoids a duplicate attach', async () => {
+    const initialized = deferred<void>()
+    const composed = createComposition({ initialize: () => initialized.promise })
+    const installStyleRestorer = vi.fn((_map, restore) => {
+      restore()
+      return () => {}
+    })
+    const { coordinator, map, runtime } = createCoordinator({
+      composition: composed.composition,
+      installStyleRestorer,
+    })
+
+    const activation = coordinator.activate()
+    await vi.waitFor(() => expect(composed.layer.initialize).toHaveBeenCalledOnce())
+    expect(map.addLayer).not.toHaveBeenCalled()
+
+    initialized.resolve()
+    await expect(activation).resolves.toBe('shared-ready')
+
+    expect(installStyleRestorer).toHaveBeenCalledOnce()
+    expect(map.addLayer).toHaveBeenCalledOnce()
+    expect(composed.layer.initialize).toHaveBeenCalledOnce()
+    expect(runtime.init).toHaveBeenCalledOnce()
+  })
+
+  it('falls back when reattaching the shared scene layer fails', async () => {
+    let restore: (() => void) | null = null
+    let reportFailure: ((error: unknown) => void) | null = null
+    const installStyleRestorer = vi.fn((_map, nextRestore) => {
+      restore = () => {
+        try {
+          nextRestore()
+        } catch (error) {
+          reportFailure?.(error)
+        }
+      }
+      return () => {}
+    })
+    const watchFailure = vi.fn((_map, nextReportFailure) => {
+      reportFailure = nextReportFailure
+      return () => {}
+    })
+    const map = new FakeMap()
+    const { coordinator, runtime } = createCoordinator({ map, installStyleRestorer, watchFailure })
+
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    map.clearStyleLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)
+    const failure = new Error('style reload layer attach failed')
+    map.addLayer.mockImplementation(() => { throw failure })
+    restore!()
+
+    await vi.waitFor(() => expect(runtime.reportRendererFailure).toHaveBeenCalledWith(
+      'maplibre-pixi',
+      failure,
+    ))
+    expect(map.remove).toHaveBeenCalledOnce()
+  })
+
+  it('disposes style restoration before disposing the layer and releasing the map', async () => {
+    const disposeRestorer = vi.fn()
+    const installStyleRestorer = vi.fn(() => disposeRestorer)
+    const composed = createComposition()
+    const { coordinator, map } = createCoordinator({
+      composition: composed.composition,
+      installStyleRestorer,
+    })
+    await coordinator.activate()
+
+    await coordinator.teardown()
+
+    expect(disposeRestorer).toHaveBeenCalledOnce()
+    expect(disposeRestorer.mock.invocationCallOrder[0]).toBeLessThan(composed.dispose.mock.invocationCallOrder[0]!)
+    expect(composed.dispose.mock.invocationCallOrder[0]).toBeLessThan(map.remove.mock.invocationCallOrder[0]!)
+  })
+
+  it('ignores a stale style restoration callback after teardown or replacement', async () => {
+    const restorers: Array<() => void> = []
+    const installStyleRestorer = vi.fn((_map, restore) => {
+      restorers.push(restore)
+      return () => {}
+    })
+    const firstMap = new FakeMap()
+    const secondMap = new FakeMap()
+    const maps = [firstMap, secondMap]
+    let index = 0
+    const { coordinator } = createCoordinator({
+      createMap: async () => maps[index++] as unknown as WorkspaceActivationMap,
+      installStyleRestorer,
+    })
+    await coordinator.activate()
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    firstMap.clearStyleLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)
+    restorers[0]!()
+    expect(firstMap.addLayer).toHaveBeenCalledOnce()
+
+    await coordinator.teardown()
+    restorers[1]!()
+    expect(secondMap.addLayer).toHaveBeenCalledOnce()
   })
 
   it('waits for a pending runtime initialization before publishing fallback-ready', async () => {
@@ -569,6 +729,7 @@ describe('WorkspaceActivationCoordinator', () => {
         createMap: async () => map as unknown as WorkspaceActivationMap,
         releaseMap: () => map.remove(),
         getWebGL2Context: () => map.context,
+        installStyleRestorer: () => () => {},
       },
       layer: {
         anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,

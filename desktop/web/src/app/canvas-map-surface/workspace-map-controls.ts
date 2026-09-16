@@ -10,6 +10,7 @@ import {
   type WorkspaceMapSnapshot,
 } from '../../maplibre/workspace-map'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
+import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import type {
   WorkspaceActivationMap,
   WorkspaceActivationMapControls,
@@ -21,6 +22,9 @@ interface WorkspaceMapAttempt {
   settled: boolean
   released: boolean
   admitted: boolean
+  styleRestorer: (() => void) | null
+  pendingStyleRestore: boolean
+  restoringStyle: boolean
   pendingFailure: Error | null
   failureReporter: ((error: Error) => void) | null
   abort: () => void
@@ -65,6 +69,9 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         settled: false,
         released: false,
         admitted: false,
+        styleRestorer: null,
+        pendingStyleRestore: false,
+        restoringStyle: false,
         pendingFailure: null,
         failureReporter: null,
         abort: () => {},
@@ -116,8 +123,14 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             attempt.pendingFailure = error
             attempt.failureReporter?.(error)
           }
-          const admit = () => {
-            if (!isLive() || attempt.settled) return
+          const handleStyleLoad = () => {
+            if (!isLive()) return
+            if (attempt.admitted) {
+              attempt.pendingStyleRestore = true
+              this.restoreStyle(attempt)
+              return
+            }
+            if (attempt.settled) return
             // The local style is admitted before a remote source is attached.
             // MapLibre may synchronously publish a passive source error while
             // addSource runs; only a thrown configuration error rejects this map.
@@ -140,7 +153,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             )
             return
           }
-          context.lifetime.on('style.load', admit)
+          context.lifetime.on('style.load', handleStyleLoad)
           context.lifetime.on('error', reportMapError)
           context.lifetime.on('webglcontextlost', handleContextLoss)
           if (signal.aborted) abort()
@@ -178,6 +191,31 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     }
   }
 
+  installStyleRestorer(
+    map: WorkspaceActivationMap,
+    restore: () => void,
+  ): () => void {
+    const attempt = this.attempt
+    if (!attempt || attempt.map !== map || attempt.released || !attempt.admitted) return () => {}
+    let active = true
+    const restoreCurrentStyle = () => {
+      if (!active) return
+      try {
+        restore()
+      } catch (error) {
+        this.reportRestorationFailure(attempt, error)
+      }
+    }
+    attempt.styleRestorer = restoreCurrentStyle
+    this.restoreStyle(attempt)
+    return () => {
+      active = false
+      if (attempt.styleRestorer === restoreCurrentStyle) {
+        attempt.styleRestorer = null
+      }
+    }
+  }
+
   private addBasemapContribution(map: WorkspaceActivationMap): void {
     const snapshot = this.options.snapshot
     if (snapshot.placementStatus !== 'confirmed' || !snapshot.basemapVisible) return
@@ -186,13 +224,50 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       map.addSource(contribution.sourceId, contribution.source as Record<string, unknown>)
     }
     if (map.getLayer(contribution.layer.id) == null) {
-      map.addLayer(contribution.layer as unknown as Record<string, unknown>)
+      if (map.getLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID) != null) {
+        map.addLayer(
+          contribution.layer as unknown as Record<string, unknown>,
+          MAPLIBRE_SHARED_SCENE_LAYER_ID,
+        )
+      } else {
+        map.addLayer(contribution.layer as unknown as Record<string, unknown>)
+      }
     }
     map.setPaintProperty?.(
       MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
       'raster-opacity',
       snapshot.basemapOpacity,
     )
+  }
+
+  private restoreStyle(attempt: WorkspaceMapAttempt): void {
+    if (
+      !attempt.pendingStyleRestore
+      || !attempt.styleRestorer
+      || attempt.restoringStyle
+      || attempt.released
+    ) return
+    attempt.pendingStyleRestore = false
+    attempt.restoringStyle = true
+    try {
+      this.addBasemapContribution(attempt.map!)
+      attempt.styleRestorer()
+    } catch (error) {
+      this.reportRestorationFailure(attempt, error)
+    } finally {
+      attempt.restoringStyle = false
+      if (attempt.pendingStyleRestore && !attempt.released) {
+        queueMicrotask(() => this.restoreStyle(attempt))
+      }
+    }
+  }
+
+  private reportRestorationFailure(attempt: WorkspaceMapAttempt, error: unknown): void {
+    if (attempt.released) return
+    attempt.pendingStyleRestore = false
+    const failure = mapError(error)
+    attempt.pendingFailure = failure
+    attempt.failureReporter?.(failure)
   }
 
   private rejectAttempt(attempt: WorkspaceMapAttempt, error: unknown): void {

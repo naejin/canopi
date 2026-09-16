@@ -27,6 +27,8 @@ export interface WorkspaceActivationMapControls {
   createMap(signal: AbortSignal): Promise<WorkspaceActivationMap>
   releaseMap(map: WorkspaceActivationMap): void
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
+  /** Restores same-map style contributions after initial style admission. */
+  installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */
   watchFailure?(
     map: WorkspaceActivationMap,
@@ -53,6 +55,7 @@ interface ActivationGeneration {
   readonly id: number
   map: WorkspaceActivationMap | null
   layer: SharedMapSceneLayer | null
+  disposeStyleRestorer: (() => void) | null
   unwatchFailure: (() => void) | null
   unsubscribeCameraFailure: (() => void) | null
   cameraAttached: boolean
@@ -86,6 +89,7 @@ export class WorkspaceActivationCoordinator {
       id: ++this.generation,
       map: null,
       layer: null,
+      disposeStyleRestorer: null,
       unwatchFailure: null,
       unsubscribeCameraFailure: null,
       cameraAttached: false,
@@ -127,10 +131,13 @@ export class WorkspaceActivationCoordinator {
       if (!this.isCurrent(current)) return 'cancelled'
       if (current.failure) return current.failure
 
-      map.addLayer(layer.layer as unknown as Record<string, unknown>)
-      if (layer.diagnostics.phase !== 'attached') {
-        throw new Error('MapLibre did not attach the initialized shared scene layer.')
-      }
+      current.disposeStyleRestorer = this.options.map.installStyleRestorer(
+        map,
+        () => this.restoreSharedSceneLayer(current, map, layer),
+      )
+      if (current.failure) return current.failure
+      this.restoreSharedSceneLayer(current, map, layer)
+      if (current.failure) return current.failure
 
       current.unsubscribeCameraFailure = this.options.camera.attachment.subscribeFailure(
         (failure) => this.observeFailure(current, cameraFailureError(failure)),
@@ -341,6 +348,13 @@ export class WorkspaceActivationCoordinator {
     current.unwatchFailure = null
     const unsubscribeCameraFailure = current.unsubscribeCameraFailure
     current.unsubscribeCameraFailure = null
+    const disposeStyleRestorer = current.disposeStyleRestorer
+    current.disposeStyleRestorer = null
+    try {
+      disposeStyleRestorer?.()
+    } catch (error) {
+      errors.push(error)
+    }
     try {
       unwatchFailure?.()
     } catch (error) {
@@ -382,6 +396,20 @@ export class WorkspaceActivationCoordinator {
         console.error('Shared workspace callback failover failed:', failure)
       }
     })
+  }
+
+  private restoreSharedSceneLayer(
+    current: ActivationGeneration,
+    map: WorkspaceActivationMap,
+    layer: SharedMapSceneLayer,
+  ): void {
+    if (!this.isCurrent(current) || current.layer !== layer || current.map !== map) return
+    if (map.getLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID) == null) {
+      map.addLayer(layer.layer as unknown as Record<string, unknown>)
+    }
+    if (layer.diagnostics.phase !== 'attached') {
+      throw new Error('MapLibre did not attach the initialized shared scene layer.')
+    }
   }
 
   private initializeRuntime(current: ActivationGeneration): Promise<void> {
