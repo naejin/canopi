@@ -6,6 +6,8 @@ import { InspectionLens } from '../src/components/canvas/InspectionLens'
 import { SpeciesFocusChip } from '../src/components/canvas/SpeciesFocusChip'
 import { ZoomControls } from '../src/components/canvas/ZoomControls'
 import { createSceneCanvasRuntimeHost } from '../src/canvas/runtime/host'
+import { CanvasRuntimeCleanupError } from '../src/canvas/runtime/cleanup'
+import { acquireCanvasRuntimeLifecycle } from '../src/canvas/runtime/lifecycle-owner'
 import type { CanvasRuntimeHost } from '../src/canvas/runtime/runtime'
 import { SceneCanvasRuntime } from '../src/canvas/runtime/scene-runtime'
 import { getCurrentCanvasSession, setCurrentCanvasSession } from '../src/canvas/session'
@@ -42,60 +44,117 @@ export function GalleryCanvasSurface({
     if (!container) return
 
     let cancelled = false
+    let runtime: CanvasRuntimeHost | null = null
+    let resize: ResizeObserver | null = null
     let released = false
-    const runtime = createRuntimeHost(design)
-    const resize = new ResizeObserver(() => {
-      runtime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
-    })
+    let releaseLease: (() => Promise<void>) | null = null
+    let runtimeCreationSettlement: Promise<void> | null = null
 
-    const release = () => {
+    const releaseRuntime = async () => {
+      if (released) return
+      const pendingCreation = runtimeCreationSettlement
+      if (pendingCreation) await pendingCreation
       if (released) return
       released = true
-      resize.disconnect()
+      const activeRuntime = runtime
+      const errors: unknown[] = []
       try {
-        runtime.destroy()
-      } finally {
-        if (getCurrentCanvasSession() === runtime.surfaces) {
+        resize?.disconnect()
+      } catch (error) {
+        errors.push(error)
+      }
+      try {
+        await activeRuntime?.destroy()
+      } catch (error) {
+        errors.push(error)
+      }
+      try {
+        if (activeRuntime && getCurrentCanvasSession() === activeRuntime.surfaces) {
           setCurrentCanvasSession(null)
         }
+      } catch (error) {
+        errors.push(error)
+      }
+      try {
         ready.value = false
         onReadyChange(false)
+      } catch (error) {
+        errors.push(error)
+      }
+      if (errors.length > 0) {
+        console.error(
+          'Unable to release gallery canvas:',
+          errors.length === 1
+            ? errors[0]
+            : new CanvasRuntimeCleanupError('Gallery Canvas runtime cleanup failed', errors),
+        )
       }
     }
-    const runtimeIsActive = () => !cancelled && !released
+    const release = () => {
+      const releaseCurrentLease = releaseLease
+      if (!releaseCurrentLease) return
+      void releaseCurrentLease().catch((error: unknown) => {
+        console.error('Unable to release gallery canvas:', error)
+      })
+    }
 
     onReadyChange(false)
-    void runtime.init(container).then(() => {
+    void (async () => {
+      const lease = await acquireCanvasRuntimeLifecycle(releaseRuntime)
+      releaseLease = lease.release
+      if (cancelled) {
+        release()
+        return
+      }
+
+      let finishRuntimeCreation!: () => void
+      runtimeCreationSettlement = new Promise<void>((resolve) => {
+        finishRuntimeCreation = resolve
+      })
+      try {
+        runtime = createRuntimeHost(design)
+      } finally {
+        finishRuntimeCreation()
+        runtimeCreationSettlement = null
+      }
+      const activeRuntime = runtime
+      const activeResize = new ResizeObserver(() => {
+        activeRuntime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
+      })
+      resize = activeResize
+      const runtimeIsActive = () => !cancelled && !released && runtime === activeRuntime
+      if (!runtimeIsActive()) {
+        release()
+        return
+      }
+
+      await activeRuntime.init(container)
       if (!runtimeIsActive()) return
-      runtime.surfaces.documents.loadDocument(design)
+      activeRuntime.surfaces.documents.loadDocument(design)
       if (!runtimeIsActive()) return
-      runtime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
+      activeRuntime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
       if (!runtimeIsActive()) return
-      runtime.surfaces.documents.zoomToFit()
+      activeRuntime.surfaces.documents.zoomToFit()
       if (dense) {
         for (let i = 0; i < 6; i++) {
           if (!runtimeIsActive()) return
-          runtime.surfaces.commands.viewport.zoomOut()
+          activeRuntime.surfaces.commands.viewport.zoomOut()
         }
       }
       if (!runtimeIsActive()) return
-      runtime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
+      activeRuntime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
       if (!runtimeIsActive()) return
-      resize.observe(container)
+      activeResize.observe(container)
       if (!runtimeIsActive()) return
-      setCurrentCanvasSession(runtime.surfaces)
-      if (!runtimeIsActive() || getCurrentCanvasSession() !== runtime.surfaces) {
+      setCurrentCanvasSession(activeRuntime.surfaces)
+      if (!runtimeIsActive() || getCurrentCanvasSession() !== activeRuntime.surfaces) {
         release()
         return
       }
       ready.value = true
       onReadyChange(true)
-    }).catch(error => {
-      try {
-        release()
-      } catch (releaseError) {
-        console.error('Unable to release failed gallery canvas:', releaseError)
-      }
+    })().catch(error => {
+      release()
       if (cancelled) return
       activity.value = 'Canvas could not start. See the browser console.'
       console.error('Unable to start gallery canvas:', error)

@@ -1,11 +1,11 @@
 export interface CanvasRuntimeLifecycleLease {
-  release(): void
+  release(): Promise<void>
 }
 
 interface CanvasRuntimeLifecycleOwner {
-  readonly releaseRuntime: () => void
+  readonly releaseRuntime: () => Promise<void>
   releaseRequested: boolean
-  releasing: boolean
+  releasePromise: Promise<void> | null
 }
 
 let currentOwner: CanvasRuntimeLifecycleOwner | null = null
@@ -18,47 +18,65 @@ export class CanvasRuntimeLifecycleBusyError extends Error {
 }
 
 /**
- * Retries a previously requested release before a component creates its next
- * runtime. A failed release remains owned here after the component that
- * requested it has unmounted.
+ * Atomically reserves the Canvas runtime lifecycle for one host. A successor
+ * joins an already-requested release before it may reserve the lifecycle.
  */
-export function ensureCanvasRuntimeLifecycleAvailable(): void {
-  if (!currentOwner) return
-  if (!currentOwner.releaseRequested) throw new CanvasRuntimeLifecycleBusyError()
-  releaseOwner(currentOwner)
-}
+export async function acquireCanvasRuntimeLifecycle(
+  releaseRuntime: () => Promise<void>,
+): Promise<CanvasRuntimeLifecycleLease> {
+  const previousOwner = currentOwner
+  if (previousOwner) {
+    if (!previousOwner.releaseRequested) throw new CanvasRuntimeLifecycleBusyError()
+    await releaseOwner(previousOwner)
+    // Another continuation may reserve the lifecycle while this one is
+    // suspended. Re-check rather than allowing two successors to claim it.
+    if (currentOwner) throw new CanvasRuntimeLifecycleBusyError()
+  }
 
-export function claimCanvasRuntimeLifecycle(
-  releaseRuntime: () => void,
-): CanvasRuntimeLifecycleLease {
-  ensureCanvasRuntimeLifecycleAvailable()
   const owner: CanvasRuntimeLifecycleOwner = {
     releaseRuntime,
     releaseRequested: false,
-    releasing: false,
+    releasePromise: null,
   }
   currentOwner = owner
 
   return Object.freeze({
-    release() {
-      if (currentOwner !== owner) return
+    release: () => {
+      if (currentOwner !== owner) return Promise.resolve()
       owner.releaseRequested = true
-      releaseOwner(owner)
+      return releaseOwner(owner)
     },
   })
 }
 
-function releaseOwner(owner: CanvasRuntimeLifecycleOwner): void {
-  if (currentOwner !== owner) return
-  if (owner.releasing) {
-    throw new CanvasRuntimeLifecycleBusyError('Canvas runtime release is still in progress')
-  }
+function releaseOwner(owner: CanvasRuntimeLifecycleOwner): Promise<void> {
+  if (owner.releasePromise) return owner.releasePromise
 
-  owner.releasing = true
+  let resolveRelease!: () => void
+  let rejectRelease!: (error: unknown) => void
+  const releaseResult = new Promise<void>((resolve, reject) => {
+    resolveRelease = resolve
+    rejectRelease = reject
+  })
+  // Publish the shared attempt before invoking external cleanup. Its
+  // synchronous handoff may reenter acquisition or release.
+  owner.releasePromise = releaseResult.then(
+    () => {
+      if (currentOwner === owner) currentOwner = null
+    },
+    (error: unknown) => {
+      // Keep the requested owner so a later acquire/release can retry it.
+      owner.releasePromise = null
+      throw error
+    },
+  )
+
   try {
-    owner.releaseRuntime()
-    if (currentOwner === owner) currentOwner = null
-  } finally {
-    owner.releasing = false
+    // Invoke the callback now: its handoff/cancellation work must happen
+    // before this owner yields to asynchronous teardown.
+    void Promise.resolve(owner.releaseRuntime()).then(resolveRelease, rejectRelease)
+  } catch (error) {
+    rejectRelease(error)
   }
+  return owner.releasePromise
 }

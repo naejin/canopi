@@ -16,7 +16,7 @@ class SceneCanvasRuntimeHost implements CanvasRuntimeHost {
     return this.runtime.init(container)
   }
 
-  destroy(): void {
+  async destroy(): Promise<void> {
     this.runtime.destroy()
   }
 }

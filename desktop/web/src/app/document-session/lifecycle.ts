@@ -7,7 +7,10 @@ import type {
   CanvasRuntimeHost,
   CanvasRuntimeSurfaces,
 } from "../../canvas/runtime/runtime";
-import { runCanvasRuntimeCleanups } from "../../canvas/runtime/cleanup";
+import {
+  CanvasRuntimeCleanupError,
+  runCanvasRuntimeCleanups,
+} from "../../canvas/runtime/cleanup";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
 import { createAppCanvasRuntimeHost } from "../canvas-runtime/host";
@@ -56,7 +59,7 @@ const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
 export interface DesignSessionLifecycle {
   start(): void;
   updateAutosaveInterval(intervalMs: number): void;
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 export function createDesignSessionLifecycle(
@@ -78,6 +81,7 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
   private cancelQueuedLoad = () => {};
   private resizeObserver: DesignSessionResizeObserver | null = null;
   private autosaveTimer: ReturnType<typeof setInterval> | null = null;
+  private disposePromise: Promise<void> | null = null;
 
   constructor(
     private readonly host: DesignSessionLifecycleHost,
@@ -152,28 +156,58 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     }, intervalMs);
   }
 
-  dispose(): void {
+  dispose(): Promise<void> {
+    if (this.disposePromise) return this.disposePromise;
+
     this.cancelled = true;
+    // The Design handoff is the loss-prevention boundary. It must complete
+    // before this lifecycle yields to settings or renderer teardown.
     this.teardownDocumentSession();
+    let synchronousCleanupError: unknown = null;
     try {
       runCanvasRuntimeCleanups([
         () => this.clearAutosaveTimer(),
         () => this.disconnectResizeObserver(),
         () => this.cancelPendingDocumentLoad(),
-        () => {
-          void Promise.resolve(flushSettingsProjection()).catch((error) => {
-            this.deps.logError("Failed to flush settings during Design Session cleanup:", error);
-          });
-        },
-        () => this.runtimeHost.destroy(),
-        () => {
-          if (getCurrentCanvasSession() === this.surfaces) {
-            this.deps.publishSurfaces(null);
-          }
-        },
       ], "Design Session lifecycle cleanup failed");
     } catch (error) {
-      this.deps.logError("Failed to dispose Design Session lifecycle:", error);
+      synchronousCleanupError = error;
+    }
+
+    this.disposePromise = this.finishDisposal(synchronousCleanupError);
+    return this.disposePromise;
+  }
+
+  private async finishDisposal(synchronousCleanupError: unknown): Promise<void> {
+    const errors = synchronousCleanupError instanceof CanvasRuntimeCleanupError
+      ? [...synchronousCleanupError.errors]
+      : synchronousCleanupError ? [synchronousCleanupError] : [];
+    try {
+      await flushSettingsProjection();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await this.runtimeHost.destroy();
+    } catch (error) {
+      errors.push(error);
+    }
+
+    try {
+      if (getCurrentCanvasSession() === this.surfaces) {
+        this.deps.publishSurfaces(null);
+      }
+    } catch (error) {
+      errors.push(error);
+    }
+
+    if (errors.length > 0) {
+      this.deps.logError(
+        "Failed to dispose Design Session lifecycle:",
+        errors.length === 1
+          ? errors[0]
+          : new CanvasRuntimeCleanupError("Design Session lifecycle cleanup failed", errors),
+      );
     }
   }
 

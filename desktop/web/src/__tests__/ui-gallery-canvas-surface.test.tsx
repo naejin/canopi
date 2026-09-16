@@ -45,8 +45,11 @@ describe('UI gallery canvas surface', () => {
     setCurrentCanvasSession(null)
   })
 
-  afterEach(() => {
-    render(null, container)
+  afterEach(async () => {
+    await act(async () => {
+      render(null, container)
+      await flushMicrotasks()
+    })
     container.remove()
     setCurrentCanvasSession(null)
     vi.unstubAllGlobals()
@@ -70,17 +73,22 @@ describe('UI gallery canvas surface', () => {
         />,
         container,
       )
-      await Promise.resolve()
+      await flushMicrotasks()
     })
 
+    await vi.waitFor(() => expect(first.documents.loadDocument).toHaveBeenCalledOnce())
+
     expect(first.host.init).toHaveBeenCalledOnce()
-    expect(first.documents.loadDocument).toHaveBeenCalledOnce()
     expect(getCurrentCanvasSession()).toBe(first.host.surfaces)
     expect(onReadyChange).toHaveBeenLastCalledWith(true)
 
-    act(() => render(<div data-primary-route="location" />, container))
+    await act(async () => {
+      render(<div data-primary-route="location" />, container)
+      await flushMicrotasks()
+    })
 
-    expect(first.host.destroy).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+
     expect(FakeResizeObserver.instances[0]?.disconnect).toHaveBeenCalledOnce()
     expect(getCurrentCanvasSession()).toBeNull()
     expect(onReadyChange).toHaveBeenLastCalledWith(false)
@@ -96,10 +104,11 @@ describe('UI gallery canvas surface', () => {
         />,
         container,
       )
-      await Promise.resolve()
+      await flushMicrotasks()
     })
 
-    expect(second.host.init).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(second.host.init).toHaveBeenCalledOnce())
+
     expect(vi.mocked(first.host.destroy).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(second.host.init).mock.invocationCallOrder[0]!)
     expect(getCurrentCanvasSession()).toBe(second.host.surfaces)
@@ -113,7 +122,7 @@ describe('UI gallery canvas surface', () => {
     const onReadyChange = vi.fn()
     const design = designFixture()
 
-    act(() => {
+    await act(async () => {
       render(
         <GalleryCanvasSurface
           activeSurface={activeSurface}
@@ -124,10 +133,14 @@ describe('UI gallery canvas surface', () => {
         />,
         container,
       )
+      await flushMicrotasks()
     })
-    expect(finishFirst).toBeTypeOf('function')
-    act(() => render(<div data-hmr-boundary />, container))
-    expect(first.host.destroy).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(finishFirst).toBeTypeOf('function'))
+    await act(async () => {
+      render(<div data-hmr-boundary />, container)
+      await flushMicrotasks()
+    })
+    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
 
     await act(async () => {
       render(
@@ -140,13 +153,13 @@ describe('UI gallery canvas surface', () => {
         />,
         container,
       )
-      await Promise.resolve()
+      await flushMicrotasks()
     })
-    expect(getCurrentCanvasSession()).toBe(second.host.surfaces)
+    await vi.waitFor(() => expect(getCurrentCanvasSession()).toBe(second.host.surfaces))
 
     await act(async () => {
       finishFirst!()
-      await Promise.resolve()
+      await flushMicrotasks()
     })
 
     expect(first.documents.loadDocument).not.toHaveBeenCalled()
@@ -177,10 +190,11 @@ describe('UI gallery canvas surface', () => {
           />,
           container,
         )
-        await Promise.resolve()
+        await flushMicrotasks()
       })
 
-      expect(first.host.destroy).toHaveBeenCalledOnce()
+      await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+
       expect(getCurrentCanvasSession()).toBeNull()
       expect(onReadyChange).not.toHaveBeenCalledWith(true)
       expect(onReadyChange).toHaveBeenLastCalledWith(false)
@@ -193,7 +207,7 @@ describe('UI gallery canvas surface', () => {
     const successor = fakeRuntimeHost()
     const first = fakeRuntimeHost(
       async () => {},
-      () => setCurrentCanvasSession(successor.host.surfaces),
+      async () => setCurrentCanvasSession(successor.host.surfaces),
     )
 
     await act(async () => {
@@ -210,16 +224,86 @@ describe('UI gallery canvas surface', () => {
       await Promise.resolve()
     })
 
-    act(() => render(<div data-primary-route="location" />, container))
+    await vi.waitFor(() => expect(getCurrentCanvasSession()).toBe(first.host.surfaces))
 
-    expect(first.host.destroy).toHaveBeenCalledOnce()
+    await act(async () => {
+      render(<div data-primary-route="location" />, container)
+      await flushMicrotasks()
+    })
+
+    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+
     expect(getCurrentCanvasSession()).toBe(successor.host.surfaces)
+  })
+
+  it('waits for asynchronous destruction before constructing a replacement owner', async () => {
+    let finishDestroy: (() => void) | undefined
+    const first = fakeRuntimeHost(
+      async () => {},
+      () => new Promise<void>(resolve => { finishDestroy = resolve }),
+    )
+    const second = fakeRuntimeHost()
+    const activeSurface = signal('workspace')
+    const onReadyChange = vi.fn()
+    const createSecond = vi.fn(() => second.host)
+
+    await act(async () => {
+      render(
+        <GalleryCanvasSurface
+          activeSurface={activeSurface}
+          design={designFixture()}
+          dense={false}
+          onReadyChange={onReadyChange}
+          createRuntimeHost={() => first.host}
+        />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+
+    await vi.waitFor(() => expect(getCurrentCanvasSession()).toBe(first.host.surfaces))
+
+    await act(async () => {
+      render(
+        <GalleryCanvasSurface
+          activeSurface={activeSurface}
+          design={designFixture()}
+          dense={false}
+          onReadyChange={onReadyChange}
+          createRuntimeHost={createSecond}
+        />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+
+    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+
+    expect(finishDestroy).toBeTypeOf('function')
+    expect(createSecond).not.toHaveBeenCalled()
+    expect(second.host.init).not.toHaveBeenCalled()
+
+    await act(async () => {
+      finishDestroy!()
+      await flushMicrotasks()
+    })
+
+    await vi.waitFor(() => expect(second.host.init).toHaveBeenCalledOnce())
+
+    expect(createSecond).toHaveBeenCalledOnce()
+    expect(getCurrentCanvasSession()).toBe(second.host.surfaces)
   })
 })
 
+async function flushMicrotasks(): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    await Promise.resolve()
+  }
+}
+
 function fakeRuntimeHost(
   initialize: () => Promise<void> = async () => {},
-  destroy: () => void = () => {},
+  destroy: () => Promise<void> = async () => {},
 ): {
   readonly host: CanvasRuntimeHost
   readonly documents: ReturnType<typeof createTestCanvasDocumentSurface>

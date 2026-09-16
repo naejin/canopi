@@ -52,7 +52,7 @@ vi.mock("../app/canvas-runtime/host", () => ({
         acknowledgeSaved: vi.fn(() => "applied"),
       })),
       resize: vi.fn(),
-      destroy: vi.fn(),
+      destroy: vi.fn(async () => undefined),
     };
     const host = {
       surfaces: {
@@ -61,7 +61,7 @@ vi.mock("../app/canvas-runtime/host", () => ({
         documents,
       },
       init: vi.fn((container) => mocks.runtimeInitImpl(container)),
-      destroy: vi.fn(),
+      destroy: vi.fn(async () => undefined),
     };
     (documents as Record<string, unknown>).originalLoadDocument = documents.loadDocument;
     (documents as Record<string, unknown>).originalReplaceDocument = documents.replaceDocument;
@@ -88,6 +88,7 @@ vi.mock("../app/settings/projection", () => ({
 }));
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
+import { createAppCanvasRuntimeHost } from "../app/canvas-runtime/host";
 import {
   currentCanvasDocumentSurface,
   currentCanvasReady,
@@ -231,6 +232,23 @@ describe("useCanvasDocumentSession", () => {
     expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
   });
 
+  it("releases a lifecycle created by a host factory that unmounts reentrantly", async () => {
+    const createHost = vi.mocked(createAppCanvasRuntimeHost);
+    const defaultCreateHost = createHost.getMockImplementation()!;
+    createHost.mockImplementationOnce(() => {
+      const host = defaultCreateHost();
+      render(null, container);
+      return host;
+    });
+
+    await mountHarness(container);
+
+    expect(mocks.runtimeInstances).toHaveLength(1);
+    expect(mocks.runtimeInstances[0]?.host.init).not.toHaveBeenCalled();
+    expect(mocks.runtimeInstances[0]?.host.destroy).toHaveBeenCalledOnce();
+    expect(currentCanvasSession.value).toBeNull();
+  });
+
   it("does not continue initialization after publication synchronously releases the runtime", async () => {
     let releasedFirst = false;
     const disposePublicationEffect = effect(() => {
@@ -319,7 +337,8 @@ describe("useCanvasDocumentSession", () => {
       host: { destroy: ReturnType<typeof vi.fn> };
     };
 
-    expect(() => render(null, container)).toThrow("handoff capture failed");
+    render(null, container);
+    await flushMicrotasks();
     expect(instance.host.destroy).not.toHaveBeenCalled();
     expect(currentCanvasSession.value).not.toBeNull();
     expect(mocks.resizeDisconnect).not.toHaveBeenCalled();
@@ -352,7 +371,8 @@ describe("useCanvasDocumentSession", () => {
     });
 
     await mountHarness(container);
-    expect(() => render(null, container)).toThrow("old Canvas lease is stale");
+    render(null, container);
+    await flushMicrotasks();
     expect(currentCanvasSession.value).toBe(successorSurfaces);
 
     mocks.runtimeInitImpl.mockImplementationOnce(() => new Promise(() => {}));
@@ -382,7 +402,8 @@ describe("useCanvasDocumentSession", () => {
         host: { destroy: ReturnType<typeof vi.fn> };
       };
 
-      expect(() => render(null, container)).not.toThrow();
+      render(null, container);
+      await flushMicrotasks();
 
       expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
       expect(mocks.resizeDisconnect).toHaveBeenCalledTimes(1);
@@ -429,6 +450,13 @@ describe("useCanvasDocumentSession", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(100);
+      await flushMicrotasks();
+    });
+    expect(mocks.autosaveDesignSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      autoSaveIntervalMs.value = 250;
+      vi.advanceTimersByTime(250);
       await flushMicrotasks();
     });
     expect(mocks.autosaveDesignSession).not.toHaveBeenCalled();

@@ -8,6 +8,7 @@ import {
 } from '../app/canvas-settings/signals'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { currentCanvasReady, currentCanvasSession } from '../canvas/session'
+import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type {
   CanvasCommandSurface,
@@ -23,6 +24,20 @@ import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
 
 describe('Web Edition canvas workspace', () => {
   let container: HTMLDivElement
+
+  async function flushMicrotasks(): Promise<void> {
+    for (let index = 0; index < 20; index += 1) {
+      await Promise.resolve()
+    }
+  }
+
+  function deferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void
+    const promise = new Promise<T>((resolvePromise) => {
+      resolve = resolvePromise
+    })
+    return { promise, resolve }
+  }
 
   afterEach(() => {
     render(null, container)
@@ -52,7 +67,9 @@ describe('Web Edition canvas workspace', () => {
         />,
         container,
       )
+      await flushMicrotasks()
     })
+    await flushMicrotasks()
 
     expect(runtime.host.init).toHaveBeenCalledOnce()
     expect(runtime.documents.loadDocument).toHaveBeenCalledWith(expect.objectContaining({ name: 'Untitled' }))
@@ -111,8 +128,9 @@ describe('Web Edition canvas workspace', () => {
           />,
           container,
         )
-        await Promise.resolve()
+        await flushMicrotasks()
       })
+      await flushMicrotasks()
 
       const destroyOrder = vi.mocked(first.host.destroy).mock.invocationCallOrder[0] ?? 0
       expect(first.host.destroy).toHaveBeenCalledOnce()
@@ -132,8 +150,9 @@ describe('Web Edition canvas workspace', () => {
           />,
           container,
         )
-        await Promise.resolve()
+        await flushMicrotasks()
       })
+      await flushMicrotasks()
       expect(second.host.init).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBe(second.host.surfaces)
     } finally {
@@ -166,7 +185,9 @@ describe('Web Edition canvas workspace', () => {
         />,
         container,
       )
+      await flushMicrotasks()
     })
+    await flushMicrotasks()
     expect(currentCanvasSession.value).toBe(first.host.surfaces)
 
     await act(async () => {
@@ -178,13 +199,162 @@ describe('Web Edition canvas workspace', () => {
         />,
         container,
       )
-      await Promise.resolve()
+      await flushMicrotasks()
     })
+    await flushMicrotasks()
 
     expect(first.documents.captureForPersistence).toHaveBeenCalledOnce()
     expect(first.host.destroy).toHaveBeenCalledOnce()
     expect(second.host.init).toHaveBeenCalledOnce()
     expect(currentCanvasSession.value).toBe(second.host.surfaces)
+  })
+
+  it('does not construct or publish a successor until the prior release settles', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const first = fakeRuntimeHost()
+    const second = fakeRuntimeHost()
+    const release = deferred<void>()
+    vi.mocked(first.host.destroy).mockImplementationOnce(() => release.promise)
+    const firstFactory = vi.fn(() => first.host)
+    const secondFactory = vi.fn(() => second.host)
+    await controller.newDesign()
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={firstFactory} />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+    await flushMicrotasks()
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={secondFactory} />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+    await flushMicrotasks()
+
+    expect(firstFactory).toHaveBeenCalledOnce()
+    expect(secondFactory).not.toHaveBeenCalled()
+    expect(currentCanvasSession.value).toBe(first.host.surfaces)
+
+    release.resolve()
+    await flushMicrotasks()
+
+    expect(secondFactory).toHaveBeenCalledOnce()
+    expect(second.host.init).toHaveBeenCalledOnce()
+    expect(currentCanvasSession.value).toBe(second.host.surfaces)
+  })
+
+  it('releases a host without attaching or publishing after unmount during initialization', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeHost()
+    const initialization = deferred<void>()
+    vi.mocked(runtime.host.init).mockImplementationOnce(() => initialization.promise)
+    await controller.newDesign()
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={() => runtime.host} />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+    await flushMicrotasks()
+    expect(runtime.host.init).toHaveBeenCalledOnce()
+
+    render(null, container)
+    initialization.resolve()
+    await flushMicrotasks()
+
+    expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
+    expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
+    expect(currentCanvasSession.value).toBeNull()
+    expect(runtime.host.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('releases a host returned by a factory that unmounts reentrantly', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeHost()
+    const createRuntimeHost = vi.fn(() => {
+      render(null, container)
+      return runtime.host
+    })
+    await controller.newDesign()
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={createRuntimeHost} />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+    await flushMicrotasks()
+
+    expect(createRuntimeHost).toHaveBeenCalledOnce()
+    expect(runtime.host.init).not.toHaveBeenCalled()
+    expect(runtime.host.destroy).toHaveBeenCalledOnce()
+    expect(currentCanvasSession.value).toBeNull()
+  })
+
+  it('waits for a reentrant browser attachment to return its disposer before teardown', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeHost()
+    const attach = controller.attachCanvasSession.bind(controller)
+    const detach = vi.fn()
+    vi.spyOn(controller, 'attachCanvasSession').mockImplementation((documents) => {
+      const detachAttachedSession = attach(documents)
+      render(null, container)
+      return () => {
+        detach()
+        detachAttachedSession()
+      }
+    })
+    await controller.newDesign()
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace controller={controller} store={store} createRuntimeHost={() => runtime.host} />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+    await flushMicrotasks()
+
+    expect(detach).toHaveBeenCalledOnce()
+    expect(runtime.host.destroy).toHaveBeenCalledOnce()
+    expect(currentCanvasSession.value).toBeNull()
   })
 
   it('shows a desktop-style browser-safe welcome screen without recent files when no Design is active', async () => {
@@ -212,7 +382,9 @@ describe('Web Edition canvas workspace', () => {
         />,
         container,
       )
+      await flushMicrotasks()
     })
+    await flushMicrotasks()
 
     expect(runtime.documents.hideCanvasChrome).toHaveBeenCalled()
     expect(container.querySelector('[data-testid="web-welcome-screen"]')).not.toBeNull()
@@ -254,6 +426,7 @@ describe('Web Edition canvas workspace', () => {
         />,
         container,
       )
+      await flushMicrotasks()
     })
     vi.mocked(runtime.documents.replaceDocument).mockClear()
 
@@ -293,8 +466,9 @@ describe('Web Edition canvas workspace', () => {
           />,
           container,
         )
-        await Promise.resolve()
+        await flushMicrotasks()
       })
+      await flushMicrotasks()
 
       await vi.waitFor(() => {
         expect(logError).toHaveBeenCalledWith(
@@ -335,8 +509,9 @@ describe('Web Edition canvas workspace', () => {
           />,
           container,
         )
-        await Promise.resolve()
+        await flushMicrotasks()
       })
+      await flushMicrotasks()
 
       await vi.waitFor(() => expect(rejected.host.destroy).toHaveBeenCalledOnce())
       expect(currentCanvasSession.value).toBe(existing.host.surfaces)
@@ -380,6 +555,7 @@ describe('Web Edition canvas workspace', () => {
           container,
         )
       })
+      await flushMicrotasks()
       let handoffFailures = 4
       vi.mocked(first.documents.captureForPersistence)
         .mockImplementation((metadata, doc) => {
@@ -394,7 +570,8 @@ describe('Web Edition canvas workspace', () => {
           }
         })
 
-      expect(() => render(null, container)).toThrow('exact persistence settlement failed')
+      render(null, container)
+      await flushMicrotasks()
       expect(disconnect).not.toHaveBeenCalled()
       expect(first.host.destroy).not.toHaveBeenCalled()
       expect(currentCanvasSession.value).toBe(first.host.surfaces)
@@ -408,8 +585,9 @@ describe('Web Edition canvas workspace', () => {
           />,
           container,
         )
-        await Promise.resolve()
+        await flushMicrotasks()
       })
+      await flushMicrotasks()
 
       expect(disconnect).toHaveBeenCalledOnce()
       expect(first.host.destroy).toHaveBeenCalledOnce()
@@ -458,22 +636,27 @@ describe('Web Edition canvas workspace', () => {
             createRuntimeHost={() => first.host}
           />,
           container,
-        )
+      )
+        await flushMicrotasks()
       })
+      await flushMicrotasks()
 
-      expect(() => render(null, container)).not.toThrow()
+      render(null, container)
+      await flushMicrotasks()
 
       expect(first.documents.captureForPersistence).toHaveBeenCalledOnce()
       expect(disconnect).toHaveBeenCalledOnce()
       expect(first.host.destroy).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBeNull()
-      expect(logError).toHaveBeenCalledWith(
-        'Failed to release browser canvas runtime:',
-        expect.objectContaining({
-          name: 'CanvasRuntimeCleanupError',
-          errors: [disconnectError, destroyError],
-        }),
-      )
+      const cleanupError = logError.mock.calls.find(
+        ([message]) => message === 'Failed to release browser canvas runtime:',
+      )?.[1]
+      expect(cleanupError).toBeDefined()
+      expect(cleanupError).toBeInstanceOf(CanvasRuntimeCleanupError)
+      expect((cleanupError as CanvasRuntimeCleanupError).errors).toEqual([
+        disconnectError,
+        destroyError,
+      ])
 
       await act(async () => {
         render(
@@ -484,8 +667,9 @@ describe('Web Edition canvas workspace', () => {
           />,
           container,
         )
-        await Promise.resolve()
+        await flushMicrotasks()
       })
+      await flushMicrotasks()
 
       expect(second.host.init).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBe(second.host.surfaces)
@@ -542,7 +726,7 @@ function fakeRuntimeHost(): {
       acknowledgeSaved: () => 'applied' as const,
     })),
     resize: vi.fn(),
-    destroy: vi.fn(),
+    destroy: vi.fn(async () => undefined),
   }
   const host: CanvasRuntimeHost = {
     surfaces: {

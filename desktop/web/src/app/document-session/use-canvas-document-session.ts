@@ -1,8 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
-import {
-  claimCanvasRuntimeLifecycle,
-  ensureCanvasRuntimeLifecycleAvailable,
-} from "../../canvas/runtime/lifecycle-owner";
+import { acquireCanvasRuntimeLifecycle } from "../../canvas/runtime/lifecycle-owner";
 import { autoSaveIntervalMs } from "../settings/state";
 import { createDesignSessionLifecycle, type DesignSessionLifecycle } from "./lifecycle";
 
@@ -32,29 +29,68 @@ export function useCanvasDocumentSession({
     const canvasArea = canvasAreaRef.current;
     if (!container || !canvasArea) return;
 
-    ensureCanvasRuntimeLifecycleAvailable();
+    let cancelled = false;
     let lifecycle: DesignSessionLifecycle | null = null;
-    const runtimeLease = claimCanvasRuntimeLifecycle(() => lifecycle?.dispose());
-    const releaseLifecycle = () => {
-      runtimeLease.release();
+    let lifecycleCreationSettlement: Promise<void> | null = null;
+    let releaseLease: (() => Promise<void>) | null = null;
+    const release = () => {
       if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
-    };
-    try {
-      lifecycle = createDesignSessionLifecycle({
-        canvasArea,
-        container,
-        rulerOverlay: rulerOverlayRef.current,
-      }, {
-        onInitializationFailure: releaseLifecycle,
+      const releaseCurrentLease = releaseLease;
+      if (!releaseCurrentLease) return;
+      void releaseCurrentLease().catch((error: unknown) => {
+        console.error("Failed to release Design Session Canvas runtime:", error);
       });
-      lifecycleRef.current = lifecycle;
-      lifecycle.start();
-    } catch (error) {
-      releaseLifecycle();
-      throw error;
-    }
+    };
 
-    return releaseLifecycle;
+    void (async () => {
+      const lease = await acquireCanvasRuntimeLifecycle(async () => {
+        const pendingCreation = lifecycleCreationSettlement;
+        if (pendingCreation) await pendingCreation;
+        await lifecycle?.dispose();
+      });
+      releaseLease = lease.release;
+      if (cancelled) {
+        release();
+        return;
+      }
+
+      try {
+        let finishCreation!: () => void;
+        lifecycleCreationSettlement = new Promise<void>((resolve) => {
+          finishCreation = resolve;
+        });
+        try {
+          lifecycle = createDesignSessionLifecycle({
+            canvasArea,
+            container,
+            rulerOverlay: rulerOverlayRef.current,
+          }, {
+            onInitializationFailure: release,
+          });
+        } finally {
+          finishCreation();
+          lifecycleCreationSettlement = null;
+        }
+        lifecycleRef.current = lifecycle;
+        if (cancelled) {
+          release();
+          return;
+        }
+        lifecycle.start();
+      } catch (error) {
+        release();
+        throw error;
+      }
+    })().catch((error: unknown) => {
+      if (!cancelled) {
+        console.error("Failed to acquire Design Session Canvas runtime:", error);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      release();
+    };
   }, []);
 
   const intervalMs = autoSaveIntervalMs.value;

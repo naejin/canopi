@@ -9,8 +9,10 @@ import {
   abortFailedAttachedDesignSessionStart,
   autosaveDesignSession,
   startAttachedDesignSession,
+  teardownAttachedDesignSession,
 } from '../app/document-session/transition'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { flushSettingsProjection } from '../app/settings/projection'
 
 vi.mock('../app/document-session/transition', () => ({
   abortFailedAttachedDesignSessionStart: vi.fn(),
@@ -24,6 +26,14 @@ vi.mock('../app/settings/projection', () => ({
   flushSettingsProjection: vi.fn(),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('document session lifecycle', () => {
   let canvasArea: HTMLDivElement
   let container: HTMLDivElement
@@ -31,7 +41,10 @@ describe('document session lifecycle', () => {
 
   beforeEach(() => {
     setCanvasRuntimeSurfaces(null)
+    vi.mocked(flushSettingsProjection).mockReset()
+    vi.mocked(flushSettingsProjection).mockResolvedValue(undefined)
     vi.mocked(abortFailedAttachedDesignSessionStart).mockReset()
+    vi.mocked(teardownAttachedDesignSession).mockReset()
     vi.mocked(startAttachedDesignSession).mockReset()
     vi.mocked(startAttachedDesignSession).mockResolvedValue(null)
     canvasArea = document.createElement('div')
@@ -48,7 +61,7 @@ describe('document session lifecycle', () => {
     })
     const surfaces = createTestCanvasRuntimeSurfaces({ documents })
     const init = vi.fn<(target: HTMLElement) => Promise<void>>(async () => undefined)
-    const destroy = vi.fn<() => void>()
+    const destroy = vi.fn<() => Promise<void>>(async () => undefined)
     const host: CanvasRuntimeHost = {
       surfaces,
       init,
@@ -82,7 +95,7 @@ describe('document session lifecycle', () => {
     expect(attachRulersTo.mock.calls[0]?.[0] === rulerOverlay).toBe(true)
     expect(logError).not.toHaveBeenCalled()
 
-    lifecycle.dispose()
+    await lifecycle.dispose()
 
     expect(destroy).toHaveBeenCalledTimes(1)
     expect(publishSurfaces.mock.calls.at(-1)![0]).toBe(null)
@@ -96,7 +109,7 @@ describe('document session lifecycle', () => {
     const host: CanvasRuntimeHost = {
       surfaces,
       init: vi.fn(async () => undefined),
-      destroy: vi.fn(),
+      destroy: vi.fn(async () => undefined),
     }
     const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
     const lifecycle = createDesignSessionLifecycle(
@@ -125,6 +138,86 @@ describe('document session lifecycle', () => {
     }
   })
 
+  it('hands off synchronously, then awaits settings and host teardown before unpublishing', async () => {
+    const settingsFlush = deferred<void>()
+    const hostDestroy = deferred<void>()
+    vi.mocked(flushSettingsProjection).mockReturnValueOnce(settingsFlush.promise)
+    const documents = createTestCanvasDocumentSurface()
+    const surfaces = createTestCanvasRuntimeSurfaces({ documents })
+    const publishSurfaces = vi.fn<(surfaces: CanvasRuntimeSurfaces | null) => void>(
+      setCanvasRuntimeSurfaces,
+    )
+    const host: CanvasRuntimeHost = {
+      surfaces,
+      init: vi.fn(async () => undefined),
+      destroy: vi.fn(() => hostDestroy.promise),
+    }
+    const lifecycle = createDesignSessionLifecycle(
+      { canvasArea, container, rulerOverlay },
+      {
+        createRuntimeHost: () => host,
+        publishSurfaces,
+        createResizeObserver: () => null,
+        readInitialAutosaveInterval: () => 1000,
+        logError: vi.fn(),
+      },
+    )
+    lifecycle.start()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const disposal = lifecycle.dispose()
+    expect(teardownAttachedDesignSession).toHaveBeenCalledOnce()
+    expect(host.destroy).not.toHaveBeenCalled()
+    expect(publishSurfaces.mock.calls.at(-1)?.[0]).toBe(surfaces)
+
+    settingsFlush.resolve()
+    await Promise.resolve()
+    expect(host.destroy).toHaveBeenCalledOnce()
+    expect(publishSurfaces.mock.calls.at(-1)?.[0]).toBe(surfaces)
+
+    hostDestroy.resolve()
+    await disposal
+    expect(publishSurfaces.mock.calls.at(-1)?.[0]).toBe(null)
+  })
+
+  it('releases terminal ownership when guarded surface unpublication throws', async () => {
+    const unpublicationError = new Error('surface observer failed')
+    const surfaces = createTestCanvasRuntimeSurfaces()
+    const destroy = vi.fn(async () => undefined)
+    const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
+    const publishSurfaces = vi.fn((next: CanvasRuntimeSurfaces | null) => {
+      setCanvasRuntimeSurfaces(next)
+      if (next === null) throw unpublicationError
+    })
+    const lifecycle = createDesignSessionLifecycle(
+      { canvasArea, container, rulerOverlay },
+      {
+        createRuntimeHost: () => ({
+          surfaces,
+          init: vi.fn(async () => undefined),
+          destroy,
+        }),
+        publishSurfaces,
+        createResizeObserver: () => null,
+        readInitialAutosaveInterval: () => 1000,
+        logError,
+      },
+    )
+    lifecycle.start()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    await expect(lifecycle.dispose()).resolves.toBeUndefined()
+    await expect(lifecycle.dispose()).resolves.toBeUndefined()
+
+    expect(destroy).toHaveBeenCalledOnce()
+    expect(logError).toHaveBeenCalledWith(
+      'Failed to dispose Design Session lifecycle:',
+      unpublicationError,
+    )
+  })
+
   it('requests owner cleanup when runtime initialization rejects asynchronously', async () => {
     const initializationError = new Error('renderer initialization failed')
     const onInitializationFailure = vi.fn<() => void>()
@@ -137,7 +230,7 @@ describe('document session lifecycle', () => {
           init: vi.fn(async () => {
             throw initializationError
           }),
-          destroy: vi.fn(),
+          destroy: vi.fn(async () => undefined),
         }),
         publishSurfaces: vi.fn(),
         createResizeObserver: () => null,
@@ -179,7 +272,7 @@ describe('document session lifecycle', () => {
         createRuntimeHost: () => ({
           surfaces: createTestCanvasRuntimeSurfaces({ documents }),
           init: vi.fn(async () => undefined),
-          destroy: vi.fn(),
+          destroy: vi.fn(async () => undefined),
         }),
         publishSurfaces,
         createResizeObserver: () => null,
@@ -222,7 +315,7 @@ describe('document session lifecycle', () => {
           init: vi.fn(async () => {
             throw new Error('renderer initialization failed')
           }),
-          destroy: vi.fn(),
+          destroy: vi.fn(async () => undefined),
         }),
         publishSurfaces: vi.fn(),
         createResizeObserver: () => null,
