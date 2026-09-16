@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -147,9 +147,66 @@ function parseArgs(argv) {
 }
 
 export async function processFixture(file, options = {}) {
+  if (options.derivative) {
+    let receipt
+    await withTemporaryDerivative(file, options.derivative, options, async (temporary) => {
+      receipt = temporary.receipt
+    })
+    return receipt
+  }
+  const source = await readVerifiedFixture(file, options)
+  await assertSourceUnchanged(file, source.sha256)
+  return source.receipt
+}
+
+/**
+ * Creates a deterministic capacity derivative only for the duration of a
+ * callback. The callback receives its private location, never a public
+ * receipt field. Both callback outcomes recheck the source and remove the
+ * temporary directory before returning.
+ */
+export async function withTemporaryDerivative(file, mode, options, callback) {
+  const source = await readVerifiedFixture(file, options)
+  const derivative = createDerivative(source.document, mode)
+  const directory = await mkdtemp(join(tmpdir(), 'canopi-fixture-'))
+  const derivativeFile = join(directory, 'synthetic-derivative.canopi')
+  const receipt = {
+    ...source.receipt,
+    syntheticDerivative: {
+      layout: mode,
+      plants: derivative.plants.length,
+      integrity: buildReceipt(derivative, Buffer.from(JSON.stringify(derivative))).integrity,
+    },
+  }
+  let result
+  let callbackFailure
+  try {
+    await writeFile(derivativeFile, JSON.stringify(derivative, null, 2) + '\n', { flag: 'wx' })
+    result = await callback({ file: derivativeFile, receipt })
+  } catch (error) {
+    callbackFailure = error
+  }
+  let cleanupFailure
+  try {
+    await rm(directory, { recursive: true, force: true })
+  } catch (error) {
+    cleanupFailure = error
+  }
+  let sourceFailure
+  try {
+    await assertSourceUnchanged(file, source.sha256)
+  } catch (error) {
+    sourceFailure = error
+  }
+  if (sourceFailure) throw sourceFailure
+  if (cleanupFailure) throw new Error('cannot clean temporary fixture derivative', { cause: cleanupFailure })
+  if (callbackFailure) throw callbackFailure
+  return result
+}
+
+async function readVerifiedFixture(file, options) {
   let bytes
   try { bytes = await readFile(file) } catch { throw new Error('cannot read input fixture') }
-  const before = sha256(bytes)
   let document
   try { document = JSON.parse(bytes.toString('utf8')) } catch { throw new Error('input is not valid JSON') }
   const receipt = buildReceipt(document, bytes)
@@ -158,17 +215,13 @@ export async function processFixture(file, options = {}) {
     if (expected !== undefined && (!/^\d+$/.test(expected) || Number(expected) !== receipt.counts[key])) throw new Error(`expected ${key} count mismatch`)
   }
   if (options['expected-sha256'] !== undefined && options['expected-sha256'] !== receipt.sha256) throw new Error('expected SHA-256 mismatch')
-  let derivativePath
-  if (options.derivative) {
-    const derivative = createDerivative(document, options.derivative)
-    const directory = await mkdtemp(join(tmpdir(), 'canopi-fixture-'))
-    derivativePath = join(directory, 'synthetic-derivative.canopi')
-    await writeFile(derivativePath, JSON.stringify(derivative, null, 2) + '\n', { flag: 'wx' })
-    receipt.syntheticDerivative = { layout: options.derivative, plants: derivative.plants.length, path: derivativePath }
-  }
-  const after = sha256(await readFile(file))
-  if (before !== after) throw new Error('input fixture changed during processing')
-  return receipt
+  return { document, receipt, sha256: receipt.sha256 }
+}
+
+async function assertSourceUnchanged(file, expectedSha256) {
+  let bytes
+  try { bytes = await readFile(file) } catch { throw new Error('cannot recheck input fixture') }
+  if (sha256(bytes) !== expectedSha256) throw new Error('input fixture changed during processing')
 }
 
 async function main() {

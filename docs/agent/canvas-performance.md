@@ -83,7 +83,69 @@ node scripts/canvas-performance/fixture-receipt.mjs \
 
 The receipt contains only hash, byte size, version, aggregate counts, and reference-integrity totals. Errors omit the supplied path. Do not commit the source, receipt path, screenshots, traces, or generated content from a private Design.
 
-Add `--derivative dense` or `--derivative dispersed` to create a deterministic 10,000-Plant capacity fixture in a fresh operating-system temporary directory. The derivative preserves source Plant appearance, assigns unique IDs, remaps Plant references, and changes local positions according to the requested layout. Use its returned path only for the bounded measurement, then delete the file and its generated temporary directory. Recheck the original receipt afterward. Never move the derivative into the repository or treat it as representative correctness evidence.
+Add `--derivative dense` or `--derivative dispersed` to verify a deterministic 10,000-Plant capacity fixture. The derivative preserves source Plant appearance, assigns unique IDs, remaps Plant references, and changes local positions according to the requested layout. Its temporary directory is managed by the helper and removed before the aggregate-only receipt is returned. Recheck the original receipt afterward. Never move the derivative into the repository or treat it as representative correctness evidence.
+
+## Production workspace capacity harness
+
+Use `production-workspace.mjs` for the shared production composition rather
+than constructing its camera, renderer, activation coordinator, or controls in
+a benchmark. It uses detached in-memory app, panel-target, contribution,
+snapshot, and offline-basemap adapters. The runner loads the Design through
+`composition.surfaces.documents` before `start()`.
+
+Start a local Web Vite server, then run one named scenario or all four serially:
+
+```bash
+CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
+  node scripts/canvas-performance/production-workspace.mjs \
+  --file '<private-v5-design.canopi>' --scenario all --headed
+```
+
+The scenarios are `representative` (shared renderer), `fallback` (forced
+Canvas2D fallback), `dense` (synthetic dense 10,000 Plants), and `dispersed`
+(synthetic dispersed 10,000 Plants). The in-browser development preparation
+changes a v5 file only by setting `version: 6` and adding
+`newDesignSpatialFrame()`; it is not a shipping converter.
+
+The interaction check ranks unlocked, ungrouped Plants that are safely inside
+the viewport by distance from its centre. It attempts up to six candidates
+through real pointer selection and uses the first exact pointer-selected Plant
+for drag and undo. Candidate IDs and positions stay inside the browser-run
+scope and are never emitted. No pointer-selectable candidate is a failed
+interaction check.
+
+`--headed` is optional; the default is headless Chrome. The JSON is
+aggregate-only. It records the source receipt, environment, viewport/DPR,
+navigation warm-up and sample counts, p50/p95/p99 navigation
+frame-opportunity intervals, stalls above 100 ms, and an
+input-to-second-animation-frame proxy. Each navigation frame sample dispatches
+an alternating wheel event before the animation-frame callback; it is not an
+idle RAF measurement.
+These are browser proxies, not native timings or GPU completion. Renderer work
+and render counters are `unavailable` unless an existing production-observable
+surface provides them. The proxy classifier compares directly with the plan's
+16.7 ms frame reference, 50 ms feedback reference, and no run of two or more
+consecutive intervals above 100 ms. It always reports native qualification as
+unavailable. A proxy miss remains a miss; a proxy pass does not certify native
+presented-frame or input-to-visible performance.
+
+When a scenario fails after source integrity and cleanup have been established,
+the runner records its fixed failure code and continues the remaining independent
+scenarios. It prints the completed and failed aggregate records before exiting
+nonzero, so one failure does not discard earlier measurements.
+
+The harness temporarily instruments public MapLibre prototype methods to capture
+the map passed to `addLayer`, read `getLayersOrder()`, and count `remove()`
+calls. It also tracks persistent DOM listeners on the window, document,
+workspace container, and workspace canvases using DOM listener identity rules,
+including capture and duplicate-add behavior. The patch is restored in its
+disposal `finally` block. A passing cleanup requires one shared-map removal, or
+zero to one removal when fallback rejects WebGL2 before map construction, plus
+zero scoped persistent DOM listeners, zero connected canvases, and unchanged
+public viewport state after settled post-disposal wheel/pointer events. MapLibre Evented
+registrations remaining after `remove()` are recorded as internal/unavailable
+and are not treated as resource-listener leaks. A fallback Canvas2D scenario
+records semantic ordering as not applicable because it has no MapLibre stack.
 
 ## Native development profiling
 

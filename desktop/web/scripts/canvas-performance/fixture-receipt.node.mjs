@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { buildReceipt, createDerivative, processFixture, sha256 } from './fixture-receipt.mjs'
+import { buildReceipt, createDerivative, processFixture, sha256, withTemporaryDerivative } from './fixture-receipt.mjs'
 
 const run = promisify(execFile)
 const script = new URL('./fixture-receipt.mjs', import.meta.url)
@@ -77,22 +77,54 @@ test('source bytes remain unchanged and derivative has deterministic unique IDs'
 test('dense and dispersed layouts are distinct and preserve plant fields', () => {
   const dense = createDerivative(fixture(), 'dense')
   const dispersed = createDerivative(fixture(), 'dispersed')
+  for (const derivative of [dense, dispersed]) {
+    const receipt = buildReceipt(derivative, Buffer.from(JSON.stringify(derivative)))
+    assert.equal(receipt.counts.plants, 10000)
+    assert.equal(receipt.integrity.uniqueNonemptyPlantIds, 10000)
+    assert.equal(receipt.integrity.references.total, receipt.integrity.references.valid)
+  }
   assert.notDeepEqual(dense.plants[101].position, dispersed.plants[101].position)
   assert.equal(dense.plants[1].canonical_name, 'Secretus beta')
   assert.equal(dense.plants[1].color, '#abcdef')
   assert.equal(dense.plants[1].symbol, 'herb')
 })
 
-test('derivative CLI writes a synthetic file in the OS temporary directory', async () => {
+test('derivative receipt stays aggregate-only and its temporary directory is removed', async () => {
   await withFixture(async file => {
     const { stdout } = await run(process.execPath, [script.pathname, '--file', file, '--derivative', 'dispersed'])
     const receipt = JSON.parse(stdout)
     assert.equal(receipt.syntheticDerivative.layout, 'dispersed')
     assert.equal(receipt.syntheticDerivative.plants, 10000)
-    assert.equal(receipt.syntheticDerivative.path.startsWith(tmpdir()), true)
-    assert.equal(receipt.syntheticDerivative.path.includes(process.cwd()), false)
-    await rm(receipt.syntheticDerivative.path, { force: true })
-    await rm(join(receipt.syntheticDerivative.path, '..'), { recursive: true, force: true })
+    assert.equal(JSON.stringify(receipt).includes('path'), false)
+    assert.equal(JSON.stringify(receipt).includes('PRIVATE'), false)
+  })
+})
+
+test('temporary derivative is removed after success and the source hash remains unchanged', async () => {
+  await withFixture(async file => {
+    const before = sha256(await readFile(file))
+    let derivativeFile = ''
+    const result = await withTemporaryDerivative(file, 'dense', {}, async ({ file: temporaryFile, receipt }) => {
+      derivativeFile = temporaryFile
+      assert.equal(receipt.syntheticDerivative.plants, 10000)
+      return 'complete'
+    })
+    assert.equal(result, 'complete')
+    await assert.rejects(access(derivativeFile))
+    assert.equal(sha256(await readFile(file)), before)
+  })
+})
+
+test('temporary derivative is removed after a callback failure', async () => {
+  await withFixture(async file => {
+    const before = sha256(await readFile(file))
+    let derivativeFile = ''
+    await assert.rejects(withTemporaryDerivative(file, 'dispersed', {}, async ({ file: temporaryFile }) => {
+      derivativeFile = temporaryFile
+      throw new Error('intentional callback failure')
+    }), /intentional callback failure/)
+    await assert.rejects(access(derivativeFile))
+    assert.equal(sha256(await readFile(file)), before)
   })
 })
 
