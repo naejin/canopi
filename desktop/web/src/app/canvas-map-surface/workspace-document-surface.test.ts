@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { createCanvasDocumentReplacementToken, type CanvasDocumentSurface } from '../../canvas/runtime/runtime'
 import { createTestCanvasDocumentSurface } from '../../__tests__/support/canvas-runtime-surfaces'
 import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
+import type { WorkspaceMapSnapshot } from '../../maplibre/workspace-map'
 import {
   WorkspaceActivationCoordinator,
   type WorkspaceActivationMap,
 } from './workspace-activation'
 import { createWorkspaceDocumentSurface } from './workspace-document-surface'
+import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler'
 
 describe('createWorkspaceDocumentSurface', () => {
   it('requests the workspace fence before synchronously delegating replacement', () => {
@@ -20,6 +22,8 @@ describe('createWorkspaceDocumentSurface', () => {
         events.push('layer-dispose-started')
         return Promise.resolve()
       }),
+      activate: vi.fn(async () => 'cancelled' as const),
+      teardown: vi.fn(async () => {}),
     }
     const documents = createTestCanvasDocumentSurface({
       replaceDocument: (_file, _token, finalizeReplacement) => {
@@ -28,7 +32,13 @@ describe('createWorkspaceDocumentSurface', () => {
         return { callerFinalizerInvoked: true }
       },
     })
-    const surface = createWorkspaceDocumentSurface({ documents, workspace })
+    const surface = createWorkspaceDocumentSurface({
+      documents,
+      reconciler: new WorkspaceGenerationReconciler({
+        workspace,
+        readSnapshot: () => ({ sessionIdentity: {}, map: mapSnapshot() }),
+      }),
+    })
 
     surface.replaceDocument({} as never, createCanvasDocumentReplacementToken(), () => {
       events.push('finalize')
@@ -46,9 +56,12 @@ describe('createWorkspaceDocumentSurface', () => {
   })
 
   it('delegates non-replacement document roles without disconnecting', () => {
-    const workspace = { requestGenerationDisconnect: vi.fn(async () => {}) }
+    const workspace = createWorkspaceLifecycle()
     const documents = createDocumentSurfaceSpy()
-    const surface = createWorkspaceDocumentSurface({ documents, workspace })
+    const surface = createWorkspaceDocumentSurface({
+      documents,
+      reconciler: createReconciler(workspace),
+    })
     const element = document.createElement('div')
 
     surface.attachInspectionTo(element)
@@ -78,13 +91,16 @@ describe('createWorkspaceDocumentSurface', () => {
   })
 
   it('preserves the underlying document receiver for delegated role methods', () => {
-    const workspace = { requestGenerationDisconnect: vi.fn(async () => {}) }
+    const workspace = createWorkspaceLifecycle()
     const documents = createDocumentSurfaceSpy()
     const loadDocument = vi.fn(function (this: CanvasDocumentSurface) {
       expect(this).toBe(documents)
     })
     documents.loadDocument = loadDocument
-    const surface = createWorkspaceDocumentSurface({ documents, workspace })
+    const surface = createWorkspaceDocumentSurface({
+      documents,
+      reconciler: createReconciler(workspace),
+    })
 
     surface.loadDocument({} as never)
 
@@ -141,7 +157,13 @@ describe('createWorkspaceDocumentSurface', () => {
         return { callerFinalizerInvoked: true }
       },
     })
-    const surface = createWorkspaceDocumentSurface({ documents, workspace })
+    const surface = createWorkspaceDocumentSurface({
+      documents,
+      reconciler: new WorkspaceGenerationReconciler({
+        workspace,
+        readSnapshot: () => ({ sessionIdentity: {}, map: mapSnapshot() }),
+      }),
+    })
 
     surface.replaceDocument({} as never, createCanvasDocumentReplacementToken(), () => {})
     const staleMap = {} as WorkspaceActivationMap
@@ -179,5 +201,31 @@ function createDocumentSurfaceSpy(): CanvasDocumentSurface {
     captureForPersistence: vi.fn(surface.captureForPersistence),
     resize: vi.fn(surface.resize),
     destroy: vi.fn(surface.destroy),
+  }
+}
+
+function createWorkspaceLifecycle() {
+  return {
+    requestGenerationDisconnect: vi.fn(async () => {}),
+    activate: vi.fn(async () => 'cancelled' as const),
+    teardown: vi.fn(async () => {}),
+  }
+}
+
+function createReconciler(workspace: ReturnType<typeof createWorkspaceLifecycle>) {
+  return new WorkspaceGenerationReconciler({
+    workspace,
+    readSnapshot: () => ({ sessionIdentity: {}, map: mapSnapshot() }),
+  })
+}
+
+function mapSnapshot(): WorkspaceMapSnapshot {
+  return {
+    anchor: { lat: 0, lon: 0 },
+    northBearingDeg: 0,
+    placementStatus: 'confirmed' as const,
+    basemapStyle: 'street',
+    basemapVisible: true,
+    basemapOpacity: 1,
   }
 }
