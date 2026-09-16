@@ -139,7 +139,7 @@ class HtmlRulerOverlay implements RulerOverlay {
       z-index: 15;
       pointer-events: auto;
       cursor: s-resize;
-      display: block;
+      display: none;
     `
 
     this._verticalCanvas.dataset.rulerOverlayPart = 'vertical'
@@ -152,7 +152,7 @@ class HtmlRulerOverlay implements RulerOverlay {
       z-index: 15;
       pointer-events: auto;
       cursor: e-resize;
-      display: block;
+      display: none;
     `
 
     this._scaleCanvas.dataset.rulerOverlayPart = 'scale'
@@ -164,7 +164,7 @@ class HtmlRulerOverlay implements RulerOverlay {
       height: ${SCALE_BAR_RESERVED_BOTTOM_PX}px;
       z-index: 18;
       pointer-events: none;
-      display: block;
+      display: none;
     `
 
     this._corner.dataset.rulerOverlayPart = 'corner'
@@ -180,6 +180,7 @@ class HtmlRulerOverlay implements RulerOverlay {
       border-right: 1px solid var(--color-border, ${DEFAULT_PALETTE.border});
       border-bottom: 1px solid var(--color-border, ${DEFAULT_PALETTE.border});
       box-sizing: border-box;
+      display: none;
     `
   }
 

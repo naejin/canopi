@@ -80,6 +80,18 @@ describe('RulerOverlay', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(createContextStub() as never)
   })
 
+  it('keeps every part hidden until the first visibility snapshot', () => {
+    const host = document.createElement('div')
+    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
+
+    expect(findPart<HTMLCanvasElement>(host, 'horizontal').style.display).toBe('none')
+    expect(findPart<HTMLCanvasElement>(host, 'vertical').style.display).toBe('none')
+    expect(findPart<HTMLCanvasElement>(host, 'scale').style.display).toBe('none')
+    expect(findPart<HTMLDivElement>(host, 'corner').style.display).toBe('none')
+
+    overlay.destroy()
+  })
+
   it('cancels an active drag and restores the exact cursor when destroyed', () => {
     const host = document.createElement('div')
     host.style.cursor = 'crosshair'
