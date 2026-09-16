@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   WorkspaceActivationCoordinator,
+  type WorkspaceActivationOutcome,
   type WorkspaceActivationMap,
   type WorkspaceActivationMapControls,
   type WorkspaceActivationSnapshot,
@@ -126,12 +127,15 @@ function createComposition(options: {
   initialize?: () => Promise<void>
   onAdd?: () => void
   dispose?: () => Promise<void>
+  directDispose?: () => Promise<void>
 } = {}) {
   let phase: SharedMapSceneLayer['diagnostics']['phase'] = 'new'
-  const dispose = vi.fn(async () => {
-    await options.dispose?.()
-    phase = 'disposed'
-  })
+  const dispose = options.directDispose
+    ? vi.fn(options.directDispose)
+    : vi.fn(async () => {
+      await options.dispose?.()
+      phase = 'disposed'
+    })
   const layer: SharedMapSceneLayer = {
     layer: {
       id: MAPLIBRE_SHARED_SCENE_LAYER_ID, type: 'custom', renderingMode: '2d',
@@ -169,6 +173,7 @@ function createCoordinator(input: {
   composition?: SharedMapSceneRendererComposition
   runtime?: WorkspaceActivationRuntime
   context?: WebGL2RenderingContext | null
+  getWebGL2Context?: WorkspaceActivationMapControls['getWebGL2Context']
   unwatchFailure?: () => void
   watchFailure?: WorkspaceActivationMapControls['watchFailure']
   installStyleRestorer?: WorkspaceActivationMapControls['installStyleRestorer']
@@ -181,7 +186,8 @@ function createCoordinator(input: {
   const mapControls: WorkspaceActivationMapControls = {
     createMap: input.createMap ?? (async () => map as unknown as WorkspaceActivationMap),
     releaseMap: vi.fn((candidate) => (candidate as unknown as FakeMap).remove()),
-    getWebGL2Context: () => input.context === undefined ? map.context : input.context,
+    getWebGL2Context: input.getWebGL2Context
+      ?? (() => input.context === undefined ? map.context : input.context),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
     watchFailure: input.watchFailure
       ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
@@ -700,6 +706,393 @@ describe('WorkspaceActivationCoordinator', () => {
     await vi.waitFor(() => expect(runtime.reportRendererFailure).toHaveBeenCalledOnce())
     expect(runtime.reportRendererFailure).toHaveBeenCalledWith('maplibre-pixi', expect.any(Error))
     expect(map.remove).toHaveBeenCalledOnce()
+  })
+
+  it('synchronously fences an active generation while deferring map release until layer disposal settles', async () => {
+    const layerDisposal = deferred<void>()
+    const events: string[] = []
+    const map = new FakeMap()
+    map.off.mockImplementation(() => {
+      events.push('camera-detach')
+      return undefined
+    })
+    map.remove.mockImplementation(() => { events.push('map-release') })
+    const composed = createComposition({ dispose: () => {
+      events.push('layer-dispose')
+      return layerDisposal.promise
+    } })
+    let restore: (() => void) | null = null
+    let reportFailure: ((error: unknown) => void) | null = null
+    const { coordinator, runtime } = createCoordinator({
+      map,
+      composition: composed.composition,
+      installStyleRestorer: vi.fn((_map, callback) => {
+        restore = callback
+        return () => { events.push('style-restorer-disposed') }
+      }),
+      watchFailure: vi.fn((_map, callback) => {
+        reportFailure = callback
+        return () => { events.push('failure-watcher-disposed') }
+      }),
+    })
+    await coordinator.activate()
+
+    const disconnected = coordinator.requestGenerationDisconnect()
+
+    expect(map.off).toHaveBeenCalledTimes(2)
+    expect(composed.dispose).toHaveBeenCalledOnce()
+    expect(events).toContain('camera-detach')
+    expect(events).toContain('layer-dispose')
+    expect(events).not.toContain('map-release')
+    expect(runtime.destroy).not.toHaveBeenCalled()
+    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    restore!()
+    reportFailure!(new Error('stale callback'))
+    expect(map.addLayer).toHaveBeenCalledOnce()
+    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+
+    layerDisposal.resolve()
+    await expect(disconnected).resolves.toBeUndefined()
+    expect(events).toEqual(expect.arrayContaining(['layer-dispose', 'map-release']))
+    expect(events.indexOf('layer-dispose')).toBeLessThan(events.indexOf('map-release'))
+  })
+
+  it.each([
+    'WebGL2 context acquisition',
+    'layer creation',
+    'failure watcher installation',
+    'style restorer installation',
+    'camera failure subscription',
+    'camera attachment',
+    'shared layer attachment',
+  ] as const)('rolls back a generation when replacement reenters from %s', async (boundary) => {
+    let coordinator!: TestWorkspaceActivationCoordinator
+    const layer = createComposition({
+      onAdd: boundary === 'shared layer attachment'
+        ? () => { coordinator.requestGenerationDisconnect() }
+        : undefined,
+    })
+    const watcherDisposer = vi.fn()
+    const restorerDisposer = vi.fn()
+    const subscriptionDisposer = vi.fn()
+    const composition: SharedMapSceneRendererComposition = boundary === 'layer creation'
+      ? {
+        ...layer.composition,
+        createLayer: vi.fn(() => {
+          coordinator.requestGenerationDisconnect()
+          return layer.layer
+        }),
+      }
+      : layer.composition
+    const { camera, map, runtime, coordinator: created } = createCoordinator({
+      composition,
+      getWebGL2Context: boundary === 'WebGL2 context acquisition'
+        ? vi.fn(() => {
+          coordinator.requestGenerationDisconnect()
+          return new FakeMap().context
+        })
+        : undefined,
+      watchFailure: boundary === 'failure watcher installation'
+        ? vi.fn(() => {
+          coordinator.requestGenerationDisconnect()
+          return watcherDisposer
+        })
+        : undefined,
+      installStyleRestorer: boundary === 'style restorer installation'
+        ? vi.fn(() => {
+          coordinator.requestGenerationDisconnect()
+          return restorerDisposer
+        })
+        : undefined,
+    })
+    coordinator = created
+    const subscribeFailure = vi.spyOn(camera.attachment, 'subscribeFailure')
+    if (boundary === 'camera failure subscription') {
+      subscribeFailure.mockImplementation(() => {
+        coordinator.requestGenerationDisconnect()
+        return subscriptionDisposer
+      })
+    }
+    const detach = vi.spyOn(camera.attachment, 'detach')
+    if (boundary === 'camera attachment') {
+      vi.spyOn(camera.attachment, 'attach').mockImplementation(() => {
+        coordinator.requestGenerationDisconnect()
+        return true
+      })
+    }
+
+    await expect(coordinator.activate()).resolves.toBe('cancelled')
+    await vi.waitFor(() => expect(map.remove).toHaveBeenCalledOnce())
+
+    if (boundary === 'failure watcher installation' || boundary === 'WebGL2 context acquisition') {
+      expect(layer.dispose).not.toHaveBeenCalled()
+    } else {
+      expect(layer.dispose).toHaveBeenCalledOnce()
+    }
+    expect(runtime.init).not.toHaveBeenCalled()
+    if (boundary === 'failure watcher installation') expect(watcherDisposer).toHaveBeenCalledOnce()
+    if (boundary === 'style restorer installation') expect(restorerDisposer).toHaveBeenCalledOnce()
+    if (boundary === 'camera failure subscription') expect(subscriptionDisposer).toHaveBeenCalledOnce()
+    if (boundary === 'camera attachment') expect(detach).toHaveBeenCalledOnce()
+    if (boundary === 'shared layer attachment') expect(subscribeFailure).not.toHaveBeenCalled()
+  })
+
+  it('waits for a requested disconnect before creating a successor map', async () => {
+    const layerDisposal = deferred<void>()
+    const first = createComposition({ dispose: () => layerDisposal.promise })
+    const successor = createComposition()
+    const composition: SharedMapSceneRendererComposition = {
+      renderer: {} as never,
+      createLayer: vi.fn().mockReturnValueOnce(first.layer).mockReturnValueOnce(successor.layer),
+      failActiveLayer: vi.fn(),
+    }
+    const maps = [new FakeMap(), new FakeMap()]
+    const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
+    const { coordinator } = createCoordinator({ createMap, composition })
+    await coordinator.activate(createActivationSnapshot({ northBearingDeg: 1 }))
+
+    coordinator.requestGenerationDisconnect()
+    const activation = coordinator.activate(createActivationSnapshot({ northBearingDeg: 2 }))
+    await Promise.resolve()
+
+    expect(createMap).toHaveBeenCalledOnce()
+    layerDisposal.resolve()
+    await expect(activation).resolves.toBe('shared-ready')
+    expect(createMap).toHaveBeenCalledTimes(2)
+  })
+
+  it('blocks one successor after a requested disconnect rejects, then permits recovery', async () => {
+    const firstMap = new FakeMap()
+    const recoveredMap = new FakeMap()
+    const cleanupFailure = new Error('map release failed')
+    firstMap.remove.mockImplementation(() => { throw cleanupFailure })
+    const maps = [firstMap, recoveredMap]
+    const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
+    const { coordinator } = createCoordinator({ createMap })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await coordinator.activate()
+
+    await expect(coordinator.requestGenerationDisconnect()).rejects.toBe(cleanupFailure)
+    await expect(coordinator.activate()).rejects.toBe(cleanupFailure)
+    expect(createMap).toHaveBeenCalledOnce()
+
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    expect(createMap).toHaveBeenCalledTimes(2)
+    consoleError.mockRestore()
+  })
+
+  it('shares one requested disconnect and does not dispose the generation twice', async () => {
+    const layerDisposal = deferred<void>()
+    const composed = createComposition({ dispose: () => layerDisposal.promise })
+    const { coordinator, map } = createCoordinator({ composition: composed.composition })
+    await coordinator.activate()
+
+    const first = coordinator.requestGenerationDisconnect()
+    const repeated = coordinator.requestGenerationDisconnect()
+
+    expect(repeated).toBe(first)
+    expect(composed.dispose).toHaveBeenCalledOnce()
+    layerDisposal.resolve()
+    await expect(first).resolves.toBeUndefined()
+    expect(map.remove).toHaveBeenCalledOnce()
+  })
+
+  it('joins a requested disconnect during terminal teardown and destroys the runtime once', async () => {
+    const layerDisposal = deferred<void>()
+    const composed = createComposition({ dispose: () => layerDisposal.promise })
+    const { coordinator, runtime, map } = createCoordinator({ composition: composed.composition })
+    await coordinator.activate()
+
+    coordinator.requestGenerationDisconnect()
+    const teardown = coordinator.teardown()
+    await Promise.resolve()
+    expect(runtime.destroy).not.toHaveBeenCalled()
+
+    layerDisposal.resolve()
+    await expect(teardown).resolves.toBeUndefined()
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('joins an already-started renderer failover before disconnect and terminal teardown settle', async () => {
+    const rendererReplacement = deferred<void>()
+    const runtime = createRuntime()
+    runtime.reportRendererFailure = vi.fn(() => rendererReplacement.promise)
+    const { coordinator } = createCoordinator({ runtime })
+    await coordinator.activate()
+
+    const failure = coordinator.reportFailure(new Error('context lost'))
+    await vi.waitFor(() => expect(runtime.reportRendererFailure).toHaveBeenCalledOnce())
+    const disconnected = coordinator.requestGenerationDisconnect()
+    const teardown = coordinator.teardown()
+    await Promise.resolve()
+
+    expect(runtime.destroy).not.toHaveBeenCalled()
+    rendererReplacement.resolve()
+
+    await expect(failure).resolves.toBe('cancelled')
+    await expect(disconnected).resolves.toBeUndefined()
+    await expect(teardown).resolves.toBeUndefined()
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a child cleanup that returns an owner operation without creating a cycle', async () => {
+    let coordinator!: TestWorkspaceActivationCoordinator
+    let nestedActivation!: Promise<WorkspaceActivationOutcome>
+    let nestedDisconnect!: Promise<void>
+    let nestedTeardown!: Promise<void>
+    const composed = createComposition({ directDispose: () => {
+      nestedActivation = coordinator.activate()
+      nestedDisconnect = coordinator.requestGenerationDisconnect()
+      expect(coordinator.requestGenerationDisconnect()).toBe(nestedDisconnect)
+      nestedTeardown = coordinator.teardown()
+      return nestedTeardown
+    } })
+    const { coordinator: created, map, runtime } = createCoordinator({
+      composition: composed.composition,
+    })
+    coordinator = created
+    await coordinator.activate()
+
+    const teardown = coordinator.teardown()
+
+    expect(nestedTeardown).toBe(teardown)
+    await expect(teardown).rejects.toThrow(
+      'Shared workspace shared scene layer disposal must not return a coordinator lifecycle operation.',
+    )
+    await expect(nestedActivation).resolves.toBe('cancelled')
+    await expect(nestedDisconnect).rejects.toThrow(
+      'Shared workspace shared scene layer disposal must not return a coordinator lifecycle operation.',
+    )
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a void-disposer teardown pending until requested disconnect cleanup completes', async () => {
+    let coordinator!: TestWorkspaceActivationCoordinator
+    let nestedTeardown!: Promise<void>
+    let nestedSettled = false
+    const layerDisposal = deferred<void>()
+    const disposeStyleRestorer = vi.fn(() => {
+      nestedTeardown = coordinator.teardown()
+      void nestedTeardown.then(
+        () => { nestedSettled = true },
+        () => { nestedSettled = true },
+      )
+    })
+    const composed = createComposition({ dispose: () => layerDisposal.promise })
+    const { coordinator: created, runtime } = createCoordinator({
+      composition: composed.composition,
+      installStyleRestorer: () => disposeStyleRestorer,
+    })
+    coordinator = created
+    await coordinator.activate()
+
+    const disconnected = coordinator.requestGenerationDisconnect()
+    expect(coordinator.teardown()).toBe(nestedTeardown)
+    await Promise.resolve()
+
+    expect(nestedSettled).toBe(false)
+    expect(runtime.destroy).not.toHaveBeenCalled()
+
+    layerDisposal.resolve()
+    await expect(disconnected).resolves.toBeUndefined()
+    await expect(nestedTeardown).resolves.toBeUndefined()
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+    expect(disposeStyleRestorer).toHaveBeenCalledOnce()
+  })
+
+  it('propagates requested-disconnect cleanup failure to a void-disposer teardown caller', async () => {
+    let coordinator!: TestWorkspaceActivationCoordinator
+    let nestedTeardown!: Promise<void>
+    const cleanupFailure = new Error('map release failed after teardown request')
+    const map = new FakeMap()
+    map.remove.mockImplementation(() => { throw cleanupFailure })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { coordinator: created, runtime } = createCoordinator({
+      map,
+      installStyleRestorer: () => () => {
+        nestedTeardown = coordinator.teardown()
+      },
+    })
+    coordinator = created
+    await coordinator.activate()
+
+    const disconnected = coordinator.requestGenerationDisconnect()
+
+    await expect(disconnected).rejects.toBe(cleanupFailure)
+    await expect(nestedTeardown).rejects.toBe(cleanupFailure)
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+    consoleError.mockRestore()
+  })
+
+  it('observes a rejected teardown intentionally ignored by a void disposer', async () => {
+    let coordinator!: TestWorkspaceActivationCoordinator
+    const cleanupFailure = new Error('ignored teardown cleanup failed')
+    const map = new FakeMap()
+    map.remove.mockImplementation(() => { throw cleanupFailure })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { coordinator: created, runtime } = createCoordinator({
+      map,
+      installStyleRestorer: () => () => {
+        void coordinator.teardown()
+      },
+    })
+    coordinator = created
+    await coordinator.activate()
+
+    await expect(coordinator.requestGenerationDisconnect()).rejects.toBe(cleanupFailure)
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        'Reentrant shared workspace lifecycle operation failed:',
+        cleanupFailure,
+      )
+    })
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+    consoleError.mockRestore()
+  })
+
+  it('rejects runtime initialization that directly returns terminal teardown', async () => {
+    let coordinator!: TestWorkspaceActivationCoordinator
+    let nestedTeardown!: Promise<void>
+    const runtime = createRuntime()
+    runtime.init = vi.fn(() => {
+      nestedTeardown = coordinator.teardown()
+      return nestedTeardown
+    })
+    const { coordinator: created, map } = createCoordinator({ runtime })
+    coordinator = created
+
+    await expect(coordinator.activate()).resolves.toBe('cancelled')
+    await expect(nestedTeardown).rejects.toThrow(
+      'Shared workspace runtime initialization must not return a coordinator lifecycle operation.',
+    )
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(runtime.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('rejects renderer failover that directly returns terminal teardown', async () => {
+    let coordinator!: TestWorkspaceActivationCoordinator
+    let nestedTeardown!: Promise<void>
+    const runtime = createRuntime()
+    runtime.reportRendererFailure = vi.fn(() => {
+      nestedTeardown = coordinator.teardown()
+      return nestedTeardown
+    })
+    const { coordinator: created, map } = createCoordinator({ runtime })
+    coordinator = created
+    await coordinator.activate()
+
+    const failure = coordinator.reportFailure(new Error('context lost'))
+
+    await expect(failure).rejects.toThrow(
+      'Shared workspace renderer failover must not return a coordinator lifecycle operation.',
+    )
+    await expect(nestedTeardown).rejects.toThrow(
+      'Shared workspace renderer failover must not return a coordinator lifecycle operation.',
+    )
+    expect(map.remove).toHaveBeenCalledOnce()
+    expect(runtime.destroy).toHaveBeenCalledOnce()
   })
 
   it('fences a stale asynchronous map creation after cancellation and tears down once', async () => {
