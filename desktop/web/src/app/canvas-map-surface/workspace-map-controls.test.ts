@@ -107,6 +107,7 @@ function createControls(options: {
   basemapVisible?: boolean
   load?: () => Promise<MapLibreApi>
   webgl2?: WebGL2RenderingContext | null
+  canCreateWebGL2Context?: () => boolean
 } = {}) {
   const maps: FakeMap[] = []
   const observers: Array<{ observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }> = []
@@ -131,6 +132,7 @@ function createControls(options: {
     container: document.createElement('div'),
     surface,
     contributions: options.contributions,
+    canCreateWebGL2Context: options.canCreateWebGL2Context ?? (() => true),
   }, snapshot)
   return { controls, maps, observers }
 }
@@ -1107,11 +1109,49 @@ describe('WorkspaceMapControls', () => {
     })
     const controls = new WorkspaceMapControls({
       container: document.createElement('div'), surface,
+      canCreateWebGL2Context: () => true,
     })
     await expect(controls.createMap(new AbortController().signal, {
       anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, placementStatus: 'confirmed',
       basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
     }, {})).rejects.toBe(error)
+  })
+
+  it('rejects unavailable WebGL2 before constructing a MapLibre map', async () => {
+    const canCreateWebGL2Context = vi.fn(() => false)
+    const { controls, maps, observers } = createControls({ canCreateWebGL2Context })
+
+    await expect(controls.createMap(new AbortController().signal)).rejects.toThrow(
+      'WebGL2 is unavailable',
+    )
+
+    expect(canCreateWebGL2Context).toHaveBeenCalledOnce()
+    expect(maps).toEqual([])
+    expect(observers).toEqual([])
+  })
+
+  it('does not ask a browser without the WebGL2 interface to create a context', async () => {
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+    const loadMapLibre = vi.fn<() => Promise<MapLibreApi>>()
+    const surface = createMapLibreSurfaceAdapter({ loadMapLibre })
+    vi.stubGlobal('WebGL2RenderingContext', undefined)
+    try {
+      const controls = new WorkspaceMapControls({
+        container: document.createElement('div'),
+        surface,
+      })
+
+      await expect(controls.createMap(new AbortController().signal, {
+        anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, placementStatus: 'confirmed',
+        basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
+      }, {})).rejects.toThrow('WebGL2 is unavailable')
+
+      expect(getContext).not.toHaveBeenCalled()
+      expect(loadMapLibre).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+      getContext.mockRestore()
+    }
   })
 
   it('rejects and releases when the constructed map has no public WebGL2 context', async () => {

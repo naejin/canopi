@@ -54,6 +54,7 @@ export interface WorkspaceActivationMapControlsOptions {
   readonly container: HTMLElement
   readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
+  readonly canCreateWebGL2Context?: () => boolean
 }
 
 /**
@@ -81,6 +82,9 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.rejectAttempt(previous, abortError())
     } else {
       this.releaseAttempt(previous)
+    }
+    if (!(this.options.canCreateWebGL2Context ?? canCreateWebGL2Context)()) {
+      return Promise.reject(new Error('WebGL2 is unavailable for the shared workspace map.'))
     }
     this.surface.attach(this.options.container)
 
@@ -426,6 +430,17 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     } finally {
       this.surface.destroy()
     }
+  }
+}
+
+function canCreateWebGL2Context(): boolean {
+  if (typeof WebGL2RenderingContext === 'undefined') return false
+  try {
+    const context = document.createElement('canvas').getContext('webgl2')
+    context?.getExtension('WEBGL_lose_context')?.loseContext()
+    return context != null
+  } catch {
+    return false
   }
 }
 

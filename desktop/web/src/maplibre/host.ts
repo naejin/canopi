@@ -57,6 +57,12 @@ export interface MapLibreHostDeps {
 interface CurrentMapLibreHostContext extends MapLibreHostContext {
   readonly generation: number
   readonly request: MapLibreHostRequest
+  readonly rollbackConstructorMutations: () => void
+}
+
+interface CreatedMapLibreMap {
+  readonly map: MapLibreMapInstance
+  readonly rollbackConstructorMutations: () => void
 }
 
 export function createMapLibreHost(deps: MapLibreHostDeps = {}): MapLibreHost {
@@ -93,7 +99,10 @@ class ImperativeMapLibreHost implements MapLibreHost {
       this.mapContext = this.createContext(
         request,
         this.mapContext.maplibre,
-        this.mapContext.map,
+        {
+          map: this.mapContext.map,
+          rollbackConstructorMutations: this.mapContext.rollbackConstructorMutations,
+        },
         this.mapContext.generation,
       )
       return
@@ -138,14 +147,14 @@ class ImperativeMapLibreHost implements MapLibreHost {
       const currentRequest = this.currentPendingRequest(key, container, generation)
       if (!currentRequest) return
 
-      const map = currentRequest.createMap(maplibre, container, this.preservedViewState)
+      const createdMap = this.createMapWithContainerRollback(currentRequest, maplibre, container)
       const latestRequest = this.currentPendingRequest(key, container, generation)
       if (!latestRequest) {
-        map.remove()
+        this.removeMap(createdMap)
         return
       }
 
-      const context = this.createContext(latestRequest, maplibre, map, generation)
+      const context = this.createContext(latestRequest, maplibre, createdMap, generation)
       this.mapContext = context
       this.loadingKey = null
       this.installResizeObserver(context, container)
@@ -162,15 +171,17 @@ class ImperativeMapLibreHost implements MapLibreHost {
   private createContext(
     request: MapLibreHostRequest,
     maplibre: MapLibreApi,
-    map: MapLibreMapInstance,
+    createdMap: CreatedMapLibreMap,
     generation: number,
   ): CurrentMapLibreHostContext {
+    const { map, rollbackConstructorMutations } = createdMap
     return {
       key: request.key,
       map,
       maplibre,
       request,
       generation,
+      rollbackConstructorMutations,
       preservedViewState: this.preservedViewState,
       isCurrent: () => this.mapContext?.map === map && this.generation === generation,
     }
@@ -193,6 +204,71 @@ class ImperativeMapLibreHost implements MapLibreHost {
     return request
   }
 
+  private createMapWithContainerRollback(
+    request: MapLibreHostRequest,
+    maplibre: MapLibreApi,
+    container: HTMLElement,
+  ): CreatedMapLibreMap {
+    const existingChildren = new Set(Array.from(container.children))
+    const existingClasses = new Set(Array.from(container.classList))
+    try {
+      const map = request.createMap(maplibre, container, this.preservedViewState)
+      return {
+        map,
+        rollbackConstructorMutations: this.createConstructorMutationRollback(
+          container,
+          existingChildren,
+          existingClasses,
+        ),
+      }
+    } catch (error) {
+      this.createConstructorMutationRollback(container, existingChildren, existingClasses)()
+      throw error
+    }
+  }
+
+  private createConstructorMutationRollback(
+    container: HTMLElement,
+    existingChildren: ReadonlySet<Element>,
+    existingClasses: ReadonlySet<string>,
+  ): () => void {
+    const constructorChildren = new Set(
+      Array.from(container.children).filter((child) => !existingChildren.has(child)),
+    )
+    const constructorClasses = Array.from(container.classList)
+      .filter((className) => !existingClasses.has(className))
+    let rolledBack = false
+
+    return () => {
+      if (rolledBack) return
+      rolledBack = true
+
+      for (const child of constructorChildren) {
+        if (child.parentElement !== container) continue
+        try {
+          child.remove()
+        } catch (error) {
+          this.logCleanupError('Failed to remove MapLibre container child after create failure:', error)
+        }
+      }
+      for (const className of constructorClasses) {
+        try {
+          container.classList.remove(className)
+        } catch (error) {
+          this.logCleanupError('Failed to remove MapLibre container class after create failure:', error)
+        }
+      }
+    }
+  }
+
+  private removeMap(createdMap: CreatedMapLibreMap): void {
+    try {
+      createdMap.map.remove()
+    } finally {
+      createdMap.rollbackConstructorMutations()
+    }
+  }
+
   private destroyCurrentMap(): void {
     this.generation += 1
     this.loadingKey = null
@@ -207,7 +283,7 @@ class ImperativeMapLibreHost implements MapLibreHost {
     try {
       context.request.onDestroy?.(context)
     } finally {
-      context.map.remove()
+      this.removeMap(context)
     }
   }
 
@@ -224,7 +300,11 @@ class ImperativeMapLibreHost implements MapLibreHost {
     } catch (error) {
       this.logError('Failed to clean up MapLibre map after create failure:', error)
     } finally {
-      context.map.remove()
+      try {
+        this.removeMap(context)
+      } catch (error) {
+        this.logCleanupError('Failed to remove MapLibre map after create failure:', error)
+      }
     }
   }
 
@@ -265,5 +345,13 @@ class ImperativeMapLibreHost implements MapLibreHost {
   private logError(message?: unknown, ...optionalParams: unknown[]): void {
     const log = this.deps.logError ?? console.error
     log(message, ...optionalParams)
+  }
+
+  private logCleanupError(message: unknown, error: unknown): void {
+    try {
+      this.logError(message, error)
+    } catch {
+      // Preserve the MapLibre construction failure when diagnostics fail.
+    }
   }
 }
