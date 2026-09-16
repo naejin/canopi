@@ -18,6 +18,7 @@ import {
   type SharedPixiRenderer,
 } from '../../maplibre/shared-scene-layer'
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
+import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler'
 
 const TEST_CAPABILITIES: RendererCapabilities = {
   domCanvas: true, canvas2d: true, offscreenCanvas: false, offscreenCanvas2d: false,
@@ -1245,6 +1246,36 @@ describe('WorkspaceActivationCoordinator', () => {
       )
     })
     expect(runtime.destroy).toHaveBeenCalledOnce()
+    consoleError.mockRestore()
+  })
+
+  it('logs a rejected reconciler disposal once when a coordinator callback initiates it', async () => {
+    const cleanupFailure = new Error('reentrant reconciler teardown failed')
+    const map = new FakeMap()
+    map.remove.mockImplementation(() => { throw cleanupFailure })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let reconciler!: WorkspaceGenerationReconciler
+    const { coordinator } = createCoordinator({
+      map,
+      installStyleRestorer: () => () => {
+        void reconciler.dispose()
+      },
+    })
+    reconciler = new WorkspaceGenerationReconciler({
+      workspace: coordinator,
+      readSnapshot: () => null,
+    })
+    await coordinator.activate(createActivationSnapshot())
+
+    const teardown = coordinator.teardown()
+
+    await expect(teardown).rejects.toBe(cleanupFailure)
+    expect(reconciler.dispose()).toBe(teardown)
+    await vi.waitFor(() => expect(consoleError).toHaveBeenCalledTimes(1))
+    expect(consoleError).toHaveBeenCalledWith(
+      'Reentrant shared workspace lifecycle operation failed:',
+      cleanupFailure,
+    )
     consoleError.mockRestore()
   })
 

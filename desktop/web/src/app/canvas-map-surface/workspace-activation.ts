@@ -474,6 +474,11 @@ export class WorkspaceActivationCoordinator {
     return teardown
   }
 
+  /** Reports observation ownership without exposing the coordinator's callback state. */
+  ownsLifecycleFailureObservation(result: Promise<unknown>): boolean {
+    return this.observedOwnedReentryResults.has(result)
+  }
+
   private async performTeardown(): Promise<void> {
     if (this.disposed && this.runtimeDestroyed) return
     this.disposed = true

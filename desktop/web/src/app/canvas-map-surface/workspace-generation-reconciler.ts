@@ -8,6 +8,8 @@ export interface WorkspaceGenerationLifecycle {
   requestGenerationDisconnect(): Promise<void>
   activate(snapshot: WorkspaceActivationSnapshot): Promise<WorkspaceActivationOutcome>
   teardown(): Promise<void>
+  /** True when this lifecycle already observes rejection of this exact result. */
+  ownsLifecycleFailureObservation?(result: Promise<unknown>): boolean
 }
 
 export interface WorkspaceGenerationReconcilerOptions {
@@ -115,7 +117,9 @@ export class WorkspaceGenerationReconciler {
       teardown = Promise.reject(error)
     }
     this.teardown = teardown
-    this.observeTerminalTeardown(teardown)
+    if (!this.options.workspace.ownsLifecycleFailureObservation?.(teardown)) {
+      this.observeTerminalTeardown(teardown)
+    }
     return teardown
   }
 
