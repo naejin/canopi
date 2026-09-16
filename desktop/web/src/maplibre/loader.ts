@@ -37,6 +37,8 @@ export interface MapLibreMapInstance {
   getSource(id: string): { setData(data: unknown): void } | undefined
   removeSource(id: string): void
   addLayer(layer: Record<string, unknown>, beforeId?: string): void
+  getLayersOrder(): string[]
+  moveLayer(id: string, beforeId?: string): void
   setPaintProperty?(layerId: string, name: string, value: unknown): void
   getLayer(id: string): unknown
   removeLayer(id: string): void

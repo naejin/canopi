@@ -17,7 +17,7 @@ export interface MapLibreOverlayMap {
   removeLayer(id: string): void
 }
 
-function overlayIds(variant: PanelTargetMapOverlayVariant) {
+export function panelTargetMapOverlayIds(variant: PanelTargetMapOverlayVariant) {
   const sourceId = `panel-target-${variant}-source`
   return {
     sourceId,
@@ -33,7 +33,7 @@ export function clearPanelTargetMapOverlay(
   map: MapLibreOverlayMap,
   variant: PanelTargetMapOverlayVariant,
 ): void {
-  const ids = overlayIds(variant)
+  const ids = panelTargetMapOverlayIds(variant)
   for (const layerId of [...ids.layerIds].reverse()) {
     if (map.getLayer(layerId)) map.removeLayer(layerId)
   }

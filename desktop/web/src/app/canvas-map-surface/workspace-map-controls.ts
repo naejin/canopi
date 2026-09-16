@@ -11,6 +11,10 @@ import {
 } from '../../maplibre/workspace-map'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
+import {
+  createMapLayerStackDescriptors,
+  reconcileMapLayerStack,
+} from './layer-stack'
 import type {
   WorkspaceActivationMap,
   WorkspaceActivationMapControls,
@@ -207,7 +211,15 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       }
     }
     attempt.styleRestorer = restoreCurrentStyle
+    const hadPendingStyleRestore = attempt.pendingStyleRestore
     this.restoreStyle(attempt)
+    if (!hadPendingStyleRestore) {
+      try {
+        this.reconcileLayerStack(attempt)
+      } catch (error) {
+        this.reportRestorationFailure(attempt, error)
+      }
+    }
     return () => {
       active = false
       if (attempt.styleRestorer === restoreCurrentStyle) {
@@ -252,6 +264,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     try {
       this.addBasemapContribution(attempt.map!)
       attempt.styleRestorer()
+      this.reconcileLayerStack(attempt)
     } catch (error) {
       this.reportRestorationFailure(attempt, error)
     } finally {
@@ -260,6 +273,14 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         queueMicrotask(() => this.restoreStyle(attempt))
       }
     }
+  }
+
+  private reconcileLayerStack(attempt: WorkspaceMapAttempt): void {
+    if (!attempt.map || attempt.released) return
+    reconcileMapLayerStack(
+      attempt.map,
+      createMapLayerStackDescriptors([]),
+    )
   }
 
   private reportRestorationFailure(attempt: WorkspaceMapAttempt, error: unknown): void {

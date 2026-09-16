@@ -27,6 +27,10 @@ import {
 } from '../../maplibre/terrain-sync'
 import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
 import {
+  createMapLayerStackDescriptors,
+  reconcileMapLayerStack,
+} from './layer-stack'
+import {
   applyLidarSync,
   clearLidarSync,
   classifyLidarSync,
@@ -199,6 +203,19 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     syncCanvasMapSurfaceOverlays(context.map, snapshot, this.state.status === 'ready')
   }
 
+  private reconcileLayerStack(
+    map: MapLibreMapInstance,
+    lidar: readonly LidarMapLayer[],
+  ): void {
+    try {
+      reconcileMapLayerStack(map, createMapLayerStackDescriptors(lidar.map((layer) => layer.id)))
+    } catch (error) {
+      // Layer ordering is derived display state; keep editing available when a
+      // passive MapLibre ordering update cannot be applied.
+      this.logError('Failed to reconcile canvas map layer order:', error)
+    }
+  }
+
   private async syncTerrain(snapshot: CanvasMapSurfaceSnapshot): Promise<void> {
     const context = this.surface.current()
     if (!context || this.state.status !== 'ready') return
@@ -206,10 +223,19 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
 
     const nextTerrainState = snapshot.terrain
     const syncMode = classifyTerrainSync(this.terrainState, nextTerrainState)
-    if (syncMode === 'noop') return
+    const terrainGeneration = this.terrainGeneration + 1
+    this.terrainGeneration = terrainGeneration
+
+    if (syncMode === 'noop') {
+      this.setSurfaceState({
+        ...this.state,
+        terrainStatus: this.terrainState ? 'ready' : 'idle',
+        terrainErrorMessage: null,
+      })
+      return
+    }
 
     if (syncMode === 'clear') {
-      this.terrainGeneration += 1
       clearTerrain(map)
       this.terrainState = null
       this.setSurfaceState({
@@ -231,8 +257,6 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       return
     }
 
-    const terrainGeneration = this.terrainGeneration + 1
-    this.terrainGeneration = terrainGeneration
     this.setSurfaceState({
       ...this.state,
       terrainStatus: 'loading',
@@ -256,6 +280,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
         terrainStatus: 'ready',
         terrainErrorMessage: null,
       })
+      this.reconcileLayerStack(map, snapshot.lidar)
     } catch (error) {
       if (
         !context.isCurrent()
@@ -370,6 +395,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     // overlay/terrain layer; insertion order inside the map is z-order.
     this.syncLidar(context.map, snapshot.lidar)
     this.syncOverlays(snapshot)
+    this.reconcileLayerStack(context.map, snapshot.lidar)
     void this.syncTerrain(snapshot)
   }
 
@@ -394,6 +420,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       this.syncBasemapPresentation(map, currentSnapshot)
       this.syncLidar(map, currentSnapshot.lidar)
       this.syncOverlays(currentSnapshot)
+      this.reconcileLayerStack(map, currentSnapshot.lidar)
       void this.syncTerrain(currentSnapshot)
     }
 

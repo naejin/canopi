@@ -1,12 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-  applyLidarSync,
   classifyLidarSync,
-  firstNonLidarLayerId,
   lidarMapLayers,
   type LidarMapLayer,
 } from '../app/canvas-map-surface/lidar'
-import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../maplibre/shared-scene-layer'
 import { lidarTileUrlTemplate } from '../app/lidar/tile-urls'
 import { readLidarPresentation } from '../app/lidar/library-store'
 import type { LidarTileset } from '../ipc/lidar'
@@ -165,30 +162,18 @@ describe('lidar map sync classification', () => {
     ])
   })
 
+  it.each([
+    ['minimum zoom', { minZoom: 12 }],
+    ['maximum zoom', { maxZoom: 18 }],
+    ['bounds', { bounds: [-0.43, 48.3, -0.4, 48.31] as [number, number, number, number] }],
+  ])('rebuilds a layer when its raster source %s changes', (_field, change) => {
+    expect(classifyLidarSync([base], [{ ...base, ...change }])).toEqual([
+      { type: 'remove', id: base.id },
+      { type: 'add', layer: { ...base, ...change } },
+    ])
+  })
+
   it('is a no-op for equal bands', () => {
     expect(classifyLidarSync([base], [base])).toEqual([])
-  })
-})
-
-describe('LiDAR shared-scene insertion', () => {
-  it('uses the canonical shared scene layer as the first upper boundary', () => {
-    const layers = new Set([
-      MAPLIBRE_SHARED_SCENE_LAYER_ID,
-      'contour-minor',
-    ])
-    const map = {
-      addSource() {}, getSource() { return undefined }, removeSource() {},
-      addLayer: vi.fn(), getLayer: (id: string) => layers.has(id) ? {} : undefined,
-      removeLayer() {},
-    }
-    expect(firstNonLidarLayerId(map)).toBe(MAPLIBRE_SHARED_SCENE_LAYER_ID)
-    applyLidarSync(map, [{
-      type: 'add', layer: {
-        id: 'lidar-elevation-lyr-1', name: 'Elevation', visible: true, opacity: 1,
-        urlTemplate: 'asset://test/{z}/{x}/{y}.png', minZoom: 1, maxZoom: 2,
-        bounds: [0, 0, 1, 1],
-      },
-    }])
-    expect(map.addLayer).toHaveBeenLastCalledWith(expect.any(Object), MAPLIBRE_SHARED_SCENE_LAYER_ID)
   })
 })

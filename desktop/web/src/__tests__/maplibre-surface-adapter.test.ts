@@ -27,6 +27,8 @@ class FakeMap implements MapLibreMapInstance {
   readonly setPaintProperty = vi.fn()
   readonly getLayer = vi.fn()
   readonly removeLayer = vi.fn()
+  readonly getLayersOrder = vi.fn(() => [])
+  readonly moveLayer = vi.fn()
   readonly handlers = new Map<string, Set<MapEventHandler>>()
 
   constructor(readonly options: MapLibreMapConstructorOptions) {}

@@ -46,11 +46,24 @@ class FakeMap {
   })
   readonly off = vi.fn((type: string, listener: () => void) => this.listeners.get(type)?.delete(listener))
   readonly layers = new Map<string, { onAdd?: (map: unknown, context: WebGL2RenderingContext) => void; onRemove?: (map: unknown, context: WebGL2RenderingContext) => void }>()
+  readonly layerOrder: string[] = []
   readonly addLayer = vi.fn((layer: { id?: string; onAdd?: (map: unknown, context: WebGL2RenderingContext) => void; onRemove?: (map: unknown, context: WebGL2RenderingContext) => void }) => {
-    if (layer.id) this.layers.set(layer.id, layer)
+    if (layer.id) {
+      this.layers.set(layer.id, layer)
+      if (!this.layerOrder.includes(layer.id)) this.layerOrder.push(layer.id)
+    }
     layer.onAdd?.(this, this.context)
   })
   readonly getLayer = vi.fn((id: string) => this.layers.get(id))
+  readonly getLayersOrder = vi.fn(() => [...this.layerOrder])
+  readonly moveLayer = vi.fn((id: string, beforeId?: string) => {
+    const index = this.layerOrder.indexOf(id)
+    if (index < 0) return
+    this.layerOrder.splice(index, 1)
+    const beforeIndex = beforeId == null ? -1 : this.layerOrder.indexOf(beforeId)
+    if (beforeIndex < 0) this.layerOrder.push(id)
+    else this.layerOrder.splice(beforeIndex, 0, id)
+  })
   readonly triggerRepaint = vi.fn()
   pitch = 0
 
@@ -68,6 +81,8 @@ class FakeMap {
   clearStyleLayer(id: string) {
     const layer = this.layers.get(id)
     this.layers.delete(id)
+    const index = this.layerOrder.indexOf(id)
+    if (index >= 0) this.layerOrder.splice(index, 1)
     layer?.onRemove?.(this, this.context)
   }
 }

@@ -2,7 +2,6 @@ import type { LidarTileset } from '../../ipc/lidar'
 import type { LidarPresentationItem } from '../lidar/library-store'
 import { lidarTileUrlTemplate } from '../lidar/tile-urls'
 import { styleForKind } from '../lidar/library-store'
-import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 
 /**
  * Map-facing description of one LiDAR band entry. Sources and results are
@@ -85,7 +84,12 @@ export function classifyLidarSync(
       actions.push({ type: 'add', layer })
       continue
     }
-    if (before.urlTemplate !== layer.urlTemplate) {
+    if (
+      before.urlTemplate !== layer.urlTemplate
+      || before.minZoom !== layer.minZoom
+      || before.maxZoom !== layer.maxZoom
+      || !sameBounds(before.bounds, layer.bounds)
+    ) {
       actions.push({ type: 'remove', id: layer.id })
       actions.push({ type: 'add', layer })
       continue
@@ -100,24 +104,6 @@ export function classifyLidarSync(
 // ---------------------------------------------------------------------------
 // MapLibre application (low-level, typed through MapLibreMapInstance)
 // ---------------------------------------------------------------------------
-
-const FIRST_NON_LIDAR_LAYER_CANDIDATES = [
-  MAPLIBRE_SHARED_SCENE_LAYER_ID,
-  'panel-target-hover-zones-fill',
-  'panel-target-selection-zones-fill',
-  'contour-minor',
-  'contour-major',
-  'hillshade-layer',
-] as const
-
-/**
- * Known overlay/terrain layer ids act as the insertion boundary so a LiDAR
- * layer added after the map already carries overlays still lands between the
- * basemap and those overlays.
- */
-export function firstNonLidarLayerId(map: LidarMapLike): string | undefined {
-  return FIRST_NON_LIDAR_LAYER_CANDIDATES.find((id) => map.getLayer(id) != null)
-}
 
 export interface LidarMapLike {
   addSource(id: string, source: Record<string, unknown>): void
@@ -155,25 +141,22 @@ function addLidarLayer(map: LidarMapLike, layer: LidarMapLayer): void {
     })
   }
   if (map.getLayer(layer.id) == null) {
-    const beforeId = firstNonLidarLayerId(map)
-    if (beforeId != null) {
-      map.addLayer({
-        id: layer.id,
-        type: 'raster',
-        source: layer.id,
-        paint: { 'raster-opacity': layer.opacity },
-      }, beforeId)
-    } else {
-      map.addLayer({
-        id: layer.id,
-        type: 'raster',
-        source: layer.id,
-        paint: { 'raster-opacity': layer.opacity },
-      })
-    }
+    map.addLayer({
+      id: layer.id,
+      type: 'raster',
+      source: layer.id,
+      paint: { 'raster-opacity': layer.opacity },
+    })
   } else {
     map.setPaintProperty?.(layer.id, 'raster-opacity', layer.opacity)
   }
+}
+
+function sameBounds(
+  left: readonly number[],
+  right: readonly number[],
+): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
 function removeLidarLayer(map: LidarMapLike, id: string): void {

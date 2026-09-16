@@ -5,7 +5,11 @@ import type {
   MapLibreMapConstructorOptions,
   MapLibreMapInstance,
 } from '../../maplibre/loader'
-import { MAPLIBRE_BASEMAP_RASTER_LAYER_ID, MAPLIBRE_BASEMAP_SOURCE_ID } from '../../maplibre/config'
+import {
+  MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+  MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+  MAPLIBRE_BASEMAP_SOURCE_ID,
+} from '../../maplibre/config'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
 
@@ -33,6 +37,15 @@ class FakeMap implements MapLibreMapInstance {
   })
   readonly setPaintProperty = vi.fn()
   readonly getLayer = vi.fn((id: string) => this.layers.get(id))
+  readonly getLayersOrder = vi.fn(() => [...this.layerOrder])
+  readonly moveLayer = vi.fn((id: string, beforeId?: string) => {
+    const index = this.layerOrder.indexOf(id)
+    if (index < 0) return
+    this.layerOrder.splice(index, 1)
+    const beforeIndex = beforeId == null ? -1 : this.layerOrder.indexOf(beforeId)
+    if (beforeIndex < 0) this.layerOrder.push(id)
+    else this.layerOrder.splice(beforeIndex, 0, id)
+  })
   readonly removeLayer = vi.fn((id: string) => {
     this.layers.delete(id)
     const index = this.layerOrder.indexOf(id)
@@ -155,6 +168,58 @@ describe('WorkspaceMapControls', () => {
       'raster-opacity',
       0.4,
     )
+  })
+
+  it('orders a preserved shared scene through moveLayer without recreating it', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
+    map.layerOrder.splice(0, map.layerOrder.length,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+    )
+    map.addLayer.mockClear()
+    map.addSource.mockClear()
+    map.setPaintProperty.mockClear()
+
+    controls.installStyleRestorer(map as never, vi.fn())
+
+    expect(map.getLayersOrder).toHaveBeenCalled()
+    expect(map.moveLayer).toHaveBeenCalled()
+    expect(map.layerOrder).toEqual([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+    ])
+    expect(map.addLayer).not.toHaveBeenCalled()
+    expect(map.addSource).not.toHaveBeenCalled()
+    expect(map.setPaintProperty).not.toHaveBeenCalled()
+  })
+
+  it('reports an initial semantic-order failure through the shared fallback watcher', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
+    map.layerOrder.splice(0, map.layerOrder.length,
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+    )
+    const failure = new Error('semantic move rejected')
+    const reportFailure = vi.fn()
+    controls.watchFailure(map as never, reportFailure)
+    map.moveLayer.mockImplementation(() => { throw failure })
+
+    controls.installStyleRestorer(map as never, vi.fn())
+
+    expect(reportFailure).toHaveBeenCalledWith(failure)
   })
 
   it('uses initial style.load only for admission, then restores the basemap before its restorer', async () => {

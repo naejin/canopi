@@ -20,7 +20,13 @@ export type WorkspaceActivationOutcome = 'shared-ready' | 'fallback-ready' | 'ca
 /** One map that is suitable for both the shared graphics layer and camera owner. */
 export type WorkspaceActivationMap = MapLibreWorkspaceCameraMap & Pick<
   MapLibreMapInstance,
-  'addLayer' | 'addSource' | 'getSource' | 'getLayer' | 'setPaintProperty'
+  | 'addLayer'
+  | 'addSource'
+  | 'getSource'
+  | 'getLayer'
+  | 'getLayersOrder'
+  | 'moveLayer'
+  | 'setPaintProperty'
 >
 
 export interface WorkspaceActivationMapControls {

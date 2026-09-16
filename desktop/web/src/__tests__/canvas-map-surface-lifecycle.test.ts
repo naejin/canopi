@@ -13,7 +13,11 @@ import type {
   MapLibreMapConstructorOptions,
   MapLibreMapInstance,
 } from '../maplibre/loader'
-import { MAPLIBRE_BASEMAP_SOURCE_ID, MAPLIBRE_BASEMAP_RASTER_LAYER_ID } from '../maplibre/config'
+import {
+  MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+  MAPLIBRE_BASEMAP_SOURCE_ID,
+  MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+} from '../maplibre/config'
 import {
   TERRAIN_CONTOUR_LAYER_IDS,
   TERRAIN_CONTOUR_SOURCE_ID,
@@ -70,14 +74,31 @@ class FakeMap implements MapLibreMapInstance {
   readonly removeSource = vi.fn((id: string) => {
     this.sources.delete(id)
   })
-  readonly addLayer = vi.fn((layer: Record<string, unknown>) => {
+  readonly addLayer = vi.fn((layer: Record<string, unknown>, beforeId?: string) => {
     const id = typeof layer.id === 'string' ? layer.id : ''
-    if (id) this.layers.add(id)
+    if (!id) return
+    this.layers.add(id)
+    const existingIndex = this.layerOrder.indexOf(id)
+    if (existingIndex >= 0) this.layerOrder.splice(existingIndex, 1)
+    const beforeIndex = beforeId == null ? -1 : this.layerOrder.indexOf(beforeId)
+    if (beforeIndex < 0) this.layerOrder.push(id)
+    else this.layerOrder.splice(beforeIndex, 0, id)
   })
   readonly setPaintProperty = vi.fn()
   readonly getLayer = vi.fn((id: string) => (this.layers.has(id) ? { id } : undefined))
+  readonly getLayersOrder = vi.fn(() => [...this.layerOrder])
+  readonly moveLayer = vi.fn((id: string, beforeId?: string) => {
+    const index = this.layerOrder.indexOf(id)
+    if (index < 0) return
+    this.layerOrder.splice(index, 1)
+    const beforeIndex = beforeId == null ? -1 : this.layerOrder.indexOf(beforeId)
+    if (beforeIndex < 0) this.layerOrder.push(id)
+    else this.layerOrder.splice(beforeIndex, 0, id)
+  })
   readonly removeLayer = vi.fn((id: string) => {
     this.layers.delete(id)
+    const index = this.layerOrder.indexOf(id)
+    if (index >= 0) this.layerOrder.splice(index, 1)
   })
 
   loadedValue = true
@@ -85,6 +106,7 @@ class FakeMap implements MapLibreMapInstance {
   readonly loadedSourceIds = new Set<string>([MAPLIBRE_BASEMAP_SOURCE_ID])
   readonly sources = new Map<string, { source: Record<string, unknown>; setData(data: unknown): void }>()
   readonly layers = new Set<string>()
+  readonly layerOrder: string[] = []
   private readonly handlers = new Map<MapEventType, Set<MapEventHandler>>([
     ['load', new Set()],
     ['error', new Set()],
@@ -471,6 +493,90 @@ describe('Canvas map surface lifecycle', () => {
     expect(maps).toHaveLength(1)
   })
 
+  it('reconciles LiDAR below terrain after existing contribution sync without mutating contributions', async () => {
+    configureNextMap = (map) => {
+      map.layers.add(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID)
+      map.layers.add(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
+      map.layerOrder.push(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID, MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
+    }
+    const lidar = {
+      id: 'lidar-elevation-lyr-1', name: 'Elevation', visible: true, opacity: 0.8,
+      urlTemplate: 'asset://test/{z}/{x}/{y}.png', minZoom: 13, maxZoom: 17,
+      bounds: [-0.43, 48.3, -0.41, 48.31] as [number, number, number, number],
+    }
+    const snapshot = createSnapshot({
+      lidar: [lidar],
+      terrain: {
+        ...createSnapshot().terrain,
+        contourIntervalMeters: 10,
+        contoursVisible: true,
+      },
+    })
+    const lifecycle = createLifecycle()
+    lifecycle.attach(container)
+    lifecycle.update(snapshot)
+    await flushPromises()
+    const map = mapAt()
+    map.layerOrder.splice(0, map.layerOrder.length,
+      TERRAIN_CONTOUR_LAYER_IDS[1],
+      lidar.id,
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      TERRAIN_CONTOUR_LAYER_IDS[0],
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+    )
+    map.addSource.mockClear()
+    map.addLayer.mockClear()
+    map.removeSource.mockClear()
+    map.removeLayer.mockClear()
+    map.moveLayer.mockClear()
+
+    lifecycle.update(snapshot)
+
+    expect(map.layerOrder).toEqual([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      lidar.id,
+      TERRAIN_CONTOUR_LAYER_IDS[0],
+      TERRAIN_CONTOUR_LAYER_IDS[1],
+    ])
+    expect(map.moveLayer).toHaveBeenCalled()
+    expect(map.addSource).not.toHaveBeenCalled()
+    expect(map.addLayer).not.toHaveBeenCalled()
+    expect(map.removeSource).not.toHaveBeenCalled()
+    expect(map.removeLayer).not.toHaveBeenCalled()
+  })
+
+  it('logs and isolates a passive layer-order failure', async () => {
+    configureNextMap = (map) => {
+      map.layers.add(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID)
+      map.layers.add(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
+      map.layerOrder.push(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID, MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
+    }
+    const lidar = {
+      id: 'lidar-elevation-lyr-1', name: 'Elevation', visible: true, opacity: 1,
+      urlTemplate: 'asset://test/{z}/{x}/{y}.png', minZoom: 13, maxZoom: 17,
+      bounds: [-0.43, 48.3, -0.41, 48.31] as [number, number, number, number],
+    }
+    const snapshot = createSnapshot({ lidar: [lidar] })
+    const lifecycle = createLifecycle()
+    lifecycle.attach(container)
+    lifecycle.update(snapshot)
+    await flushPromises()
+    const map = mapAt()
+    map.layerOrder.splice(0, map.layerOrder.length,
+      lidar.id,
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+    )
+    const failure = new Error('layer move rejected')
+    map.moveLayer.mockImplementation(() => { throw failure })
+
+    lifecycle.update(snapshot)
+
+    expect(logError).toHaveBeenCalledWith('Failed to reconcile canvas map layer order:', failure)
+    expect(onStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'error' }))
+  })
+
   it('ignores stale async terrain rebuilds when terrain settings change quickly', async () => {
     const firstTerrainLoad = createDeferred<TerrainProtocolSupport>()
     loadTerrainSupport
@@ -512,6 +618,70 @@ describe('Canvas map surface lifecycle', () => {
     await flushPromises()
     expect(map.addSource.mock.calls.length).toBe(addSourceCallCount)
   })
+
+  it.each(['resolves', 'rejects'] as const)(
+    'cancels a pending terrain rebuild when the accepted snapshot reverts and the stale load $s',
+    async (settlement) => {
+      const acceptedSnapshot = createSnapshot({
+        layerVisibility: { base: true, contours: true },
+        terrain: {
+          ...createSnapshot().terrain,
+          contourIntervalMeters: 10,
+          contoursVisible: true,
+        },
+      })
+      const lifecycle = createLifecycle()
+      lifecycle.attach(container)
+      lifecycle.update(acceptedSnapshot)
+      await flushPromises()
+
+      const map = mapAt()
+      const pendingTerrainLoad = createDeferred<TerrainProtocolSupport>()
+      loadTerrainSupport.mockImplementationOnce(() => pendingTerrainLoad.promise)
+      lifecycle.update(createSnapshot({
+        layerVisibility: { base: true, contours: true },
+        terrain: {
+          ...acceptedSnapshot.terrain,
+          contourIntervalMeters: 25,
+        },
+      }))
+      await flushPromises()
+      expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
+        terrainStatus: 'loading',
+      }))
+
+      lifecycle.update(acceptedSnapshot)
+      await flushPromises()
+      expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
+        terrainStatus: 'ready',
+        terrainErrorMessage: null,
+      }))
+
+      const mutationCounts = {
+        addLayer: map.addLayer.mock.calls.length,
+        addSource: map.addSource.mock.calls.length,
+        getLayersOrder: map.getLayersOrder.mock.calls.length,
+        moveLayer: map.moveLayer.mock.calls.length,
+        removeLayer: map.removeLayer.mock.calls.length,
+        removeSource: map.removeSource.mock.calls.length,
+        stateChanges: onStateChange.mock.calls.length,
+      }
+      logError.mockClear()
+
+      if (settlement === 'resolves') pendingTerrainLoad.resolve(terrainProtocols)
+      else pendingTerrainLoad.reject(new Error('stale terrain support failure'))
+      await flushPromises()
+
+      expect(map.addLayer).toHaveBeenCalledTimes(mutationCounts.addLayer)
+      expect(map.addSource).toHaveBeenCalledTimes(mutationCounts.addSource)
+      expect(map.getLayersOrder).toHaveBeenCalledTimes(mutationCounts.getLayersOrder)
+      expect(map.moveLayer).toHaveBeenCalledTimes(mutationCounts.moveLayer)
+      expect(map.removeLayer).toHaveBeenCalledTimes(mutationCounts.removeLayer)
+      expect(map.removeSource).toHaveBeenCalledTimes(mutationCounts.removeSource)
+      expect(onStateChange).toHaveBeenCalledTimes(mutationCounts.stateChanges)
+      expect(logError).not.toHaveBeenCalled()
+    },
+  )
 
   it('recreates the map for basemap style changes and keeps basemap paint separate from terrain paint', async () => {
     const originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
