@@ -10,6 +10,7 @@ vi.mock('pixi.js', () => {
     apps: [] as MockApplication[],
     containers: [] as MockContainer[],
     graphics: [] as MockGraphics[],
+    graphicsContexts: [] as MockGraphicsContext[],
     texts: [] as MockText[],
   }
 
@@ -31,7 +32,34 @@ vi.mock('pixi.js', () => {
     }
   }
 
+  class MockGraphicsContext {
+    private owners = new Set<MockGraphics>()
+    clear = vi.fn(() => this)
+    circle = vi.fn((...args: unknown[]) => this.record('circle', args))
+    rect = vi.fn((...args: unknown[]) => this.record('rect', args))
+    ellipse = vi.fn((...args: unknown[]) => this.record('ellipse', args))
+    moveTo = vi.fn((...args: unknown[]) => this.record('moveTo', args))
+    lineTo = vi.fn((...args: unknown[]) => this.record('lineTo', args))
+    bezierCurveTo = vi.fn((...args: unknown[]) => this.record('bezierCurveTo', args))
+    cut = vi.fn(() => this.record('cut'))
+    closePath = vi.fn(() => this.record('closePath'))
+    fill = vi.fn((...args: unknown[]) => this.record('fill', args))
+    stroke = vi.fn((...args: unknown[]) => this.record('stroke', args))
+    destroy = vi.fn(() => { this.owners.clear() })
+    constructor() {
+      state.graphicsContexts.push(this)
+    }
+    attach(graphics: MockGraphics) { this.owners.add(graphics) }
+    detach(graphics: MockGraphics) { this.owners.delete(graphics) }
+    get ownerCount() { return this.owners.size }
+    private record(method: string, args: unknown[] = []) {
+      for (const graphics of this.owners) graphics.record(method, args)
+      return this
+    }
+  }
+
   class MockGraphics {
+    private _context: MockGraphicsContext
     position = { set: vi.fn() }
     visible = true
     alpha = 1
@@ -47,9 +75,26 @@ vi.mock('pixi.js', () => {
     fill = vi.fn(() => this)
     stroke = vi.fn(() => this)
     removeFromParent = vi.fn()
-    destroy = vi.fn()
-    constructor() {
+    destroy = vi.fn((options?: boolean | { context?: boolean }) => {
+      if (options === true || (typeof options === 'object' && options.context)) this._context.destroy()
+    })
+    constructor(options?: MockGraphicsContext | { context?: MockGraphicsContext }) {
+      this._context = options instanceof MockGraphicsContext
+        ? options
+        : options?.context ?? new MockGraphicsContext()
+      this._context.attach(this)
       state.graphics.push(this)
+    }
+    get context() { return this._context }
+    set context(context: MockGraphicsContext) {
+      if (context === this._context) return
+      this._context.detach(this)
+      this._context = context
+      this._context.attach(this)
+    }
+    record(method: string, args: unknown[]) {
+      const target = this as unknown as Record<string, (...values: unknown[]) => unknown>
+      target[method]?.(...args)
     }
   }
 
@@ -91,6 +136,7 @@ vi.mock('pixi.js', () => {
     Application: MockApplication,
     Container: MockContainer,
     Graphics: MockGraphics,
+    GraphicsContext: MockGraphicsContext,
     Text: MockText,
     TextStyle: MockTextStyle,
     __pixiMockState: state,
@@ -168,7 +214,7 @@ describe('createPixiSceneRenderer', () => {
     })
     renderer.setViewport({ x: 0, y: 0, scale: 60 })
     expect(plant.visible).toBe(true)
-    expect(plant.clear).toHaveBeenCalledOnce()
+    expect(plant.clear).not.toHaveBeenCalled()
     expect(plant.fill).toHaveBeenLastCalledWith(expect.objectContaining({ color: 0xff0000 }))
     renderer.dispose()
   })
@@ -195,10 +241,18 @@ describe('createPixiSceneRenderer', () => {
     expect(text.style).not.toBe(style)
     renderer.dispose()
   })
-  it('reuses botanical geometry on pan and selection of another plant, but refreshes zoom and colour', async () => {
+  it('shares exact botanical geometry and refreshes it for zoom, colour, and interaction', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
-      __pixiMockState: { graphics: Array<{ clear: ReturnType<typeof vi.fn>; position: { set: ReturnType<typeof vi.fn> }; bezierCurveTo: ReturnType<typeof vi.fn> }> }
+      __pixiMockState: {
+        graphics: Array<{
+          clear: ReturnType<typeof vi.fn>
+          context: unknown
+          position: { set: ReturnType<typeof vi.fn> }
+          bezierCurveTo: ReturnType<typeof vi.fn>
+        }>
+        graphicsContexts: Array<{ bezierCurveTo: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; ownerCount: number }>
+      }
     }
     const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
       backendId: 'pixi', capabilities: detectRendererCapabilities({}),
@@ -208,18 +262,107 @@ describe('createPixiSceneRenderer', () => {
       createPlant({ id: 'b', symbol: 'shrub', position: { x: 5, y: 1 } }),
     ] }, viewport: { x: 0, y: 0, scale: 30 } })
     renderer.renderScene(snapshot)
-    const plant = pixi.__pixiMockState.graphics.find(g => g.bezierCurveTo.mock.calls.length)!
-    plant.clear.mockClear()
+    const [firstPlant, secondPlant] = pixi.__pixiMockState.graphics
+    expect(firstPlant).toBeDefined()
+    expect(secondPlant).toBeDefined()
+    expect(firstPlant?.context).toBe(secondPlant?.context)
+    const sharedContext = firstPlant!.context
+    expect(pixi.__pixiMockState.graphicsContexts).toHaveLength(2)
+    expect((sharedContext as { ownerCount: number }).ownerCount).toBe(2)
+    firstPlant!.clear.mockClear()
+    secondPlant!.clear.mockClear()
     renderer.setViewport({ x: 10, y: 20, scale: 30 })
-    expect(plant.clear).not.toHaveBeenCalled()
-    expect(plant.position.set).toHaveBeenLastCalledWith(40, 50)
+    expect(firstPlant!.clear).not.toHaveBeenCalled()
+    expect(secondPlant!.clear).not.toHaveBeenCalled()
+    expect(firstPlant!.position.set).toHaveBeenLastCalledWith(40, 50)
+    expect(firstPlant!.context).toBe(sharedContext)
     renderer.renderScene({ ...snapshot, selectedPlantIds: new Set(['b']) })
-    expect(plant.clear).not.toHaveBeenCalled()
+    expect(firstPlant!.context).toBe(sharedContext)
+    expect(secondPlant!.context).not.toBe(sharedContext)
     renderer.setViewport({ x: 0, y: 0, scale: 60 })
-    expect(plant.clear).toHaveBeenCalledOnce()
+    expect(firstPlant!.context).not.toBe(sharedContext)
+    const zoomContext = firstPlant!.context
     renderer.renderScene({ ...snapshot, scene: { ...snapshot.scene, plants: snapshot.scene.plants.map(p => ({ ...p, color: '#ff0000' })) } })
-    expect(plant.clear).toHaveBeenCalledTimes(2)
+    expect(firstPlant!.context).toBe(secondPlant!.context)
+    expect(firstPlant!.context).not.toBe(zoomContext)
+    expect(firstPlant!.clear).not.toHaveBeenCalled()
+    expect(secondPlant!.clear).not.toHaveBeenCalled()
+    renderer.setViewport({ x: 0, y: 0, scale: 30 })
+    renderer.setViewport({ x: 0, y: 0, scale: 60 })
+    renderer.setViewport({ x: 0, y: 0, scale: 90 })
+    const plantContexts = pixi.__pixiMockState.graphicsContexts
+      .filter(context => context.bezierCurveTo.mock.calls.length > 0)
+    expect(plantContexts.filter(context => context.destroy.mock.calls.length > 0)).not.toHaveLength(0)
     renderer.dispose()
+    for (const context of plantContexts) expect(context.destroy).toHaveBeenCalledTimes(1)
+  })
+  it('detaches removed and disposed Plant graphics from externally shared contexts', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{ context: { ownerCount: number; destroy: ReturnType<typeof vi.fn> }; destroy: ReturnType<typeof vi.fn> }>
+        graphicsContexts: Array<{ ownerCount: number; destroy: ReturnType<typeof vi.fn> }>
+      }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
+      createPlant({ id: 'a', position: { x: 1, y: 1 } }),
+      createPlant({ id: 'b', position: { x: 5, y: 1 } }),
+    ] }, viewport: { x: 0, y: 0, scale: 30 } })
+    renderer.renderScene(snapshot)
+    const [firstPlant, secondPlant] = pixi.__pixiMockState.graphics
+    const sharedContext = firstPlant!.context
+    expect(secondPlant!.context).toBe(sharedContext)
+    expect(sharedContext.ownerCount).toBe(2)
+
+    renderer.renderScene({ ...snapshot, scene: { ...snapshot.scene, plants: [snapshot.scene.plants[1]!] } })
+    expect(firstPlant!.destroy).toHaveBeenCalledOnce()
+    expect(sharedContext.ownerCount).toBe(1)
+
+    renderer.dispose()
+    expect(secondPlant!.destroy).toHaveBeenCalledOnce()
+    expect(sharedContext.ownerCount).toBe(0)
+    for (const context of pixi.__pixiMockState.graphicsContexts) {
+      expect(context.ownerCount).toBe(0)
+      expect(context.destroy).toHaveBeenCalledOnce()
+    }
+  })
+  it('reuses A/B/A exact zoom contexts, evicts only the third-oldest generation, and preserves the visible context', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{ context: { destroy: ReturnType<typeof vi.fn> }; bezierCurveTo: ReturnType<typeof vi.fn> }>
+      }
+    }
+    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
+      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
+    })
+    const snapshot = createTestSceneRendererSnapshot({ scene: {
+      plants: [createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } })],
+    }, viewport: { x: 0, y: 0, scale: 20 } })
+    renderer.renderScene(snapshot)
+    const plant = pixi.__pixiMockState.graphics[0]!
+    const contextA = plant.context
+    renderer.setViewport({ x: 0, y: 0, scale: 30 })
+    const contextB = plant.context
+    renderer.setViewport({ x: 0, y: 0, scale: 20 })
+    expect(plant.context).toBe(contextA)
+    expect(contextA.destroy).not.toHaveBeenCalled()
+    renderer.setViewport({ x: 0, y: 0, scale: 40 })
+    const contextC = plant.context
+    renderer.setViewport({ x: 0, y: 0, scale: 60 })
+    const contextD = plant.context
+    expect(contextB.destroy).toHaveBeenCalledOnce()
+    expect(contextA.destroy).not.toHaveBeenCalled()
+    expect(contextC.destroy).not.toHaveBeenCalled()
+    expect(contextD.destroy).not.toHaveBeenCalled()
+    renderer.dispose()
+    expect(contextA.destroy).toHaveBeenCalledOnce()
+    expect(contextB.destroy).toHaveBeenCalledOnce()
+    expect(contextC.destroy).toHaveBeenCalledOnce()
+    expect(contextD.destroy).toHaveBeenCalledOnce()
   })
   beforeEach(async () => {
     const pixi = await import('pixi.js') as unknown as {
@@ -227,12 +370,14 @@ describe('createPixiSceneRenderer', () => {
         apps: unknown[]
         containers: unknown[]
         graphics: unknown[]
+        graphicsContexts: unknown[]
         texts: unknown[]
       }
     }
     pixi.__pixiMockState.apps.length = 0
     pixi.__pixiMockState.containers.length = 0
     pixi.__pixiMockState.graphics.length = 0
+    pixi.__pixiMockState.graphicsContexts.length = 0
     pixi.__pixiMockState.texts.length = 0
   })
 

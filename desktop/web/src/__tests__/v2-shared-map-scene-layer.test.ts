@@ -67,11 +67,40 @@ describe('createSharedMapSceneLayer', () => {
 
     adapter.layer.render(gl, {} as never)
     expect(presentation.renderScene).toHaveBeenCalledOnce()
-    expect(presentation.setViewport).toHaveBeenCalledOnce()
+    expect(presentation.setViewport).not.toHaveBeenCalled()
     expect(adapter.diagnostics).toMatchObject({
       phase: 'attached', initializeCount: 1, renderCount: 2,
-      sceneSyncCount: 1, viewportSyncCount: 1, repaintCount: 2,
+      sceneSyncCount: 1, viewportSyncCount: 0, repaintCount: 2,
     })
+  })
+
+  it('resynchronizes presentation after a MapLibre-owned resize even when the camera is unchanged', async () => {
+    const canvas = createCanvas()
+    const map = createMap(canvas)
+    const renderer = createRenderer()
+    const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
+    const adapter = createSharedMapSceneLayer({
+      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
+      createStage: () => ({ destroy: vi.fn() }) as never,
+      createPresentation: () => presentation,
+    })
+    const gl = {} as WebGL2RenderingContext
+    await adapter.initialize(map, gl)
+    adapter.layer.onAdd!(map as never, gl)
+    adapter.setSnapshot(createTestSceneRendererSnapshot())
+    adapter.layer.render(gl, {} as never)
+
+    ;(canvas as unknown as { clientWidth: number; clientHeight: number }).clientWidth = 300
+    ;(canvas as unknown as { clientWidth: number; clientHeight: number }).clientHeight = 150
+    canvas.width = 600
+    canvas.height = 300
+    adapter.layer.render(gl, {} as never)
+
+    expect(presentation.setViewport).toHaveBeenCalledOnce()
+    expect(adapter.diagnostics).toMatchObject({ renderCount: 2, sceneSyncCount: 1, viewportSyncCount: 1, resizeCount: 1 })
+    const disposal = adapter.dispose()
+    adapter.layer.render(gl, {} as never)
+    await disposal
   })
 
   it('survives style reload detach and reattach without duplicate initialization', async () => {

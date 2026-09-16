@@ -1,6 +1,6 @@
 import { speciesFocusOpacity } from '../species-key'
 import { instrumentSceneRenderer } from './profile'
-import { Application, Container, Graphics, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
+import { Application, Container, Graphics, GraphicsContext, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
 import {
   getAnnotationVisualWorldCorners,
   getAnnotationPresentation,
@@ -42,13 +42,120 @@ import {
 } from '../scene-visuals'
 import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
-import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePoint, SceneZoneEntity } from '../scene'
+import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene'
 import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const BACKGROUND_COLOR = 0x000000
 const ZONE_STROKE_PX = 2
 const PLANT_STROKE_PX = 1.5
 const graphicsKeys = new WeakMap<Graphics, string>()
+
+type PixiSceneWorkName = 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw'
+
+declare global {
+  interface Window {
+    __CANOPI_PIXI_SCENE_WORK__?: (name: PixiSceneWorkName, durationMs: number) => void
+  }
+}
+
+function measurePixiSceneWork<T>(name: PixiSceneWorkName, operation: () => T): T {
+  const observer = import.meta.env.DEV ? window.__CANOPI_PIXI_SCENE_WORK__ : undefined
+  if (!observer) return operation()
+  const startedAt = performance.now()
+  try {
+    return operation()
+  } finally {
+    observer(name, performance.now() - startedAt)
+  }
+}
+
+/** Keeps exact current and two prior plant geometry generations while bounding zoom churn. */
+class PlantGraphicsContextCache {
+  private current = new Map<string, GraphicsContext>()
+  private recent = new Map<string, GraphicsContext>()
+  private older = new Map<string, GraphicsContext>()
+  private disposed = false
+
+  beginGeneration(): void {
+    this.destroyContexts(this.older)
+    this.older = this.recent
+    this.recent = this.current
+    this.current = new Map()
+  }
+
+  acquire(key: string): { context: GraphicsContext; created: boolean } {
+    const current = this.current.get(key)
+    if (current) return { context: current, created: false }
+    const recent = this.recent.get(key)
+    if (recent) {
+      this.recent.delete(key)
+      this.current.set(key, recent)
+      return { context: recent, created: false }
+    }
+    const older = this.older.get(key)
+    if (older) {
+      this.older.delete(key)
+      this.current.set(key, older)
+      return { context: older, created: false }
+    }
+    const context = new GraphicsContext()
+    this.current.set(key, context)
+    return { context, created: true }
+  }
+
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.destroyContexts(this.current)
+    this.destroyContexts(this.recent)
+    this.destroyContexts(this.older)
+    this.current.clear()
+    this.recent.clear()
+    this.older.clear()
+  }
+
+  private destroyContexts(contexts: ReadonlyMap<string, GraphicsContext>): void {
+    for (const context of contexts.values()) context.destroy()
+  }
+}
+
+interface CachedPlantStackCounts {
+  readonly plants: readonly ScenePlantEntity[]
+  readonly selectedPlantIds: ReadonlySet<string>
+  readonly stackCounts: ReadonlyMap<string, number>
+}
+
+class PlantStackCountsCache {
+  private readonly entries: CachedPlantStackCounts[] = []
+
+  get(
+    presentationEntries: readonly PlantPresentationEntry[],
+    selectedPlantIds: ReadonlySet<string>,
+    viewportScale: number,
+  ): ReadonlyMap<string, number> {
+    const matchIndex = this.entries.findIndex((candidate) =>
+      samePlantSelection(candidate.selectedPlantIds, selectedPlantIds)
+      && candidate.plants.length === presentationEntries.length
+      && candidate.plants.every((plant, index) => plant === presentationEntries[index]?.plant))
+    if (matchIndex >= 0) {
+      const [match] = this.entries.splice(matchIndex, 1)
+      this.entries.unshift(match!)
+      return match!.stackCounts
+    }
+    const stackCounts = layoutPlantPresentation(presentationEntries, viewportScale).stackCounts
+    this.entries.unshift({
+      plants: presentationEntries.map((entry) => entry.plant),
+      selectedPlantIds: new Set(selectedPlantIds),
+      stackCounts,
+    })
+    if (this.entries.length > 2) this.entries.pop()
+    return stackCounts
+  }
+}
+
+function samePlantSelection(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every((plantId) => right.has(plantId))
+}
 
 /**
  * Retained botanical presentation. The render-surface owner supplies the
@@ -167,6 +274,13 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   const measurementGuideGraphicsById = new Map<string, Graphics>()
   const measurementGuideLabelById = new Map<string, Text>()
   const plantGraphicsById = new Map<string, Graphics>()
+  // Passing one external empty context avoids the unused owned context that
+  // `new Graphics()` would otherwise allocate for every Plant before its exact
+  // shared geometry is assigned.
+  const emptyPlantGraphicsContext = new GraphicsContext()
+  const visiblePlantIds = new Set<string>()
+  const plantGraphicsContexts = new PlantGraphicsContextCache()
+  const plantStackCounts = new PlantStackCountsCache()
   const plantBadgeGraphicsById = new Map<string, Graphics>()
   const plantBadgeTextById = new Map<string, Text>()
   const annotationTextById = new Map<string, Text>()
@@ -177,6 +291,14 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   return {
     dispose() {
       presentation.dispose()
+      for (const graphics of plantGraphicsById.values()) {
+        graphics.removeFromParent()
+        destroySharedPlantGraphics(graphics)
+      }
+      plantGraphicsById.clear()
+      visiblePlantIds.clear()
+      emptyPlantGraphicsContext.destroy()
+      plantGraphicsContexts.dispose()
     },
     resize(width, height) {
       viewSize.width = width
@@ -199,6 +321,10 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
         plantsLayer,
         plantsOverlayLayer,
         plantGraphicsById,
+        emptyPlantGraphicsContext,
+        visiblePlantIds,
+        plantGraphicsContexts,
+        plantStackCounts,
         plantBadgeGraphicsById,
         plantBadgeTextById,
         viewSize,
@@ -239,6 +365,10 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
         plantsLayer,
         plantsOverlayLayer,
         plantGraphicsById,
+        emptyPlantGraphicsContext,
+        visiblePlantIds,
+        plantGraphicsContexts,
+        plantStackCounts,
         plantBadgeGraphicsById,
         plantBadgeTextById,
         viewSize,
@@ -549,6 +679,10 @@ function syncPlants(
   symbolLayer: Container,
   overlay: Container,
   plantGraphicsById: Map<string, Graphics>,
+  emptyPlantGraphicsContext: GraphicsContext,
+  visiblePlantIds: Set<string>,
+  plantGraphicsContexts: PlantGraphicsContextCache,
+  plantStackCounts: PlantStackCountsCache,
   plantBadgeGraphicsById: Map<string, Graphics>,
   plantBadgeTextById: Map<string, Text>,
   viewSize: { width: number; height: number },
@@ -564,47 +698,56 @@ function syncPlants(
 
   // Keep display order stable even when a previously unseen Plant enters the view.
   const nextIds = new Set<string>()
-  for (const plant of snapshot.scene.plants) {
-    nextIds.add(plant.id)
-    let graphic = plantGraphicsById.get(plant.id)
-    if (!graphic) {
-      graphic = new Graphics()
-      plantGraphicsById.set(plant.id, graphic)
-      symbolLayer.addChild(graphic)
+  measurePixiSceneWork('plantObjects', () => {
+    for (const plant of snapshot.scene.plants) {
+      nextIds.add(plant.id)
+      let graphic = plantGraphicsById.get(plant.id)
+      if (!graphic) {
+        graphic = new Graphics(emptyPlantGraphicsContext)
+        graphic.visible = false
+        plantGraphicsById.set(plant.id, graphic)
+        symbolLayer.addChild(graphic)
+      }
     }
-    graphic.visible = false
-  }
-  for (const badge of plantBadgeGraphicsById.values()) badge.visible = false
-  for (const text of plantBadgeTextById.values()) text.visible = false
+    for (const badge of plantBadgeGraphicsById.values()) badge.visible = false
+    for (const text of plantBadgeTextById.values()) text.visible = false
+  })
   // Includes the largest symbolic footprint, interaction ring and stack badge.
   const margin = 32
-  const visiblePlants = snapshot.scene.plants.filter(plant => {
+  const visiblePlants = measurePixiSceneWork('plantCull', () => snapshot.scene.plants.filter(plant => {
     if (viewSize.width <= 0 || viewSize.height <= 0) return true
     const { x, y } = worldToScreen(plant.position, snapshot.viewport)
     return x >= -margin && y >= -margin && x <= viewSize.width + margin && y <= viewSize.height + margin
-  })
-  const entries = buildPlantPresentationEntries(visiblePlants, {
+  }))
+  const entries = measurePixiSceneWork('plantEntries', () => buildPlantPresentationEntries(visiblePlants, {
     plants: snapshot.scene.plants,
     viewport: snapshot.viewport,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,
-  }, snapshot.selectedPlantIds)
-  const layout = layoutPlantPresentation(entries, snapshot.viewport.scale)
+  }, snapshot.selectedPlantIds))
+  const stackCounts = measurePixiSceneWork('plantLayout', () => plantStackCounts.get(
+    entries, snapshot.selectedPlantIds, snapshot.viewport.scale,
+  ))
+  const nextVisiblePlantIds = new Set(visiblePlants.map((plant) => plant.id))
+  for (const plantId of visiblePlantIds) {
+    if (!nextVisiblePlantIds.has(plantId)) plantGraphicsById.get(plantId)!.visible = false
+  }
+  plantGraphicsContexts.beginGeneration()
 
-  for (const entry of entries) {
-    const circle = plantGraphicsById.get(entry.plant.id)!
-    drawPlant(
-      circle,
-      entry,
-      snapshot.hoveredCanonicalName,
-      snapshot.highlightedPlantIds.has(entry.plant.id),
-      hoverStateForTarget(snapshot, 'plant', entry.plant.id),
-      speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName),
-    )
-    circle.visible = true
+  measurePixiSceneWork('plantDraw', () => { for (const entry of entries) {
+    const graphic = plantGraphicsById.get(entry.plant.id)!
+    const hovered = snapshot.hoveredCanonicalName
+    const highlighted = snapshot.highlightedPlantIds.has(entry.plant.id)
+    const hoverState = hoverStateForTarget(snapshot, 'plant', entry.plant.id)
+    const glyphOpacity = speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName)
+    const { context, created } = plantGraphicsContexts.acquire(plantGeometryKey(entry, hovered, highlighted, hoverState, glyphOpacity))
+    graphic.context = context
+    graphic.position.set(entry.screenPoint.x, entry.screenPoint.y)
+    if (created) drawPlantGeometry(context, entry, hovered, highlighted, hoverState, glyphOpacity)
+    if (!visiblePlantIds.has(entry.plant.id)) graphic.visible = true
 
-    const stackCount = layout.stackCounts.get(entry.plant.id)
+    const stackCount = stackCounts.get(entry.plant.id)
     if (stackCount) {
       const badge = plantBadgeGraphicsById.get(entry.plant.id) ?? new Graphics()
       if (!plantBadgeGraphicsById.has(entry.plant.id)) {
@@ -640,13 +783,16 @@ function syncPlants(
       const badgeText = plantBadgeTextById.get(entry.plant.id)
       if (badgeText) badgeText.visible = false
     }
-  }
+  } })
+
+  visiblePlantIds.clear()
+  for (const plantId of nextVisiblePlantIds) visiblePlantIds.add(plantId)
 
   if (!reconcileRemoved) return
   for (const [plantId, graphics] of plantGraphicsById) {
     if (nextIds.has(plantId)) continue
     graphics.removeFromParent()
-    graphics.destroy()
+    destroySharedPlantGraphics(graphics)
     plantGraphicsById.delete(plantId)
   }
   for (const [plantId, badge] of plantBadgeGraphicsById) {
@@ -663,8 +809,36 @@ function syncPlants(
   }
 }
 
-function drawPlant(
-  graphics: Graphics,
+/** Pixi does not detach a destroyed Graphics from an externally owned context. */
+function destroySharedPlantGraphics(graphics: Graphics): void {
+  // Rebinding uses Pixi's public context setter to detach both listeners from
+  // the shared cache entry. The temporary context is then destroyed with the
+  // Graphics, so neither side retains the other.
+  graphics.context = new GraphicsContext()
+  graphics.destroy({ context: true })
+}
+
+function plantGeometryKey(
+  entry: PlantPresentationEntry,
+  hoveredCanonicalName: string | null,
+  highlighted: boolean,
+  hoverState: SceneRendererHoverState | null,
+  glyphOpacity: number,
+): string {
+  const selected = entry.selected
+  const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
+  const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
+  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+  const renderedSymbol = resolveRenderedPlantSymbol(entry)
+  const edgeColor = getPlantSymbolEdgeColor(entry.color)
+  const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
+  return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.lod}|${entry.color}|${glyphOpacity}|${selected ? 1 : 0}`
+    + `|${interactionState ?? ''}|${interactionVisual?.color ?? ''}|${interactionVisual?.widthPx ?? ''}`
+    + `|${interactionVisual?.alpha ?? ''}|${edgeColor}|${edgeWidth}`
+}
+
+function drawPlantGeometry(
+  graphics: GraphicsContext,
   entry: PlantPresentationEntry,
   hoveredCanonicalName: string | null,
   highlighted: boolean,
@@ -676,18 +850,11 @@ function drawPlant(
   const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
   const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  graphics.position.set(entry.screenPoint.x, entry.screenPoint.y)
   const x = 0
   const y = 0
   const r = entry.radiusScreenPx
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
-  const geometryKey = JSON.stringify([
-    r, renderedSymbol, entry.lod, color, glyphOpacity, selected, interactionVisual,
-    getPlantSymbolEdgeColor(entry.color), getPlantSymbolEdgeWidth(r * 2),
-  ])
-  if (graphicsKeys.get(graphics) === geometryKey) return
-  graphics.clear()
   drawPlantSymbolGlyph(graphics, renderedSymbol, { ...entry, screenPoint: { x, y } }, glyphOpacity)
 
   if (selected) {
@@ -707,14 +874,13 @@ function drawPlant(
         alpha: ringVisual.alpha * cssColorAlpha(ringVisual.color),
       })
   }
-  graphicsKeys.set(graphics, geometryKey)
 }
 
 function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
   return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
 }
 
-function drawPlantSymbolGlyph(graphics: Graphics, symbol: PlantSymbolId, entry: PlantPresentationEntry, opacity: number): void {
+function drawPlantSymbolGlyph(graphics: GraphicsContext, symbol: PlantSymbolId, entry: PlantPresentationEntry, opacity: number): void {
   const { x, y } = entry.screenPoint
   const r = entry.radiusScreenPx
   const color = toPixiColor(entry.color, 0)

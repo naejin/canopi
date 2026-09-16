@@ -166,6 +166,7 @@ describe('plant presentation service', () => {
     expect(hitBounds.bounds.y).toBeCloseTo(167 - expectedHitRadius, 5)
     expect(hitBounds.bounds.width).toBeCloseTo(expectedHitRadius * 2, 5)
     expect(hitBounds.bounds.height).toBeCloseTo(expectedHitRadius * 2, 5)
+    expect(entry.hitBoundsScreen).toEqual(hitBounds)
   })
 
   it('reserves stack badges for coincident centres and anchors them to the highest-priority member', () => {

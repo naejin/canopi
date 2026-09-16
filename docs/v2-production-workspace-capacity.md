@@ -132,3 +132,56 @@ Native presented-frame timing, native input-to-visible timing, GPU completion,
 renderer work counters, renderer submission counters, real network tiles,
 raster/LiDAR workload, and concurrent editing qualification were unavailable
 in this browser harness and remain unclaimed.
+
+## Bounded navigation optimization follow-up
+
+`canopi-ltck.26` profiled the production composition with an opt-in,
+aggregate-only work observer. The accepted change shares exact Pixi Plant
+geometry contexts, keeps three bounded exact generations for A/B/A zoom reuse,
+retains coincident stack counts for unchanged visible Plant identities and
+selection, avoids repeated hit-bound projection, updates visibility only when
+Plants enter or leave the viewport, and skips presentation synchronization for
+an unchanged MapLibre camera. It still submits the retained Pixi stage in every
+admitted custom-layer callback. Botanical radius, symbol, colour, focus,
+interaction, stacking, hit testing, culling margin, display order, editing,
+history, fallback, camera authority, and WebGL lifecycle remain unchanged.
+
+Matched profiled runs identified exact Plant geometry rebuilding as a material
+CPU cost. Values below are synchronous browser-thread milliseconds; clear
+counts are `Graphics.clear()` calls per shared custom-layer callback. They do
+not include GPU completion.
+
+| Scenario | Shared layer p50 / p95 before | Shared layer p50 / p95 after | Pixi submit p50 / p95 before | Pixi submit p50 / p95 after | Clears p50 before / after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Representative shared | 33.5 / 62.7 | 30.6 / 69.7 | 17.1 / 31.1 | 11.1 / 25.8 | 2,461 / 260 |
+| Dense 10,000 shared | 101.9 / 179.2 | 53.4 / 140.6 | 42.0 / 72.7 | 13.1 / 42.3 | 7,023 / 282 |
+
+The final profiled representative run spent a median 2.1 ms building Plant
+presentation entries and 11.8 ms assigning/drawing exact Plant geometry. The
+dense run spent 9.5 ms and 26.1 ms respectively. Wheel dispatch stayed below
+1 ms median. Of 200 shared callbacks, 168 carried camera changes; the remaining
+32 callbacks reused presentation state but still submitted Pixi. MapLibre
+repaint requests were 859 and 845. Full-scene traversal count was unavailable.
+
+Two final unprofiled serial runs used the same hardware, source receipt,
+viewport, warm-up and sample counts as the original record. Each cell shows
+run 1 / run 2 in milliseconds.
+
+| Scenario | Navigation p95 | Input-to-second-RAF p95 | Sustained intervals over 100 ms | Result |
+| --- | ---: | ---: | --- | --- |
+| Representative shared | 66.7 / 66.7 | 53.7 / 100.0 | pass / pass | fail |
+| Representative fallback | 33.4 / 50.0 | 81.3 / 78.8 | pass / pass | fail |
+| Dense 10,000 shared | 66.8 / 83.4 | 173.0 / 263.6 | pass / pass | fail |
+| Dispersed 10,000 shared | 100.1 / 133.3 | 308.8 / 236.6 | fail / fail | fail |
+
+All correctness, semantic order, single-canvas ownership, interaction,
+history, disposal, listener cleanup, temporary derivative cleanup, and source
+receipt checks passed in both runs. The representative source remained at SHA-
+256 `446c656e12eca21ddf5c03e79cd1f8d7862eae88626c4cb550d55b505d246f40`.
+
+The exact-context cache materially reduced geometry churn and synchronous Pixi
+submission, especially for the dense derivative, but the unchanged performance
+gate still fails. The browser proxy cannot partition the remaining time into
+MapLibre CPU work, driver/GPU completion, or frame scheduling, and this run had
+no real tiles or raster/LiDAR workload. Phase E remains blocked pending a fresh,
+bounded rendering slice; the reference thresholds remain unchanged.

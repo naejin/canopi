@@ -89,6 +89,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let presentation: PixiScenePresentation | null = null
   let pendingSnapshot: SceneRendererSnapshot | null = null
   let renderedSnapshot: SceneRendererSnapshot | null = null
+  let presentedViewport: SceneRendererSnapshot['viewport'] | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
   let resolveDispose: (() => void) | null = null
@@ -184,7 +185,8 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         fail('MapLibre canvas backing size changed outside the shared renderer contract.')
         return
       }
-      if (!sameRendererSize(rendererSize, nextSize)) resizeCount += 1
+      const sizeChanged = !sameRendererSize(rendererSize, nextSize)
+      if (sizeChanged) resizeCount += 1
       rendererSize = nextSize
       const transform = deriveSharedMapSceneViewport({
         project: point => map!.project(point),
@@ -207,9 +209,11 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
           renderedSnapshot = pendingSnapshot
           pendingSnapshot = null
           presentation.renderScene({ ...renderedSnapshot, viewport: transform.viewport })
+          presentedViewport = transform.viewport
           sceneSyncCount += 1
-        } else {
+        } else if (sizeChanged || !sameViewport(presentedViewport, transform.viewport)) {
           presentation.setViewport(transform.viewport)
+          presentedViewport = transform.viewport
           viewportSyncCount += 1
         }
         renderer.render({ container: stage, clear: false })
@@ -349,6 +353,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     renderer = null
     pendingSnapshot = null
     renderedSnapshot = null
+    presentedViewport = null
     map = null
     context = null
     canvas = null
@@ -357,6 +362,13 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     resolveDispose = null
     rejectDispose = null
   }
+}
+
+function sameViewport(
+  left: SceneRendererSnapshot['viewport'] | null,
+  right: SceneRendererSnapshot['viewport'],
+): boolean {
+  return left?.x === right.x && left.y === right.y && left.scale === right.scale
 }
 
 function createDefaultPresentation(input: {

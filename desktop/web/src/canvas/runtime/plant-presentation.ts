@@ -94,12 +94,12 @@ export function buildPlantPresentationEntries(
   return plants.map((plant) => {
     const radiusPresentation = resolvePlantRadiusPresentation(plant, context)
     const radiusWorld = radiusPresentation.radiusWorld
-    const radiusScreenPx = radiusWorld * context.viewport.scale
+    const radiusScreenPx = radiusPresentation.radiusScreenPx
     const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
     const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
     const selected = selectedPlantIds.has(plant.id)
     const screenPoint = worldToScreen(plant.position, context.viewport)
-    const hitBoundsScreen = getPlantScreenHitBounds(plant, context)
+    const hitBoundsScreen = plantScreenHitBounds(screenPoint, radiusScreenPx)
     return {
       plant,
       radiusWorld,
@@ -147,6 +147,10 @@ export function getPlantScreenHitBounds(
 ): PlantScreenHitBounds {
   const screenPoint = worldToScreen(plant.position, context.viewport)
   const radiusScreenPx = resolvePlantRadiusWorld(plant, context) * context.viewport.scale
+  return plantScreenHitBounds(screenPoint, radiusScreenPx)
+}
+
+function plantScreenHitBounds(screenPoint: ScenePoint, radiusScreenPx: number): PlantScreenHitBounds {
   const hitRadiusPx = radiusScreenPx + 4
   return {
     center: screenPoint,
@@ -270,11 +274,11 @@ function resolvePlantRadiusWorld(plant: ScenePlantEntity, context: PlantPresenta
 function resolvePlantRadiusPresentation(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
-): { radiusWorld: number; usesCanopyRadius: boolean } {
+): { radiusWorld: number; radiusScreenPx: number; usesCanopyRadius: boolean } {
   const scale = Math.max(context.viewport.scale, .001)
   const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
-  const radiusPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42))
-  return { radiusWorld: radiusPx / scale, usesCanopyRadius: false }
+  const radiusScreenPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42))
+  return { radiusWorld: radiusScreenPx / scale, radiusScreenPx, usesCanopyRadius: false }
 }
 
 function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {

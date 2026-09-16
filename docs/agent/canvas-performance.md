@@ -129,6 +129,15 @@ consecutive intervals above 100 ms. It always reports native qualification as
 unavailable. A proxy miss remains a miss; a proxy pass does not certify native
 presented-frame or input-to-visible performance.
 
+Pass `--profile-work` only for a matched diagnostic run. It adds bounded,
+aggregate development measurements for synchronous wheel dispatch, the shared
+custom-layer callback, Pixi WebGL submission, `Graphics.clear()` calls,
+viewport presentation, Plant presentation stages, and MapLibre repaint
+requests. It restores every temporary wrapper after the scenario. These spans
+can locate browser-thread work, but they do not measure GPU completion or
+native input-to-visible latency. Canvas2D correctly reports shared-layer work
+as unavailable.
+
 When a scenario fails after source integrity and cleanup have been established,
 the runner records its fixed failure code and continues the remaining independent
 scenarios. It prints the completed and failed aggregate records before exiting
@@ -175,7 +184,8 @@ Use Web Inspector's CPU/allocations timelines to explain expensive spans. For We
 - Invalidation is frame-coalesced, with scene updates taking precedence over viewport updates. Explicit awaited scene renders remain immediate for document settlement. New scene invalidations fence older in-flight preparations immediately; teardown cancels the pending animation frame.
 - Resize changes backing dimensions only. Callers follow it with a scene or viewport update; resizing must not render an obsolete snapshot. RendererHost fallback instances receive their own size tracking.
 - Canvas2D culls Plant drawing with the same CSS-pixel margin as Pixi while retaining all Plants for spacing. Its renderer instance retains admitted names across pure pans, recomputes them on zoom/full scene refresh, and releases them on disposal. The stateless snapshot renderer (also used by inspection) remains uncached.
-- Pixi Plant geometry uses CSS-pixel local origins and position transforms. Geometry cache keys include footprint, symbol/LOD, colour, interaction appearance, focus opacity and theme edge styling. Changes to those facts must invalidate geometry.
+- Pixi Plant geometry uses CSS-pixel local origins and position transforms. Plants with exactly equal effective geometry share a `GraphicsContext`; the presentation owns and destroys those contexts. New Plant `Graphics` start on one presentation-owned empty external context so they do not allocate unused per-Plant contexts. Before removing a Plant or disposing the presentation, rebind its `Graphics` through Pixi's public setter and destroy the temporary context; Pixi does not detach destroyed `Graphics` listeners from an externally owned context by itself. The cache retains the current and two prior exact generations so A/B/A zoom movement can reuse geometry while continuous zoom churn remains bounded. Geometry cache keys include the exact footprint, symbol/LOD, colour, interaction appearance, focus opacity and theme edge styling. Changes to those facts must invalidate geometry; do not quantize botanical appearance to improve cache hits.
+- Coincident-Plant stack counts may be retained only while the ordered visible Plant identities and selected Plant IDs match. Plant edits replace entity identities and must invalidate this cache.
 - Plant culling includes a margin for interaction rings and stack badges. Spacing queries retain the full scene, including offscreen neighbours. Preserve display order and refresh hidden plants on re-entry.
 - Zone/Measurement Guide geometry is reusable during pans; zoom changes screen-weight strokes and dash spacing. Text styles are retained until their effective properties change. Pure pans translate admitted names; full scene and zoom updates recompute admission.
 - Keep performance assertions about work counts beside visual/state assertions. A faster renderer that drops selection, changes botanical appearance or publishes stale state is a regression.

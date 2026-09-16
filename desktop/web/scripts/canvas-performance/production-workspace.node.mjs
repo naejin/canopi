@@ -8,6 +8,7 @@ import {
   classifyCapacityEvidence,
   percentile,
   sanitizeRunnerError,
+  summarizeBoundedSamples,
 } from './production-workspace.mjs'
 
 const run = promisify(execFile)
@@ -47,6 +48,31 @@ test('a single long frame is reported but is not a sustained stall', () => {
   assert.equal(result.sustainedFrameOpportunityStalls.status, 'pass')
 })
 
+test('bounded work summaries retain aggregate facts and discard raw overflow', () => {
+  assert.deepEqual(summarizeBoundedSamples([5, 10, 20], {
+    count: 5,
+    totalMs: 75,
+    sampleLimit: 3,
+  }), {
+    count: 5,
+    totalMs: 75,
+    p50Ms: 10,
+    p95Ms: 20,
+    p99Ms: 20,
+    sampleLimit: 3,
+    droppedSamples: 2,
+  })
+  assert.deepEqual(summarizeBoundedSamples([], { count: 0, totalMs: 0, sampleLimit: 512 }), {
+    count: 0,
+    totalMs: 0,
+    p50Ms: null,
+    p95Ms: null,
+    p99Ms: null,
+    sampleLimit: 512,
+    droppedSamples: 0,
+  })
+})
+
 test('runner errors omit private paths and payload fragments', () => {
   const privatePath = '/home/person/PRIVATE-DESIGN.canopi'
   const error = sanitizeRunnerError({ code: 'interaction', message: `failed ${privatePath} with {\"name\":\"PRIVATE\"}` })
@@ -80,6 +106,85 @@ test('browser callbacks compare values inside their page evaluation context', as
   assert.match(source, /MAX_POINTER_TARGET_CANDIDATES/)
   assert.match(source, /no pointer-selectable editable plant candidate/)
   assert.match(source, /status: 'fail'/)
+})
+
+test('work profiling is opt-in, aggregate-only, and restores the actual patched seams', async () => {
+  const source = await readFile(script, 'utf8')
+  assert.match(source, /'profile-work': \{ type: 'boolean', default: false \}/)
+  assert.match(source, /profileWork \? \{ workProfile \} : \{\}/)
+  assert.match(source, /pixi__js/)
+  assert.match(source, /viewport-presentation/)
+  assert.match(source, /WebGLRenderer\?\.prototype, 'render'/)
+  assert.match(source, /SceneViewportPresentation\?\.prototype, 'setViewport'/)
+  assert.match(source, /fullSceneTraversalCount: 'unavailable'/)
+  assert.match(source, /workProfiler\?\.restore\(\)/)
+  assert.equal(source.includes('rawTrace'), false)
+  assert.equal(source.includes('screenshots'), false)
+})
+
+test('work profiler aggregates captured custom-layer work and restores each method', async () => {
+  const source = await readFile(script, 'utf8')
+  const createWorkProfiler = Function(`return (${extractFunction(source, 'createWorkProfiler')})`)()
+  class Graphics { clear() {} }
+  class WebGLRenderer { render() {} }
+  class SceneViewportPresentation {
+    constructor() { this.retained = null }
+    get current() { return this.retained }
+    setViewport(viewport) { this.retained = { snapshot: { viewport } } }
+  }
+  class FakeMap { triggerRepaint() {} }
+  const original = {
+    clear: Graphics.prototype.clear,
+    render: WebGLRenderer.prototype.render,
+    setViewport: SceneViewportPresentation.prototype.setViewport,
+    triggerRepaint: FakeMap.prototype.triggerRepaint,
+  }
+  const profiler = createWorkProfiler({
+    pixi: { Graphics, WebGLRenderer },
+    SceneViewportPresentation,
+    sharedLayerId: 'canopi-shared-scene',
+  })
+  const layer = {
+    id: 'canopi-shared-scene',
+    render() {
+      new Graphics().clear()
+      new WebGLRenderer().render()
+      const presentation = new SceneViewportPresentation()
+      presentation.setViewport({ x: 1, y: 2, scale: 3 })
+      presentation.setViewport({ x: 1, y: 2, scale: 3 })
+    },
+  }
+  const originalLayerRender = layer.render
+  profiler.installMap(FakeMap.prototype)
+  profiler.installPixi()
+  profiler.captureCustomLayer(layer)
+  profiler.start()
+  globalThis.__CANOPI_PIXI_SCENE_WORK__?.('plantDraw', 2)
+  new FakeMap().triggerRepaint()
+  layer.render()
+  const result = profiler.snapshot('shared-ready')
+  assert.equal(result.status, 'available')
+  assert.equal(result.synchronousWheelDispatchMs, 'unavailable')
+  assert.equal(result.sharedCustomLayerRenderMs.count, 1)
+  assert.equal(result.pixiWebGLRendererRenderMs.count, 1)
+  assert.equal(result.graphicsClearsPerSharedCustomLayerInvocation.total, 1)
+  assert.equal(result.sceneViewportPresentationSetViewportMs.changed.count, 1)
+  assert.equal(result.sceneViewportPresentationSetViewportMs.unchanged.count, 1)
+  assert.equal(result.pixiSceneWorkMs.plantDraw.count, 1)
+  assert.equal(result.pixiSceneWorkMs.plantDraw.totalMs, 2)
+  assert.equal(result.mapLibreTriggerRepaintRequests.count, 1)
+  assert.equal(result.fullSceneTraversalCount, 'unavailable')
+  assert.deepEqual(profiler.snapshot('fallback-ready'), {
+    status: 'unavailable',
+    reason: 'Canvas2D fallback does not run the shared WebGL custom layer.',
+  })
+  profiler.restore()
+  assert.equal(Graphics.prototype.clear, original.clear)
+  assert.equal(WebGLRenderer.prototype.render, original.render)
+  assert.equal(SceneViewportPresentation.prototype.setViewport, original.setViewport)
+  assert.equal(FakeMap.prototype.triggerRepaint, original.triggerRepaint)
+  assert.equal(layer.render, originalLayerRender)
+  assert.equal(globalThis.__CANOPI_PIXI_SCENE_WORK__, undefined)
 })
 
 test('actual harness listener ledger distinguishes capture and DOM deduplication', async () => {
@@ -122,7 +227,7 @@ test('actual harness listener ledger distinguishes capture and DOM deduplication
 function extractFunction(source, name) {
   const start = source.indexOf(`function ${name}`)
   assert.notEqual(start, -1)
-  const body = source.indexOf('{', start)
+  const body = source.indexOf('{', source.indexOf(')', start) + 1)
   let depth = 0
   for (let index = body; index < source.length; index += 1) {
     if (source[index] === '{') depth += 1

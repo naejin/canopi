@@ -55,6 +55,24 @@ export function percentile(samples, proportion) {
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(proportion * sorted.length) - 1))]
 }
 
+/** Summarize bounded browser-side samples without emitting individual timings. */
+export function summarizeBoundedSamples(samples, options = {}) {
+  const bounded = Array.isArray(samples) ? samples : []
+  const count = options.count ?? bounded.length
+  const totalMs = options.totalMs ?? bounded.reduce((sum, value) => sum + value, 0)
+  const sampleLimit = options.sampleLimit ?? bounded.length
+  if (bounded.length === 0) return { count, totalMs, p50Ms: null, p95Ms: null, p99Ms: null, sampleLimit, droppedSamples: count }
+  return {
+    count,
+    totalMs,
+    p50Ms: percentile(bounded, 0.5),
+    p95Ms: percentile(bounded, 0.95),
+    p99Ms: percentile(bounded, 0.99),
+    sampleLimit,
+    droppedSamples: Math.max(0, count - bounded.length),
+  }
+}
+
 /** Browser proxies compared directly with the plan's reference values. These
  * comparisons do not certify native presented frames or input-to-visible time. */
 export function classifyCapacityEvidence({ frameIntervalsMs, inputToSecondRafMs }) {
@@ -136,7 +154,7 @@ async function verifySourceReceipt(file) {
   }
 }
 
-async function runVerifiedScenario({ browser, base, scenario, file }) {
+async function runVerifiedScenario({ browser, base, scenario, file, profileWork }) {
   await verifySourceReceipt(file)
   try {
     if (scenario.derivative) {
@@ -144,17 +162,17 @@ async function runVerifiedScenario({ browser, base, scenario, file }) {
         file,
         scenario.derivative,
         FIXTURE_EXPECTATIONS,
-        ({ file: derivativeFile, receipt }) => runBrowserScenario({ browser, base, scenario, file: derivativeFile })
+        ({ file: derivativeFile, receipt }) => runBrowserScenario({ browser, base, scenario, file: derivativeFile, profileWork })
           .then((result) => ({ ...result, fixture: receipt })),
       )
     }
-    return await runBrowserScenario({ browser, base, scenario, file })
+    return await runBrowserScenario({ browser, base, scenario, file, profileWork })
   } finally {
     await verifySourceReceipt(file)
   }
 }
 
-async function runBrowserScenario({ browser, base, scenario, file }) {
+async function runBrowserScenario({ browser, base, scenario, file, profileWork }) {
   let page
   let primaryFailure = null
   let cleanupAttempted = false
@@ -182,7 +200,7 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
       }))
       await page.goto(entry)
       const sourceFile = await readFixtureForBrowser(file)
-      setup = await page.evaluate(async ({ sourceFile: unpreparedFile, base: baseHref, forceCanvas2d, warmupFrames, frameSamples, inputSamples }) => {
+      setup = await page.evaluate(async ({ sourceFile: unpreparedFile, base: baseHref, forceCanvas2d, warmupFrames, frameSamples, inputSamples, profileWork }) => {
       const source = (name) => new URL(`src/${name}`, baseHref).href
       await import(source('styles/global.css'))
       const [{ createWorkspaceRuntimeComposition }, { createDetachedCanvasRuntimeAppAdapter }, { createDetachedSceneRuntimePanelTargetAdapter }, { newDesignSpatialFrame }, { loadMapLibreModule }, basemap, sharedScene] = await Promise.all([
@@ -196,7 +214,180 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
       ])
       const container = document.querySelector('#scene')
       if (!(container instanceof HTMLElement)) throw new Error('missing workspace container')
-      function installHarnessInstrumentation(maplibre, scope) {
+      function createWorkProfiler({ pixi, SceneViewportPresentation, sharedLayerId }) {
+        const SAMPLE_LIMIT = 512
+        const observations = {
+          customLayer: false,
+          pixiRender: false,
+          graphicsClear: false,
+          viewport: false,
+          repaint: false,
+          pixiSceneWork: false,
+        }
+        const durations = {
+          wheelDispatch: [], customLayer: [], pixiRender: [], viewportChanged: [], viewportUnchanged: [],
+          plantObjects: [], plantCull: [], plantEntries: [], plantLayout: [], plantDraw: [],
+        }
+        const durationTotals = {
+          wheelDispatch: { count: 0, totalMs: 0 }, customLayer: { count: 0, totalMs: 0 },
+          pixiRender: { count: 0, totalMs: 0 }, viewportChanged: { count: 0, totalMs: 0 },
+          viewportUnchanged: { count: 0, totalMs: 0 },
+          plantObjects: { count: 0, totalMs: 0 }, plantCull: { count: 0, totalMs: 0 },
+          plantEntries: { count: 0, totalMs: 0 }, plantLayout: { count: 0, totalMs: 0 },
+          plantDraw: { count: 0, totalMs: 0 },
+        }
+        const clearsPerCustomLayer = []
+        const clearsTotal = { count: 0, total: 0 }
+        let triggerRepaintCount = 0
+        let active = false
+        let restored = false
+        const restores = []
+        const customLayerInvocations = []
+        const capturedLayers = new WeakSet()
+        const recordDuration = (name, value) => {
+          if (!active || !Number.isFinite(value)) return
+          const total = durationTotals[name]
+          total.count += 1
+          total.totalMs += value
+          if (durations[name].length < SAMPLE_LIMIT) durations[name].push(value)
+        }
+        const recordClear = () => {
+          if (!active || customLayerInvocations.length === 0) return
+          customLayerInvocations[customLayerInvocations.length - 1].clears += 1
+        }
+        const summarizeDuration = (name) => {
+          const total = durationTotals[name]
+          if (total.count === 0) return 'unavailable'
+          const samples = durations[name]
+          const sorted = [...samples].sort((left, right) => left - right)
+          const percentile = (proportion) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(proportion * sorted.length) - 1))]
+          return {
+            count: total.count,
+            totalMs: total.totalMs,
+            p50Ms: percentile(0.5),
+            p95Ms: percentile(0.95),
+            p99Ms: percentile(0.99),
+            sampleLimit: SAMPLE_LIMIT,
+            droppedSamples: Math.max(0, total.count - samples.length),
+          }
+        }
+        const summarizeClears = () => {
+          if (clearsTotal.count === 0) return 'unavailable'
+          const sorted = [...clearsPerCustomLayer].sort((left, right) => left - right)
+          const percentile = (proportion) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(proportion * sorted.length) - 1))]
+          return {
+            count: clearsTotal.count,
+            total: clearsTotal.total,
+            p50: percentile(0.5),
+            p95: percentile(0.95),
+            p99: percentile(0.99),
+            sampleLimit: SAMPLE_LIMIT,
+            droppedSamples: Math.max(0, clearsTotal.count - clearsPerCustomLayer.length),
+          }
+        }
+        const patch = (target, name, wrap) => {
+          const original = target?.[name]
+          if (typeof original !== 'function') return false
+          target[name] = wrap(original)
+          restores.push(() => { target[name] = original })
+          return true
+        }
+        return {
+          installMap(mapPrototype) {
+            observations.repaint = patch(mapPrototype, 'triggerRepaint', (original) => function (...args) {
+              if (active) triggerRepaintCount += 1
+              return original.apply(this, args)
+            })
+          },
+          installPixi() {
+            const previousSceneWorkObserver = globalThis.__CANOPI_PIXI_SCENE_WORK__
+            globalThis.__CANOPI_PIXI_SCENE_WORK__ = (name, durationMs) => recordDuration(name, durationMs)
+            restores.push(() => {
+              if (previousSceneWorkObserver) globalThis.__CANOPI_PIXI_SCENE_WORK__ = previousSceneWorkObserver
+              else delete globalThis.__CANOPI_PIXI_SCENE_WORK__
+            })
+            observations.pixiSceneWork = true
+            observations.graphicsClear = patch(pixi?.Graphics?.prototype, 'clear', (original) => function (...args) {
+              recordClear()
+              return original.apply(this, args)
+            })
+            observations.pixiRender = patch(pixi?.WebGLRenderer?.prototype, 'render', (original) => function (...args) {
+              const startedAt = performance.now()
+              try {
+                return original.apply(this, args)
+              } finally {
+                recordDuration('pixiRender', performance.now() - startedAt)
+              }
+            })
+            observations.viewport = patch(SceneViewportPresentation?.prototype, 'setViewport', (original) => function (viewport, ...args) {
+              const previous = this.current?.snapshot?.viewport
+              const unchanged = previous?.x === viewport?.x && previous?.y === viewport?.y && previous?.scale === viewport?.scale
+              const startedAt = performance.now()
+              try {
+                return original.call(this, viewport, ...args)
+              } finally {
+                recordDuration(unchanged ? 'viewportUnchanged' : 'viewportChanged', performance.now() - startedAt)
+              }
+            })
+          },
+          captureCustomLayer(layer) {
+            if (!layer || layer.id !== sharedLayerId || typeof layer.render !== 'function' || capturedLayers.has(layer)) return
+            capturedLayers.add(layer)
+            const original = layer.render
+            layer.render = function (...args) {
+              const invocation = { clears: 0 }
+              const startedAt = performance.now()
+              if (active) customLayerInvocations.push(invocation)
+              try {
+                return original.apply(this, args)
+              } finally {
+                if (active) {
+                  customLayerInvocations.pop()
+                  recordDuration('customLayer', performance.now() - startedAt)
+                  clearsTotal.count += 1
+                  clearsTotal.total += invocation.clears
+                  if (clearsPerCustomLayer.length < SAMPLE_LIMIT) clearsPerCustomLayer.push(invocation.clears)
+                }
+              }
+            }
+            restores.push(() => { layer.render = original })
+            observations.customLayer = true
+          },
+          start() { active = true },
+          recordWheelDispatch(duration) { recordDuration('wheelDispatch', duration) },
+          snapshot(outcome) {
+            if (outcome !== 'shared-ready') {
+              return { status: 'unavailable', reason: 'Canvas2D fallback does not run the shared WebGL custom layer.' }
+            }
+            return {
+              status: 'available',
+              synchronousWheelDispatchMs: summarizeDuration('wheelDispatch'),
+              sharedCustomLayerRenderMs: observations.customLayer ? summarizeDuration('customLayer') : 'unavailable',
+              pixiWebGLRendererRenderMs: observations.pixiRender ? summarizeDuration('pixiRender') : 'unavailable',
+              graphicsClearsPerSharedCustomLayerInvocation: observations.graphicsClear && observations.customLayer ? summarizeClears() : 'unavailable',
+              sceneViewportPresentationSetViewportMs: observations.viewport
+                ? { changed: summarizeDuration('viewportChanged'), unchanged: summarizeDuration('viewportUnchanged') }
+                : 'unavailable',
+              pixiSceneWorkMs: observations.pixiSceneWork ? {
+                plantObjects: summarizeDuration('plantObjects'),
+                plantCull: summarizeDuration('plantCull'),
+                plantEntries: summarizeDuration('plantEntries'),
+                plantLayout: summarizeDuration('plantLayout'),
+                plantDraw: summarizeDuration('plantDraw'),
+              } : 'unavailable',
+              mapLibreTriggerRepaintRequests: observations.repaint ? { count: triggerRepaintCount } : 'unavailable',
+              fullSceneTraversalCount: 'unavailable',
+            }
+          },
+          restore() {
+            if (restored) return
+            restored = true
+            active = false
+            for (const restore of restores.reverse()) restore()
+          },
+        }
+      }
+      function installHarnessInstrumentation(maplibre, scope, workProfiler) {
         const mapPrototype = maplibre.Map.prototype
         const original = {
           addLayer: mapPrototype.addLayer,
@@ -211,6 +402,13 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
         let map = null
         let mapRemovalCount = 0
         let restored = false
+        try {
+          workProfiler?.installMap(mapPrototype)
+          workProfiler?.installPixi()
+        } catch (error) {
+          workProfiler?.restore()
+          throw error
+        }
         const recordMapListener = (target, type, listener, delta) => {
           if (!listener) return
           const entry = mapListeners.find((candidate) => candidate.target === target && candidate.type === type && candidate.listener === listener)
@@ -242,6 +440,7 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
         }
         mapPrototype.addLayer = function (...args) {
           map ??= this
+          workProfiler?.captureCustomLayer(args[0])
           return original.addLayer.apply(this, args)
         }
         mapPrototype.on = function (type, listener, ...args) {
@@ -303,10 +502,31 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
             mapPrototype.remove = original.remove
             EventTarget.prototype.addEventListener = original.addEventListener
             EventTarget.prototype.removeEventListener = original.removeEventListener
+            workProfiler?.restore()
           },
         }
       }
-      const instrumentation = installHarnessInstrumentation(await loadMapLibreModule(), container)
+      let profilerDependencies = null
+      if (profileWork) {
+        try {
+          const pixiSceneSource = await (await fetch(source('canvas/runtime/renderers/pixi-scene.ts'))).text()
+          const pixiModulePath = pixiSceneSource.match(/from ["']([^"']*pixi__js[^"']*)["']/)?.[1]
+          const viewportPresentationPath = pixiSceneSource.match(/from ["']([^"']*viewport-presentation[^"']*)["']/)?.[1]
+          if (pixiModulePath && viewportPresentationPath) {
+            const [pixi, viewportPresentation] = await Promise.all([
+              import(new URL(pixiModulePath, baseHref).href),
+              import(new URL(viewportPresentationPath, baseHref).href),
+            ])
+            profilerDependencies = { pixi, SceneViewportPresentation: viewportPresentation.SceneViewportPresentation }
+          }
+        } catch {
+          profilerDependencies = null
+        }
+      }
+      const workProfiler = profileWork
+        ? createWorkProfiler({ ...profilerDependencies, sharedLayerId: sharedScene.MAPLIBRE_SHARED_SCENE_LAYER_ID })
+        : null
+      const instrumentation = installHarnessInstrumentation(await loadMapLibreModule(), container, workProfiler)
       const file = structuredClone(unpreparedFile)
       if (file.version !== 5) {
         instrumentation.restore()
@@ -385,10 +605,19 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
           : { status: 'not-applicable', reason: 'Canvas2D fallback has no MapLibre semantic layer stack' },
         dispose,
       }
+      const dispatchWheel = (deltaY) => {
+        if (!workProfiler) {
+          container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY }))
+          return
+        }
+        const startedAt = performance.now()
+        container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY }))
+        workProfiler.recordWheelDispatch(performance.now() - startedAt)
+      }
       const collectNavigationFrames = async (count) => {
         const timestamps = []
         for (let index = 0; index < count; index += 1) {
-          container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: index % 2 === 0 ? -1 : 1 }))
+          dispatchWheel(index % 2 === 0 ? -1 : 1)
           timestamps.push(await new Promise(requestAnimationFrame))
         }
         return timestamps.slice(1).map((value, index) => value - timestamps[index])
@@ -397,15 +626,24 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
         const samples = []
         for (let index = 0; index < count; index += 1) {
           const start = performance.now()
-          container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }))
+          dispatchWheel(-1)
           await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
           samples.push(performance.now() - start)
         }
         return samples
       }
-      await collectNavigationFrames(warmupFrames)
-      const navigationFrameOpportunityIntervalsMs = await collectNavigationFrames(frameSamples)
-      const inputToSecondRafMs = await inputToSecondRaf(inputSamples)
+      let navigationFrameOpportunityIntervalsMs
+      let inputToSecondRafMs
+      let workProfile
+      try {
+        workProfiler?.start()
+        await collectNavigationFrames(warmupFrames)
+        navigationFrameOpportunityIntervalsMs = await collectNavigationFrames(frameSamples)
+        inputToSecondRafMs = await inputToSecondRaf(inputSamples)
+      } finally {
+        workProfile = workProfiler?.snapshot(outcome)
+        workProfiler?.restore()
+      }
       const canvas = container.querySelector('canvas[data-canopi-renderer], canvas')
       let gpu = 'unavailable'
       if (canvas instanceof HTMLCanvasElement) {
@@ -421,6 +659,7 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
         connectedCanvasCount: container.querySelectorAll('canvas').length,
         navigationFrameOpportunityIntervalsMs,
         inputToSecondRafMs,
+        ...(profileWork ? { workProfile } : {}),
         metadata: {
           viewport: { width: innerWidth, height: innerHeight },
           devicePixelRatio,
@@ -436,7 +675,7 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
           renderCounters: 'unavailable',
         },
       }
-    }, { sourceFile, base: base.href, forceCanvas2d: scenario.forceCanvas2d, warmupFrames: WARMUP_FRAMES, frameSamples: FRAME_SAMPLES, inputSamples: INPUT_SAMPLES })
+    }, { sourceFile, base: base.href, forceCanvas2d: scenario.forceCanvas2d, warmupFrames: WARMUP_FRAMES, frameSamples: FRAME_SAMPLES, inputSamples: INPUT_SAMPLES, profileWork })
     } catch {
       throw failure('scenario-setup')
     }
@@ -490,6 +729,17 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
     }
     if (!postDisposeInert || pageErrorCount !== errorsBeforePostDisposeEvents) throw failure('listener-cleanup')
     if (externalRequestCount !== 0) throw failure('external-request')
+    const measurements = {
+      browserProxyOnly: true,
+      navigationFrameOpportunityIntervalsMs: summarizeSamples(setup.navigationFrameOpportunityIntervalsMs),
+      inputToSecondRafMs: summarizeSamples(setup.inputToSecondRafMs),
+      classification: classifyCapacityEvidence({ frameIntervalsMs: setup.navigationFrameOpportunityIntervalsMs, inputToSecondRafMs: setup.inputToSecondRafMs }),
+      renderer: setup.metadata.renderer,
+      workCounters: setup.metadata.workCounters,
+      renderCounters: setup.metadata.renderCounters,
+      memory: setup.metadata.memory,
+    }
+    if (setup.workProfile !== undefined) measurements.workProfile = setup.workProfile
     return {
       id: scenario.id,
       status: 'pass',
@@ -501,16 +751,7 @@ async function runBrowserScenario({ browser, base, scenario, file }) {
         semanticOrder,
         teardown: 'pass', listenerCleanup: cleanup.listeners, postDisposeWorkspaceEvents: 'pass',
       },
-      measurements: {
-        browserProxyOnly: true,
-        navigationFrameOpportunityIntervalsMs: summarizeSamples(setup.navigationFrameOpportunityIntervalsMs),
-        inputToSecondRafMs: summarizeSamples(setup.inputToSecondRafMs),
-        classification: classifyCapacityEvidence({ frameIntervalsMs: setup.navigationFrameOpportunityIntervalsMs, inputToSecondRafMs: setup.inputToSecondRafMs }),
-        renderer: setup.metadata.renderer,
-        workCounters: setup.metadata.workCounters,
-        renderCounters: setup.metadata.renderCounters,
-        memory: setup.metadata.memory,
-      },
+      measurements,
       environment: setup.metadata,
     }
   } catch (error) {
@@ -627,6 +868,7 @@ async function main() {
     file: { type: 'string' }, scenario: { type: 'string', default: 'all' },
     url: { type: 'string', default: 'http://127.0.0.1:1431/app/' },
     headed: { type: 'boolean', default: false },
+    'profile-work': { type: 'boolean', default: false },
   } })
   if (!values.file) throw new Error('missing fixture')
   const base = assertLocalUrl(values.url)
@@ -651,7 +893,7 @@ async function main() {
     let failed = false
     for (const scenario of scenarios) {
       try {
-        results.push(await runVerifiedScenario({ browser, base, scenario, file: values.file }))
+        results.push(await runVerifiedScenario({ browser, base, scenario, file: values.file, profileWork: values['profile-work'] }))
       } catch (error) {
         const safe = error instanceof CapacityRunnerError ? error : failure('unknown')
         results.push({
