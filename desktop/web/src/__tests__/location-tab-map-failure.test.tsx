@@ -136,7 +136,12 @@ describe('LocationTab map failures', () => {
     })
     expect(container.querySelector('input')?.getAttribute('placeholder')).toBe('Search for a location...')
     expect(container.textContent).toContain('Provisional site')
-    expect(container.textContent).toContain('Review placement')
+    const confirm = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Confirm location')
+    expect(confirm?.disabled).toBe(true)
+    expect(container.querySelector('input')?.parentElement?.querySelectorAll(':scope > button')).toHaveLength(1)
+    expect(container.textContent).not.toContain('Review placement')
+    expect(container.textContent).not.toContain('Cancel')
     expect(maplibreMock.navigationControlConstructor).not.toHaveBeenCalled()
   })
 
@@ -211,13 +216,16 @@ describe('LocationTab map failures', () => {
       })
     })
 
-    expect(container.textContent).toContain('Review placement')
-    expect(container.textContent).toContain('Confirm placement')
+    expect(container.textContent).toContain('Selected location')
+    expect(container.textContent).toContain('Confirm location')
+    expect(container.textContent).not.toContain('Cancel')
+    expect(container.textContent).not.toContain('Use provisional site')
+    expect(container.querySelector('input')?.parentElement?.querySelectorAll(':scope > button')).toHaveLength(1)
     expect(currentDesign.value?.spatial_frame.placement_status).toBe('confirmed')
     expect(nonCanvasRevision.value).toBe(0)
 
     const confirm = [...container.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Confirm placement')
+      .find((button) => button.textContent === 'Confirm location')
     await act(async () => {
       confirm?.click()
     })
@@ -228,6 +236,7 @@ describe('LocationTab map failures', () => {
       placement_status: 'confirmed',
     })
     expect(container.textContent).toContain('Confirmed site')
+    expect(container.textContent).toContain('Move design here')
     expect(nonCanvasRevision.value).toBe(1)
   })
 })

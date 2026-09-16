@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { BasemapStyle } from '../../generated/contracts'
-import type { SpatialFrame } from '../../types/design'
+import type { PlacementStatus, SpatialFrame } from '../../types/design'
 import { basemapStyle } from '../settings/state'
 import {
   createMapLibreSurfaceAdapter,
@@ -23,10 +23,10 @@ const DEFAULT_CENTER: [number, number] = [0, 20]
 interface LocationMapEditingWorkbench {
   readonly saved: SavedLocationPresentation
   readonly pendingPlacement: SpatialFrame | null
+  readonly committedPlacementStatus: PlacementStatus | null
+  readonly hasPendingPlacementChange: boolean
   readonly previewMapCenter: (center: { lat: number; lon: number } | null) => boolean
-  readonly previewProvisionalPlacement: () => boolean
   readonly confirmPlacement: () => boolean
-  readonly cancelPlacement: () => boolean
   readonly previewMapLocation: (coords: { lat: number; lon: number }) => { lat: number; lon: number }
   readonly previewSearchResultOnMap?: (result: LocationMapSearchResult) => { lat: number; lon: number }
 }
@@ -52,13 +52,10 @@ export interface LocationMapEditingHost {
   readonly mapContainerRef: { current: HTMLDivElement | null }
   readonly mapUnavailable: boolean
   readonly pin: PinOverlayState
-  readonly committedLocation: SavedLocationPresentation['location']
   readonly hasPendingPlacement: boolean
+  readonly canConfirmLocation: boolean
   readonly previewSearchResult: (result: LocationMapSearchResult) => void
-  readonly previewMapCenter: () => boolean
-  readonly previewProvisionalPlacement: () => boolean
-  readonly confirmPlacement: () => boolean
-  readonly cancelPlacement: () => boolean
+  readonly confirmLocation: () => boolean
 }
 
 export function useLocationMapEditingHost(
@@ -75,6 +72,7 @@ export function useLocationMapEditingHost(
 
   const mapInitFailed = useSignal(false)
   const pinState = useSignal<PinOverlayState>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
+  const currentMapCenter = useSignal<{ lat: number; lon: number } | null>(null)
   const preferredBasemapStyle = options.basemapStyle ?? basemapStyle.value
 
   useEffect(() => {
@@ -84,9 +82,10 @@ export function useLocationMapEditingHost(
     if (!surface) return
 
     mapInitFailed.value = false
+    currentMapCenter.value = null
     surface.attach(container)
 
-    const onMove = () => updateCurrentPinPosition()
+    const onMove = () => updateCurrentMapState()
     const onClick = (event?: unknown) => previewClickedLocation(event)
 
     surface.requestMap({
@@ -130,10 +129,10 @@ export function useLocationMapEditingHost(
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
         context.lifetime.on('click', onClick)
-        updatePinPosition(context.map)
+        updateMapState(context.map)
       },
       onResize: (context) => {
-        updatePinPosition(context.map)
+        updateMapState(context.map)
       },
       onCreateError: (error) => {
         container.replaceChildren()
@@ -147,15 +146,17 @@ export function useLocationMapEditingHost(
   }, [preferredBasemapStyle])
 
   useEffect(() => {
-    updateCurrentPinPosition()
+    updateCurrentMapState()
   }, [workbench.saved.key])
 
   function previewSearchResult(result: LocationMapSearchResult): void {
+    if (!isValidLocation(result)) return
     const next = workbench.previewSearchResultOnMap
       ? workbench.previewSearchResultOnMap(result)
       : workbench.previewMapLocation(result)
     const map = surfaceRef.current?.map
     if (!map) return
+    currentMapCenter.value = next
     map.easeTo({
       center: [next.lon, next.lat],
       zoom: 14,
@@ -164,9 +165,16 @@ export function useLocationMapEditingHost(
     })
   }
 
-  function previewMapCenter(): boolean {
-    const center = surfaceRef.current?.map?.getCenter()
-    return workbench.previewMapCenter(center ? { lat: center.lat, lon: center.lng } : null)
+  function confirmLocation(): boolean {
+    if (workbench.pendingPlacement !== null) {
+      if (!workbench.hasPendingPlacementChange) return false
+      return workbench.confirmPlacement()
+    }
+
+    const center = currentMapCenter.peek()
+    if (!canCommitMapCenter(workbench, center, mapInitFailed.peek())) return false
+    if (!workbench.previewMapCenter(center)) return false
+    return workbench.confirmPlacement()
   }
 
   function previewClickedLocation(event?: unknown): void {
@@ -174,6 +182,7 @@ export function useLocationMapEditingHost(
     const lng = lngLat?.lng
     const lat = lngLat?.lat
     if (typeof lng !== 'number' || typeof lat !== 'number') return
+    if (!isValidLocation({ lat, lon: lng })) return
     workbenchRef.current.previewMapLocation({ lat, lon: lng })
   }
 
@@ -204,23 +213,59 @@ export function useLocationMapEditingHost(
     }
   }
 
-  function updateCurrentPinPosition(): void {
-    const map = surfaceRef.current?.map
-    if (map) updatePinPosition(map)
+  function updateMapState(map: LocationMapLibreMap): void {
+    const center = map.getCenter()
+    currentMapCenter.value = { lat: center.lat, lon: center.lng }
+    updatePinPosition(map)
   }
+
+  function updateCurrentMapState(): void {
+    const map = surfaceRef.current?.map
+    if (map) updateMapState(map)
+  }
+
+  const hasPendingPlacement = workbench.pendingPlacement !== null
+  const canConfirmLocation = hasPendingPlacement
+    ? workbench.hasPendingPlacementChange && isValidSpatialFrameAnchor(workbench.pendingPlacement)
+    : canCommitMapCenter(workbench, currentMapCenter.value, mapInitFailed.value)
 
   return {
     mapContainerRef,
     mapUnavailable: mapInitFailed.value,
     pin: pinState.value,
-    committedLocation: workbench.saved.location,
-    hasPendingPlacement: workbench.pendingPlacement !== null,
+    hasPendingPlacement,
+    canConfirmLocation,
     previewSearchResult,
-    previewMapCenter,
-    previewProvisionalPlacement: workbench.previewProvisionalPlacement,
-    confirmPlacement: workbench.confirmPlacement,
-    cancelPlacement: workbench.cancelPlacement,
+    confirmLocation,
   }
+}
+
+function canCommitMapCenter(
+  workbench: LocationMapEditingWorkbench,
+  center: { lat: number; lon: number } | null,
+  mapUnavailable: boolean,
+): center is { lat: number; lon: number } {
+  if (mapUnavailable || !center || !isValidLocation(center)) return false
+  if (workbench.committedPlacementStatus === 'provisional') return true
+  const anchor = workbench.saved.anchorLocation
+  return workbench.committedPlacementStatus === 'confirmed'
+    && Boolean(anchor && (center.lat !== anchor.lat || center.lon !== anchor.lon))
+}
+
+function isValidLocation(location: { lat: number; lon: number }): boolean {
+  return Number.isFinite(location.lat)
+    && Number.isFinite(location.lon)
+    && location.lat >= -90
+    && location.lat <= 90
+    && location.lon >= -180
+    && location.lon <= 180
+}
+
+function isValidSpatialFrameAnchor(frame: SpatialFrame): boolean {
+  return isValidLocation({
+    lat: frame.anchor_latitude_deg,
+    lon: frame.anchor_longitude_deg,
+  })
 }
 
 function isLocationMapVisiblyReady(map: LocationMapLibreMap): boolean {

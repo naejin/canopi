@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "Localização do design",
-      "preview": "Rever localização",
       "confirm": "Confirmar localização",
-      "cancel": "Cancelar",
-      "clear": "Usar local provisório",
+      "move": "Mover design para aqui",
       "current": "Atual",
       "searchPlaceholder": "Pesquisar localização...",
       "searching": "Pesquisando...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "Local provisório",
       "provisionalBody": "A edição local está disponível. Confirme um local antes da avaliação específica do local.",
       "confirmedTitle": "Local confirmado",
-      "reviewTitle": "Rever localização"
+      "selectedTitle": "Localização selecionada"
     },
     "file": {
       "new": "Novo design",

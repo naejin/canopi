@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "Ontwerplocatie",
-      "preview": "Plaatsing controleren",
-      "confirm": "Plaatsing bevestigen",
-      "cancel": "Annuleren",
-      "clear": "Voorlopige locatie gebruiken",
+      "confirm": "Locatie bevestigen",
+      "move": "Ontwerp hierheen verplaatsen",
       "current": "Huidig",
       "searchPlaceholder": "Locatie zoeken...",
       "searching": "Zoeken...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "Voorlopige locatie",
       "provisionalBody": "Lokaal bewerken is beschikbaar. Bevestig een locatie vóór locatiespecifieke evaluatie.",
       "confirmedTitle": "Bevestigde locatie",
-      "reviewTitle": "Plaatsing controleren"
+      "selectedTitle": "Geselecteerde locatie"
     },
     "file": {
       "new": "Nieuw ontwerp",

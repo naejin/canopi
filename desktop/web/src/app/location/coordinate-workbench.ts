@@ -3,9 +3,8 @@ import { useEffect, useRef } from 'preact/hooks'
 import {
   confirmedSpatialFrame,
   locationFromSpatialFrame,
-  newDesignSpatialFrame,
 } from '../../spatial-frame'
-import type { SpatialFrame } from '../../types/design'
+import type { PlacementStatus, SpatialFrame } from '../../types/design'
 import { designSessionStore } from '../document-session/store'
 import {
   beginDesignPlacementEdit,
@@ -20,9 +19,10 @@ import {
 export interface LocationCoordinateWorkbench {
   readonly saved: SavedLocationPresentation
   readonly pendingPlacement: SpatialFrame | null
+  readonly committedPlacementStatus: PlacementStatus | null
+  readonly hasPendingPlacementChange: boolean
   readonly previewMapLocation: (coords: { lat: number; lon: number }) => { lat: number; lon: number }
   readonly previewMapCenter: (center: { lat: number; lon: number } | null) => boolean
-  readonly previewProvisionalPlacement: () => boolean
   readonly confirmPlacement: () => boolean
   readonly cancelPlacement: () => boolean
 }
@@ -72,11 +72,6 @@ export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
     return true
   }
 
-  function previewProvisionalPlacement(): boolean {
-    previewFrame(newDesignSpatialFrame())
-    return true
-  }
-
   function confirmPlacement(): boolean {
     const edit = placementEditRef.current
     if (!edit) return false
@@ -97,9 +92,11 @@ export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
   return {
     saved,
     pendingPlacement: pendingPlacement.value,
+    committedPlacementStatus: placementEditRef.current?.original.placement_status
+      ?? saved.placementStatus,
+    hasPendingPlacementChange: placementEditRef.current?.hasMutated ?? false,
     previewMapLocation,
     previewMapCenter,
-    previewProvisionalPlacement,
     confirmPlacement,
     cancelPlacement,
   }

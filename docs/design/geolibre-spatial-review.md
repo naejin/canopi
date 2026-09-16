@@ -92,6 +92,8 @@ SceneStore remains authority for local plants, zones, annotations, guides, group
 
 Setting the site must support preview/cancel and an undoable committed operation through existing document edit/history coordination. Define undo ordering with scene edits; do not introduce a disconnected Location-only history stack. Guard against saving/replacement during partially applied placement transitions using existing settlement seams.
 
+The Location editor presents one action to the right of search. It says **Confirm location** while the Design's committed placement is provisional and **Move design here** after confirmation. Search results and map clicks create a reversible candidate; the action commits that candidate, or the current map center when no candidate is pending. Escape, unmount and Design replacement cancel a pending preview. Disable the action unless it would produce a valid placement change. Do not expose a separate reset-to-provisional action.
+
 Placement changes invalidate projected scene features and Design-dependent spatial results. Source-only raster analyses remain reusable. Never move a geographic TIFF because the Design origin moved. Preserve apparent local layout when changing the anchor by deriving the new camera from the previous local viewport.
 
 Coordinate-frame rebasing that preserves geographic object positions is a different advanced operation and is **deferred**. Do not overload the ordinary site picker with it.

@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "Posizione del progetto",
-      "preview": "Verifica posizione",
       "confirm": "Conferma posizione",
-      "cancel": "Annulla",
-      "clear": "Usa sito provvisorio",
+      "move": "Sposta qui il progetto",
       "current": "Attuale",
       "searchPlaceholder": "Cerca posizione...",
       "searching": "Ricerca...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "Sito provvisorio",
       "provisionalBody": "La modifica locale è disponibile. Conferma un sito prima delle valutazioni specifiche del luogo.",
       "confirmedTitle": "Sito confermato",
-      "reviewTitle": "Verifica posizione"
+      "selectedTitle": "Posizione selezionata"
     },
     "file": {
       "new": "Nuovo design",

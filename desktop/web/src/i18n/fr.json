@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "Emplacement du design",
-      "preview": "Vérifier l'emplacement",
       "confirm": "Confirmer l'emplacement",
-      "cancel": "Annuler",
-      "clear": "Utiliser le site provisoire",
+      "move": "Déplacer le design ici",
       "current": "Actuel",
       "searchPlaceholder": "Rechercher un lieu...",
       "searching": "Recherche...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "Site provisoire",
       "provisionalBody": "L'édition locale reste disponible. Confirmez un site avant toute évaluation liée au lieu.",
       "confirmedTitle": "Site confirmé",
-      "reviewTitle": "Vérifier l'emplacement"
+      "selectedTitle": "Emplacement sélectionné"
     },
     "file": {
       "new": "Nouveau design",

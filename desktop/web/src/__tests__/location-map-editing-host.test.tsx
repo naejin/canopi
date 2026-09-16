@@ -59,11 +59,12 @@ class FakeLocationMap {
     this.center = { lng: options.center[0], lat: options.center[1] }
   })
   readonly handlers = new Map<string, Set<(event?: unknown) => void>>()
-  center = { lng: 2.3522, lat: 48.8566 }
+  center: { lng: number; lat: number }
   zoom = 10
   projected = { x: 120, y: 80 }
 
-  constructor(private readonly container: HTMLElement) {
+  constructor(private readonly container: HTMLElement, center: [number, number]) {
+    this.center = { lng: center[0], lat: center[1] }
     Object.defineProperty(container, 'clientWidth', { value: 240, configurable: true })
     Object.defineProperty(container, 'clientHeight', { value: 180, configurable: true })
   }
@@ -153,8 +154,8 @@ describe('Location map editing host', () => {
     map = null
     maplibreMock.mapConstructor.mockReset()
     maplibreMock.navigationControlConstructor.mockReset()
-    maplibreMock.mapConstructor.mockImplementation(function (options: { container: HTMLElement }) {
-      map = new FakeLocationMap(options.container)
+    maplibreMock.mapConstructor.mockImplementation(function (options: { container: HTMLElement; center: [number, number] }) {
+      map = new FakeLocationMap(options.container, options.center)
       return map
     })
   })
@@ -190,7 +191,7 @@ describe('Location map editing host', () => {
     return map
   }
 
-  it('owns saved pin projection, pending search preview, drag clearing, resize, and map commits', async () => {
+  it('commits search, panned-center, and clicked locations through one action', async () => {
     renderProbe()
     await vi.waitFor(() => expect(currentHost().pin.visible).toBe(true))
     await flushMapHost()
@@ -206,6 +207,16 @@ describe('Location map editing host', () => {
       showZoom: true,
     })
     expect(currentHost().pin).toMatchObject({ visible: true, x: 120, y: 80, clamped: false })
+    expect(currentHost().canConfirmLocation).toBe(false)
+
+    act(() => {
+      currentHost().previewSearchResult({ displayName: 'Invalid', lat: 91, lon: 13.405 })
+    })
+    expect(currentHost().canConfirmLocation).toBe(false)
+    expect(currentDesign.value?.spatial_frame).toMatchObject({
+      anchor_latitude_deg: 48.8566,
+      anchor_longitude_deg: 2.3522,
+    })
 
     act(() => {
       currentHost().previewSearchResult({ displayName: 'Berlin', lat: 52.52, lon: 13.405 })
@@ -214,32 +225,34 @@ describe('Location map editing host', () => {
       center: [13.405, 52.52],
       zoom: 14,
     }))
+    expect(currentHost().canConfirmLocation).toBe(true)
 
     act(() => {
-      currentHost().confirmPlacement()
+      expect(currentHost().confirmLocation()).toBe(true)
     })
     expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
-
-    act(() => {
-      currentMap().center = { lng: -74.006, lat: 40.7128 }
-      currentHost().previewMapCenter()
-    })
-    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 40.7128, anchor_longitude_deg: -74.006, location_metadata: { altitude_m: 35 } })
     expect(nonCanvasRevision.value).toBe(1)
 
     act(() => {
-      currentHost().cancelPlacement()
+      currentMap().center = { lng: -74.006, lat: 40.7128 }
+      currentMap().fire('move')
     })
-    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 52.52, anchor_longitude_deg: 13.405, location_metadata: { altitude_m: 35 } })
+    expect(currentHost().canConfirmLocation).toBe(true)
+
+    act(() => {
+      expect(currentHost().confirmLocation()).toBe(true)
+    })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 40.7128, anchor_longitude_deg: -74.006, location_metadata: { altitude_m: 35 } })
+    expect(nonCanvasRevision.value).toBe(2)
 
     act(() => {
       currentMap().fire('click', { lngLat: { lng: -0.1276, lat: 51.5072 } })
     })
     expect(currentDesign.value?.spatial_frame).toMatchObject({ anchor_latitude_deg: 51.5072, anchor_longitude_deg: -0.1276, location_metadata: { altitude_m: 35 } })
-    expect(nonCanvasRevision.value).toBe(1)
+    expect(nonCanvasRevision.value).toBe(2)
 
     act(() => {
-      currentHost().confirmPlacement()
+      expect(currentHost().confirmLocation()).toBe(true)
     })
 
     act(() => {
@@ -249,7 +262,7 @@ describe('Location map editing host', () => {
     expect(currentMap().resize).toHaveBeenCalled()
     expect(currentHost().pin).toMatchObject({ visible: true, x: 216, y: 156, clamped: true })
     expect(workbench?.pendingPlacement).toBeNull()
-    expect(nonCanvasRevision.value).toBe(2)
+    expect(nonCanvasRevision.value).toBe(3)
   })
 
   it('preserves the current map view when the basemap style rebuilds', async () => {
@@ -299,5 +312,17 @@ describe('Location map editing host', () => {
       zoom: 3.2,
     })
     expect(currentHost().pin.visible).toBe(false)
+    expect(currentHost().canConfirmLocation).toBe(true)
+
+    act(() => {
+      expect(currentHost().confirmLocation()).toBe(true)
+    })
+    expect(currentDesign.value?.spatial_frame).toMatchObject({
+      anchor_longitude_deg: 13,
+      anchor_latitude_deg: 23,
+      placement_status: 'confirmed',
+    })
+    expect(nonCanvasRevision.value).toBe(1)
+    expect(currentHost().canConfirmLocation).toBe(false)
   })
 })

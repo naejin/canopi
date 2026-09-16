@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "デザインの位置",
-      "preview": "配置を確認",
-      "confirm": "配置を確定",
-      "cancel": "キャンセル",
-      "clear": "仮サイトを使用",
+      "confirm": "場所を確定",
+      "move": "デザインをここに移動",
       "current": "現在",
       "searchPlaceholder": "場所を検索...",
       "searching": "検索中...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "仮サイト",
       "provisionalBody": "ローカル編集は利用できます。場所に固有の評価を行う前にサイトを確定してください。",
       "confirmedTitle": "確定済みサイト",
-      "reviewTitle": "配置を確認"
+      "selectedTitle": "選択した場所"
     },
     "file": {
       "new": "新規デザイン",

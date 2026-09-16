@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "设计位置",
-      "preview": "检查位置",
       "confirm": "确认位置",
-      "cancel": "取消",
-      "clear": "使用临时场地",
+      "move": "将设计移到这里",
       "current": "当前",
       "searchPlaceholder": "搜索位置...",
       "searching": "搜索中...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "临时场地",
       "provisionalBody": "可以继续本地编辑。进行场地专项评估前，请先确认场地。",
       "confirmedTitle": "已确认场地",
-      "reviewTitle": "检查位置"
+      "selectedTitle": "已选择的位置"
     },
     "file": {
       "new": "新建设计",

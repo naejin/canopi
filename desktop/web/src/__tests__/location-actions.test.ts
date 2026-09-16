@@ -39,6 +39,9 @@ beforeEach(() => {
 describe('location actions', () => {
   it('previews and commits one spatial placement through the action boundary', () => {
     const persistence = createDesignSessionPersistence({ store: designSessionStore })
+    const plants = currentDesign.value!.plants
+    const zones = currentDesign.value!.zones
+    const annotations = currentDesign.value!.annotations
     const edit = beginDesignPlacementEdit()
     edit.preview(confirmedSpatialFrame(edit.original, {
       lat: 48.8566,
@@ -58,6 +61,9 @@ describe('location actions', () => {
 
     expect(edit.commit()).toEqual({ status: 'committed', changed: true })
     expect(nonCanvasRevision.value).toBe(1)
+    expect(currentDesign.value?.plants).toBe(plants)
+    expect(currentDesign.value?.zones).toBe(zones)
+    expect(currentDesign.value?.annotations).toBe(annotations)
     persistence.dispose()
   })
 

@@ -16,23 +16,11 @@ export function LocationTab() {
     mapHost.previewSearchResult(result)
   }
 
-  function handlePlacementAction() {
-    if (mapHost.hasPendingPlacement) {
-      mapHost.confirmPlacement()
-      return
-    }
-    mapHost.previewMapCenter()
-  }
-
-  function handleClear() {
-    mapHost.previewProvisionalPlacement()
-  }
-
   const pin = mapHost.pin
   const mapUnavailable = mapHost.mapUnavailable
-  const placementStatus = workbench.saved.placementStatus
+  const placementStatus = workbench.committedPlacementStatus
   const statusTitle = mapHost.hasPendingPlacement
-    ? t('canvas.location.reviewTitle')
+    ? t('canvas.location.selectedTitle')
     : placementStatus === 'confirmed'
       ? t('canvas.location.confirmedTitle')
       : t('canvas.location.provisionalTitle')
@@ -56,20 +44,16 @@ export function LocationTab() {
             onInput={(e) => { search.setQuery(e.currentTarget.value) }}
             placeholder={t('canvas.location.searchPlaceholder')}
           />
-          <button type="button" className={styles.setBtn} onClick={handlePlacementAction}>
-            {mapHost.hasPendingPlacement
-              ? t('canvas.location.confirm')
-              : t('canvas.location.preview')}
+          <button
+            type="button"
+            className={styles.setBtn}
+            onClick={mapHost.confirmLocation}
+            disabled={!mapHost.canConfirmLocation}
+          >
+            {placementStatus === 'confirmed'
+              ? t('canvas.location.move')
+              : t('canvas.location.confirm')}
           </button>
-          {mapHost.hasPendingPlacement ? (
-            <button type="button" className={styles.clearBtn} onClick={mapHost.cancelPlacement}>
-              {t('canvas.location.cancel')}
-            </button>
-          ) : mapHost.committedLocation ? (
-            <button type="button" className={styles.clearBtn} onClick={handleClear}>
-              {t('canvas.location.clear')}
-            </button>
-          ) : null}
         </div>
 
         {search.isSearching.value && (
@@ -121,7 +105,7 @@ export function LocationTab() {
         </svg>
       </button>
 
-      {/* Center crosshair — always visible, shows where "Set" will place the pin */}
+      {/* Center crosshair — always visible, shows where the location action will place the Design */}
       {!mapUnavailable && <div className={styles.centerCrosshair} aria-hidden="true" />}
 
       {/* Saved location pin — shows committed design location */}

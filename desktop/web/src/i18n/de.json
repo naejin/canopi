@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "Entwurfsstandort",
-      "preview": "Platzierung prüfen",
-      "confirm": "Platzierung bestätigen",
-      "cancel": "Abbrechen",
-      "clear": "Provisorischen Standort verwenden",
+      "confirm": "Standort bestätigen",
+      "move": "Entwurf hierher verschieben",
       "current": "Aktuell",
       "searchPlaceholder": "Standort suchen...",
       "searching": "Suche...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "Provisorischer Standort",
       "provisionalBody": "Lokale Bearbeitung ist verfügbar. Bestätigen Sie vor standortbezogenen Auswertungen einen Standort.",
       "confirmedTitle": "Bestätigter Standort",
-      "reviewTitle": "Platzierung prüfen"
+      "selectedTitle": "Ausgewählter Standort"
     },
     "file": {
       "new": "Neuer Entwurf",

@@ -207,10 +207,8 @@
     },
     "location": {
       "title": "Design Location",
-      "preview": "Review placement",
-      "confirm": "Confirm placement",
-      "cancel": "Cancel",
-      "clear": "Use provisional site",
+      "confirm": "Confirm location",
+      "move": "Move design here",
       "current": "Current",
       "searchPlaceholder": "Search for a location...",
       "searching": "Searching...",
@@ -220,7 +218,7 @@
       "provisionalTitle": "Provisional site",
       "provisionalBody": "Local editing is available. Confirm a site before site-specific evaluation.",
       "confirmedTitle": "Confirmed site",
-      "reviewTitle": "Review placement"
+      "selectedTitle": "Selected location"
     },
     "file": {
       "new": "New Design",
