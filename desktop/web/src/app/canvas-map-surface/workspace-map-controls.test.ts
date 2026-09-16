@@ -5,10 +5,12 @@ import type {
   MapLibreMapConstructorOptions,
   MapLibreMapInstance,
 } from '../../maplibre/loader'
+import type { WorkspaceMapSnapshot } from '../../maplibre/workspace-map'
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
   MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
   MAPLIBRE_BASEMAP_SOURCE_ID,
+  REMOTE_BASEMAP_TILE_URL_TEMPLATE,
 } from '../../maplibre/config'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
@@ -117,16 +119,29 @@ function createControls(options: {
       return observer
     },
   })
-  const controls = new WorkspaceMapControls({
+  const snapshot: WorkspaceMapSnapshot = {
+    anchor: { lat: 48.86, lon: 2.35 }, northBearingDeg: 12,
+    placementStatus: options.placementStatus ?? 'confirmed',
+    basemapStyle: 'street', basemapVisible: options.basemapVisible ?? true, basemapOpacity: 0.4,
+  }
+  const controls = new TestWorkspaceMapControls({
     container: document.createElement('div'),
     surface,
-    snapshot: {
-      anchor: { lat: 48.86, lon: 2.35 }, northBearingDeg: 12,
-      placementStatus: options.placementStatus ?? 'confirmed',
-      basemapStyle: 'street', basemapVisible: options.basemapVisible ?? true, basemapOpacity: 0.4,
-    },
-  })
+  }, snapshot)
   return { controls, maps, observers }
+}
+
+class TestWorkspaceMapControls extends WorkspaceMapControls {
+  constructor(
+    options: ConstructorParameters<typeof WorkspaceMapControls>[0],
+    private readonly defaultSnapshot: WorkspaceMapSnapshot,
+  ) {
+    super(options)
+  }
+
+  override createMap(signal: AbortSignal, snapshot = this.defaultSnapshot) {
+    return super.createMap(signal, snapshot)
+  }
 }
 
 async function waitForMap(maps: FakeMap[]): Promise<FakeMap> {
@@ -168,6 +183,118 @@ describe('WorkspaceMapControls', () => {
       'raster-opacity',
       0.4,
     )
+  })
+
+  it('binds map construction and later style restoration to each attempt snapshot', async () => {
+    const { controls, maps } = createControls()
+    const snapshotA: WorkspaceMapSnapshot = {
+      anchor: { lat: 10, lon: 20 },
+      northBearingDeg: 30,
+      placementStatus: 'confirmed',
+      basemapStyle: 'street',
+      basemapVisible: true,
+      basemapOpacity: 0.2,
+    }
+    const snapshotB: WorkspaceMapSnapshot = {
+      anchor: { lat: -40, lon: 70 },
+      northBearingDeg: 80,
+      placementStatus: 'confirmed',
+      basemapStyle: 'satellite',
+      basemapVisible: true,
+      basemapOpacity: 0.8,
+    }
+    const first = controls.createMap(new AbortController().signal, snapshotA)
+    await vi.waitFor(() => expect(maps).toHaveLength(1))
+    const mapA = maps[0]!
+    mapA.emit('style.load')
+    await first
+    controls.installStyleRestorer(mapA as never, vi.fn())
+
+    const second = controls.createMap(new AbortController().signal, snapshotB)
+    await vi.waitFor(() => expect(maps).toHaveLength(2))
+    const mapB = maps[1]!
+    mapB.emit('style.load')
+    await second
+    controls.installStyleRestorer(mapB as never, vi.fn())
+
+    mapA.clearStyle()
+    mapA.emit('style.load')
+    mapB.clearStyle()
+    mapB.emit('style.load')
+
+    expect(mapA.options.center).toEqual([20, 10])
+    expect(mapA.options.bearing).toBe(30)
+    expect(mapA.setPaintProperty).toHaveBeenCalledTimes(1)
+    expect(mapA.setPaintProperty).toHaveBeenLastCalledWith(
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      'raster-opacity',
+      0.2,
+    )
+    expect(mapB.options.center).toEqual([70, -40])
+    expect(mapB.options.bearing).toBe(80)
+    expect(mapB.setPaintProperty).toHaveBeenCalledTimes(2)
+    expect(mapB.setPaintProperty).toHaveBeenLastCalledWith(
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      'raster-opacity',
+      0.8,
+    )
+  })
+
+  it('owns the call-time map snapshot through admission and later style reload', async () => {
+    vi.stubEnv('VITE_MAPTILER_KEY', 'snapshot-test-key')
+    try {
+      const { controls, maps } = createControls()
+      const snapshot: WorkspaceMapSnapshot = {
+        anchor: { lat: 11, lon: 22 },
+        northBearingDeg: 33,
+        placementStatus: 'confirmed',
+        basemapStyle: 'street',
+        basemapVisible: true,
+        basemapOpacity: 0.25,
+      }
+      const acquisition = controls.createMap(new AbortController().signal, snapshot)
+      const map = await waitForMap(maps)
+
+      ;(snapshot.anchor as { lat: number; lon: number }).lat = 81
+      ;(snapshot.anchor as { lat: number; lon: number }).lon = 82
+      ;(snapshot as { northBearingDeg: number }).northBearingDeg = 83
+      ;(snapshot as { basemapStyle: 'street' | 'satellite' }).basemapStyle = 'satellite'
+      ;(snapshot as { basemapVisible: boolean }).basemapVisible = false
+      ;(snapshot as { basemapOpacity: number }).basemapOpacity = 0.95
+
+      map.emit('style.load')
+      await acquisition
+      controls.installStyleRestorer(map as never, vi.fn())
+
+      expect(map.options.center).toEqual([22, 11])
+      expect(map.options.bearing).toBe(33)
+      expect(map.addSource).toHaveBeenCalledWith(
+        MAPLIBRE_BASEMAP_SOURCE_ID,
+        expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),
+      )
+      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'raster-opacity',
+        0.25,
+      )
+
+      map.clearStyle()
+      map.emit('style.load')
+
+      expect(map.addSource).toHaveBeenCalledTimes(2)
+      expect(map.addSource).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_SOURCE_ID,
+        expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),
+      )
+      expect(map.setPaintProperty).toHaveBeenCalledTimes(2)
+      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'raster-opacity',
+        0.25,
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('orders a preserved shared scene through moveLayer without recreating it', async () => {
@@ -458,12 +585,11 @@ describe('WorkspaceMapControls', () => {
     })
     const controls = new WorkspaceMapControls({
       container: document.createElement('div'), surface,
-      snapshot: {
-        anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, placementStatus: 'confirmed',
-        basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
-      },
     })
-    await expect(controls.createMap(new AbortController().signal)).rejects.toBe(error)
+    await expect(controls.createMap(new AbortController().signal, {
+      anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, placementStatus: 'confirmed',
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
+    })).rejects.toBe(error)
   })
 
   it('rejects and releases when the constructed map has no public WebGL2 context', async () => {

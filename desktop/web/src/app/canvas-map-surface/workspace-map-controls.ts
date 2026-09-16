@@ -22,6 +22,7 @@ import type {
 
 interface WorkspaceMapAttempt {
   readonly signal: AbortSignal
+  readonly snapshot: WorkspaceMapSnapshot
   map: WorkspaceActivationMap | null
   settled: boolean
   released: boolean
@@ -38,7 +39,6 @@ interface WorkspaceMapAttempt {
 
 export interface WorkspaceActivationMapControlsOptions {
   readonly container: HTMLElement
-  readonly snapshot: WorkspaceMapSnapshot
   readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
 }
@@ -57,7 +57,11 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     this.logError = options.logError ?? console.error
   }
 
-  createMap(signal: AbortSignal): Promise<WorkspaceActivationMap> {
+  createMap(
+    signal: AbortSignal,
+    snapshot: WorkspaceMapSnapshot,
+  ): Promise<WorkspaceActivationMap> {
+    const ownedSnapshot = captureMapSnapshot(snapshot)
     const previous = this.attempt
     if (previous && !previous.settled) {
       this.rejectAttempt(previous, abortError())
@@ -69,6 +73,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     return new Promise<WorkspaceActivationMap>((resolve, reject) => {
       const attempt: WorkspaceMapAttempt = {
         signal,
+        snapshot: ownedSnapshot,
         map: null,
         settled: false,
         released: false,
@@ -97,7 +102,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         createMap: (maplibre, container) => createWorkspaceMapLibreMap(
           maplibre,
           container,
-          this.options.snapshot,
+          attempt.snapshot,
         ),
         onCreate: (context) => {
           const map = context.map as WorkspaceActivationMap
@@ -140,7 +145,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             // addSource runs; only a thrown configuration error rejects this map.
             attempt.admitted = true
             try {
-              this.addBasemapContribution(map)
+              this.addBasemapContribution(attempt)
               attempt.settled = true
               signal.removeEventListener('abort', abort)
               resolve(map)
@@ -228,8 +233,9 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     }
   }
 
-  private addBasemapContribution(map: WorkspaceActivationMap): void {
-    const snapshot = this.options.snapshot
+  private addBasemapContribution(attempt: WorkspaceMapAttempt): void {
+    const { map, snapshot } = attempt
+    if (!map) return
     if (snapshot.placementStatus !== 'confirmed' || !snapshot.basemapVisible) return
     const contribution = createMapLibreBasemapContribution(snapshot.basemapStyle)
     if (map.getSource(contribution.sourceId) == null) {
@@ -262,7 +268,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     attempt.pendingStyleRestore = false
     attempt.restoringStyle = true
     try {
-      this.addBasemapContribution(attempt.map!)
+      this.addBasemapContribution(attempt)
       attempt.styleRestorer()
       this.reconcileLayerStack(attempt)
     } catch (error) {
@@ -308,6 +314,20 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     // final map removal. No app-layer code calls map.remove().
     this.surface.destroy()
   }
+}
+
+function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
+  return Object.freeze({
+    anchor: Object.freeze({
+      lat: snapshot.anchor.lat,
+      lon: snapshot.anchor.lon,
+    }),
+    northBearingDeg: snapshot.northBearingDeg,
+    placementStatus: snapshot.placementStatus,
+    basemapStyle: snapshot.basemapStyle,
+    basemapVisible: snapshot.basemapVisible,
+    basemapOpacity: snapshot.basemapOpacity,
+  })
 }
 
 function abortError(): Error {

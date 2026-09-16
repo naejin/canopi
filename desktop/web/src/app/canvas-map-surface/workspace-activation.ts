@@ -2,6 +2,7 @@ import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/mapli
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
 import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
+import type { WorkspaceMapSnapshot } from '../../maplibre/workspace-map'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
@@ -17,6 +18,13 @@ import {
 
 export type WorkspaceActivationOutcome = 'shared-ready' | 'fallback-ready' | 'cancelled'
 
+/** One immutable Design/map generation input. Session identity is compared only by ownership. */
+export interface WorkspaceActivationSnapshot {
+  readonly sessionIdentity: object
+  readonly map: WorkspaceMapSnapshot
+  readonly maximumWorldExtentMeters?: number
+}
+
 /** One map that is suitable for both the shared graphics layer and camera owner. */
 export type WorkspaceActivationMap = MapLibreWorkspaceCameraMap & Pick<
   MapLibreMapInstance,
@@ -30,7 +38,10 @@ export type WorkspaceActivationMap = MapLibreWorkspaceCameraMap & Pick<
 >
 
 export interface WorkspaceActivationMapControls {
-  createMap(signal: AbortSignal): Promise<WorkspaceActivationMap>
+  createMap(
+    signal: AbortSignal,
+    snapshot: WorkspaceMapSnapshot,
+  ): Promise<WorkspaceActivationMap>
   releaseMap(map: WorkspaceActivationMap): void
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
   /** Restores same-map style contributions after initial style admission. */
@@ -54,20 +65,21 @@ export interface WorkspaceActivationOptions {
   readonly camera: MapLibreWorkspaceCameraOwner
   readonly composition: SharedMapSceneRendererComposition
   readonly map: WorkspaceActivationMapControls
-  readonly layer: Omit<SharedMapSceneLayerOptions, 'id' | 'onFailure'>
+  readonly layer: Omit<
+    SharedMapSceneLayerOptions,
+    'id' | 'anchor' | 'northBearingDeg' | 'maximumWorldExtentMeters' | 'onFailure'
+  >
 }
 
 interface ActivationGeneration {
   readonly id: number
+  readonly snapshot: WorkspaceActivationSnapshot
   map: WorkspaceActivationMap | null
   layer: SharedMapSceneLayer | null
   disposeStyleRestorer: (() => void) | null
   unwatchFailure: (() => void) | null
   unsubscribeCameraFailure: (() => void) | null
   cameraAttached: boolean
-  runtimeInit: Promise<void> | null
-  runtimeInitialized: boolean
-  runtimeDestroyed: boolean
   cancelled: boolean
   cleanupResult: Promise<void> | null
   failure: Promise<WorkspaceActivationOutcome> | null
@@ -83,25 +95,36 @@ export class WorkspaceActivationCoordinator {
   private generation = 0
   private activationRequest = 0
   private active: ActivationGeneration | null = null
-  private teardownInFlight: Promise<void> | null = null
+  private cleanupInFlight: Promise<void> | null = null
+  private runtimeInit: Promise<void> | null = null
+  private runtimeInitialized = false
+  private runtimeDestroyed = false
+  private sharedBackendTerminal = false
+  private disposed = false
 
   constructor(private readonly options: WorkspaceActivationOptions) {}
 
-  async activate(): Promise<WorkspaceActivationOutcome> {
+  async activate(snapshot: WorkspaceActivationSnapshot): Promise<WorkspaceActivationOutcome> {
+    const ownedSnapshot = captureActivationSnapshot(snapshot)
+    if (this.disposed) return 'cancelled'
     const request = ++this.activationRequest
-    await this.teardownActive()
-    if (request !== this.activationRequest) return 'cancelled'
+    try {
+      await this.cleanupActiveGeneration()
+    } catch (error) {
+      if (request !== this.activationRequest || this.disposed) return 'cancelled'
+      throw error
+    }
+    if (request !== this.activationRequest || this.disposed) return 'cancelled'
+    if (this.sharedBackendTerminal) return 'fallback-ready'
     const current: ActivationGeneration = {
       id: ++this.generation,
+      snapshot: ownedSnapshot,
       map: null,
       layer: null,
       disposeStyleRestorer: null,
       unwatchFailure: null,
       unsubscribeCameraFailure: null,
       cameraAttached: false,
-      runtimeInit: null,
-      runtimeInitialized: false,
-      runtimeDestroyed: false,
       cancelled: false,
       cleanupResult: null,
       failure: null,
@@ -111,7 +134,10 @@ export class WorkspaceActivationCoordinator {
 
     let sharedRuntimeInitializationFailed = false
     try {
-      const map = await this.options.map.createMap(current.abortController.signal)
+      const map = await this.options.map.createMap(
+        current.abortController.signal,
+        current.snapshot.map,
+      )
       if (!this.isCurrent(current)) {
         this.releaseStaleMap(map)
         return 'cancelled'
@@ -128,6 +154,9 @@ export class WorkspaceActivationCoordinator {
       const layer = this.options.composition.createLayer({
         ...this.options.layer,
         id: MAPLIBRE_SHARED_SCENE_LAYER_ID,
+        anchor: current.snapshot.map.anchor,
+        northBearingDeg: current.snapshot.map.northBearingDeg,
+        maximumWorldExtentMeters: current.snapshot.maximumWorldExtentMeters,
         onFailure: (error) => {
           this.observeFailure(current, error)
         },
@@ -150,15 +179,15 @@ export class WorkspaceActivationCoordinator {
       )
       const attached = this.options.camera.attachment.attach({
         map,
-        anchor: this.options.layer.anchor,
-        northBearingDeg: this.options.layer.northBearingDeg,
-        maximumWorldExtentMeters: this.options.layer.maximumWorldExtentMeters,
+        anchor: current.snapshot.map.anchor,
+        northBearingDeg: current.snapshot.map.northBearingDeg,
+        maximumWorldExtentMeters: current.snapshot.maximumWorldExtentMeters,
       })
       if (!attached) throw new Error('MapLibre workspace camera rejected the shared map attachment.')
       current.cameraAttached = true
       if (current.failure) return current.failure
 
-      const runtimeInit = this.initializeRuntime(current)
+      const runtimeInit = this.initializeRuntime()
       try {
         await runtimeInit
       } catch (error) {
@@ -166,7 +195,8 @@ export class WorkspaceActivationCoordinator {
         if (current.failure) return current.failure
         sharedRuntimeInitializationFailed = true
         const errors: unknown[] = [error]
-        this.destroyRuntime(current, errors)
+        this.sharedBackendTerminal = true
+        this.destroyRuntime(errors)
         try {
           await this.cleanup(current)
         } catch (cleanupError) {
@@ -177,7 +207,7 @@ export class WorkspaceActivationCoordinator {
       if (!this.isCurrent(current)) {
         return 'cancelled'
       }
-      current.runtimeInitialized = true
+      this.runtimeInitialized = true
       return current.failure ?? 'shared-ready'
     } catch (error) {
       if (!this.isCurrent(current)) return 'cancelled'
@@ -193,12 +223,28 @@ export class WorkspaceActivationCoordinator {
   }
 
   async teardown(): Promise<void> {
+    if (this.disposed && this.runtimeDestroyed) return
+    this.disposed = true
     ++this.activationRequest
-    return this.teardownActive()
+    const errors: unknown[] = []
+    try {
+      await this.cleanupActiveGeneration()
+    } catch (error) {
+      errors.push(error)
+    }
+    if (this.runtimeInit) {
+      try {
+        await this.runtimeInit
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    this.destroyRuntime(errors)
+    throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace teardown failed')
   }
 
-  private teardownActive(): Promise<void> {
-    if (this.teardownInFlight) return this.teardownInFlight
+  private cleanupActiveGeneration(): Promise<void> {
+    if (this.cleanupInFlight) return this.cleanupInFlight
     const current = this.active
     if (!current) return Promise.resolve()
     this.active = null
@@ -207,23 +253,29 @@ export class WorkspaceActivationCoordinator {
     let tracked!: Promise<void>
     tracked = Promise.resolve().then(async () => {
       const errors: unknown[] = []
-      this.destroyRuntime(current, errors)
       try {
         await this.cleanup(current)
       } catch (error) {
         errors.push(error)
       }
+      if (current.failure) {
+        try {
+          await current.failure
+        } catch (error) {
+          errors.push(error)
+        }
+      }
       throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace teardown failed')
     }).then(
       () => {
-        if (this.teardownInFlight === tracked) this.teardownInFlight = null
+        if (this.cleanupInFlight === tracked) this.cleanupInFlight = null
       },
       (error: unknown) => {
-        if (this.teardownInFlight === tracked) this.teardownInFlight = null
+        if (this.cleanupInFlight === tracked) this.cleanupInFlight = null
         throw error
       },
     )
-    this.teardownInFlight = tracked
+    this.cleanupInFlight = tracked
     // Publish the shared cleanup transaction before aborting acquisition.
     // Abort listeners are external code and may reenter activate/teardown.
     current.abortController.abort()
@@ -241,9 +293,10 @@ export class WorkspaceActivationCoordinator {
     // cleanup code. Those boundaries may synchronously report another failure.
     current.failure = Promise.resolve().then(() => {
       if (!this.isCurrent(current)) return 'cancelled'
-      return current.runtimeInitialized
+      this.sharedBackendTerminal = true
+      return this.runtimeInitialized
         ? this.failActiveRenderer(current, error)
-        : current.runtimeInit
+        : this.runtimeInit
           ? this.failWhileRuntimeInitializes(current, error)
           : this.failAdmission(current, error)
     })
@@ -264,17 +317,17 @@ export class WorkspaceActivationCoordinator {
     if (!this.isCurrent(current)) return 'cancelled'
 
     try {
-      await this.initializeRuntime(current)
+      await this.initializeRuntime()
     } catch (initializationError) {
       if (!this.isCurrent(current)) return 'cancelled'
       errors.push(initializationError)
-      this.destroyRuntime(current, errors)
+      this.destroyRuntime(errors)
       throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace renderer initialization failed')
     }
     if (!this.isCurrent(current)) {
       return 'cancelled'
     }
-    current.runtimeInitialized = true
+    this.runtimeInitialized = true
     throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace admission cleanup failed')
     return 'fallback-ready'
   }
@@ -320,15 +373,15 @@ export class WorkspaceActivationCoordinator {
       errors.push(cleanupError)
     }
     try {
-      await current.runtimeInit
+      await this.runtimeInit
     } catch (initializationError) {
       if (!this.isCurrent(current)) return 'cancelled'
       errors.push(initializationError)
-      this.destroyRuntime(current, errors)
+      this.destroyRuntime(errors)
       throwCanvasRuntimeCleanupErrors(errors, 'Shared workspace renderer initialization failed')
     }
     if (!this.isCurrent(current)) return 'cancelled'
-    current.runtimeInitialized = true
+    this.runtimeInitialized = true
     try {
       await this.options.runtime.reportRendererFailure(MAPLIBRE_SCENE_RENDERER_ID, error)
     } catch (replacementError) {
@@ -418,20 +471,20 @@ export class WorkspaceActivationCoordinator {
     }
   }
 
-  private initializeRuntime(current: ActivationGeneration): Promise<void> {
+  private initializeRuntime(): Promise<void> {
     // Record the pending transaction before runtime code runs so a synchronous
     // throw cannot be mistaken for a pre-admission map failure and retried.
-    if (!current.runtimeInit) {
-      current.runtimeInit = Promise.resolve().then(
+    if (!this.runtimeInit) {
+      this.runtimeInit = Promise.resolve().then(
         () => this.options.runtime.init(this.options.container),
       )
     }
-    return current.runtimeInit
+    return this.runtimeInit
   }
 
-  private destroyRuntime(current: ActivationGeneration, errors: unknown[]): void {
-    if (!current.runtimeInit || current.runtimeDestroyed) return
-    current.runtimeDestroyed = true
+  private destroyRuntime(errors: unknown[]): void {
+    if (!this.runtimeInit || this.runtimeDestroyed) return
+    this.runtimeDestroyed = true
     try {
       this.options.runtime.destroy()
     } catch (error) {
@@ -450,6 +503,31 @@ export class WorkspaceActivationCoordinator {
   private isCurrent(current: ActivationGeneration): boolean {
     return !current.cancelled && this.active === current && this.generation === current.id
   }
+}
+
+function captureActivationSnapshot(
+  snapshot: WorkspaceActivationSnapshot,
+): WorkspaceActivationSnapshot {
+  const map = captureMapSnapshot(snapshot.map)
+  return Object.freeze({
+    sessionIdentity: snapshot.sessionIdentity,
+    map,
+    maximumWorldExtentMeters: snapshot.maximumWorldExtentMeters,
+  })
+}
+
+function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
+  return Object.freeze({
+    anchor: Object.freeze({
+      lat: snapshot.anchor.lat,
+      lon: snapshot.anchor.lon,
+    }),
+    northBearingDeg: snapshot.northBearingDeg,
+    placementStatus: snapshot.placementStatus,
+    basemapStyle: snapshot.basemapStyle,
+    basemapVisible: snapshot.basemapVisible,
+    basemapOpacity: snapshot.basemapOpacity,
+  })
 }
 
 function cameraFailureError(failure: MapLibreWorkspaceCameraFailure): Error {
