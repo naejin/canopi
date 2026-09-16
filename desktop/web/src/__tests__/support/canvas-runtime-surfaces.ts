@@ -38,6 +38,7 @@ export function createTestCanvasCommandSurface(
       zoomIn: () => {},
       zoomOut: () => {},
       zoomToFit: () => {},
+      returnToDesign: () => {},
       focusTemporaryBounds: () => false,
       returnFromTemporaryFocus: () => false,
     },

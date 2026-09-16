@@ -13,6 +13,8 @@ export function createBrowserWorkspaceMapContributionAdapter(
       const spatial = store.readMetadata().spatialFrame
       if (!spatial) throw new Error('Current Design is missing its required spatial frame.')
       void runtime.revision.scene.value
+      const overview = runtime.viewport.value.mode === 'overview'
+      const panelTargets = readPanelTargetOverlaySnapshot()
       const anchor = { lat: spatial.anchor_latitude_deg, lon: spatial.anchor_longitude_deg }
       return captureWorkspaceMapContributions({
         sessionIdentity,
@@ -25,7 +27,8 @@ export function createBrowserWorkspaceMapContributionAdapter(
           runtime,
           location: spatial.placement_status === 'confirmed' ? anchor : null,
           northBearingDeg: spatial.north_bearing_deg,
-          ...readPanelTargetOverlaySnapshot(),
+          hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
+          selectedTargets: overview ? [] : panelTargets.selectedTargets,
         },
         frame: resolveMapLibreSurfaceFrame(runtime, anchor, spatial.north_bearing_deg),
         designExtentMeters: runtime.getScenePhysicalExtentMeters(),

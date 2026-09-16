@@ -5,7 +5,10 @@ export interface MapLibreMapConstructorOptions {
   style: string | StyleSpecification
   center?: [number, number]
   zoom?: number
+  minZoom?: number
+  maxZoom?: number
   bearing?: number
+  renderWorldCopies?: boolean
   canvasContextAttributes?: WebGLContextAttributes
   attributionControl?: false | { compact?: boolean }
   interactive: boolean
@@ -30,6 +33,10 @@ export interface MapLibreMapInstance {
   off(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
   project?(lnglat: [number, number]): { x: number; y: number }
   getPitch?(): number
+  getZoom?(): number
+  getMinZoom?(): number
+  getMaxZoom?(): number
+  getCenter?(): { lng: number; lat: number }
   getCanvas?(): HTMLCanvasElement
   getBounds?(): {
     getWest(): number

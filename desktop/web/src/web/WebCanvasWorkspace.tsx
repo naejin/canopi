@@ -10,6 +10,7 @@ import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { acquireCanvasRuntimeLifecycle } from '../canvas/runtime/lifecycle-owner'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import { InspectionLens } from '../components/canvas/InspectionLens'
+import { CanvasOverview } from '../components/canvas/CanvasOverview'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
 import {
@@ -226,7 +227,8 @@ export function WebCanvasWorkspace({
             />
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
             {hasDesign && <InspectionLens canvasRef={containerRef} />}
-          {hasDesign && <SpeciesFocusChip />}
+            {hasDesign && <SpeciesFocusChip />}
+            {hasDesign && <CanvasOverview />}
             {!hasDesign && (
               <div className={panelStyles.canvasEmptyState}>
                 <WebWelcomeScreen controller={controller} />

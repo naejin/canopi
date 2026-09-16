@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { createAppCanvasRuntimeAppAdapter } from '../src/app/canvas-runtime/app-adapter'
 import { savedObjectStampWorkbench } from '../src/app/saved-object-stamps'
 import { InspectionLens } from '../src/components/canvas/InspectionLens'
+import { CanvasOverview } from '../src/components/canvas/CanvasOverview'
 import { SpeciesFocusChip } from '../src/components/canvas/SpeciesFocusChip'
 import { ZoomControls } from '../src/components/canvas/ZoomControls'
 import { createSceneCanvasRuntimeHost } from '../src/canvas/runtime/host'
@@ -25,6 +26,7 @@ interface GalleryCanvasSurfaceProps {
   readonly activeSurface: GallerySurfaceSignal
   readonly design: CanopiFile
   readonly dense: boolean
+  readonly cameraState?: 'site' | 'overview' | 'maximum'
   readonly onReadyChange: (ready: boolean) => void
   readonly createRuntimeHost?: (design: CanopiFile) => CanvasRuntimeHost
 }
@@ -33,6 +35,7 @@ export function GalleryCanvasSurface({
   activeSurface,
   design,
   dense,
+  cameraState = 'site',
   onReadyChange,
   createRuntimeHost = createGalleryRuntimeHost,
 }: GalleryCanvasSurfaceProps) {
@@ -141,6 +144,11 @@ export function GalleryCanvasSurface({
           activeRuntime.surfaces.commands.viewport.zoomOut()
         }
       }
+      if (cameraState === 'overview') {
+        for (let i = 0; i < 100; i++) activeRuntime.surfaces.commands.viewport.zoomOut()
+      } else if (cameraState === 'maximum') {
+        for (let i = 0; i < 100; i++) activeRuntime.surfaces.commands.viewport.zoomIn()
+      }
       if (!runtimeIsActive()) return
       activeRuntime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
       if (!runtimeIsActive()) return
@@ -164,7 +172,7 @@ export function GalleryCanvasSurface({
       cancelled = true
       release()
     }
-  }, [createRuntimeHost, dense, design, onReadyChange])
+  }, [cameraState, createRuntimeHost, dense, design, onReadyChange])
 
   useEffect(() => {
     if (!ready.value || activeSurface.value !== 'lens') return
@@ -180,7 +188,8 @@ export function GalleryCanvasSurface({
           <>
             <InspectionLens key={activeSurface.value === 'lens' ? 'lens' : 'other'} canvasRef={canvas} />
             <SpeciesFocusChip />
-            <ZoomControls />
+            <CanvasOverview />
+            <div className={styles.canvasZoom}><ZoomControls /></div>
           </>
         ) : null}
       </div>

@@ -7,6 +7,10 @@ import {
   viewportCenterWorld,
   viewportCornerGeoPoints,
 } from './projection'
+import {
+  createWorkspaceCameraPolicy,
+  type WorkspaceCameraPolicy,
+} from './workspace-camera-policy'
 
 export interface MapLibreCameraLocation {
   readonly lat: number
@@ -40,14 +44,8 @@ export interface MapFrame extends MapLibreCameraOptions {
   readonly diagnostics: MapFrameDiagnostics
 }
 
-const MAPLIBRE_MIN_ZOOM = 0
-// Preserve exact canvas-following behavior as far as the map stack can
-// reasonably support it. The raster basemap will overzoom and blur before
-// this ceiling, but we do not want to clamp the derived camera early.
-const MAPLIBRE_MAX_ZOOM = 30
-
-function clampZoom(zoom: number): number {
-  return Math.min(MAPLIBRE_MAX_ZOOM, Math.max(MAPLIBRE_MIN_ZOOM, zoom))
+function clampZoom(zoom: number, policy: WorkspaceCameraPolicy): number {
+  return Math.min(policy.maximumMapZoom, Math.max(policy.minimumMapZoom, zoom))
 }
 
 function normalizeBearingDegrees(degrees: number): number {
@@ -68,6 +66,7 @@ export function createMapFrame(
   screenSize: MapLibreCameraScreenSize,
   location: MapLibreCameraLocation | null,
   northBearingDeg: number | null,
+  policy: WorkspaceCameraPolicy = createWorkspaceCameraPolicy(location?.lat ?? 0),
 ): MapFrame | null {
   if (!location) return null
   if (screenSize.width <= 0 || screenSize.height <= 0) return null
@@ -84,7 +83,7 @@ export function createMapFrame(
 
   return {
     center: [center.lng, center.lat],
-    zoom: clampZoom(stageScaleToMapZoom(viewport.scale, location.lat)),
+    zoom: clampZoom(stageScaleToMapZoom(viewport.scale, location.lat), policy),
     bearing: maplibreBearingFromNorthBearing(northBearingDeg),
     diagnostics: {
       projectionId: LOCAL_MERCATOR_PROJECTION_ID,

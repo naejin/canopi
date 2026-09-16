@@ -160,6 +160,16 @@
       "rulersDesc": "显示/隐藏标尺",
       "zoom": "缩放"
     },
+    "overview": {
+      "label": "概览",
+      "zoomInToEdit": "放大以编辑",
+      "provisional": "设计位置尚未确认 · 放大以编辑",
+      "returnToDesign": "返回设计",
+      "design": "设计",
+      "provisionalDesign": "临时设计位置",
+      "designMarker": "返回设计",
+      "provisionalMarker": "返回临时设计位置"
+    },
     "plantColor": {
       "label": "植物颜色",
       "toolbarDesc": "编辑所选植物颜色",

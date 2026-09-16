@@ -8,8 +8,17 @@ import styles from './ZoomControls.module.css'
 export function ZoomControls() {
   const viewport = currentCanvasQuerySurface.value?.viewport.value
   const zoomPercent = viewport
-    ? Math.round((viewport.viewport.scale / viewport.referenceScale) * 100)
+    ? (viewport.viewport.scale / viewport.referenceScale) * 100
     : 100
+  const zoomLabel = viewport?.mode === 'overview'
+    ? t('canvas.overview.label')
+    : formatZoomPercent(zoomPercent)
+  const atMinimum = viewport
+    ? viewport.viewport.scale <= viewport.scaleBounds.minimum
+    : false
+  const atMaximum = viewport
+    ? viewport.viewport.scale >= viewport.scaleBounds.maximum
+    : false
   const session = currentCanvasViewportCommandSurface.value
 
   return (
@@ -17,19 +26,21 @@ export function ZoomControls() {
       <button
         className={styles.btn}
         type="button"
+        disabled={atMinimum}
         onClick={() => session?.zoomOut()}
-        aria-label="Zoom out"
+        aria-label={t('menu.view.zoomOut')}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M3 7h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </button>
-      <span className={styles.level}>{zoomPercent}%</span>
+      <span className={styles.level}>{zoomLabel}</span>
       <button
         className={styles.btn}
         type="button"
+        disabled={atMaximum}
         onClick={() => session?.zoomIn()}
-        aria-label="Zoom in"
+        aria-label={t('menu.view.zoomIn')}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M7 3v8M3 7h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -39,8 +50,8 @@ export function ZoomControls() {
         className={styles.btn}
         type="button"
         onClick={() => session?.zoomToFit()}
-        aria-label="Fit to content"
-        title="Fit to content"
+        aria-label={t('menu.view.fitToContent')}
+        title={t('menu.view.fitToContent')}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -48,4 +59,10 @@ export function ZoomControls() {
       </button>
     </div>
   )
+}
+
+function formatZoomPercent(percent: number): string {
+  if (percent >= 1) return `${Math.round(percent)}%`
+  if (percent >= 0.1) return `${percent.toFixed(1)}%`
+  return `${percent.toFixed(2)}%`
 }

@@ -467,6 +467,15 @@ async function runBrowserScenario({ browser, base, scenario, file, profileWork }
         const activeMapEventedRegistrations = () => mapListeners.reduce((count, entry) => count + Math.max(0, entry.count), 0)
         const activeScopedDomListeners = () => domListeners.length
         return {
+          readMapState() {
+            if (!map) return null
+            return {
+              zoom: map.getZoom(),
+              minimumZoom: map.getMinZoom(),
+              maximumZoom: map.getMaxZoom(),
+              renderWorldCopies: map.getRenderWorldCopies(),
+            }
+          },
           assertSemanticOrder(backgroundId, sharedSceneId) {
             if (!map) throw new Error('MapLibre map was not captured by public addLayer instrumentation')
             const order = map.getLayersOrder()
@@ -580,6 +589,53 @@ async function runBrowserScenario({ browser, base, scenario, file, profileWork }
         throw error
       }
       const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const exerciseWorldCamera = async () => {
+        const surfaces = composition.surfaces
+        const sameViewport = (left, right) => left.x === right.x
+          && left.y === right.y
+          && left.scale === right.scale
+        for (let index = 0; index < 240; index += 1) surfaces.commands.viewport.zoomOut()
+        await settle()
+        const overviewFrame = surfaces.queries.viewport.value
+        const sceneBeforeBlockedEdit = JSON.stringify(surfaces.queries.getSceneSnapshot())
+        surfaces.commands.sceneEdits.selectAll()
+        const selectionBeforeBlockedEdit = JSON.stringify(surfaces.queries.getSelection())
+        surfaces.commands.sceneEdits.deleteSelected()
+        const blockedEditPreservedScene = JSON.stringify(surfaces.queries.getSceneSnapshot()) === sceneBeforeBlockedEdit
+        const blockedEditPreservedSelection = JSON.stringify(surfaces.queries.getSelection()) === selectionBeforeBlockedEdit
+        const overviewBoundary = surfaces.queries.viewport.value
+        for (let index = 0; index < 100; index += 1) surfaces.commands.viewport.zoomOut()
+        const exhaustedOverview = surfaces.queries.viewport.value
+        const mapAtOverview = instrumentation.readMapState()
+        surfaces.commands.viewport.returnToDesign()
+        await settle()
+        const returnedFrame = surfaces.queries.viewport.value
+        for (let index = 0; index < 240; index += 1) surfaces.commands.viewport.zoomIn()
+        await settle()
+        const maximumBoundary = surfaces.queries.viewport.value
+        const mapAtMaximum = instrumentation.readMapState()
+        for (let index = 0; index < 100; index += 1) surfaces.commands.viewport.zoomIn()
+        const exhaustedMaximum = surfaces.queries.viewport.value
+        surfaces.commands.viewport.returnToDesign()
+        await settle()
+        const finalFrame = surfaces.queries.viewport.value
+        const checks = {
+          overviewEntered: overviewFrame.mode === 'overview',
+          overviewLimitNoOp: exhaustedOverview === overviewBoundary
+            && sameViewport(exhaustedOverview.viewport, overviewBoundary.viewport),
+          blockedEditPreservedScene,
+          blockedEditPreservedSelection,
+          returnedToSite: returnedFrame.mode === 'site',
+          maximumReached: maximumBoundary.viewport.scale === maximumBoundary.scaleBounds.maximum,
+          maximumLimitNoOp: exhaustedMaximum === maximumBoundary
+            && sameViewport(exhaustedMaximum.viewport, maximumBoundary.viewport),
+          zoom27Reached: outcome !== 'shared-ready' || mapAtMaximum?.zoom === 27,
+          singleWorld: outcome !== 'shared-ready' || mapAtOverview?.renderWorldCopies === false,
+          finalSite: finalFrame.mode === 'site',
+        }
+        if (!Object.values(checks).every(Boolean)) throw new Error('world camera qualification failed')
+        return { status: 'pass', checks: Object.keys(checks) }
+      }
       const dispose = async () => {
         try {
             await composition.dispose()
@@ -597,6 +653,7 @@ async function runBrowserScenario({ browser, base, scenario, file, profileWork }
       window.__productionWorkspaceCapacity = {
         composition,
         settle,
+        exerciseWorldCamera,
         semanticOrder: () => outcome === 'shared-ready'
           ? instrumentation.assertSemanticOrder(
             basemap.MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
@@ -694,7 +751,11 @@ async function runBrowserScenario({ browser, base, scenario, file, profileWork }
     }
     let interaction
     try {
+      const worldCamera = await page.evaluate(async () =>
+        window.__productionWorkspaceCapacity?.exerciseWorldCamera?.())
+      if (worldCamera?.status !== 'pass') throw new Error('world camera check unavailable')
       interaction = await exercisePublicSurfaces(page)
+      interaction.worldCamera = worldCamera
     } catch {
       throw failure('interaction')
     }
@@ -748,6 +809,7 @@ async function runBrowserScenario({ browser, base, scenario, file, profileWork }
       correctness: {
         singleCanvasOwner: 'pass', pan: interaction.pan, zoom: interaction.zoom, selection: interaction.selection,
         plantEdit: interaction.plantEdit, undo: interaction.undo,
+        worldCamera: interaction.worldCamera,
         semanticOrder,
         teardown: 'pass', listenerCleanup: cleanup.listeners, postDisposeWorkspaceEvents: 'pass',
       },

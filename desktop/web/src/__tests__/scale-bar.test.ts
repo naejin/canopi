@@ -15,6 +15,12 @@ describe('scale-bar metrics', () => {
     })
   })
 
+  it('selects a bounded 1/2/5 distance at world scale', () => {
+    const display = getScaleBarDisplay(0.00001)
+    expect(display.label).toBe('10000km')
+    expect(display.barScreenPx).toBeCloseTo(100)
+  })
+
   it('exports a shared bottom reservation for the legend and html overlay', () => {
     expect(SCALE_BAR_MARGIN_X).toBe(40)
     expect(SCALE_BAR_MARGIN_Y).toBe(16)

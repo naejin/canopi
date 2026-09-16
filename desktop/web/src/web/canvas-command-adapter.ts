@@ -12,6 +12,7 @@ import {
 } from '../app/canvas-settings/signals'
 import {
   currentCanvasCommandSurface,
+  currentCanvasQuerySurface,
   currentCanvasTool,
   setCurrentCanvasTool,
 } from '../canvas/session'
@@ -21,6 +22,7 @@ export function readWebCanvasCommandProjectionState(): CanvasCommandProjectionSt
   return {
     activeTool: currentCanvasTool.value,
     toolSelectionAvailable: surface !== null,
+    spatialEditingAvailable: currentCanvasQuerySurface.value?.viewport.value.mode !== 'overview',
     canUndo: surface?.history.canUndo.value ?? false,
     canRedo: surface?.history.canRedo.value ?? false,
     settingsAvailable: surface !== null,

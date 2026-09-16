@@ -69,6 +69,10 @@ class AttachedInteractionMap implements MapLibreWorkspaceCameraMap {
   readonly off = vi.fn()
   readonly project = vi.fn(() => this.projection[this.projectIndex++ % this.projection.length]!)
   readonly getPitch = vi.fn(() => 0)
+  readonly getZoom = vi.fn(() => 18)
+  readonly getMinZoom = vi.fn(() => 0)
+  readonly getMaxZoom = vi.fn(() => 27)
+  readonly getCenter = vi.fn(() => ({ lng: 2.3522, lat: 48.8566 }))
   readonly getCanvas = vi.fn(() => this.canvas)
 
   private projectIndex = 0
@@ -986,6 +990,7 @@ describe('SceneInteractionSession', () => {
       map,
       anchor: { lat: 48.8566, lon: 2.3522 },
       northBearingDeg: 0,
+      hasConfirmedGeography: true,
     })).toBe(true)
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
@@ -5265,6 +5270,41 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('uses primary drag for navigation in overview regardless of the armed tool', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('rectangle')
+    session.setOverviewMode(true)
+    const scene = structuredClone(store.persisted)
+    const before = camera.viewport
+
+    events.pointerDown({ x: 100, y: 100 }, { button: 0 })
+    events.pointerMove({ x: 140, y: 125 }, { button: 0 })
+    events.pointerUp({ x: 140, y: 125 }, { button: 0 })
+
+    expect(camera.viewport).toEqual({ x: before.x + 40, y: before.y + 25, scale: before.scale })
+    expect(store.persisted).toEqual(scene)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    session.dispose()
+  })
+
+  it('aborts an active drawing when overview begins and quarantines its late pointer-up', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('rectangle')
+
+    events.pointerDown({ x: 20, y: 20 }, { button: 0, pointerId: 72 })
+    events.pointerMove({ x: 80, y: 60 }, { button: 0, pointerId: 72 })
+    session.setOverviewMode(true)
+    events.pointerUp({ x: 80, y: 60 }, { button: 0, pointerId: 72 })
+
+    expect(store.persisted.zones).toEqual([])
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    session.dispose()
+  })
+
   it('pans both axes with Shift scrolling without changing scale or Design content', () => {
     const render = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render })
@@ -5346,7 +5386,7 @@ describe('SceneInteractionSession', () => {
     const point = { x: 200, y: 150 }
     events.wheel(point, { deltaY: -10000, ctrlKey: true })
     expect(camera.viewport.scale).toBeCloseTo(2.718282, 6)
-    camera.setViewport({ x: 0, y: 0, scale: 1000 })
+    camera.setViewport({ x: 0, y: 0, scale: camera.snapshot.peek().scaleBounds.maximum })
     const before = camera.snapshot.peek()
     render.mockClear()
     events.wheel(point, { deltaY: -120, ctrlKey: true })

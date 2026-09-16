@@ -75,6 +75,7 @@ describe('Canvas Command Projection', () => {
       state: {
         activeTool: 'select',
         toolSelectionAvailable: true,
+        spatialEditingAvailable: true,
         canUndo: false,
         canRedo: false,
         settingsAvailable: true,
@@ -196,6 +197,7 @@ describe('Canvas Command Projection', () => {
       state: {
         activeTool: 'ellipse',
         toolSelectionAvailable: true,
+        spatialEditingAvailable: true,
         canUndo: false,
         canRedo: false,
         settingsAvailable: false,
@@ -222,12 +224,43 @@ describe('Canvas Command Projection', () => {
     expect(intents.selectTool).toHaveBeenCalledWith('ellipse')
   })
 
+  it('keeps navigation tools armed while overview disables spatial tool controls', () => {
+    const intents = intentAdapter()
+    const projection = createCanvasCommandProjection({
+      state: {
+        activeTool: 'rectangle',
+        toolSelectionAvailable: true,
+        spatialEditingAvailable: false,
+        canUndo: true,
+        canRedo: false,
+        settingsAvailable: true,
+        gridVisible: true,
+        snapToGridEnabled: true,
+        rulersVisible: true,
+      },
+      intents,
+      translate: (key) => `resolved:${key}`,
+    })
+
+    expect(projection.primaryTools.every((command) => !command.disabled)).toBe(true)
+    expect(projection.creationTools.every((command) => command.disabled)).toBe(true)
+    expect(projection.reuseTools.every((command) => command.disabled)).toBe(true)
+    expect(projection.creationTools[1]).toMatchObject({
+      tool: 'rectangle',
+      active: true,
+      description: 'resolved:canvas.overview.zoomInToEdit',
+    })
+    projection.creationTools[1]?.action()
+    expect(intents.selectTool).not.toHaveBeenCalled()
+  })
+
   it('projects history state and dispatches history intent', () => {
     const intents = intentAdapter()
     const projection = createCanvasCommandProjection({
       state: {
         activeTool: 'select',
         toolSelectionAvailable: true,
+        spatialEditingAvailable: true,
         canUndo: true,
         canRedo: false,
         settingsAvailable: true,
@@ -271,6 +304,7 @@ describe('Canvas Command Projection', () => {
       state: {
         activeTool: 'select',
         toolSelectionAvailable: true,
+        spatialEditingAvailable: true,
         canUndo: false,
         canRedo: false,
         settingsAvailable: true,

@@ -6,6 +6,7 @@ import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { InspectionLens } from '../canvas/InspectionLens'
 import { DisplayLegend } from '../canvas/DisplayLegend'
+import { CanvasOverview } from '../canvas/CanvasOverview'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
@@ -133,7 +134,8 @@ export function CanvasPanel() {
             />
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
             {hasDesign && <InspectionLens canvasRef={containerRef} />}
-          {hasDesign && <SpeciesFocusChip />}
+            {hasDesign && <SpeciesFocusChip />}
+            {hasDesign && <CanvasOverview />}
             {locationNotice.visible && (
               <div
                 className={styles.basemapFeedback}

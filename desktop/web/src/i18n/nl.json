@@ -160,6 +160,16 @@
       "rulersDesc": "Horizontale en verticale linialen in-/uitschakelen",
       "zoom": "Zoom"
     },
+    "overview": {
+      "label": "Overzicht",
+      "zoomInToEdit": "Zoom in om te bewerken",
+      "provisional": "Voorlopige ontwerplocatie · Zoom in om te bewerken",
+      "returnToDesign": "Terug naar ontwerp",
+      "design": "Ontwerp",
+      "provisionalDesign": "Voorlopig ontwerp",
+      "designMarker": "Terug naar het ontwerp",
+      "provisionalMarker": "Terug naar het voorlopige ontwerp"
+    },
     "plantColor": {
       "label": "Plantkleur",
       "toolbarDesc": "Kleuren van geselecteerde planten bewerken",

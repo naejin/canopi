@@ -160,6 +160,16 @@
       "rulersDesc": "Mostrar/ocultar reglas",
       "zoom": "Zoom"
     },
+    "overview": {
+      "label": "Vista general",
+      "zoomInToEdit": "Acerca la vista para editar",
+      "provisional": "Ubicación provisional del diseño · Acerca la vista para editar",
+      "returnToDesign": "Volver al diseño",
+      "design": "Diseño",
+      "provisionalDesign": "Diseño provisional",
+      "designMarker": "Volver al diseño",
+      "provisionalMarker": "Volver al diseño provisional"
+    },
     "plantColor": {
       "label": "Color de planta",
       "toolbarDesc": "Editar los colores de las plantas seleccionadas",

@@ -79,11 +79,13 @@ export class SceneChromeOverlay {
       rulersVisible: snapshot.rulersVisible,
     })
 
-    this._gridCanvas.style.display = snapshot.chromeVisible && (snapshot.gridVisible || snapshot.guides.length > 0)
+    const siteMode = snapshot.camera.mode === 'site'
+    this._gridCanvas.style.display = snapshot.chromeVisible && siteMode
+      && (snapshot.gridVisible || snapshot.guides.length > 0)
       ? 'block'
       : 'none'
 
-    if (!snapshot.chromeVisible) return
+    if (!snapshot.chromeVisible || !siteMode) return
 
     this._drawGrid(snapshot)
   }

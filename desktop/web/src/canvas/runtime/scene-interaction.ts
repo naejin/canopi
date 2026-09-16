@@ -158,6 +158,7 @@ export interface SceneInteractionSessionDeps {
 
 export interface SceneInteractionSession {
   setTool(name: string): void
+  setOverviewMode(enabled: boolean): void
   prepareForDocumentReplacement(): void
   refreshMeasurements(): void
   refreshTranslations(): void
@@ -198,6 +199,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _transientCancellationPending = false
   private _designObjectDragPresentationSuppressed = false
   private _pendingInteractionHostFocusFrame: number | null = null
+  private _overviewMode = false
 
   constructor(private readonly _deps: SceneInteractionSessionDeps) {
     const rollback: Array<() => void> = []
@@ -377,6 +379,27 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
+  setOverviewMode(enabled: boolean): void {
+    if (this._disposed || this._overviewMode === enabled) return
+    this._overviewMode = enabled
+    if (!enabled) {
+      this._refreshSelectionDependentMeasurements()
+      return
+    }
+    this._designObjectDragPresentationSuppressed = false
+    runCanvasRuntimeCleanups([
+      () => this._annotationEditor.cancel(),
+      () => this._cancelTransientInteraction({ releaseSpace: true }),
+      () => this._contextMenu.hide(),
+      () => hideInteractionPreview(this._preview),
+      () => clearSavedObjectStampGhosts(this._preview),
+      () => this._selectionToolbar.hide(),
+      () => this._rotationHandle.hide(),
+      ...this._controlPointOverlays.map((overlay) => () => overlay.hide()),
+      () => this._clearPassiveHoverPresentation(),
+    ], 'Scene Interaction overview transition failed')
+  }
+
   prepareForDocumentReplacement(): void {
     if (this._disposed) return
     this._designObjectDragPresentationSuppressed = false
@@ -494,6 +517,17 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._captureInteractionPointer(event.pointerId)
     if (this._pointerGesture?.pointerId !== event.pointerId) return
 
+    if (this._overviewMode) {
+      this._sharedGestures.beginPan({
+        event,
+        screen,
+        world,
+        tool: 'hand',
+        spaceHeld: true,
+      })
+      return
+    }
+
     if (event.button === 0 && this._rotationHandle.contains(event.target)) {
       const rotationDrag = this._rotationHandle.pointerDown({ event, rawWorld: world })
       if (rotationDrag) this._toolPointerDrag = rotationDrag
@@ -545,6 +579,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _updateHover(event: PointerEvent): void {
+    if (this._overviewMode) {
+      this._clearPassiveHoverPresentation()
+      return
+    }
     if (this._activeToolAdapter()?.shouldSuppressHover?.() ?? false) {
       this._clearPassiveHoverPresentation()
       return
@@ -583,6 +621,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
     if (!this._pointerGesture) {
+      if (this._overviewMode) return
       if (this._isOwnedOverlayPointerTarget(event.target)) return
 
       const screen = this._screenPoint(event)
@@ -622,6 +661,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private readonly _onPointerUp = (event: PointerEvent): void => {
     if (this._retryPendingTransientCancellation(event)) return
+    if (this._overviewMode && !this._pointerGesture) {
+      this._quarantineUnsettledSceneEvent(event)
+      return
+    }
     const hasPointerGesture = this._pointerGesture !== null
     if (!hasPointerGesture && this._isOwnedOverlayPointerTarget(event.target)) return
     if (!hasPointerGesture && (this._activeToolAdapter()?.shouldIgnorePointerUpWithoutCapture?.() ?? false)) return
@@ -733,6 +776,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._retryPendingTransientCancellation(event)) return
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
+    if (this._overviewMode) return
     this._runAdmittedSceneEvent(event, () => {
       this._showContextMenuWhenSettled(event)
     }, { resumePending: true })
@@ -753,6 +797,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _onDragOver = (event: DragEvent): void => {
     if (this._retryPendingTransientCancellation(event)) return
     event.preventDefault()
+    if (this._overviewMode) {
+      this._rejectDragOver(event)
+      return
+    }
     let admitted: boolean
     try {
       admitted = this._deps.settledReader.readWhenSettled(() => {
@@ -808,6 +856,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     hideInteractionPreview(this._preview)
     clearSavedObjectStampGhosts(this._preview)
     if (this._retryPendingTransientCancellation(event)) return
+    if (this._overviewMode) {
+      this._quarantineUnsettledSceneEvent(event)
+      return
+    }
     this._runAdmittedSceneEvent(event, () => this._dropWhenSettled(event), {
       resumePending: true,
     })
@@ -913,6 +965,19 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       !this._pointerGesture
       && isKeyboardInteractiveEventTarget(event.target)
     ) return
+    if (this._overviewMode) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        this._cancelInterruptedInteraction()
+        return
+      }
+      if (event.code === 'Space' && !this._spaceHeld && !isEditableTarget(event.target)) {
+        event.preventDefault()
+        this._spaceHeld = true
+        this._deps.container.style.cursor = 'grab'
+      }
+      return
+    }
     if (this._activeToolAdapter()?.keyDown?.(event) ?? false) return
     if (event.key === 'Escape' && this._pointerGesture) {
       event.preventDefault()
@@ -1002,6 +1067,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _canShowSelectAffordances(): boolean {
     return this._tool === 'select'
+      && !this._overviewMode
       && !this._transientCancellationPending
       && !this._hasActiveSceneEdit()
       && !this._annotationEditor.hasActiveEditor()

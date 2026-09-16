@@ -41,6 +41,7 @@ import { openAboutCanopiDialog } from '../../app/about/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
 import {
   currentCanvasHasSelection,
+  currentCanvasQuerySurface,
   currentCanvasTool,
   getCurrentCanvasCommandSurface,
   setCurrentCanvasTool,
@@ -92,6 +93,7 @@ export type AppCommandId = NonToolbarAppCommandId | DesktopShellCommandId | Canv
 export interface AppCommandState extends ShellCommandState {
   readonly canvas: CanvasCommandSurface | null
   readonly canvasHasSelection: boolean
+  readonly canvasSpatialEditingAvailable: boolean
 }
 
 export interface AppCommandDefinition {
@@ -109,6 +111,7 @@ export function readAppCommandState(): AppCommandState {
     designDirty: designDirty.value,
     canvas: getCurrentCanvasCommandSurface(),
     canvasHasSelection: currentCanvasHasSelection.value,
+    canvasSpatialEditingAvailable: currentCanvasQuerySurface.value?.viewport.value.mode !== 'overview',
     activePanel: activePanel.value,
     sidePanel: sidePanel.value,
   }
@@ -150,6 +153,7 @@ function canvasProjectionState(state: AppCommandState): CanvasCommandProjectionS
   return {
     activeTool: currentCanvasTool.value,
     toolSelectionAvailable: true,
+    spatialEditingAvailable: state.canvasSpatialEditingAvailable,
     canUndo: state.canvas?.history.canUndo.value ?? false,
     canRedo: state.canvas?.history.canRedo.value ?? false,
     settingsAvailable: state.canvas !== null,
@@ -376,17 +380,17 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
   {
     id: 'canvas.paste',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.paste()),
-    disabled: (state) => !state.canvas,
+    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
   },
   {
     id: 'canvas.duplicateSelected',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.duplicateSelected()),
-    disabled: (state) => !state.canvas,
+    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
   },
   {
     id: 'canvas.deleteSelected',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.deleteSelected()),
-    disabled: (state) => !state.canvas,
+    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
   },
   {
     id: 'canvas.selectAll',
@@ -396,27 +400,29 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
   {
     id: 'canvas.bringToFront',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.bringToFront()),
-    disabled: (state) => !state.canvas,
+    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
   },
   {
     id: 'canvas.sendToBack',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.sendToBack()),
-    disabled: (state) => !state.canvas,
+    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
   },
   {
     id: 'canvas.lockOrUnlockSelected',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.lockSelected()),
-    disabled: (state) => !state.canvas || !state.canvasHasSelection,
+    disabled: (state) => !state.canvas
+      || !state.canvasHasSelection
+      || !state.canvasSpatialEditingAvailable,
   },
   {
     id: 'canvas.groupSelected',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.groupSelected()),
-    disabled: (state) => !state.canvas,
+    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
   },
   {
     id: 'canvas.ungroupSelected',
     run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.ungroupSelected()),
-    disabled: (state) => !state.canvas,
+    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
   },
 ]
 

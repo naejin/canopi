@@ -40,4 +40,20 @@ describe('browser workspace map contribution adapter', () => {
     clearPanelOriginTargets()
     expect(snapshot.overlays.hoveredTargets).toHaveLength(1)
   })
+
+  it('suppresses panel Target overlays in overview without changing their authority', () => {
+    const adapter = createBrowserWorkspaceMapContributionAdapter({
+      sessionIdentity: signal({}), hasCurrentDesign: () => true,
+      readMetadata: () => ({ spatialFrame: { ...newDesignSpatialFrame(), placement_status: 'confirmed' } }),
+    })
+    setHoveredPanelTargets([{ kind: 'zone', zone_name: 'plot' }])
+
+    const snapshot = adapter.read(createTestCanvasQuerySurface({
+      viewport: { x: 0, y: 0, scale: 0.01 },
+    }))!
+
+    expect(snapshot.overlays.hoveredTargets).toEqual([])
+    clearPanelOriginTargets()
+    expect(snapshot.overlays.hoveredTargets).toEqual([])
+  })
 })

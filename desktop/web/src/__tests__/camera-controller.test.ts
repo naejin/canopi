@@ -6,6 +6,11 @@ import {
   fitTemporaryBoundsViewport,
 } from '../canvas/runtime/camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
+import { mapZoomToStageScale } from '../canvas/projection'
+import { createWorkspaceCameraPolicy } from '../canvas/workspace-camera-policy'
+
+const EQUATOR_MIN_SCALE = mapZoomToStageScale(0, 0)
+const EQUATOR_MAX_SCALE = mapZoomToStageScale(27, 0)
 
 function createScene(): ScenePersistedState {
   return {
@@ -64,6 +69,10 @@ describe('CameraController', () => {
       screenSize: { width: 0, height: 0 },
       devicePixelRatio: 1,
       referenceScale: 20,
+      scaleBounds: { minimum: EQUATOR_MIN_SCALE, maximum: EQUATOR_MAX_SCALE },
+      overviewScaleThreshold: 0.1,
+      mode: 'site',
+      groundMetersPerCssPixel: null,
       revision: 0,
     })
   })
@@ -85,6 +94,10 @@ describe('CameraController', () => {
         screenSize: { width: 1000, height: 800 },
         devicePixelRatio: 1,
         referenceScale: 20,
+        scaleBounds: { minimum: EQUATOR_MIN_SCALE, maximum: EQUATOR_MAX_SCALE },
+        overviewScaleThreshold: 0.1,
+        mode: 'site',
+        groundMetersPerCssPixel: null,
         revision: 1,
       },
     ])
@@ -144,7 +157,7 @@ describe('CameraController', () => {
     camera.resize({ width: 1000, height: 800 })
     expect(camera.snapshot.value.revision).toBe(initialRevision)
 
-    camera.setViewport({ ...camera.viewport, scale: 1000 })
+    camera.setViewport({ ...camera.viewport, scale: EQUATOR_MAX_SCALE })
     const maximumRevision = camera.snapshot.value.revision
     camera.zoomIn()
     expect(camera.snapshot.value.revision).toBe(maximumRevision)
@@ -192,21 +205,86 @@ describe('CameraController', () => {
     expect(after.y).toBeCloseTo(before.y)
   })
 
-  it('clamps viewport scale between the unchanged minimum and precision maximum', () => {
+  it('clamps viewport scale to the configured map zoom range', () => {
     const camera = new CameraController()
     camera.initialize({ width: 1000, height: 800 })
 
-    expect(camera.setViewport({ x: 0, y: 0, scale: 5000 }).scale).toBe(1000)
-    expect(camera.setViewport({ x: 0, y: 0, scale: 0.001 }).scale).toBe(0.1)
+    expect(camera.setViewport({ x: 0, y: 0, scale: 5000 }).scale).toBe(EQUATOR_MAX_SCALE)
+    expect(camera.setViewport({ x: 0, y: 0, scale: 0.000001 }).scale).toBe(EQUATOR_MIN_SCALE)
   })
 
   it('lets zoom-in reach the precision maximum without exceeding it', () => {
     const camera = new CameraController()
     camera.initialize({ width: 1000, height: 800 })
-    camera.setViewport({ x: 0, y: 0, scale: 990 })
+    camera.setViewport({ x: 0, y: 0, scale: EQUATOR_MAX_SCALE / 1.05 })
 
-    expect(camera.zoomIn().scale).toBe(1000)
-    expect(camera.zoomIn().scale).toBe(1000)
+    expect(camera.zoomIn().scale).toBe(EQUATOR_MAX_SCALE)
+    expect(camera.zoomIn().scale).toBe(EQUATOR_MAX_SCALE)
+  })
+
+  it('derives overview below 0.1 while keeping the threshold editable', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+
+    camera.setViewport({ x: 0, y: 0, scale: 0.1 })
+    expect(camera.snapshot.value.mode).toBe('site')
+    camera.setViewport({ x: 0, y: 0, scale: 0.099 })
+    expect(camera.snapshot.value.mode).toBe('overview')
+  })
+
+  it('returns an empty overview to an origin-centred site frame', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 400, height: 300 })
+    camera.setViewport({ x: 12, y: 18, scale: 0.01 })
+
+    const returned = camera.returnToDesign({
+      plantSpeciesColors: {}, plantSpeciesSymbols: {}, plantSpeciesCodes: {},
+      layers: [], plants: [], zones: [], annotations: [], measurementGuides: [], groups: [], guides: [],
+    })
+
+    expect(returned).toEqual({ x: 200, y: 150, scale: 3 })
+    expect(camera.snapshot.value.mode).toBe('site')
+  })
+
+  it('returns ordinary content with the existing fit policy', () => {
+    const scene = createScene()
+    const expectedCamera = new CameraController()
+    expectedCamera.initialize({ width: 1000, height: 800 })
+    const expected = expectedCamera.zoomToFit(scene)
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+    camera.setViewport({ x: 0, y: 0, scale: 0.01 })
+
+    expect(camera.returnToDesign(scene)).toEqual(expected)
+    expect(camera.snapshot.value.mode).toBe('site')
+  })
+
+  it('keeps Fit to content global while Return restores a usable site view', () => {
+    const scene = createScene()
+    scene.zones[0]!.points = [
+      { x: -5_000_000, y: -5_000_000 },
+      { x: 5_000_000, y: -5_000_000 },
+      { x: 5_000_000, y: 5_000_000 },
+      { x: -5_000_000, y: 5_000_000 },
+    ]
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+
+    expect(camera.zoomToFit(scene).scale).toBeLessThan(0.1)
+    expect(camera.snapshot.value.mode).toBe('overview')
+    expect(camera.returnToDesign(scene)).toEqual({ x: 500, y: 400, scale: 8 })
+    expect(camera.snapshot.value.mode).toBe('site')
+  })
+
+  it('rejects nonfinite zoom input without publishing', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 400, height: 300 })
+    const before = camera.snapshot.value
+
+    camera.zoomAroundScreenPoint({ x: 10, y: 20 }, Number.NaN)
+    camera.zoomAroundScreenPoint({ x: Number.POSITIVE_INFINITY, y: 20 }, 2)
+
+    expect(camera.snapshot.value).toBe(before)
   })
 
   it('focuses temporary bounds with one retained bookmark and restores it once', () => {
@@ -261,7 +339,11 @@ describe('CameraController', () => {
     expect(fitTemporaryBoundsViewport(camera.snapshot.value,
       { minX: 0, minY: 0, maxX: 0.001, maxY: 0.001 },
       { paddingCssPx: 48 },
-    )).toEqual({ x: 199.5, y: 149.5, scale: 1000 })
+    )).toEqual({
+      x: 200 - 0.0005 * EQUATOR_MAX_SCALE,
+      y: 150 - 0.0005 * EQUATOR_MAX_SCALE,
+      scale: EQUATOR_MAX_SCALE,
+    })
     expect(fitTemporaryBoundsViewport(camera.snapshot.value,
       { minX: 0, minY: 0, maxX: 1, maxY: 1 },
       { paddingCssPx: 48, maximumScale: 2 },
@@ -277,6 +359,16 @@ describe('CameraController', () => {
 
     camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     camera.dispose()
+    expect(camera.returnFromTemporaryFocus()).toBe(false)
+  })
+
+  it('clears a temporary bookmark when the generation camera policy changes', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 400, height: 300 })
+    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+
+    camera.replacePolicy(createWorkspaceCameraPolicy(45, true))
+
     expect(camera.returnFromTemporaryFocus()).toBe(false)
   })
 

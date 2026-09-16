@@ -160,6 +160,16 @@
       "rulersDesc": "Toggle horizontal and vertical rulers",
       "zoom": "Zoom"
     },
+    "overview": {
+      "label": "Overview",
+      "zoomInToEdit": "Zoom in to edit",
+      "provisional": "Provisional Design location · Zoom in to edit",
+      "returnToDesign": "Return to Design",
+      "design": "Design",
+      "provisionalDesign": "Provisional Design",
+      "designMarker": "Return to the Design",
+      "provisionalMarker": "Return to the provisional Design"
+    },
     "plantColor": {
       "label": "Plant color",
       "toolbarDesc": "Edit selected plant colors",

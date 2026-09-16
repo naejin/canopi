@@ -160,6 +160,16 @@
       "rulersDesc": "가로 및 세로 눈금자 전환",
       "zoom": "확대/축소"
     },
+    "overview": {
+      "label": "개요",
+      "zoomInToEdit": "편집하려면 확대하세요",
+      "provisional": "임시 디자인 위치 · 편집하려면 확대하세요",
+      "returnToDesign": "디자인으로 돌아가기",
+      "design": "디자인",
+      "provisionalDesign": "임시 디자인",
+      "designMarker": "디자인으로 돌아가기",
+      "provisionalMarker": "임시 디자인으로 돌아가기"
+    },
     "plantColor": {
       "label": "식물 색상",
       "toolbarDesc": "선택한 식물 색상 편집",

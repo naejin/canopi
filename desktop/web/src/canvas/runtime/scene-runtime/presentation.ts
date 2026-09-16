@@ -100,16 +100,17 @@ export class SceneRuntimePresentationController {
     }
   }
 
-  buildRendererSnapshot(): SceneRendererSnapshot {
+  buildRendererSnapshot(options: { overview?: boolean } = {}): SceneRendererSnapshot {
     const scene = this._sceneStore.persisted
     const session = this._sceneStore.session
+    const viewport = this._getViewport()
+    if (options.overview) return buildOverviewRendererSnapshot(scene, session.speciesFocus, viewport)
     const hoveredPlant = session.hoveredTarget?.kind === 'plant'
       ? scene.plants.find((plant) => plant.id === session.hoveredTarget?.id)
       : null
     const highlightedTargets = this._resolveHighlightedTargets(scene)
     const localizedCommonNames = this.getLocalizedCommonNames()
 
-    const viewport = this._getViewport()
     const selectionLabelPlantIds = session.selectedTargets.length === 1
       && session.selectedTargets[0]?.kind === 'plant'
       ? new Set([session.selectedTargets[0].id])
@@ -238,6 +239,40 @@ export class SceneRuntimePresentationController {
       })
     }
     return backfills.length > 0 ? backfills : null
+  }
+}
+
+function buildOverviewRendererSnapshot(
+  scene: ScenePersistedState,
+  speciesFocus: SceneRendererSnapshot['speciesFocus'],
+  viewport: SceneViewportState,
+): SceneRendererSnapshot {
+  return {
+    scene: {
+      ...scene,
+      plants: [],
+      zones: [],
+      annotations: [],
+      measurementGuides: [],
+      groups: [],
+      guides: [],
+    },
+    speciesFocus,
+    viewport,
+    selectionLabelPlantIds: new Set(),
+    revealedAnnotationId: null,
+    selectedPlantIds: new Set(),
+    selectedZoneIds: new Set(),
+    selectedAnnotationIds: new Set(),
+    selectedMeasurementGuideIds: new Set(),
+    highlightedPlantIds: new Set(),
+    highlightedZoneIds: new Set(),
+    speciesCache: new Map(),
+    localizedCommonNames: new Map(),
+    hoveredCanonicalName: null,
+    hoverTarget: null,
+    pinnedPlantNameLabels: [],
+    selectionLabels: [],
   }
 }
 

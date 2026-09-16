@@ -918,6 +918,42 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('blocks spatial command mutations in overview while preserving read and layer roles', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.copy()
+    ;(runtime as unknown as { _camera: CameraController })._camera.setViewport({
+      x: 0,
+      y: 0,
+      scale: 0.01,
+    })
+    const before = runtime.querySurface.getSceneSnapshot()
+
+    expect(runtime.querySurface.viewport.value.mode).toBe('overview')
+    expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
+    runtime.commandSurface.sceneEdits.paste()
+    runtime.commandSurface.sceneEdits.pasteAt({ x: 30, y: 40 })
+    runtime.commandSurface.sceneEdits.duplicateSelected()
+    runtime.commandSurface.sceneEdits.deleteSelected()
+    runtime.commandSurface.sceneEdits.bringToFront()
+    runtime.commandSurface.sceneEdits.sendToBack()
+    runtime.commandSurface.sceneEdits.lockSelected()
+    runtime.commandSurface.sceneEdits.unlockSelected()
+    runtime.commandSurface.sceneEdits.groupSelected()
+    runtime.commandSurface.sceneEdits.ungroupSelected()
+
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(before)
+    expect(runtime.querySurface.getSelection()).toEqual([
+      plantTarget('plant-1'),
+      plantTarget('plant-2'),
+    ])
+    expect(runtime.commandSurface.layers.setSceneLayerVisibility('plants', false)).toBe(true)
+    expect(runtime.querySurface.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
+      .toBe(false)
+    runtime.destroy()
+  })
+
   it('captures Saved Object Stamps only while the Scene is settled', () => {
     const saveCurrentSelection = vi.fn()
     const localizedCommonNames = new Map<string, string | null>([

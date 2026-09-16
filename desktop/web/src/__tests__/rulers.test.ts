@@ -12,6 +12,7 @@ function cameraSnapshot(overrides: {
   width?: number
   height?: number
   revision?: number
+  groundMetersPerCssPixel?: number | null
 } = {}): CameraViewportSnapshot {
   return {
     viewport: {
@@ -25,6 +26,10 @@ function cameraSnapshot(overrides: {
     },
     devicePixelRatio: 1,
     referenceScale: 8,
+    scaleBounds: { minimum: 0.00001, maximum: 2000 },
+    overviewScaleThreshold: 0.1,
+    mode: (overrides.scale ?? 8) < 0.1 ? 'overview' : 'site',
+    groundMetersPerCssPixel: overrides.groundMetersPerCssPixel ?? null,
     revision: overrides.revision ?? 1,
   }
 }
@@ -248,6 +253,51 @@ describe('RulerOverlay', () => {
 
     expect(host.style.cursor).toBe('crosshair')
     expect(onGuideCreate).not.toHaveBeenCalled()
+    overlay.destroy()
+  })
+
+  it('cancels ruler creation and hides local chrome on overview entry', () => {
+    const host = document.createElement('div')
+    host.style.cursor = 'crosshair'
+    setHostRect(host)
+    const onGuideCreate = vi.fn()
+    const overlay = createRulerOverlay(host, { onGuideCreate })
+    overlay.update({ camera: cameraSnapshot(), chromeVisible: true, rulersVisible: true })
+    findPart<HTMLCanvasElement>(host, 'horizontal').dispatchEvent(
+      new MouseEvent('mousedown', { clientX: 180, clientY: 60 }),
+    )
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 180, clientY: 100 }))
+
+    overlay.update({
+      camera: cameraSnapshot({ scale: 0.01 }),
+      chromeVisible: true,
+      rulersVisible: true,
+    })
+    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 140 }))
+
+    expect(findPart<HTMLCanvasElement>(host, 'horizontal').style.display).toBe('none')
+    expect(findPart<HTMLCanvasElement>(host, 'vertical').style.display).toBe('none')
+    expect(findPart<HTMLCanvasElement>(host, 'scale').style.display).toBe('none')
+    expect(host.style.cursor).toBe('crosshair')
+    expect(onGuideCreate).not.toHaveBeenCalled()
+    overlay.destroy()
+  })
+
+  it('draws one geographic scale bar for confirmed map overview', () => {
+    const host = document.createElement('div')
+    const context = createContextStub()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
+    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
+
+    overlay.update({
+      camera: cameraSnapshot({ scale: 0.01, groundMetersPerCssPixel: 50_000 }),
+      chromeVisible: true,
+      rulersVisible: true,
+    })
+
+    expect(findPart<HTMLCanvasElement>(host, 'horizontal').style.display).toBe('none')
+    expect(findPart<HTMLCanvasElement>(host, 'scale').style.display).toBe('block')
+    expect(context.fillText).toHaveBeenCalledExactlyOnceWith('5000km', 90, 16)
     overlay.destroy()
   })
 

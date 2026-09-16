@@ -43,7 +43,7 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
   readonly cameraNavigation: Pick<
     WorkspaceCameraNavigation,
-    'zoomIn' | 'zoomOut' | 'zoomToFit' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus'
+    'zoomIn' | 'zoomOut' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus'
   >
   readonly history: SceneHistoryCommands
   readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
@@ -97,6 +97,7 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly setInteractionTool: (name: string) => void
   readonly invalidate: (kind: CommandInvalidationKind) => void
   readonly isRuntimeActive: () => boolean
+  readonly isSpatialEditingEnabled: () => boolean
 }
 
 export function createSceneCanvasCommandSurface(
@@ -147,6 +148,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       zoomIn: () => this.zoomIn(),
       zoomOut: () => this.zoomOut(),
       zoomToFit: () => this.zoomToFit(),
+      returnToDesign: () => this.returnToDesign(),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
       returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
     }
@@ -159,20 +161,20 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.sceneEdits = {
       saveSelectionAsObjectStamp: () => this.saveSelectionAsObjectStamp(),
       copy: () => this.options.mutations.copy(),
-      paste: () => this.options.mutations.paste(),
-      pasteAt: (point) => this.options.mutations.pasteAt(point),
-      canPaste: () => this.options.mutations.canPaste(),
-      duplicateSelected: () => this.options.mutations.duplicateSelected(),
+      paste: () => this.runSpatialEdit(() => this.options.mutations.paste()),
+      pasteAt: (point) => this.runSpatialEdit(() => this.options.mutations.pasteAt(point)),
+      canPaste: () => this.options.isSpatialEditingEnabled() && this.options.mutations.canPaste(),
+      duplicateSelected: () => this.runSpatialEdit(() => this.options.mutations.duplicateSelected()),
       toggleSelectedPlantNamePins: () => this.options.mutations.toggleSelectedPlantNamePins(),
-      deleteSelected: () => this.options.mutations.deleteSelected(),
+      deleteSelected: () => this.runSpatialEdit(() => this.options.mutations.deleteSelected()),
       selectAll: () => this.options.mutations.selectAll(),
       selectSameSpecies: (canonicalName, options) => this.options.mutations.selectSameSpecies(canonicalName, options),
-      bringToFront: () => this.options.mutations.bringToFront(),
-      sendToBack: () => this.options.mutations.sendToBack(),
-      lockSelected: () => this.options.mutations.lockSelected(),
-      unlockSelected: () => this.options.mutations.unlockSelected(),
-      groupSelected: () => this.options.mutations.groupSelected(),
-      ungroupSelected: () => this.options.mutations.ungroupSelected(),
+      bringToFront: () => this.runSpatialEdit(() => this.options.mutations.bringToFront()),
+      sendToBack: () => this.runSpatialEdit(() => this.options.mutations.sendToBack()),
+      lockSelected: () => this.runSpatialEdit(() => this.options.mutations.lockSelected()),
+      unlockSelected: () => this.runSpatialEdit(() => this.options.mutations.unlockSelected()),
+      groupSelected: () => this.runSpatialEdit(() => this.options.mutations.groupSelected()),
+      ungroupSelected: () => this.runSpatialEdit(() => this.options.mutations.ungroupSelected()),
     }
     this.chrome = {
       toggleGrid: () => this.options.settings.toggleGridVisible(),
@@ -241,6 +243,18 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
     })
     this.options.invalidate('viewport')
+  }
+
+  private returnToDesign(): void {
+    this.options.cameraNavigation.returnToDesign(this.options.sceneStore.persisted, {
+      plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
+    })
+    this.options.invalidate('viewport')
+  }
+
+  private runSpatialEdit(operation: () => void): void {
+    if (!this.options.isSpatialEditingEnabled()) return
+    operation()
   }
 
   private focusTemporaryBounds(

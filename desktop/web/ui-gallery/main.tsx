@@ -120,7 +120,7 @@ function Gallery() {
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
       <span>Edition:</span>
       {(['desktop', 'web'] as const).map((nextEdition) => <a aria-current={edition === nextEdition ? 'page' : undefined} href={editionUrl(nextEdition)}>{nextEdition}</a>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'lidar-review'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'overview', 'overview-confirmed', 'max-zoom', 'lidar-review'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
     {selectedSurface.value === 'workspace' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
@@ -142,6 +142,9 @@ function GalleryCanvasWorkspace() {
       activeSurface={selectedSurface}
       design={file}
       dense={fixtureState === 'dense'}
+      cameraState={fixtureState === 'overview' || fixtureState === 'overview-confirmed'
+        ? 'overview'
+        : fixtureState === 'max-zoom' ? 'maximum' : 'site'}
       onReadyChange={setGalleryCanvasReady}
     />
   )

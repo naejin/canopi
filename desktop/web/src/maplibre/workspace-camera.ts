@@ -1,5 +1,6 @@
 import {
   CameraController,
+  clampCameraScale,
   createInitialCameraFrame,
   type CameraScreenMetrics,
   type CameraViewportPublication,
@@ -7,6 +8,14 @@ import {
 } from '../canvas/runtime/camera'
 import type { SceneViewportState } from '../canvas/runtime/scene'
 import { createMapFrame } from '../canvas/maplibre-camera'
+import { mapZoomToStageScale } from '../canvas/projection'
+import {
+  cameraScaleBoundsForPolicy,
+  createWorkspaceCameraPolicy,
+  singleWorldEffectiveMinimumZoom,
+  type WorkspaceCameraPolicy,
+  type WorkspaceCameraScaleBounds,
+} from '../canvas/workspace-camera-policy'
 import { deriveSharedMapSceneViewport } from './scene-camera-transform'
 import type { MapLibreMapInstance } from './loader'
 
@@ -16,6 +25,7 @@ export interface MapLibreWorkspaceCameraAttachment {
   /** Local-world origin in geographic coordinates. */
   readonly anchor: { readonly lat: number; readonly lon: number }
   readonly northBearingDeg: number
+  readonly hasConfirmedGeography: boolean
   readonly maximumWorldExtentMeters?: number
 }
 
@@ -27,6 +37,10 @@ export type MapLibreWorkspaceCameraMap = Required<Pick<MapLibreMapInstance,
   | 'off'
   | 'project'
   | 'getPitch'
+  | 'getZoom'
+  | 'getMinZoom'
+  | 'getMaxZoom'
+  | 'getCenter'
   | 'getCanvas'
 >>
 
@@ -37,6 +51,7 @@ export type MapLibreWorkspaceCameraFailure =
 export interface MapLibreWorkspaceCameraOwnerOptions {
   /** Called once for each attached map that cannot provide a valid shared frame. */
   readonly onAttachmentFailure?: (failure: MapLibreWorkspaceCameraFailure) => void
+  readonly policy?: WorkspaceCameraPolicy
 }
 
 /**
@@ -57,6 +72,7 @@ interface ActiveAttachment {
   readonly resizeListener: () => void
   lastValidFrame: CameraViewportPublication
   failureReported: boolean
+  resolvedMinimumZoom: number | null
 }
 
 /**
@@ -78,12 +94,21 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   }
 
   constructor(private readonly options: MapLibreWorkspaceCameraOwnerOptions = {}) {
-    super()
+    super(options.policy ?? createWorkspaceCameraPolicy())
   }
 
   attach(attachment: MapLibreWorkspaceCameraAttachment): boolean {
     if (this.disposed) return false
     this.detach()
+    if (
+      this.policy.referenceLatitudeDeg !== attachment.anchor.lat
+      || this.policy.hasConfirmedGeography !== attachment.hasConfirmedGeography
+    ) {
+      this.replacePolicy(createWorkspaceCameraPolicy(
+        attachment.anchor.lat,
+        attachment.hasConfirmedGeography,
+      ))
+    }
 
     const generation = ++this.generation
     const active: ActiveAttachment = {
@@ -93,26 +118,30 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       resizeListener: () => this.publishAttachedFrame(active),
       lastValidFrame: this.snapshot.peek(),
       failureReported: false,
+      resolvedMinimumZoom: null,
     }
 
     try {
       this.active = active
       const current = this.snapshot.peek()
       const initialFrame = createMapFrame(
-        current.viewport,
+        this.boundAttachedViewport(attachment.map, current.viewport),
         this.mapScreenMetrics(attachment.map),
         attachment.anchor,
         attachment.northBearingDeg,
+        this.policy,
       )
       if (!initialFrame) throw new Error('Cannot attach a map camera without a finite viewport and screen size.')
 
       attachment.map.on('move', active.moveListener)
       attachment.map.on('resize', active.resizeListener)
+      const beforeZoom = attachment.map.getZoom()
       attachment.map.jumpTo({
         center: [initialFrame.center[0], initialFrame.center[1]],
         zoom: initialFrame.zoom,
         bearing: initialFrame.bearing,
       })
+      this.recordResolvedMinimum(active, beforeZoom, initialFrame.zoom)
       this.publishAttachedFrame(active)
       return this.active === active
     } catch (error) {
@@ -141,7 +170,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     if (!active) return super.initialize(screen)
     return this.jumpAttachedMap(
       active,
-      createInitialCameraFrame(this.mapScreenMetrics(active.attachment.map)).viewport,
+      createInitialCameraFrame(this.mapScreenMetrics(active.attachment.map), this.policy).viewport,
     )
   }
 
@@ -178,25 +207,32 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     active: ActiveAttachment,
     viewport: SceneViewportState,
   ): SceneViewportState {
+    let boundedViewport = viewport
     try {
+      boundedViewport = this.boundAttachedViewport(active.attachment.map, viewport)
+      const current = this.snapshot.peek().viewport
+      if (sameViewport(boundedViewport, current)) return this.viewport
       const frame = createMapFrame(
-        viewport,
+        boundedViewport,
         this.mapScreenMetrics(active.attachment.map),
         active.attachment.anchor,
         active.attachment.northBearingDeg,
+        this.policy,
       )
       if (!frame) throw new Error('Cannot navigate MapLibre without a finite CSS-pixel frame.')
+      const beforeZoom = active.attachment.map.getZoom()
       active.attachment.map.jumpTo({
         center: [frame.center[0], frame.center[1]],
         zoom: frame.zoom,
         bearing: frame.bearing,
       })
+      this.recordResolvedMinimum(active, beforeZoom, frame.zoom)
       const published = this.publishAttachedFrame(active)
-      if (!this.disposed && this.active === null) return super.setViewport(viewport)
+      if (!this.disposed && this.active === null) return super.setViewport(boundedViewport)
       return published
     } catch (error) {
       this.failAttachment(active, { kind: 'attachment-error', error })
-      if (!this.disposed && this.active === null) return super.setViewport(viewport)
+      if (!this.disposed && this.active === null) return super.setViewport(boundedViewport)
       return this.viewport
     }
   }
@@ -219,11 +255,24 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       }
 
       const metrics = this.mapScreenMetrics(map)
+      const zoom = map.getZoom()
+      const scaleBounds = this.attachedScaleBounds(active, metrics, transform.viewport.scale, zoom)
+      const center = map.getCenter()
+      const groundMetersPerCssPixel = this.policy.hasConfirmedGeography && (
+        Number.isFinite(zoom)
+        && Number.isFinite(center.lat)
+      ) ? 1 / mapZoomToStageScale(zoom, center.lat) : null
       const frame: CameraViewportPublication = {
         viewport: transform.viewport,
         screenSize: { width: metrics.width, height: metrics.height },
         devicePixelRatio: metrics.devicePixelRatio ?? 1,
         referenceScale: this.snapshot.peek().referenceScale,
+        scaleBounds,
+        overviewScaleThreshold: this.policy.overviewScaleThreshold,
+        groundMetersPerCssPixel: Number.isFinite(groundMetersPerCssPixel)
+          && groundMetersPerCssPixel! > 0
+          ? groundMetersPerCssPixel
+          : null,
       }
       this.publishFrame(frame)
       active.lastValidFrame = this.snapshot.peek()
@@ -245,6 +294,65 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       ?? finitePositive(dprFromHeight)
       ?? fallback.devicePixelRatio
     return { width, height, devicePixelRatio }
+  }
+
+  private attachedScaleBounds(
+    active: ActiveAttachment,
+    metrics = this.mapScreenMetrics(active.attachment.map),
+    actualScale?: number,
+    actualZoom = active.attachment.map.getZoom(),
+  ): WorkspaceCameraScaleBounds {
+    const map = active.attachment.map
+    const configuredMinimum = finiteNumber(map.getMinZoom()) ?? this.policy.minimumMapZoom
+    const configuredMaximum = finiteNumber(map.getMaxZoom()) ?? this.policy.maximumMapZoom
+    const effectiveMinimum = singleWorldEffectiveMinimumZoom(
+      metrics.width,
+      metrics.height,
+      active.attachment.northBearingDeg,
+      configuredMinimum,
+    )
+    const resolvedMinimum = active.resolvedMinimumZoom === null
+      ? effectiveMinimum
+      : Math.max(effectiveMinimum, active.resolvedMinimumZoom)
+    const calculated = cameraScaleBoundsForPolicy(
+      this.policy,
+      resolvedMinimum,
+      configuredMaximum,
+    )
+    if (!Number.isFinite(actualScale) || !Number.isFinite(actualZoom)) return calculated
+    return Object.freeze({
+      minimum: Math.abs(actualZoom - resolvedMinimum) < 1e-9
+        ? actualScale!
+        : calculated.minimum,
+      maximum: Math.abs(actualZoom - configuredMaximum) < 1e-9
+        ? actualScale!
+        : calculated.maximum,
+    })
+  }
+
+  private recordResolvedMinimum(
+    active: ActiveAttachment,
+    beforeZoom: number,
+    requestedZoom: number,
+  ): void {
+    const actualZoom = active.attachment.map.getZoom()
+    if (
+      requestedZoom < beforeZoom
+      && Number.isFinite(actualZoom)
+      && actualZoom > requestedZoom + 1e-9
+    ) active.resolvedMinimumZoom = actualZoom
+  }
+
+  private boundAttachedViewport(
+    _map: MapLibreWorkspaceCameraMap,
+    viewport: SceneViewportState,
+  ): SceneViewportState {
+    if (![viewport.x, viewport.y, viewport.scale].every(Number.isFinite)) return this.viewport
+    return {
+      x: viewport.x,
+      y: viewport.y,
+      scale: clampCameraScale(viewport.scale, this.snapshot.peek().scaleBounds),
+    }
   }
 
   private failAttachment(
@@ -275,7 +383,10 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       errors.push(error)
     }
     try {
-      this.publishFrame(active.lastValidFrame)
+      this.publishFrame({
+        ...active.lastValidFrame,
+        groundMetersPerCssPixel: null,
+      })
     } catch (error) {
       errors.push(error)
     }
@@ -317,6 +428,14 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
 
 function finitePositive(value: number): number | null {
   return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function finiteNumber(value: number): number | null {
+  return Number.isFinite(value) ? value : null
+}
+
+function sameViewport(left: Readonly<SceneViewportState>, right: Readonly<SceneViewportState>): boolean {
+  return left.x === right.x && left.y === right.y && left.scale === right.scale
 }
 
 function throwCameraCleanupErrors(errors: readonly unknown[]): void {

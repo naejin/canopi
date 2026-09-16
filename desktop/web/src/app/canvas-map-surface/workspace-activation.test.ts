@@ -106,6 +106,10 @@ class FakeMap {
 
   getCanvas() { return this.canvas }
   getPitch() { return this.pitch }
+  getZoom() { return 18 }
+  getMinZoom() { return 0 }
+  getMaxZoom() { return 27 }
+  getCenter() { return { lng: 0, lat: 0 } }
   project([lon, lat]: [number, number]) { return { x: 200 + lon * 4, y: 150 - lat * 4 } }
   emit(type: string) { this.listeners.get(type)?.forEach((listener) => listener()) }
   clearStyleLayer(id: string) {
@@ -880,7 +884,7 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.destroy).not.toHaveBeenCalled()
   })
 
-  it('eagerly fails only the active shared backend and retains the last camera frame', async () => {
+  it('eagerly fails only the active shared backend and retains the spatial camera frame', async () => {
     const { coordinator, runtime, camera, map } = createCoordinator()
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
     const attachedFrame = camera.snapshot.value
@@ -888,7 +892,13 @@ describe('WorkspaceActivationCoordinator', () => {
     await expect(coordinator.reportFailure(new Error('context lost'))).resolves.toBe('fallback-ready')
 
     expect(runtime.reportRendererFailure).toHaveBeenCalledWith('maplibre-pixi', expect.any(Error))
-    expect(camera.snapshot.value).toBe(attachedFrame)
+    expect(camera.snapshot.value).toEqual({
+      ...attachedFrame,
+      groundMetersPerCssPixel: null,
+      revision: attachedFrame.revision + 1,
+    })
+    expect(camera.snapshot.value.viewport).toStrictEqual(attachedFrame.viewport)
+    expect(camera.snapshot.value.scaleBounds).toStrictEqual(attachedFrame.scaleBounds)
     expect(map.off).toHaveBeenCalledTimes(2)
     expect(map.remove).toHaveBeenCalledOnce()
   })

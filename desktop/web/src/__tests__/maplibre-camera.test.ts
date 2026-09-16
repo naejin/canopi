@@ -168,7 +168,7 @@ describe('createMapFrame', () => {
     expect(result!.bearing).toBe(maplibreBearingFromNorthBearing(northBearingDeg))
   })
 
-  it('keeps extreme zoom values aligned with the canvas camera until the map ceiling', () => {
+  it('clamps extreme zoom values at the configured zoom-27 ceiling', () => {
     const result = createMapFrame(
       { x: 0, y: 0, scale: 5000 },
       { width: 1000, height: 800 },
@@ -177,7 +177,7 @@ describe('createMapFrame', () => {
     )
 
     expect(result).not.toBeNull()
-    expect(result!.zoom).toBeCloseTo(stageScaleToMapZoom(5000, 0), 8)
+    expect(result!.zoom).toBe(27)
     expect(result!.bearing).toBe(0)
   })
 

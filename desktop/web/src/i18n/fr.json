@@ -160,6 +160,16 @@
       "rulersDesc": "Afficher/masquer les règles",
       "zoom": "Zoom"
     },
+    "overview": {
+      "label": "Vue d’ensemble",
+      "zoomInToEdit": "Zoomez pour modifier",
+      "provisional": "Emplacement provisoire du projet · Zoomez pour modifier",
+      "returnToDesign": "Revenir au projet",
+      "design": "Projet",
+      "provisionalDesign": "Projet provisoire",
+      "designMarker": "Revenir au projet",
+      "provisionalMarker": "Revenir au projet provisoire"
+    },
     "plantColor": {
       "label": "Couleur de plante",
       "toolbarDesc": "Modifier les couleurs des plantes sélectionnées",

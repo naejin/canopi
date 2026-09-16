@@ -60,6 +60,7 @@ export interface CanvasViewportCommandSurface {
   zoomIn(): void
   zoomOut(): void
   zoomToFit(): void
+  returnToDesign(): void
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean
 }

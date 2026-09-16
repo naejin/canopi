@@ -178,6 +178,37 @@ describe('scene runtime presentation controller', () => {
     expect(snapshot).not.toHaveProperty('colorByAttr')
   })
 
+  it('omits detailed Scene projection work from overview snapshots', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }])
+    sceneStore.setHoveredTarget({ kind: 'plant', id: 'plant-1' })
+
+    const snapshot = controller.buildRendererSnapshot({ overview: true })
+
+    expect(snapshot.scene.plants).toEqual([])
+    expect(snapshot.scene.zones).toEqual([])
+    expect(snapshot.scene.guides).toEqual([])
+    expect(snapshot.selectedPlantIds).toEqual(new Set())
+    expect(snapshot.hoverTarget).toBeNull()
+    expect(snapshot.pinnedPlantNameLabels).toEqual([])
+  })
+
+  it('restores detail from the latest authoritative Scene after overview', () => {
+    const { controller, sceneStore } = createController()
+    expect(controller.buildRendererSnapshot({ overview: true }).scene.plants).toEqual([])
+    sceneStore.updatePersisted((draft) => {
+      draft.plants[0] = {
+        ...draft.plants[0]!,
+        position: { x: 42, y: 64 },
+      }
+    })
+
+    const restored = controller.buildRendererSnapshot()
+
+    expect(restored.scene.plants).toHaveLength(1)
+    expect(restored.scene.plants[0]?.position).toEqual({ x: 42, y: 64 })
+  })
+
   it('does not show a transient Plant label for a mixed Design Object selection', () => {
     const { controller, sceneStore } = createController()
     sceneStore.setSelection([

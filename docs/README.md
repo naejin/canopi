@@ -20,6 +20,8 @@ Implementation specifications and completed design records live under `docs/desi
 
 The [LiDAR implementation plan](design/lidar-library.md) is the single coding authority for named custom raster layers, partial TIFF coverage, local analysis, persistence and the IGN-backed POC. The supporting [scientific evidence](design/lidar-agroecology/report.md) records measured inputs and interpretation limits. Implementation remains proposed.
 
+The [Canvas world zoom and overview implementation record](design/canvas-zoom-world-overview.md) defines the delivered zoom-0–27 camera policy, single-world overview safety, Return behavior, shared Desktop/Web chrome, and its browser qualification contract.
+
 Release notes in [`release-notes/`](release-notes/) describe shipped versions. PDF validation, canvas-performance reports, Web Catalog performance evidence, and the Windows compression benchmark are dated evidence for decisions or release gates. They do not override current agent guides or ADRs. Files under `docs/assets/` and `docs/evidence/` support those records and must not become runtime or test dependencies.
 
 Superseded ADRs remain in place with their status and replacement link. Closed bead metadata remains historical even when it names a prototype or experiment that was intentionally removed after integration.

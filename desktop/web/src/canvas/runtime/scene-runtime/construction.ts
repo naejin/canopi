@@ -183,6 +183,11 @@ export function createSceneRuntimeConstruction(
     getRendererHost: () => rendererHost,
     getViewport: () => camera.viewport,
     prepareSceneRender: async () => {
+      if (camera.snapshot.peek().mode === 'overview') {
+        return {
+          publish: () => presentation.buildRendererSnapshot({ overview: true }),
+        }
+      }
       const ticket = sceneEdits.issueTicket()
       const refresh = await presentation.refreshCurrentPresentationData()
       return {
@@ -292,6 +297,7 @@ export function createSceneRuntimeConstruction(
     setInteractionTool: callbacks.setInteractionTool,
     invalidate: callbacks.invalidate,
     isRuntimeActive: () => runtimeActive,
+    isSpatialEditingEnabled: () => camera.snapshot.peek().mode === 'site',
   })
   const querySurface = createSceneCanvasQuerySurface({
     revision,

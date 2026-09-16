@@ -9,6 +9,10 @@ function cameraSnapshot(): CameraViewportSnapshot {
     screenSize: { width: 320, height: 240 },
     devicePixelRatio: 1,
     referenceScale: 2,
+    scaleBounds: { minimum: 0.00001, maximum: 2000 },
+    overviewScaleThreshold: 0.1,
+    mode: 'site',
+    groundMetersPerCssPixel: null,
     revision: 1,
   }
 }

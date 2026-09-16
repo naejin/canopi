@@ -160,6 +160,16 @@
       "rulersDesc": "Horizontale und vertikale Lineale umschalten",
       "zoom": "Zoom"
     },
+    "overview": {
+      "label": "Übersicht",
+      "zoomInToEdit": "Zum Bearbeiten hineinzoomen",
+      "provisional": "Vorläufiger Entwurfsstandort · Zum Bearbeiten hineinzoomen",
+      "returnToDesign": "Zum Entwurf zurückkehren",
+      "design": "Entwurf",
+      "provisionalDesign": "Vorläufiger Entwurf",
+      "designMarker": "Zum Entwurf zurückkehren",
+      "provisionalMarker": "Zum vorläufigen Entwurf zurückkehren"
+    },
     "plantColor": {
       "label": "Pflanzenfarbe",
       "toolbarDesc": "Farben ausgewählter Pflanzen bearbeiten",

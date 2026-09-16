@@ -160,6 +160,16 @@
       "rulersDesc": "Mostra/nascondi i righelli",
       "zoom": "Zoom"
     },
+    "overview": {
+      "label": "Panoramica",
+      "zoomInToEdit": "Ingrandisci per modificare",
+      "provisional": "Posizione provvisoria del progetto · Ingrandisci per modificare",
+      "returnToDesign": "Torna al progetto",
+      "design": "Progetto",
+      "provisionalDesign": "Progetto provvisorio",
+      "designMarker": "Torna al progetto",
+      "provisionalMarker": "Torna al progetto provvisorio"
+    },
     "plantColor": {
       "label": "Colore della pianta",
       "toolbarDesc": "Modifica i colori delle piante selezionate",

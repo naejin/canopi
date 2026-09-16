@@ -44,6 +44,10 @@ export function createTestCanvasQuerySurface({
     screenSize: { width: 400, height: 300 },
     devicePixelRatio: 1,
     referenceScale: 1,
+    scaleBounds: { minimum: 0.00001, maximum: 2000 },
+    overviewScaleThreshold: 0.1,
+    mode: viewport.scale < 0.1 ? 'overview' : 'site',
+    groundMetersPerCssPixel: null,
     revision: 0,
   })
   const admissionRevision = signal(0)

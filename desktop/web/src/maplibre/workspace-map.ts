@@ -1,6 +1,11 @@
 import type { BasemapStyle, PlacementStatus } from '../generated/contracts'
 import { createMapLibreEmptyStyle, normalizeBasemapStyle } from './config'
 import type { MapLibreApi, MapLibreMapInstance } from './loader'
+import {
+  WORKSPACE_MAP_MAX_ZOOM,
+  WORKSPACE_MAP_MIN_ZOOM,
+} from '../canvas/workspace-camera-policy'
+import { maplibreBearingFromNorthBearing } from '../canvas/maplibre-camera'
 
 export interface WorkspaceMapSnapshot {
   readonly anchor: { readonly lat: number; readonly lon: number }
@@ -49,7 +54,10 @@ export function createWorkspaceMapLibreMap(
     container,
     style: createMapLibreEmptyStyle(),
     center: [snapshot.anchor.lon, snapshot.anchor.lat],
-    bearing: snapshot.northBearingDeg,
+    bearing: maplibreBearingFromNorthBearing(snapshot.northBearingDeg),
+    minZoom: WORKSPACE_MAP_MIN_ZOOM,
+    maxZoom: WORKSPACE_MAP_MAX_ZOOM,
+    renderWorldCopies: false,
     canvasContextAttributes: { antialias: true },
     attributionControl: { compact: true },
     interactive: false,

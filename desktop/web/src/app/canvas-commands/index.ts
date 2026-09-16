@@ -38,6 +38,7 @@ export type CanvasCommandIntent =
 export interface CanvasCommandProjectionState {
   readonly activeTool: string
   readonly toolSelectionAvailable: boolean
+  readonly spatialEditingAvailable: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
   readonly settingsAvailable: boolean
@@ -436,8 +437,11 @@ export function createCanvasCommandProjection({
   intents,
   translate,
 }: CreateCanvasCommandProjectionOptions): CanvasCommandProjection {
-  const projectAction = (definition: CanvasCommandDefinition): (() => void) => () => {
-    if (isCanvasCommandDisabled(definition.intent, state)) return
+  const projectAction = (
+    definition: CanvasCommandDefinition,
+    additionallyDisabled = false,
+  ): (() => void) => () => {
+    if (additionallyDisabled || isCanvasCommandDisabled(definition.intent, state)) return
     dispatchCanvasCommandIntent(definition.intent, intents)
   }
   const toolDefinitions = canvasCommandDefinitions.filter(
@@ -447,12 +451,18 @@ export function createCanvasCommandProjection({
     tool: definition.tool,
     commandId: definition.commandId,
     label: translate(definition.labelKey),
-    description: translate(definition.descriptionKey),
+    description: !state.spatialEditingAvailable && definition.group !== 'primary'
+      ? translate('canvas.overview.zoomInToEdit')
+      : translate(definition.descriptionKey),
     shortcut: definition.displayShortcut,
     ariaShortcut: definition.ariaShortcut,
     active: state.activeTool === definition.tool,
-    disabled: isCanvasCommandDisabled(definition.intent, state),
-    action: projectAction(definition),
+    disabled: isCanvasCommandDisabled(definition.intent, state)
+      || (!state.spatialEditingAvailable && definition.group !== 'primary'),
+    action: projectAction(
+      definition,
+      !state.spatialEditingAvailable && definition.group !== 'primary',
+    ),
   })
 
   return {

@@ -160,6 +160,16 @@
       "rulersDesc": "水平・垂直定規の表示/非表示",
       "zoom": "ズーム"
     },
+    "overview": {
+      "label": "概要",
+      "zoomInToEdit": "編集するには拡大してください",
+      "provisional": "仮のデザイン位置 · 編集するには拡大してください",
+      "returnToDesign": "デザインに戻る",
+      "design": "デザイン",
+      "provisionalDesign": "仮のデザイン",
+      "designMarker": "デザインに戻る",
+      "provisionalMarker": "仮のデザインに戻る"
+    },
     "plantColor": {
       "label": "植物の色",
       "toolbarDesc": "選択した植物の色を編集",

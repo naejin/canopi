@@ -51,6 +51,10 @@ describe('ZoomControls', () => {
       screenSize: { width: 800, height: 600 },
       devicePixelRatio: 1,
       referenceScale: 8,
+      scaleBounds: { minimum: 0.00001, maximum: 2000 },
+      overviewScaleThreshold: 0.1,
+      mode: 'site',
+      groundMetersPerCssPixel: null,
       revision: 1,
     })
     const queries = {
@@ -104,5 +108,33 @@ describe('ZoomControls', () => {
     expect(zoomIn).toHaveBeenCalledOnce()
     expect(zoomOut).toHaveBeenCalledOnce()
     expect(zoomToFit).toHaveBeenCalledOnce()
+  })
+
+  it('shows overview at world scale and disables exhausted navigation', async () => {
+    const returnToDesign = vi.fn()
+    const viewport = signal<CameraViewportSnapshot>({
+      viewport: { x: 100, y: 50, scale: 0.00002 },
+      screenSize: { width: 800, height: 600 },
+      devicePixelRatio: 1,
+      referenceScale: 20,
+      scaleBounds: { minimum: 0.00002, maximum: 2000 },
+      overviewScaleThreshold: 0.1,
+      mode: 'overview',
+      groundMetersPerCssPixel: 50_000,
+      revision: 1,
+    })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: { ...createTestCanvasQuerySurface(), viewport },
+      commands: createTestCanvasCommandSurface({ viewport: { returnToDesign } }),
+    }))
+
+    await act(async () => {
+      render(<ZoomControls />, container)
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Overview')
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Zoom out"]')?.disabled).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]')?.disabled).toBe(false)
   })
 })

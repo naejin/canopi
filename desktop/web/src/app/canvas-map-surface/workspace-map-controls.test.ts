@@ -182,6 +182,25 @@ describe('WorkspaceMapControls', () => {
     }
   })
 
+  it('configures the production map shell for zoom 27 and one world', async () => {
+    const { controls, maps } = createControls({ basemapVisible: false })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+
+    try {
+      expect(map.options).toMatchObject({
+        minZoom: 0,
+        maxZoom: 27,
+        renderWorldCopies: false,
+        interactive: false,
+      })
+    } finally {
+      controls.releaseMap(admitted)
+    }
+  })
+
   it.each([
     ['LiDAR', 'removeLayer'], ['LiDAR', 'removeSource'],
     ['terrain', 'removeLayer'], ['terrain', 'removeSource'],
@@ -649,7 +668,7 @@ describe('WorkspaceMapControls', () => {
     mapB.emit('style.load')
 
     expect(mapA.options.center).toEqual([20, 10])
-    expect(mapA.options.bearing).toBe(30)
+    expect(mapA.options.bearing).toBe(330)
     expect(mapA.setPaintProperty).toHaveBeenCalledTimes(1)
     expect(mapA.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
@@ -657,7 +676,7 @@ describe('WorkspaceMapControls', () => {
       0.2,
     )
     expect(mapB.options.center).toEqual([70, -40])
-    expect(mapB.options.bearing).toBe(80)
+    expect(mapB.options.bearing).toBe(280)
     expect(mapB.setPaintProperty).toHaveBeenCalledTimes(2)
     expect(mapB.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
@@ -693,7 +712,7 @@ describe('WorkspaceMapControls', () => {
       controls.installStyleRestorer(map as never, vi.fn())
 
       expect(map.options.center).toEqual([22, 11])
-      expect(map.options.bearing).toBe(33)
+      expect(map.options.bearing).toBe(327)
       expect(map.addSource).toHaveBeenCalledWith(
         MAPLIBRE_BASEMAP_SOURCE_ID,
         expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),

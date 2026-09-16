@@ -38,6 +38,7 @@ export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 export class SceneCanvasRuntime {
   private readonly _construction: SceneRuntimeConstruction
   private _interaction: SceneInteractionSession | null = null
+  private _cameraMode: 'site' | 'overview'
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
     this._construction = createSceneRuntimeConstruction(options, {
@@ -70,6 +71,7 @@ export class SceneCanvasRuntime {
         this._interaction?.setTool(name)
       },
     })
+    this._cameraMode = this._camera.snapshot.peek().mode
     this._installEffects()
   }
 
@@ -201,6 +203,7 @@ export class SceneCanvasRuntime {
           this._setHoveredTarget(target)
         },
       })
+      this._interaction.setOverviewMode(this._camera.snapshot.peek().mode === 'overview')
       await this._rendering.renderScene()
     } catch (error) {
       const errors: unknown[] = [error]
@@ -318,6 +321,13 @@ export class SceneCanvasRuntime {
       },
       camera: this._camera,
       onCameraFrame: () => {
+        const mode = this._camera.snapshot.peek().mode
+        if (mode !== this._cameraMode) {
+          this._cameraMode = mode
+          this._interaction?.setOverviewMode(mode === 'overview')
+          this._invalidate('scene')
+          return
+        }
         this._invalidate('viewport')
       },
       settings: this._appAdapter.settings,

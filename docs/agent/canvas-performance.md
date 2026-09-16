@@ -107,6 +107,14 @@ Canvas2D fallback), `dense` (synthetic dense 10,000 Plants), and `dispersed`
 changes a v5 file only by setting `version: 6` and adding
 `newDesignSpatialFrame()`; it is not a shipping converter.
 
+Every scenario also runs the real production camera through site → overview →
+Return → zoom 27 → Return. The aggregate `correctness.worldCamera` record checks
+single-world constructor state, overview admission, blocked overview deletion,
+100 exhausted zoom inputs at each limit, exact no-op frame identity/revision,
+Return behavior, and the public MapLibre zoom/min/max values. Keep these checks
+inside the production composition; do not reconstruct its camera or weaken the
+private representative receipt when that fixture is unavailable.
+
 The interaction check ranks unlocked, ungrouped Plants that are safely inside
 the viewport by distance from its centre. It attempts up to six candidates
 through real pointer selection and uses the first exact pointer-selected Plant

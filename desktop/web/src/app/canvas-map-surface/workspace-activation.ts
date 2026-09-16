@@ -21,6 +21,7 @@ import {
   type MapLibreWorkspaceCameraFailure,
   type MapLibreWorkspaceCameraOwner,
 } from '../../maplibre/workspace-camera'
+import { createWorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
 
 export type WorkspaceActivationOutcome = 'shared-ready' | 'fallback-ready' | 'cancelled'
 
@@ -161,6 +162,10 @@ export class WorkspaceActivationCoordinator {
       throw error
     }
     if (request !== this.activationRequest || this.disposed) return 'cancelled'
+    this.options.camera.replacePolicy(createWorkspaceCameraPolicy(
+      ownedSnapshot.map.anchor.lat,
+      ownedSnapshot.map.placementStatus === 'confirmed',
+    ))
     if (this.sharedBackendTerminal) return 'fallback-ready'
     const current: ActivationGeneration = {
       id: ++this.generation,
@@ -325,6 +330,7 @@ export class WorkspaceActivationCoordinator {
             map,
             anchor: current.snapshot.map.anchor,
             northBearingDeg: current.snapshot.map.northBearingDeg,
+            hasConfirmedGeography: current.snapshot.map.placementStatus === 'confirmed',
             maximumWorldExtentMeters: current.snapshot.maximumWorldExtentMeters,
           }),
         )

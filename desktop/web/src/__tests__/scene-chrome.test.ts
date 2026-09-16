@@ -22,6 +22,10 @@ function cameraSnapshot(overrides: {
     },
     devicePixelRatio: 1,
     referenceScale: 8,
+    scaleBounds: { minimum: 0.00001, maximum: 2000 },
+    overviewScaleThreshold: 0.1,
+    mode: (overrides.scale ?? 8) < 0.1 ? 'overview' : 'site',
+    groundMetersPerCssPixel: null,
     revision: 1,
   }
 }
@@ -181,6 +185,26 @@ describe('SceneChromeOverlay', () => {
 
     expect(context.lineTo).toHaveBeenCalledWith(0.5, 1)
     expect(context.lineTo).toHaveBeenCalledWith(1, 0.5)
+    overlay.destroy()
+  })
+
+  it('suppresses the grid and saved guides in overview without changing their inputs', () => {
+    const { gridCanvas, overlay } = createOverlay()
+    const context = createContextStub()
+    vi.spyOn(gridCanvas, 'getContext').mockReturnValue(context as never)
+    const guides = [{ id: 'guide-v', axis: 'v' as const, position: 10 }]
+
+    overlay.update({
+      camera: cameraSnapshot({ scale: 0.01 }),
+      chromeVisible: true,
+      rulersVisible: true,
+      gridVisible: true,
+      guides,
+    })
+
+    expect(gridCanvas.style.display).toBe('none')
+    expect(context.beginPath).not.toHaveBeenCalled()
+    expect(guides).toEqual([{ id: 'guide-v', axis: 'v', position: 10 }])
     overlay.destroy()
   })
 

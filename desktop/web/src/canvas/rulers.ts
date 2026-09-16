@@ -98,20 +98,28 @@ class HtmlRulerOverlay implements RulerOverlay {
     if (this._destroyed) return
     this._snapshot = snapshot
 
-    const rulerDisplay = snapshot.chromeVisible && snapshot.rulersVisible ? 'block' : 'none'
+    const siteMode = snapshot.camera.mode === 'site'
+    const rulerDisplay = snapshot.chromeVisible && snapshot.rulersVisible && siteMode ? 'block' : 'none'
     this._horizontalCanvas.style.display = rulerDisplay
     this._verticalCanvas.style.display = rulerDisplay
     this._corner.style.display = rulerDisplay
-    this._scaleCanvas.style.display = snapshot.chromeVisible ? 'block' : 'none'
+    this._scaleCanvas.style.display = snapshot.chromeVisible
+      && (siteMode || snapshot.camera.groundMetersPerCssPixel !== null)
+      ? 'block'
+      : 'none'
 
-    if (!snapshot.chromeVisible || !snapshot.rulersVisible) {
+    if (!snapshot.chromeVisible || !snapshot.rulersVisible || !siteMode) {
       this._cancelActiveDrag?.()
     }
     if (!snapshot.chromeVisible) return
 
-    drawHorizontalRuler(this._horizontalCanvas, snapshot.camera, this._palette)
-    drawVerticalRuler(this._verticalCanvas, snapshot.camera, this._palette)
-    drawScaleBar(this._scaleCanvas, snapshot.camera, this._palette)
+    if (siteMode) {
+      drawHorizontalRuler(this._horizontalCanvas, snapshot.camera, this._palette)
+      drawVerticalRuler(this._verticalCanvas, snapshot.camera, this._palette)
+    }
+    if (siteMode || snapshot.camera.groundMetersPerCssPixel !== null) {
+      drawScaleBar(this._scaleCanvas, snapshot.camera, this._palette)
+    }
   }
 
   refreshTheme(): void {
@@ -407,7 +415,10 @@ function drawScaleBar(
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
   context.clearRect(0, 0, cssWidth, cssHeight)
 
-  const { barScreenPx, label } = getScaleBarDisplay(camera.viewport.scale)
+  const scale = camera.mode === 'overview'
+    ? 1 / camera.groundMetersPerCssPixel!
+    : camera.viewport.scale
+  const { barScreenPx, label } = getScaleBarDisplay(scale)
   const startX = SCALE_BAR_MARGIN_X
   const endX = startX + barScreenPx
   const lineY = cssHeight - SCALE_BAR_MARGIN_Y
