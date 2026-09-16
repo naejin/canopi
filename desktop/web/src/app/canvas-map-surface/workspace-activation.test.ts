@@ -188,6 +188,7 @@ function createCoordinator(input: {
     releaseMap: vi.fn((candidate) => (candidate as unknown as FakeMap).remove()),
     getWebGL2Context: input.getWebGL2Context
       ?? (() => input.context === undefined ? map.context : input.context),
+    updateBasemapPresentation: vi.fn(),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
     watchFailure: input.watchFailure
       ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
@@ -268,6 +269,147 @@ describe('WorkspaceActivationCoordinator', () => {
     }))
     expect(map.addLayer).toHaveBeenCalledOnce()
     expect(runtime.init).toHaveBeenCalledOnce()
+  })
+
+  it('forwards only current-generation basemap presentation without recreating workspace resources', async () => {
+    const { coordinator, map, runtime, mapControls } = createCoordinator()
+    const updateBasemapPresentation = vi.fn()
+    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    const addLayerCount = map.addLayer.mock.calls.length
+
+    coordinator.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1.5,
+    })
+
+    expect(updateBasemapPresentation).toHaveBeenCalledWith({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
+    })
+    expect(map.addLayer).toHaveBeenCalledTimes(addLayerCount)
+    expect(runtime.init).toHaveBeenCalledOnce()
+    await coordinator.teardown()
+    coordinator.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0,
+    })
+    expect(updateBasemapPresentation).toHaveBeenCalledOnce()
+  })
+
+  it('forwards a presentation posted immediately after initial activation once map acquisition starts', async () => {
+    const created = deferred<WorkspaceActivationMap>()
+    const createMap = vi.fn(() => created.promise)
+    const { coordinator, map, mapControls } = createCoordinator({ createMap })
+    const updateBasemapPresentation = vi.fn()
+    mapControls.updateBasemapPresentation = updateBasemapPresentation
+
+    const activation = coordinator.activate()
+    coordinator.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.4,
+    })
+
+    await vi.waitFor(() => expect(createMap).toHaveBeenCalledOnce())
+    expect(updateBasemapPresentation).toHaveBeenCalledOnce()
+    expect(updateBasemapPresentation).toHaveBeenCalledWith({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.4,
+    })
+    created.resolve(map as unknown as WorkspaceActivationMap)
+
+    await expect(activation).resolves.toBe('shared-ready')
+    await coordinator.teardown()
+  })
+
+  it('fences presentation updates as soon as an owned callback requests teardown', async () => {
+    let coordinator!: WorkspaceActivationCoordinator
+    let teardown: Promise<void> | null = null
+    const composition = createComposition({
+      onAdd: () => {
+        teardown = coordinator.teardown()
+        coordinator.updateBasemapPresentation({
+          basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.2,
+        })
+      },
+    })
+    const created = createCoordinator({ composition: composition.composition })
+    coordinator = created.coordinator
+    const updateBasemapPresentation = vi.fn()
+    created.mapControls.updateBasemapPresentation = updateBasemapPresentation
+
+    await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('cancelled')
+    await expect(teardown).resolves.toBeUndefined()
+    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+  })
+
+  it('drops a buffered presentation when synchronous disconnect cancels activation', async () => {
+    const { coordinator, mapControls } = createCoordinator()
+    const updateBasemapPresentation = vi.fn()
+    mapControls.updateBasemapPresentation = updateBasemapPresentation
+
+    const activation = coordinator.activate()
+    coordinator.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.2,
+    })
+    await coordinator.requestGenerationDisconnect()
+
+    await expect(activation).resolves.toBe('cancelled')
+    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+  })
+
+  it('fences presentation updates after shared-backend fallback becomes terminal', async () => {
+    const { coordinator, mapControls } = createCoordinator()
+    const updateBasemapPresentation = vi.fn()
+    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+
+    await expect(coordinator.reportFailure(new Error('shared layer failed'))).resolves.toBe('fallback-ready')
+    coordinator.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.2,
+    })
+
+    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+    await coordinator.teardown()
+  })
+
+  it('buffers the latest presentation for a replacement while prior cleanup is pending', async () => {
+    const firstDisposal = deferred<void>()
+    const first = createComposition({ dispose: () => firstDisposal.promise })
+    const second = createComposition()
+    const composition: SharedMapSceneRendererComposition = {
+      renderer: {} as never,
+      createLayer: vi.fn()
+        .mockReturnValueOnce(first.layer)
+        .mockReturnValue(second.layer),
+      failActiveLayer: vi.fn(),
+    }
+    const firstMap = new FakeMap()
+    const secondMap = new FakeMap()
+    const createMap = vi.fn()
+      .mockResolvedValueOnce(firstMap as unknown as WorkspaceActivationMap)
+      .mockResolvedValueOnce(secondMap as unknown as WorkspaceActivationMap)
+    const { coordinator, mapControls } = createCoordinator({ createMap, composition })
+    const updateBasemapPresentation = vi.fn()
+    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+
+    const replacement = coordinator.activate()
+    coordinator.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.3,
+    })
+    coordinator.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.7,
+    })
+    await vi.waitFor(() => expect(first.dispose).toHaveBeenCalledOnce())
+
+    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+    expect(createMap).toHaveBeenCalledOnce()
+    firstDisposal.resolve()
+
+    await expect(replacement).resolves.toBe('shared-ready')
+    expect(createMap).toHaveBeenCalledTimes(2)
+    expect(updateBasemapPresentation).toHaveBeenCalledOnce()
+    expect(updateBasemapPresentation).toHaveBeenCalledWith({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.7,
+    })
+
+    await coordinator.teardown()
   })
 
   it('reuses one initialized layer, map, camera, and runtime after a style reload', async () => {
@@ -1426,6 +1568,7 @@ describe('WorkspaceActivationCoordinator', () => {
         createMap: async () => map as unknown as WorkspaceActivationMap,
         releaseMap: () => map.remove(),
         getWebGL2Context: () => map.context,
+        updateBasemapPresentation: () => {},
         installStyleRestorer: () => () => {},
       },
       layer: {

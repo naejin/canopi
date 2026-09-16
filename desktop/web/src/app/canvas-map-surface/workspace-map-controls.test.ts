@@ -185,6 +185,202 @@ describe('WorkspaceMapControls', () => {
     )
   })
 
+  it('applies opacity-only presentation updates without recreating the basemap contribution', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    map.addSource.mockClear()
+    map.addLayer.mockClear()
+    map.removeLayer.mockClear()
+    map.removeSource.mockClear()
+    map.setPaintProperty.mockClear()
+
+    controls.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.75,
+    })
+
+    expect(map.setPaintProperty).toHaveBeenCalledWith(
+      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      'raster-opacity',
+      0.75,
+    )
+    expect(map.addSource).not.toHaveBeenCalled()
+    expect(map.addLayer).not.toHaveBeenCalled()
+    expect(map.removeLayer).not.toHaveBeenCalled()
+    expect(map.removeSource).not.toHaveBeenCalled()
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'normalizes non-finite opacity %p to zero',
+    async (basemapOpacity) => {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+      map.setPaintProperty.mockClear()
+
+      controls.updateBasemapPresentation({
+        basemapStyle: 'street', basemapVisible: true, basemapOpacity,
+      })
+
+      expect(map.setPaintProperty).toHaveBeenCalledWith(
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'raster-opacity',
+        0,
+      )
+    },
+  )
+
+  it('removes before source removal, retains hidden style, and restores the latest visible style', async () => {
+    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
+    try {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+
+      controls.updateBasemapPresentation({
+        basemapStyle: 'satellite', basemapVisible: false, basemapOpacity: 1.2,
+      })
+      expect(map.removeLayer.mock.invocationCallOrder[0]).toBeLessThan(
+        map.removeSource.mock.invocationCallOrder[0]!,
+      )
+      const sourceCountWhileHidden = map.addSource.mock.calls.length
+      controls.updateBasemapPresentation({
+        basemapStyle: 'satellite', basemapVisible: false, basemapOpacity: 0.2,
+      })
+      expect(map.addSource).toHaveBeenCalledTimes(sourceCountWhileHidden)
+
+      controls.updateBasemapPresentation({
+        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 2,
+      })
+      expect(map.addSource).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_SOURCE_ID,
+        expect.objectContaining({ tiles: [expect.stringContaining('maptiler.com')] }),
+      )
+      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'raster-opacity',
+        1,
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('retains the latest presentation during acquisition before style admission', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    controls.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.1,
+    })
+
+    map.emit('style.load')
+    await acquisition
+    expect(map.addSource).not.toHaveBeenCalled()
+    expect(map.addLayer).not.toHaveBeenCalled()
+  })
+
+  it('keeps a confirmed presentation update inert for a provisional attempt', async () => {
+    const { controls, maps } = createControls({ placementStatus: 'provisional' })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+
+    controls.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.8,
+    })
+
+    expect(map.addSource).not.toHaveBeenCalled()
+    expect(map.addLayer).not.toHaveBeenCalled()
+  })
+
+  it('replaces and hides only the basemap while preserving local contribution identities and order', async () => {
+    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
+    try {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+      const background = { id: MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID }
+      const lidarSource = { type: 'raster', tiles: ['lidar'] }
+      const referenceSource = { type: 'geojson' }
+      const lidar = { id: 'lidar-layer', source: 'lidar-source' }
+      const reference = { id: 'reference-layer', source: 'reference-source' }
+      const scene = { id: MAPLIBRE_SHARED_SCENE_LAYER_ID }
+      map.addLayer(background)
+      map.layerOrder.splice(0, map.layerOrder.length,
+        MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      )
+      map.addSource('lidar-source', lidarSource)
+      map.addSource('reference-source', referenceSource)
+      map.addLayer(lidar)
+      map.addLayer(reference)
+      map.addLayer(scene)
+      map.removeLayer.mockClear()
+      map.removeSource.mockClear()
+      map.addLayer.mockClear()
+      map.addSource.mockClear()
+
+      controls.updateBasemapPresentation({
+        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.6,
+      })
+
+      expect(map.removeLayer).toHaveBeenCalledExactlyOnceWith(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
+      expect(map.removeSource).toHaveBeenCalledExactlyOnceWith(MAPLIBRE_BASEMAP_SOURCE_ID)
+      expect(map.getSource('lidar-source')).toBe(lidarSource)
+      expect(map.getSource('reference-source')).toBe(referenceSource)
+      expect(map.getLayer('lidar-layer')).toBe(lidar)
+      expect(map.getLayer('reference-layer')).toBe(reference)
+      expect(map.getLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)).toBe(scene)
+      expect(map.layerOrder).toEqual([
+        MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'lidar-layer',
+        'reference-layer',
+        MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      ])
+
+      controls.updateBasemapPresentation({
+        basemapStyle: 'satellite', basemapVisible: false, basemapOpacity: 0.6,
+      })
+      controls.updateBasemapPresentation({
+        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.6,
+      })
+
+      expect(map.getSource('lidar-source')).toBe(lidarSource)
+      expect(map.getSource('reference-source')).toBe(referenceSource)
+      expect(map.getLayer('lidar-layer')).toBe(lidar)
+      expect(map.getLayer('reference-layer')).toBe(reference)
+      expect(map.getLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)).toBe(scene)
+      expect(map.removeLayer.mock.calls).toEqual([
+        [MAPLIBRE_BASEMAP_RASTER_LAYER_ID],
+        [MAPLIBRE_BASEMAP_RASTER_LAYER_ID],
+      ])
+      expect(map.removeSource.mock.calls).toEqual([
+        [MAPLIBRE_BASEMAP_SOURCE_ID],
+        [MAPLIBRE_BASEMAP_SOURCE_ID],
+      ])
+      expect(map.layerOrder).toEqual([
+        MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'lidar-layer',
+        'reference-layer',
+        MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      ])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('binds map construction and later style restoration to each attempt snapshot', async () => {
     const { controls, maps } = createControls()
     const snapshotA: WorkspaceMapSnapshot = {
@@ -418,6 +614,92 @@ describe('WorkspaceMapControls', () => {
     expect(map.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)).toBeDefined()
   })
 
+  it('replays the latest presentation requested reentrantly by a style restorer', async () => {
+    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
+    try {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+      let updateDuringRestore = true
+      controls.installStyleRestorer(map as never, () => {
+        if (!updateDuringRestore) return
+        updateDuringRestore = false
+        controls.updateBasemapPresentation({
+          basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.9,
+        })
+      })
+
+      map.clearStyle()
+      map.emit('style.load')
+      await Promise.resolve()
+
+      expect(map.addSource).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_SOURCE_ID,
+        expect.objectContaining({ tiles: [expect.stringContaining('maptiler.com')] }),
+      )
+      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'raster-opacity',
+        0.9,
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('serializes reentrant presentation and style signals from a live style replacement', async () => {
+    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
+    try {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+      const restorer = vi.fn()
+      controls.installStyleRestorer(map as never, restorer)
+      const sourceMutationDepths: number[] = []
+      let removalDepth = 0
+      let reentered = false
+      map.removeLayer.mockImplementation((id: string) => {
+        map.layers.delete(id)
+        const index = map.layerOrder.indexOf(id)
+        if (index >= 0) map.layerOrder.splice(index, 1)
+        if (id !== MAPLIBRE_BASEMAP_RASTER_LAYER_ID || reentered) return
+        reentered = true
+        removalDepth += 1
+        controls.updateBasemapPresentation({
+          basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.9,
+        })
+        map.emit('style.load')
+        removalDepth -= 1
+      })
+      map.addSource.mockImplementation((id: string, source: unknown) => {
+        sourceMutationDepths.push(removalDepth)
+        map.sources.set(id, source)
+      })
+
+      controls.updateBasemapPresentation({
+        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.3,
+      })
+
+      expect(sourceMutationDepths).toEqual([0, 0])
+      expect(map.addSource).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_SOURCE_ID,
+        expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),
+      )
+      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        'raster-opacity',
+        0.9,
+      )
+      expect(restorer).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it.each([
     ['provisional', true],
     ['confirmed', false],
@@ -505,6 +787,32 @@ describe('WorkspaceMapControls', () => {
     map.emit('style.load')
 
     expect(reportFailure).toHaveBeenCalledWith(failure)
+  })
+
+  it('reports one live presentation mutation failure through the existing watcher', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const reportFailure = vi.fn()
+    controls.watchFailure(map as never, reportFailure)
+    controls.installStyleRestorer(map as never, vi.fn())
+    const failure = new Error('opacity rejected')
+    map.setPaintProperty.mockImplementation(() => { throw failure })
+    map.setPaintProperty.mockClear()
+
+    controls.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.6,
+    })
+    controls.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.7,
+    })
+    map.emit('style.load')
+
+    expect(reportFailure).toHaveBeenCalledTimes(1)
+    expect(reportFailure).toHaveBeenCalledWith(failure)
+    expect(map.setPaintProperty).toHaveBeenCalledOnce()
   })
 
   it('reports a scene restorer failure through the existing watcher', async () => {
@@ -725,6 +1033,26 @@ describe('WorkspaceMapControls', () => {
 
     expect(map.remove).toHaveBeenCalledOnce()
     expect(observers[0]?.disconnect).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a released attempt inert when a later presentation arrives', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    controls.releaseMap(map as never)
+    map.addSource.mockClear()
+    map.addLayer.mockClear()
+    map.setPaintProperty.mockClear()
+
+    controls.updateBasemapPresentation({
+      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0,
+    })
+
+    expect(map.addSource).not.toHaveBeenCalled()
+    expect(map.addLayer).not.toHaveBeenCalled()
+    expect(map.setPaintProperty).not.toHaveBeenCalled()
   })
 
   it('reads WebGL2 only from the public map canvas', async () => {

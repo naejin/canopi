@@ -2,7 +2,12 @@ import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/mapli
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
 import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
-import type { WorkspaceMapSnapshot } from '../../maplibre/workspace-map'
+import {
+  captureWorkspaceBasemapPresentation,
+  type WorkspaceBasemapPresentation,
+  type WorkspaceMapSnapshot,
+  workspaceBasemapPresentationFromSnapshot,
+} from '../../maplibre/workspace-map'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
@@ -32,6 +37,8 @@ export type WorkspaceActivationMap = MapLibreWorkspaceCameraMap & Pick<
   | 'addSource'
   | 'getSource'
   | 'getLayer'
+  | 'removeSource'
+  | 'removeLayer'
   | 'getLayersOrder'
   | 'moveLayer'
   | 'setPaintProperty'
@@ -44,6 +51,7 @@ export interface WorkspaceActivationMapControls {
   ): Promise<WorkspaceActivationMap>
   releaseMap(map: WorkspaceActivationMap): void
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
+  updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */
@@ -74,6 +82,7 @@ export interface WorkspaceActivationOptions {
 interface ActivationGeneration {
   readonly id: number
   readonly snapshot: WorkspaceActivationSnapshot
+  presentation: WorkspaceBasemapPresentation
   map: WorkspaceActivationMap | null
   layer: SharedMapSceneLayer | null
   disposeStyleRestorer: (() => void) | null
@@ -89,6 +98,12 @@ interface ActivationGeneration {
   readonly abortController: AbortController
 }
 
+interface PendingBasemapPresentation {
+  readonly request: number
+  readonly presentation: WorkspaceBasemapPresentation
+  readonly hasUpdate: boolean
+}
+
 /**
  * Transactionally admits map-owned scene rendering. It is deliberately not
  * mounted by either edition yet: production composition still uses the default
@@ -97,6 +112,7 @@ interface ActivationGeneration {
 export class WorkspaceActivationCoordinator {
   private generation = 0
   private activationRequest = 0
+  private pendingBasemapPresentation: PendingBasemapPresentation | null = null
   private active: ActivationGeneration | null = null
   /**
    * The most recently requested generation cleanup remains observable after it
@@ -130,6 +146,11 @@ export class WorkspaceActivationCoordinator {
     const ownedSnapshot = captureActivationSnapshot(snapshot)
     if (this.disposed) return 'cancelled'
     const request = ++this.activationRequest
+    this.pendingBasemapPresentation = {
+      request,
+      presentation: workspaceBasemapPresentationFromSnapshot(ownedSnapshot.map),
+      hasUpdate: false,
+    }
     const priorCleanup = this.cleanupActiveGeneration()
     try {
       await priorCleanup
@@ -143,6 +164,7 @@ export class WorkspaceActivationCoordinator {
     const current: ActivationGeneration = {
       id: ++this.generation,
       snapshot: ownedSnapshot,
+      presentation: this.pendingPresentationFor(request, ownedSnapshot.map),
       map: null,
       layer: null,
       disposeStyleRestorer: null,
@@ -174,6 +196,7 @@ export class WorkspaceActivationCoordinator {
       } finally {
         finishMapCreation()
       }
+      this.flushPendingPresentation(current, request)
       const map = await mapPromise
       if (!this.isCurrent(current)) {
         this.releaseStaleMap(map)
@@ -346,6 +369,44 @@ export class WorkspaceActivationCoordinator {
     return current ? this.reportFailureFor(current, error) : Promise.resolve('cancelled')
   }
 
+  updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void {
+    const next = captureWorkspaceBasemapPresentation(presentation)
+    if (this.disposed || this.sharedBackendTerminal || this.terminalTeardownResult) return
+    const pending = this.pendingBasemapPresentation
+    if (pending?.request === this.activationRequest) {
+      this.pendingBasemapPresentation = {
+        request: pending.request,
+        presentation: next,
+        hasUpdate: true,
+      }
+      return
+    }
+    const current = this.active
+    if (!current || !this.isCurrent(current)) return
+    current.presentation = next
+    this.options.map.updateBasemapPresentation(next)
+  }
+
+  private pendingPresentationFor(
+    request: number,
+    map: WorkspaceMapSnapshot,
+  ): WorkspaceBasemapPresentation {
+    const pending = this.pendingBasemapPresentation
+    return pending?.request === request
+      ? pending.presentation
+      : workspaceBasemapPresentationFromSnapshot(map)
+  }
+
+  private flushPendingPresentation(current: ActivationGeneration, request: number): void {
+    const pending = this.pendingBasemapPresentation
+    if (!this.isCurrent(current) || pending?.request !== request) return
+    this.pendingBasemapPresentation = null
+    current.presentation = pending.presentation
+    if (pending.hasUpdate) {
+      this.options.map.updateBasemapPresentation(pending.presentation)
+    }
+  }
+
   /**
    * Synchronously fences one Design/map generation before Scene replacement.
    * Its returned settlement owns the asynchronous layer disposal and map
@@ -353,10 +414,12 @@ export class WorkspaceActivationCoordinator {
    */
   requestGenerationDisconnect(): Promise<void> {
     if (this.disposed) {
+      this.pendingBasemapPresentation = null
       const cleanup = this.retainedCleanup ?? Promise.resolve()
       this.recordOwnedReentry(cleanup)
       return cleanup
     }
+    this.pendingBasemapPresentation = null
     ++this.activationRequest
     const cleanup = this.cleanupActiveGeneration()
     this.recordOwnedReentry(cleanup)
@@ -379,6 +442,7 @@ export class WorkspaceActivationCoordinator {
       resolve = resolvePromise
       reject = rejectPromise
     })
+    this.pendingBasemapPresentation = null
     this.terminalTeardownResult = teardown
     this.recordOwnedReentry(teardown)
     const start = () => {

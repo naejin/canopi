@@ -1,5 +1,5 @@
 import type { BasemapStyle, PlacementStatus } from '../generated/contracts'
-import { createMapLibreEmptyStyle } from './config'
+import { createMapLibreEmptyStyle, normalizeBasemapStyle } from './config'
 import type { MapLibreApi, MapLibreMapInstance } from './loader'
 
 export interface WorkspaceMapSnapshot {
@@ -9,6 +9,31 @@ export interface WorkspaceMapSnapshot {
   readonly basemapStyle: BasemapStyle
   readonly basemapVisible: boolean
   readonly basemapOpacity: number
+}
+
+/** Live, map-owned presentation. Spatial placement remains generation-fixed. */
+export interface WorkspaceBasemapPresentation {
+  readonly basemapStyle: BasemapStyle
+  readonly basemapVisible: boolean
+  readonly basemapOpacity: number
+}
+
+export function captureWorkspaceBasemapPresentation(
+  presentation: WorkspaceBasemapPresentation,
+): WorkspaceBasemapPresentation {
+  return Object.freeze({
+    basemapStyle: normalizeBasemapStyle(presentation.basemapStyle),
+    basemapVisible: presentation.basemapVisible,
+    basemapOpacity: Number.isFinite(presentation.basemapOpacity)
+      ? Math.min(1, Math.max(0, presentation.basemapOpacity))
+      : 0,
+  })
+}
+
+export function workspaceBasemapPresentationFromSnapshot(
+  snapshot: WorkspaceMapSnapshot,
+): WorkspaceBasemapPresentation {
+  return captureWorkspaceBasemapPresentation(snapshot)
 }
 
 /**

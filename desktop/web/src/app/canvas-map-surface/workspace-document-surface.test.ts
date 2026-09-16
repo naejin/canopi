@@ -134,6 +134,7 @@ describe('createWorkspaceDocumentSurface', () => {
         },
         releaseMap,
         getWebGL2Context: () => null,
+        updateBasemapPresentation: () => {},
         installStyleRestorer: () => () => {},
       },
       layer: {},
