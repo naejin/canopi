@@ -13,6 +13,8 @@ These instructions are for AI agents working in this repository. Optimize for lo
 
 ## Agent Docs Maintenance
 
+- Optimize all `docs/` content for agentic coding and development: retain actionable contracts, ownership, decision rationale, reproducible evidence, and release operations. Remove duplicated instructions, conversational history, expired execution prompts, and user tutorials that duplicate development contracts. Follow [documentation placement and authority](docs/README.md).
+
 - Treat `AGENTS.md`, `docs/agent/*.md`, and `docs/workflow/*.md` as living operating docs, not append-only notes.
 - Update agent docs in the same change when code moves, architecture boundaries change, commands change, quality gates change, or a repeated gotcha becomes a durable rule.
 - Prefer replacing or deleting stale instructions over adding exceptions. If two rules conflict, resolve the conflict before ending the work.

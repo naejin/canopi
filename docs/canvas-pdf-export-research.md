@@ -6,7 +6,7 @@ The agreed product scope follows [ADR 0024](adr/0024-shared-canvas-pdf-export.md
 
 Scope revision, 2026-09-09: retain print-layer selection but remove map export from v1. Provider research below is preserved for later work; provider selection, map acquisition/alignment, and map-failure handling no longer gate the first release. Interactive Web maps remain a separate plan.
 
-This is historical research against the baseline above. Its candidate presets, overlap and suggested implementation work are superseded by the accepted automatic fitting and page workspace. The [user guide](canvas-pdf.md), [implementation guide](agent/canvas-pdf.md) and [production validation report](canvas-pdf-validation.md) describe the approved feature and its validation record.
+This is historical research against the baseline above. Its candidate presets, overlap and suggested implementation work are superseded by the accepted automatic fitting and page workspace. The [behavior checks](canvas-pdf.md), [implementation guide](agent/canvas-pdf.md) and [production validation report](canvas-pdf-validation.md) describe the approved feature and its validation record.
 
 ## Research Questions
 
@@ -100,56 +100,9 @@ Later map validation should compare 150/200/300 pixels/inch, alignment at nonzer
 
 **Recommendation.** Define parity as identical page geometry, content, names, and usable save/download behavior for the same frozen input. Do not require byte-identical PDFs, which may contain timestamps or different compression. Own export jobs, workers, font requests, and object URLs explicitly. Cancel or discard stale work on Design replacement; retain print setup across preview closure as agreed. Keep the browser preview independent of an assumed built-in PDF viewer and independent of interactive map readiness.
 
-## Implications for PRD
+## Validation authority
 
-Retain ADR 0024's revised scope. Keep a print selector for exportable Design Layers, initially matching their canvas visibility, with overrides confined to export setup. Specify observable results for layer-filtered overview bounds, chosen detail scales, complete legends and explicit continuations, final page references, authored presentation, and session-only setup. Clarify that the ruler measures Design metres at actual-size printing. Multilingual output remains a first-release requirement. Explicitly exclude map options, map acquisition, and provider-dependent export behavior from v1.
-
-### Proposed print-validation plan
-
-Use deterministic synthetic Designs. The existing [zoom-calibration fixtures](../desktop/web/src/__tests__/support/zoom-calibration-scenes.ts) are reusable starting points, but their dense scene uses 1.5 m spacing and distinct synthetic Species for every Plant. Add deliberate 0.5 m spacing and realistic repeated Species in future print fixtures; do not treat screen-calibration images as paper evidence.
-
-| Sample | Variations | Evidence required |
-| --- | --- | --- |
-| Dense planting bed | 1:20/50/100; 0.5 m spacing; pinned names; overlapping symbols | Readers identify actual Plants and read retained text; collisions are recorded, with no automatic remapping. |
-| Mixed garden | 1:100/200; rotated Zone; context Plants/paths; excluded distant objects; Print Area without Zones | Correct extent, context, physical distances, layer filtering, and sheet-to-overview navigation. |
-| Large sparse site | 1:500/1000; multiple areas and scale overrides; adjoining-sheet overlap | Complete coverage, stable scale across tiles, usable edge references and final page numbers. |
-| Legend stress | Long local names; Canonical fallback; duplicate Common Names; appearance variants; overflow and continuation refusal | No Species lost or merged incorrectly; complete names; overflow blocks as agreed; ambiguity stays non-blocking. |
-| Language stress | Mixed Latin/Cyrillic/CJK text; all 11 locale naming paths | Correct glyphs and name fallback; equivalent preview/PDF content. |
-| Map exclusion | With/without saved Location; map/terrain visible on the interactive canvas; unavailable map provider | White PDF background, no map options, no map requests initiated by export, and identical Design output independent of map readiness. |
-
-Compare A4 and US Letter, both orientations, at actual size. Start with legend text at 10/11/12 pt, columns at 35/40/45 mm, 10/12 mm margins, and 5/10 mm overlap. Hold other variables fixed when comparing. These are sample settings only; avoid an exhaustive Cartesian product.
-
-Print the critical samples on an ordinary colour inkjet and monochrome laser printer. Review in normal indoor and outdoor light with at least two intended field users. Ask them to identify Plants, find the correct neighbouring sheet, read the longest legend entry, and measure a known distance. Record errors, task time, printer settings, and comments. Grayscale assessment must not trigger automatic colour/symbol substitutions.
-
-Proposed geometry checks: a 100 mm calibration segment within 0.1 mm in PDF coordinates and within 1 mm on a correctly configured physical print; investigate printer scaling separately. Reject missing glyphs, clipped text, incomplete legends, or lost printable objects. Select readability defaults from the physical review, not from these proposed tolerances. Marker footprints, strokes, and authored Annotation font sizes also need an explicit physical-unit policy.
-
-Automate page dimensions, all six scales, coverage/overlap, Layer selection, Species identity and final references. Render generated PDFs with an independent PDF renderer and compare content to the preview plan. Run representative output in Linux WebKitGTK, macOS WKWebView, Windows WebView2, and Web Chrome/Edge/Firefox/Safari. Record actual runtime versions. Test cancellation, Design replacement, missing/failed font loads, interrupted downloads, repeated exports, and map independence. Use bounded 1/10/50-page stress fixtures to measure memory/time before setting production limits.
-
-## Implications for Issue Breakdown
-
-The following delivery breakdown was approved for PRD `canopi-cd7x`; its original ten slices plus the approved native verification gate are tracked in bd, which is authoritative for current status and dependencies. Feature slices include UI, shared layout, preview, PDF delivery, and behavior tests. AFK means agent execution after dependencies close; HITL requires human judgment or physical validation. All slices are P2.
-
-| Order | Bead | Slice | Type / mode | Blocked by | PRD stories |
-| --- | --- | --- | --- | --- | --- |
-| 1 | `canopi-4nzq` | Evaluate multilingual PDF output with the candidate encoders and font assets | task / AFK | None | 1, 9, 10, 14, 15, 18 |
-| 2 | `canopi-cd7x.1` | Verify the pinned fixture in actual desktop WebViews before export UI | task / AFK | 1 | 1, 9, 10, 14, 15, 18 |
-| 3 | `canopi-orpp` | Choose the PDF foundation and settle preview edge-case rules | decision / HITL | 1, 2 | 1, 3, 9, 13, 15, 16 |
-| 4 | `canopi-w4p3` | Preview and export an overview with authored presentation and readable localized legends | feature / AFK | 3, `canopi-qj4w` | 1, 2, 6, 9, 10, 12, 14, 15, 16, 17 |
-| 5 | `canopi-hikf` | Select print Layers and retain setup while editing the Design | feature / AFK | 4 | 3, 13 |
-| 6 | `canopi-e9br` | Export selected Zones as scaled detail sheets with overlap and navigation | feature / AFK | 5 | 2, 4, 6, 7, 8, 9 |
-| 7 | `canopi-25m9` | Draw Print Areas and override individual area scales | feature / AFK | 6 | 5, 7, 8, 13 |
-| 8 | `canopi-zvbk` | Export complete legends with explicit continuation pages and final references | feature / AFK | 6 | 9, 11, 12 |
-| 9 | `canopi-urxb` | Validate export recovery, resources, and representative output | task / AFK | 7, 8 | 1, 10, 11, 13, 15, 16, 17, 18 |
-| 10 | `canopi-h0q3` | Validate field prints and actual platform evidence, then choose release defaults | decision / HITL | 9 | 1, 6, 7, 9, 14, 15, 18 |
-| 11 | `canopi-1zbj` | Apply validated defaults and complete combined PDF release checks | task / AFK | 10 | All |
-
-The breakdown above records the original delivery plan. Zone-based creation in slice 6 was subsequently retired by `canopi-nv6f`; current detail pages use drawn Print Areas only, as recorded in ADR 0024.
-
-Slice 4 already includes session guards, cancellation/error outcomes, map exclusion, and blocking unresolved legend overflow. Later validation extends coverage and measures resource behavior; it does not defer those invariants. Slice 8 adds the explicit continuation option. Physical dimensions remain evaluation parameters until the paper review; early slices are delivery increments and do not reduce the full v1 release contract.
-
-Keep module ownership explicit when implementation is later sliced. New dependencies and any new binary-save IPC need their own justification and repository gates. Do not revive the retired Rust report renderer. Defer map export beyond v1; provider, map-capture, and map-failure work must not become v1 dependencies. Interactive Web maps remain separate work.
-
-The requested work order is PRD, reviewed delivery beads, `canopi-qj4w`, `canopi-90wm`, then PDF implementation. Represent `canopi-qj4w` as the actual dependency of the overview slice that consumes the affected catalog projection. The colour-chrome fix is a scheduling preference, not a technical PDF dependency. Do not duplicate either existing bug.
+The original PRD and execution breakdown are retained in bd epic `canopi-cd7x`. Preset scales, overlap and Zone-based page creation were retired; do not reuse their proposed validation matrix. Current contracts and regression commands live in the [implementation guide](agent/canvas-pdf.md), with physical-print limitations and measurements in the [validation record](canvas-pdf-validation.md).
 
 ## Updated Assumptions
 

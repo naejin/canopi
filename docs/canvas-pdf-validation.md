@@ -4,7 +4,7 @@ The field layout proposal was approved on **2026-09-10** and integrated under
 `canopi-jqyz`. The subsequent revisions were tracked by `canopi-n820` and `canopi-v36o`.
 The 2026-09-11 field-print revisions supersede their bracket, separate-key and
 overview-index defaults. The explicit-coverage correction below removes automatic
-annotation sheets introduced during that polish. Readability consent remains retired. The [user guide](canvas-pdf.md),
+annotation sheets introduced during that polish. Readability consent remains retired. The [behavior checks](canvas-pdf.md),
 [ADR 0024](adr/0024-shared-canvas-pdf-export.md) and [agent guide](agent/canvas-pdf.md)
 describe the current behaviour.
 

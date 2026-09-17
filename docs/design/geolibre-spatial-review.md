@@ -13,46 +13,19 @@ data integrity, editing behavior, fallback and lifecycle, but it does not promis
 smooth interactive editing. The 60 Hz, input-latency and stall figures in section
 7 are diagnostic reference targets and documented product limits rather than v2
 release blockers. `canopi-ltck.26` is the accepted bounded optimization;
-`canopi-ltck.27` records the rejected follow-up experiments. Do not perform
-another renderer optimization pass in this epic before completing correctness,
-integration and removal work.
+`canopi-ltck.27` records the rejected follow-up experiments. Further renderer optimization requires separately authorized work informed by user reports.
 
 ## 1. Mandate and scope
 
 Deliver one spatial workspace for drawing and geographic data. Every Design has a spatial anchor; a blank canvas is that same workspace with geographic backgrounds hidden. Target one camera owner and a shared interactive map/scene render lifecycle. Preserve Canopi's specialized botanical editing and local metric geometry.
 
-Use **GPT-5.6 Sol as lead/orchestrator**, with selective Terra/Luna workers under section 9. The user accepted this model-routing approach and maximizing useful GeoLibre reuse. Reuse means reducing total implementation and maintenance cost, not maximizing copied lines. No plugin is required for the available Codex subagent workflow. This document remains the authoritative implementation handoff; active beads record the executable slices and their evidence.
-
 This is **v2.0.0**. Backward compatibility is not required. Do not build legacy readers, optional-location compatibility branches, dual-write fields, old-schema migrations or a permanent old/new architecture switch. Breaking changes still require explicit format versioning and clear rejection of unsupported inputs. Do not overwrite or delete existing user files or app data.
 
 Use the existing **2,201-plant Design as the primary representative fixture**. The product must still load, preserve and operate on 10,000 plants without corruption, crashes or lifecycle failure; a derived scale fixture supplements the real Design rather than replacing it. Smooth 10,000-plant interaction is not a v2.0.0 guarantee.
 
-This plan owns spatial contracts, camera/input/render integration, related Layers/Location behavior, validation and removal of superseded code. The [LiDAR plan](lidar-library.md) continues to own raster import, acceptance regions, storage and scientific analysis. New hydrological algorithms, national data hosting, arbitrary CRS editing, globe/pitched editing, collaboration, generic GIS editing and new PDF map backgrounds are outside this epic.
+This plan owns spatial contracts, camera/input/render integration, related Layers/Location behavior, validation and removal of superseded code. The [LiDAR foundation record](lidar-library.md) retains raster storage and scientific invariants; the [raster rework](raster-data-analysis-rework.md) owns future delivery scope. New hydrological algorithms, national data hosting, arbitrary CRS editing, globe/pitched editing, collaboration, generic GIS editing and new PDF map backgrounds are outside this epic.
 
 The reported 34 km coverage discrepancy and layers remaining fixed after coverage navigation are regression scenarios, not a verified diagnosis. Do not claim their cause from this plan.
-
-## 2. Start workflow and existing work
-
-Read `AGENTS.md`, [domain vocabulary](../../CONTEXT.md), and these guides before touching their areas:
-[canvas runtime](../agent/canvas-runtime.md), [MapLibre](../agent/maplibre.md),
-[document lifecycle](../agent/document-lifecycle.md), [performance](../agent/canvas-performance.md),
-[edition development](../agent/edition-development.md), [Canvas PDF](../agent/canvas-pdf.md),
-and [design system](../../.interface-design/system.md).
-
-Current inspected baseline: `963fe634a808402d05a8c4ed4767ea9568ff5d45`, branch `feature/lidar-import-progress`. Refresh code and beads before implementation; do not assume that baseline remains current.
-
-| Existing bead | Relationship |
-| --- | --- |
-| `canopi-j571` | LiDAR umbrella; preserve delivered imports, library, slope and display functionality. |
-| `canopi-cldf`, `canopi-da4f`, `canopi-gkd7` | Delivered foundation repairs and progress; retain their regressions. |
-| `canopi-4kar`, `canopi-jv8a` | Library/partial-coverage work in progress; coordinate contracts without taking over their scope. |
-| `canopi-j8mp` | Existing Layers/Design integration work; put shared stacking acceptance here or transfer it explicitly to a child of this epic, never duplicate ownership. |
-| `canopi-kqpp` | Raster/drone-scale and packaged-engine qualification; share combined-load evidence. |
-| `canopi-5neg` | Analysis breadth; independent of camera replacement. |
-
-Do not recreate draft beads during planning. When the user starts implementation, create a fresh epic and only the next executable child slices, with dependencies and concrete acceptance criteria. Do not reproduce the deleted work breakdown automatically. Claim before coding. These sections specify outcomes rather than track status. Preserve the integrated LiDAR baseline in the delivered checkout; do not start from a main branch missing accepted fixes. Follow repository branch, rebase, testing and handoff rules. The accepted Sol-led delegation workflow is described in section 9; only launch workers for bounded tasks within an authorized implementation session.
-
-Record an ADR for the accepted always-anchored domain and intended single-camera architecture, marked as planned until shipped. At the rendering checkpoint, record the chosen adapter and evidence. Update operating guides when behavior actually changes, not merely because this plan proposes it.
 
 ## 3. Fixed domain and document contracts
 
@@ -179,67 +152,6 @@ Use a deterministic **10,000-plant derivative** only for capacity qualification.
 
 Small synthetic fixtures belong in automated CI for coordinate, rendering, selection and persistence regressions. A reproducible generator may be committed; the user's Design may not.
 
-## 6. Phased implementation and acceptance
-
-### Phase A — contracts, baseline and decision record
-
-Start with the GeoLibre reuse inventory in section 9, then create the ADR and immediately executable child beads; record actual integrated baseline and supported hardware. Capture representative behavior with existing [performance tools](../agent/canvas-performance.md), then extend measurement to the combined workspace. Keep later-phase interfaces provisional until the rendering checkpoint succeeds.
-
-Specify v2 fields, default anchor, validation, placement/undo semantics, UI copy and format rejection. Inspect actual Location/Layers components and UI gallery before changing them. Keep styling and 11-language localization consistent.
-
-Exit: fixture receipt, matched scenario scripts, current timings with limits, approved contract recorded in the ADR and implementable child beads. The reported incident has a regression scenario; its cause remains unclaimed unless independently reproduced and verified.
-
-### Phase B — bounded rendering feasibility checkpoint
-
-Use the temporary converted representative fixture and existing domain runtime behind an isolated development entry. Implement map-owned navigation and a custom scene layer for plants, zones, grid and selection; exercise representative botanical detail and labels early.
-
-Verify resource sharing, frame alignment, resize, reference/LiDAR stacking, click/drag arbitration and teardown. Compare against the existing renderer under identical conditions. Verify offline empty style.
-
-Exit: runnable prototype, pinned adapter/API choice, visual comparisons, alignment and performance evidence. Do not advance on a plain-point demo. If shared-context Pixi fails, the same child bead may test the focused renderer alternative; file separately scoped work for a substantial new renderer. If neither candidate meets correctness/resource requirements, leave production architecture intact and report the specific failed criterion. Do not silently substitute camera reversal plus another unsynchronized canvas.
-
-### Phase C — v2 domain and persistence
-
-Implement the authored spatial frame and versioned admission in shared types, Rust and frontend. Regenerate outputs. Update create/template/duplicate/save/open/autosave and both edition adapters. Add explicit provisional-site presentation and placement confirmation in the existing Desktop Location workflow.
-
-Exit: no nullable frame in admitted v2 Designs, zero hidden-source requests for a new Design, unsupported documents rejected without losing the active session, placement preview/cancel/undo correct, round-trip through Desktop and Web. No shipping legacy converter.
-
-### Phase D — production navigation, tools and lifetime
-
-Integrate the qualified rendering adapter through the existing runtime composition. Migrate each gesture and navigation action to the single owner; expose frame observation through the query role. Update coverage/return, interactive overlays, resize and Design replacement. Finish annotations, guides, groups, species styling, labels and all drawing tools before default activation.
-
-Exit: representative Design retains all editing behavior, camera navigation never relocates data, no camera feedback loop, stale frame or listener/resource leak across repeated replacement and style reload. Native fallback preserves editing. No production path simultaneously runs old and new interactive renderers.
-
-### Phase E — layer integration and capacity qualification
-
-Implement explicit source/result/reference ordering and paint/data distinction. Qualify source-hidden/result-visible behavior, local asset loading and simultaneous import/analysis.
-
-Retain the accepted `canopi-ltck.26` bounded geometry/cache improvements. Do not
-start another renderer optimization slice in this epic: forced Pixi batching and
-an atlas/particle candidate were evaluated and rejected in `canopi-ltck.27`.
-Preserve meaningful botanical styling and the exact editing model; do not trade
-them for clustering, symbol quantization or a speculative renderer rewrite.
-Continue measuring known costs so regressions and product limits remain visible.
-
-Exit: the real fixture passes every correctness, editing, ordering, fallback and
-lifecycle gate. The synthetic 10,000-Plant cases load and preserve exact data,
-complete the same functional interactions without crashes or leaks, and are
-removed after qualification. Their responsiveness and the representative
-fixture's known frame-time misses are reported as limitations, not exit blockers.
-CPU scene work, map/GPU work and raster processing costs remain reported
-separately without claiming unmeasured native/GPU performance.
-
-### Phase F — removal and v2 release qualification
-
-Remove superseded map-following camera code, obsolete location-null logic, map-only fit overrides, retired prototype entry points and replaced tests. Preserve meaningful assertions at the new interfaces. Keep only the selected primary renderer plus required fallback/export adapters.
-
-Update AGENTS/subsystem guides, CONTEXT and ADR status; reconcile conflicting LiDAR-plan navigation text. Apply v2.0.0 package/release metadata through the existing release workflow after integration, not as an isolated early version bump.
-
-Exit: complete native/edition qualification, documented platform and performance
-limits, no unclaimed failed correctness gate, no permanent legacy architecture
-toggle, and no runtime dependency on private fixtures. Commit and push the scoped
-integrated implementation branch per repository instructions; publishing a
-release is separate authorization.
-
 ## 7. Test and performance gates
 
 ### Required correctness scenarios
@@ -274,13 +186,7 @@ support; it does not establish smooth 10,000-Plant interaction.
 
 ### Repository gates
 
-Run the current AGENTS gate matrix, including for this mixed architecture work:
-
-From `desktop/web`: `npx tsc --noEmit`, focused Vitest while editing, full `npm test`, `npm run check:ui`, `npm run build`, `npm run build:web`. Shared contract edits require `npm run gen:types` and `npm run check:types`.
-
-From root: `cargo fmt --all -- --check`, `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace`, `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`, and `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace`. Native command/executor changes also require the native command policy test.
-
-Inspect actual light/dark UI, French long strings, narrow dock, keyboard and pointer behavior. Qualify Desktop Linux/macOS/Windows and Web according to supported release capabilities; mark unavailable platform evidence explicitly. Rerun affected gates after integration/rebase. Do not weaken architecture tests to admit new ownership: replace obsolete rules with the explicit new ADR and equivalent stronger assertions.
+Use the current [quality gates](../../AGENTS.md#quality-gates) and [edition verification workflow](../agent/edition-development.md#verification-workflow). Platform evidence must name the actual runtime; unavailable platforms are not passes.
 
 ## 8. Sources, handoff and completion
 
@@ -298,10 +204,8 @@ Verify paths and APIs before editing. MapLibre's [custom-layer contract](https:/
 
 GeoLibre reviewed at [d3fca7b8](https://github.com/opengeos/GeoLibre/tree/d3fca7b8f250e3a337d9a29de261d85420935106). Useful references are its map layer reconciliation, geometry-edit ownership and processing interfaces; its React/Zustand/plugin stack is not the target.
 
-Each implementation bead handoff must name code changes, acceptance evidence, commands/results, fixture hash, actual renderer/hardware, outstanding limits, agent-doc changes, commit/branch and preserved user files. Close only completed correctness and integration work. Record incomplete platform evidence and performance misses as explicit limits; do not reopen renderer optimization within this epic unless a correctness defect requires it.
-
 Historical planning validation: the fixture was initially read only for aggregate
 counts/hash. Subsequent diagnostics, benchmarks and implementation evidence are
-recorded in the active epic and its closed children. This handoff still does not
+recorded in the completed epic and its closed children. This handoff still does not
 by itself establish that v2 has shipped, and release publication remains outside
 the epic.

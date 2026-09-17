@@ -1,7 +1,7 @@
 # Raster foundation, Data and Analysis workbenches
 
 Status: proposed — satellite access decided; engine qualification and UI prototype acceptance remain execution gates.
-Tracking: Related existing program `canopi-j571`; scope overlaps `canopi-jv8a`, `canopi-5neg`, `canopi-j8mp`, and `canopi-kqpp`. This plan does not create, claim, or authorize implementation issues.
+Tracking: `canopi-j571`; reconciled children `canopi-kqpp`, `canopi-jv8a`, `canopi-j8mp`, and deferred `canopi-5neg`. Implementation still requires separate authorization.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 
 ## Mandate and delivery boundary
@@ -177,7 +177,7 @@ Expected outcomes derive from user-approved simple import and edition scope, ADR
 
 ## Ordered execution and exit gates
 
-Execution is serial by default, one responsible implementer with a fresh final review. No subagents are authorized. The integration owner retains responsibility for all shared files, generated contracts, locale batches, gates, and final receipts. After separate implementation authorization, reconcile the existing LiDAR backlog before claiming work; do not create a competing duplicate epic silently.
+Execution is serial by default, one responsible implementer with a fresh final review. No subagents are authorized. The integration owner retains responsibility for all shared files, generated contracts, locale batches, gates, and final receipts. The existing LiDAR backlog is reconciled under `canopi-j571`: `canopi-kqpp` qualifies engines, `canopi-jv8a` implements bounded import, `canopi-j8mp` retains workbench/shared-edition integration, and `canopi-5neg` retains deferred analysis expansion. Before claiming implementation, split prototype, Web/provider and final packaged qualification work into bounded children as needed; do not create a competing epic.
 
 | Phase | Outcome, owned surfaces, prerequisites | Exit gate and stop condition |
 | --- | --- | --- |
@@ -198,7 +198,7 @@ Apply the [repository quality gates](../../AGENTS.md#quality-gates) for this mix
 
 Use `npm run dev:ui` for live prototype/production review, then isolated real Desktop and Web sessions as described in the edition guide. Browser/jsdom success does not establish native file access, WebKit behavior, or packaged WASM loading. Qualify Linux, Windows, and macOS before claiming support there. Pin/bundle required offline processing assets and test worker/CSP/asset paths without network; a CDN-only successful development run is insufficient.
 
-At implementation, update `CONTEXT.md`, the dock design contract, LiDAR/MapLibre/edition/build-release/document-format guides, and the old LiDAR design's current-guidance/status links. Explicitly supersede preview/region-choice and no-pixel-inspection requirements. Keep scientific validity, independent visibility, immutable publication, and history requirements. Existing Web map-scope ADR descriptions contain historical implementation statements; replace their scope through a linked decision rather than treating those statements as current behavior. Do not change operating guidance merely because this proposal exists.
+At implementation, update `CONTEXT.md`, the dock design contract, LiDAR/MapLibre/edition/build-release/document-format guides, and the old LiDAR design's current-guidance/status links. The foundation record already retires preview/region-choice and no-pixel-inspection as future requirements; replace current operating guidance only when their implementation changes. Keep scientific validity, independent visibility, immutable publication, and history requirements. Existing Web map-scope ADR descriptions contain historical implementation statements; replace their scope through a linked decision rather than treating those statements as current behavior. Do not change operating guidance merely because this proposal exists.
 
 Use the [issue workflow](../workflow/issue-tracker.md) and [delivery contract](../workflow/delivery.md). At handoff, attach fixture identities, numeric/resource measurements, exact validation results, upstream artifact pins, and unavailable platform evidence to the normal bead/commit receipt. No implementation or new issue creation is authorized by this proposal.
 

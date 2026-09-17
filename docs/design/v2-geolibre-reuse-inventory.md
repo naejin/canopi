@@ -4,9 +4,7 @@ Status: evidence.
 Tracking: `canopi-ltck.1`.
 Current guidance: [ADR 0025](../adr/0025-always-anchored-spatial-workspace.md), [MapLibre](../agent/maplibre.md).
 
-This inventory precedes the v2 rendering experiment. It maps GeoLibre code at a
-fixed revision to current Canopi seams and chooses reuse only where it reduces
-implementation and long-term maintenance cost.
+This dated inventory records inputs to the completed v2 rendering experiment. Paths, versions and gaps below describe its pinned baseline, not current defects. Consult the linked operating guides for present ownership.
 
 ## Receipt and policy
 
@@ -44,7 +42,7 @@ implementation and long-term maintenance cost.
 | Map lifetime | `createMapLibreHost`, `createMapLibreSurfaceAdapter`, the lifetime registry, Canvas Map Surface lifecycle, reconciliation, and snapshot modules remain the resource boundary. They will be deepened into one workspace owner rather than bypassed. |
 | LiDAR and Layers | LiDAR presentation reads, `lidarMapLayers`, `classifyLidarSync`, `applyLidarSync`, terrain synchronization, overlay synchronization, library polling/actions, and scoped tile URLs remain. Source/result visibility, stored georeferencing, generation publication, numerical analysis, cancellation, and passive display failure are unchanged. |
 
-## Gaps the experiment must resolve
+## Historical gaps at the inspected baseline
 
 - The current `CameraController` is writable authority, MapLibre is
   `interactive: false`, and every Canvas Map Surface update can call `jumpTo`.
@@ -68,5 +66,4 @@ implementation and long-term maintenance cost.
   `clearBeforeRender: true`. A qualified adapter must be explicitly non-owning.
 - GeoLibre contains no shared Pixi/MapLibre context or botanical editing proof.
 
-These are experiment inputs, not evidence that the selected v2 runtime has
-already shipped.
+The [experiment result](../v2-shared-renderer-experiment.md) records the selected approach and measured limits. Do not reopen these baseline gaps without verifying current code.

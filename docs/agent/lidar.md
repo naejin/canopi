@@ -1,6 +1,6 @@
 # LiDAR implementation guide
 
-Use this entry point for raster import, overlap review, the shared library, analysis, or LiDAR presentation. The current foundation admits bounded, north-up, aligned single-band numeric rasters and persisted slope analysis. Broader mask/resampling admission, analysis families, drone-scale processing and packaged-platform qualification remain future scope in the [LiDAR design](../design/lidar-library.md); consult bd before claiming a slice.
+Use this entry point for raster import, overlap review, the shared library, analysis, or LiDAR presentation. The current foundation admits bounded, north-up, aligned single-band numeric rasters and persisted slope analysis. The [raster rework](../design/raster-data-analysis-rework.md) specifies future bounded import, Data/Analysis workbenches and shared Web maps; it does not change the current workflow until implemented. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
 
 | Change | Owner / reference |
 | --- | --- |

@@ -12,13 +12,13 @@ Start with the narrowest authority for the task. Current implementation guidance
 | UI hierarchy and reusable interaction patterns | [`.interface-design/system.md`](../.interface-design/system.md) |
 | Durable architecture decisions and supersession history | [`docs/adr/`](adr/) |
 | Release operation | [`docs/release.md`](release.md) and [`docs/agent/build-release.md`](agent/build-release.md) |
-| User-facing Canvas PDF behavior | [`docs/canvas-pdf.md`](canvas-pdf.md) |
+| Canvas PDF acceptance behavior | [`docs/canvas-pdf.md`](canvas-pdf.md) |
 
 ## Evidence and history
 
 Implementation specifications and completed design records live under `docs/design/`. Proposed work must not override current operating guides before implementation. The [completed Desktop/Web convergence record](design/edition-convergence/handoff.md) points to the delivered [edition development guide](agent/edition-development.md); its implementation history remains in bd epic `canopi-dp4s`.
 
-The [LiDAR guide](agent/lidar.md) routes current implementation work. Its [partially implemented design](design/lidar-library.md) retains future raster and analysis scope; bd owns which remaining slices are active. The [scientific evidence](design/lidar-agroecology/report.md) records measured inputs and interpretation limits.
+The [LiDAR guide](agent/lidar.md) routes current implementation work. Its [foundation record](design/lidar-library.md) retains storage and scientific invariants; the rework below replaces the old future-delivery plan, and bd owns executable scope. The [scientific evidence](design/lidar-agroecology/report.md) records measured inputs and interpretation limits.
 
 The [proposed raster, Data and Analysis rework](design/raster-data-analysis-rework.md) records simplified bounded import, GeoLibre reuse qualification, Desktop workbenches, and Web Location scope. It includes the selected keyless Google Satellite path with optional official API access and retains engine/UI qualification gates; it does not replace current operating contracts or authorize implementation.
 
@@ -39,7 +39,7 @@ Two historical records use number `0007`. Refer to them by filename: `0007-desig
 - Put reproducible current gates beside the code or scripts they validate. Keep large one-time captures and rejected prototypes out of Git once their conclusion is recorded.
 - Keep only material that helps implement, verify, release, or maintain the project: contracts, rationale for consequential decisions, ownership, commands, fixtures, and measured limitations. Remove conversational history, expired kickoff prompts, model assignments, and checkout-specific instructions after delivery.
 - Link rather than duplicate commands, workflow rules, or numeric constants owned elsewhere. Release notes consumed by tooling and evidence supporting current acceptance limits remain useful; do not delete them merely because they are historical.
-- Add a new top-level document only when it has a distinct long-lived audience. Link it from this map or the relevant authority so it is discoverable.
+- Add a new top-level document only when it serves a distinct development or release task. Link it from this map or the relevant authority so it is discoverable.
 
 ## Authority and maintenance
 

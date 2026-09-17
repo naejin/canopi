@@ -101,9 +101,9 @@ Canvas2D inherits the last accepted frame **and the matching scale policy**, inc
 
 Generation-bound marker metadata comes through an app-owned adapter/read surface, not imports of document stores inside canvas runtime. Marker lifecycle has one explicit owner; crossing a mode threshold changes presentation, not resource ownership. Browser and Desktop mount that shared behavior. Layer/source failure, context loss, asynchronous metadata completion, document replacement and teardown retain existing fencing. Preserve Tile/HTTP admission, CSP, privacy, logs, and offline policy; no new requests or data uploads beyond existing map navigation.
 
-## 6. Reuse and proposed change map
+## 6. Implementation seams and regression coverage
 
-All paths below are under `desktop/web/src/` unless otherwise stated. Proposed new names are design targets, not existing symbols.
+All paths below are under `desktop/web/src/` unless otherwise stated. This is the original change map; verify symbols against current code before editing.
 
 | Existing seam | Reuse/adaptation and owner | Evidence to retain/extend |
 | --- | --- | --- |
@@ -118,49 +118,11 @@ All paths below are under `desktop/web/src/` unless otherwise stated. Proposed n
 | `canvas/rulers.ts`, `grid.ts`, `scale-bar.ts`, scene chrome | Reuse lifecycle, suppress local chrome at overview, bound display math. | Ruler cancellation, no dense tick enumeration, useful scale bars. |
 | `scripts/canvas-performance/production-workspace.mjs` and related harness modules | Extend existing real composition harness; never reconstruct production camera in a parallel test implementation. | Aggregate diagnostics, representative and capacity receipts, cleanup checks. |
 
-The main implementer owns contracts, integration, shared locale work, documentation and gates. Work sequentially by default. Do not delegate unless separately requested by the user; if later authorized, assign disjoint files after contracts and the feasibility checkpoint are settled.
+## 7. Qualification method and evidence
 
-## 7. Ordered implementation and proof
+Current commands and quality gates belong in [AGENTS.md](../../AGENTS.md#quality-gates) and the [canvas performance guide](../agent/canvas-performance.md). The following retains the task-specific fixture and measurement protocol.
 
-### Phase 1 — Reproduce and qualify camera feasibility
-
-First executable action after implementation authorization: refresh status/main history, inspect or create and claim the zoom implementation bead, establish an isolated scoped branch retaining the accepted baseline fixes, and reproduce the boundary bug in the existing production-workspace browser harness. Do not stash user work without authorization. Record the actual integration baseline in the bead.
-
-Own camera/projection/map constructor and focused test seams. Before broad UI work, prove public-API navigation with zoom 27, single-world effective minimum, off-centre cursor anchoring, resize/bearing constraints and low/high-scale fallback. Add the original bug test before the fix. Upgrade the fake to apply centre, clamp zoom, and emit movement so it models the defect; pair it with the real installed library. Add exact no-op tests for exhausted zoom and quantitative screen-lock tests for legitimate changes.
-
-Exit gate: real production camera reaches 27 without silent fallback; 100 repeated outward zoom commands at each effective boundary preserve viewport, revision and content; interior anchor error is at most one CSS pixel; min/max/fallback scale limits agree. Exercise north bearing 0, 45 and 90 degrees, anchor latitude 0, 45 and 80 degrees (both hemispheres), longitudes near ±180, and landscape/portrait viewports. Record edge-constrained anchoring separately from interior anchoring. Stop if this needs private MapLibre mutation, weakened projection guards, an unapproved library upgrade, or a lower maximum. Resolve the failed approach before downstream implementation.
-
-### Phase 2 — Overview state, safety and restoration
-
-Prerequisite: Phase 1 passes. Own runtime presentation, interaction/command eligibility, overview lifecycle, contribution suppression and fallback policy wiring. Add transition tests before enabling the wider minimum in production UI. Implement section 4 behavior at every entry point. Keep fitted/returned viewports using policy-aware owner operations and preserve independent LiDAR bookmarks.
-
-Exit gate: no blocked spatial action changes committed content or history in overview; active preview crossing aborts once and late pointer-up cannot commit; undo/redo and panel-authorized changes survive re-entry; fallback/replacement preserve the correct Design and frame; detailed drawing returns from the newest Scene. Verify PDF/lens behavior is not affected. Failed settlement retains the established quarantine/retry path. Stop if a new document authority or broad edit-transaction rewrite appears necessary.
-
-### Phase 3 — Shared overview chrome
-
-Prerequisite: safe runtime overview. Own ZoomControls, marker/notice, ruler/scale display, shared command projection/edition bindings and all locales. Use the production UI gallery for both edition compositions. Preserve local settings while suppression is active. No new global key binding for Return is required; the button and marker use keyboard activation and Fit retains its existing shortcut.
-
-Exit gate: useful labelled zoom state at 0.5% and at 27; disabled controls at limits; one marker for confirmed placement and truthful provisional/fallback state; Return works for empty, large and ordinary Designs; no ruler loop proportional to geographic distance. Verify focus, overlay event exclusion, narrow/short viewport, light/dark and long translations. Update gallery fixtures with overview and boundary states.
-
-### Phase 4 — Integrated qualification and handoff
-
-Prerequisite: all prior gates pass in one checkout. Own combined review, docs and delivery. Run the commands below after implementation, and after any required rebase that changes the tested code.
-
-From `desktop/web/`:
-
-```sh
-npx vitest run src/__tests__/camera-controller.test.ts src/__tests__/maplibre-camera.test.ts src/__tests__/maplibre-workspace-camera.test.ts src/__tests__/scene-interaction.test.ts src/__tests__/rulers.test.ts src/__tests__/scale-bar.test.ts
-npx tsc --noEmit
-npm test
-npm run check:ui
-npm run check:types
-npm run build
-npm run build:web
-```
-
-The full suite includes new regression files plus renderer, lifecycle, edition and architecture tests. No Rust/IPC/shared authored-contract change is planned. If scope crosses those boundaries, first record why and add the `AGENTS.md` prescribed Rust/bindings gates; never quietly omit them.
-
-For real browser evidence, extend the documented runner, then execute from `desktop/web/` against a separate local Web server:
+For real browser evidence, execute the documented runner from `desktop/web/` against a separate local Web server:
 
 ```sh
 npm exec vite -- --mode web --host 127.0.0.1 --port 1431
@@ -180,7 +142,7 @@ Extend real checks through site → world → site → 27 → site, 100 limit in
 
 Performance method: compare before/after at the same revision receipt, browser/GPU, dimensions, DPR and input sequence, with ten warm-up navigation samples and 30 measured samples, three serial runs. Record p50/p95/p99 and stalls above 100 ms. Existing 16.7-ms frame and 50-ms feedback references remain diagnostic because the accepted baseline already misses them. A repeatable new site-scale p95 regression over 20% is an investigation gate: explain and resolve the introduced work before closure; do not reclassify it as pre-existing. Overview must bypass per-object detail drawing/layout, emit no ruler ticks, and do bounded marker/scale work; assert these work counts independently of timing. Browser RAF proxies are not native input-to-visible or GPU completion measurements.
 
-Qualify Chromium Web and native Desktop input/rendering on an available supported platform. Record macOS, Windows or WebKit gaps explicitly. A missing platform is not a pass; release qualification remains outstanding there. The private fixture and native sessions were unavailable/unrun during planning, so implementation must record access failures and residual risks rather than claiming completion from synthetic tests alone.
+Qualify Chromium Web and native Desktop input/rendering on an available supported platform. Record macOS, Windows or WebKit gaps explicitly. A missing platform is not a pass; release qualification remains outstanding there. The receipt below records the available fixture and native checks; remaining platform gaps are explicit.
 
 #### Qualification receipt — 2026-09-17
 
@@ -189,10 +151,6 @@ The follow-up located and verified the accepted private v5 fixture before and af
 At DPR 1, frame-opportunity/input-to-second-RAF p95 values were 116.6/123.7 ms for the representative shared renderer, 50.0/64.1 ms for representative Canvas2D, 66.7/180.0 ms for dense 10,000 Plants, and 1,000.1/2,005.3 ms for dispersed 10,000 Plants. Every scenario therefore missed the diagnostic proxy overall; representative shared and dispersed also recorded sustained stalls. DPR 1.5 and 2 proved DPR-sensitive correctness only: the headed background window was throttled to about 1 Hz, so those timings are not treated as rate evidence. On 2026-09-17 the user accepted these results as non-blocking and deferred optimization until real user reports justify it. High-DPR 10,000-Plant scenarios, three matched serial runs, and a before/after baseline were not pursued. Aggregate-only receipts are kept outside Git under `/tmp/canopi-world-qualification-final-*.json`; fixture contents and captures were not committed.
 
 On Linux Desktop, the actual Tauri/WebKit application passed physical XTest pan, overview-limit no-op, Return, zoom-27-limit no-op, and replacement cleanup through the Canvas2D fallback under isolated X11/DBus state. On the NVIDIA GTX 1080 Ti path, process attribution, WebGL2 rendering, local-to-map alignment (maximum sampled error about `5.6e-8` CSS px), effective world minimum, zoom 27, exhausted-limit identity, Return, and old-map removal passed through the WebKit inspector. Physical shared-GPU input could not be exercised because the real display was locked; the session was not bypassed. macOS and Windows remain unavailable. Temporary v6 fixture copies, profiles, and screenshots were deleted after re-verifying the original receipt.
-
-Exit gate: all relevant local quality gates and available real-system checks pass, integration contains every required accepted fix, measured limits and platform gaps are recorded, and no resource/content regressions remain. Update `docs/agent/canvas-runtime.md`, `docs/agent/maplibre.md`, the canvas-workspace interface guide and performance guide when commands/scenarios change; replace stale constructor/provisional-shell statements. Current ownership and commands are maintained in the linked operating guides.
-
-Close only satisfied implementation beads with concrete evidence, export bead metadata, commit intentional files, update/rebase while preserving merges and user work, rerun affected gates, and push the scoped branch according to AGENTS.md. Handoff includes bead IDs, commits, branch/upstream status, checks, screenshots/aggregate evidence locations, platform gaps, doc changes, and untouched user files. The later implementation request authorized the work recorded by `canopi-85wo`; it did not authorize release publication.
 
 ## 8. Requested GeoLibre reuse assessment
 
