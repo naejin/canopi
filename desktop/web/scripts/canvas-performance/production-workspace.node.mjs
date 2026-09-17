@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import {
   FAILURE_CODES,
   classifyCapacityEvidence,
+  parseDeviceScaleFactor,
   percentile,
   sanitizeRunnerError,
   summarizeBoundedSamples,
@@ -73,6 +74,14 @@ test('bounded work summaries retain aggregate facts and discard raw overflow', (
   })
 })
 
+test('production workspace DPR accepts qualification values and rejects invalid input', () => {
+  assert.equal(parseDeviceScaleFactor('1'), 1)
+  assert.equal(parseDeviceScaleFactor('1.5'), 1.5)
+  assert.equal(parseDeviceScaleFactor('2'), 2)
+  assert.throws(() => parseDeviceScaleFactor('0.5'), /DPR must be between 1 and 3/)
+  assert.throws(() => parseDeviceScaleFactor('not-a-number'), /DPR must be between 1 and 3/)
+})
+
 test('runner errors omit private paths and payload fragments', () => {
   const privatePath = '/home/person/PRIVATE-DESIGN.canopi'
   const error = sanitizeRunnerError({ code: 'interaction', message: `failed ${privatePath} with {\"name\":\"PRIVATE\"}` })
@@ -98,12 +107,21 @@ test('runner CLI redacts a private fixture location before loading a browser', a
 
 test('browser callbacks compare values inside their page evaluation context', async () => {
   const source = await readFile(script, 'utf8')
-  assert.equal(source.includes('sameViewport'), false)
+  const worldCameraStart = source.indexOf('const exerciseWorldCamera = async () => {')
+  const worldCameraEnd = source.indexOf('const dispose = async () => {', worldCameraStart)
+  assert.notEqual(worldCameraStart, -1)
+  assert.notEqual(worldCameraEnd, -1)
+  assert.match(source.slice(worldCameraStart, worldCameraEnd), /const sameViewport =/)
   assert.equal(source.includes('samePoint'), false)
   assert.match(source, /collectNavigationFrames/)
   assert.match(source, /alternating synthetic wheel events/)
   assert.match(source, /groupedPlantIds/)
   assert.match(source, /MAX_POINTER_TARGET_CANDIDATES/)
+  assert.match(source, /const selectionResetPoints =/)
+  assert.match(source, /cannot reset selection through an empty canvas pointer gesture/)
+  assert.match(source, /const pointerSelectedPlant =/)
+  assert.match(source, /plant && !plant\.locked && !grouped/)
+  assert.equal(source.includes("targets[0]?.id === id"), false)
   assert.match(source, /no pointer-selectable editable plant candidate/)
   assert.match(source, /status: 'fail'/)
 })
@@ -111,6 +129,8 @@ test('browser callbacks compare values inside their page evaluation context', as
 test('work profiling is opt-in, aggregate-only, and restores the actual patched seams', async () => {
   const source = await readFile(script, 'utf8')
   assert.match(source, /'profile-work': \{ type: 'boolean', default: false \}/)
+  assert.match(source, /dpr: \{ type: 'string', default: '1' \}/)
+  assert.match(source, /deviceScaleFactor: dpr/)
   assert.match(source, /profileWork \? \{ workProfile \} : \{\}/)
   assert.match(source, /pixi__js/)
   assert.match(source, /viewport-presentation/)

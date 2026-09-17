@@ -73,6 +73,12 @@ export function summarizeBoundedSamples(samples, options = {}) {
   }
 }
 
+export function parseDeviceScaleFactor(value) {
+  const dpr = Number(value)
+  if (!Number.isFinite(dpr) || dpr < 1 || dpr > 3) throw new Error('DPR must be between 1 and 3')
+  return dpr
+}
+
 /** Browser proxies compared directly with the plan's reference values. These
  * comparisons do not certify native presented frames or input-to-visible time. */
 export function classifyCapacityEvidence({ frameIntervalsMs, inputToSecondRafMs }) {
@@ -154,7 +160,7 @@ async function verifySourceReceipt(file) {
   }
 }
 
-async function runVerifiedScenario({ browser, base, scenario, file, profileWork }) {
+async function runVerifiedScenario({ browser, base, scenario, file, dpr, profileWork }) {
   await verifySourceReceipt(file)
   try {
     if (scenario.derivative) {
@@ -162,17 +168,17 @@ async function runVerifiedScenario({ browser, base, scenario, file, profileWork 
         file,
         scenario.derivative,
         FIXTURE_EXPECTATIONS,
-        ({ file: derivativeFile, receipt }) => runBrowserScenario({ browser, base, scenario, file: derivativeFile, profileWork })
+        ({ file: derivativeFile, receipt }) => runBrowserScenario({ browser, base, scenario, file: derivativeFile, dpr, profileWork })
           .then((result) => ({ ...result, fixture: receipt })),
       )
     }
-    return await runBrowserScenario({ browser, base, scenario, file, profileWork })
+    return await runBrowserScenario({ browser, base, scenario, file, dpr, profileWork })
   } finally {
     await verifySourceReceipt(file)
   }
 }
 
-async function runBrowserScenario({ browser, base, scenario, file, profileWork }) {
+async function runBrowserScenario({ browser, base, scenario, file, dpr, profileWork }) {
   let page
   let primaryFailure = null
   let cleanupAttempted = false
@@ -180,7 +186,7 @@ async function runBrowserScenario({ browser, base, scenario, file, profileWork }
   let pageErrorCount = 0
   try {
     try {
-      page = await browser.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 })
+      page = await browser.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: dpr })
     } catch {
       throw failure('scenario-setup')
     }
@@ -833,6 +839,16 @@ async function runBrowserScenario({ browser, base, scenario, file, profileWork }
 }
 
 async function exercisePublicSurfaces(page) {
+  const selectionResetPoints = [[1, 1], [1199, 1], [1, 799], [1199, 799]]
+  let selectionReset = false
+  for (const [x, y] of selectionResetPoints) {
+    await page.mouse.click(x, y)
+    await settlePage(page)
+    selectionReset = await page.evaluate(() =>
+      window.__productionWorkspaceCapacity.composition.surfaces.queries.getSelection().length === 0)
+    if (selectionReset) break
+  }
+  if (!selectionReset) throw new Error('cannot reset selection through an empty canvas pointer gesture')
   await page.evaluate(() => {
     const state = window.__productionWorkspaceCapacity
     if (!state) throw new Error('workspace state unavailable')
@@ -889,12 +905,19 @@ async function exercisePublicSurfaces(page) {
   for (const candidate of candidates) {
     await page.mouse.click(candidate.x, candidate.y)
     await settlePage(page)
-    const selected = await page.evaluate((id) => {
-      const targets = window.__productionWorkspaceCapacity.composition.surfaces.queries.getSelection()
-      return targets.length === 1 && targets[0]?.kind === 'plant' && targets[0]?.id === id
-    }, candidate.id)
-    if (selected) {
-      selectedTarget = candidate
+    const pointerSelectedPlant = await page.evaluate(() => {
+      const surfaces = window.__productionWorkspaceCapacity.composition.surfaces
+      const targets = surfaces.queries.getSelection()
+      if (targets.length !== 1) return null
+      const target = targets[0]?.kind === 'plant' ? targets[0] : null
+      if (!target) return null
+      const scene = surfaces.queries.getSceneSnapshot()
+      const plant = scene.plants.find((item) => item.id === target.id)
+      const grouped = scene.groups.some((group) => group.members.some((member) => member.kind === 'plant' && member.id === target.id))
+      return plant && !plant.locked && !grouped ? { id: plant.id, position: plant.position } : null
+    })
+    if (pointerSelectedPlant) {
+      selectedTarget = { ...pointerSelectedPlant, x: candidate.x, y: candidate.y }
       break
     }
   }
@@ -929,11 +952,13 @@ async function main() {
   const { values } = parseArgs({ options: {
     file: { type: 'string' }, scenario: { type: 'string', default: 'all' },
     url: { type: 'string', default: 'http://127.0.0.1:1431/app/' },
+    dpr: { type: 'string', default: '1' },
     headed: { type: 'boolean', default: false },
     'profile-work': { type: 'boolean', default: false },
   } })
   if (!values.file) throw new Error('missing fixture')
   const base = assertLocalUrl(values.url)
+  const dpr = parseDeviceScaleFactor(values.dpr)
   const scenarios = parseScenario(values.scenario)
   const receipt = await verifySourceReceipt(values.file)
   const require = createRequire(import.meta.url)
@@ -955,7 +980,7 @@ async function main() {
     let failed = false
     for (const scenario of scenarios) {
       try {
-        results.push(await runVerifiedScenario({ browser, base, scenario, file: values.file, profileWork: values['profile-work'] }))
+        results.push(await runVerifiedScenario({ browser, base, scenario, file: values.file, dpr, profileWork: values['profile-work'] }))
       } catch (error) {
         const safe = error instanceof CapacityRunnerError ? error : failure('unknown')
         results.push({

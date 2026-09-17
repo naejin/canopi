@@ -98,7 +98,7 @@ Start a local Web Vite server, then run one named scenario or all four serially:
 ```bash
 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
   node scripts/canvas-performance/production-workspace.mjs \
-  --file '<private-v5-design.canopi>' --scenario all --headed
+  --file '<private-v5-design.canopi>' --scenario all --dpr 1 --headed
 ```
 
 The scenarios are `representative` (shared renderer), `fallback` (forced
@@ -106,6 +106,10 @@ Canvas2D fallback), `dense` (synthetic dense 10,000 Plants), and `dispersed`
 (synthetic dispersed 10,000 Plants). The in-browser development preparation
 changes a v5 file only by setting `version: 6` and adding
 `newDesignSpatialFrame()`; it is not a shipping converter.
+
+Use `--dpr 1`, `--dpr 2`, and one fractional value such as `--dpr 1.5` for
+the qualification matrix. The accepted range is 1 through 3, and the reported
+browser metadata must match the requested value.
 
 Every scenario also runs the real production camera through site → overview →
 Return → zoom 27 → Return. The aggregate `correctness.worldCamera` record checks
