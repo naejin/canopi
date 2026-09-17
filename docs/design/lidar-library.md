@@ -1,10 +1,14 @@
 # LiDAR layers and local agroecological analysis — implementation plan
 
-Status: **foundation implemented and Linux-qualified; later slices remain tracked**. Updated 2026-09-15. Implementation beads: `canopi-j571`, foundation audit `canopi-cldf`. See the [foundation review and implementation report](lidar-foundation-review.md) and [LiDAR agroecology evidence](lidar-agroecology/report.md).
+Status: partial.
+Tracking: `canopi-j571` (remaining program), `canopi-4kar` (delivered library), `canopi-cldf` (foundation repair).
+Current guidance: [LiDAR implementation guide](../agent/lidar.md).
 
-For v2.0.0 spatial behavior, the [unified workspace implementation plan](geolibre-spatial-review.md) and active `canopi-ltck` epic own the required Design Spatial Frame, shared camera/render lifecycle, v2 document admission, placement and navigation. That clean v2 contract supersedes compatibility requirements in this plan for those surfaces. This document continues to own raster import, coverage, library persistence and scientific analysis. LiDAR contributions enter the production Shared Spatial Workspace above the basemap and below geographic references, grid, Design objects and interaction overlays; camera movement never changes numeric analysis.
+Foundation implemented and Linux-qualified; later slices remain backlog, with exact scope in bd. See the [foundation review](lidar-foundation-review.md) and [scientific evidence](lidar-agroecology/report.md). The future outcomes below are not all implemented and do not authorize work without a claimed bead. Performance optimization is deferred until user reports warrant it; integrity, admission and resource limits remain required.
 
-This is the single implementation authority for the feature. Historical alternatives and review notes have been removed. The coding agent must implement the slices in order, keep the bead current, and create follow-up beads instead of expanding a slice silently.
+For implemented v2 spatial behavior, [ADR 0025](../adr/0025-always-anchored-spatial-workspace.md) records the required Design Spatial Frame, shared camera/render lifecycle, v2 document admission, placement and navigation. That contract supersedes compatibility requirements in this plan for those surfaces. This document retains future raster import, coverage, library persistence and scientific analysis requirements. LiDAR contributions enter the production Shared Spatial Workspace above the basemap and below geographic references, grid, Design objects and interaction overlays; camera movement never changes numeric analysis.
+
+Current implementation boundaries live in the linked operating guides; this plan supplies the accepted future outcomes for a separately claimed slice. Keep the bead current and record scope changes explicitly.
 
 ## 1. Product outcome and fixed decisions
 

@@ -1,6 +1,10 @@
 # Canvas zoom 27 and single-world overview
 
-Status: implemented under bead `canopi-85wo`; qualification follow-up `canopi-a5tj` is closed with exact-fixture browser evidence and available Linux native evidence. The recorded performance misses and unavailable platform coverage are accepted limitations, not release blockers.
+Status: completed.
+Tracking: `canopi-85wo` (implementation), `canopi-a5tj` (qualification).
+Current guidance: [Canvas rendering](../agent/canvas-rendering.md), [MapLibre](../agent/maplibre.md), [Canvas performance](../agent/canvas-performance.md).
+
+Historical implementation and qualification contract. Both beads are closed with exact-fixture browser evidence and available Linux native evidence. The original gates below are retained as history; the 2026-09-17 user decision accepts measured performance misses and unavailable platform coverage as limitations, and defers optimization until user reports warrant it. They do not direct a new qualification or optimization pass.
 
 Prepared and implemented 2026-09-16. This record describes the delivered behavior and retains the original qualification contract and known release-evidence gaps.
 

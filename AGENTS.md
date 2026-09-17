@@ -13,12 +13,12 @@ These instructions are for AI agents working in this repository. Optimize for lo
 
 ## Agent Docs Maintenance
 
-- Treat `AGENTS.md`, `docs/agent/*.md`, and `docs/agents/*.md` as living operating docs, not append-only notes.
+- Treat `AGENTS.md`, `docs/agent/*.md`, and `docs/workflow/*.md` as living operating docs, not append-only notes.
 - Update agent docs in the same change when code moves, architecture boundaries change, commands change, quality gates change, or a repeated gotcha becomes a durable rule.
 - Prefer replacing or deleting stale instructions over adding exceptions. If two rules conflict, resolve the conflict before ending the work.
 - Keep `AGENTS.md` focused on repo-wide rules. Put subsystem-specific details in `docs/agent/*.md` and link to them from here.
 - Do not add one-off bug memories to `AGENTS.md`. Add a regression test, a code comment near the invariant, or a focused subsystem note instead.
-- Before closing an implementation bead, check whether the change invalidates `AGENTS.md` or `docs/agent/*.md`.
+- Before closing an implementation bead, reconcile affected operating guides and the design record's status/current-guidance links. Follow [delivery and integration](docs/workflow/delivery.md) before declaring work integrated or removing branches.
 - In the final handoff, mention agent-doc updates made, or explicitly say none were needed when the work changed architecture, commands, generated files, or quality gates.
 
 ## Repository Map
@@ -31,7 +31,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - `scripts/`: database preparation and release tooling.
 - `docs/README.md`: documentation map and placement rules.
 - `docs/agent/`: subsystem-specific guidance for future agents.
-- `docs/agents/`: workflow context consumed by repo-local agent skills.
+- `docs/workflow/`: issue, triage, domain-document, and delivery workflow guidance. `docs/agents/` contains redirects for installed skills.
 - `.interface-design/`: design system documentation.
 
 ## Subsystem Guides
@@ -42,6 +42,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - [Canvas runtime](docs/agent/canvas-runtime.md): runtime seams, scene ownership, rendering, interaction, Target projection.
 - [Canvas PDF](docs/agent/canvas-pdf.md): shared print layout, temporary page setup, fonts, preview, delivery, and validation.
 - [MapLibre](docs/agent/maplibre.md): basemap and terrain integration, projection, camera sync.
+- [LiDAR](docs/agent/lidar.md): library/import/analysis ownership, current limitations, and validation routes.
 - [Database](docs/agent/database.md): plant DB schema, query builder, FTS, translations, canopi-data export.
 - [Build and release](docs/agent/build-release.md): build commands, release workflow, platform/native rules.
 - [Problem reporting](docs/agent/problem-reporting.md): local Problem Reports, Diagnostic Bundle privacy boundary, reporting UI seams.
@@ -51,11 +52,12 @@ These instructions are for AI agents working in this repository. Optimize for lo
 
 Repo-local skills live in the ignored `.agents/skills/` directory as flat skill folders copied from the public skill catalog. Do not force-add `.agents/` to git unless the repository policy changes.
 
-- [Issue tracker](docs/agents/issue-tracker.md): bd conventions for task, bug, feature, epic, chore, and decision tracking.
-- [Triage workflow](docs/agents/triage-workflow.md): readiness labels and durable brief conventions for bd beads.
-- [Domain docs](docs/agents/domain.md): project vocabulary and decision docs that skills should read before planning or editing.
+- [Issue tracker](docs/workflow/issue-tracker.md): bd conventions for task, bug, feature, epic, chore, and decision tracking.
+- [Triage workflow](docs/workflow/triage-workflow.md): readiness labels and durable brief conventions for bd beads.
+- [Domain docs](docs/workflow/domain.md): project vocabulary and decision docs that skills should read before planning or editing.
+- [Delivery and integration](docs/workflow/delivery.md): implemented, verified, integrated, and released states; branch cleanup.
 
-Read the relevant subsystem guide before changing that area. For UI/UX, start with [.interface-design/system.md](.interface-design/system.md), then only the relevant surface-family guide. Inspect real components with `cd desktop/web && npm run dev:ui`. Prototype consequential uncertainty; reuse accepted components directly. Do not load every design/frontend guide by default. If a guide disagrees with current code, trust the code, fix the guide, and note it in the handoff.
+Read the relevant subsystem guide before changing that area; routing pages select the detailed guide to read. For UI/UX, start with [.interface-design/system.md](.interface-design/system.md), then only the relevant surface-family guide. Inspect real components with `cd desktop/web && npm run dev:ui`. Prototype consequential uncertainty; reuse accepted components directly. Do not load every design/frontend guide by default. Code establishes current behavior; accepted contracts establish intended behavior. Correct stale descriptive guidance, but track a code violation of an accepted contract in bd rather than weakening the contract. Historical plans and execution prompts do not authorize new work or override current rules.
 
 ## Common Commands
 
@@ -167,6 +169,7 @@ cargo build --release
 ## Quality Gates
 
 - Docs-only changes do not require code tests, but the final handoff must say tests were skipped because the change was docs-only.
+- Documentation changes require `python3 scripts/check_docs.py`; validator changes also require `python3 -m unittest scripts.test_check_docs`.
 - Add frontend tests under `desktop/web/src/__tests__/` as `*.test.ts` or `*.test.tsx`. Existing colocated `*.test.ts` runtime tests are also part of the full Vitest suite.
 - Bug fixes require focused regression tests, especially around document lifecycle, canvas runtime, IPC boundaries, persistence, and shared contracts.
 - Frontend changes require `cd desktop/web && npx tsc --noEmit` and focused Vitest coverage.

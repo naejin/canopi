@@ -1,5 +1,9 @@
 # Scientific evidence for LiDAR agroecological analysis
 
+Status: evidence.
+Tracking: `canopi-bdxh`.
+Current guidance: [LiDAR implementation guide](../../agent/lidar.md).
+
 Updated 2026-09-15 · Study `canopi-bdxh` · **Supporting evidence, not implementation authority.**
 
 The authoritative product and coding specification is the [LiDAR implementation plan](../lidar-library.md). This report records measured properties of the supplied files, defensible interpretations and scientific limits. It does not claim that flow, wetness, shade or vegetation classification has been calculated or field-validated on the site.

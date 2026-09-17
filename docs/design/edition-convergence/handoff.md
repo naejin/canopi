@@ -1,6 +1,8 @@
 # Desktop and Web development convergence
 
 Status: completed 2026-09-13.
+Tracking: `canopi-dp4s`.
+Current guidance: [Edition development](../../agent/edition-development.md).
 
 This record described implementation from baseline `cfa16e8cab9f06f1dfe37a99fd64c668208cae2c`. The original specification remains available in Git history at `281e8caa`. It is no longer an operating contract; current ownership, commands, and check selection live in the [Desktop and Web edition development guide](../../agent/edition-development.md).
 

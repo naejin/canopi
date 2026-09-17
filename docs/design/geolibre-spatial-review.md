@@ -1,7 +1,10 @@
 # Canopi v2.0.0 — unified spatial workspace implementation plan
 
-Status: **accepted product direction; implementation in progress under `canopi-ltck`**.
-Implementation tracking: the initial draft epic and its eight child beads were deleted at the user's request. The active epic and its executable children were created incrementally from this handoff. Historical planning bead: `canopi-8j2j`; existing LiDAR implementation history remains intact.
+Status: completed.
+Tracking: `canopi-ltck` (implementation), `canopi-8j2j` (planning).
+Current guidance: [ADR 0025](../adr/0025-always-anchored-spatial-workspace.md), [Canvas runtime](../agent/canvas-runtime.md), [MapLibre](../agent/maplibre.md), [Document lifecycle](../agent/document-lifecycle.md).
+
+Historical implementation handoff, completed 2026-09-16. The instructions, baseline, model-routing policy, draft-bead history, and kickoff prompt below describe that execution only. Do not execute them again or treat them as current authorization. Public release is a separate operation. Current task state belongs in bd.
 Updated 2026-09-16. This document replaces the GeoLibre review and recommendation tables in full.
 
 Qualification decision, 2026-09-16: correctness remains the v2 release priority.

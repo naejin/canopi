@@ -1,5 +1,9 @@
 # Canopi v2 GeoLibre reuse inventory
 
+Status: evidence.
+Tracking: `canopi-ltck.1`.
+Current guidance: [ADR 0025](../adr/0025-always-anchored-spatial-workspace.md), [MapLibre](../agent/maplibre.md).
+
 This inventory precedes the v2 rendering experiment. It maps GeoLibre code at a
 fixed revision to current Canopi seams and chooses reuse only where it reduces
 implementation and long-term maintenance cost.

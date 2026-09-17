@@ -1,5 +1,9 @@
 # Flat Typed Object Groups
 
+Status: Accepted
+
+The typed group contract remains accepted. [ADR 0025](0025-always-anchored-spatial-workspace.md) supersedes the historical legacy-ingestion migration requirement below: production admits only format v6 and has no legacy converter.
+
 Object Groups should be flat, typed collections of concrete Design Objects that may span Plants, Zones, and Annotations Layers. This favors the user's mental model of adding objects into an existing group over nested group structure, removes standalone group Layer/position/rotation authority, and prevents raw member ID collisions between placed plants, zones, and annotations.
 
 **Consequences**:

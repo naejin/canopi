@@ -1,5 +1,9 @@
 # LiDAR foundation review and implementation report
 
+Status: evidence.
+Tracking: `canopi-cldf`.
+Current guidance: [LiDAR implementation guide](../agent/lidar.md).
+
 Date: 2026-09-15. Baseline reviewed: `feature/lidar-library-prototype` at `7c91af9af53adcdb26089701b7ad0a590125713f`. Repair issue: `canopi-cldf`. Repair branch: `fix/lidar-foundation-audit`.
 
 ## Outcome

@@ -1,5 +1,7 @@
 # Web Edition Browser Drafts
 
+Status: Accepted
+
 The lightweight web edition should support browser-local Design drafts and autosave instead of relying only on explicit `.canopi` import/export. The active Web Edition save target is the browser-local draft until the user explicitly downloads or exports a `.canopi` file. Browser draft storage should be treated as a convenience recovery layer for the current browser profile, while explicit `.canopi` download/export remains the durable portable save path. Canvas PDF export in [ADR 0024](0024-shared-canvas-pdf-export.md) adds a sharing and printing artifact without changing this persistence boundary.
 
 **Consequences**:

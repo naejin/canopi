@@ -1,5 +1,7 @@
 # Species Catalog Storage Adapters
 
+Status: Accepted
+
 Canopi keeps storage engines behind the Species Catalog Read Projection: desktop uses Rust and SQLite; Web Edition uses DuckDB-WASM over generated Parquet assets. Shared UI consumes the Species Catalog Workbench and caller-oriented reads. This enables a static browser app without forcing a desktop database migration.
 
 Web catalog assets come from the same canopi-data export lineage as the desktop catalog. The reduced scope is climate zone, habit or growth form, life cycle, selected-locale Common Names for the 11 UI languages, and one lazy-loaded hero image's metadata per Species. Filter controls consume the generated supported-filter projection and omit unsupported choices. Detail remains reduced; adding a filter must not silently add desktop detail sections or expand the exported data scope. Web Plant presentation uses explicit Design colors/symbols and generic fallbacks rather than stratum metadata.
