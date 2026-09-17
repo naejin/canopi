@@ -20,7 +20,9 @@ Implementation specifications and completed design records live under `docs/desi
 
 The [LiDAR guide](agent/lidar.md) routes current implementation work. Its [partially implemented design](design/lidar-library.md) retains future raster and analysis scope; bd owns which remaining slices are active. The [scientific evidence](design/lidar-agroecology/report.md) records measured inputs and interpretation limits.
 
-The v2 spatial workspace is implemented. [ADR 0025](adr/0025-always-anchored-spatial-workspace.md) records its accepted contracts; [Canvas runtime](agent/canvas-runtime.md), [MapLibre](agent/maplibre.md), and [Document lifecycle](agent/document-lifecycle.md) route current work. The [completed v2 plan](design/geolibre-spatial-review.md) is historical evidence, including its original model/delegation policy. Do not restart it or recreate its closed epic. Implementation, verification, integration, and public release are distinct states; see [delivery](workflow/delivery.md).
+The [proposed raster, Data and Analysis rework](design/raster-data-analysis-rework.md) records simplified bounded import, GeoLibre reuse qualification, Desktop workbenches, and Web Location scope. It includes the selected keyless Google Satellite path with optional official API access and retains engine/UI qualification gates; it does not replace current operating contracts or authorize implementation.
+
+The v2 spatial workspace is implemented. [ADR 0025](adr/0025-always-anchored-spatial-workspace.md) records its accepted contracts; [Canvas runtime](agent/canvas-runtime.md), [MapLibre](agent/maplibre.md), and [Document lifecycle](agent/document-lifecycle.md) route current work. The [completed v2 plan](design/geolibre-spatial-review.md) retains historical contracts and qualification evidence. Do not restart it or recreate its closed epic. Implementation, verification, integration, and public release are distinct states; see [delivery](workflow/delivery.md).
 
 The [Canvas world zoom and overview implementation record](design/canvas-zoom-world-overview.md) defines the delivered zoom-0–27 camera policy, single-world overview safety, Return behavior, shared Desktop/Web chrome, and its browser qualification contract.
 
@@ -35,7 +37,8 @@ Two historical records use number `0007`. Refer to them by filename: `0007-desig
 - Update an existing `docs/agent/` guide when code ownership, commands, or recurring implementation constraints change. Delete superseded guidance instead of appending exceptions.
 - Record a durable architectural choice in `docs/adr/`; do not use an evidence report as hidden architecture authority.
 - Put reproducible current gates beside the code or scripts they validate. Keep large one-time captures and rejected prototypes out of Git once their conclusion is recorded.
-- Keep user instructions separate from implementation guidance. Link rather than duplicate commands or numeric constants owned elsewhere.
+- Keep only material that helps implement, verify, release, or maintain the project: contracts, rationale for consequential decisions, ownership, commands, fixtures, and measured limitations. Remove conversational history, expired kickoff prompts, model assignments, and checkout-specific instructions after delivery.
+- Link rather than duplicate commands, workflow rules, or numeric constants owned elsewhere. Release notes consumed by tooling and evidence supporting current acceptance limits remain useful; do not delete them merely because they are historical.
 - Add a new top-level document only when it has a distinct long-lived audience. Link it from this map or the relevant authority so it is discoverable.
 
 ## Authority and maintenance
