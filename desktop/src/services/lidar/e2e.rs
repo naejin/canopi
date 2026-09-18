@@ -110,11 +110,36 @@ fn assert_known_slope(engine: &engine::GdalEngine, root: &std::path::Path, cance
     );
 }
 
-fn fixture_mnt() -> Option<PathBuf> {
+/// Select the real ground-elevation fixture, explicitly rather than by discovery.
+///
+/// `CANOPI_LIDAR_E2E_FIXTURE` names the file to use, which keeps this test
+/// runnable on a host whose available IGN tile is not the default one without
+/// silently substituting a different tile. When the variable is unset the
+/// documented `0446_6807` tile under `~/Downloads` is used, and a missing fixture
+/// is reported rather than replaced. The test's expected scientific values are
+/// tile-independent, so the selection changes only which real raster is read.
+fn fixture_mnt() -> Result<PathBuf, String> {
+    if let Some(explicit) = std::env::var_os("CANOPI_LIDAR_E2E_FIXTURE") {
+        let path = PathBuf::from(explicit);
+        if path.is_file() {
+            return Ok(path);
+        }
+        return Err(format!(
+            "CANOPI_LIDAR_E2E_FIXTURE points at a missing file: {}",
+            path.display()
+        ));
+    }
     let downloads = dirs_home().join("Downloads");
     let dir = downloads.join("LHD_FXX_0446_6807_MNT_O_0M50_LAMB93_IGN69");
     let file = dir.join("LHD_FXX_0446_6807_MNT_O_0M50_LAMB93_IGN69");
-    file.exists().then_some(file)
+    if file.is_file() {
+        return Ok(file);
+    }
+    Err(format!(
+        "IGN MNT fixture is missing; set CANOPI_LIDAR_E2E_FIXTURE to an explicit \
+         ground-elevation GeoTIFF (looked for {})",
+        file.display()
+    ))
 }
 
 fn dirs_home() -> PathBuf {
@@ -124,13 +149,14 @@ fn dirs_home() -> PathBuf {
 }
 
 #[test]
-#[ignore = "requires system GDAL and the IGN 0446_6807 MNT fixture"]
+#[ignore = "requires system GDAL and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_import_publish_slope_restart_reuse() {
     let engine = engine::GdalEngine::new();
     let tools = engine.discover().expect("GDAL engine must be available");
 
-    let Some(fixture) = fixture_mnt() else {
-        panic!("IGN MNT fixture is missing from ~/Downloads");
+    let fixture = match fixture_mnt() {
+        Ok(path) => path,
+        Err(reason) => panic!("{reason}"),
     };
     let work = std::env::temp_dir().join(format!("canopi-lidar-e2e-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);

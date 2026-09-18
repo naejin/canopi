@@ -89,7 +89,171 @@ async function windowViaCogStream(stream, openerBytes, level, x, y, w, h) {
   return { values: Array.from(values), tiles: tiles.length, bytesFetched: fetched };
 }
 
+/**
+ * Byte-range transport that fetches ONLY what the decoder asks for.
+ *
+ * An earlier revision of this harness fetched the whole fixture and then sliced
+ * its resident buffer, which cannot distinguish a bounded reader from an
+ * unbounded one. Here a header prefix is fetched once and every tile is a
+ * separate HTTP Range request, so the server's own byte ledger is a truthful
+ * record of the transport cost.
+ */
+function createRangeTransport(url, prefixBytes = 65536) {
+  const stats = { prefixRequests: 0, prefixBytes: 0, tileRequests: 0, tileBytes: 0,
+                  totalBytes: 0, largestRequest: 0 };
+  let prefix = null;
+  let headerBytes = null;
+
+  async function fetchRange(start, endExclusive) {
+    const end = endExclusive - 1;
+    const response = await fetch(url, { headers: { Range: `bytes=${start}-${end}` } });
+    if (response.status !== 206) {
+      throw new Error(`range request ${start}-${end} returned ${response.status}`);
+    }
+    const buffer = await response.arrayBuffer();
+    stats.largestRequest = Math.max(stats.largestRequest, buffer.byteLength);
+    return new Uint8Array(buffer);
+  }
+
+  return {
+    stats,
+    get stream() { return prefix; },
+    get headerLength() { return headerBytes ? headerBytes.length : 0; },
+    async open() {
+      // A wider prefix is retried only when the header genuinely needs it; the
+      // cap keeps a pathological file from turning into a whole-file read.
+      let size = prefixBytes;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        headerBytes = await fetchRange(0, size);
+        stats.prefixRequests += 1;
+        stats.prefixBytes += headerBytes.length;
+        stats.totalBytes += headerBytes.length;
+        try {
+          prefix = new CogStream(headerBytes);
+          return prefix;
+        } catch (error) {
+          if (!String(error).includes("header")) throw error;
+          size *= 4;
+        }
+      }
+      throw new Error("could not parse a COG header within 4 prefix attempts");
+    },
+    async tile(level, offset, length) {
+      const bytes = await fetchRange(offset, offset + length);
+      stats.tileRequests += 1;
+      stats.tileBytes += bytes.length;
+      stats.totalBytes += bytes.length;
+      return prefix.decode_tile_f64(level, bytes);
+    },
+  };
+}
+
+/**
+ * Read one window through the ranged transport, placing tiles by index and
+ * mapping declared NoData to NaN. Returns the assembled window, never a
+ * prefetched raster.
+ */
+async function windowViaRange(transport, level, x, y, w, h) {
+  const stream = transport.stream;
+  const levelInfo = JSON.parse(stream.levels_json())[level];
+  const nodata = stream.nodata;
+  const tiles = JSON.parse(stream.tiles_for_window(level, x, y, w, h));
+  const values = new Float64Array(w * h).fill(NaN);
+  for (const tile of tiles) {
+    const decoded = await transport.tile(level, tile.offset, tile.length);
+    const bands = levelInfo.bands;
+    for (let row = 0; row < levelInfo.tile_height; row++) {
+      const ty = tile.row * levelInfo.tile_height + row;
+      if (ty < y || ty >= y + h || ty < 0 || ty >= levelInfo.height) continue;
+      for (let column = 0; column < levelInfo.tile_width; column++) {
+        const tx = tile.col * levelInfo.tile_width + column;
+        if (tx < x || tx >= x + w || tx < 0 || tx >= levelInfo.width) continue;
+        let value = decoded[(row * levelInfo.tile_width + column) * bands];
+        if (nodata !== undefined && nodata !== null && value === nodata) value = NaN;
+        values[(ty - y) * w + (tx - x)] = value;
+      }
+    }
+  }
+  return { values: Array.from(values), tiles: tiles.length };
+}
+
 const scenarios = {
+  /**
+   * Q2 numeric access over the intended ranged transport. Small synthetic tiles
+   * only: this scenario establishes correctness and boundedness, and the large
+   * fixture is exercised separately by the capacity scenario.
+   */
+  async ranged_numeric({ fixtures, numericSpec }) {
+    const results = {};
+    for (const [name, url] of Object.entries(fixtures)) {
+      const transport = createRangeTransport(url, numericSpec?.prefixBytes || 65536);
+      const entry = { fixture: name, windows: [], openError: null };
+      try {
+        const stream = await transport.open();
+        entry.headerBytes = transport.headerLength;
+        entry.levels = JSON.parse(stream.levels_json());
+        entry.epsg = stream.epsg ?? null;
+        entry.nodata = stream.nodata ?? null;
+        entry.numLevels = stream.num_levels;
+
+        for (const spec of numericSpec.windows) {
+          if (spec.fixture && spec.fixture !== name) continue;
+          const beforeTiles = transport.stats.tileRequests;
+          const beforePrefixed = transport.stats.prefixRequests;
+          const started = performance.now();
+          const record = { spec, stride: spec.stride || 1 };
+          try {
+            const read = await windowViaRange(transport, spec.level ?? 0,
+              spec.x, spec.y, spec.w, spec.h);
+            record.tiles = read.tiles;
+            record.values = read.values;
+          } catch (error) {
+            record.error = String(error).slice(0, 300);
+          }
+          record.milliseconds = performance.now() - started;
+          record.transport = {
+            prefixRequests: transport.stats.prefixRequests - beforePrefixed,
+            tileRequests: transport.stats.tileRequests - beforeTiles,
+          };
+          entry.windows.push(record);
+        }
+
+        // Stride sampling across the raster must stay tile-bounded: a bounded
+        // reader touches only the tiles its sample points fall in.
+        if (numericSpec?.strideGrid) {
+          const level0 = entry.levels[0];
+          const beforeTiles = transport.stats.tileRequests;
+          const beforeBytes = transport.stats.totalBytes;
+          const started = performance.now();
+          const samples = [];
+          for (let row = 0; row < numericSpec.strideGrid; row++) {
+            for (let column = 0; column < numericSpec.strideGrid; column++) {
+              const x = Math.min(Math.floor((column + 0.5) * level0.width / numericSpec.strideGrid),
+                                 level0.width - 1);
+              const y = Math.min(Math.floor((row + 0.5) * level0.height / numericSpec.strideGrid),
+                                 level0.height - 1);
+              const read = await windowViaRange(transport, 0, x, y, 1, 1);
+              samples.push({ x, y, value: read.values[0] });
+            }
+          }
+          entry.strideProbe = {
+            grid: numericSpec.strideGrid,
+            points: samples.length,
+            milliseconds: performance.now() - started,
+            tileRequests: transport.stats.tileRequests - beforeTiles,
+            bytes: transport.stats.totalBytes - beforeBytes,
+            samples,
+          };
+        }
+      } catch (error) {
+        entry.openError = String(error).slice(0, 400);
+      }
+      entry.transportTotals = { ...transport.stats };
+      results[name] = entry;
+    }
+    return results;
+  },
+
   /** Q1/Q2: metadata + window decode from a tiled local COG through CogStream. */
   async cogstream_windows({ fixtures }) {
     const results = {};
@@ -272,7 +436,7 @@ const scenarios = {
    * it is the only construction that proves the bridge never needs the whole
    * raster resident. `#local-file` is provided by the driver.
    */
-  async local_file_source({ fixtures }) {
+  async local_file_source({ fixtures, numericSpec }) {
     const name = Object.keys(fixtures)[0];
     const input = document.querySelector("#local-file");
     if (!input) throw new Error("driver did not provide a #local-file input");
@@ -309,6 +473,39 @@ const scenarios = {
       const png = await source.renderTilePNG(0, 0, 0, { min: 0, max: 35, colormap: "viridis" });
       out.tileBytes = png.length;
       out.statistics = await source.statistics({ maxSize: 128 });
+
+      // Stride sampling through the real local file: each point must cost only
+      // the tiles containing it, so cost grows with the number of points rather
+      // than with the size of the file.
+      if (numericSpec?.strideGrid && source.levels?.length) {
+        const level0 = source.levels[0];
+        const samples = [];
+        const beforeBytes = out.totalRangedBytes;
+        const beforeReads = out.reads.length;
+        const started = performance.now();
+        const [minLon, minLat, maxLon, maxLat] = source.boundsLonLat;
+        for (let row = 0; row < numericSpec.strideGrid; row++) {
+          for (let column = 0; column < numericSpec.strideGrid; column++) {
+            const x = Math.min(Math.floor((column + 0.5) * level0.width / numericSpec.strideGrid),
+                               level0.width - 1);
+            const y = Math.min(Math.floor((row + 0.5) * level0.height / numericSpec.strideGrid),
+                               level0.height - 1);
+            const lon = minLon + (maxLon - minLon) * (x + 0.5) / level0.width;
+            const lat = maxLat - (maxLat - minLat) * (y + 0.5) / level0.height;
+            const point = await source.point(lon, lat);
+            samples.push({ x, y, lon, lat, values: point.values,
+                           outside: point.outside ?? false });
+          }
+        }
+        out.strideProbe = {
+          grid: numericSpec.strideGrid,
+          points: samples.length,
+          milliseconds: performance.now() - started,
+          bytes: out.totalRangedBytes - beforeBytes,
+          reads: out.reads.length - beforeReads,
+          samples,
+        };
+      }
     } catch (error) {
       out.error = String(error);
     }

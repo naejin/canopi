@@ -48,6 +48,11 @@ PLANE_C = -100.0
 PIXEL_METRES = 0.5
 NODATA = -9999.0
 
+# NoData rectangles in the large capacity plane, as (row0, row1, col0, col1).
+# Declared here so the generator and the qualification oracle share one source.
+LARGE_HOLE_A = (4096, 4608, 4096, 4608)
+LARGE_HOLE_B = (12288, 12544, 8192, 8704)
+
 
 def plane_slope_degrees() -> float:
     return float(np.degrees(np.arctan(np.hypot(PLANE_A, PLANE_B) / PIXEL_METRES)))
@@ -246,13 +251,14 @@ def build_large_plane(root: Path, name: str, size: int = 20000) -> Path:
     band = dataset.GetRasterBand(1)
     band.SetNoDataValue(NODATA)
     xs = np.arange(size, dtype=np.float64)
+    # Deterministic holes that cross processing-block boundaries. Both are
+    # written for their full row range so the declared rectangles exist exactly.
     for row in range(size):
         values = (PLANE_A * xs + PLANE_B * row + PLANE_C).astype(np.float32)
-        # Deterministic holes crossing processing-block boundaries.
-        if 4096 <= row < 4608:
-            values[4096:4608] = NODATA
-        if 12288 <= row < 12544:
-            values[8192:8704] = NODATA
+        if LARGE_HOLE_A[0] <= row < LARGE_HOLE_A[1]:
+            values[LARGE_HOLE_A[2]:LARGE_HOLE_A[3]] = NODATA
+        if LARGE_HOLE_B[0] <= row < LARGE_HOLE_B[1]:
+            values[LARGE_HOLE_B[2]:LARGE_HOLE_B[3]] = NODATA
         band.WriteArray(values[None, :], 0, row)
         if row % 2000 == 0:
             print(f"    row {row}/{size}", file=sys.stderr, flush=True)

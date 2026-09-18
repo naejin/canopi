@@ -11,6 +11,7 @@ This folder collects bounded agent handoffs and their review context for the ras
 | [Implementation plan](../raster-data-analysis-rework.md) | Scope, approved UI references, slice dependencies, contracts and qualification gates |
 | [Initial Q receipt](../raster-qualification-q.md) | Agent-reported experiments; independent review did not accept Q as qualified |
 | [Q correction prompt](q-correction-agent-prompt.md) | Full handoff after review of `fd86de68`, including targeted GeoLibre reuse investigation |
+| [GeoLibre reuse inventory](geolibre-reuse-inventory.md) | Modules inspected at the pinned revision and the reuse/adapt/reject decision for each |
 
 For the debrief, compare requested assertions with the implementation actually measured, machine-readable verdicts, review findings and subsequent corrections. Separate missing instructions from failures to follow explicit instructions; do not infer a general model limitation from one run. Tie conclusions to commits, commands and regression tests rather than conversational impressions.
 

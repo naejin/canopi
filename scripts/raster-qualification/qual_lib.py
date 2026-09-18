@@ -105,14 +105,31 @@ def _read_tag_value(handle, endian: str, field_type: int, count: int, value_byte
                     data_offset: int, bigtiff: bool) -> Any:
     fmt, size = TIFF_TYPES[field_type]
     total = size * count
+    # BigTIFF reserves 8 bytes for the value/offset field regardless of the tag
+    # type, while classic TIFF reserves 4. Using the classic width here made a
+    # BigTIFF value that fits inline (GDAL_NODATA, for example) be read as an
+    # offset into unrelated bytes, silently losing the declaration.
     inline = 8 if bigtiff else 4
     if total <= inline:
         raw = value_bytes[:total]
     else:
-        offset = struct.unpack(endian + ("Q" if bigtiff else "I"), value_bytes[:8 if bigtiff else 4])[0]
+        offset = struct.unpack(
+            endian + ("Q" if bigtiff else "I"),
+            value_bytes[:8] if bigtiff else value_bytes[:4],
+        )[0]
         handle.seek(offset)
         raw = handle.read(total)
-    values = struct.unpack(endian + fmt * count, raw)
+    if field_type == 2:
+        # TIFF ASCII: return the NUL-terminated string as text, not as a list of
+        # single-character bytes, so callers can parse declared values such as
+        # GDAL_NODATA directly.
+        return raw.split(b"\x00", 1)[0].decode("ascii", errors="replace")
+    try:
+        values = struct.unpack(endian + fmt * count, raw)
+    except struct.error as error:
+        raise ValueError(
+            f"tag type {field_type} count {count}: could not decode value ({error})"
+        ) from error
     return values[0] if count == 1 else list(values)
 
 
@@ -378,10 +395,172 @@ def directory_bytes(root: Path) -> int:
     return total
 
 
+# --------------------------------------------------------------------------- #
+# Verdicts, assertions and fail-closed report contracts
+# --------------------------------------------------------------------------- #
+#
+# A qualification harness must be unable to report success for work it did not
+# measure. Every experiment therefore declares the behavior it was supposed to
+# establish, records each assertion explicitly, and may only reach `pass` when it
+# has at least one assertion and every assertion holds. Anything the harness
+# could not decide is `inconclusive`, never `pass`.
+
+PASS = "pass"
+FAIL = "fail"
+INCONCLUSIVE = "inconclusive"
+NOT_RUN = "not_run"
+
+#: Verdicts that may contribute to an overall qualification pass.
+PASSING_VERDICTS = frozenset({PASS})
+
+#: Every verdict a report may carry.
+VERDICTS = frozenset({PASS, FAIL, INCONCLUSIVE, NOT_RUN})
+
+#: Fields every experiment report must carry to be usable evidence.
+REQUIRED_REPORT_FIELDS = (
+    "experiment",
+    "result",
+    "requiredBehavior",
+    "implementationExercised",
+    "commands",
+    "fixtures",
+    "assertions",
+    "measurementLocations",
+    "limitations",
+    "failures",
+)
+
+
+@dataclass
+class Assertion:
+    """One explicit, checkable statement about observed behavior."""
+
+    name: str
+    ok: bool
+    detail: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"name": self.name, "ok": bool(self.ok), "detail": self.detail}
+
+
+class Report:
+    """Accumulates assertions and refuses to pass without them.
+
+    The class exists so that "we forgot to check anything" and "everything we
+    checked passed" cannot produce the same verdict.
+    """
+
+    def __init__(self, experiment: str, required_behavior: str) -> None:
+        self.experiment = experiment
+        self.required_behavior = required_behavior
+        self.implementation = ""
+        self.commands: list[str] = []
+        self.fixtures: list[dict[str, Any]] = []
+        self.measurement_locations: list[dict[str, Any]] = []
+        self.limitations: list[str] = []
+        self.measurements: list[dict[str, Any]] = []
+        self.assertions: list[Assertion] = []
+        self.failures: list[str] = []
+        self.notes: list[str] = []
+        self.extra: dict[str, Any] = {}
+        self._forced_inconclusive: str | None = None
+        self._forced_fail: str | None = None
+
+    # -- assertions ------------------------------------------------------- #
+
+    def check(self, name: str, ok: bool, detail: str = "") -> bool:
+        """Record one assertion. A failing assertion always fails the report."""
+        self.assertions.append(Assertion(name, ok, detail))
+        if not ok:
+            self.failures.append(f"{name}: {detail}" if detail else name)
+        return bool(ok)
+
+    def check_equal(self, name: str, observed: Any, expected: Any) -> bool:
+        return self.check(name, observed == expected,
+                          f"observed {observed!r}, expected {expected!r}")
+
+    def check_at_most(self, name: str, observed: float, limit: float) -> bool:
+        ok = observed is not None and observed <= limit
+        return self.check(name, ok, f"observed {observed}, limit {limit}")
+
+    def check_at_least(self, name: str, observed: float, minimum: float) -> bool:
+        ok = observed is not None and observed >= minimum
+        return self.check(name, ok, f"observed {observed}, minimum {minimum}")
+
+    def fail(self, message: str) -> None:
+        """Record a failure that is not tied to a single named assertion."""
+        self.failures.append(message)
+
+    def inconclusive(self, reason: str) -> None:
+        """Mark the experiment undecidable. Never upgrades to pass."""
+        self._forced_inconclusive = reason
+
+    # -- verdict ---------------------------------------------------------- #
+
+    @property
+    def result(self) -> str:
+        if self._forced_fail:
+            return FAIL
+        if self.failures:
+            return FAIL
+        if self._forced_inconclusive:
+            return INCONCLUSIVE
+        if not self.assertions:
+            # No assertion means nothing was established.
+            return INCONCLUSIVE
+        return PASS
+
+    @property
+    def reason(self) -> str:
+        if self._forced_fail:
+            return self._forced_fail
+        if self.failures:
+            return f"{len(self.failures)} failed assertion(s)"
+        if self._forced_inconclusive:
+            return self._forced_inconclusive
+        if not self.assertions:
+            return "no assertions were recorded"
+        return f"{len(self.assertions)} assertion(s) passed"
+
+    def payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "experiment": self.experiment,
+            "result": self.result,
+            "verdictReason": self.reason,
+            "requiredBehavior": self.required_behavior,
+            "implementationExercised": self.implementation,
+            "commands": self.commands,
+            "fixtures": self.fixtures,
+            "assertions": [a.as_dict() for a in self.assertions],
+            "measurementLocations": self.measurement_locations,
+            "limitations": self.limitations,
+            "failures": self.failures,
+            "notes": self.notes,
+            "measurements": self.measurements,
+            "assertionCount": len(self.assertions),
+            "passedAssertionCount": sum(1 for a in self.assertions if a.ok),
+            "failedAssertionCount": sum(1 for a in self.assertions if not a.ok),
+        }
+        payload.update(self.extra)
+        return payload
+
+    def write(self, path: Path) -> int:
+        """Write the report and return the process exit status for the verdict."""
+        payload = self.payload()
+        write_report(path, payload)
+        return 0 if payload["result"] == PASS else 1
+
+
+def default_exit(result: str) -> int:
+    """Map a verdict to an exit status. Only a pass exits 0."""
+    return 0 if result == PASS else 1
+
+
 def write_report(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default) + "\n")
-    print(json.dumps({k: v for k, v in payload.items() if k != "measurements"},
+    print(json.dumps({k: v for k, v in payload.items()
+                      if k not in ("measurements", "assertions")},
                      indent=2, sort_keys=True, default=_json_default))
 
 

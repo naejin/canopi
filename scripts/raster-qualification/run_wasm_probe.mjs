@@ -24,6 +24,28 @@ const HARNESS = dirname(fileURLToPath(import.meta.url));
 
 const EXPERIMENTS = {
   q1: { scenarios: ["cogstream_windows"], extra: {} },
+  // Q2 over the intended ranged transport, with stride sampling.
+  q2ranged: {
+    scenarios: ["ranged_numeric", "geotiff_reader"],
+    extra: {
+      numericSpec: {
+        prefixBytes: 65536,
+        strideGrid: 4,
+        windows: [
+          { fixture: "plane2000", x: 0, y: 0, w: 8, h: 8, label: "origin" },
+          { fixture: "plane2000", x: 100, y: 50, w: 8, h: 8, label: "interior" },
+          { fixture: "plane2000", x: 248, y: 248, w: 16, h: 16, label: "straddles-tile-edge" },
+          { fixture: "plane2000", x: 1016, y: 1016, w: 8, h: 8, label: "second-tile-origin" },
+          { fixture: "plane2000", x: 1024, y: 0, w: 256, h: 256, label: "max-contract-window" },
+          { fixture: "plane2000", x: 1990, y: 1990, w: 16, h: 16, label: "far-corner" },
+          { fixture: "plane256", x: 90, y: 90, w: 20, h: 20, label: "crosses-nodata-hole" },
+          { fixture: "plane256", x: 10, y: 10, w: 8, h: 8, label: "inside-nodata-hole",
+            expectNoCoverage: true },
+          { fixture: "steep45", x: 24, y: 24, w: 4, h: 4, label: "steep45-interior" },
+        ],
+      },
+    },
+  },
   q2: {
     scenarios: ["cogstream_windows", "geotiff_reader"],
     extra: {
@@ -74,7 +96,10 @@ const EXPERIMENTS = {
     },
   },
   // Q3 local transport: a real File attached by the host, sliced from disk.
-  q3file: { scenarios: ["local_file_source"], extra: {} },
+  q3file: {
+    scenarios: ["local_file_source"],
+    extra: { numericSpec: { strideGrid: 4 } },
+  },
   q5: { scenarios: ["failure_injection"], extra: {} },
 };
 
@@ -176,10 +201,14 @@ async function main() {
       (code === 0 ? done() : fail(new Error(`import_map.py exited ${code}`))));
   });
 
+  // The transport keeps its own ledger of served bytes, so the report carries a
+  // record the client cannot inflate or omit.
+  const ledgerPath = resolve(dirname(resolve(args.out)), `ledger-${args.experiment}.json`);
   const server = spawn("python3", [
     resolve(HARNESS, "serve_bench.py"),
     "--bench", bench, "--fixtures", fixtures,
     "--import-map", importMapPath, "--port", String(port),
+    "--ledger", ledgerPath,
   ], { stdio: ["ignore", "pipe", "pipe"] });
   let serverLog = "";
   server.stdout.on("data", (d) => { serverLog += d; });
@@ -257,7 +286,17 @@ async function main() {
       }
     }
   } finally {
+    // Wait for the server to actually exit: its byte ledger is written during
+    // shutdown, and reading it before then would silently record nothing.
+    const exited = new Promise((done) => server.on("exit", done));
     server.kill("SIGTERM");
+    await Promise.race([exited, new Promise((done) => setTimeout(done, 8000))]);
+  }
+  try {
+    results.transportLedger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+  } catch (error) {
+    results.transportLedger = null;
+    results.transportLedgerError = String(error).slice(0, 200);
   }
 
   mkdirSync(dirname(resolve(args.out)), { recursive: true });
