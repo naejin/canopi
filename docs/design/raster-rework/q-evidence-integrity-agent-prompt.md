@@ -1,10 +1,10 @@
 # Q evidence integrity repair — agent prompt
 
-Status: proposed — bounded follow-up to independent review of `47b9d508`; Q remains unqualified.
+Status: retired — executed in `2c830b0d`; independent review requires further repair. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [review and debrief](review-and-debrief.md), [repository contract](../../../AGENTS.md).
 
-Sending this prompt authorizes the bounded repair below, not new qualification experiments. It supersedes the [previous gate repair prompt](q-gate-repair-agent-prompt.md). Writing it does not start implementation.
+Historical instructions retained for the requested debrief; do not execute again. The [admission completeness prompt](q-admission-completeness-agent-prompt.md) supersedes this handoff. See the [implementation receipt](q-evidence-integrity-receipt.md) and [independent review](review-and-debrief.md) for outcomes.
 
 ## Mandate and first action
 

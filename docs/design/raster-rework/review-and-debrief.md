@@ -1,8 +1,8 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — three implementation handoffs reviewed; final methodology conclusions pending.
+Status: evidence — four implementation handoffs reviewed; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [implementation plan](../raster-data-analysis-rework.md), [current handoff](q-evidence-integrity-agent-prompt.md), and [delivery workflow](../../workflow/delivery.md).
+Current guidance: [implementation plan](../raster-data-analysis-rework.md), [current handoff](q-admission-completeness-agent-prompt.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
 
@@ -20,7 +20,9 @@ The reviewer inspected source and ran targeted in-memory verdict reproductions. 
 | `cfbb0c35`, corrected Q receipt | Ten experiments and aggregate pass; 218 assertions; 14 regression tests pass | Regression suite independently passes. Q still not accepted: missing mandatory evidence remains outside verdicts, cancellation still tests a substitute, and new Q6 false passes reproduced. |
 | [Gate-only repair prompt](q-gate-repair-agent-prompt.md), `f637de31` | Narrow evaluator repair, explicit TDD/craft and evidence mapping | Executed in `95310b85`, `99832cc5`, `47b9d508`; now retired. |
 | [Gate repair receipt](q-gate-repair-receipt.md), reviewed at `47b9d508` | Requirement contract; overall fail, 1 fail / 7 inconclusive / 4 pass; 64 tests green | Reviewer independently reran all 64 tests, docs validation and diff checks successfully. Repair not accepted: R3 false passes remain, including unsupported individual passing requirements. No private experiments rerun. |
-| [Evidence integrity prompt](q-evidence-integrity-agent-prompt.md) | Raw-report-to-gate regression controls, evidence admission and correspondence | Next bounded assignment; no implementation or acceptance claimed. |
+| [Evidence integrity prompt](q-evidence-integrity-agent-prompt.md), `0cc3b8fa` | Raw-report-to-gate regression controls, evidence admission and correspondence | Executed in `2c830b0d`, with bead records through `d963f755`; retired. |
+| [Evidence integrity receipt](q-evidence-integrity-receipt.md), reviewed at `d963f755` | 115 passing tests, nine reported sensitivity checks; existing records yield 12 inconclusive | Reviewer independently reran all 115 tests, docs and diff checks successfully. Repair not accepted: R4 findings below. Private report reconciliation and sensitivity checks were not independently rerun. |
+| [Admission completeness prompt](q-admission-completeness-agent-prompt.md) | Explicit required-set coverage, run provenance and monotonic failure precedence | Next bounded assignment; no implementation or acceptance claimed. |
 
 ## R2 findings and reported repairs
 
@@ -81,6 +83,21 @@ Additional inspected behavior: the synthetic marker is reported but does not pre
 
 Skill usage remains implementer-reported. The repair receipt names TDD/craft/codebase-design and describes sensitivity checks, including an initially masked mutation; no captured RED/GREEN transcript was supplied. Green tests and reported skill loading cannot establish workflow adherence independently.
 
+## R4 independent findings at `d963f755`
+
+Code revision `2c830b0d`; subsequent `c2f5eb79` and `d963f755` are bead records. Reproductions used the committed `passing_reports()` controls, the real assembler and gate, intercepted file I/O and independent deep copies of each report. Controls passed the affected requirements. No source files or private evidence changed. The clean checkout was in sync with upstream.
+
+| ID | Single-case evidence | Observed outcome / required correction |
+| --- | --- | --- |
+| R4-01 | Change the numeric fixture name to an unlisted name and hash to another hash | `Q-LOCAL-1` still passes. `_fixture_problems` compares hashes only for names already in the expected manifest; verify membership and required coverage, not intersection alone. |
+| R4-02 | Replace source correspondence with one matching revision pair for an unrelated artifact | `Q-ART-1` still passes. `_source_correspondence` does not use its required `artifacts` argument to establish coverage. |
+| R4-03 | Independently set numeric `recordedAt` to `1`, or remove both `recordedAt` and `runId` | `Q-LOCAL-1` still passes in both cases. Fields are carried into provenance but not checked; fresh assembly time must not renew source evidence. |
+| R4-04 | Remove identity from a numeric report explicitly marked fail with a failed fixture-hash assertion | Requirement becomes inconclusive and only the identity gap is explained. Early return bypasses failure evaluation; preserve known failure precedence. |
+
+These findings do not establish that real fixture measurements were fabricated or that every prior repair failed. They establish remaining false admission and failure-classification paths. The implementer reported improved display/sidecar checks and nine sensitivity checks, but independent acceptance of the complete boundary remains outstanding.
+
+The latest receipt again reports no captured RED/GREEN transcript despite the previous prompt requesting one. It also reports fixture defects discovered during implementation: shared mutable assembly configuration, a `TestCase.run` override, an `evaluate()` shadow and physically inconsistent fixtures. These are implementer-reported process observations, not independently reconstructed execution history. Preserve them for the final debrief without inferring skill adherence, intent or model capability.
+
 ## Process hypotheses, not settled conclusions
 
 | Hypothesis | Supporting observation | Evidence still needed / proposed intervention |
@@ -92,6 +109,9 @@ Skill usage remains implementer-reported. The repair receipt names TDD/craft/cod
 | Independent review caught issues cheap validation did not | Tiny injected reports reproduced false passes despite unit suite success | Add adversarial report/runner tests and preserve independent review. Measure whether those tests catch future regressions. |
 | Test controls were accepted by code but not coherent with the scientific contract | R3 display control has statistics inconsistent with samples; gate controls prefill every required assertion as pass | Test raw-report admission end to end and use independently calculated control values. Success criterion: isolated identity, precondition and statistical mutations are rejected for the intended reason. |
 | A narrower prompt and named skills were insufficient on their own | Gate-only repair still lost report failures and omitted identity comparisons explicitly requested in the earlier prompt | Distinguish instruction-following failure from handoff design: the prior handoff did not make cross-layer coherent controls sufficiently concrete. Next receipt must capture actual cycles; do not infer a general model limitation. |
+| Checks cover supplied fields but not the required set | R4 unknown fixture and unrelated artifact records pass | Required-set controls with two members, missing/extra/duplicate cases, and a regression proving unrelated additions cannot satisfy obligations. |
+| Early returns accidentally change verdict precedence | Removing identity downgrades explicit failure to inconclusive | Table-driven mixed failure/gap cases; deleting evidence must not improve eligibility or erase failure reasons. |
+| Handoff evidence requirements are not being enforced at delivery | Two receipts describe RED/GREEN work without the requested captured transcript | Require a small sanitized command/output artifact in the next receipt. Separate independently rerun GREEN from reported RED and sensitivity history. |
 
 ## Final debrief procedure
 
@@ -100,5 +120,7 @@ At completion or a deliberate stop, compare the reviewed revisions with repair r
 Summarize which work was reusable, which needed rework, and what the review caught. Use observed command/run/review counts and durations only where logs exist; leave unavailable cost/time/model-setting data unknown. Do not reconstruct token usage, skill invocation or RED/GREEN history from a final commit.
 
 Evaluate candidate improvements by falsifiable outcomes: wrong evidence rejected, regression detects guard removal, failed shell step cannot exit zero, actual route demonstrably exercised, fewer recurring review findings. Separate experiment/test success from capability qualification and integration/release throughout.
+
+For each proposed tooling/method change, retain a compact evaluation record: triggering review IDs; whether the preceding prompt already required the behavior; delivered regression or tooling revision; independently observed detection; subsequent recurrence or no evidence yet. Compare example-only tests with the new set-coverage and failure-precedence invariants. Do not call an intervention effective merely because the suite grew from 14 to 64 to 115 tests. Record reviewer omissions and overly broad handoffs alongside implementer defects; final conclusions should explain which boundary was missed and which check now catches it, not rank models from unavailable cost/settings data.
 
 Promote confirmed lessons into the narrowest appropriate regression test, report schema, reusable checker, skill improvement or operating guide through a separately scoped bead. Link that delivered change and its verification here. Do not silently edit skills, relax Q, or convert this folder into an append-only conversation log. The final synthesis should retain decisive evidence and retire obsolete execution instructions while preserving their historical revision identity.

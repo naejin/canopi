@@ -1,8 +1,12 @@
 # Q evidence integrity repair — implementation receipt
 
-Status: evidence — evidence admission repaired across raw report → assembler → gate → CLI; **pending independent verification**. Q remains unqualified.
+Status: evidence — repair reviewed at `d963f755`; **not accepted**, remaining admission defects reproduced. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [evidence-integrity prompt](q-evidence-integrity-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+Current guidance: [admission completeness prompt](q-admission-completeness-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+
+## Independent review disposition
+
+The remainder preserves implementation claims, not acceptance. Review independently reran 115 tests and documentation/diff checks successfully, then reproduced passing unlisted fixtures, unrelated artifact correspondence, stale/missing source-run provenance, and an explicit failed legacy report downgraded to inconclusive. See R4-01–R4-04 in the review record. The reported 12-inconclusive result is not proof that all source records lack measured failures; missing identity currently short-circuits their evaluation. No private qualification experiments were rerun by the reviewer.
 
 This receipt covers a bounded repair of **evidence admission**. It adds no engine, transport, worker,
 decoder, slope, preparation or publication implementation, runs no new qualification experiment, and
