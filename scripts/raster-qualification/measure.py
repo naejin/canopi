@@ -628,6 +628,18 @@ def _measure_fixture_windows(report: q.Report, args: argparse.Namespace, name: s
             report.check(f"reference-has-coverage:{name}/{label}", reference_cells > 0,
                          "the independent reference itself returned coverage")
 
+        # Valid zero and negative samples must survive as data. This is observed
+        # only where the reference itself has such samples, so an all-positive
+        # window is never silently treated as a pass.
+        zero_or_negative = native_valid & (native_values <= 0)
+        if int(zero_or_negative.sum()) > 0:
+            preserved = int(np.count_nonzero(engine_finite & zero_or_negative))
+            report.check(
+                f"zero-negative-retained:{name}/{label}",
+                preserved == int(zero_or_negative.sum()),
+                f"{preserved} of {int(zero_or_negative.sum())} valid zero-or-negative "
+                f"samples were retained")
+
 
 def cmd_q2_local_bridge(args: argparse.Namespace) -> int:
     """Establish whether any candidate role boundedly reads a stripped GeoTIFF."""
@@ -1805,6 +1817,96 @@ def cmd_validate_report(args: argparse.Namespace) -> int:
     return report.write(args.out)
 
 
+def _report_map(directory: Path) -> dict[str, Path]:
+    """Map the assembler's report roles to files in an existing output directory."""
+    names = {
+        "q1": "q1-artifacts.json",
+        "q2": "q2-numeric.json",
+        "q3prepare": "q3-prepare.json",
+        "q3members": "q3-members.json",
+        "q4slope": "q4-slope.json",
+        "q4crs": "q4-crs.json",
+        "q5lifecycle": "q5-lifecycle.json",
+        "q6resources": "q6-resources.json",
+        "trace": "q6-trace.json",
+        "ledger": "ledger-q2ranged.json",
+        "browser": "q2ranged.json",
+    }
+    return {role: directory / name for role, name in names.items()}
+
+
+def cmd_gate_assemble(args: argparse.Namespace) -> int:
+    """Assemble an eligibility bundle from reports that already exist.
+
+    Read-only with respect to the reports: nothing is regenerated or synthesised,
+    so a missing report becomes a recorded gap rather than a fresh measurement.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import qualification_evidence as evidence
+    import qualification_gate as gate_module
+
+    contract = gate_module.load_contract(args.requirements)
+    reports = _report_map(args.reports.resolve())
+    present = {role: path for role, path in reports.items() if path.is_file()}
+    missing = sorted(role for role, path in reports.items() if not path.is_file())
+
+    engine = args.engine
+    bundle = evidence.assemble(
+        contract, out=args.out, reports=present,
+        environment={"host": args.host, "engine": engine},
+        route={
+            "numeric": "whitebox-wasm CogStream over HTTP Range requests",
+            "numericArtifact": {"name": "whitebox-wasm", "version": args.numeric_artifact},
+            "display": "cog-tiler-wasm renderTilePNG over a disk-backed File",
+            "displayArtifact": {"name": "cog-tiler-wasm", "version": args.display_artifact},
+            "artifacts": "candidate artifact resolution",
+            "prepare": "native GDAL preparation",
+            "prepareArtifact": {"name": "gdal", "version": "3.8.4"},
+            "member": "ordered member replay (reference implementation)",
+            "slope": "native GDAL slope plus independent Horn implementation",
+            "slopeArtifact": {"name": "gdal", "version": "3.8.4"},
+            "crs": "native GDAL CRS resolution",
+            "crsArtifact": {"name": "gdal", "version": "3.8.4"},
+            "lifecycle": "owned-adapter lifecycle probe",
+            "unpinnedRoles": [
+                {"name": "gdal", "version": "3.8.4",
+                 "reason": "the plan allows native GDAL to retain preparation and slope"},
+                {"name": "reference-resolver", "version": "harness",
+                 "reason": "harness reference implementation, not a shipped artifact"},
+            ],
+        },
+        artifacts=[{"name": "whitebox-wasm", "version": args.numeric_artifact},
+                   {"name": "cog-tiler-wasm", "version": args.display_artifact},
+                   {"name": "gdal", "version": "3.8.4"}],
+        # Native GDAL is retained by the plan for preparation, CRS and slope, so
+        # it is declared rather than pinned; the candidate artifacts stay pinned.
+        fixtures=[], display={"ui_thread_bound_ms": UI_THREAD_BOUND_MS,
+                              "cold_runs": 1, "warm_runs": 3,
+                              "min_latencies_per_run": DISPLAY_TRACE_REQUESTS,
+                              "memory_budget_mib": RASTER_JOB_MEMORY_MIB},
+        host=args.host)
+    bundle["missingReports"] = missing
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n")
+    print(json.dumps({"out": str(args.out), "host": args.host,
+                      "presentReports": sorted(present), "missingReports": missing},
+                     indent=2))
+    return 0
+
+
+def cmd_gate(args: argparse.Namespace) -> int:
+    """Decide Q eligibility and exit non-zero unless every requirement passes."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import qualification_gate as gate_module
+
+    if not args.requirements.is_file():
+        q.fail(f"requirement contract {args.requirements} is missing")
+    contract = gate_module.load_contract(args.requirements)
+    decision = gate_module.evaluate(contract, args.bundle)
+    q.write_report(args.out, decision.as_dict())
+    return decision.exit_code
+
+
 def cmd_compare(args: argparse.Namespace) -> int:
     """Combine experiment reports, requiring a complete and conclusive set."""
     report = q.Report(
@@ -2002,6 +2104,30 @@ def main() -> int:
     p.add_argument("--report", action="append", required=True, type=Path)
     p.add_argument("--out", required=True, type=Path)
     p.set_defaults(func=cmd_validate_report)
+
+    p = sub.add_parser("gate", help="decide Q eligibility from the requirement contract")
+    p.add_argument("--bundle", required=True, type=Path,
+                   help="evidence bundle produced by gate-assemble")
+    p.add_argument("--requirements", type=Path,
+                   default=Path(__file__).resolve().parent / "requirements.json")
+    p.add_argument("--out", required=True, type=Path)
+    p.set_defaults(func=cmd_gate)
+
+    p = sub.add_parser("gate-assemble",
+                       help="assemble an evidence bundle from existing probe reports")
+    p.add_argument("--requirements", type=Path,
+                   default=Path(__file__).resolve().parent / "requirements.json")
+    p.add_argument("--reports", required=True, type=Path,
+                   help="directory holding the existing probe/experiment reports")
+    p.add_argument("--host", default="chromium",
+                   help="observation host label; only desktop-webview satisfies Q-HOST-1")
+    p.add_argument("--engine", default="Chromium 150.0.7871.46")
+    p.add_argument("--numeric-artifact", default="0.5.1",
+                   help="exact version the numeric role was exercised against")
+    p.add_argument("--display-artifact", default="0.3.6",
+                   help="exact version the display role was exercised against")
+    p.add_argument("--out", required=True, type=Path)
+    p.set_defaults(func=cmd_gate_assemble)
 
     p = sub.add_parser("compare", help="combine the required experiment set")
     p.add_argument("--report", action="append", required=True, type=Path)

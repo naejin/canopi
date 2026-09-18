@@ -1,11 +1,28 @@
 # Raster qualification receipt (slice Q)
 
-Status: evidence — corrected after independent review rejected the previous Q receipt; the harness is
-now fail-closed and all ten required experiments pass **for the scope each one actually covers**.
+Status: evidence — **Q is not qualified.** Experiment subtest results are recorded below, but
+eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
+and the current gate verdict is **non-pass** (1 fail, 7 inconclusive, 4 pass). Ten passing subcommand
+names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
 Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edition-development.md),
-[GeoLibre reuse inventory](raster-rework/geolibre-reuse-inventory.md).
+[GeoLibre reuse inventory](raster-rework/geolibre-reuse-inventory.md),
+[gate repair receipt](raster-rework/q-gate-repair-receipt.md).
+
+## Eligibility summary (read this first)
+
+| | |
+| --- | --- |
+| Gate verdict against the recorded evidence | **fail** — 1 fail, 7 inconclusive, 4 pass |
+| Requirements passing | `Q-ART-1`, `Q-LOCAL-1`, `Q-PREP-1`, `Q-CRS-1` |
+| Requirements not passing | `Q-DISPLAY-1` (fail), `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`, `Q-HOST-1`, `Q-RES-1` (inconclusive) |
+| Reproduce | `measure.py gate-assemble --reports <dir> --host chromium --out bundle.json` then `measure.py gate --bundle bundle.json --out decision.json` |
+
+The sections below are **measured subtests**. They show what the probes observed and are worth
+keeping. They do not establish Q eligibility, and no accumulation of green subtests can: the
+requirements that are not passing are ones no current probe observes. Each is listed with its
+unresolved requirement id under [Limitations](#limitations-and-their-effect-on-q-eligibility).
 
 This revision replaces `fd86de68`'s receipt. The previous receipt reported passes that did not
 establish the required behaviour; the review findings are reproduced and fixed below, and every
@@ -109,7 +126,7 @@ The inspection changed Q in three concrete ways:
 | 4b | `q4-crs` | **pass** | 6 | CRS resolver identified; candidate projection and addressing verified |
 | 5 | `q5-lifecycle` | **pass** | 13 | Active cancellation, settlement, malformed input, idempotent adapter teardown |
 | 6 | `q6-resources` | **pass** | 10 | Candidate route and reference reader measured separately against the plan's budgets |
-| — | `compare` | **pass** | 11 | The complete required set, each member conclusive |
+| — | `compare` | **pass** | 11 | The complete required set, each member conclusive — this validates the *experiment set*, not Q eligibility |
 
 Run everything with:
 
@@ -395,6 +412,28 @@ declared NoData mapped to invalid. The plan's `member-window-v1` catalog represe
 occupied-block index and manifest schema remain **N1 work** and are not fixed by this receipt.
 
 ## Limitations and their effect on Q eligibility
+
+These are **gate requirement gaps**, not waivers. Each names the requirement id it blocks, and none
+may be reassigned to a later slice without an explicit recorded decision. Items marked *(release
+gate)* are later-slice obligations the plan already assigns and do not block Q.
+
+| # | Item | Blocked requirement | Kind |
+| --- | --- | --- | --- |
+| 1 | Bounded numeric access requires a prepared tiled derivative; a stripped generation is not range-readable | N1 obligation, not a Q gap | implementation |
+| 2 | Overview reuse never resurrects replaced pixels is unexercised | `Q-MEMBER-1` | Q gap |
+| 3 | No published `whitebox-wasm` matches the pinned commit | `Q-ART-1` (recorded, passing) | recorded finding |
+| 4 | Whole-400M-cell blocked slope was not run | `F-PLATFORM-1` area *(release gate)* | later slice |
+| 5 | 48-million-cell real batch was not imported | `F-E2E-1` *(release gate)* | later slice |
+| 6 | Candidate-route memory, cache, queue depth and temporary disk are unmeasured | `Q-RES-1` | Q gap |
+| 7 | No Desktop WebView host evidence | `Q-HOST-1` | Q gap |
+| 8 | Disk-write failure and publication rollback are not exercised | `Q-FAILINJ-1` | Q gap |
+| 9 | Cancellation is not observed with work in flight on the proposed route | `Q-CANCEL-1` | Q gap |
+| 10 | Teardown release is asserted from a flag, not observed | `Q-TEARDOWN-1` | Q gap |
+| 11 | Valid zero/negative retention has no assertion in the recorded evidence | `Q-VALUE-1` | Q gap |
+| 12 | Display trace lacks one cold and three warm runs | `Q-DISPLAY-1` | Q gap |
+| 13 | WebKit, macOS and Windows were not exercised | `F-PLATFORM-1` *(release gate)* | later slice |
+
+The prose list below retains the measured detail behind these items.
 
 1. **Bounded numeric access requires a prepared tiled derivative.** A stripped generation cannot be
    range-read by any candidate role. The plan already provides for prepared derivatives and lazy

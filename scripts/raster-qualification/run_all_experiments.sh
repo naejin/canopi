@@ -16,6 +16,11 @@ step() {
   if ! "$@"; then FAILED+=("$name"); echo "--- $name reported failure"; fi
 }
 
+# Interpreter overrides exist so the runner's exit handling can be exercised by
+# tests with small deterministic stubs. Production values are the defaults.
+QUAL_PY="${QUAL_PY:-python3}"
+QUAL_NODE="${QUAL_NODE:-node}"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
@@ -36,15 +41,15 @@ cat > "$SCRATCH/fixture-map-ranged.json" <<'JSON'
 JSON
 
 echo "=== Q1: pinned artifacts ==="
-step "step01" python3 scripts/raster-qualification/measure.py q1-artifacts \
+step "step01" "$QUAL_PY" scripts/raster-qualification/measure.py q1-artifacts \
   --bench "$BENCH" --candidates scripts/raster-qualification/candidates.json \
   --out "$OUT/q1-artifacts.json"
 
 echo "=== Q2a: ranged numeric windows on tiled COGs ==="
-step "step02" node scripts/raster-qualification/run_wasm_probe.mjs --experiment q2ranged \
+step "step02" "$QUAL_NODE" scripts/raster-qualification/run_wasm_probe.mjs --experiment q2ranged \
   --bench "$BENCH" --fixtures "$FX" --fixture-map "$SCRATCH/fixture-map-ranged.json" \
   --out "$OUT/q2ranged.json" --engines chromium --chromiumExecutable "$CHROME"
-step "step03" python3 scripts/raster-qualification/measure.py q2-numeric \
+step "step03" "$QUAL_PY" scripts/raster-qualification/measure.py q2-numeric \
   --browser-report "$OUT/q2ranged.json" --fixtures "$FX" \
   --fixture-map "$SCRATCH/fixture-map-ranged.json" \
   --fixture plane256 --fixture plane2000 --fixture steep45 \
@@ -54,20 +59,20 @@ step "step03" python3 scripts/raster-qualification/measure.py q2-numeric \
   --out "$OUT/q2-numeric.json"
 
 echo "=== Q2b: stripped local bridge (negative result) ==="
-step "step04" node scripts/raster-qualification/run_wasm_probe.mjs --experiment q2 \
+step "step04" "$QUAL_NODE" scripts/raster-qualification/run_wasm_probe.mjs --experiment q2 \
   --bench "$BENCH" --fixtures "$FX" --fixture-map "$SCRATCH/fixture-map-ign.json" \
   --out "$OUT/q2ign.json" --engines chromium --chromiumExecutable "$CHROME"
-step "step05" python3 scripts/raster-qualification/measure.py q2-local-bridge \
+step "step05" "$QUAL_PY" scripts/raster-qualification/measure.py q2-local-bridge \
   --browser-report "$OUT/q2ign.json" --fixtures "$FX" \
   --fixture-map "$SCRATCH/fixture-map-ign.json" --fixture mnh_0445_6806 \
   --expect-sha256 mnh_0445_6806=c4e2938e8a166b723f25c7ac3f5a64d21555671b758fb3b40b71daac45a8bc28 \
   --out "$OUT/q2-local-bridge.json"
 
 echo "=== Q3a: native preparation and bounded readback ==="
-step "step06" node scripts/raster-qualification/run_wasm_probe.mjs --experiment q3prep \
+step "step06" "$QUAL_NODE" scripts/raster-qualification/run_wasm_probe.mjs --experiment q3prep \
   --bench "$BENCH" --fixtures "$FX" --fixture-map "$SCRATCH/fixture-map-derived.json" \
   --out "$OUT/q3prep.json" --engines chromium --chromiumExecutable "$CHROME"
-step "step07" python3 scripts/raster-qualification/measure.py q3-prepare \
+step "step07" "$QUAL_PY" scripts/raster-qualification/measure.py q3-prepare \
   --original "$FX/ign/LHD_FXX_0445_6806_MNH_O_0M50_LAMB93_IGN69" \
   --derived "$FX/derived/mnh_0445_6806_cog.tif" \
   --browser-report "$OUT/q3prep.json" --fixture-name derived_cog \
@@ -76,67 +81,67 @@ step "step07" python3 scripts/raster-qualification/measure.py q3-prepare \
   --out "$OUT/q3-prepare.json"
 
 echo "=== Q3b: multi-member generation resolution ==="
-step "step08" python3 scripts/raster-qualification/measure.py q3-members \
+step "step08" "$QUAL_PY" scripts/raster-qualification/measure.py q3-members \
   --collection "$FX/tiles24" \
   --window across-columns-0-1:0:0:2600 --window across-rows-0-1:0:0:2600 \
   --window single-member:2:4:128 --out "$OUT/q3-members.json"
 
 echo "=== Q3c: display tiles and local transport ==="
-step "step09" node scripts/raster-qualification/run_wasm_probe.mjs --experiment q3 \
+step "step09" "$QUAL_NODE" scripts/raster-qualification/run_wasm_probe.mjs --experiment q3 \
   --bench "$BENCH" --fixtures "$FX" --fixture-map "$SCRATCH/fixture-map-ranged.json" \
   --out "$OUT/q3.json" --engines chromium --chromiumExecutable "$CHROME"
-step "step10" node scripts/raster-qualification/run_wasm_probe.mjs --experiment q3file \
+step "step10" "$QUAL_NODE" scripts/raster-qualification/run_wasm_probe.mjs --experiment q3file \
   --bench "$BENCH" --fixtures "$FX" --fixture-map "$SCRATCH/fixture-map-derived.json" \
   --out "$OUT/q3file.json" --engines chromium --chromiumExecutable "$CHROME" \
   --attachFile "$FX/derived/mnh_0445_6806_cog.tif"
 # Merge the two probe runs into one evidence report: display tiles from the
 # tiled-COG run, local disk-backed transport from the File run. The merge must
 # happen before the verdict command consumes it.
-step "step11a" python3 scripts/raster-qualification/merge_probe_reports.py \
+step "step11a" "$QUAL_PY" scripts/raster-qualification/merge_probe_reports.py \
   --tiles "$OUT/q3.json" --local "$OUT/q3file.json" --out "$OUT/q3-display-probe.json"
-step "step11b" python3 scripts/raster-qualification/measure.py q3-display \
+step "step11b" "$QUAL_PY" scripts/raster-qualification/measure.py q3-display \
   --browser-report "$OUT/q3-display-probe.json" --out "$OUT/q3-display.json"
 
 echo "=== Q4a: blocked slope ==="
-step "step12" python3 scripts/raster-qualification/measure.py q4-slope \
+step "step12" "$QUAL_PY" scripts/raster-qualification/measure.py q4-slope \
   --fixtures "$FX" --block 256 --seam 4096,4096 --hole 4096,4096 \
   --out "$OUT/q4-slope.json"
 
 echo "=== Q4b: CRS authority and candidate coordinates ==="
-step "step13a" python3 scripts/raster-qualification/build_crs_reference.py \
+step "step13a" "$QUAL_PY" scripts/raster-qualification/build_crs_reference.py \
   --reference "$FX/derived/mnh_0445_6806_cog.tif" --reference-epsg 2154 \
   --out "$OUT/crs-reference.json"
-step "step13b" node scripts/raster-qualification/crs_probe.mjs \
+step "step13b" "$QUAL_NODE" scripts/raster-qualification/crs_probe.mjs \
   --bench "$BENCH" --fixtures "$FX" --fixture derived/mnh_0445_6806_cog.tif \
   --reference-points "$OUT/crs-reference.json" --out "$OUT/q4-crs-probe.json" \
   --chromiumExecutable "$CHROME"
-step "step13c" python3 scripts/raster-qualification/measure.py q4-crs \
+step "step13c" "$QUAL_PY" scripts/raster-qualification/measure.py q4-crs \
   --probe-report "$OUT/q4-crs-probe.json" --reference-points "$OUT/crs-reference.json" \
   --reference "$FX/derived/mnh_0445_6806_cog.tif" \
   --reference-epsg 2154 --out "$OUT/q4-crs.json"
 
 echo "=== Q5: cancellation and lifecycle ==="
-step "step14" node scripts/raster-qualification/run_wasm_probe.mjs --experiment q5 \
+step "step14" "$QUAL_NODE" scripts/raster-qualification/run_wasm_probe.mjs --experiment q5 \
   --bench "$BENCH" --fixtures "$FX" --fixture-map "$SCRATCH/fixture-map-ranged.json" \
   --out "$OUT/q5.json" --engines chromium --chromiumExecutable "$CHROME"
-step "step15" node scripts/raster-qualification/lifecycle_probe.mjs \
+step "step15" "$QUAL_NODE" scripts/raster-qualification/lifecycle_probe.mjs \
   --bench "$BENCH" --fixtures "$FX" --fixture derived/mnh_0445_6806_cog.tif \
   --out "$OUT/q5-probe.json"
-step "step16" python3 scripts/raster-qualification/measure.py q5-lifecycle \
+step "step16" "$QUAL_PY" scripts/raster-qualification/measure.py q5-lifecycle \
   --browser-report "$OUT/q5.json" --probe-report "$OUT/q5-probe.json" \
   --out "$OUT/q5-lifecycle.json"
 
 echo "=== Q6: resources and display trace ==="
-step "step17" node scripts/raster-qualification/run_display_trace.mjs \
+step "step17" "$QUAL_NODE" scripts/raster-qualification/run_display_trace.mjs \
   --bench "$BENCH" --fixtures "$FX" --fixture derived/mnh_0445_6806_cog.tif \
   --out "$OUT/q6-trace.json" --chromiumExecutable "$CHROME"
-step "step18" python3 scripts/raster-qualification/measure.py q6-resources \
+step "step18" "$QUAL_PY" scripts/raster-qualification/measure.py q6-resources \
   --browser-report "$OUT/q2ranged.json" --fixtures "$FX" \
   --reference-fixture largeplane.tif --max-reads 48 \
   --trace-report "$OUT/q6-trace.json" --out "$OUT/q6-resources.json"
 
 echo "=== compare ==="
-step "step19" python3 scripts/raster-qualification/measure.py compare \
+step "step19" "$QUAL_PY" scripts/raster-qualification/measure.py compare \
   --report "$OUT/q1-artifacts.json" \
   --report "$OUT/q2-local-bridge.json" \
   --report "$OUT/q2-numeric.json" \
@@ -155,9 +160,9 @@ fi
 
 echo "=== verdicts ==="
 export QUAL_OUT="$OUT"
-python3 - <<'PY'
-import json, pathlib
-out = pathlib.Path(__import__("os").environ["QUAL_OUT"])
+"${QUAL_GATE_PY:-python3}" - <<'PY'
+import json, pathlib, os
+out = pathlib.Path(os.environ["QUAL_OUT"])
 for path in sorted(out.glob("q*.json")):
     try:
         d = json.loads(path.read_text())
@@ -166,3 +171,26 @@ for path in sorted(out.glob("q*.json")):
     if "result" in d and "experiment" in d:
         print(f"{d['result']:>13}  {d['experiment']:<18} {d.get('verdictReason','')}")
 PY
+
+# Accumulated failures decide the exit status. Printing the summary above must
+# not be able to turn a failed run into a successful one for automation.
+if [ "${#FAILED[@]}" -gt 0 ]; then
+  echo "=== qualification run failed: ${#FAILED[@]} step(s): ${FAILED[*]} ===" >&2
+  exit 1
+fi
+if [ ! -f "$OUT/q-summary.json" ]; then
+  echo "=== qualification run failed: no aggregate summary was produced ===" >&2
+  exit 1
+fi
+"${QUAL_GATE_PY:-python3}" - "$OUT/q-summary.json" <<'PY'
+import json, sys
+from pathlib import Path
+payload = json.loads(Path(sys.argv[1]).read_text())
+result = payload.get("result")
+if result != "pass":
+    print(f"=== qualification aggregate is not a pass: {result} "
+          f"({payload.get('verdictReason')}) ===", file=sys.stderr)
+    raise SystemExit(1)
+print(f"=== qualification aggregate: {result} ===")
+PY
+exit $?

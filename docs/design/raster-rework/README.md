@@ -16,6 +16,7 @@ Next handoff: [Q gate repair](q-gate-repair-agent-prompt.md). It fixes verdict i
 | [Q gate repair prompt](q-gate-repair-agent-prompt.md) | Current bounded handoff, with requirement-driven verdicts and isolated red–green tests |
 | [Review and debrief record](review-and-debrief.md) | Revision-linked findings, reproduced false passes, known evidence limits, process hypotheses and final debrief procedure |
 | [GeoLibre reuse inventory](geolibre-reuse-inventory.md) | Modules inspected at the pinned revision and the reuse/adapt/reject decision for each |
+| [Q gate repair receipt](q-gate-repair-receipt.md) | Gate-only repair: requirement contract, fail-closed evaluator, tests, current evidence verdict |
 
 For the debrief, compare requested assertions with the implementation actually measured, machine-readable verdicts, review findings and subsequent corrections. Separate missing instructions from failures to follow explicit instructions; do not infer a general model limitation from one run. Tie conclusions to commits, commands and regression tests rather than conversational impressions.
 
