@@ -1,8 +1,8 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — five implementation handoffs reviewed; final methodology conclusions pending.
+Status: evidence — six implementation handoffs reviewed; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [implementation plan](../raster-data-analysis-rework.md), [current handoff](q-declaration-precedence-agent-prompt.md), and [delivery workflow](../../workflow/delivery.md).
+Current guidance: [implementation plan](../raster-data-analysis-rework.md), [declaration/precedence receipt](q-declaration-precedence-receipt.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
 
@@ -24,7 +24,29 @@ The reviewer inspected source and ran targeted in-memory verdict reproductions. 
 | [Evidence integrity receipt](q-evidence-integrity-receipt.md), reviewed at `d963f755` | 115 passing tests, nine reported sensitivity checks; existing records yield 12 inconclusive | Reviewer independently reran all 115 tests, docs and diff checks successfully. Repair not accepted: R4 findings below. Private report reconciliation and sensitivity checks were not independently rerun. |
 | [Admission completeness prompt](q-admission-completeness-agent-prompt.md), `c94b7c7f` | Explicit required-set coverage, run provenance and monotonic failure precedence | Executed in `50c1211e`, with delivery records through `578e3bdb`; retired. |
 | [Admission completeness receipt](q-admission-completeness-receipt.md), reviewed through `578e3bdb` | 168 tests, ten reported sensitivity checks and captured cycle excerpts; existing evidence twelve-inconclusive | All 168 tests and docs/diff checks independently pass. Repair not accepted: R5 findings below. Private evidence reconciliation and sensitivity mutations not independently rerun. |
-| [Declaration/precedence prompt](q-declaration-precedence-agent-prompt.md) | Validate both declarations and observations; test independent failure/gap combinations | Next bounded assignment; no implementation or acceptance claimed. |
+| [Declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), `35c6166b` | Validate both declarations and observations; test independent failure/gap combinations | Executed in the declaration/precedence repair; prompt retired. |
+| [Declaration/precedence receipt](q-declaration-precedence-receipt.md), delivered from `35c6166b` | One validated declaration path for CLI and assembly; gap-based early return removed; findings read independently of `result`; 209 tests, four reported sensitivity probes and captured cycle excerpts; existing evidence twelve-inconclusive | Implementer report. Not yet independently reviewed: R5 repairs are implemented, pending verification. Private evidence reconciliation and the sensitivity probes were not independently rerun. |
+
+## R5 repair report
+
+Repair code: `scripts/raster-qualification/qualification_evidence.py` and `measure.py`; tests in
+`tests/test_qualification_gate.py` and `tests/test_cli_integration.py`. Captured cycles, sensitivity
+probes and the read-only evidence reconciliation are in
+[q-declaration-precedence-cycles.txt](evidence/q-declaration-precedence-cycles.txt); the acceptance
+table is in the [receipt](q-declaration-precedence-receipt.md). Nothing below is independently
+verified yet.
+
+| ID | Repair reported by the implementer | Check that now detects a regression |
+| --- | --- | --- |
+| R5-01 | Declarations are validated before anything is indexed from them: missing hash or manifest is inconclusive; malformed type/value, duplicate identity (including identical), conflicting entries, undeclared required reference, repeated JSON object key and an explicit empty required list fail. Both entry points call the same validators, and a rejected declaration stops the CLI with a nonzero result and a diagnostic artifact. The same-class pin bypass was found and repaired | `DeclarationValidationTest`, `CliDeclarationValidation`, and a guard-removal probe that replaces both CLI loaders with `json.loads` |
+| R5-02 | No section of `admit_report` sets a verdict; failures, gaps, conflicts and blocked comparisons are collected and reduced once at the end, so a wrong hash stays a failure alongside a missing `runId`/time/command and every contributing source's failure reaches a combined requirement | Table-driven conflict-kind × gap-kind cross products in both orders, a metamorphic invariant over every gap kind, and a combined-fault probe that fails under both an early return and a dropped conflict list |
+| R5-03 | Recorded failures, failed assertions and failed preconditions are read independently of `result`; an absent key stays a gap while a present-but-unusable value (including explicit `null`) is invalid; every container is shape-checked, so a malformed one is an input failure rather than a silent empty list, and the `TypeError` that escaped `assemble` is gone | `ResultIndependentFailures`, the malformed-container tests, and a container-shape probe |
+
+Two existing tests changed expectation rather than being weakened:
+`FixtureCoverage.test_malformed_hash_is_not_a_valid_identity` now expects `fail` because R5-01
+reclassifies a malformed declared digest from a gap to a malformed declaration, and the
+declaration-level duplicate assertions were reworded to match the emitted messages. Both are recorded
+in the receipt.
 
 ## R2 findings and reported repairs
 

@@ -6,7 +6,7 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Next handoff: [Q declaration validation and precedence](q-declaration-precedence-agent-prompt.md). Independent review of `50c1211e` through `578e3bdb` reproduced invalid declarations passing and provenance/result gaps hiding failures, despite all 168 tests passing. This is gate repair only: no new qualification experiments, engine selection or N1. See the review record rather than inferring qualification from test counts.
+Next step: independent review of the [declaration/precedence repair](q-declaration-precedence-receipt.md) delivered on the `feature/raster-html-references` stack. Independent review of `50c1211e` through `578e3bdb` reproduced invalid declarations passing and provenance/result gaps hiding failures, despite all 168 tests passing; that repair is implemented and now awaits verification. This is gate repair only: no new qualification experiments, engine selection or N1. See the review record rather than inferring qualification from test counts.
 
 | Artifact | Purpose |
 | --- | --- |
@@ -18,7 +18,9 @@ Next handoff: [Q declaration validation and precedence](q-declaration-precedence
 | [Q evidence integrity receipt](q-evidence-integrity-receipt.md) | Implementer-reported admission repair and 12-inconclusive result; not independent acceptance |
 | [Q admission completeness prompt](q-admission-completeness-agent-prompt.md) | Retired handoff delivered in `50c1211e`; independent review requires further repair |
 | [Q admission completeness receipt](q-admission-completeness-receipt.md) | Implementer report and captured cycle excerpts; not independent acceptance |
-| [Q declaration/precedence prompt](q-declaration-precedence-agent-prompt.md) | Current bounded handoff: validate declarations and collect all available failures before deciding eligibility |
+| [Q declaration/precedence prompt](q-declaration-precedence-agent-prompt.md) | Retired handoff delivered in the declaration/precedence repair; retained as debrief evidence |
+| [Q declaration/precedence receipt](q-declaration-precedence-receipt.md) | Implementer report for the R5-01–R5-03 repair, 209 tests and captured cycle/sensitivity excerpts; implemented, pending independent verification |
+| [Q declaration/precedence cycles](evidence/q-declaration-precedence-cycles.txt) | Captured RED/GREEN, guard-removal sensitivity and read-only evidence reconciliation for that repair |
 | [Review and debrief record](review-and-debrief.md) | Revision-linked findings, reproduced false passes, known evidence limits, process hypotheses and final debrief procedure |
 | [GeoLibre reuse inventory](geolibre-reuse-inventory.md) | Modules inspected at the pinned revision and the reuse/adapt/reject decision for each |
 | [Q gate repair receipt](q-gate-repair-receipt.md) | Historical implementer report for the first gate repair; its four passing requirements are not independently accepted |

@@ -8,7 +8,7 @@ Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a
 Spec: [raster rework](raster-data-analysis-rework.md).
 Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edition-development.md),
 [GeoLibre reuse inventory](raster-rework/geolibre-reuse-inventory.md),
-[gate repair receipt](raster-rework/q-gate-repair-receipt.md).
+[declaration/precedence receipt](raster-rework/q-declaration-precedence-receipt.md).
 
 ## Eligibility summary (read this first)
 
@@ -19,7 +19,7 @@ Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edi
 | Requirements not passing | `Q-ART-1`, `Q-LOCAL-1`, `Q-PREP-1`, `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CRS-1`, `Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`, `Q-HOST-1`, `Q-RES-1`, `Q-DISPLAY-1` — all inconclusive |
 | Reproduce | `measure.py gate-assemble --reports <dir> --host chromium --out bundle.json` then `measure.py gate --bundle bundle.json --out decision.json` |
 | Why inconclusive | The recorded reports carry no identity/provenance block, so their route, environment, transport, artifact and fixture identity cannot be verified, and they record no run identity or time. This is incomplete evidence, not a measured violation |
-| Admission requirements | Fixture coverage is judged against a declared per-role manifest; each measured artifact must correspond to its declared source pin; a source run needs a nonempty runId and a fresh, finite recordedAt under one injected clock; a known failure stays a failure even when provenance is missing. See the [admission-completeness receipt](raster-rework/q-admission-completeness-receipt.md) |
+| Admission requirements | Declarations are validated before anything is indexed from them, so a missing manifest or hash is a gap while a malformed, duplicated or conflicting one is an evaluator-input failure; fixture coverage is judged against that declared per-role manifest; each measured artifact must correspond to its declared source pin; a source run needs a nonempty runId and a fresh, finite recordedAt under one injected clock; a known conflict or recorded failure stays a failure even when an unrelated field or the summary `result` is missing. See the [declaration/precedence receipt](raster-rework/q-declaration-precedence-receipt.md) |
 | Superseded | An earlier revision of this receipt reported four requirements as passing. That reading came from admitting reports without any provenance requirement and is **withdrawn**; see the [evidence-integrity receipt](raster-rework/q-evidence-integrity-receipt.md) |
 
 The sections below are **measured subtests** of the individually recorded runs. They show what the probes observed and are worth

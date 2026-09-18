@@ -29,6 +29,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -1844,47 +1845,52 @@ def _report_map(directory: Path) -> dict[str, Path]:
 FIXTURE_MANIFEST_KEYS = ("declared", "requiredFixtures", "subsetAllowed")
 
 
-def load_fixture_manifest(path: Path | None) -> tuple[dict | None, str | None]:
-    """Load the declared fixture manifest, or explain why it is unusable.
+def load_fixture_manifest(
+        path: Path | None, evidence: Any = None) -> tuple[Any, str | None]:
+    """Load and validate the declared fixture manifest.
 
     The manifest is an input, not something derived from the reports being
     checked: inferring the expected set from the observed set would make coverage
-    unfalsifiable.
+    unfalsifiable. Validation goes through the same code the programmatic
+    assembler uses, so the CLI cannot accept a declaration the assembler would
+    reject — and it returns the validation itself, so a rejection is not collapsed
+    into the same shape as an absent manifest.
     """
+    if evidence is None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import qualification_evidence as evidence
+
     if path is None:
-        return None, "no fixture manifest was supplied, so coverage cannot be established"
+        validation = evidence.validate_fixture_manifest(None, "fixture manifest")
+        return validation, "; ".join(validation.problems)
     if not path.is_file():
         return None, f"fixture manifest {path.name} is missing"
-    try:
-        payload = json.loads(path.read_text())
-    except json.JSONDecodeError as error:
-        return None, f"fixture manifest {path.name} is malformed: {error}"
-    if not isinstance(payload, dict):
-        return None, f"fixture manifest {path.name} is not a JSON object"
-    declared = payload.get("declared")
-    if not isinstance(declared, list) or not declared:
-        return None, f"fixture manifest {path.name} declares no fixtures"
-    if not path.name:
-        return None, "fixture manifest has no name"
-    return payload, None
+    validation = evidence.validate_fixture_manifest_text(
+        path.read_text(), f"fixture manifest {path.name}")
+    if not validation.usable:
+        return validation, "; ".join(validation.problems)
+    return validation, None
 
 
-def load_declared_pins(candidates_path: Path) -> tuple[dict[str, str], str | None]:
+def load_declared_pins(candidates_path: Path,
+                       evidence: Any = None) -> tuple[Any, str | None]:
     """The declared source pins for the candidate artifacts.
 
     Read from the existing candidate manifest, so the expectation is independent of
-    any report being checked. This task does not change the pins.
+    any report being checked. This task does not change the pins. Validation goes
+    through the shared path so a repeated pin name cannot let the last write win.
     """
+    if evidence is None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import qualification_evidence as evidence
+
     if not candidates_path.is_file():
-        return {}, f"candidate manifest {candidates_path.name} is missing"
-    try:
-        payload = json.loads(candidates_path.read_text())
-    except json.JSONDecodeError as error:
-        return {}, f"candidate manifest {candidates_path.name} is malformed: {error}"
-    pins = payload.get("pinnedSourceCommits")
-    if not isinstance(pins, dict) or not pins:
-        return {}, f"candidate manifest {candidates_path.name} records no source pins"
-    return {str(name): str(revision) for name, revision in pins.items()}, None
+        return None, f"candidate manifest {candidates_path.name} is missing"
+    validation = evidence.validate_pin_declaration_text(
+        candidates_path.read_text(), f"candidate manifest {candidates_path.name}")
+    if not validation.usable:
+        return validation, "; ".join(validation.problems)
+    return validation, None
 
 
 def cmd_gate_assemble(args: argparse.Namespace) -> int:
@@ -1904,11 +1910,11 @@ def cmd_gate_assemble(args: argparse.Namespace) -> int:
 
     candidates_path = args.candidates or (
         Path(__file__).resolve().parent / "candidates.json")
-    declared_pins, pins_problem = load_declared_pins(candidates_path)
+    declared_pins, pins_problem = load_declared_pins(candidates_path, evidence)
     if pins_problem:
         print(f"note: {pins_problem}", file=sys.stderr)
 
-    manifest, manifest_problem = load_fixture_manifest(args.fixture_manifest)
+    manifest, manifest_problem = load_fixture_manifest(args.fixture_manifest, evidence)
     if manifest_problem:
         # Reported through the bundle rather than exiting: a missing manifest is a
         # gap in coverage, and the evaluation must still produce a verdict.
@@ -1957,12 +1963,31 @@ def cmd_gate_assemble(args: argparse.Namespace) -> int:
     args.out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"out": str(args.out), "host": args.host,
                       "presentReports": sorted(present), "missingReports": missing,
-                      "fixtureManifest": str(args.fixture_manifest) if manifest else None,
+                      "fixtureManifest": (str(args.fixture_manifest)
+                                          if manifest is not None and manifest.usable
+                                          else None),
                       "fixtureManifestProblem": manifest_problem,
                       "candidateManifest": str(candidates_path),
                       "candidatePinsProblem": pins_problem,
-                      "declaredPins": declared_pins},
+                      "declaredPins": (declared_pins.declared_hashes()
+                                       if declared_pins is not None
+                                       and declared_pins.usable else {})},
                      indent=2))
+
+    # A declaration the shared validated path rejected is an evaluator-input
+    # failure, not a measured engine failure. The diagnostic bundle above is
+    # written first so the refusal is auditable; the nonzero result then stops a
+    # caller from treating the run as an assembled bundle.
+    rejected = [d for d in (bundle.get("declarations") or {}).values()
+                if d.get("verdict") == evidence.FAIL]
+    if rejected:
+        for declaration in rejected:
+            for problem in declaration["problems"]:
+                print(f"invalid declaration: {declaration['name']}: {problem}",
+                      file=sys.stderr)
+        print(f"invalid declaration: refusing to assemble; the rejection is "
+              f"recorded in {args.out}", file=sys.stderr)
+        return 2
     return 0
 
 

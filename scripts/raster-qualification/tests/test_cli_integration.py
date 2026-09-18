@@ -150,5 +150,131 @@ class CliIntegration(unittest.TestCase):
         self.assertNotEqual(decision["result"], "pass")
 
 
+class CliDeclarationValidation(unittest.TestCase):
+    """The CLI must reject a defective declaration, not just note it.
+
+    R5-01 requires one validated declaration path. These drive the real command,
+    so they prove the CLI cannot be weaker than the programmatic assembler: a
+    declaration the assembler rejects must stop the CLI with a diagnostic and a
+    nonzero result rather than being downgraded to a printed note.
+    """
+
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory(prefix="qual-cli-decl-")
+        self.root = Path(self._temp.name)
+        self.reports_dir = self.root / "reports"
+        self.reports_dir.mkdir()
+        writer = CliIntegration(methodName="runTest")
+        writer.root = self.root
+        writer.reports_dir = self.reports_dir
+        writer.write_reports()
+
+    def tearDown(self) -> None:
+        self._temp.cleanup()
+
+    def run_cli(self, *args: str) -> subprocess.CompletedProcess:
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(HARNESS)
+        return subprocess.run([sys.executable, str(MEASURE), *args],
+                              capture_output=True, text=True, env=environment,
+                              timeout=300)
+
+    def assemble_with(self, manifest_text: str) -> subprocess.CompletedProcess:
+        manifest = self.root / "fixture-manifest.json"
+        manifest.write_text(manifest_text)
+        return self.run_cli(
+            "gate-assemble", "--reports", str(self.reports_dir),
+            "--host", "chromium", "--fixture-manifest", str(manifest),
+            "--out", str(self.root / "bundle.json"))
+
+    def test_duplicate_json_key_is_rejected_with_a_nonzero_result(self) -> None:
+        """A repeated key is hidden by normal decoding, so it must be read first."""
+        text = ('{"declared": [{"name": "derived_cog", "sha256": "' + "a" * 64 + '"}],'
+                ' "requiredFixtures": {}, "declared": '
+                '[{"name": "other_cog", "sha256": "' + "b" * 64 + '"}]}')
+        assemble = self.assemble_with(text)
+        self.assertNotEqual(
+            assemble.returncode, 0,
+            f"a repeated declaration key was accepted: {assemble.stdout}")
+        diagnostic = assemble.stdout + assemble.stderr
+        self.assertIn("declared", diagnostic)
+        # An evaluator-input failure, not an unhandled traceback.
+        self.assertNotIn("Traceback", diagnostic)
+
+    def test_malformed_member_type_is_rejected_with_a_nonzero_result(self) -> None:
+        assemble = self.assemble_with(json.dumps({
+            "declared": ["derived_cog"], "requiredFixtures": {}}))
+        self.assertNotEqual(assemble.returncode, 0, assemble.stdout)
+        diagnostic = assemble.stdout + assemble.stderr
+        self.assertIn("not an object", diagnostic.lower())
+        self.assertNotIn("Traceback", diagnostic)
+
+    def test_required_reference_to_an_undeclared_fixture_is_rejected(self) -> None:
+        assemble = self.assemble_with(json.dumps({
+            "declared": [{"name": "derived_cog", "sha256": "a" * 64}],
+            "requiredFixtures": {"q2": ["ghost"]}}))
+        self.assertNotEqual(assemble.returncode, 0, assemble.stdout)
+        diagnostic = assemble.stdout + assemble.stderr
+        self.assertIn("ghost", diagnostic)
+        self.assertNotIn("Traceback", diagnostic)
+
+    def test_rejected_declaration_is_recorded_in_a_diagnostic_artifact(self) -> None:
+        """The refusal must be auditable after the fact, not only on stderr."""
+        self.assemble_with(json.dumps({
+            "declared": [{"name": "derived_cog", "sha256": "a" * 64},
+                         {"name": "derived_cog", "sha256": "a" * 64}],
+            "requiredFixtures": {}}))
+        bundle = self.root / "bundle.json"
+        self.assertTrue(bundle.is_file(), "no diagnostic artifact was written")
+        payload = json.loads(bundle.read_text())
+        declared = payload["declarations"]["fixtureManifest"]
+        self.assertEqual(declared["verdict"], "fail")
+        self.assertIn("derived_cog", " ".join(declared["problems"]))
+        # The declaration is rejected, so it must not be published as usable.
+        self.assertFalse(declared["usable"])
+
+    def test_usable_declaration_still_assembles(self) -> None:
+        """Control: the same command with a valid declaration succeeds."""
+        assemble = self.assemble_with(json.dumps({
+            "declared": [{"name": "derived_cog", "sha256": "a" * 64}],
+            "requiredFixtures": {}}))
+        self.assertEqual(assemble.returncode, 0, assemble.stderr)
+
+    def test_declared_member_without_a_hash_is_a_gap_not_a_pass(self) -> None:
+        """The acceptance table's first R5-01 row: removing a hash is a gap."""
+        assemble = self.assemble_with(json.dumps({
+            "declared": [{"name": "derived_cog"}], "requiredFixtures": {}}))
+        self.assertEqual(assemble.returncode, 0, assemble.stderr)
+        payload = json.loads((self.root / "bundle.json").read_text())
+        declared = payload["declarations"]["fixtureManifest"]
+        self.assertEqual(declared["verdict"], "inconclusive")
+        self.assertIn("hash", " ".join(declared["problems"]).lower())
+        # A gap is not usable, but it is also not an evaluator-input failure.
+        self.assertFalse(declared["usable"])
+
+    def test_duplicate_pin_key_is_rejected_rather_than_last_write_winning(self) -> None:
+        """The same bypass as a duplicate fixture: a dict keeps the last entry."""
+        candidates = self.root / "candidates.json"
+        candidates.write_text(
+            '{"pinnedSourceCommits": {"whitebox-wasm": "aaaaaaa",'
+            ' "whitebox-wasm": "bbbbbbb"}}')
+        assemble = self.run_cli(
+            "gate-assemble", "--reports", str(self.reports_dir),
+            "--host", "chromium", "--candidates", str(candidates),
+            "--fixture-manifest", str(self.write_valid_manifest()),
+            "--out", str(self.root / "bundle.json"))
+        self.assertNotEqual(assemble.returncode, 0, assemble.stdout)
+        diagnostic = assemble.stdout + assemble.stderr
+        self.assertIn("whitebox-wasm", diagnostic)
+        self.assertNotIn("Traceback", diagnostic)
+
+    def write_valid_manifest(self) -> str:
+        manifest = self.root / "fixture-manifest.json"
+        manifest.write_text(json.dumps({
+            "declared": [{"name": "derived_cog", "sha256": "a" * 64}],
+            "requiredFixtures": {}}))
+        return str(manifest)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

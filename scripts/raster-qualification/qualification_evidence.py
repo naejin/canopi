@@ -366,6 +366,306 @@ def display_trace_assertions(trace: dict[str, Any] | None,
 
 
 # --------------------------------------------------------------------------- #
+# declaration validation
+# --------------------------------------------------------------------------- #
+#
+# A declaration is an input, not a trusted constant: the evaluator owns the
+# harness but not the manifest it is handed. It is therefore validated *before*
+# any lookup is built from it, so a duplicate or malformed member cannot be
+# collapsed by a dict comprehension into whichever entry happened to come last.
+
+#: Declaration defects are evaluator-input failures, never measured engine
+#: failures. Every problem string is prefixed with this so a reader can tell the
+#: two apart.
+DECLARATION_PREFIX = "invalid declaration: "
+
+
+@dataclass
+class DeclarationValidation:
+    """The outcome of validating one declaration."""
+
+    name: str
+    verdict: str
+    #: The validated declaration, usable only when the verdict is pass.
+    manifest: dict[str, Any] | None = None
+    problems: list[str] = field(default_factory=list)
+    #: Per-role required fixture names, resolved through the validated members.
+    required_by_role: dict[str, list[str]] = field(default_factory=dict)
+    #: name -> validated SHA-256 of every declared member.
+    members: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def usable(self) -> bool:
+        return self.verdict == PASS
+
+    def declared_hashes(self) -> dict[str, str]:
+        """The declared fixture identities, readable only from a usable manifest."""
+        if not self.usable:
+            return {}
+        return dict(self.members)
+
+    def required_for(self, role: str | None) -> list[str]:
+        if not role:
+            return list(self.required_by_role.get("*", []))
+        if role in self.required_by_role:
+            return list(self.required_by_role[role])
+        return list(self.required_by_role.get("*", []))
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "verdict": self.verdict,
+            "problems": self.problems,
+            "requiredByRole": self.required_by_role,
+            "usable": self.usable,
+        }
+
+
+def validate_fixture_manifest_text(text: str, name: str) -> DeclarationValidation:
+    """Validate a fixture manifest from its raw text.
+
+    Duplicate JSON object keys are reported while reading: normal decoding keeps
+    only the last occurrence, which would silently hide a conflicting entry.
+    """
+    duplicates = duplicate_keys_in_text(text, "declared")
+    duplicates += duplicate_keys_in_text(text, "requiredFixtures")
+    if duplicates:
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + "repeats key "
+                      + ", ".join(sorted(set(duplicates)))] )
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as error:
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + f"is malformed: {error}"])
+    return validate_fixture_manifest(payload, name)
+
+
+def validate_fixture_manifest(manifest: Any, name: str) -> DeclarationValidation:
+    """Validate a fixture manifest before anything is indexed from it.
+
+    Missing information is inconclusive; malformed structure, malformed values,
+    duplicate identities, conflicting members and undeclared references fail.
+    """
+    if manifest is None:
+        return DeclarationValidation(
+            name=name, verdict=UNKNOWN,
+            problems=["no fixture manifest was supplied, so coverage cannot be "
+                      "established"])
+    if not isinstance(manifest, dict):
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + "is not a declaration object"])
+    if not manifest:
+        return DeclarationValidation(
+            name=name, verdict=UNKNOWN,
+            problems=["the fixture manifest is empty, so coverage cannot be "
+                      "established"])
+    if "declared" not in manifest:
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + "records no declared fixtures"])
+
+    declared = manifest.get("declared")
+    if not isinstance(declared, list):
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + "declared fixtures are not a list"])
+    if not declared:
+        return DeclarationValidation(
+            name=name, verdict=UNKNOWN,
+            problems=["fixture manifest declares no fixtures"])
+
+    problems: list[str] = []
+    failed = False
+    gaps = False
+    members: dict[str, str] = {}
+    for index, member in enumerate(declared):
+        if not isinstance(member, dict):
+            failed = True
+            problems.append(
+                DECLARATION_PREFIX + f"declared member {index} is not an object "
+                f"({type(member).__name__})")
+            continue
+        member_name = member.get("name")
+        if not isinstance(member_name, str) or not member_name.strip():
+            failed = True
+            problems.append(
+                DECLARATION_PREFIX + f"declared member {index} has no usable name")
+            continue
+        digest = member.get("sha256")
+        if digest is None:
+            # Missing information: the identity is incomplete, not malformed.
+            gaps = True
+            problems.append(
+                f"declared fixture {member_name!r} records no hash, so its identity "
+                f"is incomplete")
+            members.setdefault(member_name, "")
+            continue
+        if not _is_sha256(digest):
+            failed = True
+            problems.append(
+                DECLARATION_PREFIX + f"declared fixture {member_name!r} records a "
+                f"malformed sha256 {str(digest)[:16]!r}")
+            members.setdefault(member_name, "")
+            continue
+        if member_name in members:
+            failed = True
+            previous = members[member_name]
+            detail = (f"both record {digest}" if previous == digest
+                      else f"one records {previous!r}, another records {digest!r}")
+            problems.append(
+                DECLARATION_PREFIX + f"repeats declared fixture {member_name!r}: "
+                + detail)
+            continue
+        members[member_name] = str(digest)
+
+    required_by_role: dict[str, list[str]] = {}
+    roles = manifest.get("requiredFixtures")
+    if roles is None:
+        required_by_role["*"] = list(members)
+    elif not isinstance(roles, dict):
+        failed = True
+        problems.append(
+            DECLARATION_PREFIX + "requiredFixtures is not an object of role lists")
+    else:
+        for role, required in roles.items():
+            if not isinstance(role, str) or not role.strip():
+                failed = True
+                problems.append(
+                    DECLARATION_PREFIX + "requiredFixtures has a role without a name")
+                continue
+            if not isinstance(required, list):
+                failed = True
+                problems.append(
+                    DECLARATION_PREFIX + f"required fixture list for {role!r} is not "
+                    f"a list")
+                continue
+            if not required:
+                # An explicit empty list must not be read as "no raster evidence
+                # is required for this role".
+                failed = True
+                problems.append(
+                    DECLARATION_PREFIX + f"required fixture list for {role!r} is "
+                    f"empty, which cannot waive that role's raster evidence")
+                continue
+            resolved: list[str] = []
+            for entry in required:
+                if not isinstance(entry, str) or not entry.strip():
+                    failed = True
+                    problems.append(
+                        DECLARATION_PREFIX + f"required fixture list for {role!r} "
+                        f"contains a non-name entry ({entry!r})")
+                    continue
+                if entry not in members:
+                    failed = True
+                    problems.append(
+                        DECLARATION_PREFIX + f"required fixture {entry!r} for "
+                        f"{role!r} is not declared")
+                    continue
+                resolved.append(entry)
+            required_by_role[role] = resolved
+        required_by_role.setdefault("*", list(members))
+
+    if failed:
+        verdict = FAIL
+    elif gaps:
+        verdict = INCONCLUSIVE
+    else:
+        verdict = PASS
+    usable = verdict == PASS
+    return DeclarationValidation(
+        name=name, verdict=verdict,
+        manifest=dict(manifest) if usable else None,
+        problems=problems,
+        members=dict(members) if usable else {},
+        required_by_role={role: list(names)
+                          for role, names in required_by_role.items()} if usable else {})
+
+
+def validate_pin_declaration(pins: Any, name: str) -> DeclarationValidation:
+    """Validate declared artifact pins before they are indexed by name.
+
+    The same class of defect the fixture manifest is checked for applies here: a
+    mapping that is not a mapping, a pin that is not a digest, or a repeated name
+    whose later occurrence would silently overwrite the earlier one. A pin that is
+    simply absent is a gap; a pin that is present but unusable is a failure.
+    """
+    if pins is None:
+        return DeclarationValidation(
+            name=name, verdict=UNKNOWN,
+            problems=[f"no {name} was supplied, so pinned artifact versions cannot "
+                      f"be cross-checked"])
+    if not isinstance(pins, dict):
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + f"{name} is not an object of pins"])
+
+    problems: list[str] = []
+    failed = False
+    gaps = False
+    members: dict[str, str] = {}
+    for pin_name, digest in pins.items():
+        if not isinstance(pin_name, str) or not pin_name.strip():
+            failed = True
+            problems.append(
+                DECLARATION_PREFIX + f"{name} has a pin without a name")
+            continue
+        if digest is None:
+            gaps = True
+            problems.append(
+                f"{name} records no revision for {pin_name!r}, so its pin is "
+                f"incomplete")
+            continue
+        if not isinstance(digest, str) or not digest.strip():
+            failed = True
+            problems.append(
+                DECLARATION_PREFIX + f"{name} records a malformed pin for "
+                f"{pin_name!r}: {str(digest)[:16]!r}")
+            continue
+        members[pin_name] = digest.strip()
+
+    if failed:
+        verdict = FAIL
+    elif gaps:
+        verdict = INCONCLUSIVE
+    else:
+        verdict = PASS
+    return DeclarationValidation(name=name, verdict=verdict, problems=problems,
+                                 members=dict(members) if verdict == PASS else {})
+
+
+def validate_pin_declaration_text(text: str, name: str,
+                                  key: str = "pinnedSourceCommits") -> DeclarationValidation:
+    """Validate declared pins from raw text, before decoding hides a repeat.
+
+    A repeated pin name is the same defect as a repeated fixture name: normal
+    decoding keeps only the last occurrence, so whichever revision was written
+    last would silently become the expectation.
+    """
+    duplicates = duplicate_keys_in_text(text, key)
+    if duplicates:
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + "repeats key "
+                      + ", ".join(sorted(set(duplicates)))])
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as error:
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + f"is malformed: {error}"])
+    if not isinstance(payload, dict):
+        return DeclarationValidation(
+            name=name, verdict=FAIL,
+            problems=[DECLARATION_PREFIX + "is not a declaration object"])
+    return validate_pin_declaration(payload.get(key), name)
+
+
+
+# --------------------------------------------------------------------------- #
 # report admission: identity, provenance and preconditions
 # --------------------------------------------------------------------------- #
 #
@@ -533,18 +833,135 @@ def _negative_control_scopes(payload: dict[str, Any]) -> set[str]:
     return {str(scope) for scope in declared if isinstance(scope, str) and scope}
 
 
+@dataclass
+class FailureScan:
+    """What a report's own failure record establishes.
+
+    ``problems`` carries container malformations. A malformed container is an
+    input failure, and it must never be read as an empty list: iterating a string
+    would manufacture nonsense failure names out of its characters.
+    """
+
+    positive: list[str] = field(default_factory=list)
+    controls: list[str] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
+
+
 def _split_failures(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
     """Split recorded failures into (positive, negative-control) scopes."""
+    scan = _scan_failures(payload)
+    return scan.positive, scan.controls
+
+
+def _scan_failures(payload: dict[str, Any]) -> FailureScan:
+    """Read the report's recorded failures, checking the container's shape.
+
+    Only a list of named failures is readable. Anything else is reported as a
+    malformed container rather than being coerced into iterable entries.
+    """
+    recorded = payload.get("failures")
+    if recorded is None:
+        return FailureScan()
+    if not isinstance(recorded, list):
+        return FailureScan(problems=[
+            f"report failures container is not a list "
+            f"({type(recorded).__name__}), so its failures cannot be read"])
+
     scopes = _negative_control_scopes(payload)
     positive: list[str] = []
     controls: list[str] = []
-    for failure in payload.get("failures") or []:
-        text = str(failure)
-        if any(text.startswith(scope) for scope in scopes):
-            controls.append(text)
+    problems: list[str] = []
+    for index, failure in enumerate(recorded):
+        if not isinstance(failure, str) or not failure.strip():
+            problems.append(
+                f"report failure {index} is not a named failure "
+                f"({type(failure).__name__})")
+            continue
+        if any(failure.startswith(scope) for scope in scopes):
+            controls.append(failure)
         else:
-            positive.append(text)
-    return positive, controls
+            positive.append(failure)
+    return FailureScan(positive=positive, controls=controls, problems=problems)
+
+
+def _failed_assertions(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Assertions the report marked failed, and problems with the container.
+
+    A failed assertion is a failure the report recorded, independent of whatever
+    its ``result`` field claims or omits.
+    """
+    recorded = payload.get("assertions")
+    if recorded is None:
+        return [], []
+    if not isinstance(recorded, list):
+        return [], [f"report assertions container is not a list "
+                    f"({type(recorded).__name__}), so its assertions cannot be read"]
+    failed: list[str] = []
+    problems: list[str] = []
+    for index, assertion in enumerate(recorded):
+        if not isinstance(assertion, dict):
+            problems.append(
+                f"report assertion {index} is not an object "
+                f"({type(assertion).__name__})")
+            continue
+        name = assertion.get("name")
+        if not isinstance(name, str) or not name.strip():
+            problems.append(f"report assertion {index} has no usable name")
+            continue
+        if assertion.get("ok") is False:
+            failed.append(name)
+    return failed, problems
+
+
+def _texts(report: dict | None, container: str) -> list[str]:
+    """A report's recorded text entries, or nothing if the container is unusable.
+
+    Malformation is reported by admission; this reader exists so a downstream scan
+    cannot iterate a non-list and raise instead of reporting.
+    """
+    if not isinstance(report, dict):
+        return []
+    recorded = report.get(container)
+    if not isinstance(recorded, list):
+        return []
+    return [entry for entry in recorded if isinstance(entry, str)]
+
+
+def _failure_texts(report: dict | None) -> list[str]:
+    """A report's recorded failure texts, taken only from a usable container."""
+    return _texts(report, "failures")
+
+
+def _named_assertions(report: dict | None,
+                      container: str = "assertions") -> tuple[dict[str, dict], list[str]]:
+    """Index a report's assertions by name, reporting malformed entries.
+
+    A dict comprehension over an unchecked container is what turned a malformed
+    ``assertions`` value into an ``IndexError`` or ``TypeError`` deep inside the
+    assembler. Every entry is checked here, and the problems are returned rather
+    than raised, so a malformed container becomes a reported input failure.
+    """
+    if not isinstance(report, dict):
+        return {}, []
+    recorded = report.get(container)
+    if recorded is None:
+        return {}, []
+    if not isinstance(recorded, list):
+        return {}, [f"report {container} container is not a list "
+                    f"({type(recorded).__name__}), so its entries cannot be read"]
+    named: dict[str, dict] = {}
+    problems: list[str] = []
+    for index, entry in enumerate(recorded):
+        if not isinstance(entry, dict):
+            problems.append(f"report {container} entry {index} is not an object "
+                            f"({type(entry).__name__})")
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            problems.append(f"report {container} entry {index} has no usable name")
+            continue
+        named.setdefault(name, entry)
+    return named, problems
 
 
 def admit_report(payload: dict[str, Any] | None, *, report_name: str,
@@ -570,20 +987,53 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
     # precedence fail > inconclusive > pass is applied once, at the end.
     failed = False
     gaps = False
+    #: Comparisons that found a disagreement with the declaration. A conflict is a
+    #: failure even when the same report also has gaps.
+    conflicts: list[str] = []
+    #: Comparisons that could not be made because information is missing.
+    blocked: list[str] = []
 
     # 1. The report's own verdict. A report that failed its own checks cannot
     #    supply a passing observation, however its individual assertions read.
+    #    The report's own failures, its failed assertions and its unmet
+    #    preconditions are read independently of the result field: a report that
+    #    omits or misstates `result` still records what actually happened.
     recorded_result = payload.get("result")
-    positive_failures, control_failures = _split_failures(payload)
+    result_declared = "result" in payload
+    scan = _scan_failures(payload)
+    positive_failures, control_failures = scan.positive, scan.controls
     result.positive_failures = positive_failures
     result.negative_control_failures = control_failures
+    # A malformed container is an input failure. It is reported here rather than
+    # being iterated, which would invent failure names from its characters.
+    if scan.problems:
+        failed = True
+        result.reasons.extend(
+            f"{report_name}: {problem}" for problem in scan.problems)
 
-    if recorded_result is None:
-        # A raw producer artifact that never claimed a verdict. It cannot evidence a
-        # requirement, but it is not corrupt either.
+    failed_assertions, assertion_problems = _failed_assertions(payload)
+    if assertion_problems:
+        failed = True
+        result.reasons.extend(
+            f"{report_name}: {problem}" for problem in assertion_problems)
+    _, malformed_named = _named_assertions(payload)
+    if malformed_named:
+        failed = True
+        result.reasons.extend(
+            f"{report_name}: {problem}" for problem in malformed_named)
+
+    if not result_declared:
+        # The key is absent: a raw producer artifact that never claimed a verdict.
+        # It cannot evidence a requirement, but it is not corrupt either.
         gaps = True
         result.reasons.append(
             f"{report_name} declares no result, so it is not a qualification report")
+    elif recorded_result is None:
+        # Present but explicitly null. That is an unusable declaration, which is a
+        # different condition from never having declared one.
+        failed = True
+        result.reasons.append(
+            f"{report_name} declares an unusable result None")
     elif recorded_result not in (PASS, FAIL, INCONCLUSIVE):
         failed = True
         result.reasons.append(
@@ -605,18 +1055,44 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
         elif recorded_result == INCONCLUSIVE:
             gaps = True
             result.reasons.append(f"{report_name} reports result=inconclusive")
-        if positive_failures and recorded_result != FAIL:
-            failed = True
+
+    # The report's own recorded failures are a failure whatever its result field
+    # says, and whatever else is missing from the record. When the report already
+    # declared result=fail its failures are named there, so only the declarations
+    # that disagree with the failures need a reason of their own.
+    if positive_failures:
+        failed = True
+        if recorded_result != FAIL:
             result.reasons.append(
-                f"{report_name} reports result={recorded_result} but records failures: "
-                + "; ".join(positive_failures[:3]))
+                f"{report_name} records failures while declaring "
+                f"result={recorded_result!r}: "
+                + "; ".join(positive_failures[:5]))
+
+    # An assertion the report marked failed, or a precondition it recorded as
+    # unmet, is a failure independently of the summary verdict it wrote down. A
+    # report that omits `result` still records what actually happened.
+    if failed_assertions:
+        failed = True
+        detail = "; ".join(failed_assertions[:5])
+        if recorded_result == FAIL:
+            # The result=fail reason already names the report's failures.
+            result.reasons.append(
+                f"{report_name} also records failed assertion(s): {detail}")
+        else:
+            result.reasons.append(
+                f"{report_name} records {len(failed_assertions)} failed "
+                f"assertion(s) while declaring result={recorded_result!r}: {detail}")
 
     # 2. Preconditions the report names as gating its observations.
-    unmet = _unmet_preconditions(payload)
+    unmet, precondition_problems = _scan_preconditions(payload)
     if unmet:
         failed = True
         result.reasons.extend(
             f"{report_name} precondition not met: {name}" for name in unmet)
+    if precondition_problems:
+        failed = True
+        result.reasons.extend(
+            f"{report_name}: {problem}" for problem in precondition_problems)
 
     # 3. Duplicated identity keys, which dict conversion would collapse.
     for duplicate in (document.duplicate_identity_keys if document else ()):
@@ -696,45 +1172,43 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
     else:
         identity_expected = False
 
-    if failed:
-        result.verdict = FAIL
-        return result
-    if gaps or not identity_expected:
-        result.verdict = UNKNOWN
-        return result
+    # The sections above only record what they found. Nothing is reduced to a
+    # verdict yet: a gap discovered before a comparison must not stop that
+    # comparison from running. A wrong hash is still a conflict when the report
+    # also omits its runId, its recorded time or its command, and the reviewer must
+    # see both. The precedence fail > inconclusive > pass is applied once, at the
+    # end, over everything that was collected.
 
-    # 4. The recorded experiment must be the one this report claims to be.
+    # 5. The recorded experiment must be the one this report claims to be.
     expected_experiment = (expected or {}).get("experiment")
-    if expected_experiment and identity.get("experiment") != expected_experiment:
-        result.verdict = FAIL
+    if identity_expected and expected_experiment \
+            and identity.get("experiment") != expected_experiment:
+        failed = True
         result.reasons.append(
             f"{report_name} identity names experiment {identity.get('experiment')!r} "
             f"but {expected_experiment!r} was expected")
 
-    # 5. Declared route/environment/host must agree with the recorded values.
+    # 6. Declared route/environment/host must agree with the recorded values.
     for identity_key, _expected_key, label in COMPARED_IDENTITY_FIELDS:
         declared = (expected or {}).get(identity_key)
-        observed = identity.get(identity_key)
         if declared is None:
             continue
+        observed = (identity or {}).get(identity_key)
         if observed is None:
-            result.verdict = FAIL if result.verdict == FAIL else UNKNOWN
-            result.reasons.append(
+            blocked.append(
                 f"{report_name} does not record the {label} it measured, so it cannot "
                 f"be matched to the declared {label} ({declared!r})")
         elif str(observed) != str(declared):
-            result.verdict = FAIL
-            result.reasons.append(
+            conflicts.append(
                 f"{report_name} {label} conflict: expected {declared!r}, "
                 f"observed {observed!r}")
 
-    # 6. The artifact each source recorded must be the one declared for its role.
+    # 7. The artifact each source recorded must be the one declared for its role.
     declared_artifact = (expected or {}).get("artifact")
-    observed_artifact = identity.get("artifact")
+    observed_artifact = (identity or {}).get("artifact")
     if isinstance(declared_artifact, dict) and declared_artifact:
         if not isinstance(observed_artifact, dict) or not observed_artifact:
-            result.verdict = FAIL if result.verdict == FAIL else UNKNOWN
-            result.reasons.append(
+            blocked.append(
                 f"{report_name} does not record which artifact it exercised, so it "
                 f"cannot be matched to the declared artifact "
                 f"{declared_artifact!r}")
@@ -745,51 +1219,69 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
                 if declared_value is None:
                     continue
                 if observed_value is None:
-                    result.verdict = FAIL if result.verdict == FAIL else UNKNOWN
-                    result.reasons.append(
+                    blocked.append(
                         f"{report_name} artifact does not record its {key}, so it "
                         f"cannot be matched to the declared {key} "
                         f"({declared_value!r})")
                 elif str(observed_value) != str(declared_value):
-                    result.verdict = FAIL
-                    result.reasons.append(
+                    conflicts.append(
                         f"{report_name} artifact {key} conflict: expected "
                         f"{declared_value!r}, observed {observed_value!r}")
 
-    # 7. The transport the source actually used must be the one required.
+    # 8. The transport the source actually used must be the one required.
     #
     # A route string is a label; the transport is what was exercised. Comparing
     # the kind structurally is what stops a renamed route from qualifying an
     # HTTP-only measurement as the required local bridge.
     required_transport = (expected or {}).get("transport")
-    observed_transport = identity.get("transport")
+    observed_transport = (identity or {}).get("transport")
     if required_transport:
         if observed_transport is None:
-            result.verdict = FAIL if result.verdict == FAIL else UNKNOWN
-            result.reasons.append(
+            blocked.append(
                 f"{report_name} does not record which transport it used, so it "
                 f"cannot be matched to the required transport {required_transport!r}")
         elif str(observed_transport) != str(required_transport):
             # A real but different capability: insufficient, not a violation.
-            if result.verdict != FAIL:
-                result.verdict = UNKNOWN
-            result.reasons.append(
+            blocked.append(
                 f"{report_name} measured transport {observed_transport!r} but "
                 f"{required_transport!r} is required; the recorded capability is "
                 f"real but is not the required route")
 
-    # 8. Fixture identity and hash.
+    # 9. Fixture identity and hash.
     declared_fixtures = (expected or {}).get("declaredFixtures")
     if not isinstance(declared_fixtures, list) or not declared_fixtures:
         declared_fixtures = None
-    result.reasons.extend(_fixture_problems(
+    # The fixture checks are the last contributor. They already report severity on
+    # `result`, so their verdict is folded back into the accumulator here rather
+    # than left on a field that nothing reads after the reduction below.
+    fixture_verdict_before = result.verdict
+    fixture_problems = _fixture_problems(
         identity, payload, report_name,
         requires_raster_fixture=requires_raster_fixture,
         expected=declared_fixtures,
         verdict=result,
-        expected_manifest=(expected or {}).get("fixtureManifest"),
-        fixture_role=(expected or {}).get("fixtureRole")))
+        fixture_declaration=(expected or {}).get("fixtureDeclaration"),
+        fixture_role=(expected or {}).get("fixtureRole"))
+    result.reasons.extend(fixture_problems)
+    if result.verdict == FAIL and fixture_verdict_before != FAIL:
+        failed = True
+    elif result.verdict == UNKNOWN and fixture_verdict_before == PASS:
+        blocked.extend(fixture_problems)
 
+    # Reduce once, over everything every section collected. A conflict outranks a
+    # gap: a hash that disagrees is a failure even when the same report is also
+    # missing its runId, its recorded time or its command.
+    result.reasons.extend(conflicts)
+    result.reasons.extend(blocked)
+    if conflicts:
+        failed = True
+    if failed:
+        result.verdict = FAIL
+    elif gaps or blocked or not identity_expected:
+        result.verdict = UNKNOWN
+    else:
+        result.verdict = PASS
+    result.reasons = _dedupe(result.reasons)
     if result.verdict == FAIL and not result.reasons:
         result.reasons.append(f"{report_name} failed admission")
     return result
@@ -818,25 +1310,51 @@ def _result_contradictions(payload: dict[str, Any], recorded_result: str,
     return problems
 
 
-def _unmet_preconditions(payload: dict[str, Any]) -> list[str]:
-    """Preconditions the report marks as not met, by name."""
+def _scan_preconditions(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Preconditions the report marks as not met, and container malformations.
+
+    A malformed container is reported rather than read as "no unmet
+    preconditions": a record whose preconditions cannot be parsed has not
+    established that they held.
+    """
+    recorded = payload.get("preconditions")
+    if recorded is None:
+        return [], []
+    if not isinstance(recorded, list):
+        return [], [f"report preconditions container is not a list "
+                    f"({type(recorded).__name__}), so they cannot be read"]
     unmet: list[str] = []
-    for entry in payload.get("preconditions") or []:
+    problems: list[str] = []
+    for index, entry in enumerate(recorded):
         if not isinstance(entry, dict):
+            problems.append(f"report precondition {index} is not an object "
+                            f"({type(entry).__name__})")
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            problems.append(f"report precondition {index} has no usable name")
             continue
         if entry.get("met") is False:
-            unmet.append(str(entry.get("name") or "unnamed precondition"))
-    return unmet
+            unmet.append(name)
+    return unmet, problems
+
+
+def _unmet_preconditions(payload: dict[str, Any]) -> list[str]:
+    """Preconditions the report marks as not met, by name."""
+    return _scan_preconditions(payload)[0]
 
 
 def _fixture_problems(identity: dict[str, Any], payload: dict[str, Any],
                       report_name: str, *, requires_raster_fixture: bool,
                       expected: list[dict] | None,
                       verdict: "Admission",
-                      expected_manifest: dict[str, Any] | None = None,
+                      fixture_declaration: "DeclarationValidation | None" = None,
                       fixture_role: str | None = None) -> list[str]:
     """Fixture-policy, identity and hash checks for one report."""
     problems: list[str] = []
+    # A report with no identity block now reaches these checks instead of being
+    # skipped by an early return, so an absent block is a gap, not a crash.
+    identity = identity if isinstance(identity, dict) else {}
     policy = identity.get("fixturePolicy")
     fixtures = identity.get("fixtures")
     if policy not in FIXTURE_POLICIES:
@@ -927,42 +1445,41 @@ def _fixture_problems(identity: dict[str, Any], payload: dict[str, Any],
 
     problems.extend(_fixture_coverage(
         fixtures, report_name,
-        manifest=(expected_manifest if isinstance(expected_manifest, dict) else None),
+        declaration=(fixture_declaration
+                     if isinstance(fixture_declaration, DeclarationValidation)
+                     else validate_fixture_manifest(None, "fixture manifest")),
         role=fixture_role, verdict=verdict))
     return problems
 
 
 def _fixture_coverage(fixtures: list[Any], report_name: str, *,
-                      manifest: dict[str, Any] | None, role: str | None,
+                      declaration: DeclarationValidation, role: str | None,
                       verdict: "Admission") -> list[str]:
     """Compare observed fixtures with the set the role is required to cover.
 
-    The required set comes from the declared manifest. The observed set may be a
-    declared subset, but an undeclared extra fixture is a conflict and a missing
-    required fixture is a gap.
+    The required set comes from the validated declaration, never from whichever
+    fixtures the report happened to observe. The observed set may be a declared
+    subset, but an undeclared extra fixture is a conflict and a missing required
+    fixture is a gap.
     """
     problems: list[str] = []
     observed = [f for f in fixtures if isinstance(f, dict) and f.get("name")]
     observed_names = {str(f["name"]) for f in observed}
 
-    if not manifest or not manifest.get("declared"):
-        problems.append(
-            f"{report_name} has no declared fixture manifest, so fixture coverage "
-            f"cannot be established")
-        if verdict.verdict != FAIL:
+    if not declaration.usable:
+        # A declaration that is missing, incomplete or malformed is an evaluator
+        # input failure. It is reported as such, and it never quietly reduces the
+        # required set to nothing.
+        problems.extend(declaration.problems)
+        if declaration.verdict == FAIL:
+            verdict.verdict = FAIL
+        elif verdict.verdict != FAIL:
             verdict.verdict = UNKNOWN
         return problems
 
-    declared_hashes = {f.get("name"): f.get("sha256") for f in manifest["declared"]
-                       if isinstance(f, dict) and f.get("name")}
-    required_names = None
-    per_role = manifest.get("requiredFixtures")
-    if isinstance(per_role, dict) and role:
-        required_names = per_role.get(role)
-    if required_names is None:
-        # A role with no declared requirement covers every declared fixture.
-        required_names = list(declared_hashes)
-    required = [str(name) for name in required_names]
+    declared_hashes = {name: digest
+                       for name, digest in declaration.declared_hashes().items()}
+    required = declaration.required_for(role)
 
     missing = [name for name in required if name not in observed_names]
     if missing:
@@ -1144,8 +1661,8 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
              environment: dict[str, Any], route: dict[str, Any],
              artifacts: list[dict], fixtures: list[dict],
              display: dict[str, Any], host: str,
-             fixture_manifest: dict[str, Any] | None = None,
-             declared_artifact_pins: dict[str, str] | None = None,
+             fixture_manifest: Any = None,
+             declared_artifact_pins: Any = None,
              now: float | None = None,
              synthetic: bool = False) -> dict[str, Any]:
     """Assemble a gate bundle from the reports named in ``reports``.
@@ -1153,11 +1670,35 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     Anything a report does not establish is left ``inconclusive``; this function
     never promotes absence into a pass, and it never relabels reference-only or
     wrong-host measurements as candidate evidence.
+
+    ``fixture_manifest`` and ``declared_artifact_pins`` accept either a raw
+    declaration or an already-computed ``DeclarationValidation``. Raw declarations
+    are validated here through the same functions the CLI uses, so no caller can
+    reach a comparison built from an unvalidated declaration.
     """
     ledger, ledger_problem = _load(reports.get("ledger"))
     browser, browser_problem = _load(reports.get("browser"))
     trace, trace_problem = _load(reports.get("trace"))
     verdicts = {r["experiment"]: r for r in ([])}
+
+    # Declarations are inputs too. They are validated once, here, before anything
+    # is indexed from them: a dict or set built from an unvalidated declaration
+    # would let a duplicate or malformed entry decide the outcome silently. The
+    # validated objects are what every downstream comparison reads.
+    #
+    # A caller that already validated the declaration may hand the verdict in, so
+    # the CLI and the programmatic entry point run the identical path and a
+    # rejection keeps its own verdict instead of being reshaped into "absent".
+    fixture_declaration = (
+        fixture_manifest if isinstance(fixture_manifest, DeclarationValidation)
+        else validate_fixture_manifest(fixture_manifest, "fixture manifest"))
+    pin_declaration = (
+        declared_artifact_pins
+        if isinstance(declared_artifact_pins, DeclarationValidation)
+        else validate_pin_declaration(declared_artifact_pins,
+                                      "declared artifact pins"))
+    validated_pins = pin_declaration.declared_hashes() if pin_declaration.usable \
+        else None
 
     environment_note = ", ".join(f"{k}={v}" for k, v in sorted(environment.items()))
     entries: dict[str, Any] = {}
@@ -1234,11 +1775,11 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         # The declared manifest names the fixtures each role must cover. Coverage
         # comes from that declaration, never from whichever fixtures a report
         # happened to observe.
-        expectation.setdefault("fixtureManifest", fixture_manifest)
+        expectation.setdefault("fixtureDeclaration", fixture_declaration)
         expectation.setdefault("fixtureRole", role)
         # The pins come from the declaration. A pin the report asserts about itself
         # is not an independent expectation.
-        expectation.setdefault("declaredPins", declared_artifact_pins)
+        expectation.setdefault("declaredPins", validated_pins)
         # Which artifact a source is expected to have used follows the *source*,
         # not the requirement: a numeric report admitted on behalf of a
         # multi-source requirement still used the numeric artifact.
@@ -1287,7 +1828,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     art_assertions = _all(requirement("Q-ART-1"), UNKNOWN)
     art_notes: list[str] = []
     if q1 is not None:
-        recorded = {a["name"]: a for a in q1.get("assertions", [])}
+        recorded, _ = _named_assertions(q1)
         art_assertions["artifacts-present-at-declared-version"] = _from_assertions(
             recorded, "version:", None)
         art_assertions["artifacts-match-integrity-digest"] = _from_assertions(
@@ -1295,7 +1836,8 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         art_assertions["artifacts-record-license"] = _from_assertions(
             recorded, "license-recorded:", None)
         art_assertions["non-corresponding-artifacts-recorded"] = PASS \
-            if any("no published artifact matches" in n for n in q1.get("notes", [])) else FAIL
+            if any("no published artifact matches" in n
+                   for n in _texts(q1, "notes")) else FAIL
         exercised = list(artifacts)
         source_artifact = ((admission_for("q1", "Q-ART-1").identity or {})
                            .get("artifact") or {})
@@ -1315,7 +1857,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
             q1.get("sourceCorrespondence"),
             required=required_artifacts_by_role.get("q1") or route.get("requiredArtifacts"),
             unpinned_roles=route.get("unpinnedRoles"),
-            declared_pins=declared_artifact_pins)
+            declared_pins=validated_pins)
         art_assertions["qualified-roles-name-artifact-version"] = _worse(
             version_verdict, correspondence_verdict)
         art_notes.extend(version_notes)
@@ -1361,7 +1903,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
             if fixture_requests > 0 else UNKNOWN
         if fixture_requests <= 0:
             q2_notes.append("transport ledger did not record fixture reads")
-        names = [a["name"] for a in q2.get("assertions", [])]
+        names = list(_named_assertions(q2)[0])
         q2_assertions["no-single-request-returns-whole-artifact"] = _all_named(
             q2, [], "no-whole-file-request")
         q2_assertions["values-match-independent-reference"] = _all_named(
@@ -1369,9 +1911,9 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         q2_assertions["validity-matches-reference-exactly"] = _all_named(
             q2, names, "validity:")
         q2_assertions["window-size-within-contract-limit"] = PASS \
-            if not any("exceeds the" in f for f in q2.get("failures", [])) else FAIL
+            if not any("exceeds the" in f for f in _failure_texts(q2)) else FAIL
         q2_obs = {"testedWindows": tested, "serverLedger": ledger_observed,
-                  "failures": q2.get("failures", [])}
+                  "failures": _failure_texts(q2)}
     else:
         q2_notes.append(q2_problem or "q2 report unavailable")
     entries["Q-LOCAL-1"] = _entry(
@@ -1386,7 +1928,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     prep_assertions = _all(requirement("Q-PREP-1"), UNKNOWN)
     prep_notes: list[str] = []
     if q3p is not None:
-        named = {a["name"]: a for a in q3p.get("assertions", [])}
+        named, _ = _named_assertions(q3p)
         mapping = {
             "original-bytes-unchanged": "original-unchanged",
             "original-matches-recorded-hash": "original-hash-declared",
@@ -1419,7 +1961,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     q3m, q3m_problem = report_experiment("q3members")
     member_assertions = _all(requirement("Q-MEMBER-1"), UNKNOWN)
     if q3m is not None:
-        named = {a["name"]: a for a in q3m.get("assertions", [])}
+        named, _ = _named_assertions(q3m)
         member_assertions["window-spanning-members-resolves"] = _all_named(
             q3m, list(named), "multi-member:")
         member_assertions["unoccupied-slots-zero-coverage"] = _all_named(
@@ -1450,7 +1992,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     value_assertions["validity-matches-reference-exactly"] = _all_named(
         q2_values, [], "validity:")
     if q4 is not None:
-        named = {a["name"]: a for a in q4.get("assertions", [])}
+        named, _ = _named_assertions(q4)
         value_assertions["nodata-reported-invalid"] = _all_named(
             q4, list(named), "hole-centre-not-interpolated:")
         value_assertions["valid-zero-and-negative-retained"] = _all_named(
@@ -1468,7 +2010,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         value_assertions["required-fixture-classes-covered"] = UNKNOWN
     else:
         value_assertions["values-match-analytic-expectation"] = _single(
-            {a["name"]: a for a in (q2 or {}).get("assertions", [])}, "analytic:")
+            _named_assertions(q2)[0], "analytic:")
     # Q-VALUE-1 draws on the numeric report for its value and validity assertions
     # and on the slope report for the rest, so both sources must be admitted.
     value_admission = _combine_admissions(
@@ -1487,7 +2029,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     q4c, q4c_problem = report_experiment("q4crs")
     crs_assertions = _all(requirement("Q-CRS-1"), UNKNOWN)
     if q4c is not None:
-        named = {a["name"]: a for a in q4c.get("assertions", [])}
+        named, _ = _named_assertions(q4c)
         crs_assertions["reference-crs-configured-explicitly"] = _single(
             named, "reference-epsg-configured-explicitly")
         crs_assertions["crs-resolver-identified"] = _single(
@@ -1514,7 +2056,7 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     failinj_assertions = _all(requirement("Q-FAILINJ-1"), UNKNOWN)
     cancel_notes: list[str] = []
     if q5 is not None:
-        named = {a["name"]: a for a in q5.get("assertions", [])}
+        named, _ = _named_assertions(q5)
         # The current probe slices a resident buffer and counts completed
         # operations, so it cannot establish cancellation of the proposed route.
         cancel_assertions["cancellation-issued-while-work-in-flight"] = UNKNOWN
@@ -1731,6 +2273,13 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         "artifacts": artifacts,
         "route": route,
         "reportDigest": digest,
+        # Declaration validation is recorded even when no report is admitted: an
+        # invalid declaration is an evaluator-input failure, and the reviewer must
+        # be able to see which declaration was rejected and why.
+        "declarations": {
+            "fixtureManifest": fixture_declaration.as_dict(),
+            "declaredPins": pin_declaration.as_dict(),
+        },
         "requirements": entries,
     }
     if synthetic:
@@ -1752,8 +2301,8 @@ def _single(named: dict[str, dict], name: str) -> str:
 
 def _all_named(report: dict, names: list[str], prefix: str) -> str:
     """Combined verdict for every report assertion whose name starts with prefix."""
-    matched = [a for a in report.get("assertions", [])
-               if isinstance(a, dict) and str(a.get("name", "")).startswith(prefix)]
+    matched = [a for a in _named_assertions(report)[0].values()
+               if str(a.get("name", "")).startswith(prefix)]
     if not matched:
         return UNKNOWN
     return PASS if all(a.get("ok") for a in matched) else FAIL
@@ -1764,6 +2313,18 @@ def _from_assertions(named: dict[str, dict], prefix: str, default: str | None) -
     if not matched:
         return UNKNOWN
     return PASS if all(a.get("ok") for a in matched) else FAIL
+
+
+def _dedupe(items: list[str]) -> list[str]:
+    """Keep the first occurrence of each reason, preserving collection order."""
+    seen: set[str] = set()
+    unique: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        unique.append(item)
+    return unique
 
 
 #: Severity order for combining verdicts on one assertion: fail, then

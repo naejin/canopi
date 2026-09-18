@@ -1799,11 +1799,13 @@ class FixtureCoverage(GateTestBase):
         self.assertIn("1" * 8, reasons)
 
     def test_malformed_hash_is_not_a_valid_identity(self) -> None:
-        """A digest of the wrong shape is a gap, not an identity.
+        """A digest of the wrong shape is malformed, not merely missing.
 
-        The declared manifest carries the same malformed value, so the only
-        condition under test is the shape of the digest rather than a conflict
-        between two values.
+        R5-01 changed this verdict. It used to be read as a gap because the value
+        merely failed to match; a declared digest that cannot be a digest is a
+        malformed declaration, and a malformed declaration fails. The declared
+        manifest carries the same malformed value, so the only condition under
+        test is the shape of the digest rather than a conflict between two values.
         """
         self.amend_q2(lambda p: p["identity"]["fixtures"][0].__setitem__(
             "sha256", "not-a-sha256"))
@@ -1811,7 +1813,8 @@ class FixtureCoverage(GateTestBase):
         manifest["declared"][0]["sha256"] = "not-a-sha256"
         decision = self.assemble_and_evaluate(manifest)
         requirement = self.requirement(decision, "Q-LOCAL-1")
-        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertEqual(requirement.verdict, gate.FAIL,
+                         requirement.reasons)
         self.assertIn("malformed sha256", " ".join(requirement.reasons).lower())
 
     def test_omitted_declared_manifest_is_inconclusive(self) -> None:
@@ -2382,3 +2385,522 @@ class EvidenceMonotonicity(GateTestBase):
 def _rank(verdict: str) -> int:
     """Eligibility ordering: deleting evidence must never move this up."""
     return {"fail": 0, "inconclusive": 1, "pass": 2}.get(verdict, 1)
+
+
+# --------------------------------------------------------------------------- #
+# R5-01: declaration validation before lookup construction
+# --------------------------------------------------------------------------- #
+
+def valid_manifest() -> dict:
+    """A declaration whose members and per-role requirements are all valid."""
+    return {
+        "declared": [{"name": "plane2000", "sha256": "1" * 64},
+                     {"name": "steep45", "sha256": "2" * 64}],
+        "requiredFixtures": {"q2": ["plane2000", "steep45"]},
+        "subsetAllowed": {"q2": True},
+    }
+
+
+def manifest_fixtures() -> list[dict]:
+    return [{"name": "plane2000", "sha256": "1" * 64},
+            {"name": "steep45", "sha256": "2" * 64}]
+
+
+class DeclarationValidationTest(GateTestBase):
+    """A declaration is an input and is validated before it is indexed."""
+
+    def validate(self, manifest) -> evidence.DeclarationValidation:
+        return evidence.validate_fixture_manifest(manifest, "fixture-manifest.json")
+
+    def test_control_valid_declaration_passes(self) -> None:
+        verdict = self.validate(valid_manifest())
+        self.assertEqual(verdict.verdict, evidence.PASS, verdict.problems)
+        self.assertEqual(verdict.required_for("q2"), ["plane2000", "steep45"])
+
+    def test_conflicting_duplicate_declaration_fails_in_either_order(self) -> None:
+        """Whichever order the duplicate appears, the declaration is invalid."""
+        for label, members in (
+                ("bad-first", [{"name": "a", "sha256": "b" * 64},
+                               {"name": "a", "sha256": "1" * 64}]),
+                ("bad-last", [{"name": "a", "sha256": "1" * 64},
+                              {"name": "a", "sha256": "b" * 64}])):
+            with self.subTest(order=label):
+                verdict = self.validate({"declared": members, "requiredFixtures": {}})
+                self.assertEqual(verdict.verdict, evidence.FAIL, verdict.problems)
+                reasons = " ".join(verdict.problems)
+                self.assertIn("repeats declared fixture", reasons)
+                # Both conflicting values are identified, not just the survivor.
+                self.assertIn("b" * 8, reasons)
+                self.assertIn("1" * 8, reasons)
+
+    def test_identical_duplicate_declaration_fails(self) -> None:
+        verdict = self.validate({"declared": [{"name": "a", "sha256": "1" * 64},
+                                              {"name": "a", "sha256": "1" * 64}],
+                                 "requiredFixtures": {}})
+        self.assertEqual(verdict.verdict, evidence.FAIL, verdict.problems)
+        reasons = " ".join(verdict.problems)
+        self.assertIn("repeats declared fixture 'a'", reasons)
+        # An identical duplicate is still ambiguous, so both values are named.
+        self.assertIn("both record", reasons)
+
+    def test_malformed_member_type_names_the_declaration(self) -> None:
+        verdict = self.validate({"declared": ["a"], "requiredFixtures": {}})
+        self.assertEqual(verdict.verdict, evidence.FAIL)
+        self.assertIn("not an object", " ".join(verdict.problems).lower())
+
+    def test_malformed_declared_hash_fails(self) -> None:
+        for bad in ("zz", "abc", 12345, "a" * 63):
+            with self.subTest(hash=str(bad)[:12]):
+                verdict = self.validate(
+                    {"declared": [{"name": "a", "sha256": bad}], "requiredFixtures": {}})
+                self.assertEqual(verdict.verdict, evidence.FAIL, verdict.problems)
+                self.assertIn("sha256", " ".join(verdict.problems).lower())
+
+    def test_missing_declared_hash_is_inconclusive(self) -> None:
+        verdict = self.validate({"declared": [{"name": "a"}], "requiredFixtures": {}})
+        self.assertEqual(verdict.verdict, evidence.INCONCLUSIVE)
+        self.assertIn("hash", " ".join(verdict.problems).lower())
+
+    def test_required_referencing_undeclared_fixture_fails(self) -> None:
+        verdict = self.validate({"declared": [{"name": "a", "sha256": "1" * 64}],
+                                 "requiredFixtures": {"q2": ["ghost"]}})
+        self.assertEqual(verdict.verdict, evidence.FAIL)
+        self.assertIn("ghost", " ".join(verdict.problems))
+
+    def test_malformed_required_list_fails(self) -> None:
+        for bad in ("a", {"a": 1}, [123], [""]):
+            with self.subTest(required=str(bad)[:12]):
+                verdict = self.validate(
+                    {"declared": [{"name": "a", "sha256": "1" * 64}],
+                     "requiredFixtures": {"q2": bad}})
+                self.assertEqual(verdict.verdict, evidence.FAIL, verdict.problems)
+
+    def test_explicit_empty_required_list_does_not_waive_raster_evidence(self) -> None:
+        """An empty required list must not be read as 'no raster evidence needed'."""
+        verdict = self.validate({"declared": [{"name": "a", "sha256": "1" * 64}],
+                                 "requiredFixtures": {"q2": []}})
+        self.assertEqual(verdict.verdict, evidence.FAIL)
+        self.assertIn("empty", " ".join(verdict.problems).lower())
+
+    def test_absent_manifest_is_inconclusive(self) -> None:
+        for absent in (None, {}):
+            with self.subTest(manifest=absent):
+                verdict = self.validate(absent)
+                self.assertEqual(verdict.verdict, evidence.INCONCLUSIVE)
+
+    def test_declared_not_a_list_is_malformed(self) -> None:
+        verdict = self.validate({"declared": {"a": 1}, "requiredFixtures": {}})
+        self.assertEqual(verdict.verdict, evidence.FAIL)
+
+    def test_duplicate_json_keys_are_detected_before_decoding(self) -> None:
+        """A repeated key would be hidden by normal JSON decoding."""
+        text = ('{"declared": [{"name": "a", "sha256": "' + "1" * 64 + '"}],'
+                ' "requiredFixtures": {}, "declared": [{"name": "z", "sha256": "'
+                + "2" * 64 + '"}]}')
+        verdict = evidence.validate_fixture_manifest_text(text, "fixture-manifest.json")
+        self.assertEqual(verdict.verdict, evidence.FAIL)
+        reasons = " ".join(verdict.problems)
+        self.assertIn("repeats key", reasons)
+        self.assertIn("declared", reasons)
+
+
+# --------------------------------------------------------------------------- #
+# R5-02 / R5-03: every independently evaluable finding is collected
+# --------------------------------------------------------------------------- #
+#
+# The bounded evidence fields admit two kinds of finding: a conflict, which is
+# information that contradicts the declaration, and a gap, which is information
+# that is not there. These tests exercise the cross product rather than each kind
+# alone, because the defect they protect against was exactly the interaction: a
+# gap discovered before a comparison stopped that comparison from being made, so
+# a known conflict vanished from the record.
+
+#: Each conflict kind mutates the admitted Q-LOCAL-1 report into a disagreement
+#: with the declaration, and each names the text its explanation must contain.
+CONFLICT_KINDS = {
+    "fixture hash": (
+        lambda p: p["identity"]["fixtures"][0].__setitem__("sha256", "9" * 64),
+        "hash conflict"),
+    "artifact version": (
+        lambda p: p["identity"].setdefault("artifact", {}).__setitem__(
+            "version", "9.9.9"),
+        "artifact version conflict"),
+    "route": (
+        lambda p: p["identity"].__setitem__("routeId", "some-other-route"),
+        "route conflict"),
+    "environment": (
+        lambda p: p["identity"].__setitem__("environment", "some-other-env"),
+        "environment conflict"),
+}
+
+#: Each gap kind removes information the comparison needs. None of them is a
+#: disagreement, so none of them may erase one.
+GAP_KINDS = {
+    "runId": (
+        lambda p: p["identity"].pop("runId"),
+        "runId"),
+    "recordedAt": (
+        lambda p: p["identity"].pop("recordedAt"),
+        "recordedAt"),
+    "command": (
+        lambda p: p["identity"].pop("command"),
+        "command"),
+}
+
+#: Removing the whole identity block removes the compared values themselves, so no
+#: conflict can remain to be found. It is the boundary of the cross product rather
+#: than a member of it: the verdict must fall to inconclusive, never to a pass.
+IDENTITY_BLOCK_GAP = (lambda p: p.pop("identity"), "identity block")
+
+
+class AdmissionPrecedence(GateTestBase):
+    """A known conflict survives any gap that accompanies it, in either order."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_q2(self, mutate) -> None:
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def evaluate(self) -> dict:
+        declared = assembly()
+        bundle_path = self.bundle(
+            evidence.assemble(self.contract, out=self.root / "b.json",
+                              reports=self.reports, host="chromium", **declared),
+            "precedence.json")
+        return gate.evaluate(self.contract, bundle_path).as_dict()
+
+    def local(self, decision: dict) -> dict:
+        return next(r for r in decision["requirements"]
+                    if r["requirementId"] == "Q-LOCAL-1")
+
+    def test_control_is_a_pass(self) -> None:
+        """The control every case below moves away from."""
+        self.assertEqual(self.local(self.evaluate())["verdict"], "pass",
+                         self.local(self.evaluate())["reasons"])
+
+    def test_each_conflict_alone_fails(self) -> None:
+        """Control: every conflict kind is independently sufficient to fail."""
+        for name, (mutate, expected_text) in CONFLICT_KINDS.items():
+            with self.subTest(conflict=name):
+                self.setUp()
+                self.amend_q2(mutate)
+                local = self.local(self.evaluate())
+                self.assertEqual(local["verdict"], "fail", local["reasons"])
+                self.assertIn(expected_text, " ".join(local["reasons"]))
+
+    def test_conflict_then_gap_still_fails_and_names_both(self) -> None:
+        """The gap must not short-circuit the comparison that finds the conflict."""
+        for conflict, (mutate_conflict, conflict_text) in CONFLICT_KINDS.items():
+            for gap, (mutate_gap, gap_text) in GAP_KINDS.items():
+                with self.subTest(conflict=conflict, gap=gap, order="conflict-first"):
+                    self.setUp()
+                    self.amend_q2(mutate_conflict)
+                    self.amend_q2(mutate_gap)
+                    local = self.local(self.evaluate())
+                    reasons = " ".join(local["reasons"])
+                    self.assertEqual(local["verdict"], "fail", local["reasons"])
+                    self.assertIn(conflict_text, reasons)
+                    self.assertIn(gap_text, reasons)
+
+    def test_gap_then_conflict_still_fails_and_names_both(self) -> None:
+        """The same combination in the other mutation order.
+
+        The defect was order-dependent: whichever field the reader happened to
+        examine first decided whether the conflict was ever compared.
+        """
+        for conflict, (mutate_conflict, conflict_text) in CONFLICT_KINDS.items():
+            for gap, (mutate_gap, gap_text) in GAP_KINDS.items():
+                with self.subTest(conflict=conflict, gap=gap, order="gap-first"):
+                    self.setUp()
+                    self.amend_q2(mutate_gap)
+                    self.amend_q2(mutate_conflict)
+                    local = self.local(self.evaluate())
+                    reasons = " ".join(local["reasons"])
+                    self.assertEqual(local["verdict"], "fail", local["reasons"])
+                    self.assertIn(conflict_text, reasons)
+                    self.assertIn(gap_text, reasons)
+
+    def test_adding_an_unrelated_gap_never_downgrades_a_known_conflict(self) -> None:
+        """Metamorphic invariant across every gap kind, not just one example."""
+        mutate_conflict, conflict_text = CONFLICT_KINDS["fixture hash"]
+        self.amend_q2(mutate_conflict)
+        before = self.local(self.evaluate())
+        self.assertEqual(before["verdict"], "fail", before["reasons"])
+        for gap, (mutate_gap, _gap_text) in GAP_KINDS.items():
+            with self.subTest(gap=gap):
+                self.setUp()
+                self.amend_q2(mutate_conflict)
+                self.amend_q2(mutate_gap)
+                after = self.local(self.evaluate())
+                self.assertEqual(
+                    after["verdict"], "fail",
+                    f"gap {gap!r} downgraded a known conflict to {after['verdict']}")
+                self.assertIn(conflict_text, " ".join(after["reasons"]))
+
+    def test_no_gap_alone_is_reported_as_a_conflict(self) -> None:
+        """Control: a gap is a gap. It must not be tightened into a failure."""
+        for gap, (mutate_gap, _gap_text) in GAP_KINDS.items():
+            with self.subTest(gap=gap):
+                self.setUp()
+                self.amend_q2(mutate_gap)
+                local = self.local(self.evaluate())
+                self.assertEqual(local["verdict"], "inconclusive", local["reasons"])
+
+    def test_removing_the_declared_manifest_does_not_hide_a_conflict(self) -> None:
+        """A missing declaration is a gap, not a reason to skip every comparison.
+
+        The fixture-hash comparison genuinely needs the declaration, so it cannot
+        be made without one. The route comparison needs only the declared route,
+        which is still present, so losing the manifest must not swallow it.
+        """
+        mutate_route, route_text = CONFLICT_KINDS["route"]
+        self.amend_q2(mutate_route)
+        declared = assembly()
+        declared["fixture_manifest"] = None
+        bundle_path = self.bundle(
+            evidence.assemble(self.contract, out=self.root / "b.json",
+                              reports=self.reports, host="chromium", **declared),
+            "no-manifest.json")
+        local = self.local(gate.evaluate(self.contract, bundle_path).as_dict())
+        reasons = " ".join(local["reasons"])
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn(route_text, reasons)
+        self.assertIn("fixture manifest", reasons)
+
+    def test_removing_the_identity_block_cannot_improve_the_verdict(self) -> None:
+        """The boundary case: without the compared values there is no conflict.
+
+        The verdict must fall to a gap. It must never become a pass, and it must
+        never manufacture a conflict out of the missing values.
+        """
+        mutate_gap, gap_text = IDENTITY_BLOCK_GAP
+        self.amend_q2(mutate_gap)
+        local = self.local(self.evaluate())
+        self.assertEqual(local["verdict"], "inconclusive", local["reasons"])
+        self.assertIn(gap_text, " ".join(local["reasons"]).lower())
+
+    def test_isolated_conflict_leaves_unrelated_requirements_alone(self) -> None:
+        """Isolation: one source's defect is scoped to the requirements it feeds."""
+        clean = self.evaluate()
+        self.amend_q2(lambda p: p["identity"]["fixtures"][0].__setitem__(
+            "sha256", "9" * 64))
+        after = self.evaluate()
+        self.assertEqual(self.local(after)["verdict"], "fail")
+        for requirement_id in ("Q-DISPLAY-1", "Q-PREP-1", "Q-CRS-1"):
+            with self.subTest(requirement=requirement_id):
+                before_verdict = next(
+                    r["verdict"] for r in clean["requirements"]
+                    if r["requirementId"] == requirement_id)
+                after_verdict = next(
+                    r["verdict"] for r in after["requirements"]
+                    if r["requirementId"] == requirement_id)
+                self.assertEqual(after_verdict, before_verdict)
+
+
+class ResultIndependentFailures(GateTestBase):
+    """Failures the report recorded are read whatever its `result` says."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_q2(self, mutate) -> None:
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def local(self) -> dict:
+        declared = assembly()
+        bundle_path = self.bundle(
+            evidence.assemble(self.contract, out=self.root / "b.json",
+                              reports=self.reports, host="chromium", **declared),
+            "result-independent.json")
+        decision = gate.evaluate(self.contract, bundle_path).as_dict()
+        return next(r for r in decision["requirements"]
+                    if r["requirementId"] == "Q-LOCAL-1")
+
+    def test_positive_failure_with_the_result_key_absent_still_fails(self) -> None:
+        self.amend_q2(lambda p: p.update(
+            {"failures": ["measurement aborted"]}))
+        self.amend_q2(lambda p: p.pop("result", None))
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("measurement aborted", " ".join(local["reasons"]))
+
+    def test_absent_result_with_no_known_failure_stays_inconclusive(self) -> None:
+        """Compatibility: an absent key alone is a gap, not a manufactured failure."""
+        self.amend_q2(lambda p: p.pop("result", None))
+        local = self.local()
+        self.assertEqual(local["verdict"], "inconclusive", local["reasons"])
+
+    def test_explicitly_null_result_is_invalid_not_absent(self) -> None:
+        """A present-but-unusable declaration is not the same as a missing key."""
+        self.amend_q2(lambda p: p.__setitem__("result", None))
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("unusable result None", " ".join(local["reasons"]))
+
+    def test_failed_assertion_with_absent_result_fails(self) -> None:
+        def mutate(payload):
+            payload.pop("result", None)
+            payload.setdefault("assertions", []).append(
+                {"name": "range-bytes-served", "ok": False})
+        self.amend_q2(mutate)
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("range-bytes-served", " ".join(local["reasons"]))
+
+    def test_failed_assertion_with_inconclusive_result_fails(self) -> None:
+        """A failed assertion outranks the conclusion the report wrote down."""
+        def mutate(payload):
+            payload["result"] = "inconclusive"
+            payload["failures"] = []
+            payload.setdefault("assertions", []).append(
+                {"name": "range-bytes-served", "ok": False})
+        self.amend_q2(mutate)
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("range-bytes-served", " ".join(local["reasons"]))
+
+    def test_failed_precondition_with_absent_result_fails(self) -> None:
+        def mutate(payload):
+            payload.pop("result", None)
+            payload["preconditions"] = [
+                {"name": "range-requests-supported", "met": False}]
+        self.amend_q2(mutate)
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("range-requests-supported", " ".join(local["reasons"]))
+
+    def test_malformed_failures_container_is_an_input_failure(self) -> None:
+        """A malformed container is not an empty list, and it is not iterated."""
+        self.amend_q2(lambda p: p.__setitem__("failures", "not-a-list"))
+        local = self.local()
+        reasons = " ".join(local["reasons"])
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("not a list", reasons)
+        # Iterating the string would have produced these one-character "failures".
+        self.assertNotIn("n; o; t", reasons)
+
+    def test_malformed_assertions_container_is_an_input_failure(self) -> None:
+        self.amend_q2(lambda p: p.__setitem__("assertions", {"ok": False}))
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("not a list", " ".join(local["reasons"]))
+
+    def test_malformed_container_never_becomes_silent_absence(self) -> None:
+        """A malformed container is a failure, measured against a fresh control."""
+        self.amend_q2(lambda p: p.__setitem__("failures", 17))
+        malformed = self.local()
+        self.assertEqual(malformed["verdict"], "fail", malformed["reasons"])
+
+        # Control: the same report with a well-formed empty failure list passes, so
+        # the failure above is caused by the malformation and nothing else.
+        self.setUp()
+        self.amend_q2(lambda p: p.__setitem__("failures", []))
+        clean = self.local()
+        self.assertEqual(clean["verdict"], "pass", clean["reasons"])
+
+    def test_malformed_preconditions_container_is_an_input_failure(self) -> None:
+        """A malformed container is not evidence that the preconditions held."""
+        self.amend_q2(lambda p: p.__setitem__("preconditions", "not-a-list"))
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("preconditions container is not a list",
+                      " ".join(local["reasons"]))
+
+    def test_malformed_precondition_entry_is_an_input_failure(self) -> None:
+        self.amend_q2(lambda p: p.__setitem__("preconditions", [{"met": True}]))
+        local = self.local()
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertIn("no usable name", " ".join(local["reasons"]))
+
+
+class CombinedFaultSensitivity(GateTestBase):
+    """One check that detects a reintroduced gap-based early return.
+
+    The isolated tests above each prove one behavior. This one is the composed
+    probe: it stacks a conflict, a gap and an unrelated failure from more than one
+    contributing source, and asserts every one of them is still visible in the
+    reduced verdict. A short-circuit anywhere in admission collapses the set, so
+    this fails loudly if one is reintroduced even when the isolated tests still
+    pass for a different code path.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend(self, role: str, mutate) -> None:
+        path = self.reports[role]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def decision(self) -> dict:
+        declared = assembly()
+        bundle = self.bundle(
+            evidence.assemble(self.contract, out=self.root / "b.json",
+                              reports=self.reports, host="chromium", **declared),
+            "combined.json")
+        return gate.evaluate(self.contract, bundle).as_dict()
+
+    def requirement(self, decision: dict, requirement_id: str) -> dict:
+        return next(r for r in decision["requirements"]
+                    if r["requirementId"] == requirement_id)
+
+    def test_every_contributed_finding_survives_the_reduction(self) -> None:
+        """The combined-fault probe.
+
+        Stacked on one run: a fixture hash conflict, a missing runId, a missing
+        recorded time, a missing command, a recorded positive failure, a failed
+        assertion, an unmet precondition, and a malformed container. Every one of
+        them must be visible, and the overall verdict must be a failure.
+        """
+        def stack(payload):
+            payload["identity"].pop("runId", None)
+            payload["identity"].pop("recordedAt", None)
+            payload["identity"].pop("command", None)
+            # Two conflicts, not one: the fixture-hash comparison reports through
+            # the fixture checks while the route comparison reports through the
+            # identity comparisons. A short-circuit in either path is caught.
+            payload["identity"]["fixtures"][0]["sha256"] = "9" * 64
+            payload["identity"]["routeId"] = "some-other-route"
+            payload["failures"] = ["measurement aborted", "window exceeds the limit"]
+            payload.setdefault("assertions", []).append(
+                {"name": "range-bytes-served", "ok": False})
+            payload["preconditions"] = [
+                {"name": "range-requests-supported", "met": False}]
+        self.amend("q2", stack)
+        decision = self.decision()
+        local = self.requirement(decision, "Q-LOCAL-1")
+        reasons = " ".join(local["reasons"])
+
+        self.assertEqual(local["verdict"], "fail", local["reasons"])
+        self.assertEqual(decision["result"], "fail",
+                         decision.get("verdictReason"))
+        for expected in ("hash conflict", "route conflict", "runId", "recordedAt",
+                         "command", "measurement aborted", "range-bytes-served",
+                         "range-requests-supported"):
+            with self.subTest(finding=expected):
+                self.assertIn(expected, reasons)
+
+    def test_a_failure_in_one_source_reaches_a_shared_requirement(self) -> None:
+        """A requirement drawing on several sources keeps every contributing failure.
+
+        Q-DISPLAY-1 is fed by the trace report and the numeric report's memory
+        sampling. A failure in one must not be replaced by the other's passing
+        reading.
+        """
+        self.amend("trace", lambda p: p.update(
+            {"result": "fail", "failures": ["ui thread blocked"]}))
+        decision = self.decision()
+        display = self.requirement(decision, "Q-DISPLAY-1")
+        self.assertEqual(display["verdict"], "fail", display["reasons"])
+        self.assertIn("ui thread blocked", " ".join(display["reasons"]))
