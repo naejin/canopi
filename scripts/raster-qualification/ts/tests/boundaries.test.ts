@@ -337,15 +337,18 @@ test('C3: a wrong recorded identity cannot qualify', () => {
   }
 });
 
-test('C3: an observed transport that is not the required one cannot qualify', () => {
+test('C3: an HTTP-only measurement cannot qualify the proposed local transport', () => {
+  // The plan qualifies the scoped local bridge and states that a remote HTTP demo
+  // does not qualify bounded local access, so the assertion fails rather than
+  // passing on an adjacent capability.
   const root = new TempRoot();
   try {
     const reports = roleReports();
     const q2 = reports['q2']!;
-    q2['identity'] = { ...(q2['identity'] as Record<string, unknown>), transport: 'local-bridge' };
+    q2['identity'] = { ...(q2['identity'] as Record<string, unknown>), transport: 'http-range' };
     const result = runCli(writeRequest(root, reports), join(root.path, 'd.json'));
-    assert.equal(verdictOf(result, 'Q-LOCAL-1'), 'inconclusive');
-    assert.match(reasonsOf(result, 'Q-LOCAL-1'), /local-bridge/);
+    assert.equal(verdictOf(result, 'Q-LOCAL-1'), 'fail', reasonsOf(result, 'Q-LOCAL-1'));
+    assert.match(reasonsOf(result, 'Q-LOCAL-1'), /http-range/);
   } finally {
     root.cleanup();
   }
@@ -692,7 +695,12 @@ test('C7: a malformed request is a structured diagnostic', () => {
       assert.equal(result.status, 2, label);
       assert.doesNotMatch(result.stderr, /TypeError|AttributeError|at Object\./, label);
       assert.notEqual(result.stderr.trim(), '', label);
-      assert.equal(result.decision, undefined, label);
+      // The destination receives an explicitly labelled refusal, never a decision:
+      // it carries no requirement verdicts and cannot be read as a qualification
+      // result.
+      assert.equal(result.decision?.['kind'], 'rejected-input', label);
+      assert.deepEqual(result.decision?.['requirements'], [], label);
+      assert.notEqual(result.decision?.['verdict'], 'pass', label);
     } finally {
       root.cleanup();
     }

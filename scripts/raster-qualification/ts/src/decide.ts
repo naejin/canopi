@@ -82,6 +82,13 @@ export interface SourceView {
   readonly facts?: AdmissionFacts;
   readonly admission: Admission;
   readonly digest?: string;
+  /**
+   * The declared expectations this source is checked against.
+   *
+   * Reached through the source so a mapping can consult an independent declaration
+   * (the candidate pins, for example) without a second input path.
+   */
+  readonly expectations: SourceExpectations;
 }
 
 /** One admitted source, shared by every requirement that draws on it. */
@@ -133,6 +140,7 @@ export function prepare(input: QualificationInput): Prepared {
         label: declared.label,
         status: 'corrupt',
         snapshot: { label: declared.label, path: declared.path, status: 'corrupt' },
+        expectations: declared.expectations,
         admission: {
           label: declared.label,
           verdict: 'fail',
@@ -156,6 +164,7 @@ export function prepare(input: QualificationInput): Prepared {
         label: declared.label,
         status: snapshot.status,
         snapshot,
+        expectations: declared.expectations,
         admission: admitReport(undefined, undefined, declared.label, declared.expectations, snapshot),
         ...(snapshot.digest === undefined ? {} : { digest: snapshot.digest }),
       });
@@ -175,6 +184,7 @@ export function prepare(input: QualificationInput): Prepared {
       label: declared.label,
       status: snapshot.status,
       snapshot,
+      expectations: declared.expectations,
       shape: merged,
       facts: read.facts,
       admission: admitReport(merged, read.facts, declared.label, declared.expectations, snapshot),

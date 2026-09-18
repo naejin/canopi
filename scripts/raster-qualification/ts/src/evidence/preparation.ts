@@ -13,16 +13,26 @@ import type { SourceView } from '../decide.js';
 import type { MappingResult } from './mapping.js';
 import { unresolved } from './mapping.js';
 import { named } from './numericTransport.js';
-import { type Verdict } from '../verdict.js';
+import { worse, type Verdict } from '../verdict.js';
 
 /** Producer assertion name for each contract assertion. */
 const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ['original-bytes-unchanged', 'original-unchanged'],
   ['original-matches-recorded-hash', 'original-hash-declared'],
-  ['derivative-is-tiled-and-bounded', 'derived-tiled'],
   ['derivative-cell-exact', 'cell-exact'],
   ['derivative-preserves-metadata', 'geotransform-preserved'],
   ['derivative-windows-match-original', 'all-values-match'],
+]);
+
+/**
+ * Assertions the contract obligation spans more than one producer check for.
+ *
+ * The producer reports tiling and block bounding separately, while the contract asks
+ * whether the derivative is both tiled *and* bounded. Reading only `derived-tiled`
+ * would accept an unbounded tiled derivative, so both are required.
+ */
+const COMBINED_SOURCE_NAMES: ReadonlyMap<string, readonly string[]> = new Map([
+  ['derivative-is-tiled-and-bounded', ['derived-tiled', 'derived-block-bounded']],
 ]);
 
 const ASSERTIONS = [
@@ -56,6 +66,15 @@ export function mapPreparation(source: SourceView | undefined): MappingResult {
   const named_ = source.facts.assertions;
   for (const [assertion, sourceName] of SOURCE_NAMES) {
     assertions.set(assertion, named(named_, sourceName));
+  }
+  for (const [assertion, sourceNames] of COMBINED_SOURCE_NAMES) {
+    // The more severe of the contributing checks decides the obligation.
+    assertions.set(
+      assertion,
+      sourceNames
+        .map((sourceName) => named(named_, sourceName))
+        .reduce((a, b) => worse(a, b), 'pass' as Verdict),
+    );
   }
   assertions.set('sidecar-unchanged', sidecarVerdict(source, failures, gaps, observations));
 
@@ -131,41 +150,54 @@ function sidecarVerdict(
     );
     return 'fail';
   }
+  // A present observation that the sidecar is gone is a failure, and it is read
+  // before any missing-hash gap: the survival observation is independent of the
+  // hashes, so an absent hash must not soften a recorded disappearance.
+  const before = rawSidecar['before'];
+  const after = rawSidecar['after'];
+  observations['sidecar'] = { expected: expected ?? null, actual: actual ?? null, before: before ?? null, after: after ?? null };
+
+  const gone = after === 'absent' || after === false;
+  if (gone) {
+    failures.push('the sidecar did not survive preparation');
+    return 'fail';
+  }
+  const presentBefore = before === undefined || before === null
+    ? undefined
+    : before === 'present' || before === true;
+  if (presentBefore === false) {
+    failures.push(
+      `the sidecar was recorded as ${describe(before)} before preparation, so it was not there to preserve`,
+    );
+    return 'fail';
+  }
+
   if (!isSha256(expected) || !isSha256(actual)) {
     gaps.push('the sidecar record does not record both its expected and observed hash');
     return 'inconclusive';
   }
-
-  const before = rawSidecar['before'];
-  const after = rawSidecar['after'];
-  observations['sidecar'] = { expected, actual, before: before ?? null, after: after ?? null };
 
   if (expected !== actual) {
     failures.push(`sidecar changed: observed ${actual} but expected ${expected}`);
     return 'fail';
   }
 
-  // Survival is a separate observation from hash equality. Without it, two equal
-  // values say only that the same string was written twice.
+  // Preservation is a *pair* of observations: the sidecar was there, and it was still
+  // there afterwards. Either half alone is unmeasured, and two equal hashes say only
+  // that the same value was written twice.
   const survived = after === 'present' || after === true;
-  const gone = after === 'absent' || after === false;
-  if (gone) {
-    failures.push('the sidecar did not survive preparation');
-    return 'fail';
-  }
   if (!survived) {
     gaps.push(
       'the sidecar record does not observe that the sidecar survived preparation, so its preservation is unmeasured',
     );
     return 'inconclusive';
   }
-  if (before !== undefined && before !== null && before !== 'present' && before !== true) {
-    failures.push(
-      `the sidecar was recorded as ${describe(before)} before preparation, so it was not present to preserve`,
+  if (presentBefore === undefined) {
+    gaps.push(
+      'the sidecar record does not observe that the sidecar was present before preparation, so its preservation is unmeasured',
     );
-    return 'fail';
+    return 'inconclusive';
   }
-
   const declared = isRecord(identity?.['sidecarSha256'])
     ? identity['sidecarSha256']['expected']
     : undefined;

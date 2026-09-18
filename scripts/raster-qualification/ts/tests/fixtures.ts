@@ -66,7 +66,7 @@ export function identity(options: IdentityOptions): Record<string, unknown> {
     host: options.host ?? HOST_ID,
     fixturePolicy: options.fixturePolicy ?? 'measured',
     sidecarPolicy: options.sidecarPolicy ?? 'not_applicable',
-    transport: options.transport ?? 'http-range',
+    transport: options.transport ?? 'local-bridge',
     fixtures: options.fixtures ?? [{ name: FIXTURE_NAME, sha256: FIXTURE_HASH }],
     artifact: options.artifact ?? { name: 'whitebox-wasm', version: '0.5.1' },
   };

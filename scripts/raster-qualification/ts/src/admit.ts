@@ -331,10 +331,23 @@ function declaredComparison(expectations: SourceExpectations, key: string): stri
   }
 }
 
+/**
+ * The prefixes a report declares as negative-control scope.
+ *
+ * A scope may only exempt a failure that is genuinely a control rejection. An
+ * arbitrary report-chosen prefix would let any positive failure be relabelled out of
+ * the way, so a scope must be an explicit, namespaced declaration rather than a bare
+ * substring of the failure text.
+ */
+export const NEGATIVE_CONTROL_PREFIX = 'expected-rejection:';
+
 function negativeControlScopes(value: Record<string, unknown>): string[] {
   const declared = value['negativeControlScopes'];
   if (!Array.isArray(declared)) return [];
-  return declared.filter((scope): scope is string => isNonEmptyString(scope));
+  return declared.filter(
+    (scope): scope is string =>
+      isNonEmptyString(scope) && scope.endsWith(NEGATIVE_CONTROL_PREFIX),
+  );
 }
 
 function applyFixtureChecks(
@@ -419,7 +432,21 @@ function applyFixtureChecks(
     return;
   }
   if (manifest === undefined || expectations.fixtureManifestVerdict !== 'pass') {
+    // The declaration is incomplete, so coverage of the required set cannot be
+    // established — but the fixtures it *does* declare remain usable expectations, and
+    // an observed fixture that contradicts one is still a conflict. Returning here
+    // would let a gap in the declaration hide a known disagreement.
     for (const problem of expectations.fixtureManifestProblems ?? []) findings.gap(problem);
+    const partial = manifest?.declared ?? [];
+    const partialByName = new Map(partial.map((m) => [m.name, m.sha256]));
+    for (const fixture of observed) {
+      const declaredHash = partialByName.get(fixture.name);
+      if (declaredHash !== undefined && declaredHash !== fixture.sha256) {
+        findings.fail(
+          `${label} fixture ${JSON.stringify(fixture.name)} hash conflict: the declaration records ${declaredHash}, observed ${fixture.sha256}`,
+        );
+      }
+    }
     return;
   }
 

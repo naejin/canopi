@@ -223,10 +223,10 @@ const MUTATIONS: Mutation[] = [
   {
     label: 'source identity: transport substituted',
     target: 'Q-LOCAL-1',
-    assertion: 'window-size-within-contract-limit',
-    expect: 'pass',
-    requirementVerdict: 'inconclusive',
-    apply: (reports) => withIdentity(reports, 'q2', { transport: 'local-bridge' }),
+    assertion: 'reads-over-proposed-local-transport',
+    expect: 'fail',
+    requirementVerdict: 'fail',
+    apply: (reports) => withIdentity(reports, 'q2', { transport: 'http-range' }),
   },
   {
     label: 'source identity: block removed entirely',
@@ -370,9 +370,9 @@ const MUTATIONS: Mutation[] = [
   {
     label: 'artifacts: correspondence record removed',
     target: 'Q-ART-1',
-    assertion: 'non-corresponding-artifacts-recorded',
-    expect: 'fail',
-    requirementVerdict: 'fail',
+    assertion: 'qualified-roles-name-artifact-version',
+    expect: 'inconclusive',
+    requirementVerdict: 'inconclusive',
     apply: (reports) =>
       mutateReport(reports, 'q1', (report) => ({ ...report, sourceCorrespondence: [] })),
   },

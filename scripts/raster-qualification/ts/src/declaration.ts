@@ -353,9 +353,18 @@ export function validateFixtureManifest(value: unknown, label: string): Validati
     }
   }
 
+  const resolved: FixtureManifest = {
+    declared: Array.from(members, ([name, sha256]) => ({ name, sha256 })),
+    requiredByRole,
+  };
   if (problems.length > 0) return failed(problems);
-  if (gaps.length > 0) return gap(gaps);
-  return ok({ declared: Array.from(members, ([name, sha256]) => ({ name, sha256 })), requiredByRole });
+  if (gaps.length > 0) {
+    // The verdict is a gap, but the entries the declaration *did* resolve remain
+    // usable expectations: a caller must be able to compare an observed fixture
+    // against a partly incomplete declaration rather than losing the comparison.
+    return { verdict: 'inconclusive', value: resolved, problems: gaps };
+  }
+  return ok(resolved);
 }
 
 export interface PinDeclaration {

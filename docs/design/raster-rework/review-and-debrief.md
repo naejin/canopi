@@ -1,12 +1,14 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — seven implementation handoffs reviewed, plus one migration slice delivered; final methodology conclusions pending.
+Status: evidence — seven implementation handoffs reviewed, plus one migration slice delivered through two repair rounds; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated repair receipt](q-consolidated-repair-receipt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
 
-Current disposition: the TypeScript migration is implemented but not accepted at `abf502b6`; retain its architecture and verified behaviors while repairing the families in the [standing review](q-typescript-review.md). The [standing prompt](q-typescript-repair-agent-prompt.md) is the sole next assignment. The user remains the courier and approval point; no direct delegation is authorized. C1–C8 remain fixed.
+Current disposition: Round 1 is independently reviewed at `8ab1fff7`; specific T1–T4 repairs are retained, but the complete boundary remains unaccepted. See the [consolidated Round 1 findings](q-typescript-review.md#round-1-independent-disposition). The same standing prompt can govern Round 2 only after the user forwards this review and requests continuation. C1–C8 remain fixed; no direct delegation is authorized.
+
+Round 1 debrief evidence: 127 TypeScript tests, 261 Python regressions and 14 runner checks independently pass, yet additional family-level CLI mutations still produce false passes and lost failures. Permanent resource gaps can conceal incorrect individual assertions. Declaring one reducer does not prevent comparisons omitted upstream. Earlier reviews also missed existing paths; distinguish expanded review coverage from new requirements or regressions. Full reproductions, retained fixes, environment details and unmeasured evidence are recorded once in the standing review. No time/cost improvement or language-effect claim is established by this round.
 
 ## Consolidated independent review and migration baseline
 
@@ -86,6 +88,27 @@ What is claimed, and what is not:
 
 Remaining Python experiment orchestration, fixture/bootstrap/server and reference helpers are staged
 for separate replacement and were not touched. No Python was deleted.
+
+### Round 2 debrief inputs
+
+Round 1 was independently reviewed at `8ab1fff7` and retained its repairs while listing six remaining
+families; round 2 addresses all six. For the final synthesis:
+
+| Dimension | Observation |
+| --- | --- |
+| Reviewer-discovered versus self-review | All six round-2 families were found by the independent reviewer. The implementer's own sweep and adversarial passes in round 1 found none of them, including the two that were pre-existing contract paths — the wrong transport declaration and the envelope/identity disagreement. Round 2's own adversarial pass again found no production counterexample |
+| Repeated defect family | The recurring pattern across T1–T4 and R1-A–R1-F is **evidence discarded before it reaches the reduction**: an early return at the first gap, a declaration passed but never read, a filtered list paired by stale index, or a required set inferred from what was supplied. Round 2 addressed the instances; the pattern itself is the main lesson |
+| Input mutations attempted | 32 in the round-1 sweep plus 13 sibling cases in round 2, over declarations, source identity, per-run fields, artifact correspondence, sidecar policy, display runs, CLI arguments and the programmatic entry point |
+| False individual passes hidden by overall gaps | Every round-2 family was one. Permanent gaps already prevented overall qualification, which is exactly why an "overall non-pass" check could not see them. The receipt's cases assert individual requirement and assertion verdicts for this reason |
+| Controls that proved invalid | Two committed tests encoded `http-range` as the expected transport, i.e. the defect itself, and were rewritten against the plan. One round-1 sweep case asserted an interaction that cannot occur. Both are recorded rather than quietly corrected |
+| Guard-removal probes | 11 in round 1 (one zero), 13 in round 2 (two zero). Both round-2 zeros are redundant defence, confirmed load-bearing only as pairs, and are reported as redundancy rather than coverage |
+| Environment failures | The reviewer's `EPERM` on sandboxed subprocess capture did not recur in round 2. One probe reading was a measurement artifact (instrumenting captured stderr) and was re-measured before being believed |
+| Review rounds | Round 0 baseline discovery, round 1 delivered and reviewed, round 2 delivered. The standing prompt allows no third round without the user's decision |
+| Measured effort | Not measured; not inferred from test count |
+
+Architecture, language, implementation and review-process effects remain separable. Round 2 changed no
+architecture and no language, so its repairs are attributable to the findings and the tests rather
+than to either.
 
 ## C1–C8 repair report
 

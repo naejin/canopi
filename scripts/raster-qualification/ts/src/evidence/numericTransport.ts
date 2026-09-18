@@ -45,13 +45,28 @@ export function mapNumericTransport(
   const value = source.shape.value;
   const named = source.facts.assertions;
 
+  // The transport the source actually used must be the one the plan requires. An
+  // HTTP-only measurement is a real capability, but the plan qualifies the local
+  // bridge and rules out a remote HTTP demo, so it cannot carry this assertion.
+  const observedTransport = source.facts.identity?.['transport'];
+  const requiredTransport = 'local-bridge';
+  observations['transport'] = observedTransport ?? null;
+
   // Window count: a positive observation, not the absence of a failure.
   const tested = nonNegativeInteger(value['testedWindows']);
   observations['testedWindows'] = tested ?? null;
-  verdicts.set(
-    'reads-over-proposed-local-transport',
-    tested === undefined ? 'inconclusive' : tested > 0 ? 'pass' : 'fail',
-  );
+
+  if (isNonEmptyString(observedTransport) && observedTransport !== requiredTransport) {
+    verdicts.set('reads-over-proposed-local-transport', 'fail');
+    failures.push(
+      `the numeric source measured transport ${JSON.stringify(observedTransport)} but the plan requires the ${JSON.stringify(requiredTransport)}; a remote HTTP capability does not qualify bounded local access`,
+    );
+  } else {
+    verdicts.set(
+      'reads-over-proposed-local-transport',
+      tested === undefined ? 'inconclusive' : tested > 0 ? 'pass' : 'fail',
+    );
+  }
 
   // The transport's own byte accounting must corroborate what was served.
   const ledger = isRecord(value['serverLedger']) ? value['serverLedger'] : undefined;
@@ -65,6 +80,23 @@ export function mapNumericTransport(
     if (served === undefined || requests === undefined) {
       gaps.push('the transport ledger does not record both bytes served and request count');
       verdicts.set('transport-ledger-corroborates-bytes', 'inconclusive');
+    } else if (tested === undefined) {
+      gaps.push(
+        'the numeric report does not record how many windows it validated, so the ledger cannot corroborate them',
+      );
+      verdicts.set('transport-ledger-corroborates-bytes', 'inconclusive');
+    } else if (tested > 0 && (served <= 0 || requests <= 0)) {
+      // The probe reports validated windows, so a ledger that accounts for no bytes
+      // and no requests contradicts it rather than merely being incomplete.
+      verdicts.set('transport-ledger-corroborates-bytes', 'fail');
+      failures.push(
+        `the numeric report validates ${tested} window(s) but its transport ledger records ${served} byte(s) over ${requests} request(s), so the ledger does not corroborate the reads`,
+      );
+    } else if (tested === 0 && (served > 0 || requests > 0)) {
+      verdicts.set('transport-ledger-corroborates-bytes', 'fail');
+      failures.push(
+        `the transport ledger records ${served} byte(s) over ${requests} request(s) although no window was validated`,
+      );
     } else {
       verdicts.set('transport-ledger-corroborates-bytes', 'pass');
     }
@@ -157,9 +189,19 @@ function windowBounds(
     }
     const width = finiteNumber(spec['w']);
     const height = finiteNumber(spec['h']);
-    if (width === undefined || height === undefined || width <= 0 || height <= 0) {
+    if (width === undefined || height === undefined) {
       gaps.push(`window record ${index} does not record a usable size`);
       verdict = worse(verdict, 'inconclusive');
+      return;
+    }
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+      // A window is a whole number of cells. A fractional or non-positive dimension
+      // is not a measurable window, so it cannot be compared as though it were one
+      // and it cannot silently satisfy the bound.
+      failures.push(
+        `window record ${index} records a size of ${width}x${height} cells, which is not a whole positive number of cells`,
+      );
+      verdict = 'fail';
       return;
     }
     measured += 1;

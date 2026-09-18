@@ -148,7 +148,10 @@ test('counterexample 3a: a non-finite bundle timestamp is an input diagnostic', 
     assert.equal(result.status, 2);
     assert.doesNotMatch(result.stderr, /Traceback|at Object\./);
     assert.match(result.stderr, /finite JSON number|evaluation time/);
-    assert.equal(result.decision, undefined);
+    // The refusal is recorded at the writable destination, explicitly labelled so it
+    // cannot be mistaken for a decision.
+    assert.equal(result.decision?.['kind'], 'rejected-input');
+    assert.notEqual(result.decision?.['verdict'], 'pass');
   } finally {
     root.cleanup();
   }

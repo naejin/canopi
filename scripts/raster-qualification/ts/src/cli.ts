@@ -11,10 +11,10 @@
  */
 
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { parseJson } from './json.js';
 import { validateContract, validateFixtureManifest, validatePinDeclaration } from './declaration.js';
-import { runQualification, type QualificationRequest } from './qualification.js';
+import { DECISION_VERSION, runQualification, type QualificationRequest } from './qualification.js';
 import { expectationsForRole } from './declared/route.js';
 import { buildDirectoryRequest } from './request.js';
 
@@ -33,24 +33,41 @@ function main(argv: readonly string[]): number {
     return EXIT_INPUT_ERROR;
   }
 
+  /** Files this invocation reads as evidence; none of them may be overwritten. */
+  const inputPaths = new Set<string>([
+    ...(args.request === undefined ? [] : [args.request]),
+    ...(args.contract === undefined ? [] : [args.contract]),
+    ...(args.fixtureManifest === undefined ? [] : [args.fixtureManifest]),
+    ...(args.pins === undefined ? [] : [args.pins]),
+  ]);
+
   const requestRead = args.request !== undefined
     ? readRequest(args.request)
     : readDirectoryRequest(args);
   if (typeof requestRead === 'string') {
-    process.stderr.write(`${requestRead}\n`);
-    return EXIT_INPUT_ERROR;
+    // A readable but malformed request is a structured input failure. When the
+    // destination is writable, the diagnosis is also emitted as a non-qualifying
+    // diagnostic document so a reader is not left with stderr alone.
+    return reportRejection(requestRead, args, inputPaths);
   }
   const request = requestRead;
+  for (const source of request.sources) inputPaths.add(source.path);
 
   const outcome = runQualification(request);
   if (!outcome.ok) {
     // An evaluator-input failure is reported and never published as a decision:
     // a diagnostic that says "pass" was never computed would be worse than none.
-    for (const problem of outcome.problems) process.stderr.write(`${problem}\n`);
-    return outcome.exitCode;
+    return reportRejection(outcome.problems.join('\n'), args, inputPaths, outcome.exitCode);
   }
 
   const serialized = `${JSON.stringify(outcome.decision, replacer, 2)}\n`;
+  const collision = outputCollision(args.out, inputPaths);
+  if (collision !== undefined) {
+    // Writing the decision over one of its own inputs would destroy the evidence it
+    // was computed from, so the invocation is refused before anything is written.
+    process.stderr.write(`error: ${collision}\n`);
+    return EXIT_INPUT_ERROR;
+  }
   try {
     mkdirSync(dirname(args.out), { recursive: true });
     writeFileSync(args.out, serialized, 'utf8');
@@ -70,6 +87,70 @@ function main(argv: readonly string[]): number {
   };
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
   return outcome.decision.verdict === 'pass' ? EXIT_ELIGIBLE : EXIT_INELIGIBLE;
+}
+
+/**
+ * Whether the destination is one of the files this run read.
+ *
+ * Compared after resolving both paths, so a relative destination that names an input
+ * is caught as well as an absolute one.
+ */
+function outputCollision(
+  out: string,
+  inputPaths: ReadonlySet<string>,
+): string | undefined {
+  const resolved = resolve(out);
+  for (const input of inputPaths) {
+    if (resolve(input) === resolved) {
+      return `the output path ${out} is also an input this run reads, so writing it would overwrite the evidence it was computed from`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Report a rejected input, and record it as a diagnostic when the destination is
+ * writable.
+ *
+ * The document is explicitly a refusal, not a decision: it carries no requirement
+ * verdicts and cannot be mistaken for a qualification result.
+ */
+function reportRejection(
+  message: string,
+  args: { readonly out: string },
+  inputPaths: ReadonlySet<string>,
+  exitCode: number = EXIT_INPUT_ERROR,
+): number {
+  for (const line of message.split('\n')) {
+    if (line !== '') process.stderr.write(`${line}\n`);
+  }
+  const collision = outputCollision(args.out, inputPaths);
+  if (collision !== undefined) {
+    process.stderr.write(`note: no diagnostic was written because ${collision}\n`);
+    return exitCode;
+  }
+  try {
+    mkdirSync(dirname(args.out), { recursive: true });
+    writeFileSync(
+      args.out,
+      `${JSON.stringify(
+        {
+          version: DECISION_VERSION,
+          kind: 'rejected-input',
+          verdict: 'inconclusive',
+          problems: message.split('\n').filter((line) => line !== ''),
+          requirements: [],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+  } catch {
+    // The destination is not writable. stderr already carries the diagnosis, and the
+    // exit status is already nonzero, so there is nothing further to report.
+  }
+  return exitCode;
 }
 
 /**

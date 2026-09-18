@@ -36,6 +36,13 @@ export function parseJson(text: string, label: string): ParseResult {
     const unique = Array.from(new Set(scan.duplicates)).sort();
     return { ok: false, problem: `${label} repeats object key(s): ${unique.join(', ')}` };
   }
+  if (scan.overflow.length > 0) {
+    const unique = Array.from(new Set(scan.overflow)).sort();
+    return {
+      ok: false,
+      problem: `${label} contains ${unique.join(', ')}, which overflows to a non-finite JSON number`,
+    };
+  }
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -81,7 +88,7 @@ function isTokenBoundary(text: string, index: number): boolean {
 }
 
 type ScanResult =
-  | { ok: true; duplicates: string[] }
+  | { ok: true; duplicates: string[]; overflow: string[] }
   | { ok: false; problem: string };
 
 /**
@@ -95,6 +102,7 @@ type ScanResult =
 function scanForDuplicateKeys(text: string): ScanResult {
   let index = 0;
   const duplicates: string[] = [];
+  const overflow: string[] = [];
 
   const skipWhitespace = (): void => {
     while (index < text.length && /\s/.test(text[index]!)) index += 1;
@@ -183,6 +191,12 @@ function scanForDuplicateKeys(text: string): ScanResult {
     if (char === '"') return parseString() !== undefined;
     const start = index;
     while (index < text.length && !/[,}\]:\s]/.test(text[index]!)) index += 1;
+    // A number token that parses to a non-finite value has overflowed, so it is not
+    // a finite measurement even though it is spelled as standard JSON (`1e999`).
+    const token = text.slice(start, index);
+    if (token !== '' && /^-?\d/.test(token) && !Number.isFinite(Number(token))) {
+      overflow.push(token);
+    }
     return index > start;
   };
 
@@ -193,7 +207,7 @@ function scanForDuplicateKeys(text: string): ScanResult {
   if (index < text.length) {
     return { ok: false, problem: `unexpected trailing content at offset ${index}` };
   }
-  return { ok: true, duplicates };
+  return { ok: true, duplicates, overflow };
 }
 
 function unescapeJson(next: string, text: string, index: number): string {

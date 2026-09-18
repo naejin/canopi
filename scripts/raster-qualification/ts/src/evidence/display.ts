@@ -117,10 +117,17 @@ export function mapDisplay(source: SourceView | undefined): MappingResult {
     } else {
       const usable: number[] = [];
       let malformed = false;
+      let negative = 0;
       for (const sample of samples) {
         const value = finiteNumber(sample);
         if (value === undefined) malformed = true;
+        else if (value < 0) negative += 1;
         else usable.push(value);
+      }
+      if (negative > 0) {
+        // A latency cannot be negative, so a negative sample is not a fast run.
+        failures.push(`run ${name} records ${negative} negative latency sample(s)`);
+        latencyVerdict = 'fail';
       }
       if (malformed) {
         failures.push(`run ${name} records a latency sample that is not a finite number`);
@@ -162,6 +169,25 @@ export function mapDisplay(source: SourceView | undefined): MappingResult {
         `run ${name} rendered ${rendered} tile(s) with ${failed} failure(s)`,
       );
       renderingVerdict = 'fail';
+    } else {
+      // The counts and the request total must reconcile: a run that reports one
+      // rendered tile out of 999 requests has not demonstrated a complete render,
+      // and a run that reports more renders than requests is inconsistent.
+      const requests = nonNegativeInteger(run['tileRequests']);
+      if (requests === undefined) {
+        gaps.push(`run ${name} does not record how many tiles it requested`);
+        renderingVerdict = worse(renderingVerdict, 'inconclusive');
+      } else if (rendered + failed !== requests) {
+        failures.push(
+          `run ${name} rendered ${rendered} and failed ${failed} of ${requests} requested tile(s), which does not reconcile`,
+        );
+        renderingVerdict = 'fail';
+      }
+      const pageErrors = asArray(run['pageErrors']);
+      if (pageErrors !== undefined && pageErrors.length > 0) {
+        failures.push(`run ${name} recorded ${pageErrors.length} page error(s)`);
+        renderingVerdict = 'fail';
+      }
     }
 
     // Cache state.

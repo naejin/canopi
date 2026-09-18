@@ -38,6 +38,18 @@ export const DECISION_VERSION = 1;
 
 export function runQualification(request: QualificationRequest): QualificationOutcome {
   const problems: string[] = [];
+
+  // Every source role must be one the declared route knows, or nothing could be
+  // checked against it. This is validated here rather than thrown, so the
+  // programmatic caller receives the same structured outcome the CLI prints.
+  for (const source of request.sources) {
+    if (expectationsForRole(source.role) === undefined) {
+      problems.push(
+        `error: source ${source.role} has no declared expectations for this role`,
+      );
+    }
+  }
+  if (problems.length > 0) return { ok: false, problems, exitCode: 2 };
   // A declaration this build cannot use is an evaluator-input failure. It is
   // reported rather than downgraded, because a declaration that cannot be read is
   // not the same finding as evidence that was never collected.
@@ -60,10 +72,8 @@ export function runQualification(request: QualificationRequest): QualificationOu
     sources: request.sources.map((source) => {
       // The expectations come from the declared route for the role. A caller cannot
       // supply them, so a source cannot nominate what it should be checked against.
-      const declared = expectationsForRole(source.role);
-      if (declared === undefined) {
-        throw new Error(`no declared expectations for role ${source.role}`);
-      }
+      // Already validated above, so the lookup cannot fail here.
+      const declared = expectationsForRole(source.role)!;
       return {
       role: source.role,
       label: source.path,
@@ -121,9 +131,14 @@ export function runQualification(request: QualificationRequest): QualificationOu
     requirements.push(decideRequirement(request.contract, prepared, mapping, spec.id));
   }
 
+  const overall = overallVerdict(requirements);
   const decision: Decision = {
     version: DECISION_VERSION,
-    verdict: overallVerdict(requirements),
+    // A synthetic control exercises the same real path with complete internally
+    // coherent evidence, and is explicitly marked. It must never publish a
+    // qualifying result, whatever the rest of the contract happens to say: relying
+    // on unrelated permanent gaps to block it would make the exclusion incidental.
+    verdict: request.synthetic === true && overall === 'pass' ? 'inconclusive' : overall,
     requirements,
     generatedAt: request.now,
     synthetic: request.synthetic === true,

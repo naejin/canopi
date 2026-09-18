@@ -16,11 +16,12 @@ Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edi
 
 The qualification decision path is now TypeScript under `scripts/raster-qualification/ts/`. It
 recomputes admission and verdicts from raw report and declaration bytes and reproduces the recorded
-verdicts below for the existing evidence. A standing independent review at `abf502b6` found four
-blocking defect families in the first delivery (duplicate source roles resolved by arrival order,
+verdicts below for the existing evidence. Standing independent reviews at `abf502b6` and `8ab1fff7` found ten
+blocking defect families across two rounds in the first deliveries (duplicate source roles resolved by arrival order,
 incomplete per-run records combining into a complete one, required artifact coverage inferred from
-supplied name prefixes, and sidecar hash equality treated as survival evidence); the repair is
-delivered for review, and the receipt records that the existing records' verdicts are unchanged. The Python evaluator is frozen for comparison and is no
+supplied name prefixes, and sidecar hash equality treated as survival evidence); both repairs are
+delivered for review, and the receipt records that the existing records' verdicts are unchanged across
+all three evaluation rounds. The Python evaluator is frozen for comparison and is no
 longer the authority; its historical reconciliation is retained in the
 [consolidated repair receipt](raster-rework/q-consolidated-repair-receipt.md).
 

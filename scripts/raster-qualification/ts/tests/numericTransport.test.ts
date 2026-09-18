@@ -235,7 +235,10 @@ test('invalid declarations stop the run with a nonzero status and no decision', 
     const result = runCli(requestPath, out);
     assert.equal(result.status, 2);
     assert.match(result.stderr, /invalid declaration/);
-    assert.equal(result.decision, undefined, 'no decision may be published');
+    // No decision is published; the destination holds a labelled refusal instead.
+    assert.equal(result.decision?.['kind'], 'rejected-input',
+                  'no decision may be published');
+    assert.notEqual(result.decision?.['verdict'], 'pass');
   } finally {
     root.cleanup();
   }

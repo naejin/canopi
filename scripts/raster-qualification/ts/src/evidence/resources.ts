@@ -14,9 +14,9 @@ import { asArray, describe, finiteNumber, isRecord } from '../fields.js';
 import type { SourceView } from '../decide.js';
 import type { MappingResult } from './mapping.js';
 import { unresolved } from './mapping.js';
-import { readRunRecords, reduceResources } from '../reduce.js';
+import { readRunRecords, reduceResources, type RunRecord } from '../reduce.js';
 import { DECLARATIONS } from '../declared/route.js';
-import { type Verdict } from '../verdict.js';
+import { worse, type Verdict } from '../verdict.js';
 
 const ASSERTIONS = [
   'candidate-memory-within-budget',
@@ -55,7 +55,7 @@ export function mapResources(source: SourceView | undefined): MappingResult {
   }
 
   const runRecords = readRunRecords(measurements);
-  const raws = measurements.filter(isRecord);
+  const rawByIndex = measurements.map((entry) => (isRecord(entry) ? entry : {}));
   const reduction = reduceResources(runRecords);
   Object.assign(observations, reduction.observations);
   // The reduction keeps its own failure/gap split; flattening it into one list here
@@ -103,21 +103,20 @@ export function mapResources(source: SourceView | undefined): MappingResult {
 
   // Candidate memory is the plan's combined figure, and only a candidate record may
   // supply it. The reference reader's reading never substitutes, however convenient.
-  const memory = candidateMemory(raws, candidateRecords, observations);
+  const candidateWithRaw = candidateRecords.map((record) => ({
+    ...record,
+    raw: rawByIndex[record.index] ?? {},
+  }));
+  const memory = candidateMemory(candidateWithRaw, observations);
   assertions.set('candidate-memory-within-budget', memory.verdict);
-  for (const reason of memory.reasons) {
-    if (memory.verdict === 'fail') failures.push(reason);
-    else gaps.push(reason);
-  }
+  failures.push(...memory.failures);
+  gaps.push(...memory.gaps);
 
   // Sampling and the counter budgets come from the per-run reduction.
-  const samplingVerdict = sampling(runRecords, candidateRecords);
-  assertions.set('sampling-meets-requirement', samplingVerdict);
-  if (samplingVerdict === 'inconclusive') {
-    gaps.push('candidate memory sampling interval or count not recorded');
-  } else if (samplingVerdict === 'fail') {
-    failures.push('candidate sampling is coarser than the plan requires');
-  }
+  const samplingResult = sampling(candidateRecords);
+  assertions.set('sampling-meets-requirement', samplingResult.verdict);
+  failures.push(...samplingResult.failures);
+  gaps.push(...samplingResult.gaps);
 
   assertions.set('disk-cache-reads-queue-and-children-recorded', reductionSummary.verdict);
   observations['reductionReasons'] = reductionReasons;
@@ -131,6 +130,12 @@ export function mapResources(source: SourceView | undefined): MappingResult {
   gaps.push(
     "the plan's display disk-cache bound (512 MiB) is not established: no producer emits a display disk-cache observation, so its compliance is unmeasured",
   );
+  // The staging/free-space policy is a distinct obligation, and it is named
+  // separately so a reader can tell which plan bound is unmeasured rather than seeing
+  // one reason stand in for both.
+  gaps.push(
+    "the plan's staging and free-space policy for temporary disk is not established: temporaryDiskHighWaterBytes is recorded and reported, but no producer declares the staging policy it would be compared against",
+  );
 
   return { assertions, observations, failures, gaps, ...base };
 }
@@ -142,60 +147,101 @@ export function mapResources(source: SourceView | undefined): MappingResult {
  * reference-reader measurement is a different quantity: substituting it would
  * report a route's memory using an engine that is not the candidate.
  */
+/**
+ * Candidate route memory against the plan's combined budget.
+ *
+ * Reads the record itself rather than aligning two independently filtered lists: a
+ * leading non-record shifts the measurement indexes, so pairing `raws` with reduced
+ * records by position would read the wrong run's memory.
+ */
 function candidateMemory(
-  raws: readonly Record<string, unknown>[],
-  candidate: readonly { index: number }[],
+  candidates: readonly (RunRecord & { readonly raw: Record<string, unknown> })[],
   observations: Record<string, unknown>,
-): { verdict: Verdict; reasons: string[] } {
-  const candidateIndexes = new Set(candidate.map((record) => record.index));
+): { verdict: Verdict; failures: string[]; gaps: string[] } {
   const readings: number[] = [];
-  let malformed: string | undefined;
-  raws.forEach((record, index) => {
-    if (!candidateIndexes.has(index)) return;
-    const raw = record['incrementalPeakRssMiB'];
-    if (raw === undefined || raw === null) return;
+  const failures: string[] = [];
+  const gaps: string[] = [];
+  for (const record of candidates) {
+    const raw = record.raw['incrementalPeakRssMiB'];
+    if (raw === undefined) {
+      gaps.push(`candidate run ${record.index} does not record its incremental memory peak`);
+      continue;
+    }
+    if (raw === null) {
+      failures.push(
+        `candidate run ${record.index} records incrementalPeakRssMiB as null, which is not a measurement`,
+      );
+      continue;
+    }
     const value = finiteNumber(raw);
     if (value === undefined) {
-      malformed ??= `candidate run ${index} records incrementalPeakRssMiB=${describe(raw)}, which is not a finite measurement`;
-      return;
+      failures.push(
+        `candidate run ${record.index} records incrementalPeakRssMiB=${describe(raw)}, which is not a finite measurement`,
+      );
+      continue;
     }
     readings.push(value);
-  });
+  }
   observations['candidateMemoryMiB'] = readings;
   observations['memoryBudgetMiB'] = DECLARATIONS.combinedMemoryMiB;
-  if (malformed !== undefined) return { verdict: 'fail', reasons: [malformed] };
-  if (readings.length === 0) {
-    return {
-      verdict: 'inconclusive',
-      reasons: [
-        'no candidate-route memory measurement was recorded; a reference-reader reading cannot substitute',
-      ],
-    };
-  }
+
   const over = readings.filter((value) => value > DECLARATIONS.combinedMemoryMiB);
   if (over.length > 0) {
-    return {
-      verdict: 'fail',
-      reasons: [
-        `candidate route incremental memory ${Math.max(...over)} MiB exceeds the plan's ${DECLARATIONS.combinedMemoryMiB} MiB budget`,
-      ],
-    };
+    // A recorded over-budget peak is a measured violation, and it survives any
+    // missing observation in another run.
+    failures.push(
+      `candidate route incremental memory ${Math.max(...over)} MiB exceeds the plan's ${DECLARATIONS.combinedMemoryMiB} MiB budget`,
+    );
   }
-  return { verdict: 'pass', reasons: [] };
+  if (failures.length > 0) return { verdict: 'fail', failures, gaps };
+  if (readings.length === 0) {
+    gaps.push(
+      'no candidate-route memory measurement was recorded; a reference-reader reading cannot substitute',
+    );
+    return { verdict: 'inconclusive', failures, gaps };
+  }
+  return { verdict: gaps.length > 0 ? 'inconclusive' : 'pass', failures, gaps };
 }
 
-function sampling(
-  all: readonly { index: number; sampleIntervalMs: number | undefined; sampleCount: number | undefined }[],
-  candidate: readonly { index: number; sampleIntervalMs: number | undefined; sampleCount: number | undefined }[],
-): Verdict {
-  if (candidate.length === 0) return 'inconclusive';
+/**
+ * The plan's sampling cadence, reduced across candidate runs.
+ *
+ * A cadence violation is a measured fact and is reported even when the same run also
+ * omits a sampling field. Returning at the first missing field would let a gap hide a
+ * known violation, so every run contributes both kinds of finding and the verdict is
+ * the more severe of them.
+ */
+function sampling(candidate: readonly {
+  index: number;
+  sampleIntervalMs: number | undefined;
+  sampleCount: number | undefined;
+}[]): { verdict: Verdict; failures: string[]; gaps: string[] } {
+  if (candidate.length === 0) {
+    return {
+      verdict: 'inconclusive',
+      failures: [],
+      gaps: ['no candidate-route run was available to sample'],
+    };
+  }
+  const failures: string[] = [];
+  const gaps: string[] = [];
   let verdict: Verdict = 'pass';
   for (const record of candidate) {
     const interval = record.sampleIntervalMs;
     const count = record.sampleCount;
-    if (interval === undefined || count === undefined || count === 0) return 'inconclusive';
-    if (interval > DECLARATIONS.sampleIntervalMs) verdict = 'fail';
+    if (interval === undefined) {
+      gaps.push(`candidate run ${record.index} does not record its sampling interval`);
+      verdict = worse(verdict, 'inconclusive');
+    } else if (interval > DECLARATIONS.sampleIntervalMs) {
+      failures.push(
+        `candidate run ${record.index} sampled every ${interval} ms, exceeding the plan's ${DECLARATIONS.sampleIntervalMs} ms cadence`,
+      );
+      verdict = 'fail';
+    }
+    if (count === undefined || count === 0) {
+      gaps.push(`candidate run ${record.index} does not record a positive sample count`);
+      if (verdict !== 'fail') verdict = worse(verdict, 'inconclusive');
+    }
   }
-  void all;
-  return verdict;
+  return { verdict, failures, gaps };
 }

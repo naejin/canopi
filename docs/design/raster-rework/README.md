@@ -6,7 +6,7 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Next handoff: the [standing TypeScript repair prompt](q-typescript-repair-agent-prompt.md), using one [independent review record](q-typescript-review.md) and the unchanged [C1–C8 matrix](q-admission-acceptance.md). Review at `abf502b6` found remaining blockers despite 74 passing tests. The user remains the courier and approval point for each of at most two repair/review rounds; round 1 has not started. No direct agent-to-agent loop, new qualification experiments, Python deletion or N1 is authorized by this documentation update. Older prompts are historical evidence, not accumulating instructions.
+Round 1 is independently reviewed at `8ab1fff7`: specific fixes are retained, but the full boundary is not accepted despite 127 passing TypeScript tests. The [standing review](q-typescript-review.md#round-1-independent-disposition) records one consolidated disposition under unchanged C1–C8. Round 2 requires the user to forward that review and request continuation using the [same standing prompt](q-typescript-repair-agent-prompt.md). No direct agent-to-agent loop, new qualification experiments, Python deletion or N1 is authorized. Older prompts are historical evidence, not accumulating instructions.
 
 | Artifact | Purpose |
 | --- | --- |
@@ -16,6 +16,7 @@ Next handoff: the [standing TypeScript repair prompt](q-typescript-repair-agent-
 | [Consolidated repair receipt](q-consolidated-repair-receipt.md) | Historical implementer report; independent review found remaining blockers despite 261 passing tests |
 | [Consolidated repair cycles](evidence/q-consolidated-repair-cycles.txt) | Captured RED/GREEN, sensitivity probes, self-review cases and read-only evidence reconciliation for that repair |
 | [TypeScript agent prompt](q-typescript-agent-prompt.md) | Retired handoff executed in the TypeScript decision-path migration |
+| [TypeScript repair round 2 log](evidence/q-typescript-repair-round2.txt) | Reproduction of the Round 1 disposition's six families, the transport declaration correction, thirteen guard-removal probes and the three-round reconciliation |
 | [TypeScript repair round 1 log](evidence/q-typescript-repair-round1.txt) | Reproduction of the standing review's T1–T4 examples, the mutation sweep, the adversarial pass, eleven guard-removal probes and the read-only reconciliation |
 | [TypeScript migration receipt](q-typescript-receipt.md) | Implementer report; reviewed at `abf502b6`, complete boundary not accepted; update this same receipt for repair rounds |
 | [Assertion evidence map](../../../scripts/raster-qualification/assertion_evidence_map.md) | The 68 contract assertions, the evidence that decides each, and the seven that are permanent gaps |

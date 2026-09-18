@@ -39,6 +39,7 @@ const ASSERTIONS: Record<string, { name: string; ok: boolean }[]> = {
     { name: 'original-unchanged', ok: true },
     { name: 'original-hash-declared', ok: true },
     { name: 'derived-tiled', ok: true },
+    { name: 'derived-block-bounded', ok: true },
     { name: 'cell-exact', ok: true },
     { name: 'geotransform-preserved', ok: true },
     { name: 'all-values-match', ok: true },

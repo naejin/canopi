@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — implemented; independent review at `abf502b6` found remaining T1–T4 blockers under C1–C8. See the [standing review](q-typescript-review.md). Q remains unqualified. Claims below describe the migration delivery, not whole-boundary acceptance; future repair rounds append revision-labelled outcomes to this same receipt.
+Status: evidence — migration and Round 1 implemented; independent review at `8ab1fff7` retains specific repairs but finds remaining C1–C8 blockers. See the [Round 1 disposition](q-typescript-review.md#round-1-independent-disposition). Q remains unqualified. Claims below are revision-linked implementer reports, not whole-boundary acceptance; any user-authorized Round 2 updates this same receipt.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).
@@ -415,3 +415,83 @@ one receipt section, no acceptance written on the reviewer's behalf, and no repa
 silence.
 
 **Round 1 is complete and delivered. It awaits independent review.**
+
+---
+
+# Round 2 — repair against the Round 1 independent disposition
+
+Status of this round: **implemented, delivered for independent review**. Round 1 was delivered at
+`73a7b214` and independently reviewed at `8ab1fff7`, which retained specific repairs and listed six
+remaining families (R1-A to R1-F). This round addresses all six at family scope. Nothing here is
+accepted on the implementer's authority, and Round 2 is the final round covered by the standing
+prompt.
+
+Captured reproduction, sweep and sensitivity log:
+[q-typescript-repair-round2.txt](evidence/q-typescript-repair-round2.txt).
+
+## What was retained
+
+No architecture change, no language change, no second evaluator. Retained unchanged: one parse, one
+reduction, one authority; no bundle input; recomputation from source bytes rather than bundle trust;
+the runner's TypeScript decision routing; the strict boolean, duplicate-key and non-finite-token
+regressions; the previously accepted R5 behaviors; and the whole of the Round 1 repair set — duplicate
+source roles rejected before indexing, mandatory per-run memory, three-way leaf classification,
+declaration-driven artifact records, and the sidecar survival distinction.
+
+## Family responses
+
+| Family | What was wrong | Response |
+| --- | --- | --- |
+| **R1-A** declaration correspondence | The declared pins reached admission but were never consulted, so a record's two own revision strings agreeing was mistaken for pin verification. A correspondence record for any version passed, and a wrong-version duplicate prepended to `verifiedArtifacts` was silently ignored | Correspondence is compared against the declaration at three independent points: the record's version must be the one the route declares for that artifact, its claimed pin must equal the declared pin, and its built revision must equal that pin. An artifact outside the required set fails, a missing record for a required artifact is a gap, duplicate verified-artifact identities fail before indexing, and an absent pin declaration blocks correspondence rather than passing it. `SourceView` now carries the declared expectations, so a mapping consults an independent declaration rather than a second input path |
+| **R1-B** failure retained before gaps | A 900 ms cadence violation was lost when the same run omitted `sampleCount`; a 2048 MiB peak was missed when a leading non-record shifted the index pairing; a missing observed hash softened a recorded non-survival; and a declaration gap hid a conflicting fixture hash | The sampling reduction collects violations and gaps independently and reduces them once, so a violation is never replaced by a gap. The memory reader keys off the record itself instead of pairing two differently-filtered lists by position. A present `after: false` is read before any missing-hash gap, and a `before: false` fails likewise. A partly incomplete fixture declaration keeps its resolved members, so observed fixtures are still compared against what the declaration did resolve |
+| **R1-C** scientific sufficiency | A run reporting one rendered tile of 999 requests passed; all-negative latencies passed as fast; a ledger accounting for zero bytes over zero requests corroborated nine validated windows; a 0.5-cell window dimension was compared as though it were a size; HTTP Range passed the proposed-local-transport assertion; and preparation mapped the contract's "tiled and bounded" obligation onto the producer's tiling check alone | Render counts must reconcile with requests and page errors must be empty; negative latency samples fail; the ledger must account for the windows the report claims to have validated; window dimensions must be whole positive numbers of cells; the declared transport is now the plan's scoped **local bridge** rather than `http-range`, with an HTTP-only measurement failing the assertion and naming what it measured; and the preparation obligation combines the producer's separate tiling and block-bounding checks |
+| **R1-D** admission and policy boundary | A precondition that recorded no outcome passed; a null container passed as absent; any report-chosen prefix could exempt a positive failure; an envelope could contradict its own identity; `1e999` passed because it decodes to `Infinity`; and `after: true` without `before` passed as preservation | A precondition without `met` blocks; `preconditions: null` and `failures: null` are malformed rather than absent; a negative-control scope must be an explicit `expected-rejection:` declaration rather than an arbitrary substring; the envelope's experiment label must agree with the identity block; numeric overflow is detected after decoding as well as for bare tokens; and preservation requires **both** the before and after observations |
+| **R1-E** synthetic isolation | `synthetic: true` published an overall pass on a reduced contract, and an unknown source role threw from the programmatic path instead of returning a structured outcome | The synthetic marker blocks a qualifying verdict on the decision itself, independently of whether unrelated permanent gaps happen to be present. Unknown source roles produce a structured error outcome with exit code 2 from the programmatic entry point, so it agrees with the CLI |
+| **R1-F** output safety and diagnostics | `--out` pointing at an input overwrote that report, and a malformed request exited 2 with the diagnosis only on stderr | The destination is compared against every file the run reads and a collision is refused with the source bytes intact. A refused input writes an explicitly labelled `kind: "rejected-input"` document when the destination is writable, carrying no requirement verdicts, so it cannot be mistaken for a decision; a collision suppresses even that |
+
+## The transport declaration, and why it mattered
+
+The review's R1-C item about HTTP Range was not a missing comparison but a **wrong declaration**. The
+plan states that numeric windows must be read "via the intended Desktop/native/worker bridge", that
+"Q must qualify this local bridge, not just HTTP COG access", and that a remote HTTP demo "does not
+qualify local access". The route declaration nonetheless expected `http-range`, so the comparison ran
+and passed against the very capability the plan rules out.
+
+Correcting the declaration exposed the vacuity: two committed tests had been written around the wrong
+expectation and had to be corrected to the plan's semantics rather than the reverse. The control
+fixture now declares the local bridge, and an HTTP-only measurement fails the assertion with a reason
+naming the observed transport.
+
+## Verification and reconciliation
+
+All gates are green: `tsc` from an empty `dist/` (nothing stale), 176 emitted tests (from 127), 261
+retained Python regressions, 14 stub-runner checks, 0 documentation errors, clean `git diff --check`,
+shell and `.mjs` syntax OK. No Python decision-path file changed and no private evidence was touched.
+
+Read-only reconciliation through the emitted CLI at a fixed time is unchanged from Round 1: `fail`,
+1 fail and 11 inconclusive, with no per-requirement difference. Every Round 2 repair requires a
+duplicate declaration, an incomplete per-run record, a self-consistent but undeclared revision pair, a
+non-reconciling render or a malformed container, and these records supply none of those. No target
+distribution is prescribed.
+
+## Reported honestly
+
+- **Two guard-removal probes are zero results and one measurement was initially wrong.** The pin
+  comparison (H1) does not fail the suite alone because the built-revision comparison immediately
+  after it catches the same inputs — the two are load-bearing only as a pair, which a combined probe
+  confirms (H1b fails six tests). One earlier probe read `process.stderr` output that the test runner
+  captures, so a first reading of "the check never fires" was a measurement artifact and was
+  re-measured before being believed.
+- **Two committed tests were corrected rather than the code.** They had encoded the wrong transport
+  expectation, so they were asserting the defect. Both are now written against the plan.
+- The sweep remains finite. It is not proof against all inputs, and this receipt does not claim
+  otherwise.
+
+## Responses to the standing review
+
+All six families are addressed at family scope, and the review's two precision notes are honoured: the
+resource mapping's assertion verdicts are validated individually as well as the requirement verdict,
+and the staging/free-space policy is recorded as its own missing observation rather than being folded
+into the display disk-cache reason.
+
+**Round 2 is complete and delivered. It awaits independent review.**

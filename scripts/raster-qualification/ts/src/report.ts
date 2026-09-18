@@ -222,7 +222,9 @@ export function readAdmissionFacts(shape: ReportShape, label: string): {
 
   const failureList = asArray(value['failures']);
   const failures: string[] = [];
-  if (value['failures'] !== undefined && value['failures'] !== null && failureList === undefined) {
+  if (value['failures'] === null) {
+    problems.push(`${label} failures container is null, which is not a list`);
+  } else if (value['failures'] !== undefined && failureList === undefined) {
     problems.push(`${label} failures container is not a list (${describe(value['failures'])})`);
   } else if (failureList !== undefined) {
     failureList.forEach((entry, index) => {
@@ -233,11 +235,11 @@ export function readAdmissionFacts(shape: ReportShape, label: string): {
 
   const preconditionList = asArray(value['preconditions']);
   const preconditions: { name: string; met?: boolean }[] = [];
-  if (
-    value['preconditions'] !== undefined &&
-    value['preconditions'] !== null &&
-    preconditionList === undefined
-  ) {
+  if (value['preconditions'] === null) {
+    // Present but explicitly null. The container is documented as a list, so a null
+    // that is present is malformed rather than an absent container.
+    problems.push(`${label} preconditions container is null, which is not a list`);
+  } else if (value['preconditions'] !== undefined && preconditionList === undefined) {
     problems.push(
       `${label} preconditions container is not a list (${describe(value['preconditions'])})`,
     );
@@ -258,12 +260,33 @@ export function readAdmissionFacts(shape: ReportShape, label: string): {
         return;
       }
       seen.add(name);
+      // A precondition that does not record whether it held has not established
+      // anything, so it is reported as a gap rather than accepted silently. A
+      // present but non-boolean `met` was already reported as a failure.
+      const held = Object.prototype.hasOwnProperty.call(entry, 'met');
       const met = readBooleanLeaf(entry, 'met', JSON.stringify(name), label, problems);
+      if (!held) {
+        problems.push(`${label} precondition ${JSON.stringify(name)} does not record whether it held`);
+      }
       preconditions.push(met === undefined ? { name } : { name, met });
     });
   }
 
   const identity = isRecord(value['identity']) ? value['identity'] : undefined;
+
+  // The envelope's own experiment label and the identity block must agree: two
+  // different names for the same run is a contradiction in the record.
+  const envelopeExperiment = value['experiment'];
+  if (
+    isNonEmptyString(envelopeExperiment) &&
+    identity !== undefined &&
+    isNonEmptyString(identity['experiment']) &&
+    envelopeExperiment !== identity['experiment']
+  ) {
+    problems.push(
+      `${label} envelope names experiment ${JSON.stringify(envelopeExperiment)} but its identity names ${JSON.stringify(identity['experiment'])}`,
+    );
+  }
 
   return {
     facts: {

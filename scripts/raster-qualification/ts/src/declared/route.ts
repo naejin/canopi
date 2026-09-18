@@ -17,16 +17,25 @@ export const QUALIFICATION_ROUTE_ID = 'candidate-raster-route-v1';
 /** The observation host this run declares. Only `desktop-webview` satisfies Q-HOST-1. */
 export const QUALIFICATION_HOST = 'chromium';
 
-/** The transport each source role must have used. */
+/**
+ * The transport each source role must have used.
+ *
+ * The plan requires the proposed **local bridge** for bounded numeric access: "Q
+ * must qualify this local bridge, not just HTTP COG access", and a remote HTTP demo
+ * "does not qualify local access". Declaring `http-range` here would make the
+ * comparison vacuous by expecting the very capability the plan rules out.
+ */
+export const LOCAL_BRIDGE_TRANSPORT = 'local-bridge';
+
 export const TRANSPORT_BY_ROLE: ReadonlyMap<string, string> = new Map([
-  ['q2', 'http-range'],
-  ['q3prepare', 'http-range'],
-  ['q3members', 'http-range'],
-  ['q4slope', 'http-range'],
-  ['q4crs', 'http-range'],
-  ['q5lifecycle', 'http-range'],
-  ['q6resources', 'http-range'],
-  ['trace', 'http-range'],
+  ['q2', LOCAL_BRIDGE_TRANSPORT],
+  ['q3prepare', LOCAL_BRIDGE_TRANSPORT],
+  ['q3members', LOCAL_BRIDGE_TRANSPORT],
+  ['q4slope', LOCAL_BRIDGE_TRANSPORT],
+  ['q4crs', LOCAL_BRIDGE_TRANSPORT],
+  ['q5lifecycle', LOCAL_BRIDGE_TRANSPORT],
+  ['q6resources', LOCAL_BRIDGE_TRANSPORT],
+  ['trace', LOCAL_BRIDGE_TRANSPORT],
 ]);
 
 /** The experiment identifier each source role must record. */
