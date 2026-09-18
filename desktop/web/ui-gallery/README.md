@@ -31,7 +31,13 @@ Use `?surface=favorites&edition=web` to review the production Web Favorites comp
 
 Reloading reconstructs the gallery session and resets its memory state. Stop it with Ctrl-C. Real Web Edition storage, DuckDB catalog loading, browser downloads, Tauri IPC/WebView behavior, native file dialogs, and packaged-app behavior remain outside this host; use the [edition development guide](../../../docs/agent/edition-development.md) to choose those checks safely.
 
-## Temporary LiDAR study
+## Raster rework HTML references
+
+Open [the reference hub](http://127.0.0.1:1422/raster-reference-prototype/index.html) using the same development server. The seven linked HTML mockups cover Data, import, Analysis, Layers, inspection, Location and basemaps. They are a separate throwaway proposal, not production component stories; approval is pending. All state and credentials are synthetic and memory-only. The [implementation plan's reference contract](../../../docs/design/raster-data-analysis-rework.md#html-ui-reference-contract) maps exact files and state URLs to production slices and records their limitations. Never import `raster-reference-prototype/` into production; rebuild the accepted design with existing components. Keep these references until their production slices have been reviewed, then retire them and update the plan links together.
+
+## Historical LiDAR study
+
+The raster rework references above supersede this study for future Data/Analysis/import UI work. This older route still describes the earlier proposal; do not implement its Before/After flow as part of the rework.
 
 With the same `npm run dev:ui` command, open
 [`?surface=layers&prototype=lidar&panelWidth=380`](http://127.0.0.1:1422/?surface=layers&prototype=lidar&panelWidth=380).
