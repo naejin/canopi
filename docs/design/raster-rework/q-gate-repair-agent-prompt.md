@@ -1,10 +1,10 @@
 # Q qualification gate repair — agent prompt
 
-Status: proposed — next bounded implementation handoff; Q remains unqualified.
+Status: retired — executed through `47b9d508`; independent review requires further repair. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [review and debrief record](review-and-debrief.md), and [repository contract](../../../AGENTS.md).
 
-This supersedes the broad [Q correction prompt](q-correction-agent-prompt.md) for the next assignment. Sending this prompt authorizes only the gate repair below. Writing this document does not start that work.
+Historical handoff retained for the user-requested debrief; do not execute it again. The [evidence integrity prompt](q-evidence-integrity-agent-prompt.md) supersedes it. The [repair receipt](q-gate-repair-receipt.md) records implementation claims; the [review record](review-and-debrief.md) records remaining false passes.
 
 ## Prompt to send
 

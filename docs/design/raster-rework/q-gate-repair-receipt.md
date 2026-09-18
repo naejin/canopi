@@ -1,8 +1,12 @@
 # Qualification gate repair — implementation receipt
 
-Status: evidence — gate-only repair implemented and tested; **pending independent verification**. Q remains unqualified.
+Status: evidence — gate-only repair independently reviewed at `47b9d508`; **not accepted**, remaining false passes reproduced. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [Q gate repair prompt](q-gate-repair-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+Current guidance: [Q evidence integrity prompt](q-evidence-integrity-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+
+## Independent review disposition
+
+The report below preserves the implementer's claims at delivery, not current acceptance. Independent review reran all 64 tests and documentation checks successfully but reproduced lost report failures, unchecked evidence identities, absent sidecar evidence accepted as pass, and inconsistent display counts/statistics accepted as pass. Artifact correspondence and local-bridge qualification are also overstated. The four-pass table below must not be used as accepted capability evidence. See R3-01–R3-05 in the [review record](review-and-debrief.md); no new qualification experiments were run by the reviewer.
 
 This receipt records a bounded repair of the **qualification gate**. It does not attempt to finish Q,
 does not run new qualification experiments, and does not touch the raster engine.
