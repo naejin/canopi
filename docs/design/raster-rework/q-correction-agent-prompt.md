@@ -1,10 +1,10 @@
 # Q correction agent prompt
 
-Status: proposed — bounded corrective handoff; not yet an accepted qualification result.
+Status: retired — executed in `cfbb0c35`; independent review did not accept Q. Retained for debrief evidence.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; related follow-up `canopi-a9uy`.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md), and [repository contract](../../../AGENTS.md).
 
-Prepared after independent review of `fd86de68`. Send the complete prompt below to the implementation agent. Saving this handoff does not itself start implementation. Retain this revision for the user-requested methodology debrief; execution status remains in bd.
+Prepared after independent review of `fd86de68`; the resulting correction is `cfbb0c35`. Do not execute this historical prompt again. Use the narrower [gate repair prompt](q-gate-repair-agent-prompt.md) next and consult the [review/debrief record](review-and-debrief.md). The original text below is retained for the user-requested methodology debrief; execution status remains in bd.
 
 ## Agent prompt
 
