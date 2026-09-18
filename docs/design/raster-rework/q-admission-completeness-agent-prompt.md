@@ -4,7 +4,7 @@ Status: retired — delivered as `50c1211e`; retained for the user-requested deb
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [review/debrief](review-and-debrief.md), [repository contract](../../../AGENTS.md).
 
-Sending this prompt authorizes only the repair below. It supersedes the [evidence integrity prompt](q-evidence-integrity-agent-prompt.md). Q remains unqualified; N1 must not start.
+Historical instructions only; do not execute again. The [declaration/precedence prompt](q-declaration-precedence-agent-prompt.md) supersedes this handoff after independent review. Q remains unqualified; N1 must not start.
 
 ## Start and scope
 

@@ -1,9 +1,13 @@
 # Q admission completeness repair — implementation receipt
 
-Status: evidence — admission completeness repaired across raw report → assembler → gate → CLI; **pending independent verification**. Q remains unqualified.
+Status: evidence — independently reviewed through `578e3bdb`; **not accepted**, remaining declaration/precedence defects reproduced. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [admission-completeness prompt](q-admission-completeness-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+Current guidance: [declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
 Captured cycle evidence: [q-admission-completeness-cycles.txt](evidence/q-admission-completeness-cycles.txt).
+
+## Independent review disposition
+
+The remainder preserves implementation claims, not acceptance. The reviewer independently reran 168 tests, documentation validation and diff checks successfully. R5-01–R5-03 in the review record reproduce missing/duplicate expected fixture declarations passing, a missing runId hiding an otherwise detected hash conflict, and missing result suppressing a positive failure list. The original wrong-hash case now fails correctly, but mixed failure/gap handling is still incomplete. No private experiments or report reconciliation were rerun by the reviewer; the reported twelve-inconclusive distribution is not an acceptance target.
 
 This receipt covers a bounded repair of **evidence admission completeness**. It adds no engine,
 transport, worker, decoder, slope, preparation or publication implementation; runs no qualification

@@ -1,8 +1,8 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — four implementation handoffs reviewed; final methodology conclusions pending.
+Status: evidence — five implementation handoffs reviewed; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [implementation plan](../raster-data-analysis-rework.md), [current handoff](q-admission-completeness-agent-prompt.md), and [delivery workflow](../../workflow/delivery.md).
+Current guidance: [implementation plan](../raster-data-analysis-rework.md), [current handoff](q-declaration-precedence-agent-prompt.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
 
@@ -22,7 +22,9 @@ The reviewer inspected source and ran targeted in-memory verdict reproductions. 
 | [Gate repair receipt](q-gate-repair-receipt.md), reviewed at `47b9d508` | Requirement contract; overall fail, 1 fail / 7 inconclusive / 4 pass; 64 tests green | Reviewer independently reran all 64 tests, docs validation and diff checks successfully. Repair not accepted: R3 false passes remain, including unsupported individual passing requirements. No private experiments rerun. |
 | [Evidence integrity prompt](q-evidence-integrity-agent-prompt.md), `0cc3b8fa` | Raw-report-to-gate regression controls, evidence admission and correspondence | Executed in `2c830b0d`, with bead records through `d963f755`; retired. |
 | [Evidence integrity receipt](q-evidence-integrity-receipt.md), reviewed at `d963f755` | 115 passing tests, nine reported sensitivity checks; existing records yield 12 inconclusive | Reviewer independently reran all 115 tests, docs and diff checks successfully. Repair not accepted: R4 findings below. Private report reconciliation and sensitivity checks were not independently rerun. |
-| [Admission completeness prompt](q-admission-completeness-agent-prompt.md) | Explicit required-set coverage, run provenance and monotonic failure precedence | Next bounded assignment; no implementation or acceptance claimed. |
+| [Admission completeness prompt](q-admission-completeness-agent-prompt.md), `c94b7c7f` | Explicit required-set coverage, run provenance and monotonic failure precedence | Executed in `50c1211e`, with delivery records through `578e3bdb`; retired. |
+| [Admission completeness receipt](q-admission-completeness-receipt.md), reviewed through `578e3bdb` | 168 tests, ten reported sensitivity checks and captured cycle excerpts; existing evidence twelve-inconclusive | All 168 tests and docs/diff checks independently pass. Repair not accepted: R5 findings below. Private evidence reconciliation and sensitivity mutations not independently rerun. |
+| [Declaration/precedence prompt](q-declaration-precedence-agent-prompt.md) | Validate both declarations and observations; test independent failure/gap combinations | Next bounded assignment; no implementation or acceptance claimed. |
 
 ## R2 findings and reported repairs
 
@@ -107,6 +109,20 @@ These findings do not establish that real fixture measurements were fabricated o
 
 The latest receipt again reports no captured RED/GREEN transcript despite the previous prompt requesting one. It also reports fixture defects discovered during implementation: shared mutable assembly configuration, a `TestCase.run` override, an `evaluate()` shadow and physically inconsistent fixtures. These are implementer-reported process observations, not independently reconstructed execution history. Preserve them for the final debrief without inferring skill adherence, intent or model capability.
 
+## R5 independent findings through `578e3bdb`
+
+Repair code: `50c1211e`; subsequent delivery records: `b7112847`, `578e3bdb`. Reproductions used `passing_reports()` and fresh `assembly()` controls with the real assembler/gate. File I/O was intercepted in memory; no private experiments or working files changed. The affected requirement control passed before mutations. The wrong observed fixture hash alone now correctly fails, demonstrating a retained improvement.
+
+| ID | Independent reproduction | Observed result / remaining defect |
+| --- | --- | --- |
+| R5-01 | Remove `sha256` from `fixture_manifest.declared[0]`; separately insert a conflicting duplicate declaration before the original | `Q-LOCAL-1` passes both. Declaration dict conversion silently accepts missing expected hashes and overwrites duplicate names. Validate declarations before lookup construction. |
+| R5-02 | Wrong observed numeric hash fails; retain it and remove `identity.runId` | Verdict becomes inconclusive with only the runId gap. An early return still skips the available hash comparison, contradicting the claimed single final reduction. |
+| R5-03 | Remove numeric `result` and supply a positive `failures` entry | Verdict is inconclusive; failure list evaluation is nested under the recognized-result branch. Missing summary does not erase independently recorded failure. |
+
+The next handoff separates declaration-input validity from physical engine behavior and adds combined-fault controls. None of these reproductions establishes a real engine failure, fabricated measurement or general model limitation. Current Q remains unqualified for independent reasons.
+
+The latest receipt includes a linked trimmed cycle log, an improvement over earlier uncaptured reports. Its ten sensitivity results and reported implementation/fixture mistakes remain implementer evidence until independently checked; merely having the log is not proof the tests cover every branch. Keep the log for comparison with the R5 combined-fault regressions.
+
 ## Process hypotheses, not settled conclusions
 
 | Hypothesis | Supporting observation | Evidence still needed / proposed intervention |
@@ -121,6 +137,9 @@ The latest receipt again reports no captured RED/GREEN transcript despite the pr
 | Checks cover supplied fields but not the required set | R4 unknown fixture and unrelated artifact records pass | Required-set controls with two members, missing/extra/duplicate cases, and a regression proving unrelated additions cannot satisfy obligations. |
 | Early returns accidentally change verdict precedence | Removing identity downgrades explicit failure to inconclusive | Table-driven mixed failure/gap cases; deleting evidence must not improve eligibility or erase failure reasons. |
 | Handoff evidence requirements are not being enforced at delivery | Two receipts describe RED/GREEN work without the requested captured transcript | Require a small sanitized command/output artifact in the next receipt. Separate independently rerun GREEN from reported RED and sensitivity history. |
+| Validating observations left their expected declarations implicitly trusted | R5-01 missing/duplicate expected hashes pass despite observed-fixture coverage checks | One declaration validation path shared by CLI and assembly; independently demonstrate missing, malformed, duplicate and conflicting declaration rejection. |
+| Isolated negative tests missed interactions already prohibited by the contract | R5-02 wrong hash fails alone but loses failure when runId is removed; previous prompt explicitly required failure monotonicity | Bounded failure-kind × independent-gap-kind tests and an early-return mutation. Credit only detection, not additional test count. |
+| A compatibility exception was broader than its intended purpose | R5-03 treating absent result as a gap also suppresses a present positive failure | Check gap-only and gap-plus-failure cases separately. Debrief should distinguish the reasonable compatibility decision from its incorrect control flow. |
 
 ## Final debrief procedure
 
