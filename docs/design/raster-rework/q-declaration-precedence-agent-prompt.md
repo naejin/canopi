@@ -1,10 +1,10 @@
 # Q declaration validation and verdict precedence — agent prompt
 
-Status: retired — delivered in the declaration/precedence repair; retained as debrief evidence, not execution authority. Implementation is recorded in the [repair receipt](q-declaration-precedence-receipt.md) and awaits independent verification. Do not re-execute this prompt.
+Status: retired — R5 reproductions independently fixed; complete admission remains blocked. Retained as debrief evidence, not execution authority. See the [repair receipt](q-declaration-precedence-receipt.md); do not re-execute this prompt.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [review/debrief](review-and-debrief.md), [repository contract](../../../AGENTS.md).
 
-This prompt authorized only the repair below. It superseded the [admission completeness prompt](q-admission-completeness-agent-prompt.md). Q remains unqualified; N1 must not start. See the [receipt](q-declaration-precedence-receipt.md) for the measured outcome.
+This prompt authorized only the historical repair below. The [consolidated prompt](q-consolidated-agent-prompt.md) now owns the next assignment; do not accumulate this prompt's instructions as a parallel checklist. Q remains unqualified; N1 must not start. See the [receipt](q-declaration-precedence-receipt.md) for verified R5 fixes and remaining gate limitations.
 
 ## Start, ownership and retained work
 

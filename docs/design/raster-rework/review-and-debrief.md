@@ -2,9 +2,11 @@
 
 Status: evidence — six implementation handoffs reviewed; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [implementation plan](../raster-data-analysis-rework.md), [declaration/precedence receipt](q-declaration-precedence-receipt.md), and [delivery workflow](../../workflow/delivery.md).
+Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated prompt](q-consolidated-agent-prompt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
+
+Current disposition: the exact R5 reproductions are independently fixed, but admission as a whole is not accepted. See the [consolidated review](q-consolidated-admission-review.md) for C1–C8. The user approved consolidating review and using one stable matrix to reduce corrective handoff cycles. Do not interpret older blanket “not accepted” dispositions as rejection of every successful repair.
 
 Retain the user-requested basis for a final debrief without confusing agent claims with accepted results. References below identify the reviewed revisions; local file links identify the relevant code but may move as repairs land. Use `git show <revision>:<path>` to recover the exact reviewed source. The current Q receipt is a living report, not an immutable history of earlier claims.
 
@@ -25,7 +27,8 @@ The reviewer inspected source and ran targeted in-memory verdict reproductions. 
 | [Admission completeness prompt](q-admission-completeness-agent-prompt.md), `c94b7c7f` | Explicit required-set coverage, run provenance and monotonic failure precedence | Executed in `50c1211e`, with delivery records through `578e3bdb`; retired. |
 | [Admission completeness receipt](q-admission-completeness-receipt.md), reviewed through `578e3bdb` | 168 tests, ten reported sensitivity checks and captured cycle excerpts; existing evidence twelve-inconclusive | All 168 tests and docs/diff checks independently pass. Repair not accepted: R5 findings below. Private evidence reconciliation and sensitivity mutations not independently rerun. |
 | [Declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), `35c6166b` | Validate both declarations and observations; test independent failure/gap combinations | Executed in the declaration/precedence repair; prompt retired. |
-| [Declaration/precedence receipt](q-declaration-precedence-receipt.md), delivered from `35c6166b` | One validated declaration path for CLI and assembly; gap-based early return removed; findings read independently of `result`; 209 tests, four reported sensitivity probes and captured cycle excerpts; existing evidence twelve-inconclusive | Implementer report. Not yet independently reviewed: R5 repairs are implemented, pending verification. Private evidence reconciliation and the sensitivity probes were not independently rerun. |
+| [Declaration/precedence receipt](q-declaration-precedence-receipt.md), reviewed at `5becb043` | One validated declaration path for CLI and assembly; gap-based early return removed; findings read independently of `result`; 209 tests, four reported sensitivity probes and captured cycle excerpts; existing evidence twelve-inconclusive | Exact R5 reproductions independently fixed; retain those repairs. Full admission remains blocked by consolidated C1–C8 findings. Private reconciliation and sensitivity mutations not independently rerun. |
+| [Consolidated review](q-consolidated-admission-review.md) and [prompt](q-consolidated-agent-prompt.md) | User-approved change from example-by-example handoffs to one stable acceptance matrix and adversarial self-review | Review completed without harness changes. Execution remains separate; Q and N1 gates unchanged. |
 
 ## R5 repair report
 
@@ -162,6 +165,16 @@ The latest receipt includes a linked trimmed cycle log, an improvement over earl
 | Validating observations left their expected declarations implicitly trusted | R5-01 missing/duplicate expected hashes pass despite observed-fixture coverage checks | One declaration validation path shared by CLI and assembly; independently demonstrate missing, malformed, duplicate and conflicting declaration rejection. |
 | Isolated negative tests missed interactions already prohibited by the contract | R5-02 wrong hash fails alone but loses failure when runId is removed; previous prompt explicitly required failure monotonicity | Bounded failure-kind × independent-gap-kind tests and an early-return mutation. Credit only detection, not additional test count. |
 | A compatibility exception was broader than its intended purpose | R5-03 treating absent result as a gap also suppresses a present positive failure | Check gap-only and gap-plus-failure cases separately. Debrief should distinguish the reasonable compatibility decision from its incorrect control flow. |
+
+## Consolidated-cycle methodology decision
+
+The preceding workflow generated repeated small repair/review round trips. Reviewer contribution: stopping after a few counterexamples and writing a narrow next prompt left adjacent boundaries unaudited, including direct gate ingestion and final runner routing. Implementer contribution: isolated green examples and local sensitivity checks did not establish a complete input contract or cross-layer invariants. These observations concern this workflow; model capability, cost and settings remain unmeasured.
+
+The new cycle has one [input/acceptance matrix](q-admission-acceptance.md), one [execution prompt](q-consolidated-agent-prompt.md) and one future implementation receipt. The consolidated review identifies confirmed counterexamples separately from source-traced paths and unmeasured engine capabilities. Preserve verified R5 repairs; require a full adversarial self-review through the CLI before delivery. Block only false eligibility, lost known failures, invalid rejection of a valid control, broken diagnostics and qualification bypass. File warning cleanup and optional restructuring separately.
+
+Debrief this intervention using evidence: matrix rows actually exercised, counterexamples found by self-review versus independent review, materially new blockers after delivery, repeated findings tied to previously explicit instructions, and actual logged time/rework when available. Increased test count, longer prompts and skill-name lists are not success metrics. A later review may still find a defect; require it to identify the violated matrix invariant or justify a scope change rather than silently extending the assignment.
+
+Latest independent checks at `5becb043`: 209 tests pass with TemporaryDirectory warnings; docs validation passes. R5 controls preserve expected outcomes. New reproduction families and their code entry points are recorded once in the consolidated review, not duplicated in a new chronological task list here. No private qualification experiments or production changes occurred during this review.
 
 ## Final debrief procedure
 

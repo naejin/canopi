@@ -1,9 +1,13 @@
 # Q declaration validation and precedence repair — implementation receipt
 
-Status: evidence — **implemented, pending independent verification**. Q remains unqualified.
+Status: evidence — R5 reproductions independently verified fixed; complete admission gate not accepted. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+Current guidance: [consolidated prompt](q-consolidated-agent-prompt.md), [stable acceptance contract](q-admission-acceptance.md), [review and debrief record](review-and-debrief.md).
 Captured cycle evidence: [q-declaration-precedence-cycles.txt](evidence/q-declaration-precedence-cycles.txt).
+
+## Independent review disposition
+
+Reviewed `9fea1931` through `5becb043`: the previously reproduced R5 missing/duplicate declaration and failure-plus-gap cases now behave correctly, and those repairs are retained as verified. All 209 tests and documentation checks pass independently. The complete gate remains blocked by strict-value/container defects and the broader [consolidated review](q-consolidated-admission-review.md), including direct gate/runner bypass and incomplete quantitative evidence reductions. The remainder preserves implementer-reported execution history; private evidence reconciliation and sensitivity mutations were not independently rerun. Acceptance of individual repairs is distinct from acceptance of admission or Q.
 
 This receipt covers a bounded repair of the three R5 findings in the review record. It adds no
 engine, transport, worker, decoder, slope, preparation or publication implementation; runs no

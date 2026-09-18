@@ -6,10 +6,13 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Next step: independent review of the [declaration/precedence repair](q-declaration-precedence-receipt.md) delivered on the `feature/raster-html-references` stack. Independent review of `50c1211e` through `578e3bdb` reproduced invalid declarations passing and provenance/result gaps hiding failures, despite all 168 tests passing; that repair is implemented and now awaits verification. This is gate repair only: no new qualification experiments, engine selection or N1. See the review record rather than inferring qualification from test counts.
+Next handoff: [consolidated admission repair](q-consolidated-agent-prompt.md), governed by one [stable acceptance matrix](q-admission-acceptance.md). The [consolidated review](q-consolidated-admission-review.md) records retained verified R5 fixes and remaining blockers across the whole input-to-CLI path. No new qualification experiments, engine selection or N1 are authorized. Older prompts are historical evidence, not accumulating execution instructions.
 
 | Artifact | Purpose |
 | --- | --- |
+| [Consolidated agent prompt](q-consolidated-agent-prompt.md) | Current execution handoff, including adversarial self-review and bounded stop rules |
+| [Stable admission acceptance contract](q-admission-acceptance.md) | Single C1–C8 input/behavior/test matrix and blocker-versus-follow-up policy |
+| [Consolidated admission review](q-consolidated-admission-review.md) | Revision-linked reproductions, reviewed boundaries, retained repairs and evidence limits |
 | [Implementation plan](../raster-data-analysis-rework.md) | Scope, approved UI references, slice dependencies, contracts and qualification gates |
 | [Current Q receipt](../raster-qualification-q.md) | Living agent-reported evidence; historical versions are recoverable at `fd86de68` and `cfbb0c35`. Not independent acceptance. |
 | [Q correction prompt](q-correction-agent-prompt.md) | Retired first corrective handoff, executed in `cfbb0c35`; retained for comparison |
@@ -19,7 +22,7 @@ Next step: independent review of the [declaration/precedence repair](q-declarati
 | [Q admission completeness prompt](q-admission-completeness-agent-prompt.md) | Retired handoff delivered in `50c1211e`; independent review requires further repair |
 | [Q admission completeness receipt](q-admission-completeness-receipt.md) | Implementer report and captured cycle excerpts; not independent acceptance |
 | [Q declaration/precedence prompt](q-declaration-precedence-agent-prompt.md) | Retired handoff delivered in the declaration/precedence repair; retained as debrief evidence |
-| [Q declaration/precedence receipt](q-declaration-precedence-receipt.md) | Implementer report for the R5-01–R5-03 repair, 209 tests and captured cycle/sensitivity excerpts; implemented, pending independent verification |
+| [Q declaration/precedence receipt](q-declaration-precedence-receipt.md) | R5 reproductions independently fixed; complete gate still blocked by consolidated findings |
 | [Q declaration/precedence cycles](evidence/q-declaration-precedence-cycles.txt) | Captured RED/GREEN, guard-removal sensitivity and read-only evidence reconciliation for that repair |
 | [Review and debrief record](review-and-debrief.md) | Revision-linked findings, reproduced false passes, known evidence limits, process hypotheses and final debrief procedure |
 | [GeoLibre reuse inventory](geolibre-reuse-inventory.md) | Modules inspected at the pinned revision and the reuse/adapt/reject decision for each |
@@ -28,3 +31,5 @@ Next step: independent review of the [declaration/precedence repair](q-declarati
 For the debrief, compare requested assertions with the implementation actually measured, machine-readable verdicts, review findings and subsequent corrections. Separate missing instructions from failures to follow explicit instructions; do not infer a general model limitation from one run. Tie conclusions to commits, commands and regression tests rather than conversational impressions.
 
 When a handoff is completed or superseded, mark it retired and link its outcome. Retain it as user-requested debrief evidence, not live execution authority. Promote validated, reusable lessons into tests, tooling or operating guides; do not create a parallel Markdown task tracker here.
+
+For the consolidated cycle, update the acceptance matrix and one receipt in place. Preserve row IDs and record material scope changes explicitly. Do not create another prompt for each defect within the agreed boundary. Cosmetic and optional hardening findings are separate follow-ups; they do not reopen verified repairs.
