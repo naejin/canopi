@@ -2,14 +2,23 @@
 
 Status: evidence — **Q is not qualified.** Experiment subtest results are recorded below, but
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
-and the current gate verdict is `inconclusive` for all twelve requirements. Ten passing subcommand
-names are not a qualification.
+and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
+Independent review found further gate defects; that distribution is not independently accepted.
+The [TypeScript replacement](raster-rework/q-typescript-agent-prompt.md) is the next handoff.
+Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
 Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edition-development.md),
 [GeoLibre reuse inventory](raster-rework/geolibre-reuse-inventory.md),
+[TypeScript decision-path receipt](raster-rework/q-typescript-receipt.md),
 [consolidated repair receipt](raster-rework/q-consolidated-repair-receipt.md),
 [acceptance contract](raster-rework/q-admission-acceptance.md).
+
+The qualification decision path is now TypeScript under `scripts/raster-qualification/ts/`. It
+recomputes admission and verdicts from raw report and declaration bytes and reproduces the recorded
+verdicts below for the existing evidence. The Python evaluator is frozen for comparison and is no
+longer the authority; its historical reconciliation is retained in the
+[consolidated repair receipt](raster-rework/q-consolidated-repair-receipt.md).
 
 ## Eligibility summary (read this first)
 

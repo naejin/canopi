@@ -82,21 +82,45 @@ fi
 exit "${STUB_STATUS:-0}"
 STUB
   chmod +x "$dir/stub.sh"
+
+  # The decision stub records its own invocation so the test can prove the runner
+  # really invoked the TypeScript path with the assembled report directory.
+  cat > "$dir/decision.mjs" <<'DECISION'
+#!/usr/bin/env node
+import { appendFileSync, writeFileSync } from 'node:fs';
+const argv = process.argv.slice(2);
+appendFileSync(process.env.STUB_LOG, `decision: ${argv.join(' ')}\n`);
+const outIndex = argv.indexOf('--out');
+const out = outIndex === -1 ? '' : argv[outIndex + 1];
+if (out && out.length > 0) {
+  writeFileSync(out, `${JSON.stringify({
+    version: 1,
+    verdict: process.env.STUB_GATE_RESULT ?? 'pass',
+    requirements: [],
+  }, null, 2)}\n`);
+}
+process.exit(Number.parseInt(process.env.STUB_GATE_STATUS ?? '0', 10));
+DECISION
+  chmod +x "$dir/decision.mjs"
 }
 
 # ``gate_status`` is the eligibility decision the gate step reports, kept separate
 # from ``status`` (a step failure) because the two are different findings.
+# The decision step is a Node CLI, so the runner is exercised with two stubs: a
+# shell stub for the Python producers and a Node stub for the TypeScript decision.
 run_runner() {
   local scratch="$1" status="$2" summary="$3" no_summary="${4:-0}"
   local gate_status="${5:-0}" gate_result="${6:-pass}"
   local stubdir="$scratch/stub"
   make_stub_dir "$stubdir"
   mkdir -p "$scratch/out"
-  # One interpreter for both node and python roles: the runner's behaviour under
-  # test is its exit handling, not which interpreter it invokes.
   (
     export QUAL_PY="$stubdir/stub.sh"
     export QUAL_NODE="$stubdir/stub.sh"
+    # A compiler stub that succeeds without compiling: this suite tests exit
+    # handling, not the build. The real build is covered by the TypeScript tests.
+    export QUAL_TSC="$stubdir/stub.sh"
+    export QUAL_NODE_BIN="$stubdir/decision.mjs"
     export STUB_STATUS="$status"
     export STUB_SUMMARY_RESULT="$summary"
     export STUB_LOG="$scratch/calls.log"
@@ -115,18 +139,25 @@ echo "=== runner exit handling ==="
 scratch=$(mktemp -d)
 status=$(run_runner "$scratch" 0 pass 0 0 pass)
 check "all steps succeed and the gate passes" 0 "$status"
-if grep -q "q-bundle.json" "$scratch/calls.log"; then
-  echo "ok   - the runner assembled an evidence bundle"
+if grep -q -- "decision: .*--reports .*out" "$scratch/calls.log"; then
+  echo "ok   - the runner invoked the decision path over the report directory"
   PASS=$((PASS + 1))
 else
-  echo "FAIL - the runner never assembled a bundle"
+  echo "FAIL - the runner never invoked the decision path"
   FAIL=$((FAIL + 1))
 fi
-if grep -q -- "--bundle .*q-bundle.json" "$scratch/calls.log"; then
-  echo "ok   - the runner gated the bundle it assembled"
+if grep -q -- "--contract scripts/raster-qualification/requirements.json" "$scratch/calls.log"; then
+  echo "ok   - the decision path was given the authoritative contract"
   PASS=$((PASS + 1))
 else
-  echo "FAIL - the runner never invoked the gate"
+  echo "FAIL - the decision path was not given the contract"
+  FAIL=$((FAIL + 1))
+fi
+if [ -f "$scratch/out/q-decision.json" ]; then
+  echo "ok   - a decision document was written"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - no decision document was written"
   FAIL=$((FAIL + 1))
 fi
 rm -rf "$scratch"
@@ -158,11 +189,11 @@ rm -rf "$scratch"
 scratch=$(mktemp -d)
 status=$(run_runner "$scratch" 0 pass 0 1 inconclusive)
 check "ineligible gate exits non-zero despite a passing experiment set" 1 "$status"
-if grep -q "gate" "$scratch/calls.log"; then
-  echo "ok   - the gate was the deciding step"
+if grep -q "decision:" "$scratch/calls.log"; then
+  echo "ok   - the decision path was the deciding step"
   PASS=$((PASS + 1))
 else
-  echo "FAIL - the gate was never invoked"
+  echo "FAIL - the decision path was never invoked"
   FAIL=$((FAIL + 1))
 fi
 rm -rf "$scratch"

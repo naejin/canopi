@@ -24,6 +24,12 @@ QUAL_NODE="${QUAL_NODE:-node}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+# The decision path is TypeScript. The compiler and runtime are the ones already
+# installed for desktop/web; no dependency is added for this tool. Resolved from
+# the repository root rather than the caller's working directory.
+QUAL_TSC="${QUAL_TSC:-$ROOT/desktop/web/node_modules/.bin/tsc}"
+QUAL_NODE_BIN="${QUAL_NODE_BIN:-node}"
+
 SCRATCH="${1:-$ROOT/.rq-scratch}"
 BENCH="$SCRATCH/bench"
 FX="$SCRATCH/fx"
@@ -196,25 +202,27 @@ print(f"=== experiment aggregate: {result} ===")
 PY
 
 # The experiment aggregate summarises what the probes measured. Eligibility is
-# decided by the requirement contract, so the run ends at the gate: assemble a
-# bundle from the same reports and let `measure.py gate` decide the exit status.
-# Without this step a run could finish successfully without ever asking whether
-# the collected evidence satisfies Q.
-echo "=== admission gate ==="
-step "step20" "$QUAL_PY" scripts/raster-qualification/measure.py gate-assemble \
-  --reports "$OUT" \
-  --host "${QUAL_HOST:-chromium}" \
-  ${QUAL_FIXTURE_MANIFEST:+--fixture-manifest "$QUAL_FIXTURE_MANIFEST"} \
-  --out "$OUT/q-bundle.json"
+# decided by the requirement contract, so the run ends at the TypeScript decision
+# path: it reads the raw reports and declarations directly and recomputes admission
+# and verdicts. Without this step a run could finish successfully without ever
+# asking whether the collected evidence satisfies Q.
+#
+# The measurement steps above remain Python producers and are labelled as legacy.
+# No Python runs anywhere in this decision step.
+echo "=== admission gate (TypeScript decision path) ==="
+if [ "${QUAL_SKIP_TS_BUILD:-0}" != "1" ]; then
+  step "step20" "$QUAL_TSC" -p scripts/raster-qualification/ts/tsconfig.json
+fi
 
 if [ "${#FAILED[@]}" -gt 0 ]; then
   echo "=== qualification run failed: ${#FAILED[@]} step(s): ${FAILED[*]} ===" >&2
   exit 1
 fi
-if [ ! -f "$OUT/q-bundle.json" ]; then
-  echo "=== qualification run failed: no evidence bundle was assembled ===" >&2
-  exit 1
-fi
-"${QUAL_PY}" scripts/raster-qualification/measure.py gate \
-  --bundle "$OUT/q-bundle.json" --out "$OUT/q-decision.json"
+
+"$QUAL_NODE_BIN" scripts/raster-qualification/ts/dist/src/cli.js \
+  --reports "$OUT" \
+  --contract scripts/raster-qualification/requirements.json \
+  --pins scripts/raster-qualification/candidates.json \
+  ${QUAL_FIXTURE_MANIFEST:+--fixture-manifest "$QUAL_FIXTURE_MANIFEST"} \
+  --out "$OUT/q-decision.json"
 exit $?

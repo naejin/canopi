@@ -1,10 +1,12 @@
 # Consolidated qualification admission repair — agent prompt
 
-Status: retired — delivered in the consolidated admission repair; retained as debrief evidence, not execution authority. Implementation is recorded in the [consolidated repair receipt](q-consolidated-repair-receipt.md) and awaits independent verification. Do not re-execute this prompt. The [acceptance contract](q-admission-acceptance.md) is unchanged and remains the basis for review.
+Status: retired — delivered in the consolidated admission repair; retained as debrief evidence, not execution authority. Independent review found remaining blockers; see the [review/debrief](review-and-debrief.md) and [TypeScript replacement prompt](q-typescript-agent-prompt.md). Do not re-execute this prompt. The [acceptance contract](q-admission-acceptance.md) remains the behavioral basis for review.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
 Current guidance: [stable acceptance contract](q-admission-acceptance.md), [review evidence](q-consolidated-admission-review.md), [scientific plan](../raster-data-analysis-rework.md).
 
 ## Assignment
+
+Superseded by the [TypeScript replacement handoff](q-typescript-agent-prompt.md). Independent review at `3a7ec9eb` found remaining C5/C6/C8 defects; do not resume Python repairs under this retired assignment. Its constraints below are historical.
 
 Repair the complete admission-to-CLI decision path against **C1–C8 in the linked acceptance contract**. That is the acceptance matrix; do not treat retired prompts as accumulating additional assignments. Preserve the independently verified R5 fixes. Stop for independent review after this repair; Q stays open/unqualified and N1 unstarted.
 

@@ -1,12 +1,36 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — seven implementation handoffs reviewed; final methodology conclusions pending.
+Status: evidence — seven implementation handoffs reviewed, plus one migration slice delivered; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated repair receipt](q-consolidated-repair-receipt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
 
-Current disposition: the exact R5 reproductions are independently fixed and retained, and the consolidated C1–C8 repair is **implemented, pending independent verification** ([receipt](q-consolidated-repair-receipt.md)). The [consolidated review](q-consolidated-admission-review.md) records the C1–C8 blockers that repair addresses. The user approved consolidating review and using one stable matrix to reduce corrective handoff cycles. Do not interpret older blanket “not accepted” dispositions as rejection of every successful repair.
+Current disposition: preserve the independently verified R5 behaviors. Review at `3a7ec9eb` found remaining C5/C6/C8 blockers in the consolidated repair. The user selected TypeScript for qualification tooling and Rust for native operations; the [next prompt](q-typescript-agent-prompt.md) scopes the decision-path replacement. No migration code or new experiment is authorized by this documentation update. The stable matrix remains the acceptance boundary; older prompts are not cumulative assignments.
+
+## Consolidated independent review and migration baseline
+
+At `3a7ec9eb` the reviewer independently ran 261 Python tests, 13/13 stub-runner checks, documentation validation and diff checks successfully. Small in-memory controls through the real assembler/evaluator nevertheless reproduced:
+
+| Contract | Starting control and perturbation | Observed defect |
+| --- | --- | --- |
+| C6 | `passing_evidence()` with admission labels but no supporting declarations/provenance | Overall pass through the public evaluator |
+| C6/C8 | Set an entry's admission verdict to fail and `sourceAdmitted` to true | Requirement still passes |
+| C2/C6 | NaN bundle generation time; separately, unadmitted entry with list-valued `observed` | NaN passes; list causes `AttributeError` |
+| C5 | Passing candidate run split into two records, one lacking queue depth and the other active reads | Incomplete records combine into a passing resource requirement |
+| C5 | Append a second otherwise complete candidate run with 900 ms sampling after a 100 ms control | Resource requirement passes using first-record sampling |
+
+Reproduction entry points at that revision: `test_qualification_gate.passing_evidence`, `passing_reports`, `assembly`, `qualification_evidence.assemble`, and `qualification_gate.evaluate`. The reviewer intercepted fixture filesystem access in memory, not admission/verdict logic. No private evidence or engine experiments were rerun. The implementation's fourteen sensitivity probes and private one-fail/eleven-inconclusive reconciliation were not independently rerun. These findings do not invalidate every repaired case; they prevent acceptance of the complete boundary.
+
+### Final debrief evidence to collect
+
+The migration is a user-selected maintenance direction, not proof that Python caused the defects. Testable hypotheses: independently specified valid controls, one parsing/reduction path and per-run reductions will reduce escaped false passes; reuse of the existing TypeScript toolchain will reduce tooling fragmentation. A language port without those changes may preserve the defects.
+
+For the TypeScript receipt, record baseline/final source and test size, direct dependencies, number of authoritative evaluator entry points, contract assertions with traceable positive evidence or explicit gaps, independent-review rounds and escaped invariant failures. Record elapsed effort/cost only if measured; do not infer it from test count or model names. Retain exact commands and sanitized RED/GREEN, mutation and CLI counterexamples. Track implementation work in bd, not this table.
+
+At final debrief, distinguish requirement omissions, implementation violations, fixture/oracle defects and reviewer coverage gaps. The reviewer also contributed to earlier back-and-forth by reviewing narrow examples rather than the complete boundary. Compare whether the stable matrix reduced handoffs, not just whether the test count rose. The implementer's reported aspirational evidence map (32 of 42 prefixes absent before correction) is a provenance lesson: name coverage is not semantic adequacy. Audit mappings against actual producer observations.
+
+Promote only demonstrated improvements into regression tests/tooling or existing operating guides. No skill changes are authorized by this handoff. Retire the replacement prompt after delivery; preserve one migration receipt with measured outcomes and independent disposition. Do not declare the approach successful until independent acceptance, and do not confuse harness acceptance with Q qualification.
 
 Retain the user-requested basis for a final debrief without confusing agent claims with accepted results. References below identify the reviewed revisions; local file links identify the relevant code but may move as repairs land. Use `git show <revision>:<path>` to recover the exact reviewed source. The current Q receipt is a living report, not an immutable history of earlier claims.
 
@@ -28,7 +52,32 @@ The reviewer inspected source and ran targeted in-memory verdict reproductions. 
 | [Admission completeness receipt](q-admission-completeness-receipt.md), reviewed through `578e3bdb` | 168 tests, ten reported sensitivity checks and captured cycle excerpts; existing evidence twelve-inconclusive | All 168 tests and docs/diff checks independently pass. Repair not accepted: R5 findings below. Private evidence reconciliation and sensitivity mutations not independently rerun. |
 | [Declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), `35c6166b` | Validate both declarations and observations; test independent failure/gap combinations | Executed in the declaration/precedence repair; prompt retired. |
 | [Declaration/precedence receipt](q-declaration-precedence-receipt.md), reviewed at `5becb043` | One validated declaration path for CLI and assembly; gap-based early return removed; findings read independently of `result`; 209 tests, four reported sensitivity probes and captured cycle excerpts; existing evidence twelve-inconclusive | Exact R5 reproductions independently fixed; retain those repairs. Full admission remained blocked by consolidated C1–C8 findings. Private reconciliation and sensitivity mutations not independently rerun. |
-| [Consolidated repair receipt](q-consolidated-repair-receipt.md), delivered from `29789fe5` | C1–C8 repaired across admission, requirement mapping, bundle gate, CLI and runner; 261 tests, fourteen sensitivity probes, a 33-case adversarial self-review; existing evidence one fail and eleven inconclusive | Implementer report. Not yet independently reviewed.
+| [Consolidated repair receipt](q-consolidated-repair-receipt.md), reviewed at `3a7ec9eb` | C1–C8 repaired; 261 tests, sensitivity probes and adversarial self-review; existing evidence one fail and eleven inconclusive | Tests and stub runner independently pass, but C5/C6/C8 counterexamples above remain. Complete gate not accepted. Superseded as the qualification authority by the TypeScript decision path. |
+| [TypeScript migration receipt](q-typescript-receipt.md), delivered from `3a7ec9eb` | Decision path replaced in TypeScript: 2,632 source lines, 74 emitted tests, no dependencies, no Python in the decision path, 10 sensitivity probes, an adversarial pass and a read-only reconciliation matching the Python baseline on all twelve requirements | Implementer report. Not yet independently reviewed. |
+
+## TypeScript decision-path migration
+
+The user selected TypeScript for qualification orchestration and Rust for native raster operations. The
+migration replaced raw-byte parsing, declaration validation, admission, requirement mapping, per-run
+reduction, the requirement verdict and the CLI exit. The Python decision path is frozen for comparison
+and is no longer the authority: the runner's final step invokes the emitted TypeScript CLI.
+
+What is claimed, and what is not:
+
+* the five review counterexamples all reproduced against the Python baseline and none against the
+  TypeScript path ([receipt](q-typescript-receipt.md));
+* this is consistent with the hypothesis that one parsing/reduction path and per-run reductions reduce
+  escaped false passes, but the TypeScript path was written knowing those counterexamples and Python
+  was not, so the comparison does not isolate language from architecture;
+* the two paths agree on all twelve requirements for the existing records. That is evidence of a
+  faithful port, not of correctness: Python is not an oracle, and no verdict distribution is
+  prescribed;
+* two sensitivity probes are reported as **zero results**, and one of them (S1d) exposed that the suite
+  checked a verdict without checking that the discarded failure was explained. Reason-preservation
+  tests were added and the re-probe bites.
+
+Remaining Python experiment orchestration, fixture/bootstrap/server and reference helpers are staged
+for separate replacement and were not touched. No Python was deleted.
 
 ## C1–C8 repair report
 
@@ -37,7 +86,7 @@ Repair code: `qualification_evidence.py`, `qualification_gate.py`, `measure.py`,
 Captured cycles, sensitivity probes, self-review cases and the read-only reconciliation are in
 [q-consolidated-repair-cycles.txt](evidence/q-consolidated-repair-cycles.txt); the row-by-row coverage
 table and the minimum-decisive-case trace are in the [receipt](q-consolidated-repair-receipt.md).
-Nothing below is independently verified.
+The table below records implementer claims and test names, not whole-family acceptance. The independent review above supersedes blanket coverage claims.
 
 | ID | Repair reported by the implementer | Check that now detects a regression |
 | --- | --- | --- |

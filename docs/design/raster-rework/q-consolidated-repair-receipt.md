@@ -1,6 +1,6 @@
 # Consolidated admission repair — implementation receipt
 
-Status: evidence — **implemented, pending independent verification**. Q remains unqualified.
+Status: evidence — implemented; independent review at `3a7ec9eb` found remaining C5/C6/C8 blockers. Q remains unqualified. The implementation claims below are historical, not independent acceptance; see [review/debrief](review-and-debrief.md) and the [replacement handoff](q-typescript-agent-prompt.md).
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, the single matrix this repair is judged against.
 Current guidance: [review evidence](q-consolidated-admission-review.md), [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md).
