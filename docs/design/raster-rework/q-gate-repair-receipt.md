@@ -79,13 +79,34 @@ inconclusive, but no Q result may be reported as cross-platform support.
 | R2-06 | Receipt deferred candidate memory/cache/queue/temp-disk, Desktop hosting and overview precedence to successors | **Repaired as a verdict.** These are recorded in the contract as Q requirements; they cannot be reassigned without an explicit decision |
 | R2-07 | Negative tests could pass for unrelated preconditions | **Repaired, pending verification.** New negative cases start from an otherwise valid passing control and assert the specific reason and requirement id |
 
+### Acceptance examples
+
+Every required acceptance example is covered by a test that starts from a valid control and changes
+one condition.
+
+| Required outcome | Test |
+| --- | --- |
+| Omit candidate RSS ⇒ inconclusive, reference cannot substitute | `test_omitting_candidate_memory_is_inconclusive_not_reference_substituted` |
+| Remove Desktop worker-host evidence ⇒ inconclusive | `test_chromium_evidence_cannot_satisfy_the_desktop_host_requirement`, `test_node_cannot_satisfy_the_desktop_host_requirement` |
+| Candidate memory over budget ⇒ fail with value and budget | `test_candidate_memory_over_budget_fails_with_values` |
+| `longTaskMaxMs: 900` ⇒ fail the 50 ms requirement | `test_900ms_long_task_fails_the_bound` |
+| Observation unsupported/missing ⇒ inconclusive | `test_unsupported_observer_is_inconclusive`, `test_missing_long_task_measurement_is_inconclusive`, `test_unrecognised_producer_field_is_inconclusive` |
+| One tile fails or `ok` false ⇒ fail | `test_one_failed_tile_fails_rendering`, `test_failed_run_does_not_count_as_rendering` |
+| Remove runs or empty list ⇒ inconclusive, runs and latencies required | `test_one_cold_and_three_warm_required`, `test_empty_runs_list_no_longer_passes` |
+| Mismatched route, artifact, fixture or environment ⇒ named mismatch | `test_artifact_version_mismatch_fails`, `test_environment_mismatch_fails_with_a_named_reason`, `test_entry_without_a_route_is_inconclusive`, `test_bundle_without_a_declared_route_fails` |
+| Mandatory lifecycle case not run ⇒ inconclusive | `test_mandatory_cases_are_inconclusive_even_when_reports_pass`, `test_missing_lifecycle_report_leaves_every_assertion_inconclusive` |
+| Negative control rejects stripped input; positive evidence still required | `Q-LOCAL-1` requires positive bounded-access evidence; the stripped rejection is recorded only as a negative control in the contract |
+| All steps succeed and aggregate qualifies ⇒ exit zero | `test_runner_exit.sh` case 1 |
+| One command or aggregate fails ⇒ non-zero with diagnostics retained | `test_runner_exit.sh` cases 2, 3, 5 |
+| Required report missing, stale, malformed or duplicated ⇒ non-pass | `test_missing_bundle_is_inconclusive`, `test_malformed_bundle_fails`, `test_stale_bundle_is_a_non_pass_with_its_age`, `test_duplicate_requirement_key_cannot_hide_a_failure` |
+
 ## Test evidence
 
 ```sh
 python3 -m unittest discover -s scripts/raster-qualification/tests -v
 ```
 
-**63 tests, all passing** (`test_qualification_gate.py`, plus the shell runner contract exercised
+**64 tests, all passing** (`test_qualification_gate.py`, plus the shell runner contract exercised
 through `test_runner_exit.py`).
 
 ### Representative RED → GREEN and sensitivity outcomes
@@ -146,7 +167,7 @@ not a qualification.
 
 | Command | Result |
 | --- | --- |
-| `python3 -m unittest discover -s scripts/raster-qualification/tests -v` | 63 passed |
+| `python3 -m unittest discover -s scripts/raster-qualification/tests -v` | 64 passed |
 | `bash scripts/raster-qualification/tests/test_runner_exit.sh` | 8 passed, 0 failed |
 | `python3 scripts/check_docs.py` | 0 errors |
 | `git diff --check` | clean |

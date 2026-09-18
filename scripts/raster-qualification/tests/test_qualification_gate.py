@@ -612,6 +612,18 @@ class TraceRunCompleteness(AssemblerTestBase):
         self.assertTrue(any("warm" in entry for entry in observed["failedRuns"]),
                         f"the failed run must be named: {observed['failedRuns']}")
 
+    def test_one_failed_tile_fails_rendering(self) -> None:
+        """Attempts are not successes: a single failed tile fails the assertion.
+
+        ``ok`` stays true here, so the failure can only come from the tile counts.
+        """
+        runs = valid_trace()["runs"]
+        runs[2] = dict(runs[2], failedTiles=1, tilesRendered=127)
+        results, _, observed = evidence.display_trace_assertions(
+            {"runs": runs}, **TRACE_LIMITS)
+        self.assertEqual(results["runs-report-successful-rendering"], evidence.FAIL)
+        self.assertTrue(any("warm" in entry for entry in observed["failedRuns"]))
+
     def test_aggregate_only_latencies_are_not_individual_evidence(self) -> None:
         runs = [dict(r, individualLatenciesMs=[]) for r in valid_trace()["runs"]]
         results, _, _ = evidence.display_trace_assertions({"runs": runs}, **TRACE_LIMITS)
