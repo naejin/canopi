@@ -556,9 +556,27 @@ def default_exit(result: str) -> int:
     return 0 if result == PASS else 1
 
 
-def write_report(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default) + "\n")
+def write_output(path: Path, text: str) -> bool:
+    """Write text to ``path``, reporting whether it could be written.
+
+    Returns ``False`` and explains the failure on stderr when the destination
+    cannot be created or written. It never raises and never claims success, so a
+    caller can exit non-zero rather than presenting an unsaved output as delivered.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    except OSError as error:
+        print(f"error: cannot write output {path}: {error}", file=sys.stderr)
+        return False
+    return True
+
+
+def write_report(path: Path, payload: dict[str, Any]) -> bool:
+    if not write_output(
+            path,
+            json.dumps(payload, indent=2, sort_keys=True, default=_json_default) + "\n"):
+        return False
     print(json.dumps({k: v for k, v in payload.items()
                       if k not in ("measurements", "assertions")},
                      indent=2, sort_keys=True, default=_json_default))

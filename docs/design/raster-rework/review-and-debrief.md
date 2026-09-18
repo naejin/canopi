@@ -1,12 +1,12 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — six implementation handoffs reviewed; final methodology conclusions pending.
+Status: evidence — seven implementation handoffs reviewed; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated prompt](q-consolidated-agent-prompt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
+Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated repair receipt](q-consolidated-repair-receipt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
 
-Current disposition: the exact R5 reproductions are independently fixed, but admission as a whole is not accepted. See the [consolidated review](q-consolidated-admission-review.md) for C1–C8. The user approved consolidating review and using one stable matrix to reduce corrective handoff cycles. Do not interpret older blanket “not accepted” dispositions as rejection of every successful repair.
+Current disposition: the exact R5 reproductions are independently fixed and retained, and the consolidated C1–C8 repair is **implemented, pending independent verification** ([receipt](q-consolidated-repair-receipt.md)). The [consolidated review](q-consolidated-admission-review.md) records the C1–C8 blockers that repair addresses. The user approved consolidating review and using one stable matrix to reduce corrective handoff cycles. Do not interpret older blanket “not accepted” dispositions as rejection of every successful repair.
 
 Retain the user-requested basis for a final debrief without confusing agent claims with accepted results. References below identify the reviewed revisions; local file links identify the relevant code but may move as repairs land. Use `git show <revision>:<path>` to recover the exact reviewed source. The current Q receipt is a living report, not an immutable history of earlier claims.
 
@@ -27,7 +27,37 @@ The reviewer inspected source and ran targeted in-memory verdict reproductions. 
 | [Admission completeness prompt](q-admission-completeness-agent-prompt.md), `c94b7c7f` | Explicit required-set coverage, run provenance and monotonic failure precedence | Executed in `50c1211e`, with delivery records through `578e3bdb`; retired. |
 | [Admission completeness receipt](q-admission-completeness-receipt.md), reviewed through `578e3bdb` | 168 tests, ten reported sensitivity checks and captured cycle excerpts; existing evidence twelve-inconclusive | All 168 tests and docs/diff checks independently pass. Repair not accepted: R5 findings below. Private evidence reconciliation and sensitivity mutations not independently rerun. |
 | [Declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), `35c6166b` | Validate both declarations and observations; test independent failure/gap combinations | Executed in the declaration/precedence repair; prompt retired. |
-| [Declaration/precedence receipt](q-declaration-precedence-receipt.md), reviewed at `5becb043` | One validated declaration path for CLI and assembly; gap-based early return removed; findings read independently of `result`; 209 tests, four reported sensitivity probes and captured cycle excerpts; existing evidence twelve-inconclusive | Exact R5 reproductions independently fixed; retain those repairs. Full admission remains blocked by consolidated C1–C8 findings. Private reconciliation and sensitivity mutations not independently rerun. |
+| [Declaration/precedence receipt](q-declaration-precedence-receipt.md), reviewed at `5becb043` | One validated declaration path for CLI and assembly; gap-based early return removed; findings read independently of `result`; 209 tests, four reported sensitivity probes and captured cycle excerpts; existing evidence twelve-inconclusive | Exact R5 reproductions independently fixed; retain those repairs. Full admission remained blocked by consolidated C1–C8 findings. Private reconciliation and sensitivity mutations not independently rerun. |
+| [Consolidated repair receipt](q-consolidated-repair-receipt.md), delivered from `29789fe5` | C1–C8 repaired across admission, requirement mapping, bundle gate, CLI and runner; 261 tests, fourteen sensitivity probes, a 33-case adversarial self-review; existing evidence one fail and eleven inconclusive | Implementer report. Not yet independently reviewed.
+
+## C1–C8 repair report
+
+Repair code: `qualification_evidence.py`, `qualification_gate.py`, `measure.py`, `qual_lib.py` and
+`run_all_experiments.sh`; tests in `tests/test_acceptance_contract.py` plus the existing suites.
+Captured cycles, sensitivity probes, self-review cases and the read-only reconciliation are in
+[q-consolidated-repair-cycles.txt](evidence/q-consolidated-repair-cycles.txt); the row-by-row coverage
+table and the minimum-decisive-case trace are in the [receipt](q-consolidated-repair-receipt.md).
+Nothing below is independently verified.
+
+| ID | Repair reported by the implementer | Check that now detects a regression |
+| --- | --- | --- |
+| C1 | Boolean-only leaves for assertion `ok` and precondition `met`; a present null is malformed while an absent key stays a gap; duplicate assertion and precondition names fail | `C1StrictLeaves` (9 wrong leaves x both leaf kinds), sensitivity probe S1 |
+| C2 | Report field container shapes validated at the parse seam; `SourceDocument.present` separates absence from corruption and preserves the reason; the unbound `art_unpinned_names` and eight `AttributeError` paths are gone; one parse per source | `C2LoaderTotality` (9 roles missing, 48 shape combinations, truncated JSON), sensitivity probe S11 |
+| C3 | Experiment and transport expectations derived from the source role, so omission blocks instead of withdrawing the comparison; the CLI declares the expected environment and transports | `C3RoleIdentity`, sensitivity probe S6 |
+| C4 | The numeric window bound is decided from recorded window sizes rather than the absence of a failure string; artifact correspondence is decided from the inventory rather than a prose note; the mapping is written down and guarded against drift | `C4AssertionEvidence`, `C4MappingDrift`, sensitivity probes S7 and S14 |
+| C5 | Plan budgets enforced per counter on sampled candidate records only; a measured budget violation outranks a missing counter; a 900 ms stall survives an unrecognised optional field | `C5QuantitativeBudgets`, `C5DisplayBudgets`, sensitivity probes S8–S10 |
+| C6 | Admission block required and shape-checked; assertion verdict types validated before membership; entry-level gaps no longer return early; a missing route cannot hide a fail | `C6AssertionVerdictTypes`, `C6AdmissionRequired`, `C6FailureOutranksGap`, sensitivity probes S3–S5 |
+| C7 | The runner assembles a bundle and exits with the requirement gate's status; the experiment summary is a labelled diagnostic; an unwritable destination exits non-zero with a clear error instead of a traceback | `test_runner_exit.sh` cases 1–7, `C7OutputFailure`, sensitivity probe S12 |
+| C8 | Four fault kinds crossed with four independent gap kinds in both orders; a measured requirement violation raises the reduced admission severity; an observed failure keeps its severity in an unadmitted entry | `C8CrossLayerInvariants`, `C8ObservedFailureSeverity`, sensitivity probe S13 |
+
+Two behaviours changed verdict deliberately and are documented rather than adjusted away: the
+recorded trace's `one-cold-and-three-warm-runs` now fails because the trace holds one cold and one
+warm run where the plan requires three warm, and an unusable record's already-recorded failure keeps
+its failure severity instead of grading down to a gap.
+
+One sensitivity probe is reported as a **zero result**: removing either of the two independent
+duplicate-name checks alone leaves the suite green because the other still refuses the duplicate.
+Removing both fails. That is recorded honestly rather than presented as coverage.
 | [Consolidated review](q-consolidated-admission-review.md) and [prompt](q-consolidated-agent-prompt.md) | User-approved change from example-by-example handoffs to one stable acceptance matrix and adversarial self-review | Review completed without harness changes. Execution remains separate; Q and N1 gates unchanged. |
 
 ## R5 repair report

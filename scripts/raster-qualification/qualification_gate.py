@@ -263,6 +263,28 @@ def _label(path: Path) -> str:
     return getattr(path, "name", str(path))
 
 
+def _is_verdict(value: Any) -> bool:
+    """Whether a value is one of the three assertion verdicts.
+
+    Checked by identity rather than membership so a container cannot raise an
+    unhashable-type error and a ``True`` cannot be mistaken for a verdict.
+    """
+    return isinstance(value, str) and value in ASSERTION_VERDICTS
+
+
+def _describe(value: Any) -> str:
+    """A short, safe description of a malformed value for a diagnostic reason."""
+    if isinstance(value, str):
+        return f"the string {value!r}"
+    if isinstance(value, bool):
+        return f"the boolean {value}"
+    if isinstance(value, (int, float)):
+        return f"the number {value!r}"
+    if isinstance(value, (list, dict)):
+        return f"a {type(value).__name__}"
+    return f"{type(value).__name__} {value!r}"
+
+
 def _duplicate_requirement_keys(text: str) -> list[str]:
     """Requirement keys that appear more than once under the bundle's requirements.
 
@@ -369,6 +391,41 @@ def _bundle_corruption(payload: dict[str, Any], entries: dict[str, Any],
     return problems
 
 
+def _admission_problems(admission: Any) -> list[str]:
+    """Why an entry's admission block cannot be used, if it cannot be.
+
+    Returns an empty list only for a block the gate may read. The block is
+    required: the assembler always writes one, so its absence means the bundle did
+    not come from the admission path, and reading its assertions anyway would make
+    direct ingestion a weaker path than assembly.
+    """
+    if admission is None:
+        return ["evidence carries no admission block, so its source was never "
+                "admitted and its observations cannot be promoted"]
+    if not isinstance(admission, dict):
+        return [f"evidence admission block is {_describe(admission)}, not an object"]
+    if "verdict" not in admission:
+        return ["evidence admission block records no verdict, so the source's "
+                "admission state is unknown"]
+    verdict = admission.get("verdict")
+    if not _is_verdict(verdict):
+        if verdict is None:
+            return ["evidence admission block records a null verdict, which is "
+                    "not an admission state"]
+        return [f"evidence admission block records {_describe(verdict)}, which is "
+                f"not one of {sorted(ASSERTION_VERDICTS)}"]
+    reasons = admission.get("reasons")
+    if reasons is None:
+        return ["evidence admission block records no reasons list"]
+    if not isinstance(reasons, list):
+        return [f"evidence admission reasons are {_describe(reasons)}, not a list"]
+    for index, reason in enumerate(reasons):
+        if not isinstance(reason, str):
+            return [f"evidence admission reason {index} is "
+                    f"{_describe(reason)}, not text"]
+    return []
+
+
 def _entry_problems(requirement_id: str, entry: dict[str, Any]) -> list[str]:
     """Defects confined to one entry.
 
@@ -448,15 +505,17 @@ def evaluate(contract: Contract, bundle_path: Path, *,
             verdicts.append(result)
             continue
 
+        # Entry-level identity gaps. They are recorded, not returned on: a missing
+        # route and a measured failure are independent findings, and reducing at
+        # the first gap would drop a failure the gate never looked for. The gaps
+        # are applied once, at the end, under the contract's precedence.
+        entry_gaps: list[str] = []
         missing = [name for name in REQUIRED_EVIDENCE_FIELDS if not entry.get(name)]
         result.missing_evidence_fields = missing
         local = _entry_problems(requirement.id, entry)
-        if missing or local:
-            result.reasons.append(
-                ("evidence does not identify " + ", ".join(missing)) if missing
-                else "; ".join(local))
-            verdicts.append(result)
-            continue
+        if missing:
+            entry_gaps.append("evidence does not identify " + ", ".join(missing))
+        entry_gaps.extend(local)
 
         # Host-scoped requirements declare which hosts can satisfy them.
         rules = requirement.host_evidence_rules or {}
@@ -475,55 +534,100 @@ def evaluate(contract: Contract, bundle_path: Path, *,
         # carry the requirement, but they stay recorded so partial measured
         # successes remain visible.
         admission = entry.get("admission")
-        if admission is not None:
-            result.admission = admission if isinstance(admission, dict) else {}
-            admitted_verdict = (admission or {}).get("verdict") \
-                if isinstance(admission, dict) else None
-            admission_reasons = list((admission or {}).get("reasons") or []) \
-                if isinstance(admission, dict) else []
-            if admitted_verdict not in (None, PASS):
-                result.verdict = FAIL if admitted_verdict == FAIL else INCONCLUSIVE
-                result.reasons.extend(
-                    admission_reasons or [f"{requirement.id} source was not admitted"])
-                # Carry the source's own explanatory detail so a reader can trace
-                # which identity conflicted and with what value.
-                observations = entry.get("observations")
-                if isinstance(observations, dict):
-                    for note in observations.get("notes") or []:
-                        if note and note not in result.reasons:
-                            result.reasons.append(str(note))
-                # Partial measured successes stay visible for review, in their own
-                # field. They are deliberately not promoted into `assertions`,
-                # because the requirement verdict is already blocked and a reader
-                # must not mistake them for satisfying evidence.
-                observed = entry.get("observed")
-                if isinstance(observed, dict):
-                    result.observed_assertions = {
-                        key: value for key, value in observed.items()
-                        if value in ASSERTION_VERDICTS}
-                verdicts.append(result)
-                continue
+        admission_problems = _admission_problems(admission)
+        if admission_problems:
+            result.verdict = FAIL
+            result.reasons.extend(admission_problems)
+            verdicts.append(result)
+            continue
+
+        result.admission = admission
+        admitted_verdict = admission["verdict"]
+        admission_reasons = [str(reason) for reason in admission["reasons"]]
+        # Whether the *source* may contribute is a separate question from whether
+        # the requirement is satisfied. ``sourceAdmitted`` records the former; a
+        # record whose source was usable but whose measured assertion failed must
+        # keep those assertions as the requirement's result rather than filing them
+        # away as unusable partial evidence.
+        source_admitted = admission.get("sourceAdmitted")
+        if source_admitted is None:
+            source_admitted = admitted_verdict == PASS
+        if not source_admitted:
+            # An unadmitted source cannot carry a requirement, but the findings it
+            # already recorded keep their own severity. A measured violation in an
+            # unusable record is still a measured violation, and a failure must not
+            # be graded down to a gap because the record that contains it is also
+            # incomplete.
+            observed_assertion_failures = sorted(
+                key for key, value in (entry.get("observed") or {}).items()
+                if _is_verdict(value) and value == FAIL)
+            if admitted_verdict == FAIL or observed_assertion_failures:
+                result.verdict = FAIL
+            else:
+                result.verdict = INCONCLUSIVE
+            result.reasons.extend(
+                admission_reasons or [f"{requirement.id} source was not admitted"])
+            result.reasons.extend(
+                f"assertion {assertion_id} failed" for assertion_id
+                in observed_assertion_failures)
+            # Carry the source's own explanatory detail so a reader can trace
+            # which identity conflicted and with what value.
+            observations = entry.get("observations")
+            if isinstance(observations, dict):
+                for note in observations.get("notes") or []:
+                    if note and note not in result.reasons:
+                        result.reasons.append(str(note))
+            # Partial measured successes stay visible for review, in their own
+            # field. They are deliberately not promoted into `assertions`,
+            # because the requirement verdict is already blocked and a reader
+            # must not mistake them for satisfying evidence.
+            observed = entry.get("observed")
+            if isinstance(observed, dict):
+                result.observed_assertions = {
+                    key: value for key, value in observed.items()
+                    if _is_verdict(value)}
+            verdicts.append(result)
+            continue
 
         declared = entry.get("assertions")
         if declared is None:
-            # No observation was promoted at all, so nothing was measured.
+            # No observation was promoted at all, so nothing was measured. The
+            # entry's own identity gaps still explain why.
             result.verdict = INCONCLUSIVE
             result.reasons.append(
                 f"{requirement.id} has no promoted observations")
+            result.reasons.extend(entry_gaps)
             verdicts.append(result)
             continue
         if not isinstance(declared, dict):
             result.verdict = FAIL
             result.reasons.append(f"{requirement.id} assertions are malformed")
+            result.reasons.extend(entry_gaps)
             verdicts.append(result)
             continue
 
         assertion_verdicts: list[str] = []
         for assertion_id in requirement.assertions:
             value = declared.get(assertion_id)
-            if value not in ASSERTION_VERDICTS:
-                value = INCONCLUSIVE
+            if value is None and assertion_id not in declared:
+                # Absent: no evidence was recorded for this assertion.
                 result.reasons.append(f"assertion {assertion_id} has no result")
+                value = INCONCLUSIVE
+            elif value is None:
+                # Present but explicitly null. The documented schema does not
+                # permit null as "unavailable" for a verdict slot, so this is
+                # malformed input rather than an absence.
+                result.reasons.append(
+                    f"assertion {assertion_id} is null, which is not a verdict")
+                value = FAIL
+            elif not _is_verdict(value):
+                # Checked by identity before membership: a container value is
+                # unhashable, and reading it as "no result" would turn malformed
+                # input into a gap instead of a diagnostic failure.
+                result.reasons.append(
+                    f"assertion {assertion_id} carries {_describe(value)}, which is "
+                    f"not one of {sorted(ASSERTION_VERDICTS)}")
+                value = FAIL
             result.assertions[assertion_id] = value
             assertion_verdicts.append(value)
 
@@ -531,7 +635,11 @@ def evaluate(contract: Contract, bundle_path: Path, *,
             if value == FAIL:
                 result.reasons.append(f"assertion {assertion_id} failed")
 
-        combined = _combine(assertion_verdicts)
+        # Identity gaps and assertion verdicts are reduced together: a recorded
+        # failure outranks any gap, and a gap outranks a pass.
+        combined = _combine(assertion_verdicts + [INCONCLUSIVE] if entry_gaps
+                            else assertion_verdicts)
+        result.reasons.extend(entry_gaps)
         if combined == PASS and result.reasons:
             # A gap recorded alongside otherwise-passing assertions still blocks:
             # the reasons name evidence that was required and not usable.

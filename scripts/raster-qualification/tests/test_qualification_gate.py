@@ -36,6 +36,27 @@ import qualification_evidence as evidence  # noqa: E402
 CONTRACT_PATH = HARNESS / "requirements.json"
 
 
+def admitted_source(requirement_id: str, *,
+                    environment: str = "Chromium 150",
+                    verdict: str = "pass",
+                    reasons: list[str] | None = None) -> dict:
+    """The admission block a bundle entry carries for a source that was admitted.
+
+    The shape mirrors what ``qualification_evidence.admit_report`` produces, so
+    the gate is exercised against the real record rather than an invented one.
+    ``verdict`` and ``reasons`` are parameters so a test can admit on a gap or a
+    failure without rebuilding the block.
+    """
+    return {
+        "report": f"reports/{requirement_id.lower()}.json",
+        "verdict": verdict,
+        "reasons": list(reasons or []),
+        "identity": {"id": requirement_id, "environment": environment},
+        "positiveFailures": [],
+        "negativeControlFailures": [],
+    }
+
+
 def passing_evidence(environment: str = "Chromium 150") -> dict:
     """A complete, self-consistent evidence bundle that satisfies the contract.
 
@@ -43,6 +64,12 @@ def passing_evidence(environment: str = "Chromium 150") -> dict:
     is an in-memory stand-in for a real bundle, so it is not marked synthetic:
     the gate's own verdict semantics are what these tests exercise. Synthesised
     bundles are marked explicitly by the tests that prove the marker works.
+
+    Every entry carries an ``admission`` block, because C6 requires the public
+    gate to admit only bundles whose contributing sources were admitted. A helper
+    that omitted it would be demonstrating the missing boundary rather than a
+    usable control. The block is a positive control for the gate's verdict
+    semantics only; it is not evidence that a physical experiment occurred.
     """
     contract = gate.load_contract(CONTRACT_PATH)
     requirements = {}
@@ -56,6 +83,7 @@ def passing_evidence(environment: str = "Chromium 150") -> dict:
             "artifact": {"name": "candidate", "version": "1.0.0"},
             "fixtures": [{"name": "fixture", "sha256": "0" * 64}],
             "observations": {},
+            "admission": admitted_source(requirement.id, environment=environment),
             "assertions": {a: "pass" for a in requirement.assertions},
         }
         rules = requirement.host_evidence_rules or {}
@@ -375,7 +403,8 @@ def report_identity(experiment: str, *, route_id: str = ROUTE_ID,
                     sidecar_policy: str = "unmeasured",
                     artifact: dict | None = None,
                     digest: str | None = None,
-                    run_id: str = "run-0001") -> dict:
+                    run_id: str = "run-0001",
+                    transport: str = "http-range") -> dict:
     """The identity block a raw report must carry to be admitted as evidence."""
     return {
         "id": experiment,
@@ -386,6 +415,7 @@ def report_identity(experiment: str, *, route_id: str = ROUTE_ID,
         "digest": digest,
         "runId": run_id,
         "recordedAt": time.time(),
+        "transport": transport,
         "command": f"measure.py {experiment} --out reports/",
         "routeId": route_id,
         "environment": environment,
@@ -454,6 +484,14 @@ def passing_reports(root: Path) -> dict[str, Path]:
         "identity": report_identity("q2-numeric", artifact=CANDIDATE_ARTIFACT),
         "fixturesTested": 1,
         "testedWindows": 9,
+        # The window bounds the contract's limit is asserted about. A count alone
+        # cannot establish a size, so the control records the sizes it measured.
+        "windows": [
+            {"fixture": "plane2000", "label": "bounded",
+             "classification": "measured",
+             "window": {"x": 0, "y": 0, "w": 1024, "h": 1024, "haloCells": 1},
+             "cells": 1024 * 1024},
+        ],
         "serverLedger": {"fixtureBytesServed": 488502, "fixtureRequests": 66},
         "assertions": [
             {"name": "no-whole-file-request:plane2000", "ok": True},
@@ -575,6 +613,11 @@ ASSEMBLY = {
     "route": {
         "routeId": ROUTE_ID,
         "numeric": "whitebox-wasm CogStream over HTTP Range requests",
+    # The transport each source must have used. A declaration that omitted these
+    # would leave the comparison unable to run, which is a gap, not a licence to
+    # skip it.
+    "numericExpectedTransport": "http-range",
+    "displayExpectedTransport": "http-range",
         "numericArtifact": dict(CANDIDATE_ARTIFACT),
         "artifacts": "candidate artifact resolution",
         "prepare": "native GDAL preparation",

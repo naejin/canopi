@@ -8,17 +8,18 @@ Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a
 Spec: [raster rework](raster-data-analysis-rework.md).
 Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edition-development.md),
 [GeoLibre reuse inventory](raster-rework/geolibre-reuse-inventory.md),
-[declaration/precedence receipt](raster-rework/q-declaration-precedence-receipt.md).
+[consolidated repair receipt](raster-rework/q-consolidated-repair-receipt.md),
+[acceptance contract](raster-rework/q-admission-acceptance.md).
 
 ## Eligibility summary (read this first)
 
 | | |
 | --- | --- |
-| Gate verdict against the recorded evidence | **inconclusive** — 12 of 12 requirements not passing |
+| Gate verdict against the recorded evidence | **fail** — 1 fail, 11 inconclusive; 12 of 12 requirements not passing |
 | Requirements passing | none |
-| Requirements not passing | `Q-ART-1`, `Q-LOCAL-1`, `Q-PREP-1`, `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CRS-1`, `Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`, `Q-HOST-1`, `Q-RES-1`, `Q-DISPLAY-1` — all inconclusive |
+| Requirements not passing | `Q-DISPLAY-1` is **fail**; `Q-ART-1`, `Q-LOCAL-1`, `Q-PREP-1`, `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CRS-1`, `Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`, `Q-HOST-1`, `Q-RES-1` are inconclusive |
 | Reproduce | `measure.py gate-assemble --reports <dir> --host chromium --out bundle.json` then `measure.py gate --bundle bundle.json --out decision.json` |
-| Why inconclusive | The recorded reports carry no identity/provenance block, so their route, environment, transport, artifact and fixture identity cannot be verified, and they record no run identity or time. This is incomplete evidence, not a measured violation |
+| Why not passing | The recorded reports carry no identity/provenance block, so their route, environment, transport, artifact and fixture identity cannot be verified, and they record no run identity or time: incomplete evidence, not a measured violation. `Q-DISPLAY-1` additionally records a measured violation — the trace holds one cold and one warm run where the plan requires one cold and three warm |
 | Admission requirements | Declarations are validated before anything is indexed from them, so a missing manifest or hash is a gap while a malformed, duplicated or conflicting one is an evaluator-input failure; fixture coverage is judged against that declared per-role manifest; each measured artifact must correspond to its declared source pin; a source run needs a nonempty runId and a fresh, finite recordedAt under one injected clock; a known conflict or recorded failure stays a failure even when an unrelated field or the summary `result` is missing. See the [declaration/precedence receipt](raster-rework/q-declaration-precedence-receipt.md) |
 | Superseded | An earlier revision of this receipt reported four requirements as passing. That reading came from admitting reports without any provenance requirement and is **withdrawn**; see the [evidence-integrity receipt](raster-rework/q-evidence-integrity-receipt.md) |
 

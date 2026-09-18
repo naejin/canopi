@@ -188,9 +188,33 @@ from pathlib import Path
 payload = json.loads(Path(sys.argv[1]).read_text())
 result = payload.get("result")
 if result != "pass":
-    print(f"=== qualification aggregate is not a pass: {result} "
+    # Recorded, not decisive: the requirement gate below owns the exit status. A
+    # summary that disagrees with an eligible gate is a finding a reader must see.
+    print(f"=== warning: experiment aggregate is not a pass: {result} "
           f"({payload.get('verdictReason')}) ===", file=sys.stderr)
-    raise SystemExit(1)
-print(f"=== qualification aggregate: {result} ===")
+print(f"=== experiment aggregate: {result} ===")
 PY
+
+# The experiment aggregate summarises what the probes measured. Eligibility is
+# decided by the requirement contract, so the run ends at the gate: assemble a
+# bundle from the same reports and let `measure.py gate` decide the exit status.
+# Without this step a run could finish successfully without ever asking whether
+# the collected evidence satisfies Q.
+echo "=== admission gate ==="
+step "step20" "$QUAL_PY" scripts/raster-qualification/measure.py gate-assemble \
+  --reports "$OUT" \
+  --host "${QUAL_HOST:-chromium}" \
+  ${QUAL_FIXTURE_MANIFEST:+--fixture-manifest "$QUAL_FIXTURE_MANIFEST"} \
+  --out "$OUT/q-bundle.json"
+
+if [ "${#FAILED[@]}" -gt 0 ]; then
+  echo "=== qualification run failed: ${#FAILED[@]} step(s): ${FAILED[*]} ===" >&2
+  exit 1
+fi
+if [ ! -f "$OUT/q-bundle.json" ]; then
+  echo "=== qualification run failed: no evidence bundle was assembled ===" >&2
+  exit 1
+fi
+"${QUAL_PY}" scripts/raster-qualification/measure.py gate \
+  --bundle "$OUT/q-bundle.json" --out "$OUT/q-decision.json"
 exit $?

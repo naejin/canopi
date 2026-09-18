@@ -1,6 +1,6 @@
 # Consolidated qualification admission repair — agent prompt
 
-Status: proposed — single bounded handoff following the consolidated review at `5becb043`.
+Status: retired — delivered in the consolidated admission repair; retained as debrief evidence, not execution authority. Implementation is recorded in the [consolidated repair receipt](q-consolidated-repair-receipt.md) and awaits independent verification. Do not re-execute this prompt. The [acceptance contract](q-admission-acceptance.md) is unchanged and remains the basis for review.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
 Current guidance: [stable acceptance contract](q-admission-acceptance.md), [review evidence](q-consolidated-admission-review.md), [scientific plan](../raster-data-analysis-rework.md).
 

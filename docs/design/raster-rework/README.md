@@ -6,11 +6,13 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Next handoff: [consolidated admission repair](q-consolidated-agent-prompt.md), governed by one [stable acceptance matrix](q-admission-acceptance.md). The [consolidated review](q-consolidated-admission-review.md) records retained verified R5 fixes and remaining blockers across the whole input-to-CLI path. No new qualification experiments, engine selection or N1 are authorized. Older prompts are historical evidence, not accumulating execution instructions.
+Next step: independent review of the [consolidated admission repair](q-consolidated-repair-receipt.md) against the [stable acceptance matrix](q-admission-acceptance.md). The [consolidated review](q-consolidated-admission-review.md) records the retained verified R5 fixes and the C1–C8 blockers that repair addresses across the whole input-to-CLI path. No new qualification experiments, engine selection or N1 are authorized. Older prompts are historical evidence, not accumulating execution instructions.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Consolidated agent prompt](q-consolidated-agent-prompt.md) | Current execution handoff, including adversarial self-review and bounded stop rules |
+| [Consolidated agent prompt](q-consolidated-agent-prompt.md) | Retired handoff executed in the consolidated admission repair |
+| [Consolidated repair receipt](q-consolidated-repair-receipt.md) | Implementer report for C1–C8, 261 tests, fourteen sensitivity probes and the adversarial self-review; implemented, pending independent verification |
+| [Consolidated repair cycles](evidence/q-consolidated-repair-cycles.txt) | Captured RED/GREEN, sensitivity probes, self-review cases and read-only evidence reconciliation for that repair |
 | [Stable admission acceptance contract](q-admission-acceptance.md) | Single C1–C8 input/behavior/test matrix and blocker-versus-follow-up policy |
 | [Consolidated admission review](q-consolidated-admission-review.md) | Revision-linked reproductions, reviewed boundaries, retained repairs and evidence limits |
 | [Implementation plan](../raster-data-analysis-rework.md) | Scope, approved UI references, slice dependencies, contracts and qualification gates |

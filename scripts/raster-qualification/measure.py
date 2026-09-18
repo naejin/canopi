@@ -55,6 +55,10 @@ SETTLE_SECONDS = 5.0
 DISPLAY_TRACE_REQUESTS = 100
 # The plan's requirement that no UI-thread raster compute exceed this.
 UI_THREAD_BOUND_MS = 50.0
+# The environment identity the qualification run declares, and the identity its
+# reports must therefore have recorded. Kept here as a declared expectation: a
+# value read back from a report would not be an independent one.
+QUALIFICATION_ENVIRONMENT_ID = "qualification-host-chromium-150"
 
 PIXEL_METRES = 0.5
 PLANE = {"a": 0.1, "b": 0.2, "c": -100.0}
@@ -475,6 +479,15 @@ def cmd_q2_numeric(args: argparse.Namespace) -> int:
         }
     report.extra["testedWindows"] = state["validated"]
     report.extra["presentWindows"] = state["total"]
+    # The window bounds themselves, not just a count: the contract's window limit
+    # is an assertion about a size, and a size cannot be checked from a tally or
+    # from the absence of a failure string.
+    report.extra["windows"] = [
+        {"fixture": m.get("fixture"), "label": m.get("label"),
+         "classification": m.get("classification"), "window": m.get("window"),
+         "cells": m.get("cells")}
+        for m in report.measurements
+        if isinstance(m.get("window"), dict)]
     return report.write(args.out)
 
 
@@ -1923,9 +1936,18 @@ def cmd_gate_assemble(args: argparse.Namespace) -> int:
     engine = args.engine
     bundle = evidence.assemble(
         contract, out=args.out, reports=present,
-        environment={"host": args.host, "engine": engine},
+        # The environment identity the reports must have recorded, declared here
+        # rather than read from any report: an expectation taken from the thing
+        # being checked is not an expectation.
+        environment={"host": args.host, "engine": engine,
+                     "environment": args.expected_environment},
         route={
             "numeric": "whitebox-wasm CogStream over HTTP Range requests",
+            # The transports each source must have used. A declaration that omits
+            # these leaves the comparison unable to run, which is reported as a
+            # gap rather than silently withdrawn.
+            "numericExpectedTransport": args.numeric_expected_transport,
+            "displayExpectedTransport": args.display_expected_transport,
             "numericArtifact": {"name": "whitebox-wasm", "version": args.numeric_artifact},
             "display": "cog-tiler-wasm renderTilePNG over a disk-backed File",
             "displayArtifact": {"name": "cog-tiler-wasm", "version": args.display_artifact},
@@ -1959,8 +1981,11 @@ def cmd_gate_assemble(args: argparse.Namespace) -> int:
                               "memory_budget_mib": RASTER_JOB_MEMORY_MIB},
         host=args.host)
     bundle["missingReports"] = missing
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n")
+    # The destination is written before anything is printed about it. If it cannot
+    # be written, that is an operator-actionable failure with a clear message, and
+    # nothing may claim an output was saved.
+    if not q.write_output(args.out, json.dumps(bundle, indent=2, sort_keys=True) + "\n"):
+        return 2
     print(json.dumps({"out": str(args.out), "host": args.host,
                       "presentReports": sorted(present), "missingReports": missing,
                       "fixtureManifest": (str(args.fixture_manifest)
@@ -2000,7 +2025,10 @@ def cmd_gate(args: argparse.Namespace) -> int:
         q.fail(f"requirement contract {args.requirements} is missing")
     contract = gate_module.load_contract(args.requirements)
     decision = gate_module.evaluate(contract, args.bundle)
-    q.write_report(args.out, decision.as_dict())
+    if not q.write_report(args.out, decision.as_dict()):
+        # The decision stands, but it was not saved. The exit status stays
+        # non-zero so a caller cannot treat an unwritten output as delivered.
+        return decision.exit_code or 2
     return decision.exit_code
 
 
@@ -2218,6 +2246,12 @@ def main() -> int:
                    help="directory holding the existing probe/experiment reports")
     p.add_argument("--host", default="chromium",
                    help="observation host label; only desktop-webview satisfies Q-HOST-1")
+    p.add_argument("--expected-environment", default=QUALIFICATION_ENVIRONMENT_ID,
+                   help="the environment identity each report must have recorded")
+    p.add_argument("--numeric-expected-transport", default="http-range",
+                   help="the transport the bounded numeric sources must have used")
+    p.add_argument("--display-expected-transport", default="http-range",
+                   help="the transport the display source must have used")
     p.add_argument("--fixture-manifest", type=Path,
                    help="declared fixture manifest naming the fixtures each role must cover")
     p.add_argument("--candidates", type=Path,

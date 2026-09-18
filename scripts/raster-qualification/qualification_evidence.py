@@ -75,6 +75,86 @@ class SourceDocument:
     problem: str | None = None
     digest: str | None = None
     duplicate_identity_keys: tuple[str, ...] = ()
+    #: Whether the path existed. Absence and corruption are different findings: a
+    #: missing report is a gap, a readable report whose shape is wrong is an input
+    #: failure. The digest is still recorded so a rejected report stays traceable.
+    present: bool = False
+
+
+#: Report fields read as mappings, and therefore required to be objects.
+REPORT_MAPPING_FIELDS = (
+    "identity", "serverLedger", "sidecar", "display", "memory", "totals",
+)
+#: Report fields walked as sequences, and therefore required to be lists.
+REPORT_LIST_FIELDS = (
+    "assertions", "failures", "preconditions", "runs", "measurements",
+    "verifiedArtifacts", "sourceCorrespondence", "windows", "notes",
+    "negativeControls", "artifacts",
+)
+#: Identity fields read as text. The identity block is a record of labels, not a
+#: nested environment object, so these are strings and are checked as such.
+IDENTITY_TEXT_FIELDS = ("routeId", "environment", "host", "runId", "fixturePolicy",
+                        "sidecarPolicy", "digest", "transport")
+#: Identity fields read as mappings.
+IDENTITY_MAPPING_FIELDS = ("artifact", "sidecarSha256", "environmentDetails")
+#: Identity fields walked as sequences.
+IDENTITY_LIST_FIELDS = ("fixtures", "negativeControlScopes")
+
+
+def _kind(value: Any) -> str:
+    """How to describe a value's type in a diagnostic."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    return type(value).__name__
+
+
+def _report_shape_problems(payload: dict[str, Any]) -> list[str]:
+    """Fields whose container kind contradicts how the report is read.
+
+    A boolean or a number is never acceptable where a mapping or a sequence is
+    read, and the check lives at the parse seam so every downstream consumer,
+    including the nine role-specific mappings, can index these fields without
+    repeating it. An absent field is left alone: absence is the gap the per-field
+    logic already reports.
+    """
+    problems: list[str] = []
+    for name in REPORT_MAPPING_FIELDS:
+        if name in payload and not isinstance(payload[name], dict):
+            problems.append(
+                f"{name} container is not an object ({_kind(payload[name])})")
+    for name in REPORT_LIST_FIELDS:
+        if name in payload and not isinstance(payload[name], list):
+            problems.append(
+                f"{name} container is not a list ({_kind(payload[name])})")
+    identity = payload.get("identity")
+    if isinstance(identity, dict):
+        for name in IDENTITY_MAPPING_FIELDS:
+            if name in identity and not isinstance(identity[name], dict):
+                problems.append(
+                    f"identity.{name} container is not an object "
+                    f"({_kind(identity[name])})")
+        for name in IDENTITY_LIST_FIELDS:
+            if name in identity and not isinstance(identity[name], list):
+                problems.append(
+                    f"identity.{name} container is not a list "
+                    f"({_kind(identity[name])})")
+        for name in IDENTITY_TEXT_FIELDS:
+            # An explicit null means "not recorded" for these optional fields and
+            # is read as the gap it is. Any other non-text value is a wrong type.
+            if name in identity and identity[name] is not None \
+                    and not isinstance(identity[name], str):
+                problems.append(
+                    f"identity.{name} is not text ({_kind(identity[name])})")
+        # ``fixtures`` entries are records, not labels: walking one as a mapping
+        # requires each element to be an object.
+        for index, fixture in enumerate(
+                identity.get("fixtures") or []):
+            if not isinstance(fixture, dict):
+                problems.append(
+                    f"identity.fixtures[{index}] is not an object ({_kind(fixture)})")
+    return problems
 
 
 def load_source(path: Path | None) -> SourceDocument:
@@ -85,24 +165,45 @@ def load_source(path: Path | None) -> SourceDocument:
     try:
         text = path.read_text()
     except OSError as error:
-        return SourceDocument(None, f"{path.name} is unreadable: {error}")
+        return SourceDocument(None, f"{path.name} is unreadable: {error}",
+                              present=True)
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as error:
-        return SourceDocument(None, f"{path.name} is malformed: {error}")
+        return SourceDocument(None, f"{path.name} is malformed: {error}",
+                              present=True)
     if not isinstance(payload, dict):
-        return SourceDocument(None, f"{path.name} is not a JSON object")
+        return SourceDocument(None, f"{path.name} is not a JSON object",
+                              present=True)
     # The digest of the bytes read, not of any value the report claims about
     # itself: hashing the parsed payload would be self-referential.
     digest = "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
     duplicates = tuple(sorted(set(duplicate_keys_in_text(text, "identity"))))
-    return SourceDocument(payload, None, digest, duplicates)
+    shape = _report_shape_problems(payload)
+    if shape:
+        # A readable report whose fields contradict how they are read is corrupt
+        # input, not absent evidence. The digest is kept so the rejection is
+        # traceable to the exact bytes that were refused.
+        return SourceDocument(
+            None, f"{path.name} is malformed: " + "; ".join(shape),
+            digest, duplicates, present=True)
+    return SourceDocument(payload, None, digest, duplicates, present=True)
 
 
 def _load(path: Path | None) -> tuple[dict[str, Any] | None, str | None]:
     """Adaptor for callers that only need the payload and any problem."""
     document = load_source(path)
     return document.payload, document.problem
+
+
+def _load_full(path: Path | None) -> tuple[dict[str, Any] | None, str | None, bool]:
+    """As :func:`_load`, but also reports whether the path existed.
+
+    Absence and corruption are different findings, and only the document knows
+    which one it recorded.
+    """
+    document = load_source(path)
+    return document.payload, document.problem, document.present
 
 
 # --------------------------------------------------------------------------- #
@@ -329,6 +430,38 @@ def display_trace_assertions(trace: dict[str, Any] | None,
     # observation mechanism to have been supported.
     unsupported = [str(r.get("name")) for r in runs
                    if isinstance(r, dict) and r.get("longTaskObserverSupported") is not True]
+    # An unrecognised optional field is a finding about producer agreement. It is
+    # reported, but it cannot erase a measured violation: the stall was observed
+    # whatever else the trace happens to carry. The violation is therefore read
+    # from the runs first, and only the absence of any usable measurement falls
+    # back to the observer-support gap.
+    measured_stall: str | None = None
+    worst_measured: float | None = None
+    unmeasured_runs: list[str] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        name = str(run.get("name"))
+        value = _num(run.get("longTaskMaxMs"))
+        if value is None:
+            unmeasured_runs.append(name)
+            continue
+        if worst_measured is None or value > worst_measured:
+            worst_measured = value
+        if value > bound_ms:
+            measured_stall = (
+                f"run {name}: {value} ms exceeds the {bound_ms} ms bound")
+    if measured_stall:
+        results["no-ui-thread-task-above-bound"] = FAIL
+        results["unsupported-observation-is-inconclusive"] = (
+            UNKNOWN if (unrecognised or unsupported) else PASS)
+        notes.append(measured_stall)
+        if unrecognised:
+            notes.append(
+                "the measured stall stands even though the trace contains fields "
+                "this consumer does not recognise")
+        observed["maxLongTaskMs"] = worst_measured
+        return results, notes, observed
     if unrecognised:
         results["unsupported-observation-is-inconclusive"] = UNKNOWN
         results["no-ui-thread-task-above-bound"] = UNKNOWN
@@ -340,28 +473,16 @@ def display_trace_assertions(trace: dict[str, Any] | None,
             + ", ".join(unsupported))
     else:
         results["unsupported-observation-is-inconclusive"] = PASS
-        worst: float | None = None
-        violation: str | None = None
-        for run in runs:
-            name = str(run.get("name"))
-            value = _num(run.get("longTaskMaxMs"))
-            if value is None:
-                notes.append(f"run {name}: longTaskMaxMs is not a usable measurement")
-                worst = None
-                break
-            if worst is None or value > worst:
-                worst = value
-            if value > bound_ms:
-                violation = f"run {name}: {value} ms exceeds the {bound_ms} ms bound"
-        if violation:
-            results["no-ui-thread-task-above-bound"] = FAIL
-            notes.append(violation)
-        elif worst is None:
+        if unmeasured_runs:
+            notes.append(
+                "longTaskMaxMs is not a usable measurement for runs: "
+                + ", ".join(unmeasured_runs))
+        if worst_measured is None:
             results["no-ui-thread-task-above-bound"] = UNKNOWN
             notes.append("no usable long-task measurement in any run")
         else:
             results["no-ui-thread-task-above-bound"] = PASS
-        observed["maxLongTaskMs"] = worst
+            observed["maxLongTaskMs"] = worst_measured
     return results, notes, observed
 
 
@@ -682,6 +803,12 @@ def validate_pin_declaration_text(text: str, name: str,
 # between what the report measured and what the bundle declares is a conflict.
 # None of the three may be silently ignored, and none may be invented.
 
+#: The plan's numeric window bound: at most 1024x1024 cells per window. A window
+#: is read plus its halo, so the halo is recorded and reported alongside the size
+#: rather than folded into it.
+MAX_NUMERIC_WINDOW_CELLS = 1024 * 1024
+NUMERIC_WINDOW_EDGE = 1024
+
 #: Report identity fields that must be present to admit a report as evidence.
 #:
 #: ``digest`` is deliberately absent: the evaluator computes the digest of the
@@ -711,6 +838,55 @@ SIDECAR_POLICIES = ("measured", "not_applicable", "unmeasured")
 #: The plan's sampling cadence for resource measurement.
 REQUIRED_SAMPLE_INTERVAL_MS = 100.0
 
+#: The plan's resource budgets. Each is a ceiling on the candidate route's own
+#: accounting, declared here rather than inferred from whatever a report happened
+#: to record. A counter merely being present does not establish that it is within
+#: its budget.
+#:
+#: ``combinedMemoryMiB`` is the plan's combined incremental raster memory, already
+#: summed across the route's own processes by the producer. Per-process samples are
+#: a different quantity and are not summed here, which would double-count the WASM
+#: memory that the route and its worker share.
+RESOURCE_BUDGETS = {
+    "decodedCacheBytes": (128 * 1024 * 1024, "decoded cache"),
+    "activeReads": (2, "active reads"),
+    "queueDepth": (32, "pending display requests"),
+}
+#: Counters that must be recorded for the reduction to be complete at all.
+REQUIRED_RESOURCE_COUNTERS = (
+    "temporaryDiskHighWaterBytes", "decodedCacheBytes", "activeReads",
+    "queueDepth", "maxConcurrentChildren",
+)
+
+
+def _budget_problems(measurements: list[dict], *,
+                     missing: list[str]) -> tuple[str, list[str]]:
+    """Whether the candidate route's recorded counters are within budget.
+
+    Only records that carry the plan's sampling cadence are reduced: a record with
+    no applicable sampling describes no measured run, so it cannot supply a
+    compliant reading or stand in for a missing one.
+
+    Each budget is checked independently, and a measured violation outranks a
+    missing counter: an exceeded budget is a finding about the engine, while a
+    counter that was never recorded is a finding about the record. Neither may be
+    reported as the other.
+    """
+    over: list[str] = []
+    for measurement in measurements:
+        for counter, (limit, label) in RESOURCE_BUDGETS.items():
+            value = _num(measurement.get(counter))
+            if value is None:
+                continue
+            if value > limit:
+                over.append(f"{label} {value} exceeds the plan's {limit} budget")
+    if over:
+        return FAIL, sorted(set(over))
+    if missing:
+        return UNKNOWN, [
+            "candidate route does not record " + ", ".join(missing)]
+    return PASS, []
+
 #: How old a source run may be and still support qualification. Shared with the
 #: bundle-level freshness policy so one limit governs both.
 MAX_SOURCE_AGE_DAYS = 7.0
@@ -736,9 +912,17 @@ class Admission:
     legacy: bool = False
     #: Digest of the source bytes the evaluator actually read.
     source_digest: str | None = None
+    #: Whether the *source* itself was admitted, recorded separately from the
+    #: reduced verdict. A requirement assertion that a promoted observation failed
+    #: raises the verdict without making the source unusable, so the two questions
+    #: — may this source contribute evidence, and is the requirement satisfied —
+    #: keep separate answers.
+    source_admitted: bool | None = None
 
     @property
     def admitted(self) -> bool:
+        if self.source_admitted is not None:
+            return self.source_admitted
         return self.verdict == PASS
 
     def as_dict(self) -> dict[str, Any]:
@@ -751,6 +935,7 @@ class Admission:
             "positiveFailures": self.positive_failures,
             "legacy": self.legacy,
             "sourceDigest": self.source_digest,
+            "sourceAdmitted": self.admitted,
         }
 
 
@@ -898,6 +1083,7 @@ def _failed_assertions(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
                     f"({type(recorded).__name__}), so its assertions cannot be read"]
     failed: list[str] = []
     problems: list[str] = []
+    seen: dict[str, int] = {}
     for index, assertion in enumerate(recorded):
         if not isinstance(assertion, dict):
             problems.append(
@@ -908,8 +1094,33 @@ def _failed_assertions(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
         if not isinstance(name, str) or not name.strip():
             problems.append(f"report assertion {index} has no usable name")
             continue
-        if assertion.get("ok") is False:
+        seen[name] = seen.get(name, 0) + 1
+        if "ok" not in assertion:
+            # Unstated: the assertion did not record an outcome, which is a gap.
+            continue
+        ok = assertion.get("ok")
+        if ok is None:
+            # Present but null. The schema for this leaf is boolean, so a null
+            # that is present is malformed input rather than an absence.
+            problems.append(
+                f"report assertion {name!r} records a null ok, which is not a "
+                f"boolean")
+            continue
+        if not isinstance(ok, bool):
+            # ``"false"`` is a nonempty string and ``1`` is a number. Neither is
+            # a boolean, and truthiness must never decide a verdict.
+            problems.append(
+                f"report assertion {name!r} records ok={ok!r}, which is "
+                f"{_kind(ok)} rather than a boolean")
+            continue
+        if ok is False:
             failed.append(name)
+    duplicated = sorted(name for name, count in seen.items() if count > 1)
+    if duplicated:
+        # Duplicate keyed evidence is ambiguous: a later record could contradict
+        # an earlier one, so neither may be trusted.
+        problems.append("report has duplicate assertion name(s): "
+                        + ", ".join(duplicated))
     return failed, problems
 
 
@@ -960,7 +1171,12 @@ def _named_assertions(report: dict | None,
         if not isinstance(name, str) or not name.strip():
             problems.append(f"report {container} entry {index} has no usable name")
             continue
-        named.setdefault(name, entry)
+        if name in named:
+            # Keep the first for diagnosis, but report the ambiguity: a mapping
+            # cannot represent two records under one key.
+            problems.append(f"report {container} has duplicate name {name!r}")
+            continue
+        named[name] = entry
     return named, problems
 
 
@@ -976,6 +1192,14 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
     licence to skip a check the report itself makes possible.
     """
     if payload is None:
+        if document is not None and document.present:
+            # The path existed but its bytes or shape could not be read. Corruption
+            # is an input failure; only a genuinely absent report is a gap. The
+            # recorded reason already names which of the two it was.
+            return Admission(report=report_name, verdict=FAIL,
+                             reasons=[document.problem
+                                      or f"{report_name} is unusable"],
+                             source_digest=document.digest)
         return Admission(report=report_name, verdict=UNKNOWN,
                          reasons=[f"{report_name} is missing"])
 
@@ -1233,6 +1457,11 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
     # A route string is a label; the transport is what was exercised. Comparing
     # the kind structurally is what stops a renamed route from qualifying an
     # HTTP-only measurement as the required local bridge.
+    transport_problem = (expected or {}).get("transportProblem")
+    if transport_problem:
+        # The declaration the comparison needs is missing. That is a gap in the
+        # evaluator's own inputs, and it must not silently withdraw the check.
+        blocked.append(transport_problem)
     required_transport = (expected or {}).get("transport")
     observed_transport = (identity or {}).get("transport")
     if required_transport:
@@ -1325,6 +1554,7 @@ def _scan_preconditions(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
                     f"({type(recorded).__name__}), so they cannot be read"]
     unmet: list[str] = []
     problems: list[str] = []
+    seen: dict[str, int] = {}
     for index, entry in enumerate(recorded):
         if not isinstance(entry, dict):
             problems.append(f"report precondition {index} is not an object "
@@ -1334,8 +1564,29 @@ def _scan_preconditions(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
         if not isinstance(name, str) or not name.strip():
             problems.append(f"report precondition {index} has no usable name")
             continue
-        if entry.get("met") is False:
+        seen[name] = seen.get(name, 0) + 1
+        if "met" not in entry:
+            # Unstated: the precondition did not record whether it held.
+            continue
+        met = entry.get("met")
+        if met is None:
+            # Present but null, so malformed rather than absent, exactly as for
+            # an assertion's ok leaf.
+            problems.append(
+                f"report precondition {name!r} records a null met, which is not "
+                f"a boolean")
+            continue
+        if not isinstance(met, bool):
+            problems.append(
+                f"report precondition {name!r} records met={met!r}, which is "
+                f"{_kind(met)} rather than a boolean")
+            continue
+        if met is False:
             unmet.append(name)
+    duplicated = sorted(name for name, count in seen.items() if count > 1)
+    if duplicated:
+        problems.append("report has duplicate precondition name(s): "
+                        + ", ".join(duplicated))
     return unmet, problems
 
 
@@ -1508,6 +1759,71 @@ def _fixture_coverage(fixtures: list[Any], report_name: str, *,
     return problems
 
 
+def _window_bounds(windows: Any) -> tuple[str, list[str]]:
+    """Whether every recorded numeric window is within the contract's bound.
+
+    A pass requires a window that was actually measured and is within the limit.
+    A recorded window that exceeds the limit fails, because that is a measured
+    violation of the contract rather than a missing observation. No recorded
+    window at all is a gap: the bound was never observed.
+    """
+    if not isinstance(windows, list) or not windows:
+        return UNKNOWN, [
+            "no numeric window size was recorded, so the contract's window bound "
+            "was never observed"]
+    notes: list[str] = []
+    measured = 0
+    for index, record in enumerate(windows):
+        if not isinstance(record, dict):
+            notes.append(f"window record {index} is not an object")
+            continue
+        if record.get("classification") not in (None, "measured"):
+            # A rejected or unverified window is not a measured size.
+            continue
+        spec = record.get("window")
+        if not isinstance(spec, dict):
+            notes.append(f"window record {index} does not record its bounds")
+            continue
+        width = _num(spec.get("w"))
+        height = _num(spec.get("h"))
+        if width is None or height is None or width <= 0 or height <= 0:
+            notes.append(f"window record {index} does not record a usable size")
+            continue
+        measured += 1
+        cells = width * height
+        if cells > MAX_NUMERIC_WINDOW_CELLS:
+            return FAIL, [
+                f"a measured window of {int(width)}x{int(height)} cells exceeds the "
+                f"{MAX_NUMERIC_WINDOW_CELLS}-cell contract limit"]
+        if width > NUMERIC_WINDOW_EDGE or height > NUMERIC_WINDOW_EDGE:
+            return FAIL, [
+                f"a measured window of {int(width)}x{int(height)} exceeds the "
+                f"{NUMERIC_WINDOW_EDGE}x{NUMERIC_WINDOW_EDGE} window contract"]
+    if not measured:
+        return UNKNOWN, notes + [
+            "no usable numeric window size was recorded, so the contract's window "
+            "bound was never observed"]
+    return PASS, notes
+
+
+def _window_summary(windows: Any) -> list[dict]:
+    """The recorded window bounds, carried into the bundle for review."""
+    if not isinstance(windows, list):
+        return []
+    summary: list[dict] = []
+    for record in windows:
+        if not isinstance(record, dict):
+            continue
+        spec = record.get("window")
+        if not isinstance(spec, dict):
+            continue
+        summary.append({
+            "fixture": record.get("fixture"), "label": record.get("label"),
+            "width": spec.get("w"), "height": spec.get("h"),
+            "haloCells": spec.get("haloCells"), "cells": record.get("cells")})
+    return summary
+
+
 def _is_sha256(value: Any) -> bool:
     """Whether a value is a well-formed lowercase or uppercase SHA-256 hex digest."""
     if not isinstance(value, str) or len(value) != 64:
@@ -1584,6 +1900,31 @@ def _entry(requirement_id: str, *, admission: "Admission", source: str, command:
     satisfy the requirement.
     """
     identity = admission.identity or {}
+    # A requirement cannot be satisfied by evidence whose own assertion failed. The
+    # derived assertion verdicts are folded into the admission record here so a
+    # failing or unevidenced assertion blocks promotion exactly as a failed source
+    # admission does, instead of sitting behind an admitted block that says pass.
+    #
+    # ``admission`` is the *source's* admission, and it keeps saying whatever the
+    # source established. A failing requirement assertion is folded into the
+    # record's reasons, not into its verdict: the source was still admitted, so
+    # the entry stays promoted and the failing assertion reaches the gate as a
+    # measured violation. Turning the source admission into a failure here would
+    # demote the entry and report a measured violation as though the evidence had
+    # never been usable.
+    derived_failures = sorted(name for name, verdict in assertions.items()
+                              if verdict == FAIL)
+    admission_record = admission.as_dict()
+    admission_record["sourceAdmitted"] = admission.admitted
+    if derived_failures:
+        admission_record["reasons"] = list(admission_record.get("reasons") or []) + [
+            f"requirement assertion {name} failed" for name in derived_failures]
+        # A measured violation of this requirement outranks a gap in the source it
+        # was measured from. Without this, a report that failed a requirement but
+        # also omitted its runId reduced to the gap alone, and the failure the gate
+        # was about to report disappeared behind it.
+        if admission_record.get("verdict") != FAIL:
+            admission_record["verdict"] = FAIL
     entry: dict[str, Any] = {
         "requirementId": requirement_id,
         "source": source,
@@ -1594,7 +1935,7 @@ def _entry(requirement_id: str, *, admission: "Admission", source: str, command:
         "fixtures": fixtures,
         "observations": observations,
         "assertions": dict(assertions),
-        "admission": admission.as_dict(),
+        "admission": admission_record,
         "provenance": {
             "source": source,
             "sourceDigest": admission.source_digest,
@@ -1615,6 +1956,11 @@ def _entry(requirement_id: str, *, admission: "Admission", source: str, command:
     }
     if host:
         entry["host"] = host
+    # Promotion follows the *source's* own admission. A derived assertion failure
+    # does not demote the entry: the evidence was usable and the measurement
+    # violated the requirement, which is a finding about the engine rather than
+    # about the record. Demoting it would report the violation as unusable
+    # evidence and hide it in `observed`.
     if not admission.admitted:
         entry["observed"] = entry["assertions"]
         entry["assertions"] = {}
@@ -1676,10 +2022,30 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     are validated here through the same functions the CLI uses, so no caller can
     reach a comparison built from an unvalidated declaration.
     """
-    ledger, ledger_problem = _load(reports.get("ledger"))
-    browser, browser_problem = _load(reports.get("browser"))
-    trace, trace_problem = _load(reports.get("trace"))
-    verdicts = {r["experiment"]: r for r in ([])}
+    # Every source is read exactly once per evaluation. Admission, digesting and
+    # every observation below share this snapshot, so a source cannot be parsed
+    # twice into two different readings within one verdict.
+    loaded: dict[str, dict | None] = {}
+    documents: dict[str, SourceDocument] = {}
+    for name, path in sorted(reports.items()):
+        documents[name] = load_source(path)
+        loaded[name] = documents[name].payload
+
+    def loaded_experiment(name: str) -> tuple[dict | None, str | None]:
+        """One source's payload and, when unusable, the reason it was refused.
+
+        The reason survives as recorded: an absent path reports "is missing" and a
+        readable report whose bytes or shape are wrong reports "is malformed".
+        Collapsing the two would report corruption as a gap.
+        """
+        document = documents.get(name)
+        if document is None:
+            return None, f"no report supplied for {name}"
+        return document.payload, document.problem
+
+    ledger, ledger_problem = loaded_experiment("ledger")
+    browser, browser_problem = loaded_experiment("browser")
+    trace, trace_problem = loaded_experiment("trace")
 
     # Declarations are inputs too. They are validated once, here, before anything
     # is indexed from them: a dict or set built from an unvalidated declaration
@@ -1712,18 +2078,11 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     # Reports carry their own verdicts; a report that failed its own checks is a
     # failure of the corresponding requirement, and a missing report is a gap.
     def report_experiment(name: str) -> tuple[dict | None, str | None]:
-        payload, problem = _load(reports.get(name))
-        if payload is None:
-            return None, problem
-        return payload, None
+        return loaded_experiment(name)
 
     digest: list[str] = []
-    loaded: dict[str, dict | None] = {}
-    documents: dict[str, SourceDocument] = {}
-    for name, path in sorted(reports.items()):
-        document = load_source(path)
-        documents[name] = document
-        loaded[name] = document.payload
+    for name in sorted(reports):
+        document = documents[name]
         if document.payload is None:
             digest.append(f"{name}: {document.problem}")
             continue
@@ -1735,6 +2094,16 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     admissions: dict[str, Admission] = {}
     #: The artifacts each report role is required to cover, from the declaration.
     required_artifacts_by_role: dict[str, list[dict]] = {}
+
+    #: The experiment identifier each report role must record. The role is decided
+    #: by which path the caller supplied, so the expectation is derived from the
+    #: role rather than from the report's own claim about itself.
+    experiment_by_source = {
+        "q1": "q1-artifacts", "q2": "q2-numeric", "q3prepare": "q3-prepare",
+        "q3members": "q3-members", "q4slope": "q4-slope", "q4crs": "q4-crs",
+        "q5lifecycle": "q5-lifecycle", "q6resources": "q6-resources",
+        "trace": "q6-trace",
+    }
 
     #: Which declared artifact each report role is expected to have used.
     artifact_role_by_source = {
@@ -1753,11 +2122,45 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         "Q-CRS-1": "crsArtifact",
     }
 
-    #: Which declared transport requirement each source must satisfy.
-    transport_role_for = {
-        "Q-LOCAL-1": "numericExpectedTransport",
-        "Q-DISPLAY-1": "displayExpectedTransport",
+    #: Which declared transport each source must satisfy, by source role. A source
+    #: read for a role is expected to have used that role's transport whether or
+    #: not the caller happened to declare it, so a missing expectation element is
+    #: reported rather than silently disabling the comparison.
+    transport_by_source = {
+        "q2": "numericExpectedTransport",
+        "q3prepare": "numericExpectedTransport",
+        "q3members": "numericExpectedTransport",
+        "q4slope": "numericExpectedTransport",
+        "q4crs": "numericExpectedTransport",
+        "q5lifecycle": "numericExpectedTransport",
+        "q6resources": "numericExpectedTransport",
+        "trace": "displayExpectedTransport",
     }
+
+    #: Declared transports carried by the declaration itself, used to report an
+    #: undeclared expectation. Kept separate from the per-role map so the message
+    #: can name the declaration key the caller must supply.
+    transport_declaration_keys = {
+        "numericExpectedTransport": "bounded local numeric transport",
+        "displayExpectedTransport": "candidate display transport",
+    }
+
+    def required_measured_artifacts(role: str) -> list[dict]:
+        """The measured artifacts a role must have used, from the declaration."""
+        unpinned = {
+            entry.get("name") for entry in (route.get("unpinnedRoles") or [])
+            if isinstance(entry, dict)}
+        if role == "q1":
+            return [
+                {"name": artifact.get("name"), "version": artifact.get("version")}
+                for artifact in artifacts
+                if isinstance(artifact, dict) and artifact.get("name")
+                and artifact.get("name") not in unpinned]
+        expected_artifact = route.get(artifact_role_by_source.get(role) or "")
+        if isinstance(expected_artifact, dict) and expected_artifact.get("name"):
+            return [{"name": expected_artifact.get("name"),
+                     "version": expected_artifact.get("version")}]
+        return []
 
     def admission_for(role: str, requirement_id: str,
                       expectations: dict[str, Any] | None = None) -> Admission:
@@ -1780,6 +2183,23 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         # The pins come from the declaration. A pin the report asserts about itself
         # is not an independent expectation.
         expectation.setdefault("declaredPins", validated_pins)
+        # Identity expectations follow the source role, not the requirement that
+        # asked for it: a caller cannot disable a comparison by omitting the
+        # declaration, because the role fixes what the source must have recorded.
+        declared_experiment = experiment_by_source.get(role)
+        if declared_experiment:
+            expectation.setdefault("experiment", declared_experiment)
+        transport_key = transport_by_source.get(role)
+        if transport_key:
+            declared_transport = route.get(transport_key)
+            if declared_transport is None:
+                expectation.setdefault(
+                    "transportProblem",
+                    f"the route declaration records no {transport_key!r}, so the "
+                    f"{transport_declaration_keys[transport_key]} this source must "
+                    f"have used cannot be checked")
+            else:
+                expectation.setdefault("transport", declared_transport)
         # Which artifact a source is expected to have used follows the *source*,
         # not the requirement: a numeric report admitted on behalf of a
         # multi-source requirement still used the numeric artifact.
@@ -1813,9 +2233,6 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
                         and expected_artifact.get("name") else [])
         expectation.setdefault("requiredArtifacts", required)
         required_artifacts_by_role[role] = required
-        transport_key = transport_role_for.get(requirement_id)
-        if transport_key and route.get(transport_key) is not None:
-            expectation.setdefault("transport", route.get(transport_key))
         result = admit_report(
             loaded.get(role), report_name=str(reports.get(role) or role),
             expected=expectation, requires_raster_fixture=needs_raster, now=now,
@@ -1827,6 +2244,15 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     q1, q1_problem = report_experiment("q1")
     art_assertions = _all(requirement("Q-ART-1"), UNKNOWN)
     art_notes: list[str] = []
+    # The declared artifact sets are derived from the route and the declaration, not
+    # from the report, so they are computed before the report is read. Reading them
+    # only on the success path left the observation block referencing unbound names
+    # when q1 was absent, which escaped as a traceback instead of a verdict.
+    art_required_names = sorted(
+        str(a.get("name")) for a in (required_artifacts_by_role.get("q1") or []))
+    art_unpinned_names = sorted(
+        str(entry.get("name")) for entry in (route.get("unpinnedRoles") or [])
+        if isinstance(entry, dict) and entry.get("name"))
     if q1 is not None:
         recorded, _ = _named_assertions(q1)
         art_assertions["artifacts-present-at-declared-version"] = _from_assertions(
@@ -1835,9 +2261,29 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
             recorded, "integrity:", None)
         art_assertions["artifacts-record-license"] = _from_assertions(
             recorded, "license-recorded:", None)
-        art_assertions["non-corresponding-artifacts-recorded"] = PASS \
-            if any("no published artifact matches" in n
-                   for n in _texts(q1, "notes")) else FAIL
+        # The obligation is that a mismatch, if there is one, is recorded. The
+        # evidence for it is either the recorded non-correspondence note or a
+        # correspondence inventory that covers every required artifact — a
+        # complete inventory needs no note, because there is nothing left
+        # unmatched to comment on. Neither the note nor the inventory's silence
+        # may decide the assertion on its own.
+        correspondence_required = (required_artifacts_by_role.get("q1")
+                                   or required_measured_artifacts("q1"))
+        recorded_artifacts = {
+            str(entry.get("artifact"))
+            for entry in (q1.get("sourceCorrespondence") or [])
+            if isinstance(entry, dict) and entry.get("artifact")}
+        required_names = {
+            str(artifact["name"]) for artifact in correspondence_required
+            if isinstance(artifact, dict) and artifact.get("name")}
+        notes_non_correspondence = any("no published artifact matches" in n
+                                       for n in _texts(q1, "notes"))
+        if notes_non_correspondence:
+            art_assertions["non-corresponding-artifacts-recorded"] = PASS
+        elif required_names and required_names <= recorded_artifacts:
+            art_assertions["non-corresponding-artifacts-recorded"] = PASS
+        else:
+            art_assertions["non-corresponding-artifacts-recorded"] = FAIL
         exercised = list(artifacts)
         source_artifact = ((admission_for("q1", "Q-ART-1").identity or {})
                            .get("artifact") or {})
@@ -1862,11 +2308,6 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
             version_verdict, correspondence_verdict)
         art_notes.extend(version_notes)
         art_notes.extend(correspondence_notes)
-        art_required_names = sorted(
-            str(a.get("name")) for a in (required_artifacts_by_role.get("q1") or []))
-        art_unpinned_names = sorted(
-            str(entry.get("name")) for entry in (route.get("unpinnedRoles") or [])
-            if isinstance(entry, dict) and entry.get("name"))
         # The API set actually called and the worker build target are required by
         # the plan's first experiment; the artifact report records them.
         art_assertions["apis-called-and-worker-target-recorded"] = _single(
@@ -1910,9 +2351,15 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
             q2, names, "analytic:")
         q2_assertions["validity-matches-reference-exactly"] = _all_named(
             q2, names, "validity:")
-        q2_assertions["window-size-within-contract-limit"] = PASS \
-            if not any("exceeds the" in f for f in _failure_texts(q2)) else FAIL
+        # The window bound is a claim about a measured size, so it is decided from
+        # the recorded windows: a pass needs a window that was actually measured
+        # and is within the limit. Absence of a failure string is not evidence,
+        # and neither is a tally of how many windows there were.
+        window_verdict, window_notes = _window_bounds(q2.get("windows"))
+        q2_assertions["window-size-within-contract-limit"] = window_verdict
+        q2_notes.extend(window_notes)
         q2_obs = {"testedWindows": tested, "serverLedger": ledger_observed,
+                  "windows": _window_summary(q2.get("windows")),
                   "failures": _failure_texts(q2)}
     else:
         q2_notes.append(q2_problem or "q2 report unavailable")
@@ -2223,23 +2670,31 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
                     f"sampling interval {sample_interval} ms with {sample_count} sample(s); "
                     f"required <= {REQUIRED_SAMPLE_INTERVAL_MS} ms and at least one sample")
 
-        # Cache, queue, read and child accounting must all be present.
-        counters = ("temporaryDiskHighWaterBytes", "decodedCacheBytes", "activeReads",
-                    "queueDepth", "maxConcurrentChildren")
+        # Cache, queue, read and child accounting must all be present, and each
+        # counter must be within the plan's budget. Only records carrying the
+        # plan's sampling cadence are reduced: an unsampled record describes no
+        # measured run, so combining it would fabricate a complete one.
+        sampled = [
+            measurement for measurement in candidate_entries
+            if _num(measurement.get("sampleIntervalMs")) is not None
+            and _num(measurement.get("sampleCount")) not in (None, 0)]
         measured = set()
-        for measurement in candidate_entries:
-            for counter in counters:
+        for measurement in sampled:
+            for counter in REQUIRED_RESOURCE_COUNTERS:
                 if _num(measurement.get(counter)) is not None:
                     measured.add(counter)
-        missing_counters = [c for c in counters if c not in measured]
-        if not candidate_entries:
-            res_assertions["disk-cache-reads-queue-and-children-recorded"] = UNKNOWN
-        elif missing_counters:
+        missing_counters = [c for c in REQUIRED_RESOURCE_COUNTERS if c not in measured]
+        if not sampled:
             res_assertions["disk-cache-reads-queue-and-children-recorded"] = UNKNOWN
             res_notes.append(
-                "candidate route does not record " + ", ".join(missing_counters))
+                "no candidate-route record carries the plan's sampling cadence, so "
+                "its counters were not reduced")
         else:
-            res_assertions["disk-cache-reads-queue-and-children-recorded"] = PASS
+            budget_verdict, budget_notes = _budget_problems(
+                sampled, missing=missing_counters)
+            res_assertions["disk-cache-reads-queue-and-children-recorded"] = \
+                budget_verdict
+            res_notes.extend(budget_notes)
     entries["Q-RES-1"] = _entry(
         "Q-RES-1", admission=admission_for("q6resources", "Q-RES-1"), source="reports/q6-resources.json",
         command="measure.py q6-resources --browser-report <probe> --out reports/q6-resources.json",
