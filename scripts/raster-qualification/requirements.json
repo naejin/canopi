@@ -38,8 +38,11 @@
         "artifacts-match-integrity-digest",
         "artifacts-record-license",
         "qualified-roles-name-artifact-version",
-        "non-corresponding-artifacts-recorded"
-      ]
+        "non-corresponding-artifacts-recorded",
+        "apis-called-and-worker-target-recorded"
+      ],
+      "requiresRasterFixture": false,
+      "noFixtureReason": "an artifact inventory and integrity check measures no raster, so requiring a raster fixture here would be false evidence"
     },
     {
       "id": "Q-LOCAL-1",
@@ -62,7 +65,8 @@
       ],
       "negativeControls": [
         "A stripped GeoTIFF is correctly rejected by the ranged decoder; this establishes expected rejection and does NOT satisfy a positive capability requirement."
-      ]
+      ],
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-PREP-1",
@@ -83,7 +87,8 @@
         "derivative-cell-exact",
         "derivative-preserves-metadata",
         "derivative-windows-match-original"
-      ]
+      ],
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-MEMBER-1",
@@ -103,7 +108,8 @@
         "nodata-does-not-erase-earlier-value",
         "overviews-do-not-resurrect-replaced-pixels"
       ],
-      "unresolvedFinding": "R2-06: overview precedence is not exercised by any current probe."
+      "unresolvedFinding": "R2-06: overview precedence is not exercised by any current probe.",
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-VALUE-1",
@@ -124,8 +130,10 @@
         "slope-degrees-within-tolerance",
         "slope-percent-within-tolerance",
         "blocked-slope-agrees-at-seams",
-        "holes-and-edges-not-interpolated"
-      ]
+        "holes-and-edges-not-interpolated",
+        "required-fixture-classes-covered"
+      ],
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-CRS-1",
@@ -144,7 +152,8 @@
         "candidate-projection-within-tolerance",
         "returned-coordinate-addresses-requested-pixel",
         "no-metadata-rewritten-or-inferred"
-      ]
+      ],
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-CANCEL-1",
@@ -164,7 +173,8 @@
         "owned-work-settles-within-bound",
         "uncancelled-control-completes"
       ],
-      "unresolvedFinding": "R2-04: the current probe slices a resident in-memory buffer and counts completed operations, so it cannot qualify the WASM adapter's cancellation."
+      "unresolvedFinding": "R2-04: the current probe slices a resident in-memory buffer and counts completed operations, so it cannot qualify the WASM adapter's cancellation.",
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-TEARDOWN-1",
@@ -182,7 +192,8 @@
         "teardown-observably-releases-resource",
         "stalled-worker-terminated-within-bound",
         "silently-dead-worker-detectable"
-      ]
+      ],
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-FAILINJ-1",
@@ -201,7 +212,8 @@
         "out-of-extent-window-rejected",
         "stalled-worker-forced",
         "disk-write-failure-exercised"
-      ]
+      ],
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-HOST-1",
@@ -231,7 +243,8 @@
         ],
         "reason": "Chromium and Node runs cannot satisfy the plan's Desktop WebView requirement, and packaged cross-platform distribution remains a later release gate."
       },
-      "unresolvedFinding": "R2-06: no Desktop WebView host evidence exists; all current evidence is Chromium."
+      "unresolvedFinding": "R2-06: no Desktop WebView host evidence exists; all current evidence is Chromium.",
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-RES-1",
@@ -251,7 +264,8 @@
         "sampling-meets-requirement",
         "disk-cache-reads-queue-and-children-recorded"
       ],
-      "unresolvedFinding": "R2-06: current candidate-route evidence records request bytes only; memory is measured for the reference reader, so candidate memory is missing."
+      "unresolvedFinding": "R2-06: current candidate-route evidence records request bytes only; memory is measured for the reference reader, so candidate memory is missing.",
+      "requiresRasterFixture": true
     },
     {
       "id": "Q-DISPLAY-1",
@@ -269,10 +283,12 @@
         "hundred-valid-latencies-per-run",
         "runs-report-successful-rendering",
         "p95-from-individual-latencies",
+        "statistics-agree-with-samples",
         "cache-state-recorded",
         "no-ui-thread-task-above-bound",
         "unsupported-observation-is-inconclusive"
-      ]
+      ],
+      "requiresRasterFixture": true
     }
   ],
   "laterReleaseGates": [

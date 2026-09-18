@@ -257,7 +257,14 @@ def valid_trace(*, long_task_ms: float | None = 20.0,
     if runs is not None:
         return {"runs": runs}
     base = []
-    # One cold and three warm runs, as the plan's display trace requires.
+    # One cold and three warm runs, as the plan's display trace requires. The
+    # reported statistics are the nearest-rank values for the sample below, so a
+    # control that is physically consistent is available to every test.
+    sample = [0.5 + (i % 7) * 0.3 for i in range(128)]
+    ordered = sorted(sample)
+    median = ordered[63]
+    p95 = ordered[121]
+    maximum = ordered[-1]
     for index in range(4):
         base.append({
             "name": "cold" if index == 0 else "warm",
@@ -265,10 +272,10 @@ def valid_trace(*, long_task_ms: float | None = 20.0,
             "tileRequests": 128,
             "tilesRendered": 128,
             "failedTiles": 0,
-            "medianMs": 0.4,
-            "p95Ms": 16.7,
-            "maxMs": 31.3,
-            "individualLatenciesMs": [0.5 + (i % 7) * 0.3 for i in range(128)],
+            "medianMs": median,
+            "p95Ms": p95,
+            "maxMs": maximum,
+            "individualLatenciesMs": list(sample),
             "cachesCleared": "fresh page",
             "longTaskMaxMs": long_task_ms,
             "longTaskCount": 0 if long_task_ms is None else 1,
@@ -349,6 +356,53 @@ class DisplayTraceFieldContract(unittest.TestCase):
 # Assembler: route, host and measurement scoping
 # --------------------------------------------------------------------------- #
 
+#: Values the declared route/environment in ASSEMBLY and the report identities
+#: must agree on. A mismatch between these is an identity conflict, not a gap.
+ROUTE_ID = "candidate-raster-route-v1"
+ENVIRONMENT_ID = "qualification-host-chromium-150"
+HOST_ID = "chromium"
+FIXTURE_HASH = "a" * 64
+CANDIDATE_ARTIFACT = {"name": "candidate", "version": "1.0.0"}
+GDAL_ARTIFACT = {"name": "gdal", "version": "3.8.4"}
+REFERENCE_ARTIFACT = {"name": "reference-resolver", "version": "harness"}
+
+
+def report_identity(experiment: str, *, route_id: str = ROUTE_ID,
+                    environment: str = ENVIRONMENT_ID, host: str = HOST_ID,
+                    fixtures: list[dict] | None = None,
+                    fixture_policy: str = "measured",
+                    sidecar_policy: str = "unmeasured",
+                    artifact: dict | None = None,
+                    digest: str | None = None,
+                    run_id: str = "run-0001") -> dict:
+    """The identity block a raw report must carry to be admitted as evidence."""
+    return {
+        "id": experiment,
+        "experiment": experiment,
+        "digest": digest or ("sha256:" + "0" * 64),
+        "runId": run_id,
+        "recordedAt": time.time(),
+        "command": f"measure.py {experiment} --out reports/",
+        "routeId": route_id,
+        "environment": environment,
+        "host": host,
+        "fixturePolicy": fixture_policy,
+        "sidecarPolicy": sidecar_policy,
+        "fixtures": fixtures if fixtures is not None else [
+            {"name": "derived_cog", "sha256": FIXTURE_HASH}],
+        "artifact": artifact or {"name": "candidate", "version": "1.0.0"},
+    }
+
+
+def assembly() -> dict:
+    """A fresh copy of the declared route/environment for each assembly.
+
+    Returned as a deep copy so a test that amends the declared route cannot leak
+    that change into the next test through a shared nested dict.
+    """
+    return copy.deepcopy(ASSEMBLY)
+
+
 def passing_reports(root: Path) -> dict[str, Path]:
     """Minimal reports that assemble into a complete, passing bundle.
 
@@ -361,7 +415,17 @@ def passing_reports(root: Path) -> dict[str, Path]:
         return path
 
     q1 = write("q1-artifacts.json", {
-        "experiment": "q1-artifacts", "result": "pass",
+        "experiment": "q1-artifacts", "result": "pass", "failures": [],
+        "identity": report_identity("q1-artifacts", fixture_policy="artifact-only",
+                                    fixtures=[], artifact=CANDIDATE_ARTIFACT),
+        "fixturesTested": 0,
+        # The pinned revision this artifact must correspond to, recorded as the
+        # real report would: the artifact was built from the pinned revision.
+        "sourceCorrespondence": [{
+            "artifact": "candidate", "version": "1.0.0",
+            "pinnedRevision": "pin-abc123", "artifactRevision": "pin-abc123",
+            "matches": True, "buildCommand": "cargo build --target wasm32-unknown-unknown",
+            "buildReproduced": True}],
         "notes": ["whitebox-wasm: no published artifact matches the pinned commit"],
         "verifiedArtifacts": [{"name": "candidate", "version": "1.0.0",
                                "license": "MIT", "wasm": []}],
@@ -370,10 +434,13 @@ def passing_reports(root: Path) -> dict[str, Path]:
             {"name": "integrity:candidate", "ok": True},
             {"name": "license-recorded:candidate", "ok": True},
             {"name": "correspondence-recorded:whitebox-wasm", "ok": True},
+            {"name": "apis-and-worker-target-recorded", "ok": True},
         ],
     })
     q2 = write("q2-numeric.json", {
         "experiment": "q2-numeric", "result": "pass", "failures": [],
+        "identity": report_identity("q2-numeric", artifact=CANDIDATE_ARTIFACT),
+        "fixturesTested": 1,
         "testedWindows": 9,
         "serverLedger": {"fixtureBytesServed": 488502, "fixtureRequests": 66},
         "assertions": [
@@ -384,6 +451,9 @@ def passing_reports(root: Path) -> dict[str, Path]:
     })
     q3prepare = write("q3-prepare.json", {
         "experiment": "q3-prepare", "result": "pass", "failures": [],
+        "identity": report_identity("q3-prepare", artifact=GDAL_ARTIFACT,
+                                    sidecar_policy="not_applicable"),
+        "fixturesTested": 1,
         "assertions": [
             {"name": "original-unchanged", "ok": True},
             {"name": "original-hash-declared", "ok": True},
@@ -396,6 +466,8 @@ def passing_reports(root: Path) -> dict[str, Path]:
     })
     q3members = write("q3-members.json", {
         "experiment": "q3-members", "result": "pass", "failures": [],
+        "identity": report_identity("q3-members", artifact=REFERENCE_ARTIFACT),
+        "fixturesTested": 1,
         "assertions": [
             {"name": "multi-member:across-columns-0-1", "ok": True},
             {"name": "gap-empty:1-2", "ok": True},
@@ -405,6 +477,8 @@ def passing_reports(root: Path) -> dict[str, Path]:
     })
     q4slope = write("q4-slope.json", {
         "experiment": "q4-slope", "result": "pass", "failures": [],
+        "identity": report_identity("q4-slope", artifact=GDAL_ARTIFACT),
+        "fixturesTested": 1,
         "assertions": [
             {"name": "analytic:plane2000/origin", "ok": True},
             {"name": "validity:plane2000/origin", "ok": True},
@@ -417,15 +491,20 @@ def passing_reports(root: Path) -> dict[str, Path]:
     })
     q4crs = write("q4-crs.json", {
         "experiment": "q4-crs", "result": "pass", "failures": [],
+        "identity": report_identity("q4-crs", artifact=GDAL_ARTIFACT),
+        "fixturesTested": 1,
         "assertions": [
             {"name": "reference-epsg-configured-explicitly", "ok": True},
             {"name": "crs-resolver-identified", "ok": True},
             {"name": "candidate-projection-matches-reference", "ok": True},
             {"name": "candidate-returned-coordinate-addresses-requested-pixel", "ok": True},
+            {"name": "original-metadata-untouched", "ok": True},
         ],
     })
     q5 = write("q5-lifecycle.json", {
         "experiment": "q5-lifecycle", "result": "pass", "failures": [],
+        "identity": report_identity("q5-lifecycle", artifact=CANDIDATE_ARTIFACT),
+        "fixturesTested": 1,
         "assertions": [
             {"name": "cancellation-stops-scheduling", "ok": True},
             {"name": "cancellation-settles-in-bound", "ok": True},
@@ -441,14 +520,36 @@ def passing_reports(root: Path) -> dict[str, Path]:
     })
     q6 = write("q6-resources.json", {
         "experiment": "q6-resources", "result": "pass", "failures": [],
+        "identity": report_identity("q6-resources", artifact=CANDIDATE_ARTIFACT),
+        "fixturesTested": 1,
+        "assertions": [
+            {"name": "reference-read-bounded", "ok": True},
+            {"name": "reference-memory-within-budget", "ok": True},
+        ],
         "measurements": [
-            {"route": "candidate (wasm ranged transport)", "perFixture": [],
-             "combined": {"largestRequest": 65536}},
+            {"route": "candidate (wasm ranged transport)", "routeRole": "candidate",
+             "perFixture": [],
+             "combined": {"largestRequest": 65536},
+             # The candidate route's own memory, sampled at the plan's interval.
+             "incrementalPeakRssMiB": 300.0, "sampleIntervalMs": 100,
+             "sampleCount": 12, "maxConcurrentChildren": 1,
+             "temporaryDiskHighWaterBytes": 4096, "decodedCacheBytes": 1024,
+             "activeReads": 2, "queueDepth": 1},
             {"route": "reference reader (native byte-range, NOT the candidate route)",
+             "routeRole": "reference",
              "incrementalPeakRssMiB": 18.32, "maxSingleReadBytes": 4194304},
         ],
     })
-    trace = write("q6-trace.json", valid_trace(long_task_ms=20.0))
+    trace_payload = valid_trace(long_task_ms=20.0)
+    trace_payload.update({
+        "experiment": "q6-trace", "result": "pass", "failures": [],
+        "identity": report_identity("q6-trace", artifact=CANDIDATE_ARTIFACT),
+        "fixturesTested": 1,
+        "assertions": [{"name": "trace-recorded", "ok": True}],
+    })
+    trace = write("q6-trace.json", trace_payload)
+    # The ledger is the transport's own byte accounting, not a measured report, so
+    # it is not admitted as evidence and carries no identity block.
     ledger = write("ledger.json", {"bytes": 1000, "requests": 10, "ranged": 8,
                                    "full": 2, "perFile": {}})
     return {"q1": q1, "q2": q2, "q3prepare": q3prepare, "q3members": q3members,
@@ -457,10 +558,12 @@ def passing_reports(root: Path) -> dict[str, Path]:
 
 
 ASSEMBLY = {
-    "environment": {"host": "qualification host", "engine": "Chromium 150"},
+    "environment": {"host": "qualification host", "engine": "Chromium 150",
+                    "environment": ENVIRONMENT_ID},
     "route": {
+        "routeId": ROUTE_ID,
         "numeric": "whitebox-wasm CogStream over HTTP Range requests",
-        "numericArtifact": {"name": "candidate", "version": "1.0.0"},
+        "numericArtifact": dict(CANDIDATE_ARTIFACT),
         "artifacts": "candidate artifact resolution",
         "prepare": "native GDAL preparation",
         "member": "ordered member replay",
@@ -468,12 +571,12 @@ ASSEMBLY = {
         "crs": "native CRS resolution",
         "lifecycle": "cooperative tile-level cancellation",
         "display": "cog-tiler-wasm renderTilePNG over a disk-backed File",
-        "displayArtifact": {"name": "candidate", "version": "1.0.0"},
-        "prepareArtifact": {"name": "gdal", "version": "3.8.4"},
-        "slopeArtifact": {"name": "gdal", "version": "3.8.4"},
-        "crsArtifact": {"name": "gdal", "version": "3.8.4"},
+        "displayArtifact": dict(CANDIDATE_ARTIFACT),
+        "prepareArtifact": dict(GDAL_ARTIFACT),
+        "slopeArtifact": dict(GDAL_ARTIFACT),
+        "crsArtifact": dict(GDAL_ARTIFACT),
     },
-    "artifacts": [{"name": "candidate", "version": "1.0.0"}],
+    "artifacts": [dict(CANDIDATE_ARTIFACT)],
     "fixtures": [{"name": "derived_cog", "sha256": "a" * 64}],
     "display": {"ui_thread_bound_ms": 50.0, "cold_runs": 1, "warm_runs": 3,
                 "min_latencies_per_run": 100, "memory_budget_mib": 1024.0},
@@ -498,7 +601,7 @@ class AssemblerTestBase(GateTestBase):
         reports = dict(reports)
         reports.update(overrides)
         return evidence.assemble(self.contract, out=self.root / "bundle.json",
-                                 reports=reports, host=host, **ASSEMBLY)
+                                 reports=reports, host=host, **assembly())
 
     def entry(self, bundle: dict, requirement_id: str) -> dict:
         return bundle["requirements"][requirement_id]
@@ -522,7 +625,7 @@ class CandidateMeasurementScope(AssemblerTestBase):
         self.write_reports()
         self.amend("q6resources", lambda p: p.__setitem__(
             "measurements", [m for m in p["measurements"]
-                             if not str(m.get("route", "")).startswith("candidate")]))
+                             if m.get("routeRole") != "candidate"]))
         bundle = self.assemble()
         assertions = self.entry(bundle, "Q-RES-1")["assertions"]
         self.assertEqual(assertions["candidate-memory-within-budget"], evidence.UNKNOWN)
@@ -534,6 +637,7 @@ class CandidateMeasurementScope(AssemblerTestBase):
         self.write_reports()
         self.amend("q6resources", lambda p: p["measurements"].append(
             {"route": "candidate (wasm ranged transport)",
+             "routeRole": "candidate",
              "incrementalPeakRssMiB": 2048.0}))
         bundle = self.assemble()
         entry = self.entry(bundle, "Q-RES-1")
@@ -545,6 +649,7 @@ class CandidateMeasurementScope(AssemblerTestBase):
         self.write_reports()
         self.amend("q6resources", lambda p: p["measurements"].append(
             {"route": "candidate (wasm ranged transport)",
+             "routeRole": "candidate",
              "incrementalPeakRssMiB": 300.0}))
         bundle = self.assemble()
         self.assertEqual(self.entry(bundle, "Q-RES-1")["assertions"]
@@ -807,18 +912,739 @@ class ReproducedReviewCases(AssemblerTestBase):
         self.assertEqual(display.assertions["one-cold-and-three-warm-runs"],
                          evidence.FAIL)
 
-    def test_current_q_evidence_set_cannot_reach_a_pass(self) -> None:
-        """Level 3: a full, internally consistent run of probes still is not enough.
+    def test_unobserved_requirements_stay_blocking_without_their_measurement(self) -> None:
+        """Level 3: a complete, consistent probe set still is not enough (R3-03).
 
-        Every probe report passed its own checks, yet requirements no probe
-        observes remain unsatisfied. This is the distinction the gate exists to
-        make, and it must not be softened by better probe results alone.
+        This is the distinction the gate exists to make. Each requirement below is
+        one no probe observes, and it stays blocking even when every report that
+        does exist passes its own checks.
         """
-        decision = self.evaluate_assembled()
+        self.write_reports()
+        # Remove the candidate's own memory measurement, which the recorded
+        # evidence does not have: only request bytes were recorded there.
+        self.amend("q6resources", lambda p: p["measurements"].__setitem__(
+            0, {k: v for k, v in p["measurements"][0].items()
+                if k not in ("incrementalPeakRssMiB", "sampleIntervalMs",
+                             "sampleCount", "temporaryDiskHighWaterBytes",
+                             "decodedCacheBytes", "activeReads", "queueDepth",
+                             "maxConcurrentChildren")}))
+        decision = gate.evaluate(self.contract, self.bundle(self.assemble(), "b.json"))
         self.assertNotEqual(decision.verdict, gate.PASS)
         blocking = set(decision.as_dict()["blockingRequirementIds"])
-        # Requirements no probe currently observes must remain blocking.
         for requirement_id in ("Q-HOST-1", "Q-RES-1", "Q-CANCEL-1",
-                               "Q-TEARDOWN-1", "Q-MEMBER-1"):
+                               "Q-TEARDOWN-1", "Q-MEMBER-1", "Q-FAILINJ-1"):
             self.assertIn(requirement_id, blocking,
                           f"{requirement_id} must remain unresolved")
+
+
+# --------------------------------------------------------------------------- #
+# R3-01: a source report's own failures must reach the gate
+# --------------------------------------------------------------------------- #
+
+class SourceReportFailures(GateTestBase):
+    """Admission must not promote observations from a report that failed itself."""
+
+    def assemble_and_evaluate(self, mutate) -> gate.Decision:
+        """Amend exactly one report, assemble, and evaluate the whole bundle."""
+        write = getattr(self, "reports", None) or None
+        if write is None:
+            self.reports = passing_reports(self.root)
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def display_control(self) -> gate.Decision:
+        self.reports = passing_reports(self.root)
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_passes_the_numeric_requirement(self) -> None:
+        """Control: with an intact report, Q-LOCAL-1 is satisfied."""
+        decision = self.display_control()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-LOCAL-1").reasons)
+
+    def test_failed_precondition_fails_the_requirement(self) -> None:
+        """A failing fixture-hash check fails Q-LOCAL-1 even if values pass."""
+        def mutate(payload):
+            for assertion in payload["assertions"]:
+                if assertion["name"] == "no-whole-file-request:plane2000":
+                    assertion["ok"] = False
+            payload["result"] = "fail"
+            payload["failures"] = [
+                "fixture-hash:plane2000: sha256 mismatch on the measured fixture"]
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("q2-numeric", reasons, "the source report must be named")
+        self.assertIn("fixture-hash", reasons, "the failed precondition must be named")
+
+    def test_result_contradiction_fails_even_when_assertions_pass(self) -> None:
+        """A report claiming pass while recording failures is corrupt."""
+        def mutate(payload):
+            payload["failures"] = ["something the report itself recorded"]
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("records failures", " ".join(requirement.reasons))
+
+    def test_inconclusive_source_does_not_pass(self) -> None:
+        """An inconclusive report cannot supply a passing observation."""
+        def mutate(payload):
+            payload["result"] = "inconclusive"
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertNotEqual(decision.verdict, gate.PASS)
+
+    def test_partial_successes_stay_visible_but_do_not_satisfy(self) -> None:
+        """A failed source keeps its measured detail without passing the gate."""
+        def mutate(payload):
+            payload["result"] = "fail"
+            payload["failures"] = ["fixture-hash:plane2000: mismatch"]
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        # The value/validity observations are still recorded for review, in a
+        # field that cannot be mistaken for satisfying evidence.
+        self.assertTrue(requirement.observed_assertions,
+                        "measured observations must stay visible")
+        self.assertIn("values-match-independent-reference",
+                      requirement.observed_assertions)
+        self.assertEqual(requirement.assertions, {},
+                         "a non-admitted source must promote nothing")
+
+    def test_unrelated_requirements_are_preserved_when_one_source_fails(self) -> None:
+        """One failing source must not erase another requirement's evidence."""
+        def mutate(payload):
+            payload["result"] = "fail"
+            payload["failures"] = ["fixture-hash:plane2000: mismatch"]
+        decision = self.assemble_and_evaluate(mutate)
+        self.assertEqual(self.requirement(decision, "Q-PREP-1").verdict, gate.PASS)
+        self.assertEqual(self.requirement(decision, "Q-CRS-1").verdict, gate.PASS)
+
+
+# --------------------------------------------------------------------------- #
+# R3-02: identity and hash admission
+# --------------------------------------------------------------------------- #
+
+class IdentityAdmission(GateTestBase):
+    """Identity is extracted from the report and compared, never copied."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_identity(self, role: str, mutate) -> None:
+        path = self.reports[role]
+        payload = json.loads(path.read_text())
+        mutate(payload["identity"])
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self) -> gate.Decision:
+        """Assemble from the (possibly amended) reports and evaluate the bundle.
+
+        Named distinctly from the base `evaluate(payload)` helper: shadowing it
+        made these tests depend on which class ran first.
+        """
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_matching_identities_pass(self) -> None:
+        decision = self.assemble_and_evaluate()
+        for requirement_id in ("Q-LOCAL-1", "Q-PREP-1", "Q-RES-1"):
+            with self.subTest(requirement=requirement_id):
+                self.assertEqual(self.requirement(decision, requirement_id).verdict,
+                                 gate.PASS,
+                                 self.requirement(decision, requirement_id).reasons)
+
+    def test_missing_fixture_hash_is_inconclusive(self) -> None:
+        """A measured fixture without a hash cannot be matched to the manifest."""
+        self.amend_identity("q2", lambda ident: ident["fixtures"][0].pop("sha256"))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("records no hash", " ".join(requirement.reasons))
+
+    def test_fixture_hash_conflict_fails_with_both_values(self) -> None:
+        self.amend_identity(
+            "q2", lambda ident: ident["fixtures"][0].update({"sha256": "b" * 64}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("hash conflict", reasons)
+        self.assertIn("b" * 8, reasons, "the observed value must be named")
+        self.assertIn("a" * 8, reasons, "the expected value must be named")
+
+    def test_artifact_version_conflict_fails(self) -> None:
+        """A source that measured a different artifact version conflicts.
+
+        The declared route is copied before it is changed: mutating the shared
+        ASSEMBLY fixture in place leaked this conflict into every later test.
+        """
+        # Only the declared route changes: the report still records 1.0.0, so the
+        # two disagree.
+        bundle = evidence.assemble(
+            self.contract, out=self.root / "b.json", reports=self.reports,
+            host="chromium",
+            **{**ASSEMBLY,
+               "route": {**ASSEMBLY["route"],
+                         "numericArtifact": {**CANDIDATE_ARTIFACT, "version": "9.9.9"}}})
+        decision = gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("9.9.9", reasons)
+        self.assertIn("1.0.0", reasons)
+
+    def test_route_conflict_fails(self) -> None:
+        """A report measured on a different route cannot evidence the declared one."""
+        self.amend_identity("q2", lambda ident: ident.update({"routeId": "other-route"}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("route conflict", reasons)
+        self.assertIn("other-route", reasons)
+        self.assertIn(ROUTE_ID, reasons)
+
+    def test_environment_conflict_fails(self) -> None:
+        self.amend_identity(
+            "q2", lambda ident: ident.update({"environment": "some-other-host"}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("environment conflict", " ".join(requirement.reasons))
+
+    def test_missing_route_identity_is_inconclusive_not_silently_accepted(self) -> None:
+        """An unlabelled report cannot inherit the declared route by default."""
+        self.amend_identity("q2", lambda ident: ident.pop("routeId"))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("does not record the route", " ".join(requirement.reasons))
+
+    def test_measured_policy_without_fixtures_is_inconclusive(self) -> None:
+        def mutate(payload):
+            payload["identity"]["fixtures"] = []
+            payload["fixturesTested"] = 0
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("names no fixture", " ".join(requirement.reasons))
+
+    def test_artifact_only_policy_cannot_excuse_a_raster_requirement(self) -> None:
+        """Declaring no fixture cannot bypass a requirement measured on a raster."""
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        payload["identity"].update({"fixturePolicy": "artifact-only", "fixtures": []})
+        payload["fixturesTested"] = 0
+        path.write_text(json.dumps(payload))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("must be evidenced by a measured raster fixture",
+                      " ".join(requirement.reasons))
+
+    def test_fixture_count_disagreement_fails(self) -> None:
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        payload["fixturesTested"] = 7
+        path.write_text(json.dumps(payload))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("fixturesTested=7", " ".join(requirement.reasons))
+
+    def test_legacy_report_without_identity_is_inconclusive(self) -> None:
+        """A report predating identity blocks stays readable, never upgraded."""
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        payload.pop("identity")
+        path.write_text(json.dumps(payload))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("no identity block", " ".join(requirement.reasons))
+        self.assertTrue(requirement.admission.get("legacy"))
+
+    def test_reassembly_cannot_launder_a_conflict(self) -> None:
+        """Assembling twice from unchanged sources reproduces the same conflict."""
+        self.amend_identity(
+            "q2", lambda ident: ident["fixtures"][0].update({"sha256": "c" * 64}))
+        first = self.assemble_and_evaluate()
+        second = self.assemble_and_evaluate()
+        self.assertEqual(first.verdict, gate.FAIL)
+        self.assertEqual(second.verdict, gate.FAIL)
+        self.assertEqual(self.requirement(first, "Q-LOCAL-1").verdict,
+                         self.requirement(second, "Q-LOCAL-1").verdict)
+
+    def test_provenance_is_recorded_from_the_report_not_the_call(self) -> None:
+        """The entry's provenance comes from the report's own identity block."""
+        decision = self.assemble_and_evaluate()
+        bundle = evidence.assemble(self.contract, out=self.root / "c.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        entry = bundle["requirements"]["Q-LOCAL-1"]
+        self.assertEqual(entry["provenance"]["routeId"], ROUTE_ID)
+        self.assertEqual(entry["provenance"]["sourceDigest"], "sha256:" + "0" * 64)
+        self.assertEqual(entry["provenance"]["fixtures"][0]["sha256"], FIXTURE_HASH)
+
+
+# --------------------------------------------------------------------------- #
+# R3-03: route sufficiency and source correspondence
+# --------------------------------------------------------------------------- #
+
+class RouteSufficiency(GateTestBase):
+    """Naming a route in a report does not make it the required route."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_identity(self, role: str, mutate) -> None:
+        path = self.reports[role]
+        payload = json.loads(path.read_text())
+        mutate(payload["identity"])
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self, **route_overrides) -> gate.Decision:
+        declared = assembly()
+        declared["route"] = {**declared["route"], **route_overrides}
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **declared)
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_declared_and_recorded_transport_agree(self) -> None:
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-LOCAL-1").reasons)
+
+    def test_http_only_transport_cannot_satisfy_the_local_bridge(self) -> None:
+        """HTTP-range evidence is a real capability but not the required bridge."""
+        self.amend_identity(
+            "q2", lambda ident: ident.update({"transport": "http-range"}))
+        decision = self.assemble_and_evaluate(
+            numericExpectedTransport="scoped-local-bridge")
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("http-range", reasons)
+        self.assertIn("scoped-local-bridge", reasons)
+        # The HTTP capability observations stay visible for review.
+        self.assertTrue(requirement.observed_assertions or requirement.assertions)
+
+    def test_renaming_the_route_string_does_not_change_the_transport(self) -> None:
+        """Reassembly with a different label must not launder the transport."""
+        self.amend_identity(
+            "q2", lambda ident: ident.update({"transport": "http-range"}))
+        decision = self.assemble_and_evaluate(
+            numeric="the intended scoped Desktop/native/worker bridge",
+            numericExpectedTransport="scoped-local-bridge")
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict,
+                         gate.INCONCLUSIVE)
+
+    def test_matching_local_bridge_transport_passes(self) -> None:
+        self.amend_identity(
+            "q2", lambda ident: ident.update({"transport": "scoped-local-bridge"}))
+        decision = self.assemble_and_evaluate(
+            numericExpectedTransport="scoped-local-bridge")
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS)
+
+
+class SourceCorrespondence(GateTestBase):
+    """Artifact/source correspondence cannot be satisfied by recording a mismatch."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_q1(self, mutate) -> None:
+        path = self.reports["q1"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self) -> gate.Decision:
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_matching_source_passes(self) -> None:
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [{
+                "artifact": "candidate", "version": "1.0.0",
+                "pinnedRevision": "abc123", "artifactRevision": "abc123",
+                "matches": True}]}))
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-ART-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-ART-1").reasons)
+
+    def test_different_source_revision_cannot_pass(self) -> None:
+        """A published artifact at another revision is not correspondence."""
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [{
+                "artifact": "candidate", "version": "1.0.0",
+                "pinnedRevision": "abc123", "artifactRevision": "def456",
+                "matches": False}]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("abc123", reasons)
+        self.assertIn("def456", reasons)
+
+    def test_reproducible_build_evidence_satisfies_correspondence(self) -> None:
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [{
+                "artifact": "candidate", "version": "1.0.0",
+                "pinnedRevision": "abc123", "artifactRevision": "abc123",
+                "matches": True, "buildCommand": "cargo build --target wasm32",
+                "buildReproduced": True}]}))
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-ART-1").verdict, gate.PASS)
+
+    def test_unverified_correspondence_is_inconclusive(self) -> None:
+        """No correspondence record at all is a gap, not a silent pass.
+
+        The shared fixture records correspondence for its control, so the record
+        is removed here to isolate the gap.
+        """
+        self.amend_q1(lambda payload: payload.pop("sourceCorrespondence", None))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("correspondence", " ".join(requirement.reasons).lower())
+
+
+# --------------------------------------------------------------------------- #
+# R3-04: sidecar evidence and fixture policy
+# --------------------------------------------------------------------------- #
+
+class SidecarEvidence(GateTestBase):
+    """Absence of sidecar evidence is a gap; only policy can settle it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_q3(self, mutate) -> None:
+        path = self.reports["q3prepare"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self) -> gate.Decision:
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_declared_absent_sidecar_passes(self) -> None:
+        """The shared fixture declares that no sidecar applies."""
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-PREP-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-PREP-1").reasons)
+
+    def test_measured_sidecar_that_changed_fails(self) -> None:
+        self.amend_q3(lambda payload: payload.update({
+            "sidecar": {"expectedSha256": "d" * 64, "sha256": "e" * 64}}))
+        self.amend_q3(lambda payload: payload["identity"].update(
+            {"sidecarPolicy": "measured"}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-PREP-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("sidecar changed", " ".join(requirement.reasons))
+
+    def test_measured_sidecar_that_survived_passes(self) -> None:
+        self.amend_q3(lambda payload: payload.update({
+            "sidecar": {"expectedSha256": "d" * 64, "sha256": "d" * 64}}))
+        self.amend_q3(lambda payload: payload["identity"].update(
+            {"sidecarPolicy": "measured"}))
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-PREP-1").verdict, gate.PASS)
+
+    def test_unobserved_sidecar_is_inconclusive(self) -> None:
+        """An unmeasured sidecar cannot be assumed absent."""
+        self.amend_q3(lambda payload: payload["identity"].update(
+            {"sidecarPolicy": "unmeasured"}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-PREP-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("sidecar", " ".join(requirement.reasons).lower())
+
+    def test_measured_policy_without_a_sidecar_record_is_inconclusive(self) -> None:
+        self.amend_q3(lambda payload: payload["identity"].update(
+            {"sidecarPolicy": "measured"}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-PREP-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("not recorded", " ".join(requirement.reasons))
+
+
+# --------------------------------------------------------------------------- #
+# R3-05: display statistics derived from samples
+# --------------------------------------------------------------------------- #
+
+class PercentileConvention(unittest.TestCase):
+    """The percentile convention, frozen against hand-calculated values.
+
+    Expected values below are computed by hand from the producer's documented
+    convention, not by calling the implementation under test.
+    """
+
+    def test_small_samples_match_hand_calculation(self) -> None:
+        # sorted [1,2,3,4]: median index ceil(0.5*4)-1 = 1 -> 2
+        #                    p95    index ceil(0.95*4)-1 = 3 -> 4
+        self.assertEqual(evidence.sample_percentile([4, 1, 3, 2], 50), 2)
+        self.assertEqual(evidence.sample_percentile([4, 1, 3, 2], 95), 4)
+
+    def test_single_sample_returns_that_sample(self) -> None:
+        self.assertEqual(evidence.sample_percentile([7.5], 50), 7.5)
+        self.assertEqual(evidence.sample_percentile([7.5], 95), 7.5)
+
+    def test_boundary_rounding_picks_the_next_rank(self) -> None:
+        # 100 samples 1..100: p95 index ceil(95)-1 = 94 -> 95
+        values = [float(i) for i in range(1, 101)]
+        self.assertEqual(evidence.sample_percentile(values, 95), 95.0)
+        # 20 samples: ceil(0.95*20)-1 = 18 -> the 19th smallest = 19
+        self.assertEqual(evidence.sample_percentile([float(i) for i in range(1, 21)], 95),
+                         19.0)
+        # p100 clamps to the largest
+        self.assertEqual(evidence.sample_percentile(values, 100), 100.0)
+
+    def test_empty_and_invalid_samples(self) -> None:
+        self.assertIsNone(evidence.sample_percentile([], 95))
+        self.assertIsNone(evidence.sample_percentile([float("nan")], 95))
+
+
+class DisplayStatistics(GateTestBase):
+    """Reported statistics must agree with the sample and with the counters."""
+
+    def assertions(self, trace: dict) -> tuple[dict, list[str], dict]:
+        return evidence.display_trace_assertions(trace, **TRACE_LIMITS)
+
+    def sample_run(self, **overrides) -> dict:
+        """A run whose reported statistics match its own sample.
+
+        The latencies are a fixed 128-point sample; the median, p95 and max are
+        the nearest-rank values for that sample, calculated by hand:
+        sorted sample is 0.0..5.9 in steps of 0.1, repeated; index for p50 is 63
+        (2.7), for p95 is 121 (5.6), and the maximum is 5.9.
+        """
+        base = {
+            "name": "warm", "ok": True, "tileRequests": 128, "tilesRendered": 128,
+            "failedTiles": 0, "medianMs": 2.7, "p95Ms": 5.6, "maxMs": 5.9,
+            "individualLatenciesMs": [0.1 * (i % 60) for i in range(128)],
+            "cachesCleared": "fresh page", "longTaskMaxMs": 5.0,
+            "longTaskCount": 0, "longTaskObserverSupported": True,
+        }
+        base.update(overrides)
+        return base
+
+    def test_control_consistent_run_passes_its_statistics(self) -> None:
+        results, notes, observed = self.assertions({"runs": [self.sample_run()]})
+        self.assertEqual(results["statistics-agree-with-samples"], evidence.PASS, notes)
+        self.assertAlmostEqual(observed["sampleP95Ms"], 5.6, places=6)
+
+    def test_one_failed_tile_fails_rendering(self) -> None:
+        results, _, _ = self.assertions(
+            {"runs": [self.sample_run(failedTiles=1, tilesRendered=127)]})
+        self.assertEqual(results["runs-report-successful-rendering"], evidence.FAIL)
+
+    def test_missing_counters_are_rejected(self) -> None:
+        for field in ("tileRequests", "tilesRendered", "failedTiles"):
+            with self.subTest(field=field):
+                run = self.sample_run()
+                del run[field]
+                results, _, _ = self.assertions({"runs": [run]})
+                self.assertEqual(results["runs-report-successful-rendering"],
+                                 evidence.UNKNOWN)
+
+    def test_invalid_counts_are_rejected(self) -> None:
+        for value in (-1, 1.5):
+            with self.subTest(value=value):
+                results, _, _ = self.assertions(
+                    {"runs": [self.sample_run(tilesRendered=value)]})
+                self.assertEqual(results["runs-report-successful-rendering"],
+                                 evidence.FAIL)
+
+    def test_counts_disagreeing_with_samples_are_rejected(self) -> None:
+        """128 samples but only one rendered tile is an inconsistency."""
+        results, notes, _ = self.assertions(
+            {"runs": [self.sample_run(tilesRendered=1, tileRequests=1)]})
+        self.assertEqual(results["statistics-agree-with-samples"], evidence.FAIL)
+        self.assertTrue(any("rendered" in n for n in notes), notes)
+
+    def test_inconsistent_reported_p95_is_rejected(self) -> None:
+        """A reported p95 that disagrees with the samples is not accepted."""
+        results, notes, observed = self.assertions({"runs": [self.sample_run(p95Ms=999.0)]})
+        self.assertEqual(results["statistics-agree-with-samples"], evidence.FAIL)
+        self.assertIn("p95", " ".join(notes))
+        # The sample-derived value is reported so the disagreement is visible.
+        self.assertAlmostEqual(observed["sampleP95Ms"], 5.6, places=6)
+
+    def test_sample_derived_statistic_is_used_not_the_reported_one(self) -> None:
+        """Even a plausible reported number cannot replace the sample."""
+        results, _, observed = self.assertions({"runs": [self.sample_run(p95Ms=5.0)]})
+        self.assertEqual(results["statistics-agree-with-samples"], evidence.FAIL)
+        self.assertAlmostEqual(observed["sampleP95Ms"], 5.6, places=6)
+
+    def test_invalid_latency_values_are_rejected(self) -> None:
+        for bad in (float("nan"), -1.0, "fast"):
+            with self.subTest(bad=bad):
+                values = [0.1] * 127 + [bad]
+                results, _, _ = self.assertions(
+                    {"runs": [self.sample_run(individualLatenciesMs=values)]})
+                self.assertEqual(results["hundred-valid-latencies-per-run"], evidence.FAIL)
+
+
+# --------------------------------------------------------------------------- #
+# Same-class audit: assertions that were admitted without evidence
+# --------------------------------------------------------------------------- #
+
+class UnconditionalAssertions(GateTestBase):
+    """An assertion must rest on an observation, not on the absence of one."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def assemble_and_evaluate(self, mutate=None) -> gate.Decision:
+        if mutate:
+            path = self.reports["q4crs"]
+            payload = json.loads(path.read_text())
+            mutate(payload)
+            path.write_text(json.dumps(payload))
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_crs_control_still_passes(self) -> None:
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-CRS-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-CRS-1").reasons)
+
+    def test_metadata_rewrite_assertion_requires_an_observation(self) -> None:
+        """The original-metadata claim must cite the report that checked it.
+
+        The CRS report records that the original metadata was not rewritten; with
+        that observation removed the assertion is a gap, not an automatic pass.
+        """
+        def mutate(payload):
+            payload["assertions"] = [
+                a for a in payload["assertions"]
+                if a["name"] != "original-metadata-untouched"]
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-CRS-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("no-metadata-rewritten-or-inferred", requirement.assertions)
+        self.assertEqual(requirement.assertions["no-metadata-rewritten-or-inferred"],
+                         evidence.UNKNOWN)
+
+    def test_metadata_rewrite_observation_failing_fails_the_requirement(self) -> None:
+        def mutate(payload):
+            for assertion in payload["assertions"]:
+                if assertion["name"] == "original-metadata-untouched":
+                    assertion["ok"] = False
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-CRS-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+
+
+class RouteAttribution(GateTestBase):
+    """A measurement's role is declared, not inferred from its label."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def assemble_and_evaluate(self, mutate=None) -> gate.Decision:
+        if mutate:
+            path = self.reports["q6resources"]
+            payload = json.loads(path.read_text())
+            mutate(payload)
+            path.write_text(json.dumps(payload))
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **assembly())
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_declared_roles_pass(self) -> None:
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-RES-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-RES-1").reasons)
+
+    def test_reference_measurement_relabelled_as_candidate_is_rejected(self) -> None:
+        """Renaming a reference measurement must not make it candidate evidence."""
+        def mutate(payload):
+            for measurement in payload["measurements"]:
+                if measurement.get("routeRole") == "reference":
+                    measurement["route"] = "candidate (wasm ranged transport)"
+        self.assemble_and_evaluate(mutate)
+        # The declared role still marks the entry as a reference measurement, so
+        # renaming its route text cannot move its figures into the candidate's.
+        bundle = evidence.assemble(self.contract, out=self.root / "c.json",
+                                   reports=self.reports, host="chromium",
+                                   **assembly())
+        self.assertEqual(bundle["requirements"]["Q-RES-1"]["observations"]
+                         ["candidateMemoryMiB"], 300.0,
+                         "the candidate figure must not come from the renamed "
+                         "reference measurement")
+
+    def test_relabelling_both_role_and_text_is_rejected_as_a_contradiction(self) -> None:
+        """A record that disagrees with itself cannot attribute the measurement."""
+        def mutate(payload):
+            for measurement in payload["measurements"]:
+                if measurement.get("routeRole") == "reference":
+                    measurement["routeRole"] = "candidate"
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-RES-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("reference route", " ".join(requirement.reasons))
+
+    def test_measurement_without_a_declared_role_is_not_candidate_evidence(self) -> None:
+        def mutate(payload):
+            for measurement in payload["measurements"]:
+                measurement.pop("routeRole", None)
+        decision = self.assemble_and_evaluate(mutate)
+        requirement = self.requirement(decision, "Q-RES-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("role", " ".join(requirement.reasons).lower())

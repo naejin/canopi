@@ -97,6 +97,9 @@ class Requirement:
     negative_controls: tuple[str, ...] = ()
     host_evidence_rules: dict[str, Any] = field(default_factory=dict)
     unresolved_finding: str | None = None
+    #: Whether evidence for this requirement must name a raster fixture.
+    requires_raster_fixture: bool = True
+    no_fixture_reason: str | None = None
 
     @property
     def assertion_ids(self) -> tuple[str, ...]:
@@ -154,6 +157,8 @@ def load_contract(path: Path) -> Contract:
             negative_controls=tuple(raw.get("negativeControls") or ()),
             host_evidence_rules=raw.get("hostEvidenceRules") or {},
             unresolved_finding=raw.get("unresolvedFinding"),
+            requires_raster_fixture=bool(raw.get("requiresRasterFixture", True)),
+            no_fixture_reason=raw.get("noFixtureReason"),
         ))
     if not requirements:
         raise ValueError(f"{path.name}: no requirements declared")
@@ -170,6 +175,9 @@ class RequirementVerdict:
     assertions: dict[str, str] = field(default_factory=dict)
     missing_evidence_fields: list[str] = field(default_factory=list)
     synthetic: bool = False
+    admission: dict[str, Any] = field(default_factory=dict)
+    #: Assertions the source measured but which its admission does not promote.
+    observed_assertions: dict[str, str] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -180,6 +188,8 @@ class RequirementVerdict:
             "assertions": self.assertions,
             "missingEvidenceFields": self.missing_evidence_fields,
             "synthetic": self.synthetic,
+            "admission": self.admission,
+            "observedAssertions": self.observed_assertions,
         }
 
 
@@ -454,8 +464,49 @@ def evaluate(contract: Contract, bundle_path: Path, *,
                     f"host {observed_host!r} cannot satisfy this requirement; "
                     f"accepted hosts: {accepted}")
 
-        recorded = entry.get("assertions") or {}
-        if not isinstance(recorded, dict):
+        # Admission runs before any observation is promoted. When a source did
+        # not admit, its individually passing assertions must not be able to
+        # carry the requirement, but they stay recorded so partial measured
+        # successes remain visible.
+        admission = entry.get("admission")
+        if admission is not None:
+            result.admission = admission if isinstance(admission, dict) else {}
+            admitted_verdict = (admission or {}).get("verdict") \
+                if isinstance(admission, dict) else None
+            admission_reasons = list((admission or {}).get("reasons") or []) \
+                if isinstance(admission, dict) else []
+            if admitted_verdict not in (None, PASS):
+                result.verdict = FAIL if admitted_verdict == FAIL else INCONCLUSIVE
+                result.reasons.extend(
+                    admission_reasons or [f"{requirement.id} source was not admitted"])
+                # Carry the source's own explanatory detail so a reader can trace
+                # which identity conflicted and with what value.
+                observations = entry.get("observations")
+                if isinstance(observations, dict):
+                    for note in observations.get("notes") or []:
+                        if note and note not in result.reasons:
+                            result.reasons.append(str(note))
+                # Partial measured successes stay visible for review, in their own
+                # field. They are deliberately not promoted into `assertions`,
+                # because the requirement verdict is already blocked and a reader
+                # must not mistake them for satisfying evidence.
+                observed = entry.get("observed")
+                if isinstance(observed, dict):
+                    result.observed_assertions = {
+                        key: value for key, value in observed.items()
+                        if value in ASSERTION_VERDICTS}
+                verdicts.append(result)
+                continue
+
+        declared = entry.get("assertions")
+        if declared is None:
+            # No observation was promoted at all, so nothing was measured.
+            result.verdict = INCONCLUSIVE
+            result.reasons.append(
+                f"{requirement.id} has no promoted observations")
+            verdicts.append(result)
+            continue
+        if not isinstance(declared, dict):
             result.verdict = FAIL
             result.reasons.append(f"{requirement.id} assertions are malformed")
             verdicts.append(result)
@@ -463,7 +514,7 @@ def evaluate(contract: Contract, bundle_path: Path, *,
 
         assertion_verdicts: list[str] = []
         for assertion_id in requirement.assertions:
-            value = recorded.get(assertion_id)
+            value = declared.get(assertion_id)
             if value not in ASSERTION_VERDICTS:
                 value = INCONCLUSIVE
                 result.reasons.append(f"assertion {assertion_id} has no result")
@@ -474,14 +525,20 @@ def evaluate(contract: Contract, bundle_path: Path, *,
             if value == FAIL:
                 result.reasons.append(f"assertion {assertion_id} failed")
 
-        if result.reasons and FAIL not in assertion_verdicts:
-            result.verdict = INCONCLUSIVE
-        else:
-            result.verdict = _combine(assertion_verdicts)
-        if result.verdict == PASS and result.reasons:
-            # Reasons are recorded for gaps that did not affect the verdict only
-            # when every assertion genuinely passed; keep them visible as notes.
-            result.verdict = PASS
+        combined = _combine(assertion_verdicts)
+        if combined == PASS and result.reasons:
+            # A gap recorded alongside otherwise-passing assertions still blocks:
+            # the reasons name evidence that was required and not usable.
+            combined = INCONCLUSIVE
+        # Surface the source's explanatory detail for a non-passing verdict so a
+        # reader can trace which identity or obligation produced it.
+        if combined != PASS:
+            observations = entry.get("observations")
+            if isinstance(observations, dict):
+                for note in observations.get("notes") or []:
+                    if note and note not in result.reasons:
+                        result.reasons.append(str(note))
+        result.verdict = combined
         verdicts.append(result)
 
     overall = PASS

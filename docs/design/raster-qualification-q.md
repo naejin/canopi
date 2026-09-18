@@ -2,7 +2,7 @@
 
 Status: evidence — **Q is not qualified.** Experiment subtest results are recorded below, but
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
-and the current gate verdict is **non-pass** (1 fail, 7 inconclusive, 4 pass). Ten passing subcommand
+and the current gate verdict is `inconclusive` for all twelve requirements. Ten passing subcommand
 names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
@@ -14,12 +14,14 @@ Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edi
 
 | | |
 | --- | --- |
-| Gate verdict against the recorded evidence | **fail** — 1 fail, 7 inconclusive, 4 pass |
-| Requirements passing | `Q-ART-1`, `Q-LOCAL-1`, `Q-PREP-1`, `Q-CRS-1` |
-| Requirements not passing | `Q-DISPLAY-1` (fail), `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`, `Q-HOST-1`, `Q-RES-1` (inconclusive) |
+| Gate verdict against the recorded evidence | **inconclusive** — 12 of 12 requirements not passing |
+| Requirements passing | none |
+| Requirements not passing | `Q-ART-1`, `Q-LOCAL-1`, `Q-PREP-1`, `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CRS-1`, `Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`, `Q-HOST-1`, `Q-RES-1`, `Q-DISPLAY-1` — all inconclusive |
 | Reproduce | `measure.py gate-assemble --reports <dir> --host chromium --out bundle.json` then `measure.py gate --bundle bundle.json --out decision.json` |
+| Why inconclusive | The recorded reports carry no identity/provenance block, so their route, environment, transport and fixture identity cannot be verified. This is incomplete evidence, not a measured violation |
+| Superseded | An earlier revision of this receipt reported four requirements as passing. That reading came from admitting reports without any provenance requirement and is **withdrawn**; see the [evidence-integrity receipt](raster-rework/q-evidence-integrity-receipt.md) |
 
-The sections below are **measured subtests**. They show what the probes observed and are worth
+The sections below are **measured subtests** of the individually recorded runs. They show what the probes observed and are worth
 keeping. They do not establish Q eligibility, and no accumulation of green subtests can: the
 requirements that are not passing are ones no current probe observes. Each is listed with its
 unresolved requirement id under [Limitations](#limitations-and-their-effect-on-q-eligibility).

@@ -140,6 +140,13 @@ explained by an unrelated precondition.
 
 ## Current evidence reconciliation
 
+> **Superseded verdict, retained for the debrief.** The `fail`/`4 pass` result below came from
+> admitting reports without any provenance requirement, so four requirements passed on evidence whose
+> route, transport and fixture identity were never verified. The
+> [evidence-integrity receipt](q-evidence-integrity-receipt.md) repairs admission and reports the
+> corrected verdict: `inconclusive` for all twelve requirements. Treat the section below as the
+> historical record of that repair, not as the current result.
+
 Evaluated **read-only** against the reports already present in the private scratch directory; no
 evidence was regenerated or synthesised.
 
