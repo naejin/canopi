@@ -1,0 +1,204 @@
+Q admission completeness repair — captured cycle evidence
+=========================================================
+
+Baseline d963f755. Commands run from the repository root. Outputs are trimmed to
+the decisive lines; nothing here is reconstructed after the fact.
+
+--------------------------------------------------------------------------
+R4-01 fixture membership and coverage
+--------------------------------------------------------------------------
+
+RED (intended cause: the assembler had no declared-manifest input)
+
+  $ python3 -m unittest test_qualification_gate.FixtureCoverage \
+        .test_control_covering_every_required_fixture_passes
+  ERROR: test_control_covering_every_required_fixture_passes
+    File ".../qualification_evidence.py", line ..., in assemble
+  TypeError: assemble() got an unexpected keyword argument 'fixtureManifest'
+
+  $ python3 -m unittest discover -s scripts/raster-qualification/tests
+  ERROR: test_unexpected_fixture_is_a_conflict
+  ERROR: test_missing_required_fixture_is_inconclusive
+  ERROR: test_duplicate_fixture_identity_is_rejected
+  ERROR: test_malformed_hash_is_not_a_valid_identity
+  ERROR: test_omitted_declared_manifest_is_inconclusive
+  ERROR: test_replaced_fixture_hash_is_a_conflict
+  ERROR: test_declared_explicit_subset_passes
+  ERROR: test_control_covering_every_required_fixture_passes
+  Ran 123 tests ... FAILED (errors=8)
+
+GREEN
+
+  $ python3 -m unittest discover -s scripts/raster-qualification/tests
+  Ran 123 tests in 4.2s
+  OK
+
+One correction during the cycle: the malformed-hash case first reported 'fail'
+because the malformed digest also disagreed with the declared manifest, so two
+conditions were changing at once. The case was isolated by declaring the same
+malformed value in the manifest, after which it correctly reported inconclusive.
+
+Sensitivity (isolated copy of the module, working tree untouched)
+
+  guard removed: the undeclared-fixture conflict in `_fixture_coverage`
+  $ python3 -m unittest discover -s tests
+  FAILED (failures=3)   -> test_unexpected_fixture_is_a_conflict and two others
+
+  guard removed: the missing-coverage gap in `_fixture_coverage`
+  FAILED (failures=3)   -> test_missing_required_fixture_is_inconclusive and others
+
+  guard removed: the duplicate-identity rejection in `_fixture_problems`
+  FAILED (failures=2)   -> test_duplicate_fixture_identity_is_rejected and others
+
+CLI integration (real commands, fresh temporary root)
+
+  $ python3 scripts/raster-qualification/measure.py gate-assemble \
+      --reports <tmp>/reports --host chromium \
+      --fixture-manifest <tmp>/fixture-manifest.json --out <tmp>/bundle.json
+  "fixtureManifest": "<tmp>/fixture-manifest.json", "fixtureManifestProblem": null
+
+  $ python3 scripts/raster-qualification/measure.py gate \
+      --bundle <tmp>/bundle.json --out <tmp>/decision.json
+  exit 1 (non-zero required for a non-passing verdict)
+
+  Without --fixture-manifest: "fixtureManifestProblem": "no fixture manifest was
+  supplied, so coverage cannot be established", and Q-LOCAL-1 is inconclusive.
+
+--------------------------------------------------------------------------
+R4-02 artifact correspondence coverage
+--------------------------------------------------------------------------
+
+RED (intended cause: correspondence iterated the records supplied rather than
+the required artifacts, and took the pin from the record itself)
+
+  $ python3 -m unittest test_qualification_gate.ArtifactCorrespondence \
+        .test_control_full_matching_correspondence_passes
+  ERROR: ... TypeError: assemble() got an unexpected keyword argument
+         'declaredArtifactPins'
+  Ran 149 tests ... FAILED (errors=8)
+
+GREEN
+
+  $ python3 -m unittest discover -s scripts/raster-qualification/tests
+  Ran 149 tests ... OK
+
+Corrections during the cycle: the shared declaration listed one candidate
+artifact while the route uses two, and the required-artifact set was computed
+inside a branch that `q1` never takes. Both were fixture/computation defects, not
+gate semantics.
+
+Sensitivity (isolated copy)
+
+  required-artifact coverage off     FAILED (failures=4)
+  declared-pin check off             FAILED (failures=2)
+  duplicate-record rejection off     FAILED (failures=2)
+  build-evidence requirement off     FAILED (failures=4)
+
+--------------------------------------------------------------------------
+R4-03 source-run provenance and freshness
+--------------------------------------------------------------------------
+
+RED (intended cause: no run identity, timestamp, age or digest check existed)
+
+  $ python3 -m unittest discover -s scripts/raster-qualification/tests
+  ERROR: test_control_fresh_run_with_identity_passes
+  ERROR: test_epoch_one_timestamp_fails_as_expired
+  ERROR: test_exactly_at_the_age_limit_is_accepted
+  ERROR: test_boolean_timestamp_fails
+  ERROR: test_future_timestamp_fails
+  ERROR: test_just_over_the_age_limit_fails
+  ERROR: test_missing_recorded_time_is_inconclusive
+  ERROR: test_missing_run_identity_is_inconclusive
+  ERROR: test_matching_self_reported_digest_is_accepted
+  ERROR: test_reassembly_does_not_refresh_source_age
+  ERROR: test_source_digest_is_computed_from_the_bytes_read
+  Ran 149 tests ... FAILED (errors=12)
+
+GREEN
+
+  Ran 161 tests ... OK
+
+A boolean timestamp was first classified as a gap; it is a malformed value and
+now fails. `digest` was removed from the required identity fields because the
+evaluator computes it from the bytes read, making a self-reported digest a claim
+to cross-check rather than a field the report must supply. The bundle is stamped
+with the same injected evaluation time used for source freshness, so one clock
+governs assembly, admission and the gate; a source run's age is never refreshed.
+
+Sensitivity (isolated copy)
+
+  freshness limit off                FAILED (failures=5)
+  future-time check off              FAILED (failures=2)
+  runId requirement off              FAILED (failures=2)
+  digest conflict check off          FAILED (failures=2)
+
+--------------------------------------------------------------------------
+R4-04 failure precedence before identity gaps
+--------------------------------------------------------------------------
+
+RED (intended cause: a missing identity block returned early, discarding the
+report's own recorded failures)
+
+  $ python3 -m unittest discover -s scripts/raster-qualification/tests
+  FAIL: test_failed_report_without_identity_is_still_a_failure
+  FAIL: test_failed_precondition_without_identity_is_still_a_failure
+  FAIL: test_malformed_result_without_identity_fails
+  FAIL: test_duplicate_identity_keys_in_raw_json_fail
+  FAIL: test_failure_reaches_every_requirement_using_that_source (Q-VALUE-1)
+  Ran 149 tests ... FAILED (failures=5)
+
+GREEN
+
+  Ran 168 tests ... OK
+
+Two further corrections: the duplicate-key scan reset its seen-set per key rather
+than per object, and the combined-source requirement expected the slope artifact
+when admitting the numeric report. Both were implementation defects found by the
+tests, not fixtures adjusted to pass.
+
+One behaviour was deliberately reclassified during GREEN. A report that carries
+no `result` field at all is a raw producer artifact, not corruption, so it is a
+gap; a `result` that is present but unusable is a failure. The recorded trace
+report falls in the first class, so the corrected verdict for the existing
+evidence stays `inconclusive` for all twelve requirements rather than acquiring a
+`fail` from a report that never claimed a verdict.
+
+Sensitivity (isolated copy)
+
+  legacy failure precedence off      FAILED (failures=22)
+  duplicate identity keys off        FAILED (failures=2)
+
+--------------------------------------------------------------------------
+Current evidence, evaluated read-only from a fresh temporary root
+--------------------------------------------------------------------------
+
+Reports read from the existing private output directory; nothing regenerated.
+Digests (first 16 hex of SHA-256 of the bytes read):
+
+  q1-artifacts     14125f911bf6f8e5   result=pass   identity=absent
+  q2-numeric       b212325ac143cc12   result=pass   identity=absent
+  q3-prepare       7b776e72c7d4cb87   result=pass   identity=absent
+  q3-members       4fdb526ba469c012   result=pass   identity=absent
+  q4-slope         b2a7e073892decbc   result=pass   identity=absent
+  q4-crs           7d6828ef92cddfe1   result=pass   identity=absent
+  q5-lifecycle     eb4245e6d7c49fb0   result=pass   identity=absent
+  q6-resources     86730de8e55d85c9   result=pass   identity=absent
+  q6-trace         567abb94e612f502   result=absent identity=absent
+
+  $ python3 scripts/raster-qualification/measure.py gate-assemble \
+      --reports .rq-scratch/out --host chromium \
+      --fixture-manifest <fresh>/fixture-manifest.json --out <fresh>/bundle.json
+  "fixtureManifestProblem": null
+  "candidatePinsProblem": null
+  "declaredPins": {"whitebox-wasm": "9c0ff4f...", "cog-tiler-wasm": "a71c321..."}
+
+  $ python3 scripts/raster-qualification/measure.py gate \
+      --bundle <fresh>/bundle.json --out <fresh>/decision.json
+  exit 1
+  OVERALL: inconclusive — 12 of 12 requirements not passing
+  verdict counts: {'inconclusive': 12}
+
+Limitation: the reports carry no identity block, so no route, transport,
+environment, artifact or fixture provenance can be verified for them. That is a
+gap in those records, not a property of the repaired gate, and it cannot be
+resolved without new qualification runs, which are outside this task.

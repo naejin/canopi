@@ -362,7 +362,8 @@ ROUTE_ID = "candidate-raster-route-v1"
 ENVIRONMENT_ID = "qualification-host-chromium-150"
 HOST_ID = "chromium"
 FIXTURE_HASH = "a" * 64
-CANDIDATE_ARTIFACT = {"name": "candidate", "version": "1.0.0"}
+CANDIDATE_ARTIFACT = {"name": "whitebox-wasm", "version": "0.5.1"}
+DISPLAY_ARTIFACT = {"name": "cog-tiler-wasm", "version": "0.3.6"}
 GDAL_ARTIFACT = {"name": "gdal", "version": "3.8.4"}
 REFERENCE_ARTIFACT = {"name": "reference-resolver", "version": "harness"}
 
@@ -379,7 +380,10 @@ def report_identity(experiment: str, *, route_id: str = ROUTE_ID,
     return {
         "id": experiment,
         "experiment": experiment,
-        "digest": digest or ("sha256:" + "0" * 64),
+        # No self-reported digest by default: the evaluator computes the digest of
+        # the bytes it read, so a fixture cannot fabricate one. A test that wants
+        # to exercise the digest conflict sets `digest` explicitly.
+        "digest": digest,
         "runId": run_id,
         "recordedAt": time.time(),
         "command": f"measure.py {experiment} --out reports/",
@@ -390,7 +394,7 @@ def report_identity(experiment: str, *, route_id: str = ROUTE_ID,
         "sidecarPolicy": sidecar_policy,
         "fixtures": fixtures if fixtures is not None else [
             {"name": "derived_cog", "sha256": FIXTURE_HASH}],
-        "artifact": artifact or {"name": "candidate", "version": "1.0.0"},
+        "artifact": artifact or dict(CANDIDATE_ARTIFACT),
     }
 
 
@@ -421,18 +425,26 @@ def passing_reports(root: Path) -> dict[str, Path]:
         "fixturesTested": 0,
         # The pinned revision this artifact must correspond to, recorded as the
         # real report would: the artifact was built from the pinned revision.
-        "sourceCorrespondence": [{
-            "artifact": "candidate", "version": "1.0.0",
-            "pinnedRevision": "pin-abc123", "artifactRevision": "pin-abc123",
-            "matches": True, "buildCommand": "cargo build --target wasm32-unknown-unknown",
-            "buildReproduced": True}],
+        "sourceCorrespondence": [
+            {"artifact": "whitebox-wasm", "version": "0.5.1",
+             "pinnedRevision": "pin-abc123", "artifactRevision": "pin-abc123",
+             "matches": True},
+            {"artifact": "cog-tiler-wasm", "version": "0.3.6",
+             "pinnedRevision": "pin-cog-tiler-1", "artifactRevision": "pin-cog-tiler-1",
+             "matches": True},
+        ],
         "notes": ["whitebox-wasm: no published artifact matches the pinned commit"],
-        "verifiedArtifacts": [{"name": "candidate", "version": "1.0.0",
-                               "license": "MIT", "wasm": []}],
+        "verifiedArtifacts": [
+            {"name": "whitebox-wasm", "version": "0.5.1", "license": "MIT", "wasm": []},
+            {"name": "cog-tiler-wasm", "version": "0.3.6", "license": "MIT", "wasm": []},
+        ],
         "assertions": [
-            {"name": "version:candidate", "ok": True},
-            {"name": "integrity:candidate", "ok": True},
-            {"name": "license-recorded:candidate", "ok": True},
+            {"name": "version:whitebox-wasm", "ok": True},
+            {"name": "version:cog-tiler-wasm", "ok": True},
+            {"name": "integrity:whitebox-wasm", "ok": True},
+            {"name": "integrity:cog-tiler-wasm", "ok": True},
+            {"name": "license-recorded:whitebox-wasm", "ok": True},
+            {"name": "license-recorded:cog-tiler-wasm", "ok": True},
             {"name": "correspondence-recorded:whitebox-wasm", "ok": True},
             {"name": "apis-and-worker-target-recorded", "ok": True},
         ],
@@ -543,7 +555,7 @@ def passing_reports(root: Path) -> dict[str, Path]:
     trace_payload = valid_trace(long_task_ms=20.0)
     trace_payload.update({
         "experiment": "q6-trace", "result": "pass", "failures": [],
-        "identity": report_identity("q6-trace", artifact=CANDIDATE_ARTIFACT),
+        "identity": report_identity("q6-trace", artifact=DISPLAY_ARTIFACT),
         "fixturesTested": 1,
         "assertions": [{"name": "trace-recorded", "ok": True}],
     })
@@ -571,13 +583,31 @@ ASSEMBLY = {
         "crs": "native CRS resolution",
         "lifecycle": "cooperative tile-level cancellation",
         "display": "cog-tiler-wasm renderTilePNG over a disk-backed File",
-        "displayArtifact": dict(CANDIDATE_ARTIFACT),
+        "displayArtifact": dict(DISPLAY_ARTIFACT),
         "prepareArtifact": dict(GDAL_ARTIFACT),
         "slopeArtifact": dict(GDAL_ARTIFACT),
         "crsArtifact": dict(GDAL_ARTIFACT),
+        "unpinnedRoles": [
+            {"name": "gdal", "version": "3.8.4",
+             "reason": "the plan allows native GDAL to retain preparation and slope"},
+            {"name": "reference-resolver", "version": "harness",
+             "reason": "harness reference implementation, not a shipped artifact"},
+        ],
     },
-    "artifacts": [dict(CANDIDATE_ARTIFACT)],
+    # Both candidate artifacts the route uses. Native GDAL is deliberately absent:
+    # it stays under the plan-authorized unpinned policy.
+    "artifacts": [dict(CANDIDATE_ARTIFACT), dict(DISPLAY_ARTIFACT)],
+    # The declared source pins, independent of any report's own claim.
+    "declared_artifact_pins": {
+        "whitebox-wasm": "pin-abc123",
+        "cog-tiler-wasm": "pin-cog-tiler-1",
+    },
     "fixtures": [{"name": "derived_cog", "sha256": "a" * 64}],
+    # The declared fixture manifest the control is measured against. Coverage is
+    # judged from this declaration, never from the observed set.
+    "fixture_manifest": {
+        "declared": [{"name": "derived_cog", "sha256": "a" * 64}],
+    },
     "display": {"ui_thread_bound_ms": 50.0, "cold_runs": 1, "warm_runs": 3,
                 "min_latencies_per_run": 100, "memory_budget_mib": 1024.0},
 }
@@ -671,13 +701,12 @@ class HostScoping(AssemblerTestBase):
         self.assertEqual(bundle["requirements"]["Q-ART-1"]["assertions"]
                          ["qualified-roles-name-artifact-version"], evidence.PASS)
         # One change: the role was exercised at a version the bench never verified.
-        bundle["route"]["numericArtifact"] = {"name": "candidate", "version": "9.9.9"}
+        exercised = {"name": CANDIDATE_ARTIFACT["name"], "version": "9.9.9"}
         verdict, notes = evidence._from_versions(
-            [{"name": "candidate", "version": "1.0.0"}],
-            [bundle["route"]["numericArtifact"]])
+            [dict(CANDIDATE_ARTIFACT)], [exercised])
         self.assertEqual(verdict, evidence.FAIL)
         self.assertIn("9.9.9", " ".join(notes))
-        self.assertIn("1.0.0", " ".join(notes))
+        self.assertIn(CANDIDATE_ARTIFACT["version"], " ".join(notes))
 
     def test_role_that_is_neither_verified_nor_declared_is_inconclusive(self) -> None:
         verdict, notes = evidence._from_versions(
@@ -869,13 +898,15 @@ class ReproducedReviewCases(AssemblerTestBase):
 
     def evaluate_assembled(self) -> gate.Decision:
         self.write_reports()
-        return gate.evaluate(self.contract, self.bundle(self.assemble(), "b.json"))
+        return gate.evaluate(self.contract,
+                             self.bundle(self.assemble(), "reproduced.json"))
 
     def test_empty_runs_list_no_longer_passes(self) -> None:
         """Review input {"runs": []} previously produced exit 0 / pass."""
         self.write_reports()
         self.amend("trace", lambda p: p.__setitem__("runs", []))
-        decision = gate.evaluate(self.contract, self.bundle(self.assemble(), "b.json"))
+        bundle_path = self.bundle(self.assemble(), "empty-runs.json")
+        decision = gate.evaluate(self.contract, bundle_path)
         self.assertEqual(decision.verdict, gate.INCONCLUSIVE)
         self.assertNotEqual(decision.exit_code, 0)
         # The run-count gap is named, and it is the only reason display fails.
@@ -900,7 +931,8 @@ class ReproducedReviewCases(AssemblerTestBase):
             "individualLatenciesMs": [1.0],
             "cachesCleared": "fresh", "longTaskMaxMs": 900.0, "longTaskCount": 1,
             "longTaskObserverSupported": True}]))
-        decision = gate.evaluate(self.contract, self.bundle(self.assemble(), "b.json"))
+        bundle_path = self.bundle(self.assemble(), "failed-run.json")
+        decision = gate.evaluate(self.contract, bundle_path)
         self.assertEqual(decision.verdict, gate.FAIL)
         self.assertNotEqual(decision.exit_code, 0)
         display = next(r for r in decision.requirements
@@ -928,7 +960,8 @@ class ReproducedReviewCases(AssemblerTestBase):
                              "sampleCount", "temporaryDiskHighWaterBytes",
                              "decodedCacheBytes", "activeReads", "queueDepth",
                              "maxConcurrentChildren")}))
-        decision = gate.evaluate(self.contract, self.bundle(self.assemble(), "b.json"))
+        bundle_path = self.bundle(self.assemble(), "gaps.json")
+        decision = gate.evaluate(self.contract, bundle_path)
         self.assertNotEqual(decision.verdict, gate.PASS)
         blocking = set(decision.as_dict()["blockingRequirementIds"])
         for requirement_id in ("Q-HOST-1", "Q-RES-1", "Q-CANCEL-1",
@@ -1111,7 +1144,7 @@ class IdentityAdmission(GateTestBase):
         self.assertEqual(requirement.verdict, gate.FAIL)
         reasons = " ".join(requirement.reasons)
         self.assertIn("9.9.9", reasons)
-        self.assertIn("1.0.0", reasons)
+        self.assertIn(CANDIDATE_ARTIFACT["version"], reasons)
 
     def test_route_conflict_fails(self) -> None:
         """A report measured on a different route cannot evidence the declared one."""
@@ -1206,7 +1239,11 @@ class IdentityAdmission(GateTestBase):
                                    reports=self.reports, host="chromium", **assembly())
         entry = bundle["requirements"]["Q-LOCAL-1"]
         self.assertEqual(entry["provenance"]["routeId"], ROUTE_ID)
-        self.assertEqual(entry["provenance"]["sourceDigest"], "sha256:" + "0" * 64)
+        # The digest is the one computed from the bytes read, not a value the
+        # fixture asserted about itself.
+        digest = entry["provenance"]["sourceDigest"]
+        self.assertTrue(str(digest).startswith("sha256:"), digest)
+        self.assertEqual(len(str(digest)), len("sha256:") + 64)
         self.assertEqual(entry["provenance"]["fixtures"][0]["sha256"], FIXTURE_HASH)
 
 
@@ -1282,6 +1319,10 @@ class SourceCorrespondence(GateTestBase):
         super().setUp()
         self.reports = passing_reports(self.root)
 
+    def declared(self) -> dict:
+        """The shared declaration, whose pins the fixture records cite."""
+        return assembly()
+
     def amend_q1(self, mutate) -> None:
         path = self.reports["q1"]
         payload = json.loads(path.read_text())
@@ -1290,7 +1331,8 @@ class SourceCorrespondence(GateTestBase):
 
     def assemble_and_evaluate(self) -> gate.Decision:
         bundle = evidence.assemble(self.contract, out=self.root / "b.json",
-                                   reports=self.reports, host="chromium", **assembly())
+                                   reports=self.reports, host="chromium",
+                                   **self.declared())
         return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
 
     def requirement(self, decision: gate.Decision, requirement_id: str):
@@ -1298,38 +1340,35 @@ class SourceCorrespondence(GateTestBase):
                     if r.requirement_id == requirement_id)
 
     def test_control_matching_source_passes(self) -> None:
-        self.amend_q1(lambda payload: payload.update({
-            "sourceCorrespondence": [{
-                "artifact": "candidate", "version": "1.0.0",
-                "pinnedRevision": "abc123", "artifactRevision": "abc123",
-                "matches": True}]}))
+        """The shared fixture's own matching correspondence satisfies the control."""
         decision = self.assemble_and_evaluate()
         self.assertEqual(self.requirement(decision, "Q-ART-1").verdict, gate.PASS,
                          self.requirement(decision, "Q-ART-1").reasons)
 
     def test_different_source_revision_cannot_pass(self) -> None:
         """A published artifact at another revision is not correspondence."""
+        pinned = ASSEMBLY["declared_artifact_pins"]["whitebox-wasm"]
+        other = ASSEMBLY["declared_artifact_pins"]["cog-tiler-wasm"]
         self.amend_q1(lambda payload: payload.update({
-            "sourceCorrespondence": [{
-                "artifact": "candidate", "version": "1.0.0",
-                "pinnedRevision": "abc123", "artifactRevision": "def456",
-                "matches": False}]}))
+            "sourceCorrespondence": [
+                {"artifact": "whitebox-wasm", "version": "0.5.1",
+                 "pinnedRevision": pinned, "artifactRevision": "def456",
+                 "matches": False},
+                {"artifact": "cog-tiler-wasm", "version": "0.3.6",
+                 "pinnedRevision": other, "artifactRevision": other,
+                 "matches": True}]}))
         decision = self.assemble_and_evaluate()
         requirement = self.requirement(decision, "Q-ART-1")
         self.assertEqual(requirement.verdict, gate.FAIL)
         reasons = " ".join(requirement.reasons)
-        self.assertIn("abc123", reasons)
+        self.assertIn(pinned, reasons)
         self.assertIn("def456", reasons)
 
-    def test_reproducible_build_evidence_satisfies_correspondence(self) -> None:
-        self.amend_q1(lambda payload: payload.update({
-            "sourceCorrespondence": [{
-                "artifact": "candidate", "version": "1.0.0",
-                "pinnedRevision": "abc123", "artifactRevision": "abc123",
-                "matches": True, "buildCommand": "cargo build --target wasm32",
-                "buildReproduced": True}]}))
+    def test_matching_revision_control_satisfies_correspondence(self) -> None:
+        """The control for a matching revision, kept alongside the R4-02 build case."""
         decision = self.assemble_and_evaluate()
-        self.assertEqual(self.requirement(decision, "Q-ART-1").verdict, gate.PASS)
+        self.assertEqual(self.requirement(decision, "Q-ART-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-ART-1").reasons)
 
     def test_unverified_correspondence_is_inconclusive(self) -> None:
         """No correspondence record at all is a gap, not a silent pass.
@@ -1648,3 +1687,698 @@ class RouteAttribution(GateTestBase):
         requirement = self.requirement(decision, "Q-RES-1")
         self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
         self.assertIn("role", " ".join(requirement.reasons).lower())
+
+
+# --------------------------------------------------------------------------- #
+# R4-01: fixture membership and coverage
+# --------------------------------------------------------------------------- #
+
+FIXTURE_A = {"name": "plane2000", "sha256": "1" * 64}
+FIXTURE_B = {"name": "steep45", "sha256": "2" * 64}
+
+#: The declared fixture manifest: which fixtures each role is required to cover,
+#: and whether the role may cover an explicit subset of them.
+FIXTURE_MANIFEST = {
+    "declared": [dict(FIXTURE_A), dict(FIXTURE_B)],
+    "requiredFixtures": {
+        "q2": ["plane2000", "steep45"],
+    },
+    "subsetAllowed": {"q2": True},
+}
+
+
+def fixture_manifest() -> dict:
+    """A fresh deep copy, so a test cannot leak a change into the next one."""
+    return copy.deepcopy(FIXTURE_MANIFEST)
+
+
+class FixtureCoverage(GateTestBase):
+    """Observed fixture identities are compared with the required set for the role."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+        self.reports = passing_reports(self.root)
+        # The numeric report measures both required fixtures.
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        payload["identity"]["fixtures"] = [dict(FIXTURE_A), dict(FIXTURE_B)]
+        payload["fixturesTested"] = 2
+        path.write_text(json.dumps(payload))
+
+    def amend_q2(self, mutate) -> None:
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self, manifest: dict | None = None) -> gate.Decision:
+        declared = assembly()
+        declared["fixture_manifest"] = fixture_manifest() if manifest is None else manifest
+        # The fixtures the shared assembler call passes must match the declaration,
+        # so the control is internally consistent.
+        declared["fixtures"] = [dict(FIXTURE_A), dict(FIXTURE_B)]
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **declared)
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_covering_every_required_fixture_passes(self) -> None:
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-LOCAL-1").reasons)
+
+    def test_unexpected_fixture_is_a_conflict(self) -> None:
+        self.amend_q2(lambda p: p["identity"]["fixtures"].append(
+            {"name": "plane256", "sha256": "3" * 64}))
+        self.amend_q2(lambda p: p.__setitem__("fixturesTested", 3))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("plane256", " ".join(requirement.reasons))
+
+    def test_missing_required_fixture_is_inconclusive(self) -> None:
+        """Covering only part of a required set is a gap, not a pass."""
+        self.amend_q2(lambda p: p["identity"].__setitem__("fixtures", [dict(FIXTURE_A)]))
+        self.amend_q2(lambda p: p.__setitem__("fixturesTested", 1))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("steep45", " ".join(requirement.reasons))
+
+    def test_declared_explicit_subset_passes(self) -> None:
+        """A report may cover a declared subset; the declaration is the contract."""
+        self.amend_q2(lambda p: p["identity"].__setitem__("fixtures", [dict(FIXTURE_A)]))
+        self.amend_q2(lambda p: p.__setitem__("fixturesTested", 1))
+        manifest = fixture_manifest()
+        manifest["requiredFixtures"]["q2"] = ["plane2000"]
+        decision = self.assemble_and_evaluate(manifest)
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-LOCAL-1").reasons)
+
+    def test_duplicate_fixture_identity_is_rejected(self) -> None:
+        self.amend_q2(lambda p: p["identity"]["fixtures"].append(dict(FIXTURE_A)))
+        self.amend_q2(lambda p: p.__setitem__("fixturesTested", 3))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("duplicate", " ".join(requirement.reasons).lower())
+
+    def test_replaced_fixture_hash_is_a_conflict(self) -> None:
+        def mutate(payload):
+            payload["identity"]["fixtures"][0]["sha256"] = "9" * 64
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("9" * 8, reasons)
+        self.assertIn("1" * 8, reasons)
+
+    def test_malformed_hash_is_not_a_valid_identity(self) -> None:
+        """A digest of the wrong shape is a gap, not an identity.
+
+        The declared manifest carries the same malformed value, so the only
+        condition under test is the shape of the digest rather than a conflict
+        between two values.
+        """
+        self.amend_q2(lambda p: p["identity"]["fixtures"][0].__setitem__(
+            "sha256", "not-a-sha256"))
+        manifest = fixture_manifest()
+        manifest["declared"][0]["sha256"] = "not-a-sha256"
+        decision = self.assemble_and_evaluate(manifest)
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("malformed sha256", " ".join(requirement.reasons).lower())
+
+    def test_omitted_declared_manifest_is_inconclusive(self) -> None:
+        """No declared manifest means coverage cannot be established."""
+        decision = self.assemble_and_evaluate(manifest={})
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("manifest", " ".join(requirement.reasons).lower())
+
+
+# --------------------------------------------------------------------------- #
+# R4-02: artifact correspondence coverage
+# --------------------------------------------------------------------------- #
+
+#: The pins the qualification route declares, independent of any report. These
+#: mirror the candidate manifest, not the correspondence the report supplies.
+DECLARED_PINS = {
+    "whitebox-wasm": "pin-whitebox-abc123",
+    "cog-tiler-wasm": "pin-cog-tiler-def456",
+}
+
+
+def correspondence(artifact: str, version: str, *, pinned: str | None = None,
+                   built_from: str | None = None, **extra) -> dict:
+    """One correspondence record. The pin comes from the declaration, not the report."""
+    record = {
+        "artifact": artifact,
+        "version": version,
+        "pinnedRevision": DECLARED_PINS.get(artifact) if pinned is None else pinned,
+        "artifactRevision": (DECLARED_PINS.get(artifact) if built_from is None
+                             else built_from),
+        "matches": True,
+    }
+    record.update(extra)
+    return record
+
+
+class ArtifactCorrespondence(GateTestBase):
+    """Every required measured artifact needs its own matching correspondence."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_q1(self, mutate) -> None:
+        path = self.reports["q1"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self) -> gate.Decision:
+        declared = assembly()
+        declared["declared_artifact_pins"] = dict(DECLARED_PINS)
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **declared)
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def produce(self) -> dict:
+        declared = assembly()
+        declared["declared_artifact_pins"] = dict(DECLARED_PINS)
+        return evidence.assemble(self.contract, out=self.root / "b.json",
+                                 reports=self.reports, host="chromium", **declared)
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_full_matching_correspondence_passes(self) -> None:
+        """Both required artifacts are recorded against their declared pins."""
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.5.1"),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-ART-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-ART-1").reasons)
+
+    def test_missing_record_for_one_required_artifact_is_inconclusive(self) -> None:
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [correspondence("whitebox-wasm", "0.5.1")]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("cog-tiler-wasm", " ".join(requirement.reasons))
+
+    def test_unrelated_correspondence_does_not_satisfy_a_required_artifact(self) -> None:
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.5.1"),
+                correspondence("some-other-library", "1.0.0")]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertNotEqual(requirement.verdict, gate.PASS)
+        self.assertIn("cog-tiler-wasm", " ".join(requirement.reasons))
+
+    def test_wrong_version_for_a_required_artifact_is_inconclusive(self) -> None:
+        """A record for another version does not cover the required version."""
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.4.1"),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertNotEqual(requirement.verdict, gate.PASS)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("whitebox-wasm@0.5.1", reasons)
+        self.assertIn("no correspondence record", reasons)
+
+    def test_revision_mismatch_fails(self) -> None:
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.5.1", built_from="other-rev"),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+
+    def test_build_flag_alone_cannot_excuse_a_revision_mismatch(self) -> None:
+        """A boolean is not build evidence."""
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.5.1", built_from="other-rev",
+                               buildReproduced=True),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("build evidence", " ".join(requirement.reasons).lower())
+
+    def test_fully_evidenced_pinned_build_is_accepted(self) -> None:
+        """A reproducible build needs built identity, source revision and evidence."""
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence(
+                    "whitebox-wasm", "0.5.1", built_from="other-rev",
+                    buildReproduced=True,
+                    builtArtifact={"name": "whitebox-wasm", "version": "0.5.1",
+                                   "sha256": "b" * 64},
+                    sourceRevision="pin-whitebox-abc123",
+                    buildEvidence={"command": "cargo build --target wasm32-unknown-unknown",
+                                   "log": "build-log.txt", "sha256": "c" * 64}),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-ART-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-ART-1").reasons)
+
+    def test_duplicate_correspondence_records_fail(self) -> None:
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.5.1"),
+                correspondence("whitebox-wasm", "0.5.1", built_from="other-rev"),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("duplicate", " ".join(requirement.reasons).lower())
+
+    def test_pin_claimed_only_by_the_report_is_not_an_expected_pin(self) -> None:
+        """A report cannot establish its own expectation."""
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                # The report asserts a pin that disagrees with the declaration and
+                # claims it matches.
+                correspondence("whitebox-wasm", "0.5.1", pinned="report-invented-pin"),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertNotEqual(requirement.verdict, gate.PASS)
+        self.assertIn("report-invented-pin", " ".join(requirement.reasons))
+
+    def test_absent_declared_pins_leave_correspondence_inconclusive(self) -> None:
+        """Without a declared pin there is nothing to correspond to."""
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.5.1"),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        declared = assembly()
+        declared["declared_artifact_pins"] = None
+        bundle = evidence.assemble(self.contract, out=self.root / "c.json",
+                                   reports=self.reports, host="chromium", **declared)
+        decision = gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+        requirement = self.requirement(decision, "Q-ART-1")
+        self.assertNotEqual(requirement.verdict, gate.PASS)
+
+    def test_unpinned_tool_is_excluded_from_the_required_artifact_set(self) -> None:
+        """Native GDAL stays under the plan-authorized unpinned policy.
+
+        The exclusion must be explicit: a retained tool is declared unpinned with
+        a reason, not silently dropped from the required set.
+        """
+        self.amend_q1(lambda payload: payload.update({
+            "sourceCorrespondence": [
+                correspondence("whitebox-wasm", "0.5.1"),
+                correspondence("cog-tiler-wasm", "0.3.6")]}))
+        bundle = self.produce()
+        entry = bundle["requirements"]["Q-ART-1"]
+        self.assertEqual(entry["assertions"]["qualified-roles-name-artifact-version"],
+                         evidence.PASS, entry["observations"])
+        self.assertIn("gdal", entry["observations"]["unpinnedRoleNames"])
+        self.assertNotIn("gdal", entry["observations"]["requiredArtifactNames"])
+        # And no correspondence is demanded for it.
+        self.assertFalse(any("gdal" in reason for reason in entry["observations"]["notes"]))
+
+
+# --------------------------------------------------------------------------- #
+# R4-04: failure precedence before identity gaps
+# --------------------------------------------------------------------------- #
+
+class FailurePrecedence(GateTestBase):
+    """A known failure must not be erased by a missing identity block."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_q2(self, mutate) -> None:
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self, **overrides) -> gate.Decision:
+        declared = assembly()
+        declared.update(overrides)
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **declared)
+        return gate.evaluate(self.contract, self.bundle(bundle, "bundle.json"))
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_passes_the_numeric_requirement(self) -> None:
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-LOCAL-1").reasons)
+
+    def test_failed_report_without_identity_is_still_a_failure(self) -> None:
+        """The legacy early-return must not hide a recorded failure."""
+        def mutate(payload):
+            payload.pop("identity")
+            payload["result"] = "fail"
+            payload["failures"] = ["fixture-hash:plane2000: sha256 mismatch"]
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        reasons = " ".join(requirement.reasons)
+        self.assertIn("fail", reasons.lower())
+        self.assertIn("sha256 mismatch", reasons)
+
+    def test_failed_precondition_without_identity_is_still_a_failure(self) -> None:
+        def mutate(payload):
+            payload.pop("identity")
+            payload["preconditions"] = [
+                {"name": "fixture-hash", "met": False}]
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("fixture-hash", " ".join(requirement.reasons))
+
+    def test_malformed_result_without_identity_fails(self) -> None:
+        """A verdict that is present but unusable is a failure, not a gap."""
+        def mutate(payload):
+            payload.pop("identity")
+            payload["result"] = "probably-fine"
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("unusable result", " ".join(requirement.reasons))
+
+    def test_absent_result_without_identity_is_inconclusive(self) -> None:
+        """A raw producer artifact that never claimed a verdict is a gap."""
+        def mutate(payload):
+            payload.pop("identity")
+            payload.pop("result", None)
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("not a qualification report", " ".join(requirement.reasons))
+
+    def test_legacy_passing_report_without_identity_is_inconclusive(self) -> None:
+        """A gap-only legacy report stays readable but cannot pass."""
+        self.amend_q2(lambda payload: payload.pop("identity"))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("no identity block", " ".join(requirement.reasons))
+
+    def test_failure_outranks_a_stale_timestamp_gap(self) -> None:
+        """A failure plus a provenance gap is a failure, not inconclusive."""
+        def mutate(payload):
+            payload["result"] = "fail"
+            payload["failures"] = ["measurement aborted"]
+            payload["identity"]["recordedAt"] = 1
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("measurement aborted", " ".join(requirement.reasons))
+
+    def test_negative_control_failure_is_not_a_positive_failure(self) -> None:
+        """An expected rejection failing is scoped to the control, not the run."""
+        def mutate(payload):
+            payload["negativeControlScopes"] = ["expected-rejection:"]
+            payload["failures"] = ["expected-rejection:stripped: control did not reject"]
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        # The positive observations are unaffected, so the requirement is not
+        # failed by the control's own failure.
+        self.assertNotEqual(requirement.verdict, gate.FAIL)
+
+    def test_failure_reaches_every_requirement_using_that_source(self) -> None:
+        """A source feeds several requirements; all of them must see the failure."""
+        def mutate(payload):
+            payload["result"] = "fail"
+            payload["failures"] = ["shared source failure"]
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        for requirement_id in ("Q-LOCAL-1", "Q-VALUE-1"):
+            with self.subTest(requirement=requirement_id):
+                self.assertEqual(self.requirement(decision, requirement_id).verdict,
+                                 gate.FAIL)
+
+    def test_unrelated_requirements_are_unchanged_by_one_source_failure(self) -> None:
+        def mutate(payload):
+            payload["result"] = "fail"
+            payload["failures"] = ["shared source failure"]
+        self.amend_q2(mutate)
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-PREP-1").verdict, gate.PASS)
+        self.assertEqual(self.requirement(decision, "Q-CRS-1").verdict, gate.PASS)
+
+    def test_duplicate_identity_keys_in_raw_json_fail(self) -> None:
+        """A duplicated identity key must not be collapsed by dict conversion."""
+        path = self.reports["q2"]
+        text = path.read_text()
+        payload = json.loads(text)
+        inner = json.dumps(payload["identity"])
+        broken = text.replace('"identity": {',
+                              '"identity": ' + inner + ',"identity": {', 1)
+        path.write_text(broken)
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("repeats identity key",
+                      " ".join(requirement.reasons).lower())
+
+
+# --------------------------------------------------------------------------- #
+# R4-03: source-run provenance and freshness
+# --------------------------------------------------------------------------- #
+
+#: A fixed evaluation time so age statements are exact rather than approximate.
+FIXED_NOW = 1_800_000_000.0
+DAY = 86400.0
+
+
+class SourceProvenance(GateTestBase):
+    """Run identity, recorded time and freshness are part of admission."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+        self.stamp_all(FIXED_NOW - 3600.0)
+
+    def stamp_all(self, when: float) -> None:
+        for role, path in self.reports.items():
+            payload = json.loads(path.read_text())
+            identity = payload.get("identity")
+            if isinstance(identity, dict):
+                identity["recordedAt"] = when
+            path.write_text(json.dumps(payload))
+
+    def amend_identity(self, role: str, mutate) -> None:
+        path = self.reports[role]
+        payload = json.loads(path.read_text())
+        mutate(payload["identity"])
+        path.write_text(json.dumps(payload))
+
+    def assemble_and_evaluate(self, now: float | None = FIXED_NOW) -> gate.Decision:
+        declared = assembly()
+        declared["now"] = now
+        bundle = evidence.assemble(self.contract, out=self.root / "b.json",
+                                   reports=self.reports, host="chromium", **declared)
+        path = self.bundle(bundle, "provenance.json")
+        return gate.evaluate(self.contract, path, now=now)
+
+    def requirement(self, decision: gate.Decision, requirement_id: str):
+        return next(r for r in decision.requirements
+                    if r.requirement_id == requirement_id)
+
+    def test_control_fresh_run_with_identity_passes(self) -> None:
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-LOCAL-1").reasons)
+
+    def test_missing_run_identity_is_inconclusive(self) -> None:
+        self.amend_identity("q2", lambda ident: ident.pop("runId"))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("runId", " ".join(requirement.reasons))
+
+    def test_missing_recorded_time_is_inconclusive(self) -> None:
+        self.amend_identity("q2", lambda ident: ident.pop("recordedAt"))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.INCONCLUSIVE)
+        self.assertIn("recordedAt", " ".join(requirement.reasons))
+
+    def test_epoch_one_timestamp_fails_as_expired(self) -> None:
+        self.amend_identity("q2", lambda ident: ident.update({"recordedAt": 1}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("stale", " ".join(requirement.reasons).lower())
+
+    def test_non_finite_timestamps_fail(self) -> None:
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                self.reports = passing_reports(self.root)
+                self.stamp_all(FIXED_NOW - 3600.0)
+                self.amend_identity("q2", lambda ident, v=value: ident.update(
+                    {"recordedAt": v}))
+                decision = self.assemble_and_evaluate()
+                requirement = self.requirement(decision, "Q-LOCAL-1")
+                self.assertEqual(requirement.verdict, gate.FAIL)
+                self.assertIn("finite", " ".join(requirement.reasons).lower())
+
+    def test_boolean_timestamp_fails(self) -> None:
+        self.amend_identity("q2", lambda ident: ident.update({"recordedAt": True}))
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.FAIL)
+
+    def test_future_timestamp_fails(self) -> None:
+        self.amend_identity("q2", lambda ident: ident.update(
+            {"recordedAt": FIXED_NOW + 3600.0}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("future", " ".join(requirement.reasons).lower())
+
+    def test_exactly_at_the_age_limit_is_accepted(self) -> None:
+        self.amend_identity("q2", lambda ident: ident.update(
+            {"recordedAt": FIXED_NOW - 7 * DAY}))
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS,
+                         self.requirement(decision, "Q-LOCAL-1").reasons)
+
+    def test_just_over_the_age_limit_fails(self) -> None:
+        self.amend_identity("q2", lambda ident: ident.update(
+            {"recordedAt": FIXED_NOW - 7 * DAY - 1}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("stale", " ".join(requirement.reasons).lower())
+
+    def test_reassembly_does_not_refresh_source_age(self) -> None:
+        """A fresh bundle must not make old source evidence current."""
+        self.amend_identity("q2", lambda ident: ident.update(
+            {"recordedAt": FIXED_NOW - 30 * DAY}))
+        first = self.assemble_and_evaluate()
+        second = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(first, "Q-LOCAL-1").verdict, gate.FAIL)
+        self.assertEqual(self.requirement(second, "Q-LOCAL-1").verdict, gate.FAIL)
+
+    def test_source_digest_is_computed_from_the_bytes_read(self) -> None:
+        """A self-reported digest cannot stand in for the content read."""
+        self.amend_identity("q2", lambda ident: ident.update(
+            {"digest": "sha256:" + "0" * 64}))
+        decision = self.assemble_and_evaluate()
+        requirement = self.requirement(decision, "Q-LOCAL-1")
+        self.assertEqual(requirement.verdict, gate.FAIL)
+        self.assertIn("digest", " ".join(requirement.reasons).lower())
+
+    def test_matching_self_reported_digest_is_accepted(self) -> None:
+        """The control with a truthful digest passes."""
+        decision = self.assemble_and_evaluate()
+        self.assertEqual(self.requirement(decision, "Q-LOCAL-1").verdict, gate.PASS)
+
+
+# --------------------------------------------------------------------------- #
+# Metamorphic invariants over the bounded evidence fields
+# --------------------------------------------------------------------------- #
+
+class EvidenceMonotonicity(GateTestBase):
+    """Deleting evidence never helps; unrelated evidence never satisfies."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reports = passing_reports(self.root)
+
+    def amend_q2(self, mutate) -> None:
+        path = self.reports["q2"]
+        payload = json.loads(path.read_text())
+        mutate(payload)
+        path.write_text(json.dumps(payload))
+
+    def verdict(self) -> tuple[str, dict]:
+        declared = assembly()
+        bundle_path = self.bundle(
+            evidence.assemble(self.contract, out=self.root / "b.json",
+                              reports=self.reports, host="chromium", **declared),
+            "monotonic.json")
+        decision = gate.evaluate(self.contract, bundle_path)
+        local = next(r for r in decision.as_dict()["requirements"]
+                     if r["requirementId"] == "Q-LOCAL-1")
+        return decision.verdict, local
+
+    def test_deleting_a_fixture_never_improves_eligibility(self) -> None:
+        before = self.verdict()
+        self.amend_q2(lambda p: p["identity"].__setitem__("fixtures", []))
+        self.amend_q2(lambda p: p.__setitem__("fixturesTested", 0))
+        after = self.verdict()
+        self.assertLessEqual(_rank(after[0]), _rank(before[0]),
+                             f"{before[0]} -> {after[0]}")
+
+    def test_deleting_the_identity_never_improves_eligibility(self) -> None:
+        before = self.verdict()
+        self.amend_q2(lambda p: p.pop("identity", None))
+        after = self.verdict()
+        self.assertLessEqual(_rank(after[0]), _rank(before[0]))
+
+    def test_adding_an_unrelated_fixture_never_satisfies(self) -> None:
+        before = self.verdict()
+        self.amend_q2(lambda p: p["identity"]["fixtures"].append(
+            {"name": "unrelated", "sha256": "7" * 64}))
+        self.amend_q2(lambda p: p.__setitem__("fixturesTested", 2))
+        after = self.verdict()
+        self.assertLessEqual(_rank(after[0]), _rank(before[0]))
+
+    def test_adding_an_unrelated_correspondence_never_satisfies(self) -> None:
+        before = self.verdict()
+        path = self.reports["q1"]
+        payload = json.loads(path.read_text())
+        payload["sourceCorrespondence"].append({
+            "artifact": "unrelated-library", "version": "9.9.9",
+            "pinnedRevision": "x", "artifactRevision": "x", "matches": True})
+        path.write_text(json.dumps(payload))
+        after = self.verdict()
+        self.assertLessEqual(_rank(after[0]), _rank(before[0]))
+
+    def test_adding_a_gap_never_downgrades_a_failure(self) -> None:
+        """A failure plus a new gap stays a failure."""
+        self.amend_q2(lambda p: p.update(
+            {"result": "fail", "failures": ["known failure"]}))
+        before = self.verdict()
+        self.assertEqual(before[0], gate.FAIL)
+        self.amend_q2(lambda p: p.pop("identity", None))
+        after = self.verdict()
+        self.assertEqual(after[0], gate.FAIL,
+                         "a provenance gap must not soften a known failure")
+        self.assertIn("known failure", " ".join(after[1]["reasons"]))
+
+    def test_fresh_bundle_never_refreshes_a_stale_source(self) -> None:
+        self.amend_q2(lambda p: p["identity"].update({"recordedAt": 1}))
+        first = self.verdict()
+        second = self.verdict()
+        self.assertEqual(first[0], second[0])
+        self.assertEqual(first[0], gate.FAIL)
+
+
+def _rank(verdict: str) -> int:
+    """Eligibility ordering: deleting evidence must never move this up."""
+    return {"fail": 0, "inconclusive": 1, "pass": 2}.get(verdict, 1)

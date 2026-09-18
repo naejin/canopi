@@ -384,7 +384,7 @@ def _entry_problems(requirement_id: str, entry: dict[str, Any]) -> list[str]:
 
 
 def evaluate(contract: Contract, bundle_path: Path, *,
-             now: float | None = None) -> Decision:
+             now: float | None = None, allow_synthetic: bool = False) -> Decision:
     """Decide Q eligibility for one evidence bundle against the contract.
 
     A requirement passes only when every assertion the contract names for it is
@@ -407,6 +407,12 @@ def evaluate(contract: Contract, bundle_path: Path, *,
         corruption = _bundle_corruption(payload, entries, now=now)
     elif problem:
         corruption = [problem]
+    if synthetic and not allow_synthetic:
+        # Synthetic controls prove evaluator behaviour and are useful in tests, but
+        # they are not physically measured evidence and cannot qualify anything.
+        corruption = list(corruption) + [
+            "bundle is marked as a synthetic gate fixture, so it cannot be "
+            "published as qualification evidence"]
 
     verdicts: list[RequirementVerdict] = []
     for requirement in contract.requirements:

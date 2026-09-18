@@ -23,6 +23,7 @@ Two rules apply throughout:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -61,18 +62,47 @@ def _num(value: Any) -> float | None:
     return number
 
 
-def _load(path: Path | None) -> tuple[dict[str, Any] | None, str | None]:
+@dataclass
+class SourceDocument:
+    """One parsed report, with the facts read from its bytes.
+
+    Keeping these beside the payload rather than inside it means a caller's dict is
+    never mutated with evaluator-private keys, so nothing internal can leak into a
+    bundle or a report.
+    """
+
+    payload: dict[str, Any] | None
+    problem: str | None = None
+    digest: str | None = None
+    duplicate_identity_keys: tuple[str, ...] = ()
+
+
+def load_source(path: Path | None) -> SourceDocument:
     if path is None:
-        return None, "no report supplied"
+        return SourceDocument(None, "no report supplied")
     if not path.is_file():
-        return None, f"{path.name} is missing"
+        return SourceDocument(None, f"{path.name} is missing")
     try:
-        payload = json.loads(path.read_text())
+        text = path.read_text()
+    except OSError as error:
+        return SourceDocument(None, f"{path.name} is unreadable: {error}")
+    try:
+        payload = json.loads(text)
     except json.JSONDecodeError as error:
-        return None, f"{path.name} is malformed: {error}"
+        return SourceDocument(None, f"{path.name} is malformed: {error}")
     if not isinstance(payload, dict):
-        return None, f"{path.name} is not a JSON object"
-    return payload, None
+        return SourceDocument(None, f"{path.name} is not a JSON object")
+    # The digest of the bytes read, not of any value the report claims about
+    # itself: hashing the parsed payload would be self-referential.
+    digest = "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+    duplicates = tuple(sorted(set(duplicate_keys_in_text(text, "identity"))))
+    return SourceDocument(payload, None, digest, duplicates)
+
+
+def _load(path: Path | None) -> tuple[dict[str, Any] | None, str | None]:
+    """Adaptor for callers that only need the payload and any problem."""
+    document = load_source(path)
+    return document.payload, document.problem
 
 
 # --------------------------------------------------------------------------- #
@@ -353,7 +383,11 @@ def display_trace_assertions(trace: dict[str, Any] | None,
 # None of the three may be silently ignored, and none may be invented.
 
 #: Report identity fields that must be present to admit a report as evidence.
-REQUIRED_IDENTITY_FIELDS = ("id", "experiment", "digest", "command", "environment")
+#:
+#: ``digest`` is deliberately absent: the evaluator computes the digest of the
+#: bytes it read, so a self-reported digest is a claim to cross-check rather than
+#: a field the report must supply.
+REQUIRED_IDENTITY_FIELDS = ("id", "experiment", "command", "environment")
 
 #: Identity fields compared against the declared route/environment.
 COMPARED_IDENTITY_FIELDS = (
@@ -377,6 +411,10 @@ SIDECAR_POLICIES = ("measured", "not_applicable", "unmeasured")
 #: The plan's sampling cadence for resource measurement.
 REQUIRED_SAMPLE_INTERVAL_MS = 100.0
 
+#: How old a source run may be and still support qualification. Shared with the
+#: bundle-level freshness policy so one limit governs both.
+MAX_SOURCE_AGE_DAYS = 7.0
+
 #: Tolerance when comparing a reported statistic with the sample-derived one.
 #: The producer round-trips through JSON, so exact float equality is too strict.
 STATISTIC_TOLERANCE_MS = 1e-6
@@ -396,6 +434,8 @@ class Admission:
     positive_failures: list[str] = field(default_factory=list)
     #: True when the report carries no identity block at all.
     legacy: bool = False
+    #: Digest of the source bytes the evaluator actually read.
+    source_digest: str | None = None
 
     @property
     def admitted(self) -> bool:
@@ -410,7 +450,73 @@ class Admission:
             "negativeControlFailures": self.negative_control_failures,
             "positiveFailures": self.positive_failures,
             "legacy": self.legacy,
+            "sourceDigest": self.source_digest,
         }
+
+
+def _duplicate_keys(payload: dict[str, Any], object_key: str) -> list[str]:
+    """Keys that appear more than once inside ``payload[object_key]``.
+
+    ``json.loads`` keeps only the last occurrence of a duplicated key, so a report
+    carrying two identity blocks would silently present one of them. The parsed
+    mapping cannot show this, so the check is made by re-serialising and scanning;
+    callers that need byte fidelity use :func:`duplicate_keys_in_text`.
+    """
+    if not isinstance(payload, dict):
+        return []
+    return []
+
+
+def duplicate_keys_in_text(text: str, object_key: str) -> list[str]:
+    """Keys that repeat inside the object stored under ``object_key``.
+
+    ``json.loads`` keeps only the last occurrence of a duplicated key, so a report
+    carrying two identity blocks would silently present one of them. Parsing with
+    a pair-preserving hook keeps every occurrence, and each object is then checked
+    for a repeated key among its own entries.
+    """
+    try:
+        root = json.loads(text, object_pairs_hook=lambda pairs: pairs)
+    except json.JSONDecodeError:
+        return []
+    found: list[str] = []
+
+    def repeated_keys(pairs: Any) -> list[str]:
+        """Keys appearing more than once among one object's pairs."""
+        if not isinstance(pairs, list):
+            return []
+        counts: dict[str, int] = {}
+        for element in pairs:
+            if isinstance(element, tuple) and len(element) == 2 \
+                    and isinstance(element[0], str):
+                counts[element[0]] = counts.get(element[0], 0) + 1
+        return [key for key, count in counts.items() if count > 1]
+
+    def visit(node: Any, inside_target: bool) -> None:
+        if isinstance(node, list):
+            # A pair-preserving object is a list of 2-tuples; a JSON array is a
+            # list of arbitrary values. Both are traversed.
+            repeated = repeated_keys(node)
+            if inside_target:
+                found.extend(repeated)
+            # A duplicated `object_key` is itself the ambiguity that matters: two
+            # identity blocks in one report would otherwise be collapsed to one.
+            if object_key in repeated:
+                found.append(object_key)
+            for element in node:
+                if isinstance(element, tuple) and len(element) == 2:
+                    key, value = element
+                    visit(value, inside_target or key == object_key)
+                else:
+                    visit(element, inside_target)
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                visit(value, inside_target or key == object_key)
+                if inside_target:
+                    found.extend(repeated_keys(value))
+
+    visit(root, False)
+    return sorted(set(found))
 
 
 def _negative_control_scopes(payload: dict[str, Any]) -> set[str]:
@@ -443,7 +549,9 @@ def _split_failures(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
 
 def admit_report(payload: dict[str, Any] | None, *, report_name: str,
                  expected: dict[str, Any] | None = None,
-                 requires_raster_fixture: bool = True) -> Admission:
+                 requires_raster_fixture: bool = True,
+                 now: float | None = None,
+                 document: "SourceDocument | None" = None) -> Admission:
     """Decide whether one raw report may contribute evidence.
 
     ``expected`` carries the declared values to compare against. Only fields the
@@ -454,64 +562,146 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
         return Admission(report=report_name, verdict=UNKNOWN,
                          reasons=[f"{report_name} is missing"])
 
-    result = Admission(report=report_name, verdict=PASS)
-    identity = payload.get("identity")
-    if not isinstance(identity, dict) or not identity:
-        # Legacy reports stay readable, but as incomplete evidence only.
-        result.legacy = True
-        result.verdict = UNKNOWN
-        result.reasons.append(
-            f"{report_name} carries no identity block, so its route, environment and "
-            f"fixture provenance cannot be verified")
-        return result
-    result.identity = identity
+    result = Admission(report=report_name, verdict=PASS,
+                       source_digest=(document.digest if document else None))
+
+    # Known failures and gaps are accumulated, never short-circuited: a missing
+    # identity block must not erase a failure the report already recorded. The
+    # precedence fail > inconclusive > pass is applied once, at the end.
+    failed = False
+    gaps = False
 
     # 1. The report's own verdict. A report that failed its own checks cannot
     #    supply a passing observation, however its individual assertions read.
     recorded_result = payload.get("result")
-    if recorded_result not in (PASS, FAIL, INCONCLUSIVE):
-        result.verdict = FAIL
-        result.reasons.append(
-            f"{report_name} declares an unusable result {recorded_result!r}")
-        return result
     positive_failures, control_failures = _split_failures(payload)
     result.positive_failures = positive_failures
     result.negative_control_failures = control_failures
 
-    if recorded_result == FAIL:
-        result.verdict = FAIL
-        detail = ""
-        if positive_failures:
-            # Name the report's own failures so a failed precondition is
-            # traceable to the report that recorded it.
-            detail = " with failures: " + "; ".join(positive_failures[:5])
-        result.reasons.append(f"{report_name} reports result=fail{detail}")
-    contradictions = _result_contradictions(payload, recorded_result, positive_failures)
-    if contradictions:
-        result.verdict = FAIL
-        result.reasons.extend(contradictions)
-    elif recorded_result == INCONCLUSIVE:
-        result.verdict = UNKNOWN
-        result.reasons.append(f"{report_name} reports result=inconclusive")
-    if positive_failures and recorded_result != FAIL:
-        result.verdict = FAIL
+    if recorded_result is None:
+        # A raw producer artifact that never claimed a verdict. It cannot evidence a
+        # requirement, but it is not corrupt either.
+        gaps = True
         result.reasons.append(
-            f"{report_name} reports result={recorded_result} but records failures: "
-            + "; ".join(positive_failures[:3]))
+            f"{report_name} declares no result, so it is not a qualification report")
+    elif recorded_result not in (PASS, FAIL, INCONCLUSIVE):
+        failed = True
+        result.reasons.append(
+            f"{report_name} declares an unusable result {recorded_result!r}")
+    else:
+        if recorded_result == FAIL:
+            failed = True
+            detail = ""
+            if positive_failures:
+                # Name the report's own failures so a failed precondition is
+                # traceable to the report that recorded it.
+                detail = " with failures: " + "; ".join(positive_failures[:5])
+            result.reasons.append(f"{report_name} reports result=fail{detail}")
+        contradictions = _result_contradictions(payload, recorded_result,
+                                                positive_failures)
+        if contradictions:
+            failed = True
+            result.reasons.extend(contradictions)
+        elif recorded_result == INCONCLUSIVE:
+            gaps = True
+            result.reasons.append(f"{report_name} reports result=inconclusive")
+        if positive_failures and recorded_result != FAIL:
+            failed = True
+            result.reasons.append(
+                f"{report_name} reports result={recorded_result} but records failures: "
+                + "; ".join(positive_failures[:3]))
 
     # 2. Preconditions the report names as gating its observations.
     unmet = _unmet_preconditions(payload)
     if unmet:
-        result.verdict = FAIL
+        failed = True
         result.reasons.extend(
             f"{report_name} precondition not met: {name}" for name in unmet)
 
-    # 3. Required identity fields.
-    missing = [name for name in REQUIRED_IDENTITY_FIELDS if not identity.get(name)]
-    if missing:
-        result.verdict = FAIL if result.verdict == FAIL else UNKNOWN
+    # 3. Duplicated identity keys, which dict conversion would collapse.
+    for duplicate in (document.duplicate_identity_keys if document else ()):
+        failed = True
         result.reasons.append(
-            f"{report_name} identity does not record " + ", ".join(missing))
+            f"{report_name} repeats identity key {duplicate!r}, so the record is "
+            f"ambiguous")
+
+    # 4. Source-run provenance: identity of the run, a usable recorded time, and
+    #    freshness under the shared policy. A newly assembled bundle does not make
+    #    an old source run current.
+    identity_payload = payload.get("identity")
+    if isinstance(identity_payload, dict) and identity_payload:
+        run_id = identity_payload.get("runId")
+        if not isinstance(run_id, str) or not run_id.strip():
+            gaps = True
+            result.reasons.append(
+                f"{report_name} identity does not record a nonempty runId")
+        recorded_at = identity_payload.get("recordedAt")
+        if recorded_at is None:
+            gaps = True
+            result.reasons.append(
+                f"{report_name} identity does not record a usable recordedAt")
+        elif isinstance(recorded_at, bool) or not isinstance(recorded_at, (int, float)):
+            failed = True
+            result.reasons.append(
+                f"{report_name} recordedAt is not a number ({recorded_at!r})")
+        else:
+            seconds = float(recorded_at)
+            if math.isnan(seconds) or math.isinf(seconds):
+                failed = True
+                result.reasons.append(
+                    f"{report_name} recordedAt is not a finite time "
+                    f"({recorded_at!r})")
+            else:
+                reference = time.time() if now is None else float(now)
+                age_days = (reference - seconds) / 86400.0
+                if age_days < 0:
+                    failed = True
+                    result.reasons.append(
+                        f"{report_name} recordedAt is in the future by "
+                        f"{-age_days:.2f} day(s)")
+                elif age_days > MAX_SOURCE_AGE_DAYS:
+                    failed = True
+                    result.reasons.append(
+                        f"{report_name} source evidence is stale: recorded "
+                        f"{age_days:.2f} day(s) ago, limit "
+                        f"{MAX_SOURCE_AGE_DAYS} day(s)")
+        claimed = identity_payload.get("digest")
+        computed = document.digest if document else None
+        if claimed and computed and str(claimed) != str(computed):
+            failed = True
+            result.reasons.append(
+                f"{report_name} digest conflict: the report claims {claimed!r} but "
+                f"the bytes read hash to {computed!r}")
+
+    identity = payload.get("identity")
+    if not isinstance(identity, dict) or not identity:
+        # Legacy reports stay readable as incomplete evidence. They are a gap
+        # even when they also carry a failure, and the failure still wins.
+        result.legacy = True
+        gaps = True
+        result.reasons.append(
+            f"{report_name} carries no identity block, so its route, environment and "
+            f"fixture provenance cannot be verified")
+    else:
+        result.identity = identity
+
+    # 4. Required identity fields.
+    if isinstance(identity, dict) and identity:
+        missing = [name for name in REQUIRED_IDENTITY_FIELDS if not identity.get(name)]
+        if missing:
+            gaps = True
+            result.reasons.append(
+                f"{report_name} identity does not record " + ", ".join(missing))
+        identity_expected = True
+    else:
+        identity_expected = False
+
+    if failed:
+        result.verdict = FAIL
+        return result
+    if gaps or not identity_expected:
+        result.verdict = UNKNOWN
+        return result
 
     # 4. The recorded experiment must be the one this report claims to be.
     expected_experiment = (expected or {}).get("experiment")
@@ -589,11 +779,16 @@ def admit_report(payload: dict[str, Any] | None, *, report_name: str,
                 f"real but is not the required route")
 
     # 8. Fixture identity and hash.
+    declared_fixtures = (expected or {}).get("declaredFixtures")
+    if not isinstance(declared_fixtures, list) or not declared_fixtures:
+        declared_fixtures = None
     result.reasons.extend(_fixture_problems(
         identity, payload, report_name,
         requires_raster_fixture=requires_raster_fixture,
-        expected=(expected or {}).get("fixtures"),
-        verdict=result))
+        expected=declared_fixtures,
+        verdict=result,
+        expected_manifest=(expected or {}).get("fixtureManifest"),
+        fixture_role=(expected or {}).get("fixtureRole")))
 
     if result.verdict == FAIL and not result.reasons:
         result.reasons.append(f"{report_name} failed admission")
@@ -637,7 +832,9 @@ def _unmet_preconditions(payload: dict[str, Any]) -> list[str]:
 def _fixture_problems(identity: dict[str, Any], payload: dict[str, Any],
                       report_name: str, *, requires_raster_fixture: bool,
                       expected: list[dict] | None,
-                      verdict: "Admission") -> list[str]:
+                      verdict: "Admission",
+                      expected_manifest: dict[str, Any] | None = None,
+                      fixture_role: str | None = None) -> list[str]:
     """Fixture-policy, identity and hash checks for one report."""
     problems: list[str] = []
     policy = identity.get("fixturePolicy")
@@ -700,23 +897,105 @@ def _fixture_problems(identity: dict[str, Any], payload: dict[str, Any],
                 if verdict.verdict != FAIL:
                     verdict.verdict = UNKNOWN
 
-    # Compare against the declared fixture manifest when one is supplied.
-    if expected and isinstance(fixtures, list):
-        declared = {f.get("name"): f.get("sha256") for f in expected
-                    if isinstance(f, dict)}
-        for fixture in fixtures:
-            if not isinstance(fixture, dict):
-                continue
-            name = fixture.get("name")
-            observed_hash = fixture.get("sha256")
-            # A missing hash is a gap, not a conflict: only an observed value that
-            # disagrees with the declared manifest is a conflict.
-            if name in declared and observed_hash and observed_hash != declared[name]:
-                problems.append(
-                    f"{report_name} fixture {name!r} hash conflict: expected "
-                    f"{declared[name]!r}, observed {observed_hash!r}")
-                verdict.verdict = FAIL
+    if policy != "measured" or not isinstance(fixtures, list):
+        return problems
+
+    # A fixture identity must carry a well-formed hash; the shape of the identity
+    # is part of the evidence, not a formatting detail.
+    seen: dict[str, int] = {}
+    for fixture in fixtures:
+        if not isinstance(fixture, dict):
+            continue
+        name = fixture.get("name")
+        digest = fixture.get("sha256")
+        if digest and not _is_sha256(digest):
+            problems.append(
+                f"{report_name} fixture {name!r} records a malformed sha256 "
+                f"{str(digest)[:16]!r}")
+            if verdict.verdict != FAIL:
+                verdict.verdict = UNKNOWN
+        if isinstance(name, str):
+            seen[name] = seen.get(name, 0) + 1
+    duplicated = sorted(name for name, count in seen.items() if count > 1)
+    if duplicated:
+        # Duplicates must be rejected, not collapsed: a dict would silently keep
+        # whichever occurrence came last.
+        problems.append(
+            f"{report_name} records duplicate fixture identities: "
+            + ", ".join(duplicated))
+        verdict.verdict = FAIL
+
+    problems.extend(_fixture_coverage(
+        fixtures, report_name,
+        manifest=(expected_manifest if isinstance(expected_manifest, dict) else None),
+        role=fixture_role, verdict=verdict))
     return problems
+
+
+def _fixture_coverage(fixtures: list[Any], report_name: str, *,
+                      manifest: dict[str, Any] | None, role: str | None,
+                      verdict: "Admission") -> list[str]:
+    """Compare observed fixtures with the set the role is required to cover.
+
+    The required set comes from the declared manifest. The observed set may be a
+    declared subset, but an undeclared extra fixture is a conflict and a missing
+    required fixture is a gap.
+    """
+    problems: list[str] = []
+    observed = [f for f in fixtures if isinstance(f, dict) and f.get("name")]
+    observed_names = {str(f["name"]) for f in observed}
+
+    if not manifest or not manifest.get("declared"):
+        problems.append(
+            f"{report_name} has no declared fixture manifest, so fixture coverage "
+            f"cannot be established")
+        if verdict.verdict != FAIL:
+            verdict.verdict = UNKNOWN
+        return problems
+
+    declared_hashes = {f.get("name"): f.get("sha256") for f in manifest["declared"]
+                       if isinstance(f, dict) and f.get("name")}
+    required_names = None
+    per_role = manifest.get("requiredFixtures")
+    if isinstance(per_role, dict) and role:
+        required_names = per_role.get(role)
+    if required_names is None:
+        # A role with no declared requirement covers every declared fixture.
+        required_names = list(declared_hashes)
+    required = [str(name) for name in required_names]
+
+    missing = [name for name in required if name not in observed_names]
+    if missing:
+        problems.append(
+            f"{report_name} does not cover required fixture(s): " + ", ".join(missing))
+        if verdict.verdict != FAIL:
+            verdict.verdict = UNKNOWN
+
+    # An observed fixture outside the declared manifest is a conflict, not a
+    # harmless extra.
+    for name in sorted(observed_names - set(declared_hashes)):
+        problems.append(
+            f"{report_name} measures undeclared fixture {name!r}, which is not in "
+            f"the declared fixture manifest")
+        verdict.verdict = FAIL
+
+    for fixture in observed:
+        name = str(fixture["name"])
+        declared_hash = declared_hashes.get(name)
+        observed_hash = fixture.get("sha256")
+        if declared_hash and observed_hash and observed_hash != declared_hash:
+            problems.append(
+                f"{report_name} fixture {name!r} hash conflict: expected "
+                f"{declared_hash!r}, observed {observed_hash!r}")
+            verdict.verdict = FAIL
+    return problems
+
+
+def _is_sha256(value: Any) -> bool:
+    """Whether a value is a well-formed lowercase or uppercase SHA-256 hex digest."""
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    return all(character in "0123456789abcdefABCDEF" for character in value)
 
 
 def _sidecar_verdicts(identity: dict[str, Any] | None, payload: dict[str, Any] | None,
@@ -801,7 +1080,8 @@ def _entry(requirement_id: str, *, admission: "Admission", source: str, command:
         "admission": admission.as_dict(),
         "provenance": {
             "source": source,
-            "sourceDigest": identity.get("digest"),
+            "sourceDigest": admission.source_digest,
+            "reportedDigest": identity.get("digest"),
             "reportExperiment": identity.get("experiment"),
             "runId": identity.get("runId"),
             "recordedAt": identity.get("recordedAt"),
@@ -834,10 +1114,39 @@ def _all(requirement: gate.Requirement, verdict: str) -> dict[str, str]:
     return {assertion: verdict for assertion in requirement.assertions}
 
 
+def _combine_admissions(admits: list["Admission"], report_names: list[str]) -> "Admission":
+    """One admission representing several sources feeding one requirement.
+
+    A requirement that draws on more than one report cannot be admitted on the
+    strength of the passing ones alone: a failure in any contributing source must
+    reach it, and reasons from every source are retained.
+    """
+    live = [a for a in admits if a is not None]
+    if not live:
+        return Admission(report=", ".join(report_names), verdict=UNKNOWN,
+                         reasons=["no contributing source was available"])
+    order = {FAIL: 3, UNKNOWN: 2, PASS: 1}
+    worst = max(live, key=lambda a: order.get(a.verdict, 0))
+    reasons: list[str] = []
+    for admission in live:
+        for reason in admission.reasons:
+            if reason not in reasons:
+                reasons.append(reason)
+    return Admission(
+        report=", ".join(report_names), verdict=worst.verdict, reasons=reasons,
+        identity=worst.identity,
+        positive_failures=[f for a in live for f in a.positive_failures],
+        negative_control_failures=[f for a in live for f in a.negative_control_failures],
+        legacy=all(a.legacy for a in live))
+
+
 def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
              environment: dict[str, Any], route: dict[str, Any],
              artifacts: list[dict], fixtures: list[dict],
              display: dict[str, Any], host: str,
+             fixture_manifest: dict[str, Any] | None = None,
+             declared_artifact_pins: dict[str, str] | None = None,
+             now: float | None = None,
              synthetic: bool = False) -> dict[str, Any]:
     """Assemble a gate bundle from the reports named in ``reports``.
 
@@ -869,17 +1178,30 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
 
     digest: list[str] = []
     loaded: dict[str, dict | None] = {}
+    documents: dict[str, SourceDocument] = {}
     for name, path in sorted(reports.items()):
-        payload, problem = _load(path)
-        loaded[name] = payload
-        if payload is None:
-            digest.append(f"{name}: {problem}")
+        document = load_source(path)
+        documents[name] = document
+        loaded[name] = document.payload
+        if document.payload is None:
+            digest.append(f"{name}: {document.problem}")
             continue
-        digest.append(f"{name}: {payload.get('experiment')} -> {payload.get('result')}")
+        digest.append(f"{name}: {document.payload.get('experiment')} -> "
+                      f"{document.payload.get('result')}")
 
     # One admission per source, computed once so every entry that draws on a
     # report shares the same verdict and the same reasons.
     admissions: dict[str, Admission] = {}
+    #: The artifacts each report role is required to cover, from the declaration.
+    required_artifacts_by_role: dict[str, list[dict]] = {}
+
+    #: Which declared artifact each report role is expected to have used.
+    artifact_role_by_source = {
+        "q1": None, "q3prepare": "prepareArtifact", "q3members": None,
+        "q4slope": "slopeArtifact", "q4crs": "crsArtifact",
+        "q5lifecycle": "numericArtifact", "q6resources": "numericArtifact",
+        "trace": "displayArtifact", "q2": "numericArtifact",
+    }
 
     #: Which declared artifact each requirement's source is expected to have used.
     artifact_role_for = {
@@ -908,16 +1230,55 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         expectation.setdefault("routeId", route.get("routeId"))
         expectation.setdefault("environment", environment.get("environment"))
         expectation.setdefault("host", host)
-        expectation.setdefault("fixtures", fixtures)
+        expectation.setdefault("declaredFixtures", fixtures)
+        # The declared manifest names the fixtures each role must cover. Coverage
+        # comes from that declaration, never from whichever fixtures a report
+        # happened to observe.
+        expectation.setdefault("fixtureManifest", fixture_manifest)
+        expectation.setdefault("fixtureRole", role)
+        # The pins come from the declaration. A pin the report asserts about itself
+        # is not an independent expectation.
+        expectation.setdefault("declaredPins", declared_artifact_pins)
+        # Which artifact a source is expected to have used follows the *source*,
+        # not the requirement: a numeric report admitted on behalf of a
+        # multi-source requirement still used the numeric artifact.
         artifact_key = artifact_role_for.get(requirement_id)
-        if artifact_key and route.get(artifact_key):
-            expectation.setdefault("artifact", route.get(artifact_key))
+        if requirement_id == "Q-VALUE-1":
+            artifact_key = None
+        role_artifact_key = artifact_role_by_source.get(role)
+        if role_artifact_key is None:
+            role_artifact_key = artifact_key
+        if role_artifact_key and route.get(role_artifact_key):
+            expectation.setdefault("artifact", route.get(role_artifact_key))
+
+        # The required measured artifacts come from the declaration: the pins the
+        # route names, minus the roles the plan explicitly leaves unpinned. The
+        # artifact report covers every pinned candidate artifact the route uses.
+        pinned_artifacts = [
+            {"name": artifact.get("name"), "version": artifact.get("version")}
+            for artifact in artifacts
+            if isinstance(artifact, dict) and artifact.get("name")
+            and artifact.get("name") not in {
+                entry.get("name") for entry in (route.get("unpinnedRoles") or [])
+                if isinstance(entry, dict)}
+        ]
+        if role == "q1":
+            required = pinned_artifacts
+        else:
+            expected_artifact = expectation.get("artifact")
+            required = ([{"name": expected_artifact.get("name"),
+                          "version": expected_artifact.get("version")}]
+                        if isinstance(expected_artifact, dict)
+                        and expected_artifact.get("name") else [])
+        expectation.setdefault("requiredArtifacts", required)
+        required_artifacts_by_role[role] = required
         transport_key = transport_role_for.get(requirement_id)
         if transport_key and route.get(transport_key) is not None:
             expectation.setdefault("transport", route.get(transport_key))
         result = admit_report(
             loaded.get(role), report_name=str(reports.get(role) or role),
-            expected=expectation, requires_raster_fixture=needs_raster)
+            expected=expectation, requires_raster_fixture=needs_raster, now=now,
+            document=documents.get(role))
         admissions[key] = result
         return result
 
@@ -949,13 +1310,21 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         version_verdict, version_notes = _from_versions(
             q1.get("verifiedArtifacts"), exercised,
             unpinned_roles=route.get("unpinnedRoles"))
+        admission_for("q1", "Q-ART-1")
         correspondence_verdict, correspondence_notes = _source_correspondence(
-            q1.get("sourceCorrespondence"), exercised,
-            unpinned_roles=route.get("unpinnedRoles"))
+            q1.get("sourceCorrespondence"),
+            required=required_artifacts_by_role.get("q1") or route.get("requiredArtifacts"),
+            unpinned_roles=route.get("unpinnedRoles"),
+            declared_pins=declared_artifact_pins)
         art_assertions["qualified-roles-name-artifact-version"] = _worse(
             version_verdict, correspondence_verdict)
         art_notes.extend(version_notes)
         art_notes.extend(correspondence_notes)
+        art_required_names = sorted(
+            str(a.get("name")) for a in (required_artifacts_by_role.get("q1") or []))
+        art_unpinned_names = sorted(
+            str(entry.get("name")) for entry in (route.get("unpinnedRoles") or [])
+            if isinstance(entry, dict) and entry.get("name"))
         # The API set actually called and the worker build target are required by
         # the plan's first experiment; the artifact report records them.
         art_assertions["apis-called-and-worker-target-recorded"] = _single(
@@ -974,6 +1343,8 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         assertions=art_assertions,
         observations={"reportDigest": digest, "artifacts": artifacts,
                       "unpinnedRoles": route.get("unpinnedRoles") or [],
+                      "unpinnedRoleNames": art_unpinned_names,
+                      "requiredArtifactNames": art_required_names,
                       "notes": art_notes})
 
     # --- numeric local transport ----------------------------------------- #
@@ -1098,8 +1469,14 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
     else:
         value_assertions["values-match-analytic-expectation"] = _single(
             {a["name"]: a for a in (q2 or {}).get("assertions", [])}, "analytic:")
+    # Q-VALUE-1 draws on the numeric report for its value and validity assertions
+    # and on the slope report for the rest, so both sources must be admitted.
+    value_admission = _combine_admissions(
+        [admission_for("q2", "Q-VALUE-1", ) if q2 is not None else None,
+         admission_for("q4slope", "Q-VALUE-1")],
+        [str(reports.get("q2") or "q2"), str(reports.get("q4slope") or "q4slope")])
     entries["Q-VALUE-1"] = _entry(
-        "Q-VALUE-1", admission=admission_for("q4slope", "Q-VALUE-1"), source="reports/q4-slope.json",
+        "Q-VALUE-1", admission=value_admission, source="reports/q4-slope.json",
         command="measure.py q4-slope --fixtures <fx> --out reports/q4-slope.json",
         environment=environment_note, route=route.get("slope", "blocked Horn slope"),
         artifact=route.get("slopeArtifact"), fixtures=fixtures,
@@ -1346,7 +1723,10 @@ def assemble(contract: gate.Contract, *, out: Path, reports: dict[str, Path],
         observations={"reportProblem": trace_problem, "notes": trace_notes, **trace_observed})
 
     payload: dict[str, Any] = {
-        "generatedAt": time.time(),
+        # Stamped with the same evaluation time used for source freshness, so one
+        # consistent clock governs assembly, admission and the gate. This records
+        # when the bundle was built; it never refreshes a source run's own age.
+        "generatedAt": time.time() if now is None else float(now),
         "environment": environment,
         "artifacts": artifacts,
         "route": route,
@@ -1396,46 +1776,145 @@ def _worse(first: str, second: str) -> str:
     return first if SEVERITY.get(first, 0) >= SEVERITY.get(second, 0) else second
 
 
-def _source_correspondence(recorded: Any, artifacts: list[dict],
-                           unpinned_roles: list[dict] | None = None
+def _source_correspondence(recorded: Any, required: list[dict] | None = None,
+                           unpinned_roles: list[dict] | None = None,
+                           declared_pins: dict[str, str] | None = None
                            ) -> tuple[str, list[str]]:
-    """Check each role's artifact against the source revision it was built from.
+    """Check every required measured artifact against its declared source pin.
 
-    ``recorded`` is whatever the artifact report states about correspondence. A
-    mismatch is a failure whatever else the report claims; a role with no
-    correspondence record at all is a gap, because nothing establishes that the
-    artifact exercised is the pinned source.
+    Coverage is over the *required* artifacts, not over whichever correspondence
+    records happen to be present: an unrelated record cannot satisfy a required
+    artifact, and the expected pin comes from the declaration rather than from the
+    record being checked.
     """
-    if not isinstance(recorded, list) or not recorded:
-        return UNKNOWN, ["no artifact/source correspondence was recorded"]
     unpinned = {entry.get("name") for entry in (unpinned_roles or [])
                 if isinstance(entry, dict)}
-    notes: list[str] = []
+    required = [a for a in (required or [])
+                if isinstance(a, dict) and a.get("name")
+                and a.get("name") not in unpinned]
+    if not required:
+        return UNKNOWN, [
+            "no required measured artifact was declared, so correspondence cannot "
+            "be established"]
+    if not isinstance(declared_pins, dict) or not declared_pins:
+        return UNKNOWN, [
+            "no declared source pin was supplied, so correspondence has nothing to "
+            "compare against"]
+    if not isinstance(recorded, list) or not recorded:
+        return UNKNOWN, ["no artifact/source correspondence was recorded"]
+
+    # Duplicate records for one artifact/version are ambiguous, so they fail
+    # rather than letting a later record win.
+    counts: dict[tuple[str, str], int] = {}
+    by_key: dict[tuple[str, str], dict] = {}
     for entry in recorded:
         if not isinstance(entry, dict):
             return UNKNOWN, ["a correspondence record is not an object"]
         name = entry.get("artifact")
         if not name:
             return UNKNOWN, ["a correspondence record names no artifact"]
+        key = (str(name), str(entry.get("version")))
+        counts[key] = counts.get(key, 0) + 1
+        by_key.setdefault(key, entry)
+    duplicated = sorted(f"{name}@{version}" for (name, version), count in counts.items()
+                        if count > 1)
+    if duplicated:
+        return FAIL, ["duplicate artifact/source correspondence records: "
+                      + ", ".join(duplicated)]
+
+    notes: list[str] = []
+    problems: list[str] = []
+    failed = False
+    for artifact in required:
+        name = str(artifact["name"])
+        version = artifact.get("version")
+        declared_pin = declared_pins.get(name)
+        if not declared_pin:
+            problems.append(
+                f"{name}: the declaration records no source pin, so correspondence "
+                f"cannot be established")
+            continue
+        entry = by_key.get((name, str(version)))
+        if entry is None:
+            problems.append(
+                f"{name}@{version}: no correspondence record for this required artifact")
+            continue
         pinned = entry.get("pinnedRevision")
-        observed = entry.get("artifactRevision")
-        if name in unpinned:
+        built_from = entry.get("artifactRevision")
+        if not pinned or not built_from:
+            problems.append(
+                f"{name}@{version}: correspondence does not record both revisions")
             continue
-        if not pinned or not observed:
-            return UNKNOWN, [f"{name} correspondence does not record both revisions"]
-        if str(pinned) != str(observed):
-            # Recording the mismatch does not satisfy correspondence.
-            if not entry.get("buildReproduced"):
-                return FAIL, [
-                    f"{name} source correspondence conflict: pinned {pinned!r}, "
-                    f"artifact built from {observed!r}, and no reproducible build "
-                    f"from the pinned revision"]
-            notes.append(f"{name}: reproducible build from {pinned!r} recorded")
+        if str(pinned) != str(declared_pin):
+            # A report cannot establish its own expectation.
+            failed = True
+            problems.append(
+                f"{name}@{version}: correspondence claims pin {pinned!r} but the "
+                f"declaration records {declared_pin!r}")
             continue
-        notes.append(f"{name}: artifact revision matches the pinned revision")
-    if not notes:
-        return UNKNOWN, ["no correspondence record applied to a measured artifact"]
+        if str(built_from) == str(declared_pin):
+            notes.append(f"{name}@{version}: artifact revision matches the declared pin")
+            continue
+        # A revision mismatch must be excused by real build evidence tied to the
+        # measured artifact, never by a boolean alone.
+        evidence_problems = _build_evidence_problems(name, version, entry, declared_pin)
+        if evidence_problems:
+            failed = True
+            problems.extend(evidence_problems)
+        else:
+            notes.append(
+                f"{name}@{version}: reproducible build from {declared_pin!r} recorded "
+                f"with artifact, source and build evidence")
+
+    if failed:
+        return FAIL, problems
+    if problems:
+        return UNKNOWN, problems
     return PASS, notes
+
+
+def _build_evidence_problems(name: str, version: Any, entry: dict[str, Any],
+                             declared_pin: str) -> list[str]:
+    """Reasons a revision mismatch is not excused by the supplied build evidence."""
+    problems: list[str] = []
+    observed_revision = entry.get("artifactRevision")
+    built = entry.get("builtArtifact")
+    if not isinstance(built, dict) or not built.get("name"):
+        problems.append(
+            f"{name}@{version}: revision mismatch (declared pin {declared_pin!r}, "
+            f"artifact built from {observed_revision!r}) with no built-artifact "
+            f"identity")
+    else:
+        if str(built.get("name")) != name:
+            problems.append(
+                f"{name}@{version}: build evidence names artifact "
+                f"{built.get('name')!r}")
+        if str(built.get("version")) != str(version):
+            problems.append(
+                f"{name}@{version}: build evidence names version "
+                f"{built.get('version')!r}")
+        digest = built.get("sha256")
+        if not digest or not _is_sha256(digest):
+            problems.append(
+                f"{name}@{version}: build evidence records no usable artifact digest")
+    if str(entry.get("sourceRevision")) != str(declared_pin):
+        problems.append(
+            f"{name}@{version}: build evidence records source revision "
+            f"{entry.get('sourceRevision')!r}, not the declared pin {declared_pin!r}")
+    evidence = entry.get("buildEvidence")
+    if not isinstance(evidence, dict) or not evidence:
+        problems.append(
+            f"{name}@{version}: revision mismatch with only a build-evidence flag "
+            f"and no recorded build evidence")
+    else:
+        if not evidence.get("command"):
+            problems.append(f"{name}@{version}: build evidence records no command")
+        if not evidence.get("sha256") or not _is_sha256(str(evidence.get("sha256"))):
+            problems.append(
+                f"{name}@{version}: build evidence records no usable digest")
+    if not entry.get("buildReproduced"):
+        problems.append(f"{name}@{version}: build was not reported as reproduced")
+    return problems
 
 
 def _from_versions(verified: Any, artifacts: list[dict],

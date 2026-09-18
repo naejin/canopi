@@ -51,6 +51,15 @@ Each repair below is reported by the implementer and is **not** resolved until i
 | R3-05 | Reported statistics were trusted; attempts could count as rendering | A physically inconsistent trace could pass | **Repair implemented, pending verification**: counters must be whole and consistent with the samples, and median/p95/max are recomputed from individual latencies under a frozen hand-verified convention. |
 | R3-06 | The cleaned Q receipt still presented four requirements as passing and the contract was missing two plan obligations | A stale four-pass table contradicted the eligibility result | **Repair implemented, pending verification**: the receipt now reports the corrected verdict and the contract carries `apis-called-and-worker-target-recorded` and `required-fixture-classes-covered`. |
 
+### Fourth review findings
+
+| ID | Evidence at `d963f755` | Impact / verification required | Status |
+| --- | --- | --- | --- |
+| R4-01 | Fixture comparison was subset-only against a flat list; an unexpected fixture was ignored, a missing required fixture was not a gap, duplicates collapsed in a dict, and the CLI passed an empty fixture list | Coverage could not be established, yet nothing blocked | **Repair implemented, pending verification**: coverage is judged against a declared per-role manifest; undeclared fixtures conflict, missing required fixtures are gaps, duplicates fail, and the CLI loads the declaration. |
+| R4-02 | Correspondence iterated the supplied records and took the expected pin from the record being checked | An unrelated record satisfied a required artifact, and a report could invent its own expectation | **Repair implemented, pending verification**: coverage iterates the required artifact/version pairs against the pin declared in the candidate manifest; a revision mismatch needs real build evidence tied to the measured artifact. |
+| R4-03 | No run identity, timestamp, age or digest check existed; freshness applied only to the bundle stamp | Reassembly refreshed old evidence, and any digest string was accepted | **Repair implemented, pending verification**: `runId` and a finite non-boolean `recordedAt` are required, age uses the shared seven-day limit at one injected clock, and the digest is computed from the bytes read. |
+| R4-04 | A missing identity block returned early, discarding recorded failures and failed preconditions | A known failure could be erased by a provenance gap | **Repair implemented, pending verification**: failures and gaps accumulate and `fail > inconclusive > pass` applies once; a requirement drawing on several sources inherits any contributing source's failure. |
+
 ### Reproduced Q6 failure cases
 
 Reviewer invoked the real `cmd_q6_resources` with in-memory injected browser/report input and an intercepted report writer; no fixture or report files were changed. Browser input carried an available/ok Chromium result, a transport ledger, and candidate transport totals with a 64-byte largest request. No reference fixture was supplied. Two trace inputs independently produced exit `0` and verdict `pass`:

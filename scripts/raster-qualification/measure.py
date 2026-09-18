@@ -1835,6 +1835,58 @@ def _report_map(directory: Path) -> dict[str, Path]:
     return {role: directory / name for role, name in names.items()}
 
 
+#: Shape of the declared fixture manifest supplied to ``gate-assemble``.
+#:
+#: ``declared``         the fixture identities the qualification suite defines.
+#: ``requiredFixtures`` per report role, the fixtures that role must cover. A role
+#:                      absent from this map is required to cover all declared.
+#: ``subsetAllowed``    per report role, whether an explicit subset is permitted.
+FIXTURE_MANIFEST_KEYS = ("declared", "requiredFixtures", "subsetAllowed")
+
+
+def load_fixture_manifest(path: Path | None) -> tuple[dict | None, str | None]:
+    """Load the declared fixture manifest, or explain why it is unusable.
+
+    The manifest is an input, not something derived from the reports being
+    checked: inferring the expected set from the observed set would make coverage
+    unfalsifiable.
+    """
+    if path is None:
+        return None, "no fixture manifest was supplied, so coverage cannot be established"
+    if not path.is_file():
+        return None, f"fixture manifest {path.name} is missing"
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError as error:
+        return None, f"fixture manifest {path.name} is malformed: {error}"
+    if not isinstance(payload, dict):
+        return None, f"fixture manifest {path.name} is not a JSON object"
+    declared = payload.get("declared")
+    if not isinstance(declared, list) or not declared:
+        return None, f"fixture manifest {path.name} declares no fixtures"
+    if not path.name:
+        return None, "fixture manifest has no name"
+    return payload, None
+
+
+def load_declared_pins(candidates_path: Path) -> tuple[dict[str, str], str | None]:
+    """The declared source pins for the candidate artifacts.
+
+    Read from the existing candidate manifest, so the expectation is independent of
+    any report being checked. This task does not change the pins.
+    """
+    if not candidates_path.is_file():
+        return {}, f"candidate manifest {candidates_path.name} is missing"
+    try:
+        payload = json.loads(candidates_path.read_text())
+    except json.JSONDecodeError as error:
+        return {}, f"candidate manifest {candidates_path.name} is malformed: {error}"
+    pins = payload.get("pinnedSourceCommits")
+    if not isinstance(pins, dict) or not pins:
+        return {}, f"candidate manifest {candidates_path.name} records no source pins"
+    return {str(name): str(revision) for name, revision in pins.items()}, None
+
+
 def cmd_gate_assemble(args: argparse.Namespace) -> int:
     """Assemble an eligibility bundle from reports that already exist.
 
@@ -1849,6 +1901,18 @@ def cmd_gate_assemble(args: argparse.Namespace) -> int:
     reports = _report_map(args.reports.resolve())
     present = {role: path for role, path in reports.items() if path.is_file()}
     missing = sorted(role for role, path in reports.items() if not path.is_file())
+
+    candidates_path = args.candidates or (
+        Path(__file__).resolve().parent / "candidates.json")
+    declared_pins, pins_problem = load_declared_pins(candidates_path)
+    if pins_problem:
+        print(f"note: {pins_problem}", file=sys.stderr)
+
+    manifest, manifest_problem = load_fixture_manifest(args.fixture_manifest)
+    if manifest_problem:
+        # Reported through the bundle rather than exiting: a missing manifest is a
+        # gap in coverage, and the evaluation must still produce a verdict.
+        print(f"note: {manifest_problem}", file=sys.stderr)
 
     engine = args.engine
     bundle = evidence.assemble(
@@ -1880,7 +1944,10 @@ def cmd_gate_assemble(args: argparse.Namespace) -> int:
                    {"name": "gdal", "version": "3.8.4"}],
         # Native GDAL is retained by the plan for preparation, CRS and slope, so
         # it is declared rather than pinned; the candidate artifacts stay pinned.
-        fixtures=[], display={"ui_thread_bound_ms": UI_THREAD_BOUND_MS,
+        fixtures=[],
+        fixture_manifest=manifest,
+        declared_artifact_pins=declared_pins or None,
+        display={"ui_thread_bound_ms": UI_THREAD_BOUND_MS,
                               "cold_runs": 1, "warm_runs": 3,
                               "min_latencies_per_run": DISPLAY_TRACE_REQUESTS,
                               "memory_budget_mib": RASTER_JOB_MEMORY_MIB},
@@ -1889,7 +1956,12 @@ def cmd_gate_assemble(args: argparse.Namespace) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"out": str(args.out), "host": args.host,
-                      "presentReports": sorted(present), "missingReports": missing},
+                      "presentReports": sorted(present), "missingReports": missing,
+                      "fixtureManifest": str(args.fixture_manifest) if manifest else None,
+                      "fixtureManifestProblem": manifest_problem,
+                      "candidateManifest": str(candidates_path),
+                      "candidatePinsProblem": pins_problem,
+                      "declaredPins": declared_pins},
                      indent=2))
     return 0
 
@@ -2121,6 +2193,10 @@ def main() -> int:
                    help="directory holding the existing probe/experiment reports")
     p.add_argument("--host", default="chromium",
                    help="observation host label; only desktop-webview satisfies Q-HOST-1")
+    p.add_argument("--fixture-manifest", type=Path,
+                   help="declared fixture manifest naming the fixtures each role must cover")
+    p.add_argument("--candidates", type=Path,
+                   help="candidate manifest holding the declared source pins")
     p.add_argument("--engine", default="Chromium 150.0.7871.46")
     p.add_argument("--numeric-artifact", default="0.5.1",
                    help="exact version the numeric role was exercised against")
