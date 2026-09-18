@@ -2,7 +2,7 @@
 
 Status: active — stable behavioral contract retained for the TypeScript replacement; no authorization to run qualification experiments.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [scientific implementation plan](../raster-data-analysis-rework.md), [review evidence](review-and-debrief.md), [execution prompt](q-typescript-agent-prompt.md).
+Current guidance: [scientific implementation plan](../raster-data-analysis-rework.md), [standing review](q-typescript-review.md), [standing execution prompt](q-typescript-repair-agent-prompt.md).
 
 The user selected TypeScript for the qualification decision path and Rust for native raster operations. C1–C8 remain unchanged acceptance obligations, not Python implementation prescriptions. Runtime validation and one authoritative reduction are mandatory. The historical Python output and its synthetic “passing” fixture are not correctness oracles. The replacement must recompute decisions from source evidence and independent declarations, never trust a serialized admission label. See the prompt for migration ownership and the independent-acceptance/deletion boundary.
 

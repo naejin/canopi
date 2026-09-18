@@ -119,8 +119,18 @@ export function mapResources(source: SourceView | undefined): MappingResult {
     failures.push('candidate sampling is coarser than the plan requires');
   }
 
-  assertions.set('disk-cache-reads-queue-and-children-recorded', reduction.verdict);
+  assertions.set('disk-cache-reads-queue-and-children-recorded', reductionSummary.verdict);
   observations['reductionReasons'] = reductionReasons;
+
+  // The plan names a 512 MiB display disk-cache bound, but no producer emits an
+  // observation of it. The gap is stated unconditionally rather than inferred from
+  // the absence of a field name: a field name is this consumer's guess, so accepting
+  // one would let a caller establish the plan's bound by inventing a key. This
+  // mirrors the other unsupported obligations, which stay gaps until a producer
+  // emits the observation the plan actually names.
+  gaps.push(
+    "the plan's display disk-cache bound (512 MiB) is not established: no producer emits a display disk-cache observation, so its compliance is unmeasured",
+  );
 
   return { assertions, observations, failures, gaps, ...base };
 }

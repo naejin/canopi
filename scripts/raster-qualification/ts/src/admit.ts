@@ -50,6 +50,15 @@ export interface SourceExpectations {
   readonly transport?: string;
   /** Declared for the role; its absence is reported rather than skipped. */
   readonly expectedArtifact?: { readonly name: string; readonly version: string };
+  /**
+   * Whether the declaration retains this engine rather than pinning it.
+   *
+   * The plan retains native GDAL for preparation, CRS and slope: the *name* must
+   * still be the declared engine, while the version is whatever the run discovered.
+   * "Unpinned" therefore means the version is not declared, not that any engine is
+   * acceptable.
+   */
+  readonly unpinnedEngine?: boolean;
   /** Declared measured artifacts that must be covered by correspondence. */
   readonly requiredArtifacts?: readonly { readonly name: string; readonly version?: string }[];
   /** Whether the requirement this source feeds must be evidenced on a raster. */
@@ -259,7 +268,10 @@ export function admitReport(
           `${label} does not record which artifact it exercised, so it cannot be matched to the declared artifact`,
         );
       } else {
-        for (const key of ['name', 'version'] as const) {
+        const keysToCompare = expectations.unpinnedEngine === true
+          ? (['name'] as const)
+          : (['name', 'version'] as const);
+        for (const key of keysToCompare) {
           const declaredValue = expectations.expectedArtifact[key];
           const observedValue = artifact[key];
           if (observedValue === undefined || observedValue === null) {
@@ -267,6 +279,16 @@ export function admitReport(
           } else if (observedValue !== declaredValue) {
             findings.fail(
               `${label} artifact ${key} conflict: expected ${JSON.stringify(declaredValue)}, observed ${JSON.stringify(observedValue)}`,
+            );
+          }
+        }
+        if (expectations.unpinnedEngine === true) {
+          // The declared engine is retained with a discovered version; the version is
+          // recorded for review rather than compared with a declared value.
+          const version = artifact['version'];
+          if (!isNonEmptyString(version)) {
+            findings.gap(
+              `${label} records no version for the retained engine ${JSON.stringify(expectations.expectedArtifact.name)}`,
             );
           }
         }

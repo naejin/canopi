@@ -4,7 +4,7 @@ Status: evidence — **Q is not qualified.** Experiment subtest results are reco
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
 and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
 Independent review found further gate defects; that distribution is not independently accepted.
-The [TypeScript replacement](raster-rework/q-typescript-agent-prompt.md) is the next handoff.
+The [standing TypeScript repair](raster-rework/q-typescript-repair-agent-prompt.md) is the next handoff; the [independent review](raster-rework/q-typescript-review.md) records remaining gate defects.
 Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
@@ -16,7 +16,11 @@ Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edi
 
 The qualification decision path is now TypeScript under `scripts/raster-qualification/ts/`. It
 recomputes admission and verdicts from raw report and declaration bytes and reproduces the recorded
-verdicts below for the existing evidence. The Python evaluator is frozen for comparison and is no
+verdicts below for the existing evidence. A standing independent review at `abf502b6` found four
+blocking defect families in the first delivery (duplicate source roles resolved by arrival order,
+incomplete per-run records combining into a complete one, required artifact coverage inferred from
+supplied name prefixes, and sidecar hash equality treated as survival evidence); the repair is
+delivered for review, and the receipt records that the existing records' verdicts are unchanged. The Python evaluator is frozen for comparison and is no
 longer the authority; its historical reconciliation is retained in the
 [consolidated repair receipt](raster-rework/q-consolidated-repair-receipt.md).
 

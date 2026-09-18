@@ -220,8 +220,12 @@ function uiThreadBound(
       return;
     }
     const value = finiteNumber(raw);
-    if (value === undefined) {
-      failures.push(`run ${name} records longTaskMaxMs=${describe(raw)}, which is not a finite measurement`);
+    if (value === undefined || value < 0) {
+      // A duration cannot be negative, so a negative value is not a measurement of
+      // elapsed time and must not be compared as though it were a fast run.
+      failures.push(
+        `run ${name} records longTaskMaxMs=${describe(raw)}, which is not a usable duration`,
+      );
       violation ??= `run ${name} records an unusable long-task measurement`;
       return;
     }

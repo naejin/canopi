@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — agent prompt
 
-Status: retired — delivered in the TypeScript decision-path migration; retained as debrief evidence, not execution authority. Implementation is recorded in the [migration receipt](q-typescript-receipt.md) and awaits independent verification. Do not re-execute this prompt. The [acceptance contract](q-admission-acceptance.md) is unchanged and remains the basis for review.
+Status: retired — migration delivered in `df54b314` / `abf502b6`; independent review found remaining blockers. See the [standing review](q-typescript-review.md) and [repair prompt](q-typescript-repair-agent-prompt.md). Do not re-execute this migration prompt; its instructions below are historical.
 Tracking: parent `canopi-j571`, qualification `canopi-kqpp`; bd owns execution status.
 Current guidance: [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [acceptance contract](q-admission-acceptance.md), [review/debrief](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).
 

@@ -93,6 +93,8 @@ export interface Prepared {
   readonly input: QualificationInput;
   readonly admitted: readonly AdmittedSource[];
   readonly byRole: ReadonlyMap<string, AdmittedSource>;
+  /** Roles that more than one source claimed, and which therefore carry no report. */
+  readonly duplicatedRoles: ReadonlySet<string>;
 }
 
 /**
@@ -103,8 +105,50 @@ export interface Prepared {
  * different bytes.
  */
 export function prepare(input: QualificationInput): Prepared {
+  // A source role names the one report a requirement reads for that role. Two
+  // sources claiming one role are ambiguous evidence, so the role is rejected
+  // before anything is indexed: resolving it by arrival order would let whichever
+  // source happened to be read last decide the verdict.
+  const roleCounts = new Map<string, number>();
+  for (const declared of input.sources) {
+    roleCounts.set(declared.role, (roleCounts.get(declared.role) ?? 0) + 1);
+  }
+  const duplicatedRoles = new Set(
+    Array.from(roleCounts, ([role, count]) => (count > 1 ? role : undefined)).filter(
+      (role): role is string => role !== undefined,
+    ),
+  );
+  const labelsByRole = new Map<string, string[]>();
+  for (const declared of input.sources) {
+    const existing = labelsByRole.get(declared.role) ?? [];
+    existing.push(declared.label);
+    labelsByRole.set(declared.role, existing);
+  }
+
   const admitted: AdmittedSource[] = [];
   for (const declared of input.sources) {
+    if (duplicatedRoles.has(declared.role)) {
+      admitted.push({
+        role: declared.role,
+        label: declared.label,
+        status: 'corrupt',
+        snapshot: { label: declared.label, path: declared.path, status: 'corrupt' },
+        admission: {
+          label: declared.label,
+          verdict: 'fail',
+          sourceAdmitted: false,
+          reasons: [
+            `source role ${JSON.stringify(declared.role)} is declared more than once (${(
+              labelsByRole.get(declared.role) ?? []
+            ).join(', ')}), so which report it refers to is ambiguous`,
+          ],
+          identity: {},
+          positiveFailures: [],
+          negativeControlFailures: [],
+        },
+      });
+      continue;
+    }
     const snapshot = readSource(declared.path, declared.label);
     if (snapshot.status !== 'present') {
       admitted.push({
@@ -137,8 +181,13 @@ export function prepare(input: QualificationInput): Prepared {
       ...(snapshot.digest === undefined ? {} : { digest: snapshot.digest }),
     });
   }
-  const byRole = new Map(admitted.map((entry) => [entry.role, entry]));
-  return { input, admitted, byRole };
+  // Only roles that arrived exactly once are indexed. A duplicated role is absent
+  // from the index rather than present twice, so no requirement can read one of the
+  // duplicates and believe it read the role.
+  const byRole = new Map(
+    admitted.filter((entry) => !duplicatedRoles.has(entry.role)).map((entry) => [entry.role, entry]),
+  );
+  return { input, admitted, byRole, duplicatedRoles };
 }
 
 /** Reduce requirement verdicts to one overall verdict. */
@@ -184,7 +233,12 @@ export function decideRequirement(
   }
   const result = mapping({ byRole: prepared.byRole });
   const sourceAdmissions = result.sourceRoles.map((role) => prepared.byRole.get(role));
-  const admission = combineAdmissions(sourceAdmissions, result.sourceRoles);
+  const admission = combineAdmissions(
+    sourceAdmissions,
+    result.sourceRoles,
+    prepared.duplicatedRoles,
+    prepared.admitted,
+  );
 
   const assertions = result.assertions;
   const assertionVerdicts = spec.assertions.map((id) => assertions.get(id) ?? 'inconclusive');
@@ -234,8 +288,31 @@ export function decideRequirement(
 function combineAdmissions(
   admissions: readonly (AdmittedSource | undefined)[],
   roles: readonly string[],
+  duplicatedRoles: ReadonlySet<string>,
+  allAdmitted: readonly AdmittedSource[],
 ): Admission {
   const live = admissions.filter((entry): entry is AdmittedSource => entry !== undefined);
+
+  // A requirement that draws on a duplicated role inherits the ambiguity as a
+  // failure rather than as a gap: two sources claimed one role, which is invalid
+  // input rather than missing evidence, and it must not read as "nothing measured".
+  const duplicated = roles.filter((role) => duplicatedRoles.has(role));
+  if (duplicated.length > 0) {
+    const reasons = duplicated.map((role) => {
+      const labels = allAdmitted.filter((entry) => entry.role === role).map((entry) => entry.label);
+      return `source role ${JSON.stringify(role)} is declared more than once (${labels.join(', ')}), so which report it refers to is ambiguous`;
+    });
+    return {
+      label: duplicated.join(', '),
+      verdict: 'fail',
+      sourceAdmitted: false,
+      reasons,
+      identity: {},
+      positiveFailures: [],
+      negativeControlFailures: [],
+    };
+  }
+
   if (live.length === 0) {
     return {
       label: roles.join(', '),

@@ -6,9 +6,17 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
-Current disposition: preserve the independently verified R5 behaviors. Review at `3a7ec9eb` found remaining C5/C6/C8 blockers in the consolidated repair. The user selected TypeScript for qualification tooling and Rust for native operations; the [next prompt](q-typescript-agent-prompt.md) scopes the decision-path replacement. No migration code or new experiment is authorized by this documentation update. The stable matrix remains the acceptance boundary; older prompts are not cumulative assignments.
+Current disposition: the TypeScript migration is implemented but not accepted at `abf502b6`; retain its architecture and verified behaviors while repairing the families in the [standing review](q-typescript-review.md). The [standing prompt](q-typescript-repair-agent-prompt.md) is the sole next assignment. The user remains the courier and approval point; no direct delegation is authorized. C1–C8 remain fixed.
 
 ## Consolidated independent review and migration baseline
+
+### User-mediated repair protocol
+
+The user explicitly retained the courier role. The process change is fewer, fuller handoffs, not less oversight: one standing prompt, one review record, one updated implementation receipt, and fixed C1–C8 criteria. Baseline TypeScript review is round 0; count subsequent consolidated repair deliveries plus independent reviews as rounds 1 and 2. After two unsuccessful rounds, report the structural problem and options to the user instead of silently extending the loop. An accepted round stops the repair assignment, not the qualification gate.
+
+At final debrief, compare escaped invariant families and user handoffs before/after this protocol. Record self-review discoveries, mutations attempted and omissions, invalid positive controls, reason-preservation failures, sandbox-only failures and optional findings kept out of acceptance. Independent review must cover the full agreed boundary before returning one consolidated result, distinguish accepted/blocked/unreviewed behavior, and cite C IDs for new blockers. The reviewer must not substitute incremental example reviews or cosmetic demands for the agreed contract. Preserve unknown time/cost as unknown; do not claim the new workflow reduced effort without evidence.
+
+Latest independent evidence is in the [standing TypeScript review](q-typescript-review.md): 74 emitted tests passed outside the subprocess-restricting sandbox, 14 runner checks and docs/diff checks passed, yet real CLI probes exposed T1–T4. This is evidence that green test counts and a central reducer do not by themselves guarantee complete admission or preserve findings discarded upstream. The next receipt must test requirement-level verdicts; overall Q non-pass can conceal those defects.
 
 At `3a7ec9eb` the reviewer independently ran 261 Python tests, 13/13 stub-runner checks, documentation validation and diff checks successfully. Small in-memory controls through the real assembler/evaluator nevertheless reproduced:
 

@@ -7,7 +7,8 @@
  * "unmeasured" is a gap, while "measured" with disagreeing hashes is a failure.
  */
 
-import { asArray, isNonEmptyString, isRecord } from '../fields.js';
+import { asArray, describe, isNonEmptyString, isRecord } from '../fields.js';
+import { isSha256 } from '../declaration.js';
 import type { SourceView } from '../decide.js';
 import type { MappingResult } from './mapping.js';
 import { unresolved } from './mapping.js';
@@ -70,6 +71,15 @@ export function mapPreparation(source: SourceView | undefined): MappingResult {
  *   survived, and any declared expected hash to match;
  * - an unstated policy is a gap, because nothing established whether one applies.
  */
+/**
+ * The sidecar assertion, decided by the declared policy and the recorded evidence.
+ *
+ * A `measured` policy asserts that a sidecar was present and still present
+ * afterwards. Equality of two recorded hashes does not establish that on its own: the
+ * record must say when each hash was taken and that the sidecar survived, or the
+ * claim is unmeasured. A digest that cannot be a digest is malformed input, so it
+ * fails rather than becoming a gap.
+ */
 function sidecarVerdict(
   source: SourceView,
   failures: string[],
@@ -83,37 +93,93 @@ function sidecarVerdict(
     return 'inconclusive';
   }
   observations['sidecarPolicy'] = policy;
-  if (policy === 'not_applicable') return 'pass';
+  if (policy === 'not_applicable') {
+    // A declared absence of a sidecar is a deliberate statement about the fixture,
+    // not an omission, so the obligation is satisfied.
+    return 'pass';
+  }
   if (policy !== 'measured') {
-    gaps.push(`the preparation report declares an unrecognised sidecar policy ${JSON.stringify(policy)}`);
+    gaps.push(
+      `the preparation report declares an unrecognised sidecar policy ${JSON.stringify(policy)}`,
+    );
     return 'inconclusive';
   }
-  const sidecar = isRecord(source.shape?.value['sidecar']) ? source.shape.value['sidecar'] : undefined;
-  if (sidecar === undefined) {
+
+  const rawSidecar = source.shape?.value['sidecar'];
+  if (rawSidecar === undefined) {
     gaps.push('the sidecar policy is measured but no sidecar record was supplied');
     return 'inconclusive';
   }
-  const expected = sidecar['expectedSha256'];
-  const actual = sidecar['sha256'];
-  if (!isNonEmptyString(expected) || !isNonEmptyString(actual)) {
+  if (!isRecord(rawSidecar)) {
+    failures.push(`the sidecar record is ${describe(rawSidecar)}, not an object`);
+    return 'fail';
+  }
+
+  const expected = rawSidecar['expectedSha256'];
+  const actual = rawSidecar['sha256'];
+  // A present value that cannot be a digest is malformed input, while an absent one
+  // is a gap. The distinction is what keeps a mistyped hash from reading as missing.
+  if (expected !== undefined && expected !== null && !isSha256(expected)) {
+    failures.push(
+      `the sidecar expected hash is ${describe(expected)}, which is not a SHA-256 digest`,
+    );
+    return 'fail';
+  }
+  if (actual !== undefined && actual !== null && !isSha256(actual)) {
+    failures.push(
+      `the sidecar observed hash is ${describe(actual)}, which is not a SHA-256 digest`,
+    );
+    return 'fail';
+  }
+  if (!isSha256(expected) || !isSha256(actual)) {
     gaps.push('the sidecar record does not record both its expected and observed hash');
     return 'inconclusive';
   }
-  observations['sidecar'] = { expected, actual, after: sidecar['after'] ?? null };
+
+  const before = rawSidecar['before'];
+  const after = rawSidecar['after'];
+  observations['sidecar'] = { expected, actual, before: before ?? null, after: after ?? null };
+
   if (expected !== actual) {
     failures.push(`sidecar changed: observed ${actual} but expected ${expected}`);
     return 'fail';
   }
-  if (sidecar['after'] === false) {
+
+  // Survival is a separate observation from hash equality. Without it, two equal
+  // values say only that the same string was written twice.
+  const survived = after === 'present' || after === true;
+  const gone = after === 'absent' || after === false;
+  if (gone) {
     failures.push('the sidecar did not survive preparation');
     return 'fail';
   }
-  const declared = isRecord(identity?.['sidecarSha256']) ? identity['sidecarSha256']['expected'] : undefined;
-  if (isNonEmptyString(declared) && declared !== expected) {
-    failures.push(`sidecar hash conflict: declared ${declared} but the report records ${expected}`);
+  if (!survived) {
+    gaps.push(
+      'the sidecar record does not observe that the sidecar survived preparation, so its preservation is unmeasured',
+    );
+    return 'inconclusive';
+  }
+  if (before !== undefined && before !== null && before !== 'present' && before !== true) {
+    failures.push(
+      `the sidecar was recorded as ${describe(before)} before preparation, so it was not present to preserve`,
+    );
     return 'fail';
+  }
+
+  const declared = isRecord(identity?.['sidecarSha256'])
+    ? identity['sidecarSha256']['expected']
+    : undefined;
+  if (declared !== undefined && declared !== null) {
+    if (!isSha256(declared)) {
+      failures.push(
+        `the declared sidecar hash is ${describe(declared)}, which is not a SHA-256 digest`,
+      );
+      return 'fail';
+    }
+    if (declared !== expected) {
+      failures.push(`sidecar hash conflict: declared ${declared} but the report records ${expected}`);
+      return 'fail';
+    }
   }
   return 'pass';
 }
-
-void asArray;

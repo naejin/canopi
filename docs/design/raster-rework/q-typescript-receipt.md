@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — **implemented, pending independent verification**. Q remains unqualified.
+Status: evidence — implemented; independent review at `abf502b6` found remaining T1–T4 blockers under C1–C8. See the [standing review](q-typescript-review.md). Q remains unqualified. Claims below describe the migration delivery, not whole-boundary acceptance; future repair rounds append revision-labelled outcomes to this same receipt.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).
@@ -335,3 +335,83 @@ start** before this slice is independently reviewed. The
 Per the plan, the next migration phase — replacing remaining Python experiment orchestration,
 fixture/bootstrap/server and reference helpers — requires separate authorization after this slice is
 independently accepted. Deletion of superseded Python is explicitly out of scope until then.
+
+
+---
+
+# Round 1 — repair against the standing review at `abf502b6`
+
+Status of this round: **implemented, delivered for independent review**. Round 0 was the baseline
+review. Starting revision `abf502b6` / `df54b314`; one consolidated delivery, one receipt section, no
+per-defect prompts. Nothing in this section is accepted on the implementer's authority.
+
+Captured reproduction, mutation and sensitivity log:
+[q-typescript-repair-round1.txt](evidence/q-typescript-repair-round1.txt).
+
+## What was retained
+
+The architecture is unchanged: one parse, one reduction, one authority; no bundle input; no Python in
+the decision path; the runner's TypeScript decision routing; source-byte parsing and recomputation
+rather than bundle trust; the strict boolean and duplicate-key regressions; and the independently
+verified R5 behaviors. No file was rewritten wholesale and no second evaluator was introduced.
+
+## Family responses
+
+| Family | Response | Tests |
+| --- | --- | --- |
+| **T1** keyed identity | `prepare` counts every source role before indexing and rejects any role claimed more than once, omitting it from the index. The ambiguity reaches the requirement as a *failure* — two sources claiming one role is invalid input, not missing evidence. Order no longer matters, in either direction. | `t1DuplicateRoles.test.ts` (4); Q-VALUE-1's two-source case in `adversarialRound1.test.ts` |
+| **T2** per-run completeness and precedence | `incrementalPeakRssMiB` joined the mandatory per-run observations; every leaf is classified as usable, present-but-unusable (fails) or absent (a gap), so an explicit `null` fails and the sampling gap names its field; the budget check reads **every** record that recorded the counter, so a measured over-limit value survives a sampling gap in the same record. | `t2RunReduction.test.ts` (10) |
+| **T3** required artifact coverage | The three artifact assertions iterate the *declared* required artifacts and look up each one's own record instead of prefix-matching the supplied list. `q3prepare`, `q4slope` and `q4crs` now declare native GDAL; for those retained roles the name must match while the version is whatever the run discovered, so `gdal@3.9.0` is recorded and `unrelated-engine@999` fails. | `t3ArtifactCoverage.test.ts` (11) |
+| **T4** sidecar evidence | Present-but-malformed digests fail while absent ones are gaps; hash equality is no longer treated as survival evidence, so a `measured` record must observe that the sidecar was present before and after; `absent`/`false`, a conflicting declared hash, a non-object record and unrecognised or absent policies each get their own treatment. | `t4Sidecar.test.ts` (12) |
+
+## Additional T2 scope named by the review
+
+The plan's 512 MiB display disk-cache bound and the staging/free-space policy have **no producer
+observation**. Rather than invent a field name, the requirement carries an explicit, unconditional
+gap: a caller supplying `displayDiskCacheBytes` at 1 GiB, 1 or 0 leaves the requirement inconclusive,
+so it cannot be moved in either direction by inventing a key.
+
+Recorded consequence: `Q-RES-1` moved out of the supported set in the test fixture. Its five contract
+assertions are all decidable and correct; the *requirement* is permanently a gap because one
+dimension of the plan's budget is unmeasured. Declaring it supported would have required fabricating
+that observation.
+
+## Sweep, adversarial review and sensitivity
+
+- **Mutation sweep** (`mutationSweep.test.ts`, 32 mutations): every mutation declares both the target
+  assertion's verdict and the requirement verdict, then every unaffected requirement is checked
+  separately. Three defects in the agent's **own expectations** were found and are recorded in the
+  log — including one case that asserted an interaction that cannot occur, and one that claimed a
+  prefix-based validation record could not cover its prefix.
+- **Adversarial review** (`adversarialRound1.test.ts`, 9 cases): sibling paths across other keyed
+  collections, other per-run fields, other mappings, the programmatic entry point versus the CLI, an
+  empty source list and a directory as a source path. One further fixture defect was found and fixed.
+- **Sensitivity** (11 guard-removal probes): **G4 was a genuine gap in the agent's tests** — reverting
+  the budget check to sampled records left the suite green because every over-limit case had a second
+  healthy run. Two cases were added and the re-probe now fails one test. G3 is reported as a build
+  failure rather than counted as coverage.
+
+No counterexample in the production code was found by the sweep or the adversarial pass beyond the
+T1-T4 families, and none of the reviewed examples reproduces after the repair.
+
+## Verification and reconciliation
+
+All gates green: `tsc` from an empty `dist/` (nothing stale), 127 emitted tests, 261 retained Python
+regressions, 14 stub-runner checks, 0 documentation errors, clean `git diff --check`, shell syntax OK.
+No Python decision-path file changed and no private evidence was touched.
+
+Read-only reconciliation through the emitted CLI at a fixed time gives **the same per-requirement
+verdicts as round 0** — `fail`, 1 fail and 11 inconclusive. That is expected: every T1-T4 defect
+requires a duplicate source, a malformed or incomplete per-run record, a missing artifact record or
+an unsupported sidecar policy, and these records supply none of those. No target distribution is
+prescribed.
+
+## Responses to the standing review
+
+The review's four families are addressed at family scope rather than example scope, and its two
+additional T2 items (display disk cache and the staging policy) are answered with an explicit gap
+rather than an invented cap. The review's protocol notes are respected: one consolidated delivery,
+one receipt section, no acceptance written on the reviewer's behalf, and no repair round inferred from
+silence.
+
+**Round 1 is complete and delivered. It awaits independent review.**

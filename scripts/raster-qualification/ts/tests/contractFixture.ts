@@ -19,8 +19,10 @@ export function realContractPath(): string {
 /** Producer assertion names each requirement mapping reads, with `ok` outcomes. */
 const ASSERTIONS: Record<string, { name: string; ok: boolean }[]> = {
   q1: [
-    { name: `version:whitebox-wasm@0.5.1`, ok: true },
-    { name: `version:cog-tiler-wasm@0.3.6`, ok: true },
+    // The producer names these by artifact, with the version carried in
+    // `verifiedArtifacts`; the consumer looks up the declared artifact's own record.
+    { name: `version:whitebox-wasm`, ok: true },
+    { name: `version:cog-tiler-wasm`, ok: true },
     { name: `integrity:whitebox-wasm`, ok: true },
     { name: `integrity:cog-tiler-wasm`, ok: true },
     { name: `license-recorded:whitebox-wasm`, ok: true },
@@ -145,7 +147,13 @@ export function roleReports(): Record<string, Record<string, unknown>> {
     q3prepare: report({
       experiment: 'q3-prepare',
       assertions: ASSERTIONS['q3prepare']!,
-      identity: identity({ experiment: 'q3-prepare', sidecarPolicy: 'not_applicable' }),
+      // Preparation is native GDAL in the plan's route, so the report records the
+      // retained engine with the version the run discovered.
+      identity: identity({
+        experiment: 'q3-prepare',
+        sidecarPolicy: 'not_applicable',
+        artifact: { name: 'gdal', version: '3.8.4' },
+      }),
       extra: {
         sidecar: { expectedSha256: FIXTURE_HASH, sha256: FIXTURE_HASH, after: true },
       },
@@ -243,7 +251,6 @@ export const SUPPORTED_REQUIREMENTS: readonly string[] = [
   'Q-LOCAL-1',
   'Q-PREP-1',
   'Q-CRS-1',
-  'Q-RES-1',
   'Q-DISPLAY-1',
 ];
 
@@ -256,4 +263,16 @@ export const UNSUPPORTED_ASSERTIONS: ReadonlyMap<string, string> = new Map([
   ['teardown-observably-releases-resource', 'Q-TEARDOWN-1'],
   ['disk-write-failure-exercised', 'Q-FAILINJ-1'],
   ['observed-in-desktop-webview', 'Q-HOST-1'],
+]);
+
+/**
+ * Requirements blocked by an observation no producer emits.
+ *
+ * `Q-RES-1` is here rather than in the supported set: its reducer decides all five
+ * contract assertions correctly, but the plan's 512 MiB display disk-cache bound has
+ * no producer observation, so the requirement is permanently a gap. Listing it as
+ * supported would require fabricating that observation.
+ */
+export const UNRESOLVED_REQUIREMENTS: ReadonlyMap<string, string> = new Map([
+  ['Q-RES-1', "the plan's display disk-cache bound (512 MiB) has no producer observation"],
 ]);

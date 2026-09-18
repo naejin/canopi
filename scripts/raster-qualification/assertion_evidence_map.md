@@ -27,9 +27,9 @@ Rules applied throughout:
 
 | Assertion | Evidence read | If absent |
 | --- | --- | --- |
-| `artifacts-present-at-declared-version` | q1 assertions prefixed `version:` | inconclusive |
-| `artifacts-match-integrity-digest` | q1 assertions prefixed `integrity:` | inconclusive |
-| `artifacts-record-license` | q1 assertions prefixed `license-recorded:` | inconclusive |
+| `artifacts-present-at-declared-version` | each **declared** required artifact's own `version:<artifact>` record | inconclusive; a record that fails fails the assertion |
+| `artifacts-match-integrity-digest` | each **declared** required artifact's own `integrity:<artifact>` record | inconclusive; a record that fails fails the assertion |
+| `artifacts-record-license` | each **declared** required artifact's own `license-recorded:<artifact>` record | inconclusive; a record that fails fails the assertion |
 | `qualified-roles-name-artifact-version` | worse of `verifiedArtifacts` against the exercised roles, and `sourceCorrespondence` against the declared pins | inconclusive |
 | `non-corresponding-artifacts-recorded` | a recorded non-correspondence note, or a `sourceCorrespondence` inventory covering every required measured artifact | failure when a required artifact is neither covered nor noted |
 | `apis-called-and-worker-target-recorded` | q1 assertion `apis-and-worker-target-recorded` | inconclusive |
@@ -51,7 +51,7 @@ Rules applied throughout:
 | --- | --- | --- |
 | `original-bytes-unchanged` | q3-prepare assertion `original-unchanged` | inconclusive |
 | `original-matches-recorded-hash` | q3-prepare assertion `original-hash-declared` | inconclusive |
-| `sidecar-unchanged` | the identity `sidecarPolicy` and the recorded sidecar hashes (see `_sidecar_verdicts`) | inconclusive |
+| `sidecar-unchanged` | the identity `sidecarPolicy` and a sidecar record that observes the sidecar present before **and** after preparation; a present malformed digest, a changed sidecar, a sidecar that did not survive or a conflicting declared hash fails | inconclusive; hash equality alone is not survival evidence |
 | `derivative-is-tiled-and-bounded` | q3-prepare assertion `derived-tiled` | inconclusive |
 | `derivative-cell-exact` | q3-prepare assertion `cell-exact` | inconclusive |
 | `derivative-preserves-metadata` | q3-prepare assertion `geotransform-preserved` | inconclusive |
@@ -132,11 +132,11 @@ Rules applied throughout:
 
 | Assertion | Evidence read | If absent |
 | --- | --- | --- |
-| `candidate-memory-within-budget` | candidate `incrementalPeakRssMiB` against the plan's 1 GiB combined budget | inconclusive; the reference reader's reading never substitutes |
+| `candidate-memory-within-budget` | each candidate run's `incrementalPeakRssMiB` against the plan's 1 GiB combined budget; the per-run peak is a mandatory observation, so a run that omits it cannot evidence the bound | inconclusive; the reference reader's reading never substitutes |
 | `measurement-is-of-candidate-route` | each measurement's declared `routeRole` against its own route text | failure on a contradiction; inconclusive when no candidate record exists |
 | `reference-measurements-labelled-separately` | the presence of reference-labelled records | inconclusive |
 | `sampling-meets-requirement` | candidate `sampleIntervalMs` ≤ 100 ms with a positive `sampleCount` | inconclusive |
-| `disk-cache-reads-queue-and-children-recorded` | **sampled** candidate records: `temporaryDiskHighWaterBytes`, `decodedCacheBytes` ≤ 128 MiB, `activeReads` ≤ 2, `queueDepth` ≤ 32, `maxConcurrentChildren` | inconclusive when a counter is unrecorded or no sampled record exists; failure when a recorded counter exceeds its budget |
+| `disk-cache-reads-queue-and-children-recorded` | **every** candidate record that recorded a counter: `temporaryDiskHighWaterBytes`, `decodedCacheBytes` ≤ 128 MiB, `activeReads` ≤ 2, `queueDepth` ≤ 32, `maxConcurrentChildren`; a budget is checked whether or not the record sampled correctly | inconclusive when a mandatory observation is unrecorded or no record sampled; failure when a recorded counter exceeds its budget or a leaf is present but unusable |
 
 ## Q-DISPLAY-1 — route-level display measurement (source: q6-trace)
 
@@ -154,7 +154,7 @@ Rules applied throughout:
 ## Observations that are deliberately permanent gaps
 
 Seven assertions are hard-coded `UNKNOWN` because **no probe emits their evidence**. They stay
-inconclusive and this repair did not implement them, because doing so would require new qualification
+inconclusive and no repair has implemented them, because doing so would require new qualification
 experiments:
 
 * `Q-MEMBER-1` `overviews-do-not-resurrect-replaced-pixels`;
@@ -167,3 +167,13 @@ experiments:
 Recording them as gaps is the honest outcome. Fabricating a measurement, or weakening an assertion to
 match what a probe happens to emit, is not permitted, and neither is treating the absence of a failure
 string as a pass.
+
+Two further observations have no producer and are reported as requirement-level gaps without being
+contract assertions:
+
+* the plan's **512 MiB display disk-cache bound**. The gap is stated unconditionally rather than
+  inferred from a missing field name, because a field name is this consumer's guess: accepting one
+  would let a caller establish the plan's bound by inventing a key. `Q-RES-1` therefore stays a gap
+  even though its five contract assertions are all decidable and correct;
+* the plan's **staging and free-space policy** for temporary disk. `temporaryDiskHighWaterBytes` is
+  recorded and reported, but it is compared with that policy rather than an invented universal cap.

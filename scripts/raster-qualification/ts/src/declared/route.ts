@@ -45,13 +45,34 @@ export const EXPERIMENT_BY_ROLE: ReadonlyMap<string, string> = new Map([
   ['browser', 'q2ranged'],
 ]);
 
-/** Which declared artifact each source role is expected to have exercised. */
+/**
+ * Which declared engine each source role must have exercised.
+ *
+ * A role that the plan leaves unpinned still names the engine it expects: the plan
+ * retains native GDAL for preparation, CRS and slope, and "unpinned" means the
+ * version is discovered rather than declared, not that any engine is acceptable.
+ */
 export const ARTIFACT_BY_ROLE: ReadonlyMap<string, { name: string; version: string }> = new Map([
   ['q2', { name: 'whitebox-wasm', version: '0.5.1' }],
+  ['q3prepare', { name: 'gdal', version: 'retained' }],
   ['q3members', { name: 'reference-resolver', version: 'harness' }],
+  ['q4slope', { name: 'gdal', version: 'retained' }],
+  ['q4crs', { name: 'gdal', version: 'retained' }],
   ['q5lifecycle', { name: 'whitebox-wasm', version: '0.5.1' }],
   ['q6resources', { name: 'whitebox-wasm', version: '0.5.1' }],
   ['trace', { name: 'cog-tiler-wasm', version: '0.3.6' }],
+]);
+
+/**
+ * Roles whose declared engine the plan retains rather than pins.
+ *
+ * For these the name must still match the declared engine, while the version is
+ * whatever the run discovered.
+ */
+export const UNPINNED_ENGINE_ROLES: ReadonlySet<string> = new Set([
+  'q3prepare',
+  'q4slope',
+  'q4crs',
 ]);
 
 /** The measured artifacts the route must cover. */
@@ -124,6 +145,7 @@ export function expectationsForRole(
   transport?: string;
   requiresRasterFixture: boolean;
   expectedArtifact?: { name: string; version: string };
+  unpinnedEngine?: boolean;
   requiredArtifacts: readonly { name: string; version: string }[];
   unpinnedRoles: readonly string[];
 } | undefined {
@@ -143,6 +165,7 @@ export function expectationsForRole(
     ...(transport === undefined ? {} : { transport }),
     requiresRasterFixture: role !== 'q1',
     ...(artifact === undefined ? {} : { expectedArtifact: artifact }),
+    ...(UNPINNED_ENGINE_ROLES.has(role) ? { unpinnedEngine: true } : {}),
     requiredArtifacts,
     unpinnedRoles: UNPINNED_ROLES.map((entry) => entry.name),
   };

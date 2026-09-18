@@ -14,7 +14,7 @@
  * a cap would be inventing a requirement.
  */
 
-import { finiteNumber, isRecord, nonNegativeInteger } from './fields.js';
+import { finiteNonNegative, isRecord, nonNegativeInteger } from './fields.js';
 import { Findings, type Verdict } from './verdict.js';
 import { DECLARATIONS } from './declared/route.js';
 
@@ -35,14 +35,24 @@ export interface RunRecord {
   readonly malformed: readonly string[];
 }
 
-/** Counters a complete candidate resource record must carry. */
+/**
+ * Observations a complete candidate resource record must carry.
+ *
+ * Memory is a per-run peak, so a run that does not record it cannot evidence the
+ * combined bound; that is the same class of gap as a missing counter, and it must
+ * not be filled in from a different run.
+ */
 export const REQUIRED_RESOURCE_COUNTERS = [
+  'incrementalPeakRssMiB',
   'temporaryDiskHighWaterBytes',
   'decodedCacheBytes',
   'activeReads',
   'queueDepth',
   'maxConcurrentChildren',
 ] as const;
+
+/** The subset of those counters that also carries a plan budget. */
+export const BUDGETED_COUNTERS = ['decodedCacheBytes', 'activeReads', 'queueDepth'] as const;
 
 /** The plan's ceilings, each on the candidate route's own accounting. */
 export const RESOURCE_BUDGETS: ReadonlyMap<string, { limit: number; label: string }> = new Map([
@@ -58,22 +68,56 @@ export function readRunRecords(measurements: unknown): RunRecord[] {
     const record = isRecord(entry) ? entry : {};
     const routeRole = typeof record['routeRole'] === 'string' ? record['routeRole'] : '';
     const route = typeof record['route'] === 'string' ? record['route'] : '';
-    const interval = nonNegativeInteger(record['sampleIntervalMs']);
-    const count = nonNegativeInteger(record['sampleCount']);
-    const sampled = interval !== undefined && count !== undefined && count > 0;
     const counters = new Map<string, number>();
     const missing: string[] = [];
     const malformed: string[] = [];
-    for (const name of REQUIRED_RESOURCE_COUNTERS) {
-      const raw = record[name];
-      if (raw === undefined || raw === null) {
-        if (sampled) missing.push(name);
-        continue;
+
+    /**
+     * Classify one observable leaf.
+     *
+     * Three outcomes are kept apart, because they call for different verdicts: a
+     * usable value, a value that is present but unusable (invalid input), and a
+     * value that was never written (missing evidence).
+     */
+    const observe = (
+      name: string,
+      read: (raw: unknown) => number | undefined,
+    ): number | undefined => {
+      if (!Object.prototype.hasOwnProperty.call(record, name)) {
+        missing.push(name);
+        return undefined;
       }
-      const value = nonNegativeInteger(raw);
-      if (value === undefined) malformed.push(name);
-      else counters.set(name, value);
+      const raw = record[name];
+      if (raw === null) {
+        // Present but explicitly null. The schema for these leaves is a number, so a
+        // null that is present is malformed input rather than absent evidence.
+        malformed.push(name);
+        return undefined;
+      }
+      if (raw === undefined) {
+        missing.push(name);
+        return undefined;
+      }
+      const value = read(raw);
+      if (value === undefined) {
+        malformed.push(name);
+        return undefined;
+      }
+      counters.set(name, value);
+      return value;
+    };
+
+    const interval = observe('sampleIntervalMs', nonNegativeInteger);
+    const count = observe('sampleCount', nonNegativeInteger);
+    for (const name of REQUIRED_RESOURCE_COUNTERS) {
+      // Memory is a real-valued peak in MiB; the counters are non-negative integers.
+      observe(name, name === 'incrementalPeakRssMiB' ? finiteNonNegative : nonNegativeInteger);
     }
+    // Every observation is classified whether or not the record can ultimately be
+    // reduced. The completeness check below reads `missing` only from records that
+    // sampled, so a record with no usable cadence reports the sampling gap as its
+    // finding rather than reporting every counter twice.
+    const sampled = interval !== undefined && count !== undefined && count > 0;
     return { index, routeRole, route, sampleIntervalMs: interval, sampleCount: count, sampled, counters, missing, malformed };
   });
 }
@@ -113,8 +157,20 @@ export function reduceResources(runRecords: readonly RunRecord[]): ResourceReduc
     const interval = record.sampleIntervalMs;
     const count = record.sampleCount;
     if (interval === undefined || count === undefined || count === 0) {
+      const absent = record.missing.filter(
+        (name) => name === 'sampleIntervalMs' || name === 'sampleCount',
+      );
+      const unusable = record.malformed.filter(
+        (name) => name === 'sampleIntervalMs' || name === 'sampleCount',
+      );
+      const detail = [
+        absent.length > 0 ? `missing ${absent.join(', ')}` : '',
+        unusable.length > 0 ? `unusable ${unusable.join(', ')}` : '',
+      ]
+        .filter((part) => part !== '')
+        .join('; ');
       findings.gap(
-        `candidate run ${record.index} does not record a usable sampling interval or sample count`,
+        `candidate run ${record.index} does not record a usable sampling cadence (${detail || 'no usable sampling interval or sample count'})`,
       );
       continue;
     }
@@ -129,10 +185,12 @@ export function reduceResources(runRecords: readonly RunRecord[]): ResourceReduc
   observations['samplingIntervalsMs'] = intervals;
   observations['sampleCounts'] = counts;
 
-  // Each budget is enforced on every sampled record, independently of the others.
+  // Each budget is enforced on every record that recorded the counter, whether or
+  // not the record sampled correctly and whether or not another field is missing.
+  // An over-limit measurement is a fact about the engine; discarding it because the
+  // same record has a gap would lose a known failure.
   let violations = 0;
   for (const record of candidate) {
-    if (!record.sampled) continue;
     for (const [name, budget] of RESOURCE_BUDGETS) {
       const value = record.counters.get(name);
       if (value === undefined) continue;
@@ -146,14 +204,29 @@ export function reduceResources(runRecords: readonly RunRecord[]): ResourceReduc
   }
   observations['budgetViolations'] = violations;
 
-  // The declaration's own resource records, reported for review. A high-water mark
-  // is reported rather than compared with an invented cap.
+  // A value that is present but unusable is invalid input, not a gap. It is
+  // reported once per field so the reader knows which observation was refused.
+  for (const record of candidate) {
+    for (const name of record.malformed) {
+      findings.fail(
+        `candidate run ${record.index} records ${name} with an unusable value, so it is not a measurement`,
+      );
+    }
+  }
+
+  // Per-run peaks are reported for review. A high-water mark is compared with the
+  // plan's staging and free-space policy rather than an invented universal cap, so
+  // it is carried as an observation and not gated here.
   const sampledRecords = candidate.filter((record) => record.sampled);
   observations['sampledRunCount'] = sampledRecords.length;
-  observations['temporaryDiskHighWaterBytes'] = sampledRecords
-    .map((record) => record.counters.get('temporaryDiskHighWaterBytes') ?? null);
-  observations['activeReads'] = sampledRecords.map((record) => record.counters.get('activeReads') ?? null);
-  observations['queueDepth'] = sampledRecords.map((record) => record.counters.get('queueDepth') ?? null);
+  observations['incrementalPeakRssMiB'] = candidate.map(
+    (record) => record.counters.get('incrementalPeakRssMiB') ?? null,
+  );
+  observations['temporaryDiskHighWaterBytes'] = candidate.map(
+    (record) => record.counters.get('temporaryDiskHighWaterBytes') ?? null,
+  );
+  observations['activeReads'] = candidate.map((record) => record.counters.get('activeReads') ?? null);
+  observations['queueDepth'] = candidate.map((record) => record.counters.get('queueDepth') ?? null);
 
   if (sampledRecords.length === 0) {
     findings.gap(
@@ -162,20 +235,12 @@ export function reduceResources(runRecords: readonly RunRecord[]): ResourceReduc
     return { verdict: findings.verdict(), findings, observations };
   }
 
-  // Completeness is judged per record, and a counter missing from any sampled
-  // record leaves the reduction incomplete rather than being filled in from a
-  // different record.
-  const incomplete = sampledRecords.filter(
-    (record) => record.missing.length > 0 || record.malformed.length > 0,
-  );
+  // Completeness is judged per record across every mandatory observation, so an
+  // incomplete run is never combined with another into a fictional complete one.
+  const incomplete = sampledRecords.filter((record) => record.missing.length > 0);
   if (incomplete.length > 0) {
     const detail = incomplete
-      .map((record) => {
-        const parts: string[] = [];
-        if (record.missing.length > 0) parts.push(`missing ${record.missing.join(', ')}`);
-        if (record.malformed.length > 0) parts.push(`malformed ${record.malformed.join(', ')}`);
-        return `run ${record.index} (${parts.join('; ')})`;
-      })
+      .map((record) => `run ${record.index} is missing ${record.missing.join(', ')}`)
       .join('; ');
     findings.gap(
       `candidate route resource records are incomplete, so no complete run was measured: ${detail}`,

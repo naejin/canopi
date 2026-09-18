@@ -6,16 +6,18 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Next step: independent review of the [TypeScript decision-path migration](q-typescript-receipt.md) against the [stable acceptance matrix](q-admission-acceptance.md). The user selected TypeScript for qualification orchestration and Rust for native raster operations; the [migration plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration) stages the remaining Python replacement separately. The Python decision path is frozen for comparison, not an oracle, and the consolidated repair's C5/C6/C8 blockers at `3a7ec9eb` are recorded in the [debrief](review-and-debrief.md). Migration acceptance does not qualify Q. No new qualification experiments, engine selection or N1 are authorized. Older prompts are historical evidence, not accumulating execution instructions.
+Next handoff: the [standing TypeScript repair prompt](q-typescript-repair-agent-prompt.md), using one [independent review record](q-typescript-review.md) and the unchanged [C1–C8 matrix](q-admission-acceptance.md). Review at `abf502b6` found remaining blockers despite 74 passing tests. The user remains the courier and approval point for each of at most two repair/review rounds; round 1 has not started. No direct agent-to-agent loop, new qualification experiments, Python deletion or N1 is authorized by this documentation update. Older prompts are historical evidence, not accumulating instructions.
 
 | Artifact | Purpose |
 | --- | --- |
-| [TypeScript replacement prompt](q-typescript-agent-prompt.md) | Sole next handoff: bounded decision-path migration, independent-review gate and debrief evidence |
+| [Standing TypeScript repair prompt](q-typescript-repair-agent-prompt.md) | Sole next assignment, retained for both user-forwarded repair rounds |
+| [Standing TypeScript review](q-typescript-review.md) | Baseline T1–T4 family reproductions, independent evidence, subsequent round dispositions |
 | [Consolidated agent prompt](q-consolidated-agent-prompt.md) | Retired handoff executed in the consolidated admission repair |
 | [Consolidated repair receipt](q-consolidated-repair-receipt.md) | Historical implementer report; independent review found remaining blockers despite 261 passing tests |
 | [Consolidated repair cycles](evidence/q-consolidated-repair-cycles.txt) | Captured RED/GREEN, sensitivity probes, self-review cases and read-only evidence reconciliation for that repair |
 | [TypeScript agent prompt](q-typescript-agent-prompt.md) | Retired handoff executed in the TypeScript decision-path migration |
-| [TypeScript migration receipt](q-typescript-receipt.md) | Implementer report for the decision-path replacement: architecture, C1–C8 coverage, 74 emitted tests, 10 sensitivity probes, adversarial review and read-only reconciliation; implemented, pending independent verification |
+| [TypeScript repair round 1 log](evidence/q-typescript-repair-round1.txt) | Reproduction of the standing review's T1–T4 examples, the mutation sweep, the adversarial pass, eleven guard-removal probes and the read-only reconciliation |
+| [TypeScript migration receipt](q-typescript-receipt.md) | Implementer report; reviewed at `abf502b6`, complete boundary not accepted; update this same receipt for repair rounds |
 | [Assertion evidence map](../../../scripts/raster-qualification/assertion_evidence_map.md) | The 68 contract assertions, the evidence that decides each, and the seven that are permanent gaps |
 | [Stable admission acceptance contract](q-admission-acceptance.md) | Single C1–C8 input/behavior/test matrix and blocker-versus-follow-up policy |
 | [Consolidated admission review](q-consolidated-admission-review.md) | Revision-linked reproductions, reviewed boundaries, retained repairs and evidence limits |

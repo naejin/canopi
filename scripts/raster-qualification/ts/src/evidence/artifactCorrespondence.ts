@@ -19,6 +19,9 @@ import { allNamed, named } from './numericTransport.js';
 import { worse, type Verdict } from '../verdict.js';
 import { ROUTE_ARTIFACTS, UNPINNED_ROLES } from '../declared/route.js';
 
+/** Artifact names the plan leaves unpinned, which have no integrity record. */
+const UNPINNED_NAMES = new Set(UNPINNED_ROLES.map((entry) => entry.name));
+
 export function mapArtifactCorrespondence(source: SourceView | undefined): MappingResult {
   const assertions = unresolved([
     'artifacts-present-at-declared-version',
@@ -52,13 +55,32 @@ export function mapArtifactCorrespondence(source: SourceView | undefined): Mappi
 
   const value = source.shape.value;
   const named_ = source.facts.assertions;
-  assertions.set('artifacts-present-at-declared-version', allNamed(named_, 'version:'));
-  assertions.set('artifacts-match-integrity-digest', allNamed(named_, 'integrity:'));
-  assertions.set('artifacts-record-license', allNamed(named_, 'license-recorded:'));
+
+  // Required sets come from the declaration, not from whichever names the report
+  // supplied. A prefix match over the supplied list proves only that some record
+  // exists under some name; it says nothing about whether the artifacts the route
+  // needs were covered, and an unrelated name would satisfy it.
+  const requiredArtifacts = ROUTE_ARTIFACTS.filter(
+    (artifact) => !UNPINNED_NAMES.has(artifact.name),
+  );
+  assertions.set(
+    'artifacts-present-at-declared-version',
+    perArtifact(requiredArtifacts, named_, (name) => `version:${name}`, 'version'),
+  );
+  assertions.set(
+    'artifacts-match-integrity-digest',
+    perArtifact(requiredArtifacts, named_, (name) => `integrity:${name}`, 'integrity digest'),
+  );
+  assertions.set(
+    'artifacts-record-license',
+    perArtifact(requiredArtifacts, named_, (name) => `license-recorded:${name}`, 'license'),
+  );
   assertions.set(
     'apis-called-and-worker-target-recorded',
     named(named_, 'apis-and-worker-target-recorded'),
   );
+
+  observations['requiredArtifacts'] = requiredArtifacts.map((artifact) => artifact.name);
 
   const verified = asArray(value['verifiedArtifacts']) ?? [];
   const correspondence = asArray(value['sourceCorrespondence']) ?? [];
@@ -102,6 +124,36 @@ export function mapArtifactCorrespondence(source: SourceView | undefined): Mappi
     sourceRoles: ['q1'],
     ...base,
   };
+}
+
+/**
+ * Whether every required artifact carries its own named record.
+ *
+ * A failure in any artifact's record fails the assertion; a missing record is a gap,
+ * so an absent report is distinguishable from a report that contradicts itself.
+ */
+function perArtifact(
+  required: readonly { name: string; version: string }[],
+  named: ReadonlyMap<string, { ok?: boolean }>,
+  key: (name: string) => string,
+  label: string,
+): Verdict {
+  if (required.length === 0) return 'inconclusive';
+  let verdict: Verdict = 'pass';
+  for (const artifact of required) {
+    const found = named.get(key(artifact.name));
+    if (found === undefined) {
+      verdict = worse(verdict, 'inconclusive');
+      continue;
+    }
+    if (found.ok === false) {
+      // A required artifact whose record failed cannot be carried by another
+      // artifact's passing record.
+      return 'fail';
+    }
+    if (found.ok === undefined) verdict = worse(verdict, 'inconclusive');
+  }
+  return verdict;
 }
 
 /** Each exercised role must name a version the bench verified. */
