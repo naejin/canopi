@@ -2,6 +2,8 @@
 
 Use this entry point for raster import, overlap review, the shared library, analysis, or LiDAR presentation. The current foundation admits bounded, north-up, aligned single-band numeric rasters and persisted slope analysis. The [raster rework](../design/raster-data-analysis-rework.md) specifies future bounded import, Data/Analysis workbenches and shared Web maps; it does not change the current workflow until implemented. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
 
+Engine, artifact and capacity qualification for the rework lives in the [Q receipt](../design/raster-qualification-q.md) and its harness under `scripts/raster-qualification/`. That receipt is the input N1 depends on; read it before planning bounded numeric access. Its load-bearing constraints: a prepared tiled COG derivative is required before a generation is boundedly readable, the incomplete EPSG:2154 fixture WKT is resolvable only through GDAL, the pinned `whitebox-wasm` source commit has no published artifact, and the candidate stream decoder's `free()` is not idempotent.
+
 | Change | Owner / reference |
 | --- | --- |
 | Catalogue migrations, generations, footprints, history | `desktop/src/services/lidar/catalogue.rs`, `import.rs`, `mod.rs` |

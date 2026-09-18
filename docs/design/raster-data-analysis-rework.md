@@ -1,6 +1,6 @@
 # Raster foundation, Data and Analysis workbenches
 
-Status: proposed — HTML prototype approved; engine qualification remains a mandatory gate before dependent production implementation.
+Status: proposed — HTML prototype approved; engine qualification remains a mandatory gate before dependent production implementation. Q executed; its receipt is [raster qualification Q](raster-qualification-q.md) and awaits independent review before N1.
 Tracking: `canopi-j571`; reconciled children `canopi-kqpp`, `canopi-jv8a`, `canopi-j8mp`, and deferred `canopi-5neg`. Implementation still requires separate authorization.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 
