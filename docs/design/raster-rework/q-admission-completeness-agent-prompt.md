@@ -1,6 +1,6 @@
 # Q admission completeness — agent prompt
 
-Status: proposed — bounded repair following independent review of `2c830b0d` at `d963f755`.
+Status: retired — delivered as `50c1211e`; retained for the user-requested debrief and no longer an execution authority. Superseded by the [admission-completeness receipt](q-admission-completeness-receipt.md).
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [review/debrief](review-and-debrief.md), [repository contract](../../../AGENTS.md).
 
