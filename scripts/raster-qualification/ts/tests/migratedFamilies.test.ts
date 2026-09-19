@@ -211,6 +211,27 @@ test('S3 artifact: a boolean-only reproduction claim cannot excuse a mismatch', 
   }
 });
 
+test('S3 artifact: a replacement recorded against another source revision fails', () => {
+  const root = new TempRoot();
+  try {
+    const reports = roleReports();
+    reports['q1'] = buildReplacement(reports['q1']!, BUILD_DIGEST, 'd'.repeat(40));
+    const q1 = reports['q1']!;
+    reports['q1'] = {
+      ...q1,
+      sourceCorrespondence: (q1['sourceCorrespondence'] as Rec[]).map((entry, index) =>
+        index === 0 ? { ...entry, sourceRevision: 'f'.repeat(40) } : entry,
+      ),
+    };
+    const result = decide(root, reports);
+    const current = state(result, 'Q-ART-1');
+    assert.equal(current.verdict, 'fail', current.reasons);
+    assert.match(current.reasons, /source revision/);
+  } finally {
+    root.cleanup();
+  }
+});
+
 test('S3 artifact: a missing correspondence record is a gap, never a pass', () => {
   const root = new TempRoot();
   try {

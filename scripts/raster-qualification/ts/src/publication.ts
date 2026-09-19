@@ -62,6 +62,19 @@ export type PublicationRequest =
   | (PublicationBase & { readonly kind: 'decision'; readonly document: unknown })
   | (PublicationBase & { readonly kind: 'diagnostic' });
 
+/**
+ * A seam for fault injection in tests.
+ *
+ * The no-replace guarantee has two layers: an early refusal when the destination is
+ * already known to exist, and the atomic no-replace link that also covers a
+ * destination created meanwhile. The second layer is only reachable during a genuine
+ * race, which a test cannot stage through the CLI, so this single hook exists. It is
+ * inert unless a test sets it: production code never does.
+ */
+export const publicationFaultInjection: {
+  beforeLink?: (destination: string) => void;
+} = {};
+
 export interface PublicationResult {
   /** Where a document was actually published; absent when nothing was written. */
   readonly publishedPath?: string;
@@ -221,6 +234,7 @@ function publishAt(destination: string, bytes: string): { readonly ok: true } | 
     return { ok: false, problem: `cannot write the staged document: ${detail(error)}` };
   }
 
+  publicationFaultInjection.beforeLink?.(destination);
   try {
     linkSync(staged, destination);
   } catch (error) {

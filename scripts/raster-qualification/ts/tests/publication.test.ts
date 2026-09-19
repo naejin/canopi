@@ -14,10 +14,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, symlinkSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { runCli, runCliArgs, TempRoot } from './helpers.js';
+import { publish, publicationFaultInjection } from '../src/publication.js';
 import { NOW, roleReports, realContractPath, SOURCE_ROLES } from './contractFixture.js';
 import { candidatePins, fixtureManifest } from './fixtures.js';
 
@@ -154,6 +155,20 @@ test('publication: an absent destination that is still an input is refused', () 
     assert.equal(result.status, 2, result.stderr);
     assert.equal(root.has(join('reports', 'q6-trace.json')), false);
     assert.match(result.stderr, /is also an input this run reads/);
+  } finally {
+    root.cleanup();
+  }
+});
+
+test('publication: the request file is an input and cannot be the destination', () => {
+  const root = new TempRoot();
+  try {
+    const request = writeRequest(root);
+    const before = readFileSync(request, 'utf8');
+    const result = runCli(request, request);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(readFileSync(request, 'utf8'), before);
+    assert.match(result.stderr, /already exists|is also an input this run reads/);
   } finally {
     root.cleanup();
   }
@@ -334,6 +349,72 @@ test('publication: an unusable destination parent reports that no diagnostic was
 // --------------------------------------------------------------------------
 // Race and cleanup invariants
 // --------------------------------------------------------------------------
+
+test('publication: a destination created during publication is refused, never replaced', () => {
+  const root = new TempRoot();
+  try {
+    const out = join(root.path, 'decision.json');
+    // The race window between the early refusal and the atomic link cannot be staged
+    // through the CLI, so the narrow interface is used with a genuine competing
+    // creator: the document must not be published, and the competing bytes survive.
+    publicationFaultInjection.beforeLink = (destination) => {
+      // One competing creator: the hook clears itself so the diagnostic that the
+      // refusal publishes is not blocked by the same injected competitor.
+      delete publicationFaultInjection.beforeLink;
+      writeFileSync(destination, '{"competing":true}\n');
+    };
+    try {
+      const result = publish({
+        kind: 'decision',
+        requestedOut: out,
+        inputs: [],
+        readSetComplete: true,
+        document: { requirements: [], marker: 'ours' },
+        problems: [],
+        version: 2,
+        generatedAt: 0,
+      });
+      assert.equal(result.requestedPathUsed, false);
+      assert.equal(result.publishedKind, 'diagnostic');
+      assert.match(result.problems.join(' '), /already exists/);
+    } finally {
+      delete publicationFaultInjection.beforeLink;
+    }
+    assert.equal(readFileSync(out, 'utf8'), '{"competing":true}\n');
+    assert.deepEqual(stagingLeftovers(root.path), []);
+  } finally {
+    root.cleanup();
+  }
+});
+
+test('publication: an existing destination in a read-only directory is refused by name', () => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    // Root ignores directory permissions, so the staging attempt would succeed and
+    // this case could not distinguish the early refusal from the atomic one.
+    return;
+  }
+  const root = new TempRoot();
+  try {
+    const directory = join(root.path, 'readonly');
+    mkdirSync(directory, { recursive: true });
+    const out = join(directory, 'decision.json');
+    writeFileSync(out, '{"keep":"these bytes"}\n');
+    chmodSync(directory, 0o500);
+    try {
+      const result = runCli(writeRequest(root), out);
+      assert.equal(result.status, 2, result.stderr);
+      // The early refusal names the real reason; without it the failure would be the
+      // staging directory, which is a different problem for a caller to act on.
+      assert.match(result.stderr, /already exists/);
+      assert.doesNotMatch(result.stderr, /staging directory/);
+    } finally {
+      chmodSync(directory, 0o700);
+    }
+    assert.equal(readFileSync(out, 'utf8'), '{"keep":"these bytes"}\n');
+  } finally {
+    root.cleanup();
+  }
+});
 
 test('publication: concurrent creators produce exactly one complete document', async () => {
   const root = new TempRoot();
