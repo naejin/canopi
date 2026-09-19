@@ -6,7 +6,7 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
-Current disposition: bounded NC1–NC2/MR1 work is independently accepted at `579880be`; the [repair loop is closed](q-typescript-review.md#numeric-completion-independent-acceptance). The [next handoff](q-desktop-bridge-agent-prompt.md) moves to a positive Desktop transport producer/pilot. The [collaboration protocol](collaboration-protocol.md) assigns settled design and independent review to the main agent, execution/evidence to the implementation agent, and forwarding/approval to the user.
+Current disposition: bounded NC1–NC2/MR1 work is independently accepted at `579880be`; the [repair loop is closed](q-typescript-review.md#numeric-completion-independent-acceptance). The Desktop bridge transport slice is delivered at `fab0c381`: an isolated host measured Q-LOCAL-1 and Q-HOST-1 on a generated fixture and awaits one independent review, which is the next step. The [collaboration protocol](collaboration-protocol.md) assigns settled design and independent review to the main agent, execution/evidence to the implementation agent, and forwarding/approval to the user.
 
 ### Continuous-improvement checkpoint after tooling acceptance
 
@@ -384,6 +384,27 @@ The new cycle has one [input/acceptance matrix](q-admission-acceptance.md), one 
 Debrief this intervention using evidence: matrix rows actually exercised, counterexamples found by self-review versus independent review, materially new blockers after delivery, repeated findings tied to previously explicit instructions, and actual logged time/rework when available. Increased test count, longer prompts and skill-name lists are not success metrics. A later review may still find a defect; require it to identify the violated matrix invariant or justify a scope change rather than silently extending the assignment.
 
 Latest independent checks at `5becb043`: 209 tests pass with TemporaryDirectory warnings; docs validation passes. R5 controls preserve expected outcomes. New reproduction families and their code entry points are recorded once in the consolidated review, not duplicated in a new chronological task list here. No private qualification experiments or production changes occurred during this review.
+
+## Desktop bridge transport slice at `fab0c381` (delivery record)
+
+The first slice that ran a real experiment rather than testing the evaluator. What it
+produced, and what it exposed, in the debrief's own terms:
+
+| Question | Observed |
+| --- | --- |
+| Capability gained | Two positively observed Q requirements — Q-LOCAL-1 (bounded numeric windows over the scoped local bridge, five windows, 81 920 cells, no value or validity mismatch) and Q-HOST-1 (bundled worker and assets, Desktop WebView, no network origin). Both are exploratory: one synthetic fixture, the published engine, one host. Ten requirements remain inconclusive because their producers do not exist, and zero requirements are qualified |
+| Reusable work | The production executor was reused by path rather than reimplemented, and the existing admission/decision path consumed the new reports unchanged. The new work was one isolated workspace plus a declaration profile |
+| Work that needed rework | Four failures, each found by the harness rather than by review: GTK cannot start under a bare network namespace (X11 abstract sockets are namespaced), the WebView read camelCase keys while Tauri returns authored snake_case, engine assets copied after the host build were not embedded, and the worker used `tile.column` where the engine's JSON says `col`. Every one of them produced a run that looked completed |
+| What the harness caught instead of a reviewer | The embedded-asset digest check caught the MIME-type failure at its cause rather than at its symptom; the analytic comparison turned a silent all-`NaN` decode into a named failure; the fresh-output guard was added after a probe showed a reused directory presenting a previous decision as this run's evidence |
+| Measurement defect found by probing | A sensitivity probe first appeared to prove the analytic expectation was irrelevant. It proved nothing, because the generator and the expectation were the same function: changing it changed the fixture too. The probe was rebuilt to freeze the fixture bytes first. Expectation probes must break *correspondence*, not a shared source |
+| Review coverage limit | Every probe ran on the same harness it exercises, the network posture used a local X11 relay rather than a firewall rule, and the observations are two runs by the implementer. Independent reproduction is the reviewer's step |
+| Effort/cost | Not measured. The harness runs end to end in about five seconds once built, which is an observed runtime, not a cost comparison |
+
+The transferable lesson for the next prompt: when a pilot reports success, the reviewer
+should ask what would have to be true for the run to look successful while measuring the
+wrong bytes. Here the answer was three separate staleness paths — embedded bundle, reused
+run directory, and a generator that shared the expectation — and two of them
+were closed only because a probe or a failure pointed at them.
 
 ## Final debrief procedure
 

@@ -135,7 +135,7 @@ Rules applied throughout:
 | --- | --- | --- |
 | `bundled-worker-and-asset-path-exercised` | the host report's own assertions, with the declared accepted-host rule | inconclusive |
 | `no-network-origin-required` | the host report's own assertions | inconclusive |
-| `observed-in-desktop-webview` | the host report's `identity.host` against the declared accepted hosts; only `desktop-webview` satisfies it | inconclusive. The rule is implemented and driver-tested, but no source role `host` has declared expectations and no producer emits a host report, so this assertion is a permanent gap in the CLI path |
+| `observed-in-desktop-webview` | the host report's `identity.host` against the declared accepted hosts; only `desktop-webview` satisfies it | inconclusive when the host report is absent, which is the case under the default `chromium` profile. The `desktop-local` profile declares the role `host` and the isolated Desktop host produces `host.json`; the assertion passed on measured evidence at `fab0c381` |
 
 ## Q-RES-1 — route-level resource measurement (source: q6-resources)
 
@@ -162,7 +162,7 @@ Rules applied throughout:
 
 ## Observations that are deliberately permanent gaps
 
-Seven assertions are hard-coded `UNKNOWN` because **no probe emits their evidence**. They stay
+Six assertions are hard-coded `UNKNOWN` because **no probe emits their evidence**. They stay
 inconclusive and no repair has implemented them, because doing so would require new qualification
 experiments:
 
@@ -170,8 +170,11 @@ experiments:
 * `Q-VALUE-1` `required-fixture-classes-covered`;
 * `Q-CANCEL-1` `cancellation-issued-while-work-in-flight` and `concurrent-in-flight-work-measured`;
 * `Q-TEARDOWN-1` `teardown-observably-releases-resource`;
-* `Q-FAILINJ-1` `disk-write-failure-exercised`;
-* `Q-HOST-1` `observed-in-desktop-webview` (satisfiable only by a real Desktop WebView run).
+* `Q-FAILINJ-1` `disk-write-failure-exercised`.
+
+`Q-HOST-1` `observed-in-desktop-webview` was listed here until the isolated Desktop host produced a
+real WebView run at `fab0c381`; the `desktop-local` profile's `host` role now decides it, so it is no
+longer a permanent gap.
 
 Recording them as gaps is the honest outcome. Fabricating a measurement, or weakening an assertion to
 match what a probe happens to emit, is not permitted, and neither is treating the absence of a failure

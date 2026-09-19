@@ -4,7 +4,7 @@ Status: evidence — **Q is not qualified.** Experiment subtest results are reco
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
 and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
 Independent review found further gate defects; that distribution is not independently accepted.
-The bounded numeric completion/MR1 slice is independently accepted at `579880be`; no real Q capability was added. The [Desktop bridge handoff](raster-rework/q-desktop-bridge-agent-prompt.md), when forwarded, is next: isolated TS/Rust producer/host pilot and a specific Python-helper replacement. Full Q remains unqualified; private/large runs, production N1 and engine substitution remain unauthorized.
+The bounded numeric completion/MR1 slice is independently accepted at `579880be`; no real Q capability was added. The Desktop bridge transport slice at `fab0c381` measured the first positive observations — Q-LOCAL-1 and Q-HOST-1 pass on one generated tiled COG through the isolated host, with the other ten requirements inconclusive — and replaced and deleted `import_map.py`. It is one exploratory run on a synthetic fixture with the published engine, so **full Q remains unqualified**, the pinned-artifact correspondence failure is preserved, and private/large runs, production N1 and engine substitution remain unauthorized. See the [receipt section](raster-rework/q-typescript-receipt.md#desktop-bridge-transport-slice-implementation-response).
 Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
@@ -549,4 +549,4 @@ large fixtures and measurement output stay outside Git under the ignored `.rq-sc
   part.
 - **Branch and commits:** recorded in the accompanying delivery note.
 - **Status:** verified, **not integrated**. Pushing does not integrate.
-- **Next action:** user-forwarded [Desktop bridge slice](raster-rework/q-desktop-bridge-agent-prompt.md), then independent review of code and actual pilot evidence separately. Preserve source-pin failures and remaining gaps. **Production N1 still requires Q acceptance, not tooling or pilot acceptance.**
+- **Next action:** one independent review, through the user, of the Desktop bridge transport slice at `fab0c381`: the harness code, the two pilot runs and the ten requirements that stay inconclusive. Preserve source-pin failures and remaining gaps. **Production N1 still requires Q acceptance, not tooling or pilot acceptance.**

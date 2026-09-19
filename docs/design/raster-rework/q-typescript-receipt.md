@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — bounded NC1–NC2/MR1 slice independently accepted at `579880be`; the agreed repair loop is closed. See [independent acceptance](q-typescript-review.md#numeric-completion-independent-acceptance) for coverage and limits. Historical delivery claims below are revision-specific, not full-Q acceptance. The [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) is next when forwarded; Q remains unqualified.
+Status: evidence — bounded NC1–NC2/MR1 slice independently accepted at `579880be`; the agreed repair loop is closed. See [independent acceptance](q-typescript-review.md#numeric-completion-independent-acceptance) for coverage and limits. The Desktop bridge transport slice at `fab0c381` reports measured Q-LOCAL-1 and Q-HOST-1 observations and awaits one independent review; Q remains unqualified. Historical delivery claims below are revision-specific, not full-Q acceptance.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).
@@ -825,3 +825,135 @@ was fabricated for an old report, and no unavailable environment is inferred as 
 The matrix is bounded to the three counters and their operand pairs; it is not an exhaustive audit. No
 engine, browser, platform or private experiment was run, so every readiness statement remains a
 statement about producer code. Time and cost remain unmeasured.
+
+## Desktop bridge transport slice (implementation response)
+
+Revision `fab0c381`, baseline `f92ee112`. This is the implementer's report for the
+[Desktop bridge handoff](q-desktop-bridge-agent-prompt.md); it claims no acceptance, and Q
+remains open and unqualified. Unlike the previous slices this one ran a real experiment, so
+its observations are separated below from its code.
+
+### What changed
+
+| Area | Change |
+| --- | --- |
+| Isolated host | `scripts/raster-qualification/desktop-host/` is a separate Cargo workspace (own `Cargo.lock`, `tauri.conf.json`, bundled `web/dist`) with no production manifest, IPC registration or app-data change. `desktop/src/native_operation.rs` is reused **by path**, not copied |
+| Byte seam | `read(handle, offset, length, requestId)` returns exactly one interval or a structured refusal, decided before any byte is read: `unknown-handle`, `closed-handle`, `wrong-run`, `duplicate-request-id`, `zero-length`, `out-of-range`, `too-large`, `whole-artifact`, `overflow`. `close` is idempotent, teardown revokes every handle, and two running reads with 32 waiting requests are admitted before anything is refused for capacity |
+| Ledger | The host writes its own ledger at read time — fixture, request id, offset, requested/returned length, outcome, aggregate bytes, maximum read, active/queued high water. Hash/preflight I/O is labelled `reference` and is never candidate transport evidence. The launcher reconciles it with the worker's counters instead of trusting either side |
+| Worker | Plans reads from a 64 KiB header prefix (grown only on a genuine header shortage, capped at 1 MiB), asks for exactly the tiles it needs, and decodes them with `CogStream`/`tiles_for_window`/`decode_tile_f64`. Engine JSON is validated field by field, so a renamed key is a named failure rather than a window of `NaN` |
+| Profile | Fixed `desktop-local` profile: route id, candidate pins and `local-bridge` transport unchanged; host `desktop-webview`, environment `qualification-host-desktop-local-v1`, role `host`, experiment `q-host`, file `host.json`, artifact `{name: desktop-webview, version: bundled}` declared unpinned with the reason recorded. Selection is explicit launcher input, an unknown profile is refused, and a conflict between `--profile` and the request body is refused before publication |
+| Python | `import_map.py` and its three `.mjs` consumers are replaced by `ts/src/importMap.ts`; the helper is deleted. Output is byte-identical over the installed tree (830 entries), including key order and scoped/subpath handling |
+
+Semantic changes, stated explicitly: the isolated host declares one unpinned artifact
+(`desktop-webview`, `bundled`); and the launcher refuses to run in a directory that already
+holds results, because the publication policy never replaces an existing path and a reused
+directory would otherwise present a previous run's decision as this run's evidence.
+
+### Genuinely measured
+
+Two runs at this revision (`pilot-1789852111652`, `pilot-1789852116521`) through
+`node tools/runPilot.mjs --run-dir <fresh>`; both take about five seconds end to end and
+produced identical transport numbers.
+
+| Observation | Value |
+| --- | --- |
+| Windows | Five level-zero windows (origin, mid, hole, far, lower-left) compared cell by cell against the analytic expectation: 81 920 cells, **0 value mismatches, 0 validity mismatches** in both runs |
+| Bounded transport | 12 candidate reads totalling 11 599 872 bytes: one 65 536-byte header prefix plus eleven 1 048 576-byte tiles. Largest read 1 048 576 of 16 778 048 fixture bytes; no read returned the artifact |
+| Ledger reconciliation | Worker counters (11 599 872 bytes in 12 reads, largest 1 048 576, no unexpected read failures) agree exactly with the native ledger, which is written host-side |
+| Refusal controls | `whole-artifact`→`too-large`, `zero-length`→`zero-length`, `past-end`→`out-of-range`, `unknown-handle`→`unknown-handle`: all four refused with the declared code through the real WebView→IPC→bridge path and recorded natively with 0 bytes returned |
+| Bundled assets | The host re-hashed all six embedded bundle files inside the binary and matched the launcher's declaration |
+| Network denial | `unshare -rn` network namespace with no interface other than loopback; the display is reached through a local-only X11 pathname-socket relay, so the WebView runs without a network origin |
+| Evaluator | `--profile desktop-local` over the produced reports: **Q-LOCAL-1 pass**, **Q-HOST-1 pass**, 10 requirements inconclusive, 0 fail, `synthetic: false`, no internal defects, overall verdict `inconclusive` |
+
+Q-HOST-1's three assertions (`bundled-worker-and-asset-path-exercised`,
+`no-network-origin-required`, `observed-in-desktop-webview`) and Q-LOCAL-1's six
+(`reads-over-proposed-local-transport`, `transport-ledger-corroborates-bytes`,
+`no-single-request-returns-whole-artifact`, `values-match-independent-reference`,
+`validity-matches-reference-exactly`, `window-size-within-contract-limit`) all pass on
+measured evidence. **This is the first positive local-bridge transport observation in Q.**
+
+### Induced failures and sensitivity probes
+
+Failures met while building, kept because each one is the reason a guard exists:
+
+| Observed failure | Cause | What now prevents it |
+| --- | --- | --- |
+| GTK panics under `unshare -rn` (`Failed to initialize GTK`, no `/tmp/.X11-unix`) | a network namespace also isolates the X11 *abstract* socket | the launcher relays the *pathname* socket, which is reached through the filesystem and needs no network |
+| `Module name, 'undefined/whitebox_wasm.js' does not resolve to a valid URL` | the WebView read camelCase keys while Tauri returns the spec in its authored snake_case | the message was the stale-bundle symptom as well; both are now explicit (authored key names, and a host-side digest check) |
+| `'text/html' is not a valid JavaScript MIME type` | engine assets copied into the bundle *after* the host was built, so the embedded snapshot fell back to `index.html` | the launcher builds the frontend, copies assets, then builds the host; the host re-hashes every embedded file |
+| Every window returned `NaN` | the worker read `tile.column` while the engine's JSON says `col`, and ignored band interleaving | engine JSON is validated field by field, and the analytic comparison failed loudly instead of reporting a successful read |
+
+Probes, each in an isolated copy of the sources with the original restored byte-for-byte
+afterwards:
+
+| Guard removed or expectation broken | Result |
+| --- | --- |
+| Independent expectation broken after the fixture was written (`column - row` → `column + row`), guards intact | q2 report `fail`, decision `fail`, Q-LOCAL-1 `fail`, 16 255–16 384 mismatching cells per window |
+| The same break with `compareWindow` forced to report no mismatch | q2 report `pass`, Q-LOCAL-1 `pass` — the comparison is the load-bearing guard |
+| The 4 MiB read cap in `bridge.rs` | `bridge::tests::refuses_every_interval_before_reading` fails (15 pass, 1 fails) |
+| One declared bundled-asset digest replaced by zeros | the run fails naming the asset, its embedded digest and its declared digest |
+| A refusal control declaring `out-of-range` for a zero-length read | the report's `no-whole-file-request:refused-before-read` assertion is `false` and Q-LOCAL-1 becomes `fail` |
+| The host digest comparison neutered, with the wrong declaration above | the run passes — the host-side check is what makes the bundled-asset claim an observation |
+
+### Gate commands actually run
+
+`desktop/web/node_modules/.bin/tsc -p scripts/raster-qualification/ts/tsconfig.json` and the
+same compile into a fresh output directory; `node --test
+'scripts/raster-qualification/ts/dist/tests/*.test.js'` (**296 passing**, 279 at the previous
+revision); `desktop/web/node_modules/.bin/tsc -p
+scripts/raster-qualification/desktop-host/web/tsconfig.json`; `cargo build --offline`,
+`cargo test --offline` (**16 passing**), `cargo check --offline --all-targets`, `cargo clippy
+--offline --all-targets -- -D warnings` and `rustfmt --check --edition 2021` on the host's
+own files; `python3 -m unittest discover -s scripts/raster-qualification/tests` (**261
+passing**, frozen reference); `bash scripts/raster-qualification/tests/test_runner_exit.sh`
+(18 passing); `bash -n scripts/raster-qualification/run_all_experiments.sh`; `python3
+scripts/check_docs.py`; `git diff --check`. The host builds offline: `https://crates.io`
+returns 403 from this environment, so every Rust command uses `--offline` against the
+existing cache.
+
+Two gates are deliberately not claimed as clean here. `cargo fmt --check` in the host
+directory reports a diff in the reused production file `desktop/src/native_operation.rs`
+(import ordering under rustfmt 1.9.0); that file is not part of this slice, is left exactly
+as found, and the host's own files are checked directly instead. Repository Rust CI parity
+(`cargo fmt --all --check`, `cargo clippy --workspace`) was not run, because the production
+workspace is untouched by this slice and the isolated crate is outside it.
+
+### Limitations
+
+The fixture is one generated 2048×2048 Float32 plane, not the plan's private-original
+derivative, so the declared fixture manifest is a declared *subset*: it establishes coverage
+of the fixture this run used, not of the plan's fixture classes. The pilot exercises the
+transport, the refusal seam at the adapter boundary and the host's asset and network
+posture; it does not measure cancellation, teardown-on-failure, resource budgets, display
+traces, preparation, members, slope, CRS or artifact correspondence, and none of those are
+inferred from it. The engine is the published `whitebox-wasm` 0.5.1 from the local bench:
+`candidates.json` records that it does not correspond to the source pin, and that
+correspondence failure is preserved rather than hidden — the engine was not rebuilt,
+replaced or substituted, and the pinned route is not qualified by this evidence. Packaging
+is claimed only for this Linux WebKit host. Time and cost are still unmeasured.
+
+### Python replaced, and what still consumes Python
+
+`scripts/raster-qualification/import_map.py` is deleted. Its replacements are
+`ts/src/importMap.ts` and `ts/tests/importMap.test.ts` (8 tests, including a parity test that
+compares this implementation with the Python helper while it exists and returns early once it
+does not). The three callers `run_wasm_probe.mjs`, `run_display_trace.mjs` and `crs_probe.mjs`
+now run `ts/dist/src/importMap.js` through `process.execPath`, and `serve_bench.py` consumes
+the generated JSON unchanged with its `--import-map` help text updated.
+`run_all_experiments.sh` compiles the tooling with a new `step00` before the probe steps.
+`serve_bench.py`, `measure.py`, `qual_lib.py`, `bootstrap_bench.py` and the frozen Python
+regressions remain as they were; no other Python file was touched and no new Python work was
+added.
+
+### Next blocked dependency and authority needed
+
+The remaining Q obligations are unchanged and none of them is a wiring problem this slice
+could have fixed. Each needs a producer decision the handoff did not authorize: preparation,
+members, slope and CRS need the private fixtures and their producers; resources and display
+need new producers and the two unobserved plan bounds; cancellation, teardown and failure
+injection need capabilities, not runs. Because the fixture is generated and the engine does
+not correspond to the source pin, no further run of this harness can qualify Q: a
+qualification claim needs a separately authorized slice with the pinned artifact and the
+managed fixtures. **This slice adds two positively observed Q capabilities (Q-LOCAL-1 and
+Q-HOST-1, both as exploratory observations on a generated fixture) and zero qualified
+requirements.**

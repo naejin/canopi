@@ -6,11 +6,11 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The bounded numeric completion/MR1 slice is independently accepted at `579880be`; the agreed tooling repair loop is closed. The [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) is the sole next assignment when forwarded by the user: isolated TS/Rust positive transport, one small generated-fixture Desktop pilot and a specific Python helper replacement. Q remains unqualified; no production N1 or integration is authorized. The [collaboration protocol](collaboration-protocol.md) defines main-agent design/review, implementation-agent execution and the user's courier/approval role.
+The bounded numeric completion/MR1 slice is independently accepted at `579880be`; the agreed tooling repair loop is closed. The Desktop bridge transport slice is delivered at `fab0c381`: an isolated TS/Rust host measured Q-LOCAL-1 and Q-HOST-1 on a generated fixture, and `import_map.py` is replaced and deleted. It awaits one independent review through the user. Q remains unqualified; no production N1 or integration is authorized. The [collaboration protocol](collaboration-protocol.md) defines main-agent design/review, implementation-agent execution and the user's courier/approval role.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) | Sole next assignment: positive scoped native transport/worker pilot, honest host/profile evidence and bounded Python retirement |
+| [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) | Retired; executed in `fab0c381`, delivery reported in the migration receipt and awaiting one independent review |
 | [Collaboration protocol](collaboration-protocol.md) | User-mediated design, implementation, review and evidence-driven improvement loop |
 | [Numeric completion handoff](q-numeric-counter-repair-agent-prompt.md) | Retired; bounded slice independently accepted at `579880be` |
 | [Bounded boundary-repair handoff](q-final-boundary-repair-agent-prompt.md) | Retired assignment; original examples repaired, two numeric blockers remain after independent review |
@@ -25,7 +25,7 @@ The bounded numeric completion/MR1 slice is independently accepted at `579880be`
 | [TypeScript agent prompt](q-typescript-agent-prompt.md) | Retired handoff executed in the TypeScript decision-path migration |
 | [TypeScript repair round 2 log](evidence/q-typescript-repair-round2.txt) | Reproduction of the Round 1 disposition's six families, the transport declaration correction, thirteen guard-removal probes and the three-round reconciliation |
 | [TypeScript repair round 1 log](evidence/q-typescript-repair-round1.txt) | Reproduction of the standing review's T1–T4 examples, the mutation sweep, the adversarial pass, eleven guard-removal probes and the read-only reconciliation |
-| [TypeScript migration receipt](q-typescript-receipt.md) | Revision-linked implementation reports; Round 2 independently unaccepted; preserved for reassessment |
+| [TypeScript migration receipt](q-typescript-receipt.md) | Revision-linked implementation reports, latest the Desktop bridge transport slice at `fab0c381` with measured Q-LOCAL-1/Q-HOST-1 observations; not acceptance |
 | [Assertion evidence map](../../../scripts/raster-qualification/assertion_evidence_map.md) | The 68 contract assertions, the evidence that decides each, and the seven that are permanent gaps |
 | [Stable admission acceptance contract](q-admission-acceptance.md) | Single C1–C8 input/behavior/test matrix and blocker-versus-follow-up policy |
 | [Consolidated admission review](q-consolidated-admission-review.md) | Revision-linked reproductions, reviewed boundaries, retained repairs and evidence limits |
