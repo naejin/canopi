@@ -24,6 +24,12 @@ import { validateContract, validateFixtureManifest, validatePinDeclaration } fro
 import { DECISION_VERSION, runQualification, type QualificationRequest } from './qualification.js';
 import { expectationsForRole } from './declared/route.js';
 import { buildDirectoryRequest, declaredReportPaths } from './request.js';
+import {
+  DEFAULT_PROFILE,
+  isQualificationProfile,
+  QUALIFICATION_PROFILES,
+  type QualificationProfile,
+} from './declared/profiles.js';
 import { publish, type PublicationResult } from './publication.js';
 
 const EXIT_ELIGIBLE = 0;
@@ -39,8 +45,12 @@ interface RequestRead {
   readonly inputs: readonly string[];
   /** False when the source list could not be recovered completely. */
   readonly readSetComplete: boolean;
+  /** True when the flag and the request body declare different profiles. */
+  readonly profileConflict?: boolean;
   /** The evaluation time, when the invocation recorded one. */
   readonly now?: number;
+  /** The declaration profile this invocation selected. */
+  readonly profile?: QualificationProfile;
 }
 
 function main(argv: readonly string[]): number {
@@ -49,7 +59,9 @@ function main(argv: readonly string[]): number {
     process.stderr.write(
       'usage: cli.js --request <request.json> --out <decision.json>\n' +
         '   or: cli.js --reports <dir> --contract <contract.json> [--fixture-manifest <f>] ' +
-        '[--pins <candidates.json>] [--now <epoch-seconds>] --out <decision.json>\n' +
+        '[--pins <candidates.json>] [--now <epoch-seconds>] [--profile <name>] --out <decision.json>\n' +
+        `\n` +
+        `profiles: ${QUALIFICATION_PROFILES.join(', ')} (default ${DEFAULT_PROFILE})\n` +
         '\n' +
         'The destination must not already exist: publication never replaces an existing\n' +
         'path or a path this invocation reads. Use a fresh output path for each run.\n',
@@ -57,12 +69,25 @@ function main(argv: readonly string[]): number {
     return EXIT_INPUT_ERROR;
   }
 
+  // The profile is explicit launcher input. An unknown value is rejected here, and
+  // the request body may name one too; a conflicting pair is refused rather than
+  // resolved by precedence, because the two are different declarations of the same
+  // run.
+  if (args.profile !== undefined && !isQualificationProfile(args.profile)) {
+    process.stderr.write(
+      `error: unknown qualification profile ${JSON.stringify(args.profile)}; known profiles: ${QUALIFICATION_PROFILES.join(', ')}\n`,
+    );
+    return EXIT_INPUT_ERROR;
+  }
+  const flagProfile: QualificationProfile | undefined = isQualificationProfile(args.profile)
+    ? args.profile
+    : undefined;
   const argumentInputs = [args.request, args.contract, args.fixtureManifest, args.pins].filter(
     (path): path is string => typeof path === 'string',
   );
   const read = args.request !== undefined
-    ? readRequest(args.request, argumentInputs)
-    : readDirectoryRequest(args, argumentInputs);
+    ? readRequest(args.request, argumentInputs, flagProfile)
+    : readDirectoryRequest(args, argumentInputs, flagProfile);
 
   let problems: readonly string[] = read.problems;
   let document: unknown;
@@ -106,6 +131,7 @@ function main(argv: readonly string[]): number {
 
   const summary = {
     out: publication.publishedPath,
+    profile: (document as { profile: string }).profile,
     verdict: (document as { verdict: string }).verdict,
     requirements: (
       (document as { requirements: readonly { id: string; verdict: string }[] }).requirements
@@ -127,7 +153,11 @@ function main(argv: readonly string[]): number {
  * The declared report paths are part of the read-set before anything is validated,
  * so a declaration failure cannot leave the destination unprotected.
  */
-function readDirectoryRequest(args: CliArgs, argumentInputs: readonly string[]): RequestRead {
+function readDirectoryRequest(
+  args: CliArgs,
+  argumentInputs: readonly string[],
+  flagProfile: QualificationProfile | undefined,
+): RequestRead {
   if (args.reports === undefined || args.contract === undefined) {
     return {
       ok: false,
@@ -136,7 +166,10 @@ function readDirectoryRequest(args: CliArgs, argumentInputs: readonly string[]):
       readSetComplete: false,
     };
   }
-  const inputs = [...argumentInputs, ...declaredReportPaths(args.reports)];
+  const profile = flagProfile ?? DEFAULT_PROFILE;
+  // The profile's extra report files are part of the read-set before anything is
+  // validated, so a declaration failure cannot leave them unprotected.
+  const inputs = [...argumentInputs, ...declaredReportPaths(args.reports, profile)];
   const now = args.now === undefined ? Date.now() / 1000 : Number.parseFloat(args.now);
   if (!Number.isFinite(now)) {
     return {
@@ -153,11 +186,20 @@ function readDirectoryRequest(args: CliArgs, argumentInputs: readonly string[]):
     ...(args.fixtureManifest === undefined ? {} : { fixtureManifestPath: args.fixtureManifest }),
     ...(args.pins === undefined ? {} : { pinsPath: args.pins }),
     now,
+    profile,
   });
   if (!built.ok) {
     return { ok: false, problems: built.problems, inputs, readSetComplete: true, now };
   }
-  return { ok: true, request: built.request, problems: [], inputs, readSetComplete: true, now };
+  return {
+    ok: true,
+    request: built.request,
+    problems: [],
+    inputs,
+    readSetComplete: true,
+    now,
+    profile,
+  };
 }
 
 /**
@@ -191,7 +233,11 @@ function recoverSourcePaths(
   return { paths, complete };
 }
 
-function readRequest(path: string, argumentInputs: readonly string[]): RequestRead {
+function readRequest(
+  path: string,
+  argumentInputs: readonly string[],
+  flagProfile: QualificationProfile | undefined,
+): RequestRead {
   let text: string;
   try {
     text = readFileSync(path, 'utf8');
@@ -228,6 +274,33 @@ function readRequest(path: string, argumentInputs: readonly string[]): RequestRe
   const inputs = [path, ...recovered.paths];
   const readSetComplete = recovered.complete;
 
+  // The profile is read from explicit input only: the request body's own `profile`
+  // field, and the launcher's `--profile` flag. Report identity is never consulted.
+  const bodyProfile = request['profile'];
+  if (bodyProfile !== undefined && !isQualificationProfile(bodyProfile)) {
+    return {
+      ok: false,
+      problems: [
+        `error: request declares unknown qualification profile ${JSON.stringify(bodyProfile)}; known profiles: ${QUALIFICATION_PROFILES.join(', ')}`,
+      ],
+      inputs,
+      readSetComplete,
+    };
+  }
+  if (flagProfile !== undefined && bodyProfile !== undefined && flagProfile !== bodyProfile) {
+    return {
+      ok: false,
+      profileConflict: true,
+      problems: [
+        `error: --profile ${flagProfile} conflicts with the request's profile ${String(bodyProfile)}`,
+      ],
+      inputs,
+      readSetComplete,
+    };
+  }
+  const profile: QualificationProfile | undefined = flagProfile ??
+    (isQualificationProfile(bodyProfile) ? bodyProfile : undefined);
+
   const contractRead = validateContract(request['contract'], 'request contract');
   if (contractRead.verdict !== 'pass' || contractRead.value === undefined) {
     return {
@@ -263,8 +336,9 @@ function readRequest(path: string, argumentInputs: readonly string[]): RequestRe
     if (typeof sourcePath !== 'string' || sourcePath.length === 0) {
       return { ok: false, problems: [`error: source ${role} has no path`], inputs, readSetComplete };
     }
-    // The role must be one the declared route knows, or nothing could be checked.
-    if (expectationsForRole(role) === undefined) {
+    // The role must be one the declared route knows under the selected profile, or
+    // nothing could be checked.
+    if (expectationsForRole(role, profile ?? DEFAULT_PROFILE) === undefined) {
       return {
         ok: false,
         problems: [`error: source ${role} has no declared expectations for this role`],
@@ -288,6 +362,7 @@ function readRequest(path: string, argumentInputs: readonly string[]): RequestRe
     ok: true,
     request: {
       contract: contractRead.value,
+      ...(profile === undefined ? {} : { profile }),
       sources,
       now,
       synthetic: request['synthetic'] === true,
@@ -308,6 +383,7 @@ interface CliArgs {
   readonly fixtureManifest?: string;
   readonly pins?: string;
   readonly now?: string;
+  readonly profile?: string;
   readonly out: string;
 }
 
@@ -318,6 +394,7 @@ function parseArgs(argv: readonly string[]): CliArgs | undefined {
   let fixtureManifest: string | undefined;
   let pins: string | undefined;
   let now: string | undefined;
+  let profile: string | undefined;
   let out: string | undefined;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -327,6 +404,7 @@ function parseArgs(argv: readonly string[]): CliArgs | undefined {
     else if (arg === '--fixture-manifest') fixtureManifest = argv[++index];
     else if (arg === '--pins') pins = argv[++index];
     else if (arg === '--now') now = argv[++index];
+    else if (arg === '--profile') profile = argv[++index];
     else if (arg === '--out') out = argv[++index];
   }
   if (out === undefined) return undefined;
@@ -338,6 +416,7 @@ function parseArgs(argv: readonly string[]): CliArgs | undefined {
     ...(fixtureManifest === undefined ? {} : { fixtureManifest }),
     ...(pins === undefined ? {} : { pins }),
     ...(now === undefined ? {} : { now }),
+    ...(profile === undefined ? {} : { profile }),
     out,
   };
 }

@@ -20,6 +20,7 @@ import {
 } from './report.js';
 import { admitReport, type Admission, type SourceExpectations } from './admit.js';
 import type { Contract, FixtureManifest, PinDeclaration } from './declaration.js';
+import type { QualificationProfile } from './declared/profiles.js';
 import type { CheckReceipt } from './evidence/checks.js';
 import { Findings } from './verdict.js';
 import { PASS, PRECEDENCE, type Verdict } from './verdict.js';
@@ -45,6 +46,8 @@ export interface RequirementVerdict {
 export interface Decision {
   readonly version: number;
   readonly verdict: Verdict;
+  /** The declaration profile this decision was computed under. */
+  readonly profile: QualificationProfile;
   /** Internal-check defects across every requirement, each stated once. */
   readonly internalDefects: readonly string[];
   readonly requirements: readonly RequirementVerdict[];

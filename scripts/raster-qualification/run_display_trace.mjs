@@ -122,9 +122,10 @@ async function main() {
   mkdirSync(stubDir, { recursive: true });
   writeFileSync(resolve(stubDir, "node-builtin.js"), "export default {};\n");
   await new Promise((done, fail) => {
-    const child = spawn("python3", [resolve(HARNESS, "import_map.py"),
+    const child = spawn(process.execPath, [resolve(HARNESS, "ts/dist/src/importMap.js"),
       "--bench", bench, "--out", importMapPath], { stdio: ["ignore", "ignore", "inherit"] });
-    child.on("exit", (code) => (code === 0 ? done() : fail(new Error("import_map failed"))));
+    child.on("exit", (code) =>
+      (code === 0 ? done() : fail(new Error(`importMap.js exited ${code}`))));
   });
   const imports = JSON.parse(readFileSync(importMapPath, "utf8")).imports;
   // geotiff's ESM entry point statically imports its Node HTTP client for remote

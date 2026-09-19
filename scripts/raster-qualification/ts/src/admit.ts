@@ -63,6 +63,8 @@ export interface SourceExpectations {
   readonly requiredArtifacts?: readonly { readonly name: string; readonly version?: string }[];
   /** Whether the requirement this source feeds must be evidenced on a raster. */
   readonly requiresRasterFixture: boolean;
+  /** Hosts a report may record in the selected profile. */
+  readonly acceptedHosts?: readonly string[];
   readonly fixtureManifest?: FixtureManifest;
   readonly declaredPins?: PinDeclaration;
   /** Whether the declaration was usable; a gap here blocks coverage. */

@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseJson } from './json.js';
 import { validateContract, validateFixtureManifest, validatePinDeclaration } from './declaration.js';
+import { DEFAULT_PROFILE, profileDeclaration, type QualificationProfile } from './declared/profiles.js';
 import type { QualificationRequest } from './qualification.js';
 
 /** The report file each role is read from, matching the producer's own naming. */
@@ -32,6 +33,19 @@ export interface DirectoryRequestOptions {
   readonly fixtureManifestPath?: string;
   readonly pinsPath?: string;
   readonly now: number;
+  /** The declaration profile this run uses; the default keeps callers compatible. */
+  readonly profile?: QualificationProfile;
+}
+
+/** The report file each role is read from, including the profile's extra roles. */
+export function reportFiles(
+  profile: QualificationProfile = DEFAULT_PROFILE,
+): ReadonlyMap<string, string> {
+  const files = new Map(REPORT_FILES);
+  for (const extra of profileDeclaration(profile).extraRoles) {
+    files.set(extra.role, extra.reportFile);
+  }
+  return files;
 }
 
 /**
@@ -41,8 +55,11 @@ export interface DirectoryRequestOptions {
  * anything: a declaration failure must not be able to leave the destination
  * unprotected.
  */
-export function declaredReportPaths(reportsDirectory: string): string[] {
-  return Array.from(REPORT_FILES.values(), (file) => join(reportsDirectory, file));
+export function declaredReportPaths(
+  reportsDirectory: string,
+  profile: QualificationProfile = DEFAULT_PROFILE,
+): string[] {
+  return Array.from(reportFiles(profile).values(), (file) => join(reportsDirectory, file));
 }
 
 export type RequestBuild =
@@ -103,7 +120,8 @@ export function buildDirectoryRequest(options: DirectoryRequestOptions): Request
       fixtureManifest: manifestRead,
       pins: pinsRead,
       now: options.now,
-      sources: Array.from(REPORT_FILES, ([role, file]) => ({
+      ...(options.profile === undefined ? {} : { profile: options.profile }),
+      sources: Array.from(reportFiles(options.profile ?? DEFAULT_PROFILE), ([role, file]) => ({
         role,
         path: join(options.reportsDirectory, file),
       })),

@@ -26,10 +26,13 @@ const acceptedHost: Check = {
     if (typeof host !== 'string' || host.length === 0) {
       return unsatisfied(['the host report does not record which host it observed'], [reference]);
     }
-    if (!ALLOWED_HOSTS.includes(host)) {
+    // The accepted hosts come from the selected declaration profile, falling back to
+    // the packaged Desktop WebView rule when a caller supplies no profile.
+    const accepted = view.expectations.acceptedHosts ?? ALLOWED_HOSTS;
+    if (!accepted.includes(host)) {
       return unsatisfied(
         [
-          `host ${JSON.stringify(host)} cannot satisfy this requirement; accepted hosts: ${ALLOWED_HOSTS.join(', ')}`,
+          `host ${JSON.stringify(host)} cannot satisfy this requirement; accepted hosts: ${accepted.join(', ')}`,
         ],
         [reference],
       );

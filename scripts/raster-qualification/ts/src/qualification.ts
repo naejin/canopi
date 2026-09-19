@@ -11,6 +11,7 @@
  */
 
 import { DECLARATIONS, declaredRoute, expectationsForRole } from './declared/route.js';
+import { DEFAULT_PROFILE, isQualificationProfile, type QualificationProfile } from './declared/profiles.js';
 import { prepare, decideRequirement, overallVerdict, type Decision, type Prepared, type QualificationInput, type RequirementVerdict } from './decide.js';
 import type { Contract, Validation, FixtureManifest, PinDeclaration } from './declaration.js';
 import type { SourceExpectations } from './admit.js';
@@ -19,6 +20,8 @@ import type { SourceView } from './decide.js';
 
 export interface QualificationRequest {
   readonly contract: Contract;
+  /** The declaration profile; absent means the current default profile. */
+  readonly profile?: QualificationProfile;
   readonly sources: readonly {
     readonly role: string;
     readonly path: string;
@@ -45,11 +48,24 @@ export const DECISION_VERSION = 2;
 export function runQualification(request: QualificationRequest): QualificationOutcome {
   const problems: string[] = [];
 
+  // The profile is explicit input: an unknown value is an evaluator-input failure
+  // rather than a silent fallback, because it decides which host and environment the
+  // sources are checked against.
+  const requestedProfile: unknown = request.profile;
+  if (requestedProfile !== undefined && !isQualificationProfile(requestedProfile)) {
+    return {
+      ok: false,
+      problems: [`error: unknown qualification profile ${JSON.stringify(requestedProfile)}`],
+      exitCode: 2,
+    };
+  }
+  const profile = requestedProfile ?? DEFAULT_PROFILE;
+
   // Every source role must be one the declared route knows, or nothing could be
   // checked against it. This is validated here rather than thrown, so the
   // programmatic caller receives the same structured outcome the CLI prints.
   for (const source of request.sources) {
-    if (expectationsForRole(source.role) === undefined) {
+    if (expectationsForRole(source.role, profile) === undefined) {
       problems.push(
         `error: source ${source.role} has no declared expectations for this role`,
       );
@@ -79,7 +95,7 @@ export function runQualification(request: QualificationRequest): QualificationOu
       // The expectations come from the declared route for the role. A caller cannot
       // supply them, so a source cannot nominate what it should be checked against.
       // Already validated above, so the lookup cannot fail here.
-      const declared = expectationsForRole(source.role)!;
+      const declared = expectationsForRole(source.role, profile)!;
       return {
       role: source.role,
       label: source.path,
@@ -147,6 +163,7 @@ export function runQualification(request: QualificationRequest): QualificationOu
   ).sort();
   const decision: Decision = {
     version: DECISION_VERSION,
+    profile,
     internalDefects,
     // A synthetic control exercises the same real path with complete internally
     // coherent evidence, and is explicitly marked. It must never publish a

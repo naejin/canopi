@@ -43,12 +43,18 @@ mkdir -p "$OUT"
 # result must not measure anything. The check runs before the first producer step so
 # no evidence is collected for a result that cannot be written.
 DECISION="$OUT/q-decision.json"
+
 if [ -e "$DECISION" ] || [ -L "$DECISION" ]; then
   echo "=== qualification run refused: $DECISION already exists ===" >&2
   echo "publication never replaces an existing output; pass a fresh run root as this" >&2
   echo "script's first argument, or move the completed run aside first" >&2
   exit 1
 fi
+
+# The probe steps generate their browser import maps with the TypeScript tooling, so
+# the tooling is compiled before the first probe runs. The later compile step remains
+# as the recorded build of the decision path.
+step "step00" "$QUAL_TSC" -p scripts/raster-qualification/ts/tsconfig.json
 
 cat > "$SCRATCH/fixture-map-ranged.json" <<'JSON'
 {

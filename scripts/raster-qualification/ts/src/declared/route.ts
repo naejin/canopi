@@ -1,3 +1,10 @@
+import {
+  DEFAULT_PROFILE,
+  profileDeclaration,
+  profileRole,
+  type QualificationProfile,
+} from './profiles.js';
+
 /**
  * The declared qualification route.
  *
@@ -146,12 +153,14 @@ export function declaredRoute(): Record<string, unknown> {
  */
 export function expectationsForRole(
   role: string,
+  profile: QualificationProfile = DEFAULT_PROFILE,
 ): {
   role: string;
   experiment: string;
   routeId: string;
   environment: string;
   host: string;
+  acceptedHosts: readonly string[];
   transport?: string;
   requiresRasterFixture: boolean;
   expectedArtifact?: { name: string; version: string };
@@ -159,6 +168,31 @@ export function expectationsForRole(
   requiredArtifacts: readonly { name: string; version: string }[];
   unpinnedRoles: readonly string[];
 } | undefined {
+  const declared = profileDeclaration(profile);
+  // A profile may add a role that exists only in its environment, such as the
+  // Desktop host report. Its expectations are declared here, never supplied by the
+  // report or by custom caller input.
+  const extra = profileRole(profile, role);
+  if (extra !== undefined) {
+    return {
+      role,
+      experiment: extra.experiment,
+      routeId: QUALIFICATION_ROUTE_ID,
+      environment: declared.environment,
+      host: declared.host,
+      acceptedHosts: declared.acceptedHosts,
+      requiresRasterFixture: false,
+      ...(extra.artifact === undefined ? {} : { expectedArtifact: extra.artifact }),
+      ...(extra.unpinnedReason === undefined
+        ? {}
+        : { unpinnedEngine: true, unpinnedRoles: [extra.artifact?.name ?? role] }),
+      requiredArtifacts: extra.artifact === undefined ? [] : [extra.artifact],
+      unpinnedRoles: [
+        ...UNPINNED_ROLES.map((entry) => entry.name),
+        ...(extra.unpinnedReason === undefined ? [] : [extra.artifact?.name ?? role]),
+      ],
+    };
+  }
   const experiment = EXPERIMENT_BY_ROLE.get(role);
   if (experiment === undefined) return undefined;
   const transport = TRANSPORT_BY_ROLE.get(role);
@@ -170,8 +204,9 @@ export function expectationsForRole(
     role,
     experiment,
     routeId: QUALIFICATION_ROUTE_ID,
-    environment: QUALIFICATION_ENVIRONMENT_ID,
-    host: QUALIFICATION_HOST,
+    environment: declared.environment,
+    host: declared.host,
+    acceptedHosts: declared.acceptedHosts,
     ...(transport === undefined ? {} : { transport }),
     requiresRasterFixture: role !== 'q1',
     ...(artifact === undefined ? {} : { expectedArtifact: artifact }),
