@@ -260,7 +260,9 @@ const LEDGER_CASES: readonly LedgerCase[] = [
     label: 'bytes not a number',
     q2: { serverLedger: { fixtureBytesServed: 'many', fixtureRequests: 2 } },
     assertion: 'fail',
-    reason: /fixtureBytesServed=the string "many", which is not a finite byte count/,
+    // The counters count discrete things, so the wording names the whole-number rule
+    // rather than finiteness; the verdict is unchanged.
+    reason: /fixtureBytesServed=the string "many", which is not a whole non-negative byte count/,
   },
   { label: 'bytes null', q2: { serverLedger: { fixtureBytesServed: null, fixtureRequests: 2 } }, assertion: 'fail', reason: /fixtureBytesServed=null/ },
   { label: 'bytes negative', q2: { serverLedger: { fixtureBytesServed: -1 } }, assertion: 'fail', reason: /-1 byte\(s\) served/ },
@@ -272,7 +274,7 @@ const LEDGER_CASES: readonly LedgerCase[] = [
     label: 'window count not a number',
     q2: { testedWindows: 'nine' },
     assertion: 'fail',
-    reason: /testedWindows=the string "nine", which is not a finite validated-window count/,
+    reason: /testedWindows=the string "nine", which is not a whole non-negative validated-window count/,
   },
   { label: 'coherent ledger', q2: {}, assertion: 'pass', reason: /./ },
 ];

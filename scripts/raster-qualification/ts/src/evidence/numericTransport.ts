@@ -66,23 +66,34 @@ function absent(record: Record<string, unknown>, key: string): boolean {
 /**
  * Read one counter.
  *
- * Absence is missing evidence. A present value that is not a finite number is
- * unusable input, `null` included, because the schema for a counter is a number.
+ * These counters count discrete things, so a supplied value must be a finite
+ * non-negative integer: a fraction, a negative value, `null`, a string, a boolean or
+ * a container is unusable input. Absence is missing evidence and gaps. Nothing is
+ * coerced or rounded, and zero is a valid count.
+ *
+ * A negative integer keeps its specific wording, because "records -1 byte(s) served"
+ * names a recorded impossibility rather than a wrong type.
  */
 function readCounter(
   record: Record<string, unknown>,
   key: string,
   label: string,
+  unit: string,
+  negativeKind: string,
 ): { readonly value?: number; readonly problem?: LeafProblem } {
   if (absent(record, key)) {
     return { problem: { kind: 'missing', reason: `does not record its ${label}` } };
   }
-  const value = finiteNumber(record[key]);
+  const raw = record[key];
+  const value = nonNegativeInteger(raw);
   if (value === undefined) {
+    const negativeInteger = typeof raw === 'number' && Number.isInteger(raw) && raw < 0;
     return {
       problem: {
         kind: 'malformed',
-        reason: `records ${key}=${describe(record[key])}, which is not a finite ${label}`,
+        reason: negativeInteger
+          ? `records ${raw} ${unit}, which is not a possible ${negativeKind}`
+          : `records ${key}=${typeof raw === 'number' ? String(raw) : describe(raw)}, which is not a whole non-negative ${label}`,
       },
     };
   }
@@ -143,15 +154,17 @@ const transport: Check = {
         `the numeric source measured transport ${JSON.stringify(observed)} but the plan requires the ${JSON.stringify(REQUIRED_TRANSPORT)}; a remote HTTP capability does not qualify bounded local access`,
       );
     }
-    const tested = readCounter(view.shape.value, 'testedWindows', 'validated-window count');
+    const tested = readCounter(
+      view.shape.value,
+      'testedWindows',
+      'validated-window count',
+      'validated window(s)',
+      'count',
+    );
     if (tested.problem !== undefined) {
       // A present unusable count is invalid input; an absent one is missing evidence.
       (tested.problem.kind === 'missing' ? gaps : failures).push(
         `the numeric report ${tested.problem.reason}`,
-      );
-    } else if (tested.value !== undefined && tested.value < 0) {
-      failures.push(
-        `the numeric report records ${tested.value} validated window(s), which is not a possible count`,
       );
     } else if (tested.value === 0) {
       failures.push('the numeric report validated no window, so it demonstrates no bounded read');
@@ -182,39 +195,24 @@ const ledger: Check = {
       );
     }
 
-    // Each counter is judged on its own before any corroboration is attempted, so a
-    // missing sibling cannot hide a recorded impossibility.
+    // Every counter is read and judged on its own first, so an unusable or absent
+    // sibling can neither hide a recorded impossibility nor enter any arithmetic.
     const failures: string[] = [];
     const gaps: string[] = [];
     const evidence: EvidenceRef[] = [sourceEvidence(view, 'serverLedger') ?? reference];
-    const served = readCounter(ledgerValue, 'fixtureBytesServed', 'byte count');
-    const requests = readCounter(ledgerValue, 'fixtureRequests', 'request count');
-    const tested = readCounter(value, 'testedWindows', 'validated-window count');
+    const served = readCounter(ledgerValue, 'fixtureBytesServed', 'byte count', 'byte(s) served', 'byte count');
+    const requests = readCounter(ledgerValue, 'fixtureRequests', 'request count', 'request(s)', 'request count');
+    const tested = readCounter(
+      value,
+      'testedWindows',
+      'validated-window count',
+      'validated window(s)',
+      'count',
+    );
     for (const read of [served, requests, tested]) {
       if (read.problem === undefined) continue;
       (read.problem.kind === 'missing' ? gaps : failures).push(
         `the numeric report ${read.problem.reason}`,
-      );
-    }
-    // A negative counter is a recorded impossibility, and it cannot take part in the
-    // corroboration as though it were a measurement.
-    const servedValue = served.value !== undefined && served.value >= 0 ? served.value : undefined;
-    const requestsValue =
-      requests.value !== undefined && requests.value >= 0 ? requests.value : undefined;
-    const testedValue = tested.value !== undefined && tested.value >= 0 ? tested.value : undefined;
-    if (served.value !== undefined && served.value < 0) {
-      failures.push(
-        `the transport ledger records ${served.value} byte(s) served, which is not a possible byte count`,
-      );
-    }
-    if (requests.value !== undefined && requests.value < 0) {
-      failures.push(
-        `the transport ledger records ${requests.value} request(s), which is not a possible request count`,
-      );
-    }
-    if (tested.value !== undefined && tested.value < 0) {
-      failures.push(
-        `the numeric report records ${tested.value} validated window(s), which is not a possible count`,
       );
     }
     if (served.problem?.kind === 'missing' || requests.problem?.kind === 'missing') {
@@ -226,29 +224,45 @@ const ledger: Check = {
       );
     }
 
-    if (servedValue !== undefined && requestsValue !== undefined && testedValue !== undefined) {
-      if (testedValue > 0 && (servedValue === 0 || requestsValue === 0)) {
-        // The probe reports validated windows, so a ledger that accounts for no bytes
-        // and no requests contradicts it rather than merely being incomplete.
+    // Each relationship is decided from its own two operands only: with nine
+    // validated windows and no recorded request count, zero bytes still contradicts
+    // the reads, and the missing count is recorded as its own gap.
+    let decided = 0;
+    const corroborate = (
+      quantity: { readonly value?: number },
+      unit: string,
+      field: string,
+    ): void => {
+      if (tested.value === undefined || quantity.value === undefined) return;
+      decided += 1;
+      if (tested.value > 0 && quantity.value === 0) {
         failures.push(
-          `the numeric report validates ${testedValue} window(s) but its transport ledger records ${servedValue} byte(s) over ${requestsValue} request(s), so the ledger does not corroborate the reads`,
+          `the numeric report validates ${tested.value} window(s) but its transport ledger records 0 ${unit}, so the ledger does not corroborate the reads`,
         );
-      } else if (testedValue === 0 && (servedValue > 0 || requestsValue > 0)) {
-        failures.push(
-          `the transport ledger records ${servedValue} byte(s) over ${requestsValue} request(s) although no window was validated`,
-        );
-      } else {
-        const ref = sourceEvidence(
-          view,
-          'serverLedger',
-          `${servedValue} byte(s) over ${requestsValue} request(s)`,
-        );
-        if (ref !== undefined) evidence.push(ref);
+        return;
       }
-    }
+      if (tested.value === 0 && quantity.value > 0) {
+        failures.push(
+          `the transport ledger records ${quantity.value} ${unit} although no window was validated`,
+        );
+        return;
+      }
+      const ref = sourceEvidence(view, `serverLedger.${field}`, `${quantity.value} ${unit}`);
+      if (ref !== undefined) evidence.push(ref);
+    };
+    corroborate(served, 'byte(s)', 'fixtureBytesServed');
+    corroborate(requests, 'request(s)', 'fixtureRequests');
 
     if (failures.length > 0) return contradicted(failures, gaps, evidence);
     if (gaps.length > 0) return unsatisfied(gaps, evidence);
+    if (decided < 2) {
+      // Both relationships were readable but neither could be stated, which is not
+      // support: it is a gap, never a pass.
+      return unsatisfied(
+        ['the transport ledger could not be corroborated against the validated windows'],
+        evidence,
+      );
+    }
     return satisfied(evidence);
   },
 };
