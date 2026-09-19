@@ -10,6 +10,7 @@
 
 import type { SourceView } from '../decide.js';
 import type { Verdict } from '../verdict.js';
+import { runChecks, type CheckReceipt, type RequirementChecks } from './checks.js';
 
 export interface MappingContext {
   /** The admitted sources available to this requirement, by role. */
@@ -24,6 +25,8 @@ export interface MappingResult {
   readonly gaps: readonly string[];
   /** Structured internal-check defects the driver found, if any. */
   readonly defects?: readonly string[];
+  /** One receipt per executed check, for the decision document. */
+  readonly checks?: readonly CheckReceipt[];
   /** Which admitted sources this requirement draws on, in order. */
   readonly sourceRoles: readonly string[];
   readonly source: string;
@@ -35,6 +38,40 @@ export interface MappingResult {
 }
 
 export type RequirementMapping = (context: MappingContext) => MappingResult;
+
+/** The provenance every mapping records, independent of how it decides. */
+export interface MappingProvenance {
+  readonly sourceRoles: readonly string[];
+  readonly source: string;
+  readonly legacyProducerCommand: string;
+  readonly route: string;
+  readonly artifact: Record<string, unknown>;
+  readonly fixtures: readonly { name: string; sha256?: string }[];
+}
+
+/**
+ * A mapping whose assertions are decided by declared checks.
+ *
+ * The mapping owns provenance only: every verdict, reason and receipt comes from the
+ * driver, so a migrated requirement has exactly one writer for its assertions.
+ */
+export function checkedMapping(
+  spec: RequirementChecks,
+  provenance: MappingProvenance,
+): RequirementMapping {
+  return (context) => {
+    const result = runChecks(spec, { requirementId: spec.requirementId, byRole: context.byRole });
+    return {
+      assertions: result.assertions,
+      observations: result.observations,
+      failures: result.failures,
+      gaps: result.gaps,
+      defects: result.defects,
+      checks: result.receipts,
+      ...provenance,
+    };
+  };
+}
 
 /** Every assertion unknown, ready for a mapping to fill in. */
 export function unresolved(assertions: readonly string[]): Map<string, Verdict> {

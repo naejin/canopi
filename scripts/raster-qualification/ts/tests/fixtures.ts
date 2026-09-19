@@ -25,6 +25,7 @@ export const PLAN = {
   coldRuns: 1,
   warmRuns: 3,
   minLatenciesPerRun: 100,
+  minTileRequestsPerRun: 100,
   sourceAgeDays: 7,
 } as const;
 
@@ -96,13 +97,17 @@ export function traceRun(
 ): Record<string, unknown> {
   const samples = latencies(PLAN.minLatenciesPerRun, name === 'cold' ? 4 : 2);
   const sorted = [...samples].sort((a, b) => a - b);
+  // The producer records one individual latency per successfully rendered tile, so a
+  // coherent run has equal request, render and sample counts. The former
+  // 128-request/100-sample run was not a physically consistent control and is not an
+  // oracle: it violates the relationship the producer itself maintains.
   return {
     name,
     ok: true,
     pageErrors: [],
     wallSeconds: 1.5,
-    tileRequests: 128,
-    tilesRendered: 128,
+    tileRequests: PLAN.minTileRequestsPerRun,
+    tilesRendered: PLAN.minLatenciesPerRun,
     failedTiles: 0,
     medianMs: percentile(sorted, 0.5),
     p95Ms: percentile(sorted, 0.95),

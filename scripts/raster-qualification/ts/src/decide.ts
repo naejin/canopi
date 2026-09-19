@@ -20,6 +20,7 @@ import {
 } from './report.js';
 import { admitReport, type Admission, type SourceExpectations } from './admit.js';
 import type { Contract, FixtureManifest, PinDeclaration } from './declaration.js';
+import type { CheckReceipt } from './evidence/checks.js';
 import { Findings } from './verdict.js';
 import { PASS, PRECEDENCE, type Verdict } from './verdict.js';
 
@@ -33,6 +34,8 @@ export interface RequirementVerdict {
   readonly assertions: ReadonlyMap<string, Verdict>;
   /** Partial measured successes that were not promoted. */
   readonly observed: ReadonlyMap<string, Verdict>;
+  /** One receipt per executed check, empty for a legacy mapping. */
+  readonly checks: readonly CheckReceipt[];
   readonly reasons: readonly string[];
   readonly admission: Admission;
   readonly source: string;
@@ -283,8 +286,10 @@ export function decideRequirement(
     for (const [id, value] of assertions) observed.set(id, value);
   }
 
+  // The driver already recorded each defect as a gap on the assertion it affected,
+  // so the requirement reasons carry it once; the raw defects travel separately so
+  // the decision can report them as tool defects rather than engine measurements.
   const defects = [...(result.defects ?? [])];
-  for (const defect of defects) findings.gap(`internal check defect: ${defect}`);
 
   const verdict = findings.verdict();
 
@@ -295,6 +300,7 @@ export function decideRequirement(
     defects,
     assertions,
     observed,
+    checks: result.checks ?? [],
     reasons: [...admission.reasons, ...findings.reasons()],
     admission,
     source: result.source,

@@ -111,6 +111,7 @@ export function runQualification(request: QualificationRequest): QualificationOu
         title: spec.title,
         verdict: 'inconclusive',
         defects: [],
+        checks: [],
         assertions: new Map(),
         observed: new Map(),
         reasons: [`no Q obligation recorded (${spec.phase})`],
@@ -128,14 +129,14 @@ export function runQualification(request: QualificationRequest): QualificationOu
       });
       continue;
     }
-    const mapping = MAPPINGS.get(spec.id);
-    if (mapping === undefined) {
+    const entry = MAPPINGS.get(spec.id);
+    if (entry === undefined) {
       // An obligation with no mapping is a gap, never a pass. It is also a build
       // defect, so it is stated explicitly rather than silently skipped.
       requirements.push(unmapped(spec.id, spec.title, spec.assertions));
       continue;
     }
-    requirements.push(decideRequirement(request.contract, prepared, mapping, spec.id));
+    requirements.push(decideRequirement(request.contract, prepared, entry.mapping, spec.id));
   }
 
   const overall = overallVerdict(requirements);
@@ -180,6 +181,7 @@ function unmapped(
     verdict: 'inconclusive',
     assertions: new Map(assertions.map((assertion) => [assertion, 'inconclusive' as const])),
     defects: [],
+    checks: [],
     observed: new Map(),
     reasons: [`no evidence mapping is implemented for ${id}, so it cannot pass`],
     admission: {

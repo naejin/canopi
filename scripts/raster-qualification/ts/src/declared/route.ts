@@ -121,6 +121,7 @@ export const DECLARATIONS = {
   coldRuns: 1,
   warmRuns: 3,
   minLatenciesPerRun: 100,
+  minTileRequestsPerRun: 100,
   sourceAgeDays: 7,
 } as const;
 
