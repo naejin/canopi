@@ -158,3 +158,31 @@ Retained as evidence by the reassessment: the recompilation build-identity check
 Review-coverage gaps recorded for the debrief: the Round 2 sweep and adversarial pass did not reach `resources.ts` route attribution or the directory-mode publication path, and the retained Python oracle for the undeclared-role rule asserts the *requirement* verdict, which stays `inconclusive` in the TypeScript path even when the individual assertion is wrongly promoted to `pass`. A whole-requirement non-pass is therefore not a sufficient oracle for individual assertions, in tests as well as in reviews.
 
 No independent design review has examined the reassessment. Implementation, Q experiments, remaining Python migration and N1 remain unauthorized.
+
+## Implementation response at `5878f80e` (implementer, not acceptance)
+
+The settled design's S1–S5 are implemented in the commits `2b0a02c7`, `70e51534`, `1fb1d064`,
+`8a85fc3a`, `567e6d29`, `5878f80e`. The implementer's evidence is the new section of the
+[migration receipt](q-typescript-receipt.md#implementation-of-the-settled-design-s1s5); the design is
+[q-typescript-reassessment.md](q-typescript-reassessment.md). Implementing a design is not accepting it,
+and this response claims no resolution of the findings above.
+
+Summary of the response to each family this review recorded:
+
+| Family | Response |
+| --- | --- |
+| R2-A display failure retention | The display requirement is fourteen independent checks; failed tiles, page errors, reconciliation, the request minimum and the sample/render relationship each run whatever else is missing. The tile failure and the page error both now fail the assertion when a sibling count is removed, and the gaps are retained beside them |
+| R2-B artifact comparisons | Coverage, present versions, the claimed pin and the built revision are separate checks. A wrong version fails even when another artifact has no record; a present wrong claimed pin fails even when the built revision is missing; and the design's reproducible-build route is admitted only with the full identity and digest chain |
+| R2-C display sufficiency | The plan's per-run relationships are enforced: at least 100 requests, at least 100 usable latencies, samples equal to rendered, rendered plus failed equal to requested. The old 128-render/100-sample control is corrected and now fails |
+| R2-D / N-2 publication | `publication.ts` never replaces an existing path, refuses a destination that is or resolves to a known input even when absent, refuses to use the requested path when the read-set is unknown, and publishes a diagnostic into a freshly owned directory with its real path on stderr. The runner refuses a stale final output before any producer step |
+| N-1 route attribution | Only an explicit `candidate` or `reference` label attributes a measurement; an absent role gaps, an invalid or self-contradicting label fails, and an unlabelled record can never be counted as a separated reference measurement |
+
+Also recorded as responses, not resolutions: the decision document's version is 2 with per-requirement
+check receipts; the ledger of test-expectation corrections is in the receipt; two publication guards are
+redundant in the single-creator case and are proven as a pair by a read-only-parent case and an injected
+competitor; and the guard-removal probe pass found those two zero results, fixed them, and reports no
+remaining zero results.
+
+Unchanged by this response: `canopi-kqpp` stays open, Q is not qualified, no independent review has
+examined the implementation, and no experiment, producer migration, engine work, Python deletion or N1
+is authorized.

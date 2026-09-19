@@ -141,6 +141,22 @@ independent review**, not a higher test count. No reduction in handoffs is promi
 were followed by a design reassessment, and whether the seam shortens the next cycle is a prediction
 this evidence does not support.
 
+### Implementation debrief inputs
+
+The settled design was implemented at `5878f80e` (S1 `2b0a02c7`, S2 `70e51534`, S3 `1fb1d064`, S4
+`8a85fc3a`, S5 `567e6d29`, verification `5878f80e`). Independently reported inputs for the synthesis:
+
+| Dimension | Observation |
+| --- | --- |
+| Escaped families addressed | All five demonstrated families (R2-A to R2-D, N-1) are reproduced as failing cases first and pass after the migration. The migration oracle shows all twelve requirements and all 68 assertions unchanged on the coherent corpus, with version 1 → 2 and check receipts added |
+| Independence of the test oracle | The acceptance cases were derived from C1–C8, the plan and the findings, not from the check inventory: the inventory is compared with `requirements.json` by a separate guard, and the expected outcomes are literals in the tests |
+| Fixture corrections | The positive display control was physically inconsistent — 128 requests and renders with 100 latency samples, while the producer records one latency per rendered tile. It is now 100/100/100 and the old shape is a failing case. The previous control was not blessed as an oracle |
+| Guard-removal results | Eight guards removed one at a time in isolated copies; six were detected immediately. Two were zero results because each publication guard made the other unreachable; two deterministic cases (read-only parent, injected competing creator) were added and both probes are now detected. No zero-result probe remains |
+| Self-review discoveries | Three implementation defects were found by the retained tests rather than by the new ones: dropped gaps beside failures, a non-object sidecar record gapping instead of failing, and a lost incompleteness summary. Each was fixed in scope rather than by relaxing the test |
+| Behaviour changes | A missing output parent is refused rather than created; an unrecoverable read-set never writes to the requested destination; and the new per-run relationships will fail a real run whose producer records fewer latencies than rendered tiles. All three are recorded in the receipt, not discovered at review time |
+| Unavailable observations | No producer, engine, browser or private experiment ran. `Q-HOST-1`'s accepted-host rule is implemented but unreachable through the CLI, and the resource disk-cache/staging bounds and the lifecycle/member/value/host obligations remain explicit gaps |
+| Measured effort | Not measured; test count is not used as a proxy |
+
 ## C1–C8 repair report
 
 Repair code: `qualification_evidence.py`, `qualification_gate.py`, `measure.py`, `qual_lib.py` and

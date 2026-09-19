@@ -503,3 +503,97 @@ The Round 2 review was delivered as **not accepted**, and the two-round repair a
 The user-authorized [reassessment](q-typescript-reassessment.md) at `82184e6c` re-reproduced the four Round 2 families at the same implementation revision, verified the emitted build against a fresh compilation of the inspected source, and added two demonstrated families this receipt never covered (`evidence/resources.ts` route attribution and the `--reports`-mode publication path). It also found that two of the TypeScript behaviours under review are regressions against the retained Python gate rather than new specification gaps: the per-run rendered-versus-sample reconciliation and the undeclared-role rule both still exist and are tested in `qualification_evidence.py` and `tests/test_qualification_gate.py`. No claim in this receipt is withdrawn; the receipt simply does not establish those two behaviours.
 
 Nothing further is implemented, and no migration step is authorized, until the user has independent design review of that document. `canopi-kqpp` stays open.
+
+## Implementation of the settled design (S1–S5)
+
+Revision `5878f80e` (S1 `2b0a02c7`, S2 `70e51534`, S3 `1fb1d064`, S4 `8a85fc3a`, S5 `567e6d29`).
+This section is the implementer's report for the [decision-complete
+design](q-typescript-reassessment.md); it is a claim awaiting independent review, not acceptance, and
+it does not qualify Q.
+
+### What changed
+
+| Phase | Delivered |
+| --- | --- |
+| S1 | `publication.ts` owns every write: an existing destination is refused whatever it looks like, a destination that is or resolves to a known input is refused even when that input is absent, and an unrecoverable read-set makes the requested destination unusable. Documents are serialized once and published by hard-linking a complete staging file, so a competing creator causes a refusal rather than truncation; there is no overwriting fallback. Refusals and rejected requests publish a `kind:"rejected-input"` diagnostic into a fresh exclusive directory beneath the destination parent, with the real path on stderr, and state explicitly when even that failed. `cli.ts` recovers the read-set before any validation, from the same bytes it parses; the runner refuses to start when its final output already exists, before any producer step, and no longer deletes stale reports. `DECISION_VERSION` is 2 |
+| S2 | `evidence/checks.ts`: each check evaluates one independently decidable fact over the admitted snapshots and returns a required outcome (`satisfied`, `evidence`, `failures`, `gaps`). The driver validates the outcome, the evidence references and the declared inventory, then derives verdicts only through the existing reduction. A missing or malformed outcome, a thrown check, an unregistered or duplicate id, a required check with no implementation, or a contradictory success is a structured internal-check defect that cannot pass, does not stop its siblings, and exits input-class. The whole display requirement is fourteen checks |
+| S3 | Artifacts and resources migrated: present versions and claimed pins are compared independently of missing siblings, the built revision is satisfied by the declared pin or by a fully evidenced reproducible build whose digest chain reaches the bench-verified record and every consuming source, and route attribution accepts only explicit role labels. Every budget is enforced per record; the plan's 512 MiB disk-cache bound and staging policy remain stated requirement gaps |
+| S4 | The remaining nine requirements migrated through shared record readers, so no mapping writes a verdict of its own. Unsupported obligations are declared with their reasons; the cancellation control stays a rejection control |
+| S5 | The registry tag and legacy adapter are removed; `CHECK_INVENTORIES` exposes the declared inventory for coverage tests. Guards added: contract/inventory coverage, one-decided-or-unsupported, no direct verdict writer outside the driver, receipts for exactly the declared checks, programmatic/CLI parity, and the enforced run bounds against the plan |
+
+### Behaviour changes, expected and verified
+
+* the positive display fixture is corrected: `run_display_trace.mjs` records one latency per rendered
+  tile, so a coherent run is 100 requests / 100 renders / 100 samples. The former 128-request/100-sample
+  shape now fails as physically inconsistent, and a test says so. It is not an oracle;
+* migration oracle over the coherent corpus against `55d6f485` (normalizing version, receipts, times and
+  temporary paths): **all twelve requirements and all 68 assertions unchanged**, version 1 → 2, and each
+  requirement now publishes its check receipts (3–14 per requirement). The old decision diff is a
+  regression baseline, not scientific truth;
+* a destination whose parent directory does not exist is now refused rather than created: the caller
+  prepares the output root, and this tool creates only its own staging and diagnostic directories;
+* a malformed request whose read-set cannot be recovered no longer writes to the requested destination;
+  the diagnostic is published into a freshly owned directory and its path is reported;
+* test expectations that contradicted the accepted contract were corrected with the reason recorded:
+  one destination per case instead of reuse, diagnostics located where they are actually published, the
+  refusal reason accepted for an existing destination, and the unwritable-parent case now asserting the
+  explicit "no diagnostic was saved" message.
+
+### Verification actually run
+
+* `desktop/web/node_modules/.bin/tsc -p scripts/raster-qualification/ts/tsconfig.json` — clean;
+* `node --test 'scripts/raster-qualification/ts/dist/tests/*.test.js'` — **239 passing**, from 177 at the
+  reviewed baseline; new files `publication.test.ts` (16), `checkedOutcomes.test.ts` (15),
+  `migratedFamilies.test.ts` (14), `remainingFamilies.test.ts` (10), `inventoryCoverage.test.ts` (6);
+* a fresh-output-directory compile and test run (ignored/stale `dist` cannot supply success);
+* `python3 -m unittest discover -s scripts/raster-qualification/tests` — **261 passing**, unchanged and
+  not used as the acceptance oracle;
+* `bash scripts/raster-qualification/tests/test_runner_exit.sh` — **18 passing**, including the new
+  stale-output refusal that proves no producer step runs;
+* `bash -n run_all_experiments.sh`, `python3 scripts/check_docs.py`, `git diff --check` — clean.
+
+### Guard-removal probes (each in an isolated copy of the sources)
+
+Each guard was removed on its own, the suite rebuilt and the applicable tests run:
+
+| Removed guard | Detected by |
+| --- | --- |
+| satisfied-without-evidence defect | 1 failure (`checkedOutcomes.test.js`) |
+| display sample/render relationship check | 3 failures (`checkedOutcomes.test.js`) |
+| failure precedence in the single reduction | 6 failures (`checkedOutcomes.test.js`) |
+| explicit reference labelling | 1 failure (`migratedFamilies.test.js`) |
+| early existence refusal | 1 failure (`publication.test.js`, read-only-parent case) |
+| no-replace at the link step (replace instead) | 1 failure (`publication.test.js`, injected competitor) |
+| claimed-pin comparison | 2 failures (`migratedFamilies.test.js`) |
+| evidence digest validation | 1 failure (`checkedOutcomes.test.js`) |
+
+The first pass found two **zero results**: removing the early existence refusal and removing the link's
+no-replace refusal were both undetected, because each guard made the other unreachable. Two
+deterministic cases were added rather than leaving the redundancy unproven: a read-only parent that
+distinguishes the early refusal from a staging failure, and one inert fault-injection seam in
+`publication.ts` that lets a test act as a competing creator between the two layers. Both probes are now
+detected. No probe remained a zero result.
+
+### Self-review discoveries fixed in scope
+
+* the first directory-mode collision case did not reject anything — it validated and became a negative
+  control; the rejected-input case was rebuilt with an unreadable contract;
+* the artifact/resource checks initially returned only failures, dropping the independent gaps they had
+  collected; `contradicted` now carries both, and the checks use it;
+* a non-object sidecar record initially gapped instead of failing, caught by the retained T4 test;
+* the incompleteness summary for resource records was lost during migration, caught by the retained
+  counterexample test and restored as the reduction-level statement.
+
+### Limitations and omissions
+
+* the audit and the probe set are finite; they are not proof that no other guard is unreachable;
+* no producer, engine, browser or private experiment was run. Every producer-side statement is read from
+  tracked source, and the private `fail` distribution remains implementer-reported and was not rerun;
+* `Q-HOST-1`'s accepted-host rule is implemented and driver-tested, but no role `host` has declared
+  expectations and no producer emits a host report, so the assertion is a permanent gap through the CLI;
+* `Q-RES-1`'s 512 MiB disk-cache bound, the staging/free-space policy, the local-bridge numeric
+  measurement and the six lifecycle/member/value/host obligations remain unestablished;
+* adding the request minimum and the sample/render relationship means a real run whose producer records
+  fewer latencies than rendered tiles will now fail. That is the intended relationship, and the first
+  real reconciliation after this change must report the decision diff per requirement;
+* time and cost remain unknown: they were not measured.

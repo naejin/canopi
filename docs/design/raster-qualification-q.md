@@ -549,5 +549,5 @@ large fixtures and measurement output stay outside Git under the ignored `.rq-sc
   part.
 - **Branch and commits:** recorded in the accompanying delivery note.
 - **Status:** verified, **not integrated**. Pushing does not integrate.
-- **Next action:** independent design review of the delivered [bounded reassessment](raster-rework/q-typescript-reassessment.md); the earlier review of this corrected receipt and of limitation 1 remains outstanding. **N1 must not
+- **Next action:** independent review of the [implementation delivered at `5878f80e`](raster-rework/q-typescript-receipt.md#implementation-of-the-settled-design-s1s5); the earlier review of this corrected receipt and of limitation 1 remains outstanding. **N1 must not
   start before those reviews conclude.**

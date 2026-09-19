@@ -2,7 +2,13 @@
 
 Status: active — the executable mapping the acceptance contract's C4 row requires next to the harness.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [acceptance contract](../design/raster-rework/q-admission-acceptance.md), [requirement contract](requirements.json), [repair receipt](../design/raster-rework/q-consolidated-repair-receipt.md).
+Current guidance: [acceptance contract](../design/raster-rework/q-admission-acceptance.md), [requirement contract](requirements.json), [decision-complete design](../design/raster-rework/q-typescript-reassessment.md), [migration receipt](../design/raster-rework/q-typescript-receipt.md).
+
+The executable form of this map is the declared check inventory in
+`ts/src/evidence/registry.ts` (`CHECK_INVENTORIES`), one entry per requirement, each
+check deciding exactly one contract assertion. This file records the same evidence in
+prose so a reader can tell a capability gap from a gate defect; it does not generate
+expected test outcomes, which are derived independently in `ts/tests/`.
 
 `requirements.json` owns *which* assertions a Q requirement has and remains the executable obligation
 set. This file records, for each assertion, **which recorded evidence decides it and what an absent
@@ -16,6 +22,9 @@ Rules applied throughout:
 
 * an assertion passes only on a positive observation the producer recorded, or on a comparison the
   declaration makes possible;
+* a check returns an explicit outcome: a pass needs affirmative applicable evidence, and a missing or
+  malformed outcome, a thrown check or a contradictory success is a reported internal-check defect
+  that cannot pass and exits input-class rather than being read as an engine failure;
 * an observation that is absent is an explicit gap, never a pass;
 * a value that is present but contradicts the declaration is a failure;
 * a producer field this consumer does not recognise makes the affected assertion inconclusive and is
@@ -30,15 +39,15 @@ Rules applied throughout:
 | `artifacts-present-at-declared-version` | each **declared** required artifact's own `version:<artifact>` record | inconclusive; a record that fails fails the assertion |
 | `artifacts-match-integrity-digest` | each **declared** required artifact's own `integrity:<artifact>` record | inconclusive; a record that fails fails the assertion |
 | `artifacts-record-license` | each **declared** required artifact's own `license-recorded:<artifact>` record | inconclusive; a record that fails fails the assertion |
-| `qualified-roles-name-artifact-version` | worse of `verifiedArtifacts` against the exercised roles, and `sourceCorrespondence` against the declared pins | inconclusive |
-| `non-corresponding-artifacts-recorded` | a recorded non-correspondence note, or a `sourceCorrespondence` inventory covering every required measured artifact | failure when a required artifact is neither covered nor noted |
+| `qualified-roles-name-artifact-version` | each artifact's own bench-verified version compared against the declaration; the claimed `pinnedRevision` compared against the declared pin **whenever the claim is present**; the recorded `artifactRevision` equal to that pin, or a fully evidenced reproducible build from it (`builtArtifact.{name,version,sha256}`, `sourceRevision`, `buildEvidence.{command,sha256}`, `buildReproduced`, the bench-verified digest and every consuming source's `identity.artifact.sha256`) | inconclusive for the comparison whose own operand is missing; a wrong version, a wrong claimed pin or a mismatched digest fails independently of any other gap |
+| `non-corresponding-artifacts-recorded` | a `sourceCorrespondence` inventory covering every required measured artifact | inconclusive when a required artifact has no correspondence record; a duplicate key, an unrequired artifact or a wrong version in the inventory fails. A prose note is not correspondence evidence |
 | `apis-called-and-worker-target-recorded` | q1 assertion `apis-and-worker-target-recorded` | inconclusive |
 
 ## Q-LOCAL-1 — scoped local numeric transport (source: q2)
 
 | Assertion | Evidence read | If absent |
 | --- | --- | --- |
-| `reads-over-proposed-local-transport` | the count of validated windows in q2 | failure when no window was validated |
+| `reads-over-proposed-local-transport` | the transport the q2 identity declares, which must be the plan's `local-bridge`, together with a positive validated-window count | inconclusive when the transport is unrecorded or no window count is recorded; a different transport (HTTP range included) or zero validated windows fails |
 | `transport-ledger-corroborates-bytes` | q2 `serverLedger` reconciled against the probe's transport ledger | inconclusive |
 | `no-single-request-returns-whole-artifact` | q2 assertions prefixed `no-whole-file-request` | inconclusive |
 | `values-match-independent-reference` | q2 assertions prefixed `analytic:` | inconclusive |
@@ -126,7 +135,7 @@ Rules applied throughout:
 | --- | --- | --- |
 | `bundled-worker-and-asset-path-exercised` | the host report's own assertions, with the declared accepted-host rule | inconclusive |
 | `no-network-origin-required` | the host report's own assertions | inconclusive |
-| `observed-in-desktop-webview` | the entry or bundle host label against `acceptedHosts` | inconclusive; only `desktop-webview` can satisfy it |
+| `observed-in-desktop-webview` | the host report's `identity.host` against the declared accepted hosts; only `desktop-webview` satisfies it | inconclusive. The rule is implemented and driver-tested, but no source role `host` has declared expectations and no producer emits a host report, so this assertion is a permanent gap in the CLI path |
 
 ## Q-RES-1 — route-level resource measurement (source: q6-resources)
 
@@ -134,7 +143,7 @@ Rules applied throughout:
 | --- | --- | --- |
 | `candidate-memory-within-budget` | each candidate run's `incrementalPeakRssMiB` against the plan's 1 GiB combined budget; the per-run peak is a mandatory observation, so a run that omits it cannot evidence the bound | inconclusive; the reference reader's reading never substitutes |
 | `measurement-is-of-candidate-route` | each measurement's declared `routeRole` against its own route text | failure on a contradiction; inconclusive when no candidate record exists |
-| `reference-measurements-labelled-separately` | the presence of reference-labelled records | inconclusive |
+| `reference-measurements-labelled-separately` | records that explicitly declare the `reference` role | inconclusive when any record declares no role, and when no reference-labelled record exists; an invalid role label fails. A record with no role is never counted as a labelled reference measurement |
 | `sampling-meets-requirement` | candidate `sampleIntervalMs` ≤ 100 ms with a positive `sampleCount` | inconclusive |
 | `disk-cache-reads-queue-and-children-recorded` | **every** candidate record that recorded a counter: `temporaryDiskHighWaterBytes`, `decodedCacheBytes` ≤ 128 MiB, `activeReads` ≤ 2, `queueDepth` ≤ 32, `maxConcurrentChildren`; a budget is checked whether or not the record sampled correctly | inconclusive when a mandatory observation is unrecorded or no record sampled; failure when a recorded counter exceeds its budget or a leaf is present but unusable |
 
@@ -143,8 +152,8 @@ Rules applied throughout:
 | Assertion | Evidence read | If absent |
 | --- | --- | --- |
 | `one-cold-and-three-warm-runs` | the trace `runs` names against the plan's run set | inconclusive when the list is empty; failure when the counts are short |
-| `hundred-valid-latencies-per-run` | each run's `individualLatenciesMs` count against the plan's ≥100 samples | inconclusive |
-| `runs-report-successful-rendering` | each run's `ok`, `tilesRendered`, `failedTiles` | inconclusive |
+| `hundred-valid-latencies-per-run` | each run's `individualLatenciesMs`: at least 100 finite non-negative samples, and a sample count equal to that run's successfully rendered tile count | inconclusive when the list or the rendered count is unreadable; a short list, a negative or non-finite sample, or a sample/render mismatch fails |
+| `runs-report-successful-rendering` | each run's `ok`, `tilesRendered`, `failedTiles`, `tileRequests` and `pageErrors`, each read on its own: `ok` true, zero failed tiles, no page errors, rendered + failed equal to requested, at least 100 requested tiles, and a positive rendered count | inconclusive for the operand that is missing; a recorded failure, page error or reconciliation mismatch fails even when a sibling field is missing |
 | `p95-from-individual-latencies` | the run's own samples recomputed against `p95Ms` | inconclusive |
 | `statistics-agree-with-samples` | median and max recomputed from the samples | inconclusive |
 | `cache-state-recorded` | each run's `cachesCleared` | inconclusive |
@@ -177,3 +186,79 @@ contract assertions:
   even though its five contract assertions are all decidable and correct;
 * the plan's **staging and free-space policy** for temporary disk. `temporaryDiskHighWaterBytes` is
   recorded and reported, but it is compared with that policy rather than an invented universal cap.
+
+## Executable check inventory
+
+Generated from `CHECK_INVENTORIES` at the delivered revision; each contract assertion is
+decided by the listed checks, or declared unsupported with its reason.
+
+| Requirement | Assertion | Check id(s) | Unsupported reason |
+| --- | --- | --- | --- |
+| `Q-ART-1` | `artifacts-present-at-declared-version` | `artifacts.version-records` |  |
+| `Q-ART-1` | `artifacts-match-integrity-digest` | `artifacts.integrity-records` |  |
+| `Q-ART-1` | `artifacts-record-license` | `artifacts.license-records` |  |
+| `Q-ART-1` | `qualified-roles-name-artifact-version` | `artifacts.verified-versions`, `artifacts.correspondence-inventory`, `artifacts.claimed-pin`, `artifacts.observed-revision` |  |
+| `Q-ART-1` | `non-corresponding-artifacts-recorded` | `artifacts.correspondence-coverage` |  |
+| `Q-ART-1` | `apis-called-and-worker-target-recorded` | `artifacts.api-and-worker-target` |  |
+| `Q-LOCAL-1` | `reads-over-proposed-local-transport` | `local.transport` |  |
+| `Q-LOCAL-1` | `transport-ledger-corroborates-bytes` | `local.ledger` |  |
+| `Q-LOCAL-1` | `no-single-request-returns-whole-artifact` | `local.whole-file-requests` |  |
+| `Q-LOCAL-1` | `values-match-independent-reference` | `local.analytic-values` |  |
+| `Q-LOCAL-1` | `validity-matches-reference-exactly` | `local.validity` |  |
+| `Q-LOCAL-1` | `window-size-within-contract-limit` | `local.window-bounds` |  |
+| `Q-PREP-1` | `original-bytes-unchanged` | `prep.original-unchanged` |  |
+| `Q-PREP-1` | `original-matches-recorded-hash` | `prep.original-hash` |  |
+| `Q-PREP-1` | `sidecar-unchanged` | `prep.sidecar-policy`, `prep.sidecar-hashes`, `prep.sidecar-survival` |  |
+| `Q-PREP-1` | `derivative-is-tiled-and-bounded` | `prep.derivative-tiled-and-bounded` |  |
+| `Q-PREP-1` | `derivative-cell-exact` | `prep.cell-exact` |  |
+| `Q-PREP-1` | `derivative-preserves-metadata` | `prep.metadata-preserved` |  |
+| `Q-PREP-1` | `derivative-windows-match-original` | `prep.windows-match` |  |
+| `Q-MEMBER-1` | `window-spanning-members-resolves` | `members.multi-member` |  |
+| `Q-MEMBER-1` | `unoccupied-slots-zero-coverage` | `members.gap-empty` |  |
+| `Q-MEMBER-1` | `ordered-replacement-precedence` | `members.precedence` |  |
+| `Q-MEMBER-1` | `nodata-does-not-erase-earlier-value` | `members.nodata` |  |
+| `Q-MEMBER-1` | `overviews-do-not-resurrect-replaced-pixels` | **none — declared unsupported** | no probe observes overview precedence, so the obligation remains unmeasured |
+| `Q-VALUE-1` | `values-match-analytic-expectation` | `values.analytic` |  |
+| `Q-VALUE-1` | `validity-matches-reference-exactly` | `values.validity` |  |
+| `Q-VALUE-1` | `nodata-reported-invalid` | `values.nodata` |  |
+| `Q-VALUE-1` | `valid-zero-and-negative-retained` | `values.zero-negative` |  |
+| `Q-VALUE-1` | `slope-degrees-within-tolerance` | `values.slope-degrees` |  |
+| `Q-VALUE-1` | `slope-percent-within-tolerance` | `values.slope-percent` |  |
+| `Q-VALUE-1` | `blocked-slope-agrees-at-seams` | `values.seams` |  |
+| `Q-VALUE-1` | `holes-and-edges-not-interpolated` | `values.holes-edges` |  |
+| `Q-VALUE-1` | `required-fixture-classes-covered` | **none — declared unsupported** | no producer reports per-fixture-class coverage of the required fixture set |
+| `Q-CRS-1` | `reference-crs-configured-explicitly` | `crs.reference-crs-configured-explicitly` |  |
+| `Q-CRS-1` | `crs-resolver-identified` | `crs.crs-resolver-identified` |  |
+| `Q-CRS-1` | `candidate-projection-within-tolerance` | `crs.candidate-projection-within-tolerance` |  |
+| `Q-CRS-1` | `returned-coordinate-addresses-requested-pixel` | `crs.returned-coordinate-addresses-requested-pixel` |  |
+| `Q-CRS-1` | `no-metadata-rewritten-or-inferred` | `crs.no-metadata-rewritten-or-inferred` |  |
+| `Q-CANCEL-1` | `cancellation-issued-while-work-in-flight` | **none — declared unsupported** | the recorded probe slices a resident buffer rather than the plan's route, so in-flight work on the proposed route is not measured |
+| `Q-CANCEL-1` | `unstarted-work-never-scheduled` | `cancel.unstarted-work` |  |
+| `Q-CANCEL-1` | `concurrent-in-flight-work-measured` | **none — declared unsupported** | the recorded probe counts completed operations, which is not concurrent in-flight work |
+| `Q-CANCEL-1` | `owned-work-settles-within-bound` | `cancel.settles-in-bound` |  |
+| `Q-CANCEL-1` | `uncancelled-control-completes` | `cancel.uncancelled-control` |  |
+| `Q-TEARDOWN-1` | `adapter-tolerates-repeated-dispose` | `teardown.repeated-dispose` |  |
+| `Q-TEARDOWN-1` | `teardown-observably-releases-resource` | **none — declared unsupported** | release is asserted from a flag rather than observed on the route's own handles |
+| `Q-TEARDOWN-1` | `stalled-worker-terminated-within-bound` | `teardown.stalled-worker` |  |
+| `Q-TEARDOWN-1` | `silently-dead-worker-detectable` | `teardown.dead-worker` |  |
+| `Q-FAILINJ-1` | `truncated-header-rejected` | `failinj.truncated-header` |  |
+| `Q-FAILINJ-1` | `corrupt-tile-rejected` | `failinj.corrupt-tile` |  |
+| `Q-FAILINJ-1` | `out-of-extent-window-rejected` | `failinj.out-of-extent-window` |  |
+| `Q-FAILINJ-1` | `stalled-worker-forced` | `failinj.stalled-worker` |  |
+| `Q-FAILINJ-1` | `disk-write-failure-exercised` | **none — declared unsupported** | no probe injects a disk-write failure |
+| `Q-HOST-1` | `bundled-worker-and-asset-path-exercised` | `host.bundled-worker` |  |
+| `Q-HOST-1` | `no-network-origin-required` | `host.no-network-origin` |  |
+| `Q-HOST-1` | `observed-in-desktop-webview` | `host.accepted-webview` |  |
+| `Q-RES-1` | `candidate-memory-within-budget` | `resources.candidate-memory` |  |
+| `Q-RES-1` | `measurement-is-of-candidate-route` | `resources.role-labels` |  |
+| `Q-RES-1` | `reference-measurements-labelled-separately` | `resources.reference-labels` |  |
+| `Q-RES-1` | `sampling-meets-requirement` | `resources.sampling` |  |
+| `Q-RES-1` | `disk-cache-reads-queue-and-children-recorded` | `resources.counters-and-budgets` |  |
+| `Q-DISPLAY-1` | `one-cold-and-three-warm-runs` | `display.run-set` |  |
+| `Q-DISPLAY-1` | `hundred-valid-latencies-per-run` | `display.latency-samples`, `display.sample-count-matches-rendered` |  |
+| `Q-DISPLAY-1` | `runs-report-successful-rendering` | `display.request-minimum`, `display.run-outcome`, `display.failed-tiles`, `display.counter-reconciliation`, `display.page-errors` |  |
+| `Q-DISPLAY-1` | `p95-from-individual-latencies` | `display.p95` |  |
+| `Q-DISPLAY-1` | `statistics-agree-with-samples` | `display.median-max` |  |
+| `Q-DISPLAY-1` | `cache-state-recorded` | `display.cache-state` |  |
+| `Q-DISPLAY-1` | `no-ui-thread-task-above-bound` | `display.ui-thread-bound` |  |
+| `Q-DISPLAY-1` | `unsupported-observation-is-inconclusive` | `display.unrecognised-fields`, `display.observer-support` |  |

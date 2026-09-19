@@ -1,8 +1,13 @@
 # TypeScript qualification — implementation handoff
 
-Status: proposed — ready for user-forwarded implementation of the reviewer-owned design; not a continuation of the retired two-round prompt.
+Status: retired — executed and delivered at `5878f80e`; the delivery is recorded in the [migration receipt](q-typescript-receipt.md#implementation-of-the-settled-design-s1s5) and awaits independent review. Kept for the assignment record; it authorizes nothing further.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [decision-complete design](q-typescript-reassessment.md), [C1–C8 acceptance](q-admission-acceptance.md), [standing review](q-typescript-review.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
+Current guidance: [implementation receipt](q-typescript-receipt.md#implementation-of-the-settled-design-s1s5), [decision-complete design](q-typescript-reassessment.md), [C1–C8 acceptance](q-admission-acceptance.md), [standing review](q-typescript-review.md#implementation-response-at-5878f80e-implementer-not-acceptance).
+
+Delivered under this assignment: S1–S5 in `2b0a02c7`, `70e51534`, `1fb1d064`, `8a85fc3a`, `567e6d29`,
+`5878f80e`; 239 TypeScript tests, 261 retained Python tests, 18 runner stub checks, coverage/drift/parity
+guards and a guard-removal pass with no zero-result probes. Q remains unqualified and `canopi-kqpp` stays
+open. The text below is the historical assignment, not a current instruction.
 
 ## Assignment
 
