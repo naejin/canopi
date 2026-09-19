@@ -1,14 +1,16 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — settled-design delivery through `d6b3f8e1` independently reviewed with B1–B3 blocking; the bounded repair is delivered at `95028481` and awaits independent review. Q remains unqualified.
+Status: evidence — delivery `933fb593` independently reviewed: original B1–B3 cases repaired; NC1–NC2 numeric blockers remain. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
-Current guidance: [decision-complete design](q-typescript-reassessment.md), [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response), [bounded repair handoff](q-final-boundary-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [debrief](review-and-debrief.md).
+Current guidance: [numeric repair handoff](q-numeric-counter-repair-agent-prompt.md), [decision-complete design](q-typescript-reassessment.md), [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response), [C1–C8 contract](q-admission-acceptance.md), [debrief](review-and-debrief.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
 
 ## Settled-design independent disposition
 
-Reviewed delivery: `d6b3f8e1`, including implementation `70f97f30` and design `ac68fb64`. **Not accepted yet.** The [bounded boundary-repair handoff](q-final-boundary-repair-agent-prompt.md) is the sole next assignment when forwarded by the user. Earlier implementation and reassessment prompts authorize nothing further.
+The latest review is [boundary-repair independent disposition](#boundary-repair-independent-disposition); the following baseline is retained as revision-linked evidence.
+
+Reviewed delivery: `d6b3f8e1`, including implementation `70f97f30` and design `ac68fb64`. This historical disposition led to the now-retired [boundary-repair handoff](q-final-boundary-repair-agent-prompt.md). See the newer disposition below for current blockers.
 
 These reproductions used fresh small synthetic reports through the real emitted CLI, starting from `roleReports()`, `SOURCE_ROLES`, `NOW`, the real contract and declarations in `ts/tests/{contractFixture,fixtures}.ts`, and `TempRoot`/`runCli`. They demonstrate incorrect individual requirement verdicts and input-path creation, not an overall Q pass or overwriting existing data.
 
@@ -22,6 +24,22 @@ These reproductions used fresh small synthetic reports through the real emitted 
 Independently retained: a failed display tile plus missing `ok` now keeps the failure; a wrong artifact version plus missing another artifact keeps the failure. Compilation, 239 TypeScript tests (approved unrestricted rerun after sandbox failures), 261 Python tests, 18 runner checks, documentation validation, shell syntax and diff checks passed. The review did not independently repeat fresh-outDir testing or real/private qualification experiments. Worktree remained unchanged. Passing tests do not cover the counterexamples above.
 
 Disposition: finish these boundaries under the settled design, not another architecture migration. Review the repair and bounded same-family sweep together. Do not expand acceptance to optional hardening. Any further blocker must demonstrate a violation of an existing validity or input-preservation invariant; otherwise track it separately. Q remains unqualified and N1 unstarted.
+
+## Boundary-repair independent disposition
+
+Reviewed checkout `933fb593`, implementation `95028481`. Original B1–B3 examples are independently repaired, but the slice is **not accepted**: two numeric cases still violate D1–D2/C1/C8. These are bounded same-family findings, not new architecture requirements. The [numeric completion handoff](q-numeric-counter-repair-agent-prompt.md) is the sole next assignment when forwarded by the user.
+
+Real-CLI reproductions used the same coherent `roleReports()` control, real contract/declarations and fresh temporary sources as the prior review:
+
+| Finding | Mutation / observation | Required result |
+| --- | --- | --- |
+| NC1 — discrete counters | Independently set q2 `serverLedger.fixtureRequests=0.5` or `testedWindows=0.5`: Q-LOCAL-1 **passes** | Malformed count fails with identifying reason. `readCounter` now checks finiteness but lost whole-number validity |
+| NC2 — true comparison operands | With nine validated windows, set `serverLedger.fixtureBytesServed=0` and delete `fixtureRequests`: Q-LOCAL-1 becomes **inconclusive** | Ledger contradiction fails despite unrelated request-count gap. Its comparison currently waits for all three operands |
+| MR1 — readiness semantics | Receipt describes `q2-local-bridge` as a produced scoped-bridge capability needing wiring | `measure.py:cmd_q2_local_bridge` explicitly checks `bounded-range-rejected` and prefix metadata for stripped input. This negative control cannot qualify successful Desktop bridge access by changing roles or report paths |
+
+Independently retained: alias reproduction exits 2 and preserves absence; width 2048 without height, negative bytes without requests, disappearance without sidecar policy, and null route role all fail correctly with applicable gaps retained. Compilation, 266 TypeScript tests, 261 Python regressions, 18 stub-runner checks, docs, shell syntax and diff checks passed. Fresh-output compilation and private runs were not independently repeated. No source/doc changes occurred during review; no overall Q pass was demonstrated. This documentation update records that completed review, not another test run.
+
+Correct NC1–NC2 and MR1 under the existing design; no broader audit or producer implementation is requested. Q remains unqualified and production N1 unstarted.
 
 ## Baseline evidence and retained work
 

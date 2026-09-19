@@ -6,7 +6,15 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
-Current disposition: settled-design delivery through `d6b3f8e1` is independently unaccepted on three boundary families, recorded in the [standing review](q-typescript-review.md#settled-design-independent-disposition). The [next handoff](q-final-boundary-repair-agent-prompt.md) finishes the existing design without another architecture migration. The user remains the courier and approval point.
+Current disposition: delivery `933fb593` repaired the original B1–B3 cases but remains unaccepted on NC1–NC2, recorded in the [standing review](q-typescript-review.md#boundary-repair-independent-disposition). The [next handoff](q-numeric-counter-repair-agent-prompt.md) completes numeric semantics and reconciles MR1 readiness guidance, without redesign or producer work. The user remains the courier and approval point.
+
+### Boundary-repair debrief evidence
+
+At `933fb593`, the reviewer independently confirmed the original cases repaired and reran 266 TypeScript tests, 261 Python regressions and 18 runner checks successfully. Two counterexamples escaped: a shared finite-number parser admitted fractional discrete counts, and a three-operand guard suppressed a contradiction requiring only two operands. Record these as retained-domain-semantics and comparison-dependency coverage gaps, not a need for another architecture. Earlier review did not expose these exact cases; distinguish newly observed behavior from a newly introduced requirement.
+
+The readiness statement also mistook a named negative-control producer for a positive transport capability. MR1 was corrected by tracing `cmd_q2_local_bridge` to its rejection assertions, not by running an experiment. Future readiness inventories should cite the successful operation and observable assertion, not just a filename or command label. Test that practice on the next authorized inventory before promoting it into a skill or repository-wide rule.
+
+Product-progress delta for this delivery: original boundary cases repaired; **zero new real Q capabilities demonstrated**, Q unqualified, production N1 unstarted. Hypotheses for reducing another escape are unit-aware counter cases and explicit operand-pair tests. The next receipt should show whether those detectors catch deliberately removed checks, not merely a higher test count. Effort/cost remains unknown where not measured. No language/model causal claim is supported.
 
 ### Product-progress checkpoint and debrief method
 

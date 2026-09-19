@@ -1,8 +1,8 @@
 # TypeScript qualification — decision-complete design
 
-Status: partial — design retained; implementation through `d6b3f8e1` independently reviewed with B1–B3 still blocking acceptance.
+Status: partial — design retained; delivery `933fb593` independently reviewed with original B1–B3 examples repaired and NC1–NC2 still blocking acceptance.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
-Current guidance: [bounded repair handoff](q-final-boundary-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [standing review](q-typescript-review.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
+Current guidance: [numeric completion handoff](q-numeric-counter-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [standing review](q-typescript-review.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
 
 ## Authority, outcome and baseline
 

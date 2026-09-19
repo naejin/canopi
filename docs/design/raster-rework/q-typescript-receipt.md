@@ -689,6 +689,8 @@ qualification run, and its reports predate parts of the current consumer vocabul
 
 ## Measurement-readiness handoff
 
+Reviewer correction MR1 at delivery `933fb593`: the original inventory confused the `q2-local-bridge` command name with successful scoped Desktop transport. The row and prerequisite below are corrected from inspected code; no new measurement or producer implementation is claimed. See the [independent disposition](q-typescript-review.md#boundary-repair-independent-disposition).
+
 What a fresh bounded qualification run needs, requirement by requirement. This maps the existing
 mandatory gaps to producer and host availability; it changes no acceptance limit and claims no
 measurement. Sources are the tracked producer code (`measure.py`, `qual_lib.py`, `run_display_trace.mjs`,
@@ -702,7 +704,7 @@ the decision path reads a different file or field.
 | Requirement | Observation needed | Current availability | Kind |
 | --- | --- | --- | --- |
 | all roles | the `identity` block (`id`, `experiment`, `command`, `environment`, `routeId`, `host`, `transport`, `runId`, `recordedAt`, `fixturePolicy`, `fixtures`, `artifact`) that admission requires | no producer writes an `identity` block; `Report.payload()` in `qual_lib.py` has no such key, and only the frozen Python consumer references the vocabulary. 11 of 12 requirements report the missing block on the retained reports | **missing producer** (envelope), prerequisite for everything else |
-| `Q-LOCAL-1` | bounded numeric windows over the plan's scoped local bridge: `testedWindows`, `windows[].window.{w,h}` and the ledger in the report the decision path reads | `measure.py q2-numeric` writes exactly that vocabulary today; the retained report predates it. `measure.py q2-local-bridge` (bounded access to stripped local files) is produced by the runner but **not read by the decision path**, which maps role `q2` to `q2-numeric.json` | **missing run** (current producer) + **wiring decision**: which report carries the scoped local bridge |
+| `Q-LOCAL-1` | successful bounded numeric windows through the scoped Desktop bridge with source identity, dimensions and ledger | `q2-numeric` emits numeric observations, but that does not establish the required Desktop transport. `cmd_q2_local_bridge` explicitly expects stripped-file range-read rejection and prefix metadata; it is a negative control, not an unwired positive bridge measurement | **missing positive producer/route evidence**, host environment and subsequent report wiring; not just a missing run |
 | `Q-HOST-1` | a Desktop WebView host report recording `identity.host = desktop-webview` and the bundled worker/asset path | no producer emits a host report, and no source role `host` has declared expectations in the decision path, so the accepting rule is reachable only from a test | **missing producer** + consumer schema decision + **missing environment** (packaged Desktop WebView) |
 | `Q-DISPLAY-1` | one cold and three warm runs with at least 100 tile requests and 100 usable latencies each, reconciled against renders | `run_display_trace.mjs` exists and writes `runs`; the retained probe has 1 cold and 1 warm run. The enveloped trace lives inside the resources report (`displayTrace`), while the decision path reads the raw probe as role `trace` | **missing run** + **wiring decision** (which file is the declared trace) + **missing environment** (Chromium present; Desktop hosting still absent) |
 | `Q-RES-1` | candidate-route memory, sampling, counters and the display disk-cache bound | `measure.py q6-resources` exists and writes candidate/reference measurement rows; the retained rows carry no `routeRole` label. The 512 MiB disk-cache bound and the staging/free-space policy have no producer at all | **missing run** for the counters, **missing producer** for the two plan bounds |
@@ -723,9 +725,10 @@ In dependency order, so a later authorization can size the work:
 2. **Host role decision.** The decision path rejects a source whose role is `host`, because no declared
    expectations exist for it. A Desktop WebView measurement needs either a declared host role or a
    declared expectation recording the host on an existing role.
-3. **Local-bridge wiring.** Decide which report carries the scoped local bridge — the stripped-local
-   `q2-local-bridge` producer or the numeric probe — and align `REPORT_FILES` and the declared transport
-   accordingly. Both files are already produced by the runner.
+3. **Positive local-bridge producer.** A separately authorized slice must exercise successful reads
+   through the actual scoped Desktop bridge, then align the resulting report with declared roles.
+   Retain `q2-local-bridge` as stripped-input rejection evidence only. Neither changing its filename
+   nor adding a transport/identity label turns rejection into a measured positive capability.
 4. **Bounded-read prerequisite.** The recorded numeric limitation stands (`Q` receipt limitation 1): a
    bounded numeric read needs a prepared tiled derivative or a bounded legacy reader, so preparation
    must precede numeric windows on the platform fixture.

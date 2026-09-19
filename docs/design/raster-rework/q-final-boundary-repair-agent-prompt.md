@@ -1,6 +1,6 @@
 # Qualification tooling — bounded boundary repair
 
-Status: retired — executed and delivered at `95028481`; the delivery is recorded in the [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response) and awaits independent review. Kept for the assignment record; it authorizes nothing further.
+Status: retired — delivered through `933fb593` and independently reviewed; original examples repaired, NC1–NC2 remain. The [numeric completion handoff](q-numeric-counter-repair-agent-prompt.md) supersedes this assignment. It authorizes nothing further.
 Current guidance: [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response), [measurement-readiness handoff](q-typescript-receipt.md#measurement-readiness-handoff), [standing review](q-typescript-review.md#b1b3-implementation-response-at-95028481-implementer-not-acceptance), [settled design](q-typescript-reassessment.md).
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 ## Assignment and first action
