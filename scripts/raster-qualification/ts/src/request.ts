@@ -34,6 +34,17 @@ export interface DirectoryRequestOptions {
   readonly now: number;
 }
 
+/**
+ * Every report path this directory mode reads, before any file is validated.
+ *
+ * The names are declared constants, so the read-set is knowable without reading
+ * anything: a declaration failure must not be able to leave the destination
+ * unprotected.
+ */
+export function declaredReportPaths(reportsDirectory: string): string[] {
+  return Array.from(REPORT_FILES.values(), (file) => join(reportsDirectory, file));
+}
+
 export type RequestBuild =
   | { ok: true; request: QualificationRequest }
   | { ok: false; problems: readonly string[] };

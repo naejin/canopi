@@ -557,7 +557,9 @@ test('R1-F: the output path may not be one of the inputs', () => {
     const result = decide(root, { reports, outPath: () => q2Path });
     assert.notEqual(result.status, 0, 'writing over an input was accepted');
     assert.equal(readFileSync(q2Path, 'utf8'), before, 'the source bytes were overwritten');
-    assert.match(result.stderr, /also an input/);
+    // An existing destination is refused by the no-replace rule before the read-set
+    // comparison; either refusal protects the bytes.
+    assert.match(result.stderr, /already exists|also an input/);
   } finally {
     root.cleanup();
   }
@@ -566,7 +568,9 @@ test('R1-F: the output path may not be one of the inputs', () => {
 test('R1-F: a refused input leaves a labelled diagnostic when the destination is writable', () => {
   const root = new TempRoot();
   try {
-    const out = join(root.path, 'out', 'decision.json');
+    // The parent directory exists, so the requested destination is usable and the
+    // diagnostic is published there: a refused input must not be silent.
+    const out = join(root.path, 'decision.json');
     const result = decide(root, { pins: 7, outPath: () => out });
     assert.equal(result.status, 2);
     assert.match(result.stderr, /candidate pins/);

@@ -691,16 +691,23 @@ test('C7: a malformed request is a structured diagnostic', () => {
     const root = new TempRoot();
     try {
       const requestPath = root.writeRaw('request.json', body);
-      const result = runCli(requestPath, join(root.path, 'd.json'));
+      const out = join(root.path, 'd.json');
+      const result = runCli(requestPath, out);
       assert.equal(result.status, 2, label);
       assert.doesNotMatch(result.stderr, /TypeError|AttributeError|at Object\./, label);
       assert.notEqual(result.stderr.trim(), '', label);
-      // The destination receives an explicitly labelled refusal, never a decision:
-      // it carries no requirement verdicts and cannot be read as a qualification
-      // result.
-      assert.equal(result.decision?.['kind'], 'rejected-input', label);
-      assert.deepEqual(result.decision?.['requirements'], [], label);
-      assert.notEqual(result.decision?.['verdict'], 'pass', label);
+      // A malformed request publishes an explicitly labelled refusal, never a
+      // decision. When its sources cannot be recovered the requested destination is
+      // left untouched and the diagnostic is written into a directory this run owns.
+      const reported = /non-qualifying diagnostic was written to (.+)/.exec(result.stderr)?.[1]?.trim();
+      const diagnostic = reported ?? out;
+      const document = JSON.parse(readFileSync(diagnostic, 'utf8')) as Record<string, unknown>;
+      assert.equal(document['kind'], 'rejected-input', label);
+      assert.deepEqual(document['requirements'], [], label);
+      assert.notEqual(document['verdict'], 'pass', label);
+      if (reported !== undefined) {
+        assert.equal(root.has('d.json'), false, `${label}: the destination was used anyway`);
+      }
     } finally {
       root.cleanup();
     }

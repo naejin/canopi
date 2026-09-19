@@ -33,8 +33,14 @@ export type QualificationOutcome =
   | { ok: true; decision: Decision; exitCode: number }
   | { ok: false; problems: readonly string[]; exitCode: number };
 
-/** The decision document version this build emits. */
-export const DECISION_VERSION = 1;
+/**
+ * The decision document version this build emits.
+ *
+ * Version 2 adds the explicit per-requirement check receipts and the recorded
+ * internal-check defects. Version-1 documents are historical outputs and are never
+ * read back as evidence, so no version-1 reader is maintained.
+ */
+export const DECISION_VERSION = 2;
 
 export function runQualification(request: QualificationRequest): QualificationOutcome {
   const problems: string[] = [];
@@ -104,6 +110,7 @@ export function runQualification(request: QualificationRequest): QualificationOu
         id: spec.id,
         title: spec.title,
         verdict: 'inconclusive',
+        defects: [],
         assertions: new Map(),
         observed: new Map(),
         reasons: [`no Q obligation recorded (${spec.phase})`],
@@ -132,8 +139,14 @@ export function runQualification(request: QualificationRequest): QualificationOu
   }
 
   const overall = overallVerdict(requirements);
+  // Internal-check defects are defects in this tool, not measurements of the
+  // engine, so they are recorded separately and drive an input-class exit status.
+  const internalDefects = Array.from(
+    new Set(requirements.flatMap((entry) => entry.defects)),
+  ).sort();
   const decision: Decision = {
     version: DECISION_VERSION,
+    internalDefects,
     // A synthetic control exercises the same real path with complete internally
     // coherent evidence, and is explicitly marked. It must never publish a
     // qualifying result, whatever the rest of the contract happens to say: relying
@@ -149,7 +162,11 @@ export function runQualification(request: QualificationRequest): QualificationOu
       ...(entry.snapshot.digest === undefined ? {} : { digest: entry.snapshot.digest }),
     })),
   };
-  return { ok: true, decision, exitCode: decision.verdict === 'pass' ? 0 : 1 };
+  return {
+    ok: true,
+    decision,
+    exitCode: internalDefects.length > 0 ? 2 : decision.verdict === 'pass' ? 0 : 1,
+  };
 }
 
 function unmapped(
@@ -162,6 +179,7 @@ function unmapped(
     title,
     verdict: 'inconclusive',
     assertions: new Map(assertions.map((assertion) => [assertion, 'inconclusive' as const])),
+    defects: [],
     observed: new Map(),
     reasons: [`no evidence mapping is implemented for ${id}, so it cannot pass`],
     admission: {

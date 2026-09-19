@@ -36,7 +36,19 @@ FX="$SCRATCH/fx"
 OUT="$SCRATCH/out"
 CHROME="${QUAL_CHROME:-/usr/bin/google-chrome}"
 mkdir -p "$OUT"
-rm -f "$OUT"/q*.json
+
+# The decision path publishes immutably: it never replaces an existing output and
+# never writes over a path it reads. A stale decision in the run root is therefore a
+# refusal, not something this script deletes: a run that cannot publish its own
+# result must not measure anything. The check runs before the first producer step so
+# no evidence is collected for a result that cannot be written.
+DECISION="$OUT/q-decision.json"
+if [ -e "$DECISION" ] || [ -L "$DECISION" ]; then
+  echo "=== qualification run refused: $DECISION already exists ===" >&2
+  echo "publication never replaces an existing output; pass a fresh run root as this" >&2
+  echo "script's first argument, or move the completed run aside first" >&2
+  exit 1
+fi
 
 cat > "$SCRATCH/fixture-map-ranged.json" <<'JSON'
 {
@@ -224,5 +236,5 @@ fi
   --contract scripts/raster-qualification/requirements.json \
   --pins scripts/raster-qualification/candidates.json \
   ${QUAL_FIXTURE_MANIFEST:+--fixture-manifest "$QUAL_FIXTURE_MANIFEST"} \
-  --out "$OUT/q-decision.json"
+  --out "$DECISION"
 exit $?

@@ -151,13 +151,17 @@ test('adversarial: a negative-control prefix cannot excuse a mandatory assertion
 test('adversarial: an absurd counter cannot be read as within budget', () => {
   const root = new TempRoot();
   try {
+    let attempt = 0;
     for (const value of [Number.MAX_SAFE_INTEGER, 1e308, -1, 2.5, '1024', null]) {
       const reports = roleReports();
       const q6 = reports['q6resources']!;
       const measurements = (q6['measurements'] as Record<string, unknown>[]).map((entry, index) =>
         index === 0 ? { ...entry, decodedCacheBytes: value } : entry);
       reports['q6resources'] = { ...q6, measurements };
-      const result = runCli(requestWith(root, reports), join(root.path, 'd.json'));
+      // Publication never replaces an existing output, so each case needs its own
+      // destination; reusing one would make the second case an output refusal.
+      const result = runCli(requestWith(root, reports), join(root.path, `d-${attempt}.json`));
+      attempt += 1;
       assert.notEqual(
         result.decision?.['verdict'],
         'pass',
@@ -172,13 +176,17 @@ test('adversarial: an absurd counter cannot be read as within budget', () => {
 test('adversarial: an infinite or NaN measurement cannot pass a budget', () => {
   const root = new TempRoot();
   try {
+    let attempt = 0;
     for (const token of ['1e999', 'NaN', '-Infinity']) {
       const reports = roleReports();
       const q6 = reports['q6resources']!;
       const body = JSON.stringify(q6).replace('"decodedCacheBytes":1024', `"decodedCacheBytes":${token}`);
       const requestPath = requestWith(root, reports);
       writeFileSync(join(root.path, 'reports/q6resources.json'), body);
-      const result = runCli(requestPath, join(root.path, 'd.json'));
+      // Each token needs its own destination: publication never replaces an
+      // existing output, so a shared path would make the second case a refusal.
+      const result = runCli(requestPath, join(root.path, `d-nonfinite-${attempt}.json`));
+      attempt += 1;
       assertNoFalsePass(result, `decodedCacheBytes=${token}`, 1);
     }
   } finally {
@@ -250,14 +258,18 @@ test('adversarial: a path traversal in a source path reaches nothing it should n
   }
 });
 
-test('adversarial: an unwritable output directory exits nonzero without a saved claim', () => {
+test('adversarial: an unusable output parent exits nonzero without a saved claim', () => {
+  // Publication creates only its own staging and diagnostic directories beneath an
+  // existing parent. A missing parent is the caller's to prepare: the invocation is
+  // refused, nothing is created, and the caller is told no diagnostic was saved.
   const root = new TempRoot();
   try {
     const requestPath = requestWith(root, roleReports());
     const result = runCli(requestPath, join(root.path, 'no-such-dir', 'deeper', 'd.json'));
-    // A missing parent is created, so this must succeed; the unwritable case is a
-    // file where a directory is required.
-    assert.equal(result.status, 1, 'a creatable path must still decide, not error');
+    assert.equal(result.status, 2, 'a missing parent must be refused, not created');
+    assert.match(result.stderr, /no diagnostic was saved/);
+    assert.equal(root.has(join('no-such-dir')), false, 'the parent was created anyway');
+    assert.doesNotMatch(result.stdout, /"out"/);
   } finally {
     root.cleanup();
   }
@@ -265,9 +277,11 @@ test('adversarial: an unwritable output directory exits nonzero without a saved 
   try {
     const requestPath = requestWith(root2, roleReports());
     const blocker = root2.write('blocker', 'x');
+    const before = readFileSync(blocker, 'utf8');
     const result = runCli(requestPath, join(blocker, 'd.json'));
     assert.equal(result.status, 2);
-    assert.match(result.stderr, /cannot write decision/);
+    assert.match(result.stderr, /no diagnostic was saved/);
+    assert.equal(readFileSync(blocker, 'utf8'), before);
     assert.doesNotMatch(result.stdout, /"out"/);
   } finally {
     root2.cleanup();

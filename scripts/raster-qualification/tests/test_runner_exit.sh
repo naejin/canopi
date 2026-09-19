@@ -94,7 +94,7 @@ const outIndex = argv.indexOf('--out');
 const out = outIndex === -1 ? '' : argv[outIndex + 1];
 if (out && out.length > 0) {
   writeFileSync(out, `${JSON.stringify({
-    version: 1,
+    version: 2,
     verdict: process.env.STUB_GATE_RESULT ?? 'pass',
     requirements: [],
   }, null, 2)}\n`);
@@ -227,6 +227,38 @@ if grep -q "warning: experiment aggregate is not a pass" "$scratch/runner.err"; 
   PASS=$((PASS + 1))
 else
   echo "FAIL - a summary that disagrees with an eligible gate was silent"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$scratch"
+
+# 8. An existing final output is refused before any producer step runs. Publication
+#    never replaces an existing output, and a run that cannot publish its own result
+#    must not measure: the refusal is authoritative and the bytes are preserved.
+scratch=$(mktemp -d)
+mkdir -p "$scratch/out"
+printf '{"version":2,"verdict":"pass","requirements":[]}\n' > "$scratch/out/q-decision.json"
+before=$(cat "$scratch/out/q-decision.json")
+status=$(run_runner "$scratch" 0 pass 0 0 pass)
+check "existing final output refuses the run" 1 "$status"
+if [ -s "$scratch/calls.log" ]; then
+  echo "FAIL - a producer step ran despite the existing final output"
+  FAIL=$((FAIL + 1))
+else
+  echo "ok   - no producer step was invoked"
+  PASS=$((PASS + 1))
+fi
+if grep -q "already exists" "$scratch/runner.err"; then
+  echo "ok   - the refusal names the existing output"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - the refusal was silent"
+  FAIL=$((FAIL + 1))
+fi
+if [ "$(cat "$scratch/out/q-decision.json")" = "$before" ]; then
+  echo "ok   - the existing decision was left unchanged"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - the existing decision was modified"
   FAIL=$((FAIL + 1))
 fi
 rm -rf "$scratch"

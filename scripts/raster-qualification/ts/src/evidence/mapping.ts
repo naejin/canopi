@@ -22,6 +22,8 @@ export interface MappingResult {
   /** Findings this mapping produced beyond the raw assertion verdicts. */
   readonly failures: readonly string[];
   readonly gaps: readonly string[];
+  /** Structured internal-check defects the driver found, if any. */
+  readonly defects?: readonly string[];
   /** Which admitted sources this requirement draws on, in order. */
   readonly sourceRoles: readonly string[];
   readonly source: string;

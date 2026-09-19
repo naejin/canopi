@@ -144,14 +144,20 @@ test('counterexample 3a: a non-finite bundle timestamp is an input diagnostic', 
   const root = new TempRoot();
   try {
     const requestPath = root.writeRaw('request.json', '{"now": NaN, "sources": []}');
-    const result = runCli(requestPath, join(root.path, 'decision.json'));
+    const out = join(root.path, 'decision.json');
+    const result = runCli(requestPath, out);
     assert.equal(result.status, 2);
     assert.doesNotMatch(result.stderr, /Traceback|at Object\./);
     assert.match(result.stderr, /finite JSON number|evaluation time/);
-    // The refusal is recorded at the writable destination, explicitly labelled so it
-    // cannot be mistaken for a decision.
-    assert.equal(result.decision?.['kind'], 'rejected-input');
-    assert.notEqual(result.decision?.['verdict'], 'pass');
+    // A body that cannot be parsed leaves the read-set unknown, so the requested
+    // destination is not used; the refusal is still recorded, explicitly labelled so
+    // it cannot be mistaken for a decision.
+    const reported = /non-qualifying diagnostic was written to (.+)/.exec(result.stderr)?.[1]?.trim();
+    assert.ok(reported !== undefined, result.stderr);
+    const document = JSON.parse(readFileSync(reported, 'utf8')) as Record<string, unknown>;
+    assert.equal(document['kind'], 'rejected-input');
+    assert.notEqual(document['verdict'], 'pass');
+    assert.equal(root.has('decision.json'), false);
   } finally {
     root.cleanup();
   }

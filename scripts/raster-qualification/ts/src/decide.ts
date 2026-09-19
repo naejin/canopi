@@ -28,6 +28,8 @@ export interface RequirementVerdict {
   readonly id: string;
   readonly title: string;
   readonly verdict: Verdict;
+  /** Structured internal-check defects; never a measured engine failure. */
+  readonly defects: readonly string[];
   readonly assertions: ReadonlyMap<string, Verdict>;
   /** Partial measured successes that were not promoted. */
   readonly observed: ReadonlyMap<string, Verdict>;
@@ -40,6 +42,8 @@ export interface RequirementVerdict {
 export interface Decision {
   readonly version: number;
   readonly verdict: Verdict;
+  /** Internal-check defects across every requirement, each stated once. */
+  readonly internalDefects: readonly string[];
   readonly requirements: readonly RequirementVerdict[];
   readonly generatedAt: number;
   readonly synthetic: boolean;
@@ -279,12 +283,16 @@ export function decideRequirement(
     for (const [id, value] of assertions) observed.set(id, value);
   }
 
+  const defects = [...(result.defects ?? [])];
+  for (const defect of defects) findings.gap(`internal check defect: ${defect}`);
+
   const verdict = findings.verdict();
 
   return {
     id: spec.id,
     title: spec.title,
     verdict,
+    defects,
     assertions,
     observed,
     reasons: [...admission.reasons, ...findings.reasons()],

@@ -252,7 +252,7 @@ test('an unwritable destination exits nonzero without claiming a saved output', 
     const blocker = root.write('blocker', 'not a directory');
     const result = runCli(requestPath, join(blocker, 'decision.json'));
     assert.equal(result.status, 2);
-    assert.match(result.stderr, /cannot write decision/);
+    assert.match(result.stderr, /no diagnostic was saved/);
     assert.doesNotMatch(result.stdout, /"out"/);
   } finally {
     root.cleanup();
