@@ -1,10 +1,27 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — Round 2 implementation remains unaccepted. Reassessment `55d6f485` required five design corrections; the reviewer resolved them under delegated user authority in the current design. Implementation and independent acceptance are still pending.
+Status: evidence — settled-design delivery through `d6b3f8e1` independently reviewed; three blocking families remain. The design is retained; bounded repair is next.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
-Current guidance: [decision-complete design](q-typescript-reassessment.md), [implementation handoff](q-typescript-implementation-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
+Current guidance: [decision-complete design](q-typescript-reassessment.md), [bounded repair handoff](q-final-boundary-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
+
+## Settled-design independent disposition
+
+Reviewed delivery: `d6b3f8e1`, including implementation `70f97f30` and design `ac68fb64`. **Not accepted yet.** The [bounded boundary-repair handoff](q-final-boundary-repair-agent-prompt.md) is the sole next assignment when forwarded by the user. Earlier implementation and reassessment prompts authorize nothing further.
+
+These reproductions used fresh small synthetic reports through the real emitted CLI, starting from `roleReports()`, `SOURCE_ROLES`, `NOW`, the real contract and declarations in `ts/tests/{contractFixture,fixtures}.ts`, and `TempRoot`/`runCli`. They demonstrate incorrect individual requirement verdicts and input-path creation, not an overall Q pass or overwriting existing data.
+
+| ID / existing contract | Minimal mutation and observed result | Required result / location |
+| --- | --- | --- |
+| B1 / D3, C7 | Create `alias` symlink to an existing `actual` directory. Declare absent q2 input `alias/not-yet.json`; request output `actual/not-yet.json`. CLI exits 1 and creates that input containing a version-2 decision | Refuse with exit 2; input remains absent. `publication.ts:canonicalInput` lexically resolves missing paths without resolving existing ancestor aliases |
+| B2 / D1–D2, C8 | Set `q2.windows[0].window.w=2048`: Q-LOCAL-1 fails. Delete `h`: becomes inconclusive. Separately set `serverLedger.fixtureBytesServed=-1`: fails; delete `fixtureRequests`: becomes inconclusive | Independently known width/negative-byte violations and their reasons remain failures; missing operands also remain gaps. `evidence/numericTransport.ts` returns before independent checks |
+| B2 / D1–D2, C8 | q3prepare: identity sidecar policy `measured`; sidecar `{expectedSha256: "a" repeated 64 times, sha256: same, before: true, after: false}` fails Q-PREP-1. Delete `identity.sidecarPolicy`: becomes inconclusive and loses disappearance reason | Recorded disappearance remains fail alongside the policy gap. `evidence/preparation.ts:sidecarSurvival` exits on policy absence before reading survival |
+| B3 / D2, C1 | Set q2 window width to `"bad"`, or q6resources first measurement `routeRole=null`: corresponding requirement becomes inconclusive | Supplied malformed leaves fail; genuinely absent leaves gap. `numericTransport.ts:windowBounds`; `resources.ts:roleLabels` ignores the parsed malformed-role distinction |
+
+Independently retained: a failed display tile plus missing `ok` now keeps the failure; a wrong artifact version plus missing another artifact keeps the failure. Compilation, 239 TypeScript tests (approved unrestricted rerun after sandbox failures), 261 Python tests, 18 runner checks, documentation validation, shell syntax and diff checks passed. The review did not independently repeat fresh-outDir testing or real/private qualification experiments. Worktree remained unchanged. Passing tests do not cover the counterexamples above.
+
+Disposition: finish these boundaries under the settled design, not another architecture migration. Review the repair and bounded same-family sweep together. Do not expand acceptance to optional hardening. Any further blocker must demonstrate a violation of an existing validity or input-preservation invariant; otherwise track it separately. Q remains unqualified and N1 unstarted.
 
 ## Baseline evidence and retained work
 

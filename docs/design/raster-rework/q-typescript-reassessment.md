@@ -1,8 +1,8 @@
 # TypeScript qualification — decision-complete design
 
-Status: proposed — design complete under the user's delegated engineering authority; ready for implementation through the user-forwarded handoff. No implementation or independent acceptance is claimed.
+Status: partial — design retained; implementation through `d6b3f8e1` independently reviewed with B1–B3 still blocking acceptance.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
-Current guidance: [implementation handoff](q-typescript-implementation-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [standing review](q-typescript-review.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
+Current guidance: [bounded repair handoff](q-final-boundary-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [standing review](q-typescript-review.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
 
 ## Authority, outcome and baseline
 

@@ -1,6 +1,6 @@
 # TypeScript qualification — implementation handoff
 
-Status: retired — executed and delivered at `5878f80e`; the delivery is recorded in the [migration receipt](q-typescript-receipt.md#implementation-of-the-settled-design-s1s5) and awaits independent review. Kept for the assignment record; it authorizes nothing further.
+Status: retired — executed through `d6b3f8e1`; [independent review](q-typescript-review.md#settled-design-independent-disposition) requires B1–B3 repairs under the [next handoff](q-final-boundary-repair-agent-prompt.md). Kept for the assignment record; it authorizes nothing further.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
 Current guidance: [implementation receipt](q-typescript-receipt.md#implementation-of-the-settled-design-s1s5), [decision-complete design](q-typescript-reassessment.md), [C1–C8 acceptance](q-admission-acceptance.md), [standing review](q-typescript-review.md#implementation-response-at-5878f80e-implementer-not-acceptance).
 

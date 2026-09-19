@@ -4,7 +4,7 @@ Status: evidence — **Q is not qualified.** Experiment subtest results are reco
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
 and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
 Independent review found further gate defects; that distribution is not independently accepted.
-The [reviewer-owned decision-path design](raster-rework/q-typescript-reassessment.md) is ready for the [user-forwarded implementation handoff](raster-rework/q-typescript-implementation-agent-prompt.md). The old reassessment and repair prompts are retired. No experiment, producer/Python migration or production N1 is authorized.
+The [reviewer-owned decision-path design](raster-rework/q-typescript-reassessment.md) was implemented through `d6b3f8e1` and independently reviewed with three remaining blockers. The [bounded repair handoff](raster-rework/q-final-boundary-repair-agent-prompt.md) is next when forwarded by the user. No experiment, producer/Python migration or production N1 is authorized.
 Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
@@ -549,5 +549,4 @@ large fixtures and measurement output stay outside Git under the ignored `.rq-sc
   part.
 - **Branch and commits:** recorded in the accompanying delivery note.
 - **Status:** verified, **not integrated**. Pushing does not integrate.
-- **Next action:** independent review of the [implementation delivered at `5878f80e`](raster-rework/q-typescript-receipt.md#implementation-of-the-settled-design-s1s5); the earlier review of this corrected receipt and of limitation 1 remains outstanding. **N1 must not
-  start before those reviews conclude.**
+- **Next action:** the [bounded repair](raster-rework/q-final-boundary-repair-agent-prompt.md) addresses the independent review of delivery through `d6b3f8e1`. After tooling acceptance, separately authorize fresh qualification measurements, prioritizing scoped local bridge and Desktop hosting. The earlier evidence/limitation review remains outstanding. **N1 requires Q acceptance, not just tooling acceptance.**

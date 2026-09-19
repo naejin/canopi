@@ -6,11 +6,12 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Round 2 remains unaccepted; the reassessment delivered in `55d6f485` was reviewed and found five design gaps. The user delegated design ownership to the reviewer. The [decision-complete design](q-typescript-reassessment.md) now resolves those gaps and the [implementation handoff](q-typescript-implementation-agent-prompt.md) is the sole next assignment when forwarded by the user. Old repair/reassessment prompts are retired. No experiments, Python deletion, production N1 or integration are authorized.
+The settled-design delivery through `d6b3f8e1` has been independently reviewed: three boundary families remain unaccepted. The [bounded boundary-repair handoff](q-final-boundary-repair-agent-prompt.md) is the sole next assignment when forwarded by the user; the [decision-complete design](q-typescript-reassessment.md) is retained. After tooling acceptance, the intended milestone is fresh qualification evidence, prioritizing local bridge and Desktop hosting under a separately authorized assignment. No experiments, Python deletion, production N1 or integration are authorized by this handoff.
 
 | Artifact | Purpose |
 | --- | --- |
-| [TypeScript implementation handoff](q-typescript-implementation-agent-prompt.md) | Sole next assignment: implement the fixed design, then stop for user-mediated independent review |
+| [Bounded boundary-repair handoff](q-final-boundary-repair-agent-prompt.md) | Sole next assignment: repair B1–B3, provide measurement readiness, then stop for user-mediated review |
+| [TypeScript implementation handoff](q-typescript-implementation-agent-prompt.md) | Retired S1–S5 assignment; delivery independently reviewed with remaining B1–B3 blockers |
 | [TypeScript reassessment prompt](q-typescript-reassessment-agent-prompt.md) | Retired investigation assignment; original delivery remains recoverable in `55d6f485` |
 | [TypeScript decision-complete design](q-typescript-reassessment.md) | Reviewer-owned design replacing the reassessment proposal: explicit outcomes, safe publication, compatibility, full migration and verification |
 | [Standing TypeScript repair prompt](q-typescript-repair-agent-prompt.md) | Retired after two unsuccessful repair/review rounds; no Round 3 authority |
