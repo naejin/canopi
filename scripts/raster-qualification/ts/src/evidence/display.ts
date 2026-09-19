@@ -22,6 +22,7 @@ import {
 } from '../fields.js';
 import { DECLARATIONS } from '../declared/route.js';
 import {
+  contradicted,
   satisfied,
   sourceEvidence,
   unsatisfied,
@@ -269,9 +270,10 @@ function conclude(
   findings: { readonly failures: readonly string[]; readonly gaps: readonly string[] },
   evidence: readonly EvidenceRef[] = [],
 ): CheckOutcome {
-  if (findings.failures.length > 0) return violated(findings.failures, [reference, ...evidence]);
-  if (findings.gaps.length > 0) return unsatisfied(findings.gaps, [reference, ...evidence]);
-  return satisfied([reference, ...evidence]);
+  const refs = [reference, ...evidence];
+  if (findings.failures.length > 0) return contradicted(findings.failures, findings.gaps, refs);
+  if (findings.gaps.length > 0) return unsatisfied(findings.gaps, refs);
+  return satisfied(refs);
 }
 
 function perRunEvidence(

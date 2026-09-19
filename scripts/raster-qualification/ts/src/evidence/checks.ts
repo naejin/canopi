@@ -78,6 +78,13 @@ export interface RequirementChecks {
   readonly required: readonly string[];
   /** Assertion id to the reason no check can decide it yet. */
   readonly unsupported: ReadonlyMap<string, string>;
+  /**
+   * Requirement-level gaps that belong to no assertion.
+   *
+   * A plan obligation with no producer observation is stated honestly here rather
+   * than invented as an assertion or inferred from a missing field name.
+   */
+  readonly declaredGaps?: readonly string[];
   readonly checks: readonly Check[];
 }
 
@@ -136,6 +143,20 @@ export function violated(
   evidence: readonly EvidenceRef[] = [],
 ): CheckOutcome {
   return outcome({ satisfied: false, failures, evidence });
+}
+
+/**
+ * A contradicted fact whose independent gaps are retained alongside it.
+ *
+ * A check that records a failure must not discard the gaps it also found: the
+ * failure decides the verdict, and the gaps stay reviewable.
+ */
+export function contradicted(
+  failures: readonly string[],
+  gaps: readonly string[],
+  evidence: readonly EvidenceRef[] = [],
+): CheckOutcome {
+  return outcome({ satisfied: false, failures, gaps, evidence });
 }
 
 /**
@@ -383,7 +404,7 @@ export function runChecks(spec: RequirementChecks, context: CheckContext): Check
 
   const assertions = new Map<string, Verdict>();
   const failures: string[] = [];
-  const gaps: string[] = [];
+  const gaps: string[] = [...(spec.declaredGaps ?? [])];
   for (const assertion of spec.assertions) {
     const target = bucket(assertion);
     assertions.set(assertion, reduce(target.failures, target.gaps));

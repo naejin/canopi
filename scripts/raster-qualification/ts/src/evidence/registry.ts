@@ -12,14 +12,14 @@
 
 import { checkedMapping, type MappingContext, type MappingResult } from './mapping.js';
 import { mapNumericTransport } from './numericTransport.js';
-import { mapArtifactCorrespondence } from './artifactCorrespondence.js';
+import { ARTIFACT_CHECKS, ARTIFACT_PROVENANCE } from './artifactCorrespondence.js';
 import { mapPreparation } from './preparation.js';
 import { mapMembers } from './members.js';
 import { mapValues } from './values.js';
 import { mapCrs } from './crs.js';
 import { mapCancellation, mapFailureInjection, mapTeardown } from './lifecycle.js';
 import { mapHost } from './host.js';
-import { mapResources } from './resources.js';
+import { RESOURCE_CHECKS, RESOURCE_PROVENANCE } from './resources.js';
 import { DISPLAY_CHECKS, DISPLAY_PROVENANCE } from './display.js';
 
 export type RequirementMapping = (context: MappingContext) => MappingResult;
@@ -41,7 +41,7 @@ function legacy(mapping: RequirementMapping): RegistryEntry {
 }
 
 export const MAPPINGS: ReadonlyMap<string, RegistryEntry> = new Map<string, RegistryEntry>([
-  ['Q-ART-1', legacy((context) => mapArtifactCorrespondence(context.byRole.get('q1')))],
+  ['Q-ART-1', { kind: 'checked', mapping: checkedMapping(ARTIFACT_CHECKS, ARTIFACT_PROVENANCE) }],
   ['Q-LOCAL-1', legacy((context) => mapNumericTransport(context.byRole.get('q2'), [
     'reads-over-proposed-local-transport',
     'transport-ledger-corroborates-bytes',
@@ -61,7 +61,7 @@ export const MAPPINGS: ReadonlyMap<string, RegistryEntry> = new Map<string, Regi
   ['Q-TEARDOWN-1', legacy((context) => mapTeardown(context.byRole.get('q5lifecycle')))],
   ['Q-FAILINJ-1', legacy((context) => mapFailureInjection(context.byRole.get('q5lifecycle')))],
   ['Q-HOST-1', legacy((context) => mapHost(context.byRole.get('host')))],
-  ['Q-RES-1', legacy((context) => mapResources(context.byRole.get('q6resources')))],
+  ['Q-RES-1', { kind: 'checked', mapping: checkedMapping(RESOURCE_CHECKS, RESOURCE_PROVENANCE) }],
   ['Q-DISPLAY-1', { kind: 'checked', mapping: checkedMapping(DISPLAY_CHECKS, DISPLAY_PROVENANCE) }],
 ]);
 
