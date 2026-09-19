@@ -72,8 +72,3 @@ export function checkedMapping(
     };
   };
 }
-
-/** Every assertion unknown, ready for a mapping to fill in. */
-export function unresolved(assertions: readonly string[]): Map<string, Verdict> {
-  return new Map(assertions.map((id) => [id, 'inconclusive' as Verdict]));
-}

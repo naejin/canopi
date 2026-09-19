@@ -280,7 +280,7 @@ test('parity: the programmatic entry point decides the same as the CLI', () => {
     const programmatic = decideRequirement(
       contract.value!,
       prepared,
-      MAPPINGS.get('Q-LOCAL-1')!.mapping,
+      MAPPINGS.get('Q-LOCAL-1')!,
       'Q-LOCAL-1',
     );
     const cli = decide(root, reports);

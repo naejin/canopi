@@ -129,14 +129,14 @@ export function runQualification(request: QualificationRequest): QualificationOu
       });
       continue;
     }
-    const entry = MAPPINGS.get(spec.id);
-    if (entry === undefined) {
+    const mapping = MAPPINGS.get(spec.id);
+    if (mapping === undefined) {
       // An obligation with no mapping is a gap, never a pass. It is also a build
       // defect, so it is stated explicitly rather than silently skipped.
       requirements.push(unmapped(spec.id, spec.title, spec.assertions));
       continue;
     }
-    requirements.push(decideRequirement(request.contract, prepared, entry.mapping, spec.id));
+    requirements.push(decideRequirement(request.contract, prepared, mapping, spec.id));
   }
 
   const overall = overallVerdict(requirements);

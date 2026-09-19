@@ -1,16 +1,21 @@
 /**
- * The requirement-to-mapping registry.
+ * The requirement-to-check registry.
  *
- * Every required obligation in the contract has exactly one mapping here. A
- * requirement with no mapping is reported as an explicit gap by the caller rather
- * than being silently skipped, so a missing mapping can never read as a pass.
+ * Every required obligation in the contract has exactly one entry here, and every
+ * entry decides its assertions through the explicit check driver. There is no second
+ * way to produce a requirement verdict: the mappings own provenance only, and the
+ * driver owns evaluation, attribution and the conversion to the one reduction.
  *
- * Each mapping declares which source roles it draws on. The decision then requires
- * every one of those sources to have been admitted, so a requirement cannot be
- * carried by the passing sources alone.
+ * `CHECK_INVENTORIES` is the declared inventory itself, so a coverage or drift test
+ * can compare it with the requirement contract without executing a decision.
  */
 
-import { checkedMapping, type MappingContext, type MappingResult } from './mapping.js';
+import {
+  checkedMapping,
+  type MappingContext,
+  type MappingProvenance,
+  type MappingResult,
+} from './mapping.js';
 import { NUMERIC_CHECKS, NUMERIC_PROVENANCE } from './numericTransport.js';
 import { ARTIFACT_CHECKS, ARTIFACT_PROVENANCE } from './artifactCorrespondence.js';
 import { PREPARATION_CHECKS, PREPARATION_PROVENANCE } from './preparation.js';
@@ -28,52 +33,30 @@ import {
 import { HOST_CHECKS, HOST_PROVENANCE } from './host.js';
 import { RESOURCE_CHECKS, RESOURCE_PROVENANCE } from './resources.js';
 import { DISPLAY_CHECKS, DISPLAY_PROVENANCE } from './display.js';
+import type { RequirementChecks } from './checks.js';
 
 export type RequirementMapping = (context: MappingContext) => MappingResult;
 
-/**
- * How a requirement's assertions are decided during the migration.
- *
- * `checked` entries use the explicit check driver and are the target shape.
- * `legacy` entries still write their own verdicts; the tag is internal and
- * temporary, and the final coverage test forbids it once every requirement is
- * migrated. A requirement is one or the other, never both.
- */
-export type RegistryEntry =
-  | { readonly kind: 'checked'; readonly mapping: RequirementMapping }
-  | { readonly kind: 'legacy'; readonly mapping: RequirementMapping };
+const REQUIREMENTS: readonly (readonly [RequirementChecks, MappingProvenance])[] = [
+  [ARTIFACT_CHECKS, ARTIFACT_PROVENANCE],
+  [NUMERIC_CHECKS, NUMERIC_PROVENANCE],
+  [PREPARATION_CHECKS, PREPARATION_PROVENANCE],
+  [MEMBER_CHECKS, MEMBER_PROVENANCE],
+  [VALUE_CHECKS, VALUE_PROVENANCE],
+  [CRS_CHECKS, CRS_PROVENANCE],
+  [CANCEL_CHECKS, CANCEL_PROVENANCE],
+  [TEARDOWN_CHECKS, TEARDOWN_PROVENANCE],
+  [FAILURE_INJECTION_CHECKS, FAILURE_INJECTION_PROVENANCE],
+  [HOST_CHECKS, HOST_PROVENANCE],
+  [RESOURCE_CHECKS, RESOURCE_PROVENANCE],
+  [DISPLAY_CHECKS, DISPLAY_PROVENANCE],
+];
 
-function legacy(mapping: RequirementMapping): RegistryEntry {
-  return { kind: 'legacy', mapping };
-}
+/** The declared check inventory for every requirement. */
+export const CHECK_INVENTORIES: ReadonlyMap<string, RequirementChecks> = new Map(
+  REQUIREMENTS.map(([spec]) => [spec.requirementId, spec]),
+);
 
-export const MAPPINGS: ReadonlyMap<string, RegistryEntry> = new Map<string, RegistryEntry>([
-  ['Q-ART-1', { kind: 'checked', mapping: checkedMapping(ARTIFACT_CHECKS, ARTIFACT_PROVENANCE) }],
-  ['Q-LOCAL-1', { kind: 'checked', mapping: checkedMapping(NUMERIC_CHECKS, NUMERIC_PROVENANCE) }],
-  ['Q-PREP-1', { kind: 'checked', mapping: checkedMapping(PREPARATION_CHECKS, PREPARATION_PROVENANCE) }],
-  ['Q-MEMBER-1', { kind: 'checked', mapping: checkedMapping(MEMBER_CHECKS, MEMBER_PROVENANCE) }],
-  ['Q-VALUE-1', { kind: 'checked', mapping: checkedMapping(VALUE_CHECKS, VALUE_PROVENANCE) }],
-  ['Q-CRS-1', { kind: 'checked', mapping: checkedMapping(CRS_CHECKS, CRS_PROVENANCE) }],
-  ['Q-CANCEL-1', { kind: 'checked', mapping: checkedMapping(CANCEL_CHECKS, CANCEL_PROVENANCE) }],
-  [
-    'Q-TEARDOWN-1',
-    { kind: 'checked', mapping: checkedMapping(TEARDOWN_CHECKS, TEARDOWN_PROVENANCE) },
-  ],
-  [
-    'Q-FAILINJ-1',
-    { kind: 'checked', mapping: checkedMapping(FAILURE_INJECTION_CHECKS, FAILURE_INJECTION_PROVENANCE) },
-  ],
-  ['Q-HOST-1', { kind: 'checked', mapping: checkedMapping(HOST_CHECKS, HOST_PROVENANCE) }],
-  ['Q-RES-1', { kind: 'checked', mapping: checkedMapping(RESOURCE_CHECKS, RESOURCE_PROVENANCE) }],
-  ['Q-DISPLAY-1', { kind: 'checked', mapping: checkedMapping(DISPLAY_CHECKS, DISPLAY_PROVENANCE) }],
-]);
-
-/** Requirements whose assertions the explicit check driver decides. */
-export const CHECKED_REQUIREMENTS: readonly string[] = Array.from(MAPPINGS)
-  .filter(([, entry]) => entry.kind === 'checked')
-  .map(([id]) => id);
-
-/** Requirements still decided by their own legacy mapping. */
-export const LEGACY_REQUIREMENTS: readonly string[] = Array.from(MAPPINGS)
-  .filter(([, entry]) => entry.kind === 'legacy')
-  .map(([id]) => id);
+export const MAPPINGS: ReadonlyMap<string, RequirementMapping> = new Map(
+  REQUIREMENTS.map(([spec, provenance]) => [spec.requirementId, checkedMapping(spec, provenance)]),
+);
