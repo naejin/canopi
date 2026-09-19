@@ -4,7 +4,7 @@ Status: evidence — **Q is not qualified.** Experiment subtest results are reco
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
 and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
 Independent review found further gate defects; that distribution is not independently accepted.
-The [bounded TypeScript design reassessment](raster-rework/q-typescript-reassessment.md) is delivered at `82184e6c` and awaits user-mediated independent design review; the [Round 2 independent review](raster-rework/q-typescript-review.md#round-2-independent-disposition) records the remaining gate defects it starts from. The two-round repair prompt is retired; no Round 3 implementation, experiment, further Python migration or N1 is authorized by that delivery.
+The [reviewer-owned decision-path design](raster-rework/q-typescript-reassessment.md) is ready for the [user-forwarded implementation handoff](raster-rework/q-typescript-implementation-agent-prompt.md). The old reassessment and repair prompts are retired. No experiment, producer/Python migration or production N1 is authorized.
 Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).

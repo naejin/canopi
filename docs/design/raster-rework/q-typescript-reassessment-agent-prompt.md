@@ -1,6 +1,6 @@
 # TypeScript qualification — bounded design reassessment
 
-Status: proposed — user-authorized reassessment, not an implementation or Round 3 repair assignment.
+Status: retired — reassessment delivered in `55d6f485`; the reviewer subsequently resolved the design under delegated user authority. Use the [implementation handoff](q-typescript-implementation-agent-prompt.md). Historical instructions below do not authorize further reassessment or implementation.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Current guidance: [Round 2 independent disposition](q-typescript-review.md#round-2-independent-disposition), [C1–C8 contract](q-admission-acceptance.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
 

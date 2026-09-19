@@ -6,7 +6,7 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
-Current disposition: Round 2 is independently reviewed at `6a98cd33`; the complete boundary remains unaccepted. See the [Round 2 findings](q-typescript-review.md#round-2-independent-disposition). The two-round limit has been reached. The user authorized [bounded design reassessment](q-typescript-reassessment-agent-prompt.md), not another repair round. C1–C8 remain fixed; no direct delegation is authorized.
+Current disposition: existing TypeScript remains unaccepted after Round 2. Reassessment `55d6f485` exposed useful causes but retained five design gaps. The user delegated design ownership to the reviewer, who resolved the [current design](q-typescript-reassessment.md) and prepared one [implementation handoff](q-typescript-implementation-agent-prompt.md). The implementation agent executes and tests that fixed design; the user remains the courier for independent review.
 
 Round 1 debrief evidence: 127 TypeScript tests, 261 Python regressions and 14 runner checks independently pass, yet additional family-level CLI mutations still produce false passes and lost failures. Permanent resource gaps can conceal incorrect individual assertions. Declaring one reducer does not prevent comparisons omitted upstream. Earlier reviews also missed existing paths; distinguish expanded review coverage from new requirements or regressions. Full reproductions, retained fixes, environment details and unmeasured evidence are recorded once in the standing review. No time/cost improvement or language-effect claim is established by this round.
 
@@ -318,6 +318,14 @@ Debrief this intervention using evidence: matrix rows actually exercised, counte
 Latest independent checks at `5becb043`: 209 tests pass with TemporaryDirectory warnings; docs validation passes. R5 controls preserve expected outcomes. New reproduction families and their code entry points are recorded once in the consolidated review, not duplicated in a new chronological task list here. No private qualification experiments or production changes occurred during this review.
 
 ## Final debrief procedure
+
+### Reviewer-owned design intervention
+
+After `55d6f485`, the user separated responsibilities: the reviewer resolves engineering design; the implementation agent executes it, tests it and supplies evidence; the user remains the courier and scope authority. The five design-review gaps and their closure are recorded in the [standing review](q-typescript-review.md#reassessment-design-review-and-closure). The previous proposal is recoverable in Git; its D-A–D-F questions are not outstanding decisions.
+
+The [current design](q-typescript-reassessment.md) is the intervention to evaluate, not a proven improvement. Record one consolidated delivery/review per implementation assignment, not per internal phase. In the existing receipt, record revision, fixed acceptance family, intended behavior change, independently derived test/control, self-review discovery, reviewer-discovered escape, actual command evidence and unavailable observations. In the final synthesis compare recurrence of failure loss, false positive evidence and unsafe publication before/after this intervention. Separate true code regressions from invalid fixtures and test-oracle defects.
+
+Acceptance requires zero known blockers under C1–C8; “fewer defects” alone does not pass the gate. Test counts, check registrations, longer plans, skill names and green aggregate verdicts are not efficacy evidence. Record effort/cost only where measured, otherwise unknown. Preserve the possibility that the new seam adds complexity without reducing escaped defects. Changes to skills or general tooling require a separately authorized follow-up supported by observed results, not a causal claim about model capability or language.
 
 At completion or a deliberate stop, compare the reviewed revisions with repair receipts and independently verified outcomes. For each recurring issue, distinguish missing/ambiguous instruction, failure to follow explicit instruction, environment limitation, implementation defect, measurement defect and reviewer/handoff defect. Record a contributing cause only when evidence supports it; otherwise retain it as a hypothesis.
 

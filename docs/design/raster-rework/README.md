@@ -6,12 +6,13 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Round 2 is independently reviewed at `6a98cd33`: the complete boundary remains unaccepted despite 177 passing TypeScript tests. The [Round 2 disposition](q-typescript-review.md#round-2-independent-disposition) records lost failures, a display false pass and a rejected-request source overwrite. The two-round repair prompt is retired. The user authorized the [bounded design reassessment](q-typescript-reassessment-agent-prompt.md): reproduce, compare design options and propose verification/migration, then stop for user-mediated independent design review. That reassessment is delivered as the [design reassessment](q-typescript-reassessment.md) at `82184e6c`; it recommends one focused finding-accumulation seam plus a safe publication policy, and it authorizes no implementation. No direct agent loop, new experiments, Python deletion or N1 is authorized. Older prompts are historical evidence, not accumulating instructions.
+Round 2 remains unaccepted; the reassessment delivered in `55d6f485` was reviewed and found five design gaps. The user delegated design ownership to the reviewer. The [decision-complete design](q-typescript-reassessment.md) now resolves those gaps and the [implementation handoff](q-typescript-implementation-agent-prompt.md) is the sole next assignment when forwarded by the user. Old repair/reassessment prompts are retired. No experiments, Python deletion, production N1 or integration are authorized.
 
 | Artifact | Purpose |
 | --- | --- |
-| [TypeScript reassessment prompt](q-typescript-reassessment-agent-prompt.md) | Sole next assignment: documentation/diagnostics only, with implementation approval still required |
-| [TypeScript design reassessment](q-typescript-reassessment.md) | Delivered result at `82184e6c`: seven reproduced/located families, structural cause, two bounded options, recommended seam, publication policy, ordered proposal — proposed and awaiting user-mediated design review |
+| [TypeScript implementation handoff](q-typescript-implementation-agent-prompt.md) | Sole next assignment: implement the fixed design, then stop for user-mediated independent review |
+| [TypeScript reassessment prompt](q-typescript-reassessment-agent-prompt.md) | Retired investigation assignment; original delivery remains recoverable in `55d6f485` |
+| [TypeScript decision-complete design](q-typescript-reassessment.md) | Reviewer-owned design replacing the reassessment proposal: explicit outcomes, safe publication, compatibility, full migration and verification |
 | [Standing TypeScript repair prompt](q-typescript-repair-agent-prompt.md) | Retired after two unsuccessful repair/review rounds; no Round 3 authority |
 | [Standing TypeScript review](q-typescript-review.md) | Baseline T1–T4 family reproductions, independent evidence, subsequent round dispositions |
 | [Consolidated agent prompt](q-consolidated-agent-prompt.md) | Retired handoff executed in the consolidated admission repair |

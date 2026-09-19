@@ -1,12 +1,20 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — Round 2 independently reviewed at `6a98cd33` / `c76d1b2e`; complete decision path not accepted. Two-round repair authority is exhausted. The bounded reassessment is delivered at `82184e6c` and awaits user-mediated independent design review; no implementation is authorized.
+Status: evidence — Round 2 implementation remains unaccepted. Reassessment `55d6f485` required five design corrections; the reviewer resolved them under delegated user authority in the current design. Implementation and independent acceptance are still pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
-Current guidance: [bounded reassessment](q-typescript-reassessment.md), [reassessment prompt](q-typescript-reassessment-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
+Current guidance: [decision-complete design](q-typescript-reassessment.md), [implementation handoff](q-typescript-implementation-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
 
 ## Baseline evidence and retained work
+
+### Reassessment design review and closure
+
+The delivered proposal in `55d6f485` was useful evidence, not implementation-ready design. Independent review identified five gaps: a void/no-op check could appear successful through empty findings; a fixed sibling diagnostic could still overwrite evidence; retention tests derived from production `reads` missed within-check dependencies; the proposed migration did not cover all named mappings; and deferring reproducible-build admission weakened an existing contract. These are design findings, not new measured engine failures.
+
+The user then delegated engineering design ownership to the reviewer. The current [D1–D5 design](q-typescript-reassessment.md) resolves those points: explicit evidence-backed outcomes and runtime rejection of invalid outcomes; immutable publication with uniquely owned fallback diagnostics; independently derived same/cross-record failure-plus-gap cases; complete mapping ownership and removal of the transition adapter; and retained pinned-build correspondence tied to measured artifact digests. Decision schema version 2 and fresh outputs are deliberate tooling compatibility choices. No implementation has yet proved them.
+
+Implementation now follows one [fixed handoff](q-typescript-implementation-agent-prompt.md), not the retired Round 1/2 prompt. Design clarity does not establish acceptance: independent review must still verify behavior against C1–C8. Do not convert this design closure into a passing qualification receipt.
 
 The reviewer independently verified the TypeScript build, 74 emitted tests, 14 stub-runner checks, documentation validation and diff checks. The initial sandboxed test run failed because child-process stderr capture returned `EPERM`; an authorized unrestricted rerun passed all 74. Record environment failures separately from code failures; never weaken stderr assertions to accommodate the sandbox.
 

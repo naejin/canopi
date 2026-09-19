@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — migration and both repair rounds delivered; independent review at `6a98cd33` finds remaining C1–C8 blockers. See the [Round 2 disposition](q-typescript-review.md#round-2-independent-disposition). Claims below are revision-linked implementer reports, not whole-boundary acceptance. The user authorized [design reassessment](q-typescript-reassessment-agent-prompt.md), not Round 3; the reassessment is delivered at `82184e6c` as [q-typescript-reassessment.md](q-typescript-reassessment.md) and awaits independent design review. Q remains unqualified.
+Status: evidence — migration and both repair rounds delivered; complete decision path remains unaccepted. Historical implementation claims below are not acceptance. Reassessment `55d6f485` was reviewed; the [reviewer-owned design](q-typescript-reassessment.md) and [implementation handoff](q-typescript-implementation-agent-prompt.md) replace the unresolved proposal. No new implementation is claimed; Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).

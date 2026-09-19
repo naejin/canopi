@@ -1,254 +1,170 @@
-# TypeScript qualification — bounded design reassessment
+# TypeScript qualification — decision-complete design
 
-Status: proposed — evidence-backed reassessment delivered for user-mediated independent design review. No implementation, Round 3, evaluator rewrite or language change is authorized by this document.
+Status: proposed — design complete under the user's delegated engineering authority; ready for implementation through the user-forwarded handoff. No implementation or independent acceptance is claimed.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
-Current guidance: [reassessment prompt](q-typescript-reassessment-agent-prompt.md), [Round 2 disposition](q-typescript-review.md#round-2-independent-disposition), [C1–C8 contract](q-admission-acceptance.md#stable-acceptance-matrix), [assertion evidence map](../../../scripts/raster-qualification/assertion_evidence_map.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md#round-2-debrief-inputs).
+Current guidance: [implementation handoff](q-typescript-implementation-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [standing review](q-typescript-review.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
 
-This document answers one question: why known failures still disappear and inconsistent observations still pass after two repair rounds, and what bounded change would stop the recurrence. It is not a repair report and not an execution prompt. It contains no new producer observation, no benchmark run, no engine build and no private reconciliation; every reproduction below is a local mutation of the synthetic helper corpus through the emitted CLI.
+## Authority, outcome and baseline
 
-## Inspected revision and method
+The user delegated design ownership to the reviewing agent after independent review of the reassessment delivered in `55d6f485`. This document replaces that proposal's unresolved D-A–D-F choices and S1–S7 sequence. Its historical investigation remains recoverable at that commit; [Round 2 findings and reassessment discoveries](q-typescript-review.md#round-2-independent-disposition) remain evidence, not superseded facts.
 
-| Item | Value |
+Outcome: the single TypeScript decision path preserves every independently decidable failure and reason, requires affirmative evidence for success, and cannot overwrite input files on either successful or rejected requests. Implement against unchanged C1–C8, not against a target count of tests or a prescribed distribution of private verdicts. Complete the bounded implementation and stop for independent review via the user. Harness acceptance is not Q qualification, integration, release or permission for N1.
+
+Inspected baseline: `55d6f485`; TypeScript implementation is still `c76d1b2e`. Preserve the full branch stack, prior fixes and approved UI `0e696722`. Relevant sources: `scripts/raster-qualification/ts/src/`, its tests, `requirements.json`, `candidates.json`, the runner and retained Python regression cases. No requirement, pin, scientific tolerance, resource budget or approved UI changes.
+
+Fixed scope: TypeScript decision code/tests, the thin shell runner and stub tests, assertion evidence map and affected docs. No new dependencies, second evaluator, general-purpose validation DSL, engine experiment/build/download, production frontend/Rust work, private-evidence regeneration, Python repair/deletion or producer migration. TypeScript remains tooling authority; native raster operations remain Rust/native GDAL. Keep frozen Python as reference material, never as the acceptance oracle. No user product decision remains open for this slice.
+
+## Evidence and structural diagnosis
+
+The reviewer independently ran the existing 177 TypeScript tests, 261 Python tests and 14 runner checks at Round 2; they passed despite these real-CLI counterexamples:
+
+| Family | Failure to eliminate |
 | --- | --- |
-| Checkout | `82184e6c` on `feature/raster-html-references` (two commits above implementation `c76d1b2e`, one above the reviewed checkout `6a98cd33`) |
-| Reviewed implementation | `c76d1b2e`; reviewed checkout `6a98cd33` |
-| Source changes to `scripts/raster-qualification/ts` since `c76d1b2e` | none (`git diff --stat c76d1b2e HEAD -- scripts/raster-qualification/ts` is empty) |
-| Build identity | verified, not assumed: `tsc -p scripts/raster-qualification/ts/tsconfig.json --outDir <temp>` exited 0 and `diff -r scripts/raster-qualification/ts/dist <temp>` was empty, so the emitted `dist/` the reproductions ran against is the compilation of the inspected revision |
-| Reproducer | untracked scratch driver over `ts/tests/contractFixture.ts` (`roleReports()`, `SOURCE_ROLES`, `NOW`) plus `ts/tests/fixtures.ts` (`fixtureManifest()`, `candidatePins()`), run through `ts/dist/src/cli.js` in fresh helper-owned temporary roots; deleted before commit |
+| R2-A | A failed tile becomes inconclusive when `ok` is missing; a page error disappears when a render count is missing |
+| R2-B | Missing coverage hides another artifact's wrong version; missing built revision hides a present wrong pin |
+| R2-C | One requested/rendered tile plus 100 latency samples passes display qualification |
+| R2-D / N-2 | Rejection overwrites an input in request mode with invalid `now`, or directory mode with unreadable contract |
+| N-1 | An absent `routeRole` is classified as a separately labelled reference measurement |
 
-Method notes that constrain what may be concluded:
+N-1/N-2 were demonstrated by the reassessment agent; the standing review distinguishes that attribution. Its build-identity verification and Python comparisons are reported evidence, not newly rerun measurements here. No real engine or platform run supports this design.
 
-* the control is a **synthetic, internally coherent corpus**, marked `synthetic: true` in the request so the run records it as a control; the flag can only demote an overall `pass`, and no requirement verdict below depends on it;
-* a whole-Q non-pass does not validate individual requirements, so **every case below asserts one requirement and one named reason**, never the overall exit code alone;
-* the sweep is finite and targeted. It is not a proof that the remaining mappings are correct, and this document does not claim one;
-* each case preserves every input byte except the disposable copy of the file a case intentionally aims at;
-* the assignment named **craft**, **codebase-design** and **write-plan**. The first two were applied; `write-plan` is **not present in this session's available skill catalog**, so its guidance could not be loaded and the plan structure here follows the assignment's required sections and the repository's delivery workflow instead. `tdd` informed the test-first ordering in the implementation proposal; no RED/GREEN claim is made for this documentation-only delivery.
+There are three mechanisms, not one universal cause: independent comparisons are skipped before reduction; observations lack required relationships/coverage; publication lacks ownership on rejection paths. A central precedence function fixes none of these alone. Choose a focused check-execution seam plus a separate publication module, preserving existing parsing/admission/reduction. More visible checks are a review aid, not proof of semantic correctness. The claim that this will reduce review cost remains a hypothesis for the debrief.
 
-## Reproductions from the coherent positive control
+## D1 — explicit check outcomes and one verdict owner
 
-Control (`exit=1`, document `verdict=inconclusive`, `synthetic=true`, every source byte-identical before and after):
+Use `evidence/checks.ts` as a small internal seam; this is ordinary TypeScript, not a schema interpreter. Each requirement owns its declared check inventory. Each check has a stable id, exactly one contract assertion id, and a pure evaluation over the already-read source snapshots and declared expectations. A check evaluates one independently decidable fact (for example a run's failed-tile count, not its entire rendering verdict). Checks may share pure parsing helpers, never another check's mutable findings.
 
-| Requirement | Verdict |
+The evaluator returns a required `CheckOutcome` with these semantics:
+
+- `satisfied`: strict boolean, explicitly stating whether affirmative applicable evidence established this fact;
+- `evidence`: source role, snapshot digest and concrete field/record references supporting the result, plus declaration references where a comparison uses them;
+- `failures` and `gaps`: separate lists of attributed reasons; both may exist and neither discards the other.
+
+There is **no default success**. A pass requires `satisfied=true`, nonempty applicable evidence, and no failures or gaps. Unsupported obligations return `satisfied=false` plus their specific gap. A deliberate not-applicable policy needs its supporting declaration/observations; it is not an empty success. An omitted/undefined/malformed outcome, a thrown check, or contradictory success-plus-failure is a structured internal-check defect: fail closed, retain other findings, continue other independently executable checks, exit nonzero. Do not call it a measured engine failure. A well-formed unsatisfied outcome with no explanation becomes an explicit gap, never pass. Validate evidence references against the same snapshots; caller-supplied strings or an evaluated check id alone cannot establish support.
+
+The driver owns execution, outcome validation, attribution, coverage and conversion to the existing `Findings`/precedence helpers. It returns derived assertion verdicts, reasons and check receipts; mappings no longer write independent verdicts for migrated assertions. `decide.ts` combines those results with existing source admission. An unadmitted source cannot qualify a requirement, but its readable failures remain observable. No mutable aggregate findings object is passed between checks.
+
+Define mandatory check ids before inspecting supplied observations. Every contract assertion has at least one required check or an explicit unsupported check. Reject duplicate/unknown ids and missing implementations; absence of coverage is a named gap. Cover the declaration's required artifact/fixture set, not just supplied entries. Per-run/per-record facts evaluate **all** records without stop-on-first-gap; preserve indices/keys for diagnostics and reject ambiguous duplicates. Empty required observations cannot pass. Required-set coverage is a separate check from comparisons against present records.
+
+Registering one check for an assertion does not establish semantic completeness: the independently authored acceptance cases below and C1–C8 still govern which facts must exist. The check inventory is reviewable code; the evidence map cites it but does not generate expected test outcomes. `reads` metadata is optional documentation, not execution authority or a sufficient test oracle.
+
+### Same-record and cross-record retention
+
+A check may stop a comparison only when one of **that comparison's** operands is unusable. For example:
+
+- Compare a present claimed pin to the declared pin even if built revision is missing.
+- Compare each present version even if another required artifact is absent.
+- Read a recorded failed-tile count and page errors even if `ok` or other counts are missing.
+- Retain a budget violation in an unsampled record and when a separate record is malformed.
+- Keep raw recorded failures even when admission/provenance has a gap.
+
+Malformed present values fail; absent values gap, subject only to documented unavailable-value exceptions. Do not coerce booleans, counters or role labels. Readable independent contradictions still fail alongside malformed/missing siblings.
+
+## D2 — domain checks and compatibility
+
+All 12 requirements and their 68 existing assertion ids remain in scope. Do not invent passing host/lifecycle/cache observations. Migrate unsupported assertions as explicit gaps with their reasons. Preserve the additional display-disk-cache and staging-policy gaps attached to Q-RES-1 even though they are not new assertion ids.
+
+| Area | Required decisions |
 | --- | --- |
-| `Q-ART-1`, `Q-LOCAL-1`, `Q-PREP-1`, `Q-CRS-1`, `Q-DISPLAY-1` | `pass` |
-| `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`, `Q-HOST-1`, `Q-RES-1` | `inconclusive` |
+| Display | Independently evaluate run outcome, failed tiles, page errors, counters and their reconciliation. Each required cold/warm run needs at least 100 requests and 100 finite nonnegative individual latencies; sample count equals successfully rendered tile count for this producer, and rendered + failed equals requested. Retain recomputed median/p95/max, cache state and 50 ms UI bound. Fix positive fixtures to match these relationships: the old 128-render/100-sample control is not an oracle |
+| Resources | Accept only explicit `candidate`/`reference` role labels consistent with the existing route contract. Absent role is a gap; null, invalid role or contradictory identity fails. Never infer reference from “not candidate”. A reference-label assertion cannot pass on unlabelled data; missing reference evidence remains a gap under the existing contract. Check each applicable counter/budget independently across every candidate record |
+| Artifacts | Independently check declared coverage, each version, claimed pin, observed revision and build evidence. D-F below preserves the reproducible-build route. Do not use prose notes or a boolean as correspondence |
+| Numeric/preparation | Preserve strict window limits, transport identity, ledger corroboration, both tiling and block-bound checks, cell/metadata preservation and before/after sidecar observations. Missing sibling operands cannot hide a known violation; do not infer additional real capabilities from adjacent named assertions |
+| Members/values/CRS/lifecycle/host | Reuse relevant named-check helpers and admitted evidence semantics, but return explicit outcomes through the same driver. Required sources and unsupported facts remain mandatory. Negative-control success never proves a positive capability |
 
-The five passing requirements are the ones whose assertions a producer observation can satisfy; the seven inconclusive ones carry the known permanent gaps. The contract rows that govern each case are C1 (strict leaves), C3 (required identity/correspondence), C4 (explicit evidence per assertion), C5 (per-run reductions and plan bounds), C7 (CLI authority and publication) and C8 (cross-layer invariants).
+### D-F — reproducible-build correspondence is retained
 
-### Round 2 families, re-reproduced
+The main plan already permits obtainable published artifacts **or** reproducible pinned builds. Absence of a producer for build evidence does not remove that admission path. Use the retained Python cases to identify regressions, not to copy weaknesses.
 
-| Case | Expected per C1–C8 | Observed | Reasons recorded |
-| --- | --- | --- | --- |
-| Control | requirement passes | `exit=1`, `Q-DISPLAY-1=pass` | none |
-| `failedTiles=1` on the cold run | C5/C8: `Q-DISPLAY-1` fails | `exit=1`, `Q-DISPLAY-1=fail` | `run cold rendered 128 tile(s) with 1 failure(s)` |
-| the same failure **plus** `ok` deleted on that run | C5/C8: the failure survives an independent gap | `exit=1`, `Q-DISPLAY-1=inconclusive` | `run cold does not record whether it rendered successfully`; the tile failure is gone |
-| `pageErrors=['render crashed']` **plus** `tilesRendered` deleted | C4/C5: the recorded page error is a failure | `exit=1`, `Q-DISPLAY-1=inconclusive` | `run cold does not record its rendered and failed tile counts`; the page error is gone |
-| `verifiedArtifacts[0].version='999'` | C3: `Q-ART-1` fails | `exit=1`, `Q-ART-1=fail` | `whitebox-wasm was verified at version "999" but the route declares "0.5.1"` |
-| the same wrong version **plus** the second verified record removed | C3/C8: the wrong-version comparison survives the coverage gap | `exit=1`, `Q-ART-1=inconclusive` | `no bench-verified version is recorded for cog-tiler-wasm`; the wrong version is never compared |
-| `sourceCorrespondence[0].pinnedRevision` set to forty zeroes **plus** `artifactRevision` deleted | C3: a present claimed pin that contradicts the declaration fails, and only the built-revision comparison may be blocked | `exit=1`, `Q-ART-1=inconclusive` | `whitebox-wasm@0.5.1: the correspondence record does not record both revisions`; the pin conflict is never compared |
-| cold run `tilesRendered=1`, `tileRequests=1`, 100 latency samples, `failedTiles=0` | C5: `pass` requires the plan's per-run tile-request minimum and count/sample reconciliation | `exit=1`, `Q-DISPLAY-1=pass` | none — the run qualifies with one rendered tile of one request |
-| request `now='invalid'`, `--out` set to one of the request's own source paths | C7: the input is preserved; the run refuses before writing | `exit=2`, source replaced by a `kind:'rejected-input'` document | the collision is not detected |
-| negative control: valid request, same `--out` | C7: refused before writing | `exit=2`, source byte-identical, no document written | collision detected |
+For each declared artifact/version, accept either a recorded published revision matching the declared pin, or a fully evidenced replacement built from that pin. Preserve the existing recorded vocabulary: `builtArtifact.{name,version,sha256}`, `sourceRevision`, `buildEvidence.{command,sha256}` (retain optional log reference), and strict `buildReproduced=true`. The claimed pin must still match the independent declaration; build evidence cannot excuse a wrong claimed pin.
 
-### Families found in this reassessment
+For the replacement route, require a matching name/version and valid SHA-256 in the q1 `verifiedArtifacts` entry, equal to `builtArtifact.sha256`. Cross-check that digest against `identity.artifact.sha256` on every declared consuming source using that artifact. Add these optional digest leaves to the existing admission vocabulary if absent; their presence is mandatory **only for qualifying this build route**. Compare all available identities even if another is missing. No declaration or digest is fabricated for legacy reports.
 
-These are new here, not Round 2 findings. They matter because the assignment asked for an audit of every mapping, and because they show the same family outside the three files the review named.
+Wrong source revision, wrong name/version/digest, false reproduction, malformed present build fields or boolean-only “proof” fails. Missing proof alone gaps when no independent violation is established. A recorded published mismatch without a valid replacement remains fail; a complete pinned replacement explains that published mismatch, but never other identity conflicts. The build receipt's command and digest establish recorded correspondence, not cryptographic attestation that a build occurred. Preserve current pin/registry-integrity requirements. Validate with small synthetic controls only; do not run an engine build or read arbitrary log paths from reports.
 
-| Case | Expected per C1–C8 | Observed |
+### Decision document and consumers
+
+Bump only `DECISION_VERSION` to **2** because explicit check receipts and publication behavior are a deliberate tooling contract change. Keep authored `requirements.json` version and all scientific ids unchanged. Existing decision fields remain; add per-requirement check receipts with check id, assertion id, derived verdict, evidence references and separate failure/gap reasons. These receipts are outputs, never admissible input. Preserve programmatic `runQualification` and CLI entry modes; update relevant tests and operating commands together.
+
+Inspect consumers in the runner, stub tests, TypeScript helpers and documentation; update version expectations where present. Do not build a v1 bundle reader or maintain two evaluator authorities. Version-1 historical documents stay historical. Missing legacy provenance remains unknown. During migration compare known affected outcomes and unrelated requirements, normalizing version/check receipts, times and temporary paths; old output is a regression baseline, not expected scientific truth.
+
+## D3 — publication that never overwrites
+
+Choose immutable outputs: **an existing destination is never replaced**, regardless of whether its contents resemble a prior decision. There is no `--force` and no “safe-looking sibling” exception. This strengthens the plan's existing fresh-output-root rule. A caller may re-evaluate unchanged reports into a fresh decision path; it must not delete reports or old decisions to make this invocation work.
+
+Use one `publication.ts` module for successful decisions and rejected-input diagnostics:
+
+1. Collect argument inputs immediately. In directory mode include every `REPORT_FILES` path before validating any file. In request mode recover all structurally available source paths before semantic validation; retain them even when `now`, contract or another entry fails. A partial read-set stays explicitly partial. Reuse parsed snapshots; do not re-read request bytes to make a different safety decision.
+2. Refuse a destination matching any known input, even when that input is absent; compare resolved paths and existing canonical aliases. Treat alias-resolution errors as inability to establish safety, not as permission. Refuse existing files/directories/symlinks (including dangling links) without modifying them. No need to prove all unknown aliases: the no-overwrite rule also protects existing hard-linked inputs.
+3. With a complete read-set and absent non-input destination, serialize once into an exclusively created staging file in a new helper-owned directory beneath the destination parent. Close the complete file, then publish atomically **without replacement** (a same-filesystem hard-link operation followed by unlinking the owned staging name is the selected Node implementation). A competing creator causes failure, never truncation. Do not fall back to overwriting rename/write if the filesystem cannot support publication.
+4. For a collision, existing output, partial/unrecoverable read-set or rejected request with unsafe requested output, create a fresh exclusive diagnostic directory under the requested output's parent. Write a non-qualifying `kind:"rejected-input"` document there using the same safe publisher; report its actual path on stderr. Never choose a fixed `<out>.rejected.json` name. No qualification verdict/requirement array is published as a substitute success.
+5. If the parent cannot be used or diagnostic creation/write fails, emit actionable stderr, exit 2 and explicitly state that no diagnostic was saved. Do not claim a path before successful publication. Clean only staging paths created by this invocation; leave existing paths and completed fallback diagnostics untouched.
+
+Known malformed inputs yield structured diagnostics and nonzero exits, not stack traces. Successful publication exits 0 only for full eligibility, 1 for an ordinary nonqualifying decision. Input/internal-check/publication defects exit 2; independent measured failures remain recorded. Programmatic decisions report internal defects consistently even without file publication.
+
+Interruption before publication leaves no final file; after publication the final file is complete. Best-effort cleanup removes only owned staging paths; abrupt termination may leave an owned staging directory, which is not a decision and is never scanned as evidence. No claim of power-loss durability or defense against malicious concurrent directory replacement. Output creation races and ordinary aliases are in scope. A failed or interrupted process cannot be treated as qualification by the runner.
+
+The runner must preflight its final output's freshness **before launching producer steps**, then use the same fixed `$OUT/q-decision.json` path in a fresh run root. Existing output is a nonzero refusal, not automatic deletion. Final CLI status remains authoritative; no stale decision can rescue a failed step. Verify only with stubs; no private run.
+
+## D4 — independent verification contract
+
+C1–C8 are unchanged. Add a test-only acceptance-case inventory derived from those obligations, the main plan and the findings—not by importing production check ids, `reads`, success lists or the Python evaluator. Each case identifies the obligation, fixture/control, independently expected assertion/requirement outcome, expected reason and unaffected requirements. Relate it to check ids only for traceability after deriving expectations.
+
+Use vertical TDD cycles, not all tests first. The inventory specifies cases; implement one behavior and observe its intended RED before its GREEN. Existing tests are retained or replaced only when the old expectation contradicts the accepted contract, with that correction documented. No deletion of Python tests in this work.
+
+| Acceptance case | Required observable outcome |
+| --- | --- |
+| No-op, undefined/malformed result, nonexistent evidence reference, duplicate check id or thrown check | No pass; structured internal defect or explicit coverage gap as defined by D1; unrelated independent checks and reasons retained |
+| Deliberate unsupported check | Specific gap persists; no invented failing-engine control or positive fixture required |
+| Failure alone, then same failure plus an independent gap | Same failure and identifying reason survive at assertion and requirement levels; gap also recorded; test same record, another record in both orders, another source and partial declaration where applicable |
+| Missing a true comparison operand | Only that comparison gaps; independently executable comparisons still run |
+| Samples and counters | Coherent 100/100/100 control passes applicable display checks; 1 request/1 render/100 samples fails; negative sample fails; each counter removed/malformed/contradictory independently blocks or fails correctly |
+| Artifact/build alternatives | Direct match passes; full pinned replacement tied to actual measured digests passes correspondence; wrong pin plus missing revision fails; missing artifact plus another wrong version fails; unsupported boolean-only build claim and mismatched consuming digest fail |
+| Role attribution | Correctly labelled candidate/reference control; label removal cannot create a reference pass; invalid labels fail; reference memory never substitutes for candidate memory |
+| Publication | Both entry modes, valid and rejected requests, existing input/output, malformed/truncated request, partial source list, aliases, dangling symlink, creation race, write failure and interruption: existing bytes unchanged; only complete newly owned documents published; no zero exit on defects |
+| Driver coverage and final integration | Every current requirement/assertion covered by explicit outcomes or explicit unsupported gaps; no old direct-verdict mapping remains; no full-Q synthetic qualifying bypass |
+| Regression sensitivity | Independently remove outcome requirement, skip a comparison, suppress a failure reason, infer a reference label, and bypass no-clobber in isolated copies; each applicable test detects the behavior change, or documented redundancy is tested as a group |
+
+The retention matrix must cover missing/malformed leaves **within** each check's inputs as well as unrelated leaves, and distinct records matching the same wildcard path. Do not merely enumerate mutations outside declared `reads`. Use the narrower interface for driver defects and filesystem fault injection, plus real raw-report → CLI coverage for each domain/publication family. Never mock admission, mappings or reduction to establish their correctness.
+
+Passing controls must be physically coherent and supported by producer semantics. Unsupported requirements need no fabricated overall pass. Validate negative controls only against rejection obligations. Limits/platform gaps are reported honestly; zero-result sensitivity probes do not count as coverage. Finite coverage is not proof of absence of all defects.
+
+## D5 — implementation sequence and module ownership
+
+One implementation agent owns this slice; no subagents. Preserve the current branch and accepted stack. Each phase is an internal milestone, **not another user approval or courier round**. Use focused reversible commits; update evidence-map rows and relevant docs in the same phase as behavior.
+
+| Phase | Scope and owner | Exit evidence |
 | --- | --- | --- |
-| `--reports <dir> --out <dir>/q1-artifacts.json`, valid contract (negative control) | C7: declared report files are inputs; refuse and preserve | `exit=2`, report byte-identical, no document written |
-| the same destination with an unreadable contract | C7: the rejection diagnostic is emitted, but not over an input | `exit=2`, the declared report file is replaced by a `kind:'rejected-input'` document |
-| `measurements` reduced to the labelled candidate record only | C4: no reference measurement exists, so the assertion is unestablished | `Q-RES-1=inconclusive`; `measurement-is-of-candidate-route=pass`; `reference-measurements-labelled-separately=inconclusive` |
-| the same, with the candidate record's `routeRole` deleted | C4/C8: removing a label cannot create evidence | `Q-RES-1=inconclusive`; `measurement-is-of-candidate-route=inconclusive`; `reference-measurements-labelled-separately=**pass**` |
+| S1 — protect publication | New `publication.ts`; `cli.ts` / `request.ts`; runner freshness guard and stub tests; decision version 2 routing | Valid/rejected collision controls, no-clobber/diagnostic/fault tests pass; runner never invokes producers with a stale output; no evaluator semantics changed |
+| S2 — first complete requirement | `evidence/checks.ts`, `mapping.ts`, `registry.ts`, `decide.ts`, `qualification.ts`; migrate **all display assertions** and R2-A/R2-C, not just the failing branches | Explicit outcome and no-op/throw guards proven; coherent display controls and retention matrix pass; only documented display/output-schema changes |
+| S3 — identity/resource families | Fully migrate `artifactCorrespondence.ts`, `resources.ts` and supporting admission checks for D-F | R2-B/N-1, direct and reproduced-build controls, per-run budget retention and unsupported resource gaps verified |
+| S4 — remaining mappings | Fully migrate `numericTransport.ts`, `preparation.ts`, `members.ts`, `values.ts`, `crs.ts`, all three `lifecycle.ts` mappings and `host.ts` | All remaining assertion outcomes registered and explicit; required source/fixture coverage and same-family retention checks pass; missing real observations remain gaps |
+| S5 — remove transition and verify | Remove the legacy mapping adapter/direct verdict writers; finish map/drift coverage, CLI/API parity and full suite; update one existing receipt/review/debrief | All 12 requirements/68 assertions use the driver, no competing results; C1–C8 evidence and limitations delivered for independent review |
 
-The last pair is a false individual pass produced by deleting a label: the record whose own `route` text still reads `candidate (wasm ranged transport)` is reclassified as a *separately labelled reference measurement* because the consumer tests `routeRole !== 'candidate'`. The producer this repository ships emits no `routeRole` on any measurement — the candidate record carries only its prose `route` and its per-fixture counters (`measure.py`, candidate measurement append) — so this is the shipped report's shape, not a hypothetical one.
+During S2–S4 a tagged registry entry is either legacy or checked, never both; only checked entries use the new driver. The tag is internal and temporary, never a user bypass. Migrate a whole requirement atomically; do not mix two writers for its assertions. Legacy tags are removed by S5 and final coverage tests forbid them. Existing admission and required-source logic remain active for both branches. Helpers may be reused; do not duplicate a second evaluator. `sources.ts`, strict JSON/declaration parsing and `verdict.ts` are retained unless a demonstrated in-scope contract violation requires a focused regression repair.
 
-### Hypotheses that did not survive re-measurement
+Use source snapshots rather than new filesystem reads in mappings. `reduce.ts` may supply leaf parsing/budget helpers but no competing final assertion authority. Keep decision provenance/reasons readable throughout migration. No blank “coverage” registration around an unmodified large mapping: its independently decidable facts must actually become independent checks.
 
-`decide.ts` merges the shape's gaps and then discards them in a no-op loop (`for (const gap of merged.gaps) void gap;`). Read alone, that looks like the same family: a computed finding thrown away before reduction. It is not. `admitReport` is called with the merged shape and reports those gaps itself, so a deleted `identity.runId` — the one gap that only `checkReportShape` produces — does reach the decision. Measured: `Q-LOCAL-1` moves from `pass` to `inconclusive` and the `runId` reason appears. The loop is dead code with a misleading comment, not an evidence loss. It is reported here as a review-coverage observation, not a defect.
+Rollback is a targeted revert of the affected migration commits and their dependants, never a reset of the accepted branch or deletion of evidence. Reverting a safety fix restores an unaccepted state, not a qualified baseline. Do not integrate partial migration as accepted delivery.
 
-## Structural trace from bytes to exit code
+## Gates, stop conditions and handoff
 
-The path is: raw bytes → `sources.ts` (`readSource`: one read, digest, absent ≠ corrupt) → `report.ts` (`checkReportShape`, `readAdmissionFacts`) → `admit.ts` (`admitReport`) → `decide.ts` (`prepare`, then `decideRequirement` per requirement) → `evidence/*.ts` (one mapping per requirement) → `verdict.ts` (`Findings`, `reduce`, `worse`) → `qualification.ts` (`runQualification`, `overallVerdict`) → `cli.ts` (publication and exit code). `reduce.ts` holds the per-run and across-run reductions that `resources.ts` and the display mapping consult.
+Run from the repository root after completing code changes:
 
-The single reduction is correct and total: `reduce(failures, gaps)` returns `fail` if any failure exists, then `inconclusive`, then `pass`, and the same rule is applied at every layer. **The defect is not in the reduction. It is that the mappings decide the *reachability* of each check with imperative control flow, and a check that never runs appends no finding, so the reducer never sees it.** Four variants of that one cause are demonstrated above:
-
-1. **Mutually exclusive chain.** `display.ts` rendering facts are an `if / else if / else if / else if / else` chain, so `pageErrors` and the render/request reconciliation live only in the final branch and are lost whenever `ok`, `tilesRendered` or `failedTiles` is unusable. The family predates the migration: the retained Python reducer also breaks out of its counter loop at the first missing counter and therefore never evaluates `failed > 0` for that run.
-2. **Early return on a coverage gap.** `verifiedVersions` returns `inconclusive` as soon as one required artifact lacks a verified version, so the versions it *does* hold are never compared against the declaration.
-3. **Conjunction of independent preconditions.** `pinnedCorrespondence` requires both `pinnedRevision` and `artifactRevision` to be present before comparing either. The claimed-pin comparison needs only the claimed pin and the declaration; only the built-revision comparison needs the built revision. The same conjunction exists in the retained Python gate.
-4. **Requirement inferred from what was supplied.** `resources.ts` derives "reference measurements are labelled separately" from `routeRole !== 'candidate'` rather than from a declared role, so absence of the label is read as the label. `display.ts` checks the length of the latency list but never ties it to the tile counts, so a one-tile run with 100 samples satisfies a per-run sample minimum; and `DECLARATIONS` has no key for the plan's "at least 100 tile requests in each cold/warm run" ([main plan](../raster-data-analysis-rework.md), resource step), so no verdict can depend on it.
-
-The mappings that do **not** show the family are as informative as the ones that do. `values.ts`, `members.ts`, `crs.ts` and `lifecycle.ts` set every assertion unconditionally from its own evidence through the accumulating helpers `named`/`allNamed`; `reduce.ts` enforces every budget on every record whether or not the record sampled correctly; `lifecycle.ts` declares its assertions, its producer names and its unmeasurable obligations as three explicit lists. Those are the target shape, already present in this codebase, for three requirements and one reducer.
-
-Two further asymmetries are worth recording without overstating them:
-
-* `resources.ts` reports `sampleCount === 0` as "does not record a positive sample count", i.e. a present zero read as absence, while `reduce.ts` classifies a present `null` as malformed rather than missing. Both are severity-direction choices, not demonstrated false passes;
-* `numericTransport.ts` skips a window record whose `classification` is not `measured` without recording that it skipped it. No measured claim is lost by that skip, so it is an analogous risk rather than a demonstrated defect;
-* the artifact required set is derived twice with different filters (all declared artifacts for the inventory assertion, declared-minus-unpinned for the correspondence assertion). The two agree today only because no currently declared artifact is in `UNPINNED_ROLES`; a future unpinned artifact would make the inventory assertion unsatisfiable while the correspondence check fails any record naming it.
-
-## Required consumed evidence and dependencies
-
-The per-assertion inventory is not missing: [`assertion_evidence_map.md`](../../../scripts/raster-qualification/assertion_evidence_map.md) is active and records, for each of the 68 contract assertions, the evidence that decides it and what an absent observation means. The reassessment's finding is about the **tie between that inventory and the code**, not about its existence. Three concrete disagreements were measured:
-
-* the map's `runs-report-successful-rendering` row names `ok`, `tilesRendered` and `failedTiles`; the code additionally reads `pageErrors` and `tileRequests`, and the map does not record either, so the row that a reviewer would check against C5 is silent about the check that R2-A and R2-C defeat;
-* the map's `reference-measurements-labelled-separately` row says "the presence of reference-labelled records", which is weaker than the assertion's own name: presence of *unlabelled* records satisfies it in the code. The retained Python gate instead keeps an explicit `undeclared` bucket, refuses a pass while any measurement records no role, and has a test for it (`tests/test_qualification_gate.py`, `test_measurement_without_a_declared_role_is_not_candidate_evidence`);
-* the retained Python reducer reconciles `rendered` tiles against the individual sample count per run, a check the TypeScript display mapping does not perform. R2-C is therefore a **migration regression with a retained oracle**, not a new specification gap. Its second half — the plan's ≥100 tile requests per run — is checked by neither implementation.
-
-Dependencies each comparison actually needs, separated from what it has been written to require:
-
-| Comparison | Needs | Must not be blocked by |
-| --- | --- | --- |
-| claimed pin vs declared pin | the record's claimed pin, the declaration's pin | a missing built revision, a missing coverage record for another artifact, a `matches` boolean |
-| built revision vs declared pin | the record's built revision and the declaration's pin | nothing beyond those two; a missing built revision gaps *this* comparison only |
-| version verified vs declared version | each required artifact's own record | another artifact's missing record |
-| per-run count reconciliation | that run's own counters | another run's missing counters |
-| per-run sample sufficiency | that run's own samples and tile counters | any other run |
-| route attribution | the record's declared role and its own route text | any other record |
-
-Producer negative control and positive capability stay distinct and must stay distinct under any change: `expected-rejection:`-scoped failure strings are the producer's record that a deliberately bad input was rejected (`admit.ts`, `NEGATIVE_CONTROL_PREFIX` and the `positiveFailures` / `negativeControlFailures` split). A negative control may support only rejection assertions, and the contract is explicit that "an expected rejection is successful execution of that control, not a positive capability". A check inventory that reads a control scope for a capability assertion would be a new false-pass channel.
-
-Evidence that exists in this repository but is **not** in the consumer's vocabulary is a third category and should be reported as such rather than as missing measurement: the shipped q6-resources producer records the route as prose and emits no `routeRole`, no per-record sampling cadence and no per-record counters, so `Q-RES-1`'s five assertions are undecidable from the report this checkout can produce, while the consumer reports them as unrecorded rather than as a producer/consumer vocabulary mismatch. Unavailable evidence that stays unavailable: the 512 MiB display disk-cache bound, the staging/free-space policy, the local-bridge numeric measurement, the Desktop WebView host observation, and the six lifecycle/member/value/host assertions already listed as permanent gaps. None of them is created or removed by this reassessment.
-
-## Output ownership and publication policy
-
-`cli.ts` is the only writer in the decision path (verified by grepping every `writeFileSync`, `mkdirSync`, `renameSync`, `unlinkSync` and stream constructor in `ts/src`): the decision document and the `kind:'rejected-input'` diagnostic. Every other module reads.
-
-The defect is a derivation order, not a missing check. The read-set is built from the four argument paths, and the request's own source paths are added **after** `readRequest` returns a request object. `readRequest` returns `QualificationRequest | string`, so every structured validation failure — including a failure that occurs *after* the source list was fully parsed, such as the reproduced `now='invalid'` — discards the facts the collision guard exists to use. The rejection path then evaluates the guard against a read-set that omits the sources and writes the diagnostic to `--out`. The guard therefore protects exactly the runs where publication is least dangerous (a decision whose inputs are known) and not the runs where it is most dangerous (a refusal that knows nothing) — even though the refusal also publishes, through the same `--out` and the same `writeFileSync`.
-
-The same derivation order makes the directory mode protectable by accident rather than by construction: with a valid contract the built request registers all nine report paths and a collision is detected; with an unreadable contract the request is never built, no source path is registered, and a declared report file is replaced. In directory mode the source set is statically declared (`REPORT_FILES`), so it is knowable before any validation at all; in request mode the `sources` array is structurally readable before any semantic validation.
-
-Proposed policy, one rule with three parts:
-
-1. **Compute the read-set before publishing anything, from the strongest available source.** Argument inputs (`--request`, `--contract`, `--fixture-manifest`, `--pins`) always; in directory mode, the nine declared report files resolved against `--reports`, with no dependence on validation; in request mode, every source path recovered **while** parsing, so a later semantic failure cannot discard paths already seen. Parsing collects paths monotonically and never drops them on an error path.
-2. **Refuse to write when the canonical destination is a read-set member**, in both the decision and the rejection path, before `mkdirSync` runs. Canonicalisation: `realpathSync` when the path exists (which also resolves symlinks and returns the on-disk name on a case-insensitive filesystem), otherwise `resolve`; compare the canonical forms case-sensitively. This decides ordinary aliases — `./out.json`, `a/../out.json`, relative versus absolute, a symlink to an input — without inventing a threat model. Stated non-goals: hard links and bind mounts are not detected; a directory destination keeps failing with the existing `EISDIR` diagnostic.
-3. **When the read-set cannot be recovered at all** — the request bytes do not parse, or `sources` is not a list — never replace `--out`. Write the diagnostic to the documented sibling path `<out>.rejected.json` and name it on stderr. This keeps C7's requirement that a diagnostic is emitted when the destination is writable, keeps exit status 2, and cannot destroy a file whose provenance the run cannot establish. Rejected alternative: overwrite `--out` only when its current bytes look like this tool's own document. That makes publication depend on the content of a file the run did not produce, which is a weaker and harder-to-review rule than "never replace a file whose provenance is unknown".
-
-Existing-output behaviour: overwriting is **kept** for both documents when the destination is provably not an input, because the runner re-runs into the same `$OUT/q-decision.json` and a stale document must not block a fresh one; when a rejection replaces an existing decision document the replacement is stated on stderr. No `--force` flag is added.
-
-## Options and recommendation
-
-Both options keep one TypeScript authority, the current runner routing, source-byte snapshots, recomputation from sources, and every requirement id, tolerance, pin and budget.
-
-**Option A — disciplined repairs inside the existing mapping shape.** Fix each demonstrated site where it is: split the display chain, compare the versions that are present before reporting coverage, separate the two presence checks in `pinnedCorrespondence`, add the plan's tile-request minimum and the sample/count reconciliation, port the Python `undeclared` rule, and rebuild the CLI read-set. Add one test per case. Cost: lowest. Demonstrated defect elimination: it removes every case reproduced above. Residual risk: it is the third application of the same strategy. Round 1 repaired six families and the reviewer found four more in Round 2, three of them in files that Round 1 had already touched or reviewed; the family is a property of how checks are written, so a per-site repair is only as good as the next reviewer's sweep, and nothing prevents the next mapping from gating a check behind a sibling's success.
-
-**Option B — one focused seam that accumulates independently decidable findings before reduction.** Add a small check inventory per requirement and a total driver: each check is evaluated unconditionally, appends its own failure or gap through the existing `Findings` class, and declares which assertion ids it decides and which observation leaves it reads. The driver merges every check's findings into the existing reduction, and reports any declared assertion that no check decided as an explicit gap, so a declaration can no longer be "passed but never read" and an assertion can no longer be silently `inconclusive` by omission. Option A's fixes become the *content* of the migration, and the extra structural elements are a totality check (every contract assertion decided by at least one check), a per-check negative fixture, and a retention sweep driven by the declared reads (mutating a leaf a check does not read must not change that check's outcome). Cost: one new module, an additive field on `MappingResult`, a mapping-by-mapping migration, and two new test drivers. Review cost: lower than A's for the next change, because each requirement's decided facts become one short enumerable list instead of control flow distributed over a file.
-
-Recommendation: **Option B**, on demonstrated defect elimination and review cost rather than elegance or line count. Four of the seven demonstrated cases (R2-A, R2-B, N-1, N-2) are the same reachability mistake in different syntaxes, and R2-C is a *missing* check that no per-site repair would have enumerated; the inventory makes both visible in one place and gives the retention invariant a mechanical expression. The codebase already contains the target shape in miniature (`lifecycle.ts`'s three declared lists) and the accumulation primitives (`Findings`, `worse`, `combine`, `allNamed`, and `reduce.ts`'s budget loop), so B is a generalisation of accepted patterns rather than a new architecture. Honest trade-off: B costs more than A up front, and it changes files whose evidence semantics are load-bearing, so the migration must be validated by per-requirement decision-document comparison, not only by the new tests. A partial migration is safe in the other direction — the driver with no migrated mapping changes nothing.
-
-Rejected: a wholesale rewrite, because it would discard 177 TypeScript tests, 261 retained Python tests that still encode stricter rules this migration dropped, and the admission/verdict semantics that are demonstrably correct; a generic validation DSL, because the inventory is data plus one total driver and no evidence of a need for a general expression language has been produced.
-
-## Reuse inventory
-
-| Module | Disposition | Reason |
-| --- | --- | --- |
-| `sources.ts` | reuse unchanged | read-once, digest of the exact bytes, absent ≠ corrupt is the correct boundary and the only read of evidence |
-| `report.ts` | reuse unchanged | container/leaf strictness and the problems-versus-gaps split already separate malformed input from missing evidence |
-| `admit.ts` | reuse; adapt only the leaf vocabulary | admission, identity comparison and the negative-control scope rule are correct and must not be relaxed; the seam needs the leaf paths checks declare |
-| `decide.ts` | reuse; adapt minimally | `prepare`/`decideRequirement` keep ownership of admission and reduction; add the check-driver hook and undecided-assertion reporting, delete the dead `void gap` loop and the unused `assertionVerdicts` local |
-| `verdict.ts` | reuse unchanged | `Findings`, `reduce`, `worse`, `combine` are the single reduction and the sink for accumulated per-check findings |
-| `reduce.ts` | reuse unchanged as the model | its per-record budget loop is the retention discipline the seam generalises |
-| `qualification.ts` | reuse unchanged | routing, synthetic-control exclusion and unmapped-requirement handling stay; add the evaluated check inventory to the decision document |
-| `cli.ts` | adapt | extract the read-set derivation and publish only against it, for both documents |
-| `evidence/display.ts` | adapt | the demonstrated R2-A and R2-C sites |
-| `evidence/artifactCorrespondence.ts` | adapt | the demonstrated R2-B sites; keep the three-point correspondence comparison |
-| `evidence/resources.ts` | adapt | the demonstrated N-1 site; port the retained `undeclared` rule and keep the unconditional plan-bound gaps |
-| `evidence/numericTransport.ts` | adapt lightly | keep `allNamed`/`named` as the accumulation helpers; record skipped non-measured window records |
-| `evidence/preparation.ts`, `host.ts` | adapt lightly | independent-fact checks; `COMBINED_SOURCE_NAMES` is already the "more severe of contributors" shape |
-| `evidence/values.ts`, `members.ts`, `crs.ts`, `lifecycle.ts` | reuse; declare as-is | already the target shape; the migration is declarative for these |
-| `evidence/registry.ts`, `mapping.ts` | adapt additively | one mapping per requirement is correct; `MappingResult` gains the evaluated check ids |
-| `assertion_evidence_map.md` | adapt | becomes the reviewable inventory the code cites; rows gain check ids and the missing `pageErrors`/`tileRequests`/tile-minimum evidence |
-
-## Proposed interfaces and ownership
-
-Proposed, not implemented. The seam is one module and one additive field.
-
-```ts
-// scripts/raster-qualification/ts/src/evidence/checks.ts (proposed)
-export interface CheckInput {
-  readonly byRole: ReadonlyMap<string, SourceView>;
-  /** Per-check findings sink; the driver attributes them to `decides`. */
-  readonly findings: Findings;
-  readonly observations: Record<string, unknown>;
-}
-
-export interface Check {
-  /** Stable id, cited by tests, the evidence map and the decision document. */
-  readonly id: string;
-  /** Contract assertion ids this check contributes a finding to. */
-  readonly decides: readonly string[];
-  /** Observation leaves this check reads, e.g. `trace.runs[].pageErrors`. */
-  readonly reads: readonly string[];
-  /** Evaluated unconditionally by the driver; never returns a verdict. */
-  run(input: CheckInput): void;
-}
-
-/** Evaluate every check; report assertions no check decided. */
-export function runChecks(
-  checks: readonly Check[],
-  declared: readonly string[],
-  input: CheckInput,
-): { readonly evaluated: readonly string[] };
+```sh
+desktop/web/node_modules/.bin/tsc -p scripts/raster-qualification/ts/tsconfig.json
+node --test 'scripts/raster-qualification/ts/dist/tests/*.test.js'
+python3 -m unittest discover -s scripts/raster-qualification/tests
+bash scripts/raster-qualification/tests/test_runner_exit.sh
+bash -n scripts/raster-qualification/run_all_experiments.sh
+python3 scripts/check_docs.py
+git diff --check
 ```
 
-Driver contract: checks are invoked in declaration order, unconditionally, with a `Findings` whose entries are attributed to every id in `decides`; verdicts come only from `Findings.verdict()`; a declared assertion id that no check decided produces an explicit gap naming the id; a check that throws is a build defect and is reported, not swallowed. Ownership stays where it is: `decide.ts` owns admission and reduction, each mapping owns its declarations and does not read another mapping's findings, and no module gains a second read of a source.
+Also compile into a fresh temporary output directory and run its emitted tests, so ignored/stale dist cannot supply success. Record actual prerequisites and commands. Existing frontend compiler/types are reused; no dependency install is authorized. Sandbox-only subprocess capture failures use the normal approval route; never weaken diagnostic tests. No Rust/frontend feature gates are needed unless scope is separately expanded. Never run the private experiment runner.
 
-The `MappingResult` change is additive: it keeps `assertions`, `observations`, `failures`, `gaps` and the provenance fields, and adds `checks: readonly string[]` (the evaluated ids) for the decision document. Requirement ids, assertion ids, contract tolerances, engine pins, declared budgets and the decision document's existing fields are unchanged; the only intended decision changes are the enumerated assertion-level flips recorded in the migration table for each slice.
+Fix in-scope counterexamples during this assignment before handoff; do not stop at each phase merely because a new example was found. Stop for a genuine scope/authority conflict (scientific policy, engine, dependency, new producer/experiment, incompatible external consumer) and name the exact decision needed. Unknown optional cleanup is not a blocker. No silent budget/tolerance changes or invented measurements.
 
-## Deterministic verification coverage and omissions
+Deliver one revision-labelled section in `q-typescript-receipt.md`, update the single standing review with implementation responses (not self-acceptance), and update index, LiDAR/Q guidance and debrief. Record expected semantic changes versus actual decision diffs, RED/GREEN commands, independently derived cases, guard-removal results including zero results, unavailable environments and remaining real-Q gaps. Keep `canopi-kqpp` open. Follow repository delivery/sync rules without overwriting user work.
 
-Coverage the proposed implementation must add, in the order it earns it:
-
-1. one CLI-level counterexample per demonstrated family, with the failure-plus-gap variant asserted on the named reason, not on the overall exit code — the transcripts in this document are the fixtures;
-2. one positive control per migrated requirement, asserting that the coherent corpus still passes at assertion level;
-3. totality, enforced by the driver rather than only tested: every contract assertion id from [`requirements.json`](../../../scripts/raster-qualification/requirements.json) is decided by at least one check, and an undecided assertion is a reported gap;
-4. one negative fixture per check id (the check produces a failure) and, for checks whose verdict can be a gap, one absent-observation fixture;
-5. the retention sweep: for each check and each mutated leaf the check does not declare in `reads`, that check's verdict and reason set must be unchanged from the control;
-6. publication cases as pairs: rejected input with `--out` on a source (refuse and preserve) and valid input with the same destination (refuse and preserve) in both CLI modes, plus the unparseable-request case writing only the sibling diagnostic;
-7. a migration oracle: per-requirement decision-document comparison against the pre-migration revision on the synthetic corpus, with every difference enumerated and justified in the slice's commit.
-
-Omissions, stated so a later reviewer does not read silence as proof: the sweep is finite and does not prove the unmodified mappings correct; declared `reads` lists are review artifacts and a check that should read a leaf but does not will pass the retention sweep (negative fixtures are the guard for that direction); no producer observation is created, so `Q-RES-1`'s producer-vocabulary mismatch and every permanent gap stay exactly as they are; the 512 MiB display disk-cache bound, the staging/free-space policy, the local-bridge measurement and the Desktop WebView observation remain unestablished; no private reconciliation, benchmark or engine build is run; and this reassessment cannot tell whether the runner's existing report set would newly fail under the added checks — that is the point of the migration table, and it is why the first slices must report the decision diff per requirement rather than only a green suite.
-
-## Ordered implementation and rollback proposal
-
-Test-first, one vertical slice per commit. Each slice: add the failing counterexample, confirm it fails for the expected reason, implement the smallest change that passes, then run the decision-document comparison for the affected requirement. No RED/GREEN claim is made here; this is a proposed sequence for a later authorized implementation.
-
-| Slice | Content | Rollback |
-| --- | --- | --- |
-| S1 | `checks.ts` driver plus the coverage guard, no mapping migrated: pure addition, decision documents byte-identical | revert the commit; nothing depends on it |
-| S2 | `display.ts` rendering facts as independent checks (R2-A), including the page-error and reconciliation facts the map omits | revert S2 only; the driver with the old mapping is inert |
-| S3 | `display.ts` per-run sufficiency: the plan's ≥100 tile requests and rendered-versus-sample reconciliation (R2-C), with the declaration entry the plan states | revert S3; S2 stays |
-| S4 | `resources.ts` route attribution: declared roles with an explicit undeclared bucket, ported from the retained Python rule and its test (N-1) | revert S4 |
-| S5 | `artifactCorrespondence.ts`: split coverage, pin and built-revision comparisons so each is decided independently (R2-B) | revert S5 |
-| S6 | `cli.ts` read-set derivation and the publication policy, in both modes, including the sibling diagnostic (R2-D, N-2) | revert S6; the guard reverts to its previous behaviour, which is the demonstrated defect |
-| S7 | `assertion_evidence_map.md` rows updated to cite check ids and the added evidence, plus the inventory tie for `values.ts`, `members.ts`, `crs.ts`, `lifecycle.ts` | revert S7; documentation only |
-
-Order rationale: S2 is the tracer bullet because it proves the seam against the family's clearest instance and its existing helper corpus; S6 is independent of S1–S5 and may be done first if the user prefers to close the evidence-destruction risk before the verdict work. Stop conditions for the implementation: any slice that changes a decision for a requirement it did not intend to touch, any slice that cannot express its counterexample at the CLI seam, and any slice whose decision diff cannot be enumerated.
-
-## Decisions blocking implementation
-
-Each needs the user's answer; recommendation and trade-off are stated so the answer can be a yes or a no.
-
-| Decision | Recommendation | Trade-off |
-| --- | --- | --- |
-| D-A: check inventory declared in code (`checks.ts` per mapping) versus generated from a data file | declare in code | a data file becomes a DSL without evidence of need; code keeps the comparison logic reviewable next to its declarations |
-| D-B: expose the evaluated check inventory in the decision document | add it as an additive field and keep `DECISION_VERSION` at 1 | additive and regenerated per run, but if any consumer treats the document as closed-schema the version should be bumped instead; this is a contract call, not an implementation detail |
-| D-C: enforce the plan's ≥100 tile requests per cold/warm run as a declared bound | enforce it | the plan states it, so it is an existing obligation; enforcing it will newly fail runs that currently pass on samples alone, which is the intended effect but must be visible in the migration table |
-| D-D: publication when the read-set cannot be recovered | never replace `--out`; write `<out>.rejected.json` | keeps C7 satisfied and cannot destroy evidence, but a caller that reads only `--out` will miss the diagnostic and must read stderr |
-| D-E: assertion severity when a record carries no route role | gap, matching the retained Python rule | a fail would be stronger, but an unlabelled record may be valid evidence for another route, so refusal rather than condemnation is the honest verdict |
-| D-F: whether a built-revision mismatch may be excused by recorded build evidence | do not adopt the excuse path now | the retained Python gate has it and tests it, but no producer in this checkout emits `builtArtifact` or `buildEvidence`, so adopting it would add an untested dead path; if the plan later requires it, it belongs in its own check |
-
-## Approval requested
-
-The user is asked to approve or reject, as independent design review of this document:
-
-1. the structural conclusion — that the demonstrated defects are one family (a check whose reachability is decided by imperative control flow, a claim inferred from supplied data, and an output-safety rule derived after validation) rather than four unrelated bugs, and that the prose-only tie between `assertion_evidence_map.md` and the mappings is why the family survived two repair rounds;
-2. Option B as the bounded change, with Option A's fixes as its content, and the rejection of a rewrite or a generic DSL;
-3. the publication policy in full, including the sibling-diagnostic rule and the decision that overwriting a provably non-input destination stays allowed;
-4. the ordering S1–S7 with per-slice decision-document comparison as the migration oracle, and the definition of success for the next authorized implementation: **fewer escaped invariant families at independent review**, not a higher test count;
-5. the blocking decisions D-A to D-F.
-
-Approval of this document authorizes nothing by itself: no implementation, no Q experiment, no remaining Python migration, no N1, no producer change, no requirement, tolerance, pin, budget or UI change, and no closure of `canopi-kqpp`. The scratch reproducer used here is deleted rather than committed.
-
-## Limits of this reassessment
-
-Inspected revision and build identity are recorded above and were verified by recompilation. Everything else is bounded by three limits: the audit swept the mappings and the decision path by reading them and by mutating one coherent synthetic corpus, so absence of a finding in a file is not evidence of correctness; no producer ran, so every producer-side statement here is read from tracked source rather than measured; and no independent review has examined this document yet, which is the next step rather than a completed one.
+The user forwards the consolidated delivery for independent review; no automatic repair loop or direct agent-to-agent exchange. Do not start experiments, producer migration, engine selection, Python deletion, production N1 or integration. Success for acceptance is **zero known C1–C8 blockers in the delivered scope**; fewer escaped invariant families and user handoffs are debrief metrics, not permission to ship residual defects.
