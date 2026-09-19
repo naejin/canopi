@@ -185,8 +185,21 @@ The B1–B3 repair at `95028481` adds these inputs to the synthesis:
 | Counterexamples found by the repair's own sweep | Four: negative counters admitted as measurements, negative counters used in corroboration arithmetic, unmeasured window records dropped without a finding, and evidence references resolved too strictly so that ordinary missing-field gaps were reported as internal-check defects. The last one was found only by running the decision path read-only over the retained producer report shapes, not by synthetic fixtures |
 | Controls corrected | Two retained expectations contradicted the accepted contract: a sweep case expected an unusable window size to be inconclusive (the B3 defect itself), and a window reason collapsed the missing dimension into "usable size". Both were corrected with the reason recorded rather than by relaxing anything |
 | Guard-removal probes | Seven removals in isolated copies, all detected: alias normalization, window and ledger failure retention, sidecar retention, malformed window dimension, malformed role on each side. No zero results; one redundant direction (directory-mode alias) reported rather than credited |
-| Measurement readiness | The handoff distinguishes a missing producer from a missing run or environment. The headline prerequisite is producer-side: no producer writes the `identity` block the decision path requires, so 11 of 12 requirements cannot be admitted against real reports whatever else is fixed. The scoped local bridge and the display trace are produced but not wired to the roles the decision path reads |
+| Measurement readiness | The handoff distinguishes a missing producer from a missing run or environment. The headline prerequisite is producer-side: no producer writes the `identity` block the decision path requires, so 11 of 12 requirements cannot be admitted against real reports whatever else is fixed. The display trace needs a wiring decision, but the local bridge is not merely unwired: `measure.py q2-local-bridge` is a stripped-layout rejection control (MR1), so a positive producer that exercises the scoped bridge must still be written. This slice adds zero real Q capabilities |
 | Measured effort | Not measured; test count is not used as a proxy |
+
+### Numeric counter debrief inputs
+
+The NC1–NC2 completion at `e1f7ac95` adds:
+
+| Dimension | Observation |
+| --- | --- |
+| Defect class | Both findings were the same "one fact hides another" shape as the earlier families, one level lower: a counter was validated for finiteness instead of the discrete unit the contract counts, and a comparison waited for a third operand it did not need. Neither was caught by the earlier sweeps because those exercised presence and type, not unit semantics or operand minimality |
+| Matrix | A 20-row table over the three counters plus a zero-window table that asserts the ledger assertion separately from the transport assertion. The separate assertion matters: without it, a skipped ledger comparison is masked by the transport failure that zero windows already produce |
+| Sensitivity | Three isolated guard removals, all detected on the intended assertion: integer validation (4 failures) and each relationship gated on the third counter (3 each). No zero results |
+| Readiness correction | MR1 was a documentation defect, verified against producer code rather than the command name. `q2-local-bridge` is a negative control; the positive scoped-bridge producer remains unwritten, and this slice records zero new real Q capabilities |
+| Controls corrected | Two retained sweep expectations changed wording for the malformed-count rule; no verdict expectation was relaxed |
+| Measured effort | Not measured |
 
 ## C1–C8 repair report
 

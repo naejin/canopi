@@ -245,3 +245,21 @@ Known and reported rather than hidden: the directory-mode alias case is protecte
 canonicalization alone, so the input-side normalization is redundant in that direction; and the
 measurement-readiness handoff records that no producer currently writes the `identity` block admission
 requires, which is a prerequisite for any fresh qualification evidence and is outside this slice.
+
+## NC1–NC2 implementation response at `e1f7ac95` (implementer, not acceptance)
+
+The numeric completion is delivered; the implementer's evidence is the [numeric counter
+section of the migration receipt](q-typescript-receipt.md#nc1nc2-numeric-counter-completion-implementation-response).
+This response resolves nothing above.
+
+| Review finding | Response |
+| --- | --- |
+| NC1 discrete counters | The three counters now require finite non-negative integers. `testedWindows=0.5`, `fixtureBytesServed=0.5` and `fixtureRequests=0.5` each fail on their relevant assertion and on Q-LOCAL-1 with the field and value in the reason; `null`, strings, booleans, lists and objects fail the same way; absent values still gap; zero remains a valid value and `T=0` still demonstrates no successful numeric read. Nothing is coerced or rounded, and a negative count keeps its own recorded-impossibility wording |
+| NC2 true comparison operands | Each ledger relationship is decided from its own two operands. `T=9, B=0` with `R` absent fails on zero bytes and retains the missing-`R` gap; `T=9, R=0` with `B` absent is symmetric; `T=0` with recorded bytes or requests contradicts one operand at a time; an unusable value never enters the arithmetic; positive counters with one counter absent and no contradiction stay inconclusive rather than failed; and a pass still requires both relationships to be decided coherently |
+| MR1 readiness semantics | Verified against `measure.py:cmd_q2_local_bridge`: it records `stripped-layout`, `bounded-range-rejected` and `metadata-from-prefix` checks and describes the stripped-file rejection as its negative control, so the corrected reading stands. The debrief's remaining wiring claim is corrected, and no producer was implemented |
+
+Sensitivity: three isolated guard removals (integer validation, each relationship gated on the third
+counter) were each detected by the intended cases, with no zero results. Two retained sweep expectations
+were corrected for the new malformed-count wording without changing any verdict. **This tooling-only
+slice adds zero real Q capabilities**, and the measurement-readiness handoff still requires a positive
+local-bridge producer, the identity envelope and a declared host role before any fresh evidence.

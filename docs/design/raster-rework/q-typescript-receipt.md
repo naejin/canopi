@@ -740,3 +740,88 @@ In dependency order, so a later authorization can size the work:
 7. **Then the remaining obligations**: the resource budgets and the two unobserved plan bounds, the
    lifecycle capabilities (`Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`) and the member/value coverage
    gaps — none of which the local-bridge or host measurements would close.
+
+## NC1–NC2 numeric counter completion (implementation response)
+
+Revision `e1f7ac95`, baseline `933fb593`, implementation `95028481`, design `ac68fb64`. This is the
+implementer's report for the [numeric completion handoff](q-numeric-counter-repair-agent-prompt.md); it
+claims no acceptance, and the two counter families remain open until the reviewer confirms them.
+
+### What changed
+
+| Finding | Repair |
+| --- | --- |
+| NC1 — discrete counters | The validated-window count, the served-byte count and the request count are counts of discrete things, so a supplied value must be a finite non-negative integer. A fraction, a negative value, `null`, a string, a boolean or a container fails with the field and value named and the whole-number rule stated; an absent value gaps; zero stays a valid value. Nothing is coerced or rounded. An impossible negative count keeps its own wording, because "records -1 byte(s) served" is a recorded impossibility rather than a wrong type |
+| NC2 — true comparison operands | The ledger decides each relationship from its own two operands. With nine validated windows, zero bytes fails even when the request count is absent, and the missing count is recorded as its own gap; the request relationship is symmetric. Zero validated windows contradict recorded bytes or requests one operand at a time. An unusable value never enters the arithmetic, positive counters with a missing third counter and no independently known contradiction stay inconclusive, and a pass still requires both relationships to have been decided coherently |
+
+Semantic changes, stated explicitly: a fractional or otherwise non-integer counter that previously
+satisfied "finite number" now fails; and the ledger corroboration no longer waits for all three counters,
+so a contradiction between two of them is reported even when the third is absent. The rule that a zero
+validated-window count demonstrates no successful numeric read is retained and unchanged, and no new
+ratio, window-count minimum or scientific tolerance was introduced.
+
+### RED and GREEN commands
+
+* RED: `node --test 'scripts/raster-qualification/ts/dist/tests/numericCounters.test.js'` — 10 of 11
+  cases failed before the change (the eleventh is the unaffected-requirements regression guard).
+* GREEN: the same command after the change — 13 of 13 pass, including the two matrix tests.
+* Full suite, in place and from a fresh output directory:
+  `node --test 'scripts/raster-qualification/ts/dist/tests/*.test.js'` — 279 passing, from 266 at
+  baseline.
+
+### Bounded counter matrix coverage
+
+`numericCounters.test.ts` adds 13 cases: the NC1 and NC2 examples, zero-value semantics (including
+`T=0` with `B=0` and `R=0`, and `T=0` with activity), malformed types, and two tables — a 20-row matrix
+over the three counters covering valid whole, zero, fractional, negative, `null`, string, boolean, list,
+object and absent values with the specific assertion and reason asserted for each row, and a zero-window
+table that asserts the **ledger** assertion as well as the transport assertion so the no-window finding
+cannot mask a skipped comparison. Every row also asserts that the window-bound assertion is untouched by
+a counter case, and the NC2 cases assert the retained gaps beside the failures.
+
+Two retained expectations were corrected for the new wording of a malformed count (verdicts unchanged):
+`boundarySweep.test.ts` rows "bytes not a number" and "window count not a number" now expect
+"not a whole non-negative …" rather than "not a finite …".
+
+### Guard-removal sensitivity (isolated copies)
+
+| Guard removed | Detected by |
+| --- | --- |
+| integer validation (finiteness only) | 4 failures: both NC1 counter cases, the malformed-type case and the matrix, all on the intended assertion and reason |
+| the byte relationship gated on the request count | 3 failures: the NC2 zero-byte case, the zero-window contradiction table and the zero-window matrix |
+| the request relationship gated on the byte count | 3 failures: the NC2 zero-request case, the zero-window contradiction table and the zero-window matrix |
+
+No probe was a zero result, and each failed the intended assertion rather than an unrelated permanent
+gap. Probes P1–P7 from the boundary-repair delivery remain effective and their tests still pass.
+
+### MR1 readiness verification
+
+Verified against producer code, not against the command name. `measure.py:cmd_q2_local_bridge` states
+that it "establish[es] whether any candidate role boundedly reads a stripped GeoTIFF", records the
+expected outcome for a stripped fixture as "a clean rejection, which is the negative control for this
+experiment", and asserts `stripped-layout:{fixture}`, `bounded-range-rejected:{fixture}` and
+`metadata-from-prefix:{fixture}` together with a `conclusion-recorded` check. It therefore supplies
+negative-control evidence that a stripped layout is rejected and that prefix metadata is readable; it
+cannot establish successful scoped Desktop bridge transport, and renaming it, relabelling its transport
+or moving it to another role would not change that.
+
+Reconciled guidance: the receipt's `Q-LOCAL-1` readiness row and prerequisite 3 carry the reviewer's
+correction; the debrief's readiness row is corrected here to state that the local bridge needs a positive
+producer, not wiring of an existing one; and the LiDAR guide already records the corrected reading. No
+producer was implemented and no measurement is claimed. **This slice adds zero real Q capabilities.**
+
+### Gate commands actually run
+
+`desktop/web/node_modules/.bin/tsc -p scripts/raster-qualification/ts/tsconfig.json`; `node --test
+'scripts/raster-qualification/ts/dist/tests/*.test.js'` (279 passing); the same compile and test from a
+fresh output directory; `python3 -m unittest discover -s scripts/raster-qualification/tests` (261
+passing, frozen reference); `bash scripts/raster-qualification/tests/test_runner_exit.sh` (18 passing);
+`bash -n scripts/raster-qualification/run_all_experiments.sh`; `python3 scripts/check_docs.py`; `git diff
+--check`. The private experiment runner was not invoked, no producer or Python file changed, no identity
+was fabricated for an old report, and no unavailable environment is inferred as covered.
+
+### Limitations
+
+The matrix is bounded to the three counters and their operand pairs; it is not an exhaustive audit. No
+engine, browser, platform or private experiment was run, so every readiness statement remains a
+statement about producer code. Time and cost remain unmeasured.
