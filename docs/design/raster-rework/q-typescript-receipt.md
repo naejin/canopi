@@ -911,12 +911,17 @@ scripts/check_docs.py`; `git diff --check`. The host builds offline: `https://cr
 returns 403 from this environment, so every Rust command uses `--offline` against the
 existing cache.
 
-Two gates are deliberately not claimed as clean here. `cargo fmt --check` in the host
-directory reports a diff in the reused production file `desktop/src/native_operation.rs`
-(import ordering under rustfmt 1.9.0); that file is not part of this slice, is left exactly
-as found, and the host's own files are checked directly instead. Repository Rust CI parity
-(`cargo fmt --all --check`, `cargo clippy --workspace`) was not run, because the production
-workspace is untouched by this slice and the isolated crate is outside it.
+Two gates are deliberately not claimed as clean here, and the reason is stated exactly.
+`cargo fmt --check` inside the host crate passes on this working tree, but only because the
+working tree already carried an uncommitted import-ordering change to the reused production
+file `desktop/src/native_operation.rs`; that file is included by path, so the host crate
+formats it too. On a clean checkout of this revision the same command reports two diffs in
+that file (rustfmt 1.9.0 orders `AssertUnwindSafe` after the lowercase names), and that file
+belongs to production rather than to this slice, so it was left exactly as found and is not
+part of either commit. The host's own files are therefore checked directly with `rustfmt
+--check --edition 2021 src/bridge.rs src/main.rs build.rs`, which passes. Repository Rust CI
+parity (`cargo fmt --all --check`, `cargo clippy --workspace`) was not run, because the
+production workspace is untouched by this slice and the isolated crate is outside it.
 
 ### Limitations
 
