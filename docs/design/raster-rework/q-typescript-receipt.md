@@ -566,6 +566,7 @@ Each guard was removed on its own, the suite rebuilt and the applicable tests ru
 | no-replace at the link step (replace instead) | 1 failure (`publication.test.js`, injected competitor) |
 | claimed-pin comparison | 2 failures (`migratedFamilies.test.js`) |
 | evidence digest validation | 1 failure (`checkedOutcomes.test.js`) |
+| evidence reference resolution | 1 failure (`checkedOutcomes.test.js`) |
 
 The first pass found two **zero results**: removing the early existence refusal and removing the link's
 no-replace refusal were both undetected, because each guard made the other unreachable. Two
@@ -573,6 +574,13 @@ deterministic cases were added rather than leaving the redundancy unproven: a re
 distinguishes the early refusal from a staging failure, and one inert fault-injection seam in
 `publication.ts` that lets a test act as a competing creator between the two layers. Both probes are now
 detected. No probe remained a zero result.
+
+The adversarial pass also closed one acceptance case the first delivery had under-implemented: evidence
+references are now resolved against the snapshot they name. A satisfied outcome must resolve the whole
+reference (`runs[2].individualLatenciesMs`, `assertions[version:whitebox-wasm]`, `identity.artifact.sha256`),
+so a typo cannot be published as support; a failure or gap cites its evidence for review and needs only a
+real part of the snapshot, because a reference into an absent record is a finding about the record rather
+than an internal defect.
 
 ### Self-review discoveries fixed in scope
 
@@ -582,7 +590,10 @@ detected. No probe remained a zero result.
   collected; `contradicted` now carries both, and the checks use it;
 * a non-object sidecar record initially gapped instead of failing, caught by the retained T4 test;
 * the incompleteness summary for resource records was lost during migration, caught by the retained
-  counterexample test and restored as the reduction-level statement.
+  counterexample test and restored as the reduction-level statement;
+* the final adversarial pass found that evidence references were validated by digest but not by
+  existence, so `runs[2].nope` could have been published as support; reference resolution was added with
+  its own test and probe.
 
 ### Limitations and omissions
 

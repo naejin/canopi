@@ -192,6 +192,40 @@ function stringList(value: unknown): string[] | undefined {
   return out;
 }
 
+/**
+ * Whether an evidence reference resolves in the snapshot it names.
+ *
+ * `assertions[...]` names a producer assertion record, which lives on the admission
+ * facts rather than in the report body; every other reference is a dotted or indexed
+ * path into the report's value. A full resolution is required only when the outcome
+ * claims the fact is satisfied.
+ */
+function resolvesInSnapshot(view: SourceView, field: string, full: boolean): boolean {
+  const segments = field.split(/[.[]/).map((segment) => segment.replace(/\]$/, '').replace(/^"|"$/g, ''));
+  const root = segments[0] ?? field;
+  if (root === 'assertions') {
+    const records = view.facts?.assertions;
+    if (records === undefined) return false;
+    if (segments.length === 1) return true;
+    return !full || records.has(segments.slice(1).join('.'));
+  }
+  const value = view.shape?.value;
+  if (!isRecord(value) || !Object.prototype.hasOwnProperty.call(value, root)) return false;
+  if (!full) return true;
+  let current: unknown = value[root];
+  for (const segment of segments.slice(1)) {
+    if (Array.isArray(current)) {
+      const index = Number.parseInt(segment, 10);
+      if (!Number.isInteger(index) || index < 0 || index >= current.length) return false;
+      current = current[index];
+      continue;
+    }
+    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, segment)) return false;
+    current = current[segment];
+  }
+  return true;
+}
+
 /** A validated outcome, or the defect that makes it unusable. */
 function validateOutcome(
   check: Check,
@@ -243,6 +277,16 @@ function validateOutcome(
     if (entry['digest'] !== view.digest) {
       return {
         defect: `check ${check.id} cites evidence for ${JSON.stringify(field)} whose digest does not match the admitted source ${JSON.stringify(role)}`,
+      };
+    }
+    // The cited field must exist in the snapshot it names, so a typo cannot be
+    // published as support. A satisfied outcome must resolve the whole reference;
+    // a failure or gap cites its evidence for review, and such a reference only has
+    // to name a real part of the snapshot. The vocabulary is the checks' own field
+    // names, not an interpreted path language.
+    if (!resolvesInSnapshot(view, field, satisfiedValue)) {
+      return {
+        defect: `check ${check.id} cites evidence field ${JSON.stringify(field)}, which the admitted source ${JSON.stringify(role)} does not record`,
       };
     }
     evidence.push({

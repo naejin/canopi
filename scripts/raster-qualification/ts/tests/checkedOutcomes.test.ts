@@ -45,7 +45,9 @@ function view(role: string, digest = DIGEST): SourceView {
     label: `reports/${role}.json`,
     status: 'present',
     digest,
-    shape: { value: {}, problems: [], gaps: [] },
+    // The snapshot must record the fields a check cites; `runs` is the field the
+    // driver cases use.
+    shape: { value: { runs: [] }, problems: [], gaps: [] },
     admission: {
       label: role,
       verdict: 'pass',
@@ -147,6 +149,37 @@ test('driver: evidence must match the admitted snapshot', () => {
   );
   assert.equal(unknownRole.assertions.get('a1'), 'inconclusive');
   assert.match(unknownRole.defects.join(' '), /does not read/);
+
+  const missingField = runChecks(
+    spec([
+      check('c.field', 'a1', () => satisfied([{ role: 'trace', field: 'runs[0].nope', digest: DIGEST }])),
+    ]),
+    context(),
+  );
+  assert.equal(missingField.assertions.get('a1'), 'inconclusive');
+  assert.match(missingField.defects.join(' '), /does not record/);
+
+  const missingRoot = runChecks(
+    spec([check('c.root', 'a1', () => satisfied([{ role: 'trace', field: 'nope', digest: DIGEST }]))]),
+    context(),
+  );
+  assert.equal(missingRoot.assertions.get('a1'), 'inconclusive');
+  assert.match(missingRoot.defects.join(' '), /does not record/);
+
+  // A failure cites its evidence for review: a reference into a record that is
+  // absent is a gap, not an internal defect, because the outcome claims no support.
+  const citedByFailure = runChecks(
+    spec([
+      check('c.fail', 'a1', () =>
+        violated(['run 9 does not reconcile'], [
+          { role: 'trace', field: 'runs[9].tileRequests', digest: DIGEST },
+        ]),
+      ),
+    ]),
+    context(),
+  );
+  assert.equal(citedByFailure.assertions.get('a1'), 'fail');
+  assert.deepEqual(citedByFailure.defects, []);
 
   const absentSource = runChecks(
     spec([check('c.absent', 'a1', () => satisfied([{ role: 'trace', field: 'runs', digest: DIGEST }]))]),

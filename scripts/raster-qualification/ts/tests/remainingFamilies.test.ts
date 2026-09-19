@@ -207,7 +207,11 @@ test('S4 host: the accepted-host rule is exercised at the driver level', () => {
       label: 'reports/host.json',
       status: 'present',
       digest: `sha256:${'a'.repeat(64)}`,
-      shape: { value: {}, problems: [], gaps: [] },
+      shape: {
+        value: { identity: host === undefined ? {} : { host } },
+        problems: [],
+        gaps: [],
+      },
       facts: { identity: host === undefined ? {} : { host }, assertions: new Map(), failures: [], preconditions: [] },
       admission: {
         label: 'host',
