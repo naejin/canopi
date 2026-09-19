@@ -166,8 +166,10 @@ test('driver: evidence must match the admitted snapshot', () => {
   assert.equal(missingRoot.assertions.get('a1'), 'inconclusive');
   assert.match(missingRoot.defects.join(' '), /does not record/);
 
-  // A failure cites its evidence for review: a reference into a record that is
-  // absent is a gap, not an internal defect, because the outcome claims no support.
+  // A failure or gap cites its evidence for review: a reference into a record the
+  // snapshot does not carry is the finding itself, not an internal defect, because the
+  // outcome claims no support. This is the shape real reports have when a whole field
+  // is missing, and misclassifying it would report tool defects for ordinary gaps.
   const citedByFailure = runChecks(
     spec([
       check('c.fail', 'a1', () =>
@@ -175,10 +177,16 @@ test('driver: evidence must match the admitted snapshot', () => {
           { role: 'trace', field: 'runs[9].tileRequests', digest: DIGEST },
         ]),
       ),
+      check('c.absent-field', 'a2', () =>
+        unsatisfied(['the report records no windows'], [
+          { role: 'trace', field: 'windows[0].window', digest: DIGEST },
+        ]),
+      ),
     ]),
     context(),
   );
   assert.equal(citedByFailure.assertions.get('a1'), 'fail');
+  assert.equal(citedByFailure.assertions.get('a2'), 'inconclusive');
   assert.deepEqual(citedByFailure.defects, []);
 
   const absentSource = runChecks(

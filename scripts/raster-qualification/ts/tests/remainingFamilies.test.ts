@@ -92,7 +92,9 @@ test('S4 local: an over-limit window fails while another record is unusable', ()
     const current = state(result, 'Q-LOCAL-1');
     assert.equal(current.verdict, 'fail', current.reasons);
     assert.match(current.reasons, /exceeds the/);
-    assert.match(current.reasons, /does not record a usable size/);
+    // The unusable record now names the dimension it is missing rather than
+    // reporting a single collapsed "usable size" gap.
+    assert.match(current.reasons, /does not record h/);
   } finally {
     root.cleanup();
   }

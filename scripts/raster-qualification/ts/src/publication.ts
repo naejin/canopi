@@ -115,25 +115,61 @@ type Canonical = { readonly ok: true; readonly path: string } | { readonly ok: f
  * The canonical form of an input path.
  *
  * A path that exists is resolved through the filesystem, so a symlink or a
- * symlinked parent directory is compared as the file it names. A path that does
- * not exist keeps its resolved form, because the read-set must still protect a
- * declared report path that has not been produced yet. A path that exists but
- * cannot be resolved is reported rather than guessed: an unresolvable input means
- * safety cannot be established.
+ * symlinked parent directory is compared as the file it names.
+ *
+ * A path that does not exist is still resolved through its nearest existing
+ * ancestor, with the unresolved suffix appended. Resolving an absent path
+ * lexically would miss an alias: an input declared as `alias/not-yet.json` and an
+ * output written as `actual/not-yet.json` are the same future file when `alias` is
+ * a symlink to `actual`, and publishing would create the input. Only genuine
+ * absence takes this route; an ancestor that exists but cannot be resolved means
+ * safety cannot be established, so it is reported rather than guessed. Nothing is
+ * created here.
  */
 function canonicalInput(path: string): Canonical {
+  const absolute = resolve(path);
   let exists = false;
   try {
-    lstatSync(path);
+    lstatSync(absolute);
     exists = true;
   } catch {
     exists = false;
   }
-  if (!exists) return { ok: true, path: resolve(path) };
-  try {
-    return { ok: true, path: realpathSync(path) };
-  } catch (error) {
-    return { ok: false, problem: `cannot resolve the input path ${path}: ${detail(error)}` };
+  if (exists) {
+    try {
+      return { ok: true, path: realpathSync(absolute) };
+    } catch (error) {
+      return { ok: false, problem: `cannot resolve the input path ${path}: ${detail(error)}` };
+    }
+  }
+
+  const suffix: string[] = [];
+  let current = absolute;
+  for (;;) {
+    const parent = dirname(current);
+    suffix.unshift(basename(current));
+    let parentExists = false;
+    try {
+      lstatSync(parent);
+      parentExists = true;
+    } catch {
+      parentExists = false;
+    }
+    if (parentExists) {
+      try {
+        return { ok: true, path: join(realpathSync(parent), ...suffix) };
+      } catch (error) {
+        return {
+          ok: false,
+          problem: `cannot resolve the existing ancestor ${parent} of the absent input path ${path}: ${detail(error)}`,
+        };
+      }
+    }
+    if (parent === current) {
+      // Nothing on the path exists, so its resolved form is already canonical.
+      return { ok: true, path: absolute };
+    }
+    current = parent;
   }
 }
 

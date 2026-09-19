@@ -2,10 +2,18 @@
  * Q-LOCAL-1 - scoped local numeric transport, as explicit checks.
  *
  * Every assertion needs a positive observation. The transport must be named and must
- * be the plan's scoped local bridge; the window bound is decided from the sizes the
- * producer actually recorded, with an over-limit window a measured violation and no
- * recorded window a gap. Whole-file request, value and validity assertions are each
- * read on their own, so a missing sibling cannot suppress a recorded contradiction.
+ * be the plan's scoped local bridge; the window bounds and the ledger are decided from
+ * the values the producer actually recorded.
+ *
+ * Two rules shape the reductions here:
+ *
+ * - each recorded leaf is parsed and judged on its own before any comparison that
+ *   needs a second operand, so a missing sibling never erases a recorded violation:
+ *   a width above the edge limit fails even when the height is absent, and a negative
+ *   byte count fails even when the request count is absent;
+ * - a leaf that is absent is missing evidence and gaps, while a leaf that is present
+ *   but unusable fails. Nothing is coerced, and a comparison that lacks an operand
+ *   gaps without discarding the failures already found.
  */
 
 import { asArray, describe, finiteNumber, isNonEmptyString, isRecord, nonNegativeInteger } from '../fields.js';
@@ -14,7 +22,6 @@ import {
   satisfied,
   sourceEvidence,
   unsatisfied,
-  violated,
   type Check,
   type CheckContext,
   type EvidenceRef,
@@ -38,12 +45,83 @@ const ASSERTIONS = [
   'window-size-within-contract-limit',
 ];
 
+/** A leaf a check needed but could not use. */
+interface LeafProblem {
+  readonly kind: 'missing' | 'malformed';
+  readonly reason: string;
+}
+
 function numeric(context: CheckContext): {
   readonly view: ReturnType<CheckContext['byRole']['get']>;
   readonly reference: EvidenceRef | undefined;
 } {
   const view = context.byRole.get('q2');
   return { view, reference: sourceEvidence(view, 'windows') };
+}
+
+function absent(record: Record<string, unknown>, key: string): boolean {
+  return !Object.prototype.hasOwnProperty.call(record, key) || record[key] === undefined;
+}
+
+/**
+ * Read one counter.
+ *
+ * Absence is missing evidence. A present value that is not a finite number is
+ * unusable input, `null` included, because the schema for a counter is a number.
+ */
+function readCounter(
+  record: Record<string, unknown>,
+  key: string,
+  label: string,
+): { readonly value?: number; readonly problem?: LeafProblem } {
+  if (absent(record, key)) {
+    return { problem: { kind: 'missing', reason: `does not record its ${label}` } };
+  }
+  const value = finiteNumber(record[key]);
+  if (value === undefined) {
+    return {
+      problem: {
+        kind: 'malformed',
+        reason: `records ${key}=${describe(record[key])}, which is not a finite ${label}`,
+      },
+    };
+  }
+  return { value };
+}
+
+/** Read one window dimension and apply its own shape and sign rules. */
+function readDimension(
+  spec: Record<string, unknown>,
+  key: 'w' | 'h',
+  index: number,
+): { readonly value?: number; readonly problem?: LeafProblem } {
+  if (absent(spec, key)) {
+    return {
+      problem: { kind: 'missing', reason: `window record ${index} does not record ${key}` },
+    };
+  }
+  const raw = spec[key];
+  const value = finiteNumber(raw);
+  if (value === undefined) {
+    return {
+      problem: {
+        kind: 'malformed',
+        reason: `window record ${index} records ${key}=${describe(raw)}, which is not a usable window dimension`,
+      },
+    };
+  }
+  if (!Number.isInteger(value) || value <= 0) {
+    // A window is a whole number of cells. A fractional or non-positive dimension is
+    // present but unusable, so it cannot be compared as though it were measurable and
+    // it cannot silently satisfy the bound.
+    return {
+      problem: {
+        kind: 'malformed',
+        reason: `window record ${index} records ${key}=${value}, which is not a whole positive number of cells`,
+      },
+    };
+  }
+  return { value };
 }
 
 const transport: Check = {
@@ -55,7 +133,6 @@ const transport: Check = {
       return unsatisfied(['no numeric report was available']);
     }
     const observed = view.facts.identity?.['transport'];
-    const tested = nonNegativeInteger(view.shape.value['testedWindows']);
     const failures: string[] = [];
     const gaps: string[] = [];
     const evidence: EvidenceRef[] = [reference];
@@ -66,9 +143,17 @@ const transport: Check = {
         `the numeric source measured transport ${JSON.stringify(observed)} but the plan requires the ${JSON.stringify(REQUIRED_TRANSPORT)}; a remote HTTP capability does not qualify bounded local access`,
       );
     }
-    if (tested === undefined) {
-      gaps.push('the numeric report does not record how many windows it validated');
-    } else if (tested === 0) {
+    const tested = readCounter(view.shape.value, 'testedWindows', 'validated-window count');
+    if (tested.problem !== undefined) {
+      // A present unusable count is invalid input; an absent one is missing evidence.
+      (tested.problem.kind === 'missing' ? gaps : failures).push(
+        `the numeric report ${tested.problem.reason}`,
+      );
+    } else if (tested.value !== undefined && tested.value < 0) {
+      failures.push(
+        `the numeric report records ${tested.value} validated window(s), which is not a possible count`,
+      );
+    } else if (tested.value === 0) {
       failures.push('the numeric report validated no window, so it demonstrates no bounded read');
     } else if (observed === REQUIRED_TRANSPORT) {
       const ref = sourceEvidence(view, 'testedWindows', `transport ${observed}`);
@@ -89,7 +174,6 @@ const ledger: Check = {
       return unsatisfied(['no numeric report was available']);
     }
     const value = view.shape.value;
-    const tested = nonNegativeInteger(value['testedWindows']);
     const ledgerValue = isRecord(value['serverLedger']) ? value['serverLedger'] : undefined;
     if (ledgerValue === undefined) {
       return unsatisfied(
@@ -97,42 +181,75 @@ const ledger: Check = {
         [reference],
       );
     }
-    const served = finiteNumber(ledgerValue['fixtureBytesServed']);
-    const requests = nonNegativeInteger(ledgerValue['fixtureRequests']);
-    if (served === undefined || requests === undefined) {
-      return unsatisfied(
-        ['the transport ledger does not record both bytes served and request count'],
-        [reference],
+
+    // Each counter is judged on its own before any corroboration is attempted, so a
+    // missing sibling cannot hide a recorded impossibility.
+    const failures: string[] = [];
+    const gaps: string[] = [];
+    const evidence: EvidenceRef[] = [sourceEvidence(view, 'serverLedger') ?? reference];
+    const served = readCounter(ledgerValue, 'fixtureBytesServed', 'byte count');
+    const requests = readCounter(ledgerValue, 'fixtureRequests', 'request count');
+    const tested = readCounter(value, 'testedWindows', 'validated-window count');
+    for (const read of [served, requests, tested]) {
+      if (read.problem === undefined) continue;
+      (read.problem.kind === 'missing' ? gaps : failures).push(
+        `the numeric report ${read.problem.reason}`,
       );
     }
-    if (tested === undefined) {
-      return unsatisfied(
-        [
-          'the numeric report does not record how many windows it validated, so the ledger cannot corroborate them',
-        ],
-        [reference],
+    // A negative counter is a recorded impossibility, and it cannot take part in the
+    // corroboration as though it were a measurement.
+    const servedValue = served.value !== undefined && served.value >= 0 ? served.value : undefined;
+    const requestsValue =
+      requests.value !== undefined && requests.value >= 0 ? requests.value : undefined;
+    const testedValue = tested.value !== undefined && tested.value >= 0 ? tested.value : undefined;
+    if (served.value !== undefined && served.value < 0) {
+      failures.push(
+        `the transport ledger records ${served.value} byte(s) served, which is not a possible byte count`,
       );
     }
-    const evidence = sourceEvidence(view, 'serverLedger') ?? reference;
-    if (tested > 0 && (served <= 0 || requests <= 0)) {
-      // The probe reports validated windows, so a ledger that accounts for no bytes
-      // and no requests contradicts it rather than merely being incomplete.
-      return violated(
-        [
-          `the numeric report validates ${tested} window(s) but its transport ledger records ${served} byte(s) over ${requests} request(s), so the ledger does not corroborate the reads`,
-        ],
-        [evidence],
+    if (requests.value !== undefined && requests.value < 0) {
+      failures.push(
+        `the transport ledger records ${requests.value} request(s), which is not a possible request count`,
       );
     }
-    if (tested === 0 && (served > 0 || requests > 0)) {
-      return violated(
-        [
-          `the transport ledger records ${served} byte(s) over ${requests} request(s) although no window was validated`,
-        ],
-        [evidence],
+    if (tested.value !== undefined && tested.value < 0) {
+      failures.push(
+        `the numeric report records ${tested.value} validated window(s), which is not a possible count`,
       );
     }
-    return satisfied([evidence]);
+    if (served.problem?.kind === 'missing' || requests.problem?.kind === 'missing') {
+      gaps.push('the transport ledger does not record both bytes served and request count');
+    }
+    if (tested.problem?.kind === 'missing') {
+      gaps.push(
+        'the numeric report does not record how many windows it validated, so the ledger cannot corroborate them',
+      );
+    }
+
+    if (servedValue !== undefined && requestsValue !== undefined && testedValue !== undefined) {
+      if (testedValue > 0 && (servedValue === 0 || requestsValue === 0)) {
+        // The probe reports validated windows, so a ledger that accounts for no bytes
+        // and no requests contradicts it rather than merely being incomplete.
+        failures.push(
+          `the numeric report validates ${testedValue} window(s) but its transport ledger records ${servedValue} byte(s) over ${requestsValue} request(s), so the ledger does not corroborate the reads`,
+        );
+      } else if (testedValue === 0 && (servedValue > 0 || requestsValue > 0)) {
+        failures.push(
+          `the transport ledger records ${servedValue} byte(s) over ${requestsValue} request(s) although no window was validated`,
+        );
+      } else {
+        const ref = sourceEvidence(
+          view,
+          'serverLedger',
+          `${servedValue} byte(s) over ${requestsValue} request(s)`,
+        );
+        if (ref !== undefined) evidence.push(ref);
+      }
+    }
+
+    if (failures.length > 0) return contradicted(failures, gaps, evidence);
+    if (gaps.length > 0) return unsatisfied(gaps, evidence);
+    return satisfied(evidence);
   },
 };
 
@@ -154,7 +271,7 @@ const windowBounds: Check = {
     const failures: string[] = [];
     const gaps: string[] = [];
     const evidence: EvidenceRef[] = [reference];
-    let measured = 0;
+    let usable = 0;
     list.forEach((entry, index) => {
       if (!isRecord(entry)) {
         gaps.push(`window record ${index} is not an object`);
@@ -174,38 +291,42 @@ const windowBounds: Check = {
         gaps.push(`window record ${index} does not record its bounds`);
         return;
       }
-      const width = finiteNumber(spec['w']);
-      const height = finiteNumber(spec['h']);
-      if (width === undefined || height === undefined) {
-        gaps.push(`window record ${index} does not record a usable size`);
-        return;
+      const width = readDimension(spec, 'w', index);
+      const height = readDimension(spec, 'h', index);
+      for (const read of [width, height]) {
+        if (read.problem === undefined) continue;
+        (read.problem.kind === 'missing' ? gaps : failures).push(read.problem.reason);
       }
-      if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
-        // A window is a whole number of cells. A fractional or non-positive dimension
-        // is not a measurable window, so it cannot be compared as though it were one
-        // and it cannot silently satisfy the bound.
-        failures.push(
-          `window record ${index} records a size of ${width}x${height} cells, which is not a whole positive number of cells`,
+      // Each recorded dimension is compared with the edge bound on its own, so a
+      // missing sibling cannot hide a recorded violation.
+      for (const [label, read] of [
+        ['width', width],
+        ['height', height],
+      ] as const) {
+        if (read.value === undefined) continue;
+        usable += 1;
+        if (read.value > WINDOW_EDGE) {
+          failures.push(
+            `a measured window ${label} of ${read.value} exceeds the ${WINDOW_EDGE}x${WINDOW_EDGE} window contract`,
+          );
+        }
+      }
+      if (width.value === undefined || height.value === undefined) {
+        gaps.push(
+          `window record ${index} does not record both dimensions, so its area cannot be compared with the ${WINDOW_CELLS}-cell contract limit`,
         );
         return;
       }
-      measured += 1;
-      if (width * height > WINDOW_CELLS) {
+      if (width.value * height.value > WINDOW_CELLS) {
         failures.push(
-          `a measured window of ${width}x${height} cells exceeds the ${WINDOW_CELLS}-cell contract limit`,
+          `a measured window of ${width.value}x${height.value} cells exceeds the ${WINDOW_CELLS}-cell contract limit`,
         );
         return;
       }
-      if (width > WINDOW_EDGE || height > WINDOW_EDGE) {
-        failures.push(
-          `a measured window of ${width}x${height} exceeds the ${WINDOW_EDGE}x${WINDOW_EDGE} window contract`,
-        );
-        return;
-      }
-      const ref = sourceEvidence(view, `windows[${index}].window`, `${width}x${height}`);
+      const ref = sourceEvidence(view, `windows[${index}].window`, `${width.value}x${height.value}`);
       if (ref !== undefined) evidence.push(ref);
     });
-    if (measured === 0 && failures.length === 0) {
+    if (usable === 0 && failures.length === 0) {
       gaps.push(
         "no usable numeric window size was recorded, so the contract's window bound was never observed",
       );

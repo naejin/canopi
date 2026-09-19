@@ -335,11 +335,14 @@ const MUTATIONS: Mutation[] = [
     apply: (reports) => mutateReport(reports, 'q2', (report) => ({ ...report, windows: [] })),
   },
   {
+    // A present but unusable leaf is invalid input, so it fails. Only a genuinely
+    // absent leaf gaps; the earlier expectation here contradicted the accepted
+    // contract and was corrected with the B3 repair.
     label: 'window: size substituted with an unusable value',
     target: 'Q-LOCAL-1',
     assertion: 'window-size-within-contract-limit',
-    expect: 'inconclusive',
-    requirementVerdict: 'inconclusive',
+    expect: 'fail',
+    requirementVerdict: 'fail',
     apply: (reports) =>
       mutateReport(reports, 'q2', (report) => ({
         ...report,

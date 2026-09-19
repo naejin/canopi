@@ -214,7 +214,10 @@ const roleLabels: Check = {
         continue;
       }
       if (record.role === undefined) {
-        gaps.push(undeclaredReason(record)!);
+        // A present-but-unusable label is invalid input; only genuine absence gaps.
+        const reason = undeclaredReason(record)!;
+        const problem = record.roleProblem;
+        (problem !== undefined && problem.kind === 'malformed' ? failures : gaps).push(reason);
         continue;
       }
       if (record.role === 'candidate') {
@@ -261,6 +264,7 @@ const referenceLabels: Check = {
     if (read.records === undefined) {
       return violated(['the resource report records no measurements list'], [read.reference]);
     }
+    const failures: string[] = [];
     const gaps: string[] = [];
     const evidence: EvidenceRef[] = [read.reference];
     const references: ResourceRecord[] = [];
@@ -277,16 +281,22 @@ const referenceLabels: Check = {
       }
       if (record.role === undefined || record.role === 'candidate') {
         const reason = undeclaredReason(record);
-        if (reason !== undefined) gaps.push(reason);
+        const problem = record.roleProblem;
+        if (reason !== undefined) {
+          if (problem !== undefined && problem.kind === 'malformed') failures.push(reason);
+          else gaps.push(reason);
+        }
         continue;
       }
-      gaps.push(
-        `${record.label} declares route role ${JSON.stringify(record.role)}, so it cannot be counted as a labelled reference measurement`,
+      // A present label that is neither candidate nor reference is unusable input.
+      failures.push(
+        `${record.label} declares route role ${JSON.stringify(record.role)}, which is neither candidate nor reference, so it cannot be counted as a labelled reference measurement`,
       );
     }
     if (references.length === 0) {
       gaps.push('no reference measurement is recorded to separate');
     }
+    if (failures.length > 0) return contradicted(failures, gaps, evidence);
     if (gaps.length > 0) return unsatisfied(gaps, evidence);
     return satisfied(evidence);
   },

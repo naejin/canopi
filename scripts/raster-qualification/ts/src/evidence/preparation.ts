@@ -62,13 +62,18 @@ function sidecarOf(context: CheckContext): {
   readonly reference?: EvidenceRef;
 } {
   const view = context.byRole.get(ROLE);
-  const reference = sourceEvidence(view, 'sidecar');
   const raw = view?.shape?.value['sidecar'];
-  if (view === undefined || view.shape === undefined || reference === undefined) {
+  if (view === undefined || view.shape === undefined) {
     return { problem: 'no preparation report was available' };
   }
   if (raw === undefined) {
-    return { reference, problem: 'the sidecar policy is measured but no sidecar record was supplied' };
+    // No record is cited when there is none: a satisfied outcome may not cite a
+    // field the snapshot does not record, and the declared policy is the evidence.
+    return { problem: 'no sidecar record was supplied' };
+  }
+  const reference = sourceEvidence(view, 'sidecar');
+  if (reference === undefined) {
+    return { problem: 'no preparation report was available' };
   }
   if (!isRecord(raw)) {
     // A present record of the wrong shape is invalid input, not missing evidence.
@@ -111,21 +116,33 @@ const sidecarHashes: Check = {
   id: 'prep.sidecar-hashes',
   assertion: 'sidecar-unchanged',
   run: (context) => {
+    // The hashes are read whenever a record exists, whatever the policy says: a
+    // malformed or contradicting hash is a recorded fact, and a policy problem is a
+    // separate gap that must not suppress it.
     const policy = policyOf(context);
-    if (policy.problem !== undefined) {
-      return policy.reference === undefined
-        ? unsatisfied([policy.problem])
-        : unsatisfied([policy.problem], [policy.reference]);
-    }
-    if (policy.policy === 'not_applicable') {
-      return satisfied(policy.reference === undefined ? [] : [policy.reference]);
-    }
     const read = sidecarOf(context);
-    if (read.problem !== undefined && read.record === undefined) {
-      const refs = read.reference === undefined ? [] : [read.reference];
-      return read.malformed === true ? violated([read.problem], refs) : unsatisfied([read.problem], refs);
+    const refs = [policy.reference, read.reference].filter(
+      (ref): ref is EvidenceRef => ref !== undefined,
+    );
+    if (read.malformed === true) {
+      // A present record of the wrong shape contradicts the declaration whatever the
+      // policy says, and the policy problem is retained beside it.
+      return contradicted(
+        [read.problem ?? 'the sidecar record is not an object'],
+        policy.problem === undefined ? [] : [policy.problem],
+        refs,
+      );
     }
-    const record = read.record ?? {};
+    if (read.record === undefined) {
+      // No record: a declared not-applicable policy is a deliberate statement, so
+      // there is nothing to observe. Otherwise the missing record and the policy
+      // problem are both gaps.
+      if (policy.policy === 'not_applicable') return satisfied(refs);
+      const gaps = [read.problem ?? 'no sidecar record was supplied'];
+      if (policy.problem !== undefined) gaps.push(policy.problem);
+      return unsatisfied(gaps, refs);
+    }
+    const record = read.record;
     const failures: string[] = [];
     const gaps: string[] = [];
     const evidence: EvidenceRef[] = read.reference === undefined ? [] : [read.reference];
@@ -161,6 +178,12 @@ const sidecarHashes: Check = {
         failures.push(`sidecar hash conflict: declared ${declared} but the report records ${expected}`);
       }
     }
+    if (policy.problem !== undefined) gaps.push(policy.problem);
+    // A declared not-applicable policy is a deliberate statement: it suppresses the
+    // observation gaps, but never a recorded contradiction.
+    if (policy.policy === 'not_applicable' && failures.length === 0) {
+      return satisfied(evidence);
+    }
     if (failures.length > 0) return contradicted(failures, gaps, evidence);
     if (gaps.length > 0) return unsatisfied(gaps, evidence);
     return satisfied(evidence);
@@ -171,21 +194,33 @@ const sidecarSurvival: Check = {
   id: 'prep.sidecar-survival',
   assertion: 'sidecar-unchanged',
   run: (context) => {
+    // Survival is read from the observations, never gated on the policy: a sidecar
+    // observed present and then absent is a recorded disappearance, and a missing
+    // policy is a separate gap that must not erase it.
     const policy = policyOf(context);
-    if (policy.problem !== undefined) {
-      return policy.reference === undefined
-        ? unsatisfied([policy.problem])
-        : unsatisfied([policy.problem], [policy.reference]);
-    }
-    if (policy.policy === 'not_applicable') {
-      return satisfied(policy.reference === undefined ? [] : [policy.reference]);
-    }
     const read = sidecarOf(context);
-    if (read.problem !== undefined && read.record === undefined) {
-      const refs = read.reference === undefined ? [] : [read.reference];
-      return read.malformed === true ? violated([read.problem], refs) : unsatisfied([read.problem], refs);
+    const refs = [policy.reference, read.reference].filter(
+      (ref): ref is EvidenceRef => ref !== undefined,
+    );
+    if (read.malformed === true) {
+      // A present record of the wrong shape contradicts the declaration whatever the
+      // policy says, and the policy problem is retained beside it.
+      return contradicted(
+        [read.problem ?? 'the sidecar record is not an object'],
+        policy.problem === undefined ? [] : [policy.problem],
+        refs,
+      );
     }
-    const record = read.record ?? {};
+    if (read.record === undefined) {
+      // No record: a declared not-applicable policy is a deliberate statement, so
+      // there is nothing to observe. Otherwise the missing record and the policy
+      // problem are both gaps.
+      if (policy.policy === 'not_applicable') return satisfied(refs);
+      const gaps = [read.problem ?? 'no sidecar record was supplied'];
+      if (policy.problem !== undefined) gaps.push(policy.problem);
+      return unsatisfied(gaps, refs);
+    }
+    const record = read.record;
     const failures: string[] = [];
     const gaps: string[] = [];
     const evidence: EvidenceRef[] = read.reference === undefined ? [] : [read.reference];
@@ -214,6 +249,12 @@ const sidecarSurvival: Check = {
       gaps.push(
         'the sidecar record does not observe that the sidecar was present before preparation, so its preservation is unmeasured',
       );
+    }
+    if (policy.problem !== undefined) gaps.push(policy.problem);
+    // A declared not-applicable policy is a deliberate statement: it suppresses the
+    // observation gaps, but a contradicting survival observation still fails.
+    if (policy.policy === 'not_applicable' && failures.length === 0) {
+      return satisfied(evidence);
     }
     if (failures.length > 0) return contradicted(failures, gaps, evidence);
     if (gaps.length > 0) return unsatisfied(gaps, evidence);
