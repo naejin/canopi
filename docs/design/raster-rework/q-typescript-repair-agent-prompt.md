@@ -1,6 +1,6 @@
 # TypeScript qualification — standing repair prompt
 
-Status: proposed — ready for user-forwarded implementation; keep this prompt for both bounded repair rounds, not one prompt per defect.
+Status: retired — both authorized repair rounds are complete; Round 2 remains unaccepted. Historical instructions below do not authorize Round 3. The user authorized the [bounded design reassessment](q-typescript-reassessment-agent-prompt.md) instead.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the work tracker.
 Current guidance: [standing review](q-typescript-review.md), [C1–C8 acceptance](q-admission-acceptance.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
 

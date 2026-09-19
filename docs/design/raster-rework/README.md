@@ -6,11 +6,12 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Round 1 is independently reviewed at `8ab1fff7`: specific fixes are retained, but the full boundary is not accepted despite 127 passing TypeScript tests. The [standing review](q-typescript-review.md#round-1-independent-disposition) records one consolidated disposition under unchanged C1–C8. Round 2 requires the user to forward that review and request continuation using the [same standing prompt](q-typescript-repair-agent-prompt.md). No direct agent-to-agent loop, new qualification experiments, Python deletion or N1 is authorized. Older prompts are historical evidence, not accumulating instructions.
+Round 2 is independently reviewed at `6a98cd33`: the complete boundary remains unaccepted despite 177 passing TypeScript tests. The [Round 2 disposition](q-typescript-review.md#round-2-independent-disposition) records lost failures, a display false pass and a rejected-request source overwrite. The two-round repair prompt is retired. The user authorized the [bounded design reassessment](q-typescript-reassessment-agent-prompt.md): reproduce, compare design options and propose verification/migration, then stop for user-mediated independent design review. No implementation, direct agent loop, new experiments, Python deletion or N1 is authorized. Older prompts are historical evidence, not accumulating instructions.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Standing TypeScript repair prompt](q-typescript-repair-agent-prompt.md) | Sole next assignment, retained for both user-forwarded repair rounds |
+| [TypeScript reassessment prompt](q-typescript-reassessment-agent-prompt.md) | Sole next assignment: documentation/diagnostics only, with implementation approval still required |
+| [Standing TypeScript repair prompt](q-typescript-repair-agent-prompt.md) | Retired after two unsuccessful repair/review rounds; no Round 3 authority |
 | [Standing TypeScript review](q-typescript-review.md) | Baseline T1–T4 family reproductions, independent evidence, subsequent round dispositions |
 | [Consolidated agent prompt](q-consolidated-agent-prompt.md) | Retired handoff executed in the consolidated admission repair |
 | [Consolidated repair receipt](q-consolidated-repair-receipt.md) | Historical implementer report; independent review found remaining blockers despite 261 passing tests |
@@ -18,7 +19,7 @@ Round 1 is independently reviewed at `8ab1fff7`: specific fixes are retained, bu
 | [TypeScript agent prompt](q-typescript-agent-prompt.md) | Retired handoff executed in the TypeScript decision-path migration |
 | [TypeScript repair round 2 log](evidence/q-typescript-repair-round2.txt) | Reproduction of the Round 1 disposition's six families, the transport declaration correction, thirteen guard-removal probes and the three-round reconciliation |
 | [TypeScript repair round 1 log](evidence/q-typescript-repair-round1.txt) | Reproduction of the standing review's T1–T4 examples, the mutation sweep, the adversarial pass, eleven guard-removal probes and the read-only reconciliation |
-| [TypeScript migration receipt](q-typescript-receipt.md) | Implementer report; reviewed at `abf502b6`, complete boundary not accepted; update this same receipt for repair rounds |
+| [TypeScript migration receipt](q-typescript-receipt.md) | Revision-linked implementation reports; Round 2 independently unaccepted; preserved for reassessment |
 | [Assertion evidence map](../../../scripts/raster-qualification/assertion_evidence_map.md) | The 68 contract assertions, the evidence that decides each, and the seven that are permanent gaps |
 | [Stable admission acceptance contract](q-admission-acceptance.md) | Single C1–C8 input/behavior/test matrix and blocker-versus-follow-up policy |
 | [Consolidated admission review](q-consolidated-admission-review.md) | Revision-linked reproductions, reviewed boundaries, retained repairs and evidence limits |

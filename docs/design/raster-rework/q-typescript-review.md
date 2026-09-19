@@ -1,8 +1,8 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — Round 1 independently reviewed at `8ab1fff7` / `73a7b214`; specific repairs retained, complete decision path not accepted. Round 2 requires user-forwarded continuation.
+Status: evidence — Round 2 independently reviewed at `6a98cd33` / `c76d1b2e`; complete decision path not accepted. Two-round repair authority is exhausted; the user authorized a bounded design reassessment, not Round 3.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
-Current guidance: [standing prompt](q-typescript-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
+Current guidance: [reassessment prompt](q-typescript-reassessment-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
 
@@ -106,3 +106,30 @@ The transport item was a wrong **declaration**, not a missing comparison: the pl
 Reported honestly: thirteen guard-removal probes were run and **two are zero results**. The pin comparison does not fail the suite alone because the built-revision comparison immediately after it catches the same inputs, and the envelope/identity check is redundant with identity verification; the pin pair is load-bearing only together, which a combined probe confirms. One early probe reading was a measurement artifact — it instrumented `process.stderr`, which the test runner captures — and was re-measured before being believed.
 
 Reviewer coverage note: the R1-C local-bridge item and the R1-D envelope agreement are existing contract paths that neither the implementer's sweep nor the earlier reviews reached. They are recorded as such rather than presented as newly discovered requirements.
+
+## Round 2 independent disposition
+
+Reviewed checkout `6a98cd33`, implementation `c76d1b2e`. **Not accepted.** The two-round stopping condition applies. The user subsequently authorized the [bounded design reassessment](q-typescript-reassessment-agent-prompt.md), not another repair round. Preserve delivered fixes; no rollback, engine change, Python work, Q experiment or N1 follows from this review.
+
+Independently rerun: TypeScript compilation, **177 emitted Node tests**, **261 retained Python tests**, **14 stub-runner checks**, documentation validation and `git diff --check`, all passing. Node tests used approved unrestricted subprocess capture. This review did not independently repeat the clean-empty-dist build, sensitivity probes, private reconciliation or platform/engine measurements. The private `fail` distribution remains implementer-reported. No source files were changed during review.
+
+### Reproduced blockers under unchanged C1–C8
+
+All cases used the real emitted CLI, the authoritative contract and fresh `TempRoot` synthetic reports. The existing `roleReports()` control passed the target requirement. Overall Q remained non-pass; that does not excuse incorrect individual outcomes. These cases extend the previous families, not the requirements.
+
+| Finding / contract | Minimal mutation and observation | Demonstrated cause |
+| --- | --- | --- |
+| R2-A — C5/C8 failure retention | Set `trace.runs[0].failedTiles=1`: Q-DISPLAY-1 fails. Also delete that run's `ok`: becomes inconclusive and the tile failure reason disappears. Independently, set `pageErrors=['render crashed']` and delete `tilesRendered`: page error is lost behind the missing count | `evidence/display.ts` rendering checks use an `if/else if` chain; page errors are examined only in the final successful-count branch |
+| R2-B — C3/C8 artifact comparisons | Set `q1.verifiedArtifacts[0].version='999'`: Q-ART-1 fails. Also remove the second artifact record: becomes inconclusive, losing the wrong-version comparison. Separately set `q1.sourceCorrespondence[0].pinnedRevision` to forty zeroes and delete `artifactRevision`: the present pin conflict becomes only a missing-revision gap | `verifiedVersions` returns on missing coverage before comparing present versions. `pinnedCorrespondence` requires both revisions before independently comparing the present claimed pin to the declaration |
+| R2-C — C4/C5 observation sufficiency | Set the first trace run's `tilesRendered=1` and `tileRequests=1`, retaining its 100 latency samples and zero failed tiles: Q-DISPLAY-1 passes | Render/request equality is checked, but sample/count consistency and the plan's minimum 100 tile requests per run are not established |
+| R2-D — C7 source preservation | In a disposable request with valid source paths, set `now='invalid'` and `--out` equal to its q2 source path: CLI exits 2, but replaces source bytes with `kind:'rejected-input'` | `cli.ts` registers source paths only after request validation succeeds; the rejection publication path knows only the request/declaration paths |
+
+These four families encompass the five examples in the user-facing review (wrong version and wrong pin are separate examples of R2-B). Reproduction method is the Round 1 method above: existing emitted `TempRoot/runCli`, `roleReports/SOURCE_ROLES/NOW/realContractPath`, and `fixtureManifest/candidatePins`; fresh control per mutation. For R2-D capture source bytes before/after and parse the written document's `kind`; only a disposable report is overwritten. For R2-C preserve the control's recorded statistics and samples—no engine measurement is claimed.
+
+### Structural reassessment and retained work
+
+The demonstrated defect is not the precedence table: independently decidable facts never reach it. Central reduction cannot preserve a failure an earlier branch skipped. Separately, independent counters are not enough without relationships that establish what was measured. The output safety defect is an ownership boundary that applies only after successful admission, despite rejection also writing a file.
+
+Retain TypeScript, raw-source snapshots, the no-bundle-input boundary, runner authority, strict parsing regressions, accepted historical fixes, and honestly unsupported observations. Existing tests remain useful but are not a sufficient acceptance oracle. Do not infer that all six Round 1 families are complete from the passing suite. This review was targeted and finite; it did not independently establish the absence of sibling defects across the whole boundary.
+
+The approved next activity is evidence-backed comparison of bounded mapping repair versus a focused finding/publication seam change, with a recommendation, migration proposal and independent verification strategy. It is not an approved redesign. No third repair round is authorized. User-mediated independent design review must precede implementation.

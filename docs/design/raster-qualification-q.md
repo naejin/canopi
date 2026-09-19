@@ -4,7 +4,7 @@ Status: evidence — **Q is not qualified.** Experiment subtest results are reco
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
 and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
 Independent review found further gate defects; that distribution is not independently accepted.
-The [standing TypeScript repair](raster-rework/q-typescript-repair-agent-prompt.md) is the next handoff; the [independent review](raster-rework/q-typescript-review.md) records remaining gate defects.
+The [bounded TypeScript design reassessment](raster-rework/q-typescript-reassessment-agent-prompt.md) is the next handoff; the [Round 2 independent review](raster-rework/q-typescript-review.md#round-2-independent-disposition) records remaining gate defects. The two-round repair prompt is retired; no Round 3 implementation is authorized.
 Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
@@ -16,12 +16,11 @@ Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edi
 
 The qualification decision path is now TypeScript under `scripts/raster-qualification/ts/`. It
 recomputes admission and verdicts from raw report and declaration bytes and reproduces the recorded
-verdicts below for the existing evidence. Standing independent reviews at `abf502b6` and `8ab1fff7` found ten
-blocking defect families across two rounds in the first deliveries (duplicate source roles resolved by arrival order,
-incomplete per-run records combining into a complete one, required artifact coverage inferred from
-supplied name prefixes, and sidecar hash equality treated as survival evidence); both repairs are
-delivered for review, and the receipt records that the existing records' verdicts are unchanged across
-all three evaluation rounds. The Python evaluator is frozen for comparison and is no
+verdicts below for the existing evidence, according to the implementation receipt. Independent
+review at `6a98cd33`, after both repair rounds, still reproduced lost display/artifact failures,
+a display false pass and source overwrite on rejected input. The receipt reports unchanged private-record
+verdicts across all three evaluation rounds; that reconciliation was not independently rerun.
+The Python evaluator is frozen for comparison and is no
 longer the authority; its historical reconciliation is retained in the
 [consolidated repair receipt](raster-rework/q-consolidated-repair-receipt.md).
 

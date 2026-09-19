@@ -6,11 +6,21 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
-Current disposition: Round 1 is independently reviewed at `8ab1fff7`; specific T1–T4 repairs are retained, but the complete boundary remains unaccepted. See the [consolidated Round 1 findings](q-typescript-review.md#round-1-independent-disposition). The same standing prompt can govern Round 2 only after the user forwards this review and requests continuation. C1–C8 remain fixed; no direct delegation is authorized.
+Current disposition: Round 2 is independently reviewed at `6a98cd33`; the complete boundary remains unaccepted. See the [Round 2 findings](q-typescript-review.md#round-2-independent-disposition). The two-round limit has been reached. The user authorized [bounded design reassessment](q-typescript-reassessment-agent-prompt.md), not another repair round. C1–C8 remain fixed; no direct delegation is authorized.
 
 Round 1 debrief evidence: 127 TypeScript tests, 261 Python regressions and 14 runner checks independently pass, yet additional family-level CLI mutations still produce false passes and lost failures. Permanent resource gaps can conceal incorrect individual assertions. Declaring one reducer does not prevent comparisons omitted upstream. Earlier reviews also missed existing paths; distinguish expanded review coverage from new requirements or regressions. Full reproductions, retained fixes, environment details and unmeasured evidence are recorded once in the standing review. No time/cost improvement or language-effect claim is established by this round.
 
 ## Consolidated independent review and migration baseline
+
+### Round 2 reassessment evidence
+
+At `6a98cd33`, the reviewer independently reran compilation, 177 TypeScript tests, 261 Python regressions, 14 runner checks and docs/diff checks successfully. CLI perturbations nevertheless exposed R2-A–R2-D: missing fields hid independently known display/artifact failures; consistent request/render counters did not establish the required number of tile samples; and rejected-input publication overwrote a disposable source report. Exact mutations and limits live in the standing review rather than being duplicated here.
+
+The escaped invariant families recur across rounds: failure retention, semantic sufficiency and input preservation. The final output-safety example extends review into the rejection path; a successful-path collision test was insufficient. Earlier implementer sweeps and independent reviews both missed sibling paths. This is evidence of inadequate coverage, not evidence that TypeScript or a particular model caused the failure.
+
+The approved process response is a design checkpoint. The reassessment must trace which independent checks execute before reduction, compare bounded alternatives and propose a test matrix derived from obligations and dependencies. The hypothesis is that making omitted comparisons harder and testing failure-plus-gap combinations systematically will reduce escaped families; it is not yet a measured improvement. Preserve positive controls and accepted fixes. Keep implementation approval separate from approving the reassessment assignment.
+
+For the final debrief compare baseline, Round 1, Round 2 and any later explicitly authorized work by escaped invariant family, self-review discoveries, invalid controls, coverage omissions, user handoffs and review outcome. Record elapsed effort/cost only where measured (currently not established); do not use line counts, test counts or mutation totals as proxies for correctness or efficiency. Success means independently accepted behavior with fewer recurring escapes, not merely fewer messages. No additional implementation round is authorized by this measurement plan.
 
 ### User-mediated repair protocol
 
@@ -18,7 +28,6 @@ The user explicitly retained the courier role. The process change is fewer, full
 
 At final debrief, compare escaped invariant families and user handoffs before/after this protocol. Record self-review discoveries, mutations attempted and omissions, invalid positive controls, reason-preservation failures, sandbox-only failures and optional findings kept out of acceptance. Independent review must cover the full agreed boundary before returning one consolidated result, distinguish accepted/blocked/unreviewed behavior, and cite C IDs for new blockers. The reviewer must not substitute incremental example reviews or cosmetic demands for the agreed contract. Preserve unknown time/cost as unknown; do not claim the new workflow reduced effort without evidence.
 
-Latest independent evidence is in the [standing TypeScript review](q-typescript-review.md): 74 emitted tests passed outside the subprocess-restricting sandbox, 14 runner checks and docs/diff checks passed, yet real CLI probes exposed T1–T4. This is evidence that green test counts and a central reducer do not by themselves guarantee complete admission or preserve findings discarded upstream. The next receipt must test requirement-level verdicts; overall Q non-pass can conceal those defects.
 
 At `3a7ec9eb` the reviewer independently ran 261 Python tests, 13/13 stub-runner checks, documentation validation and diff checks successfully. Small in-memory controls through the real assembler/evaluator nevertheless reproduced:
 
