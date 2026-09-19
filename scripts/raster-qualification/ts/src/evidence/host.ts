@@ -7,55 +7,63 @@
  * perfectly good evidence for a different host, it is simply not this one.
  */
 
-import type { SourceView } from '../decide.js';
-import type { MappingResult } from './mapping.js';
-import { unresolved } from './mapping.js';
-import { named } from './numericTransport.js';
+import { satisfied, sourceEvidence, unsatisfied, type Check, type RequirementChecks } from './checks.js';
+import { namedCheck } from './records.js';
 import { ALLOWED_HOSTS } from '../declared/route.js';
 
-const ASSERTIONS = [
-  'bundled-worker-and-asset-path-exercised',
-  'no-network-origin-required',
-  'observed-in-desktop-webview',
-];
+const ROLE = 'host';
 
-export function mapHost(source: SourceView | undefined): MappingResult {
-  const assertions = unresolved(ASSERTIONS);
-  const observations: Record<string, unknown> = {};
-  const failures: string[] = [];
-  const gaps: string[] = [];
-  const base = {
-    sourceRoles: ['host'] as const,
-    source: 'reports/host.json',
-    legacyProducerCommand: 'Desktop WebView host report',
-    route: 'bundled worker and asset path with no network origin',
-    artifact: { name: 'desktop-webview', version: 'bundled' },
-    fixtures: [] as { name: string; sha256?: string }[],
-  };
+const acceptedHost: Check = {
+  id: 'host.accepted-webview',
+  assertion: 'observed-in-desktop-webview',
+  run: (context) => {
+    const view = context.byRole.get(ROLE);
+    const reference = sourceEvidence(view, 'identity.host');
+    if (view === undefined || view.facts === undefined || reference === undefined) {
+      return unsatisfied(['no Desktop host report was available']);
+    }
+    const host = view.facts.identity?.['host'];
+    if (typeof host !== 'string' || host.length === 0) {
+      return unsatisfied(['the host report does not record which host it observed'], [reference]);
+    }
+    if (!ALLOWED_HOSTS.includes(host)) {
+      return unsatisfied(
+        [
+          `host ${JSON.stringify(host)} cannot satisfy this requirement; accepted hosts: ${ALLOWED_HOSTS.join(', ')}`,
+        ],
+        [reference],
+      );
+    }
+    return satisfied([reference]);
+  },
+};
 
-  if (source === undefined || source.facts === undefined) {
-    gaps.push('no Desktop host report was available');
-    return { assertions, observations, failures, gaps, ...base };
-  }
-  const named_ = source.facts.assertions;
-  assertions.set(
+export const HOST_CHECKS: RequirementChecks = {
+  requirementId: 'Q-HOST-1',
+  assertions: [
     'bundled-worker-and-asset-path-exercised',
-    named(named_, 'bundled-worker-and-asset-path-exercised'),
-  );
-  assertions.set('no-network-origin-required', named(named_, 'no-network-origin-required'));
+    'no-network-origin-required',
+    'observed-in-desktop-webview',
+  ],
+  required: ['host.bundled-worker', 'host.no-network-origin', 'host.accepted-webview'],
+  unsupported: new Map<string, string>(),
+  checks: [
+    namedCheck(
+      'host.bundled-worker',
+      'bundled-worker-and-asset-path-exercised',
+      ROLE,
+      'bundled-worker-and-asset-path-exercised',
+    ),
+    namedCheck('host.no-network-origin', 'no-network-origin-required', ROLE, 'no-network-origin-required'),
+    acceptedHost,
+  ],
+};
 
-  const host = source.facts.identity?.['host'];
-  observations['host'] = host ?? null;
-  if (typeof host !== 'string' || host.length === 0) {
-    gaps.push('the host report does not record which host it observed');
-    assertions.set('observed-in-desktop-webview', 'inconclusive');
-  } else if (!ALLOWED_HOSTS.includes(host)) {
-    gaps.push(
-      `host ${JSON.stringify(host)} cannot satisfy this requirement; accepted hosts: ${ALLOWED_HOSTS.join(', ')}`,
-    );
-    assertions.set('observed-in-desktop-webview', 'inconclusive');
-  } else {
-    assertions.set('observed-in-desktop-webview', 'pass');
-  }
-  return { assertions, observations, failures, gaps, ...base };
-}
+export const HOST_PROVENANCE = {
+  sourceRoles: ['host'] as const,
+  source: 'reports/host.json',
+  legacyProducerCommand: 'Desktop WebView host report',
+  route: 'bundled worker and asset path with no network origin',
+  artifact: { name: 'desktop-webview', version: 'bundled' },
+  fixtures: [] as { name: string; sha256?: string }[],
+};

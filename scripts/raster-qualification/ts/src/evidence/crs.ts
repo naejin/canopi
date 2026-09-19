@@ -5,13 +5,11 @@
  * gap, so an absent comparison never reads as agreement.
  */
 
-import type { SourceView } from '../decide.js';
-import type { MappingResult } from './mapping.js';
-import { unresolved } from './mapping.js';
-import { named } from './numericTransport.js';
+import { namedCheck } from './records.js';
+import type { RequirementChecks } from './checks.js';
 
 /** Producer assertion name for each contract assertion. */
-const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
+const SOURCE_NAMES: readonly (readonly [string, string])[] = [
   ['reference-crs-configured-explicitly', 'reference-epsg-configured-explicitly'],
   ['crs-resolver-identified', 'crs-resolver-identified'],
   ['candidate-projection-within-tolerance', 'candidate-projection-matches-reference'],
@@ -20,28 +18,23 @@ const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
     'candidate-returned-coordinate-addresses-requested-pixel',
   ],
   ['no-metadata-rewritten-or-inferred', 'original-metadata-untouched'],
-]);
+];
 
-export function mapCrs(source: SourceView | undefined): MappingResult {
-  const assertions = unresolved(Array.from(SOURCE_NAMES.keys()));
-  const observations: Record<string, unknown> = {};
-  const failures: string[] = [];
-  const gaps: string[] = [];
-  const base = {
-    sourceRoles: ['q4crs'] as const,
-    source: 'reports/q4-crs.json',
-    legacyProducerCommand: 'measure.py q4-crs --fixture <tif> --out reports/q4-crs.json',
-    route: 'native GDAL CRS resolution',
-    artifact: { name: 'gdal', version: '3.8.4' },
-    fixtures: [] as { name: string; sha256?: string }[],
-  };
+export const CRS_CHECKS: RequirementChecks = {
+  requirementId: 'Q-CRS-1',
+  assertions: SOURCE_NAMES.map(([assertion]) => assertion),
+  required: SOURCE_NAMES.map(([assertion]) => `crs.${assertion}`),
+  unsupported: new Map<string, string>(),
+  checks: SOURCE_NAMES.map(([assertion, sourceName]) =>
+    namedCheck(`crs.${assertion}`, assertion, 'q4crs', sourceName),
+  ),
+};
 
-  if (source === undefined || source.facts === undefined) {
-    return { assertions, observations, failures, gaps: ['no CRS report was available'], ...base };
-  }
-  const named_ = source.facts.assertions;
-  for (const [assertion, sourceName] of SOURCE_NAMES) {
-    assertions.set(assertion, named(named_, sourceName));
-  }
-  return { assertions, observations, failures, gaps, ...base };
-}
+export const CRS_PROVENANCE = {
+  sourceRoles: ['q4crs'] as const,
+  source: 'reports/q4-crs.json',
+  legacyProducerCommand: 'measure.py q4-crs --fixture <tif> --out reports/q4-crs.json',
+  route: 'native GDAL CRS resolution',
+  artifact: { name: 'gdal', version: '3.8.4' },
+  fixtures: [] as { name: string; sha256?: string }[],
+};

@@ -11,14 +11,21 @@
  */
 
 import { checkedMapping, type MappingContext, type MappingResult } from './mapping.js';
-import { mapNumericTransport } from './numericTransport.js';
+import { NUMERIC_CHECKS, NUMERIC_PROVENANCE } from './numericTransport.js';
 import { ARTIFACT_CHECKS, ARTIFACT_PROVENANCE } from './artifactCorrespondence.js';
-import { mapPreparation } from './preparation.js';
-import { mapMembers } from './members.js';
-import { mapValues } from './values.js';
-import { mapCrs } from './crs.js';
-import { mapCancellation, mapFailureInjection, mapTeardown } from './lifecycle.js';
-import { mapHost } from './host.js';
+import { PREPARATION_CHECKS, PREPARATION_PROVENANCE } from './preparation.js';
+import { MEMBER_CHECKS, MEMBER_PROVENANCE } from './members.js';
+import { VALUE_CHECKS, VALUE_PROVENANCE } from './values.js';
+import { CRS_CHECKS, CRS_PROVENANCE } from './crs.js';
+import {
+  CANCEL_CHECKS,
+  CANCEL_PROVENANCE,
+  FAILURE_INJECTION_CHECKS,
+  FAILURE_INJECTION_PROVENANCE,
+  TEARDOWN_CHECKS,
+  TEARDOWN_PROVENANCE,
+} from './lifecycle.js';
+import { HOST_CHECKS, HOST_PROVENANCE } from './host.js';
 import { RESOURCE_CHECKS, RESOURCE_PROVENANCE } from './resources.js';
 import { DISPLAY_CHECKS, DISPLAY_PROVENANCE } from './display.js';
 
@@ -42,25 +49,21 @@ function legacy(mapping: RequirementMapping): RegistryEntry {
 
 export const MAPPINGS: ReadonlyMap<string, RegistryEntry> = new Map<string, RegistryEntry>([
   ['Q-ART-1', { kind: 'checked', mapping: checkedMapping(ARTIFACT_CHECKS, ARTIFACT_PROVENANCE) }],
-  ['Q-LOCAL-1', legacy((context) => mapNumericTransport(context.byRole.get('q2'), [
-    'reads-over-proposed-local-transport',
-    'transport-ledger-corroborates-bytes',
-    'no-single-request-returns-whole-artifact',
-    'values-match-independent-reference',
-    'validity-matches-reference-exactly',
-    'window-size-within-contract-limit',
-  ]))],
-  ['Q-PREP-1', legacy((context) => mapPreparation(context.byRole.get('q3prepare')))],
-  ['Q-MEMBER-1', legacy((context) => mapMembers(context.byRole.get('q3members')))],
+  ['Q-LOCAL-1', { kind: 'checked', mapping: checkedMapping(NUMERIC_CHECKS, NUMERIC_PROVENANCE) }],
+  ['Q-PREP-1', { kind: 'checked', mapping: checkedMapping(PREPARATION_CHECKS, PREPARATION_PROVENANCE) }],
+  ['Q-MEMBER-1', { kind: 'checked', mapping: checkedMapping(MEMBER_CHECKS, MEMBER_PROVENANCE) }],
+  ['Q-VALUE-1', { kind: 'checked', mapping: checkedMapping(VALUE_CHECKS, VALUE_PROVENANCE) }],
+  ['Q-CRS-1', { kind: 'checked', mapping: checkedMapping(CRS_CHECKS, CRS_PROVENANCE) }],
+  ['Q-CANCEL-1', { kind: 'checked', mapping: checkedMapping(CANCEL_CHECKS, CANCEL_PROVENANCE) }],
   [
-    'Q-VALUE-1',
-    legacy((context) => mapValues(context.byRole.get('q2'), context.byRole.get('q4slope'))),
+    'Q-TEARDOWN-1',
+    { kind: 'checked', mapping: checkedMapping(TEARDOWN_CHECKS, TEARDOWN_PROVENANCE) },
   ],
-  ['Q-CRS-1', legacy((context) => mapCrs(context.byRole.get('q4crs')))],
-  ['Q-CANCEL-1', legacy((context) => mapCancellation(context.byRole.get('q5lifecycle')))],
-  ['Q-TEARDOWN-1', legacy((context) => mapTeardown(context.byRole.get('q5lifecycle')))],
-  ['Q-FAILINJ-1', legacy((context) => mapFailureInjection(context.byRole.get('q5lifecycle')))],
-  ['Q-HOST-1', legacy((context) => mapHost(context.byRole.get('host')))],
+  [
+    'Q-FAILINJ-1',
+    { kind: 'checked', mapping: checkedMapping(FAILURE_INJECTION_CHECKS, FAILURE_INJECTION_PROVENANCE) },
+  ],
+  ['Q-HOST-1', { kind: 'checked', mapping: checkedMapping(HOST_CHECKS, HOST_PROVENANCE) }],
   ['Q-RES-1', { kind: 'checked', mapping: checkedMapping(RESOURCE_CHECKS, RESOURCE_PROVENANCE) }],
   ['Q-DISPLAY-1', { kind: 'checked', mapping: checkedMapping(DISPLAY_CHECKS, DISPLAY_PROVENANCE) }],
 ]);
