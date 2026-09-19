@@ -6,7 +6,15 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
-Current disposition: delivery `933fb593` repaired the original B1–B3 cases but remains unaccepted on NC1–NC2, recorded in the [standing review](q-typescript-review.md#boundary-repair-independent-disposition). The [next handoff](q-numeric-counter-repair-agent-prompt.md) completes numeric semantics and reconciles MR1 readiness guidance, without redesign or producer work. The user remains the courier and approval point.
+Current disposition: bounded NC1–NC2/MR1 work is independently accepted at `579880be`; the [repair loop is closed](q-typescript-review.md#numeric-completion-independent-acceptance). The [next handoff](q-desktop-bridge-agent-prompt.md) moves to a positive Desktop transport producer/pilot. The [collaboration protocol](collaboration-protocol.md) assigns settled design and independent review to the main agent, execution/evidence to the implementation agent, and forwarding/approval to the user.
+
+### Continuous-improvement checkpoint after tooling acceptance
+
+Observed outcome: the independent 125-case counter matrix matched expected ledger outcomes and existing gates passed. This supports acceptance of the bounded numeric slice, not exhaustive evaluator correctness or a new raster capability. No real Q capability was added. The next progress measure is whether a real worker/native bridge/host run produces admissible observations, including honest failure where artifact correspondence is unresolved.
+
+The next slice tests three process improvements: explicit native-read ownership should make byte provenance reviewable; tracing each capability to its positive producer should prevent MR1-style naming assumptions; consumer inventory plus replacement coverage should permit a concrete Python deletion without losing evidence. Record whether each helped, actual discoveries and residual gaps in the existing receipt. Timing/cost stays unknown unless recorded. Do not infer that a model, language or added test count caused improvement.
+
+The main agent preserves accepted scope and consolidates blockers; the implementer self-reviews before courier delivery; the user should not need to reconcile contradictory prompts. Maintain one current handoff, retire executed prompts and distinguish measured, accepted, integrated and released states. Improvements to shared tooling/skills require evidence and separate scope; this agreement does not authorize direct agent-to-agent automation.
 
 ### Boundary-repair debrief evidence
 

@@ -1,6 +1,6 @@
 # TypeScript qualification — decision-complete design
 
-Status: partial — design retained; delivery `933fb593` independently reviewed with original B1–B3 examples repaired and NC1–NC2 still blocking acceptance.
+Status: completed — bounded repair loop closed after independent acceptance at `579880be`; retained design contract, not permission to rerun implementation. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Current guidance: [numeric completion receipt](q-typescript-receipt.md#nc1nc2-numeric-counter-completion-implementation-response), [C1–C8 contract](q-admission-acceptance.md), [standing review](q-typescript-review.md), [main plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [LiDAR guide](../../agent/lidar.md).
 

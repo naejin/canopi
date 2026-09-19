@@ -6,11 +6,13 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-Delivery `933fb593` is independently reviewed: original B1–B3 examples are repaired, and the NC1–NC2 numeric blockers it found are repaired at `e1f7ac95` with the MR1 readiness correction reconciled. The [numeric completion handoff](q-numeric-counter-repair-agent-prompt.md) is the sole next assignment when forwarded by the user; the settled design is unchanged. Readiness correction MR1 distinguishes stripped-file rejection from successful scoped Desktop transport. After tooling acceptance, a separately authorized positive bridge producer/host measurement is the intended milestone. No experiment, Python deletion, production N1 or integration is authorized by this handoff.
+The bounded numeric completion/MR1 slice is independently accepted at `579880be`; the agreed tooling repair loop is closed. The [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) is the sole next assignment when forwarded by the user: isolated TS/Rust positive transport, one small generated-fixture Desktop pilot and a specific Python helper replacement. Q remains unqualified; no production N1 or integration is authorized. The [collaboration protocol](collaboration-protocol.md) defines main-agent design/review, implementation-agent execution and the user's courier/approval role.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Numeric completion handoff](q-numeric-counter-repair-agent-prompt.md) | Executed handoff; NC1–NC2 repaired at `e1f7ac95` with MR1 reconciled, awaiting independent review |
+| [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) | Sole next assignment: positive scoped native transport/worker pilot, honest host/profile evidence and bounded Python retirement |
+| [Collaboration protocol](collaboration-protocol.md) | User-mediated design, implementation, review and evidence-driven improvement loop |
+| [Numeric completion handoff](q-numeric-counter-repair-agent-prompt.md) | Retired; bounded slice independently accepted at `579880be` |
 | [Bounded boundary-repair handoff](q-final-boundary-repair-agent-prompt.md) | Retired assignment; original examples repaired, two numeric blockers remain after independent review |
 | [TypeScript implementation handoff](q-typescript-implementation-agent-prompt.md) | Retired S1–S5 assignment; delivery independently reviewed with remaining B1–B3 blockers |
 | [TypeScript reassessment prompt](q-typescript-reassessment-agent-prompt.md) | Retired investigation assignment; original delivery remains recoverable in `55d6f485` |

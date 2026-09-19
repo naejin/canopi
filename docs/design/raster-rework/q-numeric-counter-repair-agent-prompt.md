@@ -1,9 +1,8 @@
 # Qualification tooling — numeric counter completion
 
-Status: retired — executed and delivered at `e1f7ac95`; the delivery is recorded in the [receipt](q-typescript-receipt.md#nc1nc2-numeric-counter-completion-implementation-response) and awaits independent review. Kept for the assignment record; it authorizes nothing further.
-Current guidance: [numeric completion receipt](q-typescript-receipt.md#nc1nc2-numeric-counter-completion-implementation-response), [standing review](q-typescript-review.md#nc1nc2-implementation-response-at-e1f7ac95-implementer-not-acceptance), [readiness handoff](q-typescript-receipt.md#measurement-readiness-handoff).
+Status: retired — delivered at `e1f7ac95`, independently accepted at `579880be`; see the [acceptance](q-typescript-review.md#numeric-completion-independent-acceptance). Kept as historical assignment; it authorizes nothing further.
+Current guidance: [independent acceptance](q-typescript-review.md#numeric-completion-independent-acceptance), [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md), [readiness handoff](q-typescript-receipt.md#measurement-readiness-handoff).
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [independent disposition](q-typescript-review.md#boundary-repair-independent-disposition), [settled design](q-typescript-reassessment.md), [C1–C8](q-admission-acceptance.md), [LiDAR guide](../../agent/lidar.md).
 
 ## Mandate and start
 

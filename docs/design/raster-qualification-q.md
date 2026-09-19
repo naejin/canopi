@@ -4,7 +4,7 @@ Status: evidence — **Q is not qualified.** Experiment subtest results are reco
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
 and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
 Independent review found further gate defects; that distribution is not independently accepted.
-Delivery `933fb593` was independently reviewed: the original B1–B3 examples were repaired but two numeric-counter blockers remained under the unchanged design; the [numeric completion](raster-rework/q-numeric-counter-repair-agent-prompt.md) repaired them at `e1f7ac95` and reconciled the MR1 readiness correction, and that delivery awaits independent review. No producer was implemented, so the readiness handoff still requires a positive local-bridge producer, the identity envelope and a declared host role before any fresh qualification evidence.
+The bounded numeric completion/MR1 slice is independently accepted at `579880be`; no real Q capability was added. The [Desktop bridge handoff](raster-rework/q-desktop-bridge-agent-prompt.md), when forwarded, is next: isolated TS/Rust producer/host pilot and a specific Python-helper replacement. Full Q remains unqualified; private/large runs, production N1 and engine substitution remain unauthorized.
 Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
@@ -549,4 +549,4 @@ large fixtures and measurement output stay outside Git under the ignored `.rq-sc
   part.
 - **Branch and commits:** recorded in the accompanying delivery note.
 - **Status:** verified, **not integrated**. Pushing does not integrate.
-- **Next action:** independent review of the [numeric completion delivered at `e1f7ac95`](raster-rework/q-typescript-receipt.md#nc1nc2-numeric-counter-completion-implementation-response). After tooling acceptance, separately authorize the positive bridge/host producer prerequisites and measurements described in the corrected readiness handoff. The earlier evidence/limitation review remains outstanding. **N1 requires Q acceptance, not just tooling acceptance.**
+- **Next action:** user-forwarded [Desktop bridge slice](raster-rework/q-desktop-bridge-agent-prompt.md), then independent review of code and actual pilot evidence separately. Preserve source-pin failures and remaining gaps. **Production N1 still requires Q acceptance, not tooling or pilot acceptance.**

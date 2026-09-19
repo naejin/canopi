@@ -1,14 +1,20 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — delivery `933fb593` independently reviewed: original B1–B3 cases repaired; NC1–NC2 numeric blockers remain. Q remains unqualified.
+Status: evidence — bounded numeric completion and MR1 accepted at `579880be`; repair loop closed for this scope. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
-Current guidance: [numeric repair handoff](q-numeric-counter-repair-agent-prompt.md), [decision-complete design](q-typescript-reassessment.md), [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response), [C1–C8 contract](q-admission-acceptance.md), [debrief](review-and-debrief.md).
+Current guidance: [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md), [collaboration protocol](collaboration-protocol.md), [decision-complete design](q-typescript-reassessment.md), [C1–C8 contract](q-admission-acceptance.md), [debrief](review-and-debrief.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
 
+## Numeric completion independent acceptance
+
+Reviewed `579880be`, implementation `e1f7ac95`: **accepted for the bounded NC1–NC2/MR1 slice**, with no remaining blocker found in that review. An independently generated 125-case real-CLI matrix over absent/null/fractional/zero/positive values for each of the three counters matched all expected ledger verdicts. Compilation, 279 TypeScript tests, 261 frozen Python regressions, 18 runner checks, docs, syntax and diff checks passed. Fresh-output compilation and real qualification experiments were not independently repeated. No files were changed during review.
+
+This closes the agreed tooling repair loop, not every possible evaluator defect and not Q qualification. Retain accepted behavior and move to the [bounded positive Desktop bridge slice](q-desktop-bridge-agent-prompt.md), with TS/Rust producer work and evidence separate from full-Q acceptance. No new real Q capability was demonstrated by the numeric repair. User-forwarded execution remains required.
+
 ## Settled-design independent disposition
 
-The latest review is [boundary-repair independent disposition](#boundary-repair-independent-disposition); the following baseline is retained as revision-linked evidence.
+The latest review is [numeric completion acceptance](#numeric-completion-independent-acceptance); the following baseline is retained as revision-linked evidence.
 
 Reviewed delivery: `d6b3f8e1`, including implementation `70f97f30` and design `ac68fb64`. This historical disposition led to the now-retired [boundary-repair handoff](q-final-boundary-repair-agent-prompt.md). See the newer disposition below for current blockers.
 

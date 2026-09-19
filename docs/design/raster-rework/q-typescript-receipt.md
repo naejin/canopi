@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — migration and both repair rounds delivered; complete decision path remains unaccepted. Historical implementation claims below are not acceptance. Reassessment `55d6f485` was reviewed; the [reviewer-owned design](q-typescript-reassessment.md) and [implementation handoff](q-typescript-implementation-agent-prompt.md) replace the unresolved proposal. No new implementation is claimed; Q remains unqualified.
+Status: evidence — bounded NC1–NC2/MR1 slice independently accepted at `579880be`; the agreed repair loop is closed. See [independent acceptance](q-typescript-review.md#numeric-completion-independent-acceptance) for coverage and limits. Historical delivery claims below are revision-specific, not full-Q acceptance. The [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) is next when forwarded; Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).
