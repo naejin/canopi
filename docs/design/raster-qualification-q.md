@@ -4,7 +4,7 @@ Status: evidence — **Q is not qualified.** Experiment subtest results are reco
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
 and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
 Independent review found further gate defects; that distribution is not independently accepted.
-The [bounded TypeScript design reassessment](raster-rework/q-typescript-reassessment-agent-prompt.md) is the next handoff; the [Round 2 independent review](raster-rework/q-typescript-review.md#round-2-independent-disposition) records remaining gate defects. The two-round repair prompt is retired; no Round 3 implementation is authorized.
+The [bounded TypeScript design reassessment](raster-rework/q-typescript-reassessment.md) is delivered at `82184e6c` and awaits user-mediated independent design review; the [Round 2 independent review](raster-rework/q-typescript-review.md#round-2-independent-disposition) records the remaining gate defects it starts from. The two-round repair prompt is retired; no Round 3 implementation, experiment, further Python migration or N1 is authorized by that delivery.
 Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
@@ -549,5 +549,5 @@ large fixtures and measurement output stay outside Git under the ignored `.rq-sc
   part.
 - **Branch and commits:** recorded in the accompanying delivery note.
 - **Status:** verified, **not integrated**. Pushing does not integrate.
-- **Next action:** independent review of this corrected receipt and of limitation 1. **N1 must not
-  start before that review concludes.**
+- **Next action:** independent design review of the delivered [bounded reassessment](raster-rework/q-typescript-reassessment.md); the earlier review of this corrected receipt and of limitation 1 remains outstanding. **N1 must not
+  start before those reviews conclude.**

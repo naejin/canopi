@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — migration and both repair rounds delivered; independent review at `6a98cd33` finds remaining C1–C8 blockers. See the [Round 2 disposition](q-typescript-review.md#round-2-independent-disposition). Claims below are revision-linked implementer reports, not whole-boundary acceptance. The user authorized [design reassessment](q-typescript-reassessment-agent-prompt.md), not Round 3. Q remains unqualified.
+Status: evidence — migration and both repair rounds delivered; independent review at `6a98cd33` finds remaining C1–C8 blockers. See the [Round 2 disposition](q-typescript-review.md#round-2-independent-disposition). Claims below are revision-linked implementer reports, not whole-boundary acceptance. The user authorized [design reassessment](q-typescript-reassessment-agent-prompt.md), not Round 3; the reassessment is delivered at `82184e6c` as [q-typescript-reassessment.md](q-typescript-reassessment.md) and awaits independent design review. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).
@@ -495,3 +495,11 @@ and the staging/free-space policy is recorded as its own missing observation rat
 into the display disk-cache reason.
 
 **Round 2 is complete and delivered. It awaits independent review.**
+
+## Reassessment closure of this receipt (documentation only)
+
+The Round 2 review was delivered as **not accepted**, and the two-round repair authority is exhausted. This receipt therefore closes without a further implementer repair: the migration it reports is preserved, and the remaining work is a design decision that belongs to the user.
+
+The user-authorized [reassessment](q-typescript-reassessment.md) at `82184e6c` re-reproduced the four Round 2 families at the same implementation revision, verified the emitted build against a fresh compilation of the inspected source, and added two demonstrated families this receipt never covered (`evidence/resources.ts` route attribution and the `--reports`-mode publication path). It also found that two of the TypeScript behaviours under review are regressions against the retained Python gate rather than new specification gaps: the per-run rendered-versus-sample reconciliation and the undeclared-role rule both still exist and are tested in `qualification_evidence.py` and `tests/test_qualification_gate.py`. No claim in this receipt is withdrawn; the receipt simply does not establish those two behaviours.
+
+Nothing further is implemented, and no migration step is authorized, until the user has independent design review of that document. `canopi-kqpp` stays open.

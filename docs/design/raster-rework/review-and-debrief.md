@@ -119,6 +119,28 @@ Architecture, language, implementation and review-process effects remain separab
 architecture and no language, so its repairs are attributable to the findings and the tests rather
 than to either.
 
+### Reassessment debrief inputs
+
+The bounded [design reassessment](q-typescript-reassessment.md) at `82184e6c` delivered evidence for the
+final synthesis in addition to the Round 2 inputs above. No further repair round followed it; the
+instrument for the next authorized implementation is the proposed seam, not a third sweep.
+
+| Dimension | Observation |
+| --- | --- |
+| Escaped invariant families | Two crossed both repair rounds and the Round 2 review: **a check whose reachability is decided by imperative control flow** (mutually exclusive chains, early returns, conjunctions of independent preconditions), and **a claim inferred from supplied data instead of the declaration** (tile counts from a sample list, a reference label from a missing role). The reassessment reproduced four Round 2 instances and added two more, one of them a false *assertion* pass (`reference-measurements-labelled-separately`) that no whole-requirement check could see |
+| Self-review findings | Dead code that reads like a discard (`decide.ts`'s `void gap` loop over merged shape gaps) and an unused `assertionVerdicts` local; two duplicated doc comments left by hand-applied repairs (`resources.ts`, `preparation.ts`); admission reasons published twice per requirement because `decideRequirement` concatenates the admission's reasons with a `Findings` list that already contains them. Each is small; together they show that per-site repairs were applied and reviewed where the last finding pointed rather than across the file |
+| Invalid controls | The first directory-mode case was labelled a rejected-input case but validated successfully and became the negative control for the pair; a driver label printed an unchanged report as `writtenKind=decision`; an early `assertionsOf` helper iterated a captured array and silently wrote the unmutated reports, producing a first N-1 reading that was re-measured and corrected. Every reading quoted in the reassessment is from a re-run after those driver fixes |
+| Hypothesis that did not survive measurement | `decide.ts` merging the shape's gaps and then discarding them in a no-op loop looked like the same family. Measurement refuted it: admission reports those gaps, and a deleted `identity.runId` does reach the decision. Recorded because a source reading that is not re-measured is not evidence |
+| Reviewer coverage gaps | The Round 2 sweep and adversarial pass did not reach `evidence/resources.ts` route attribution or the directory-mode publication path, and their oracle assertions were requirement-level, so an individual assertion wrongly promoted to `pass` could not be seen. The reassessment also compared the TypeScript rules with the retained Python gate and found two TypeScript behaviours that are regressions against rules Python still enforces and tests — a comparison neither the implementer rounds nor the review performed |
+| Guards that prevent recurrence | The proposed totality check (every contract assertion decided by at least one check, enforced by the driver) prevents silently undecided assertions; per-check negative fixtures prevent a check that stops running from passing unnoticed; the `reads`-based retention sweep makes "a finding survives an unrelated missing observation" mechanical instead of family-by-family; the migration oracle (per-requirement decision comparison) makes an unintended verdict change visible in the slice that causes it; the publication read-set makes input protection independent of validation success. None of these is claimed to be complete |
+| Language, architecture, implementation, test oracle | The reassessment separates them: R2-C's sample/count reconciliation and N-1's undeclared-role rule are **implementation/migration** regressions with a retained oracle; R2-A's page-error check is a **new implementation** check that no retained path performs and that was gated behind a sibling; R2-B's conjunction and R2-D's derivation order are **architecture/design** defects present in the retained implementation too; the requirement-level oracle in the retained Python test is a **test-oracle** error, not a language effect. No language change is recommended, and no family was caused by TypeScript as a language |
+| Measured effort | Not measured for this reassessment beyond the command list in the document; not inferred from test counts |
+
+Success for the next authorized implementation is defined as **fewer escaped invariant families at
+independent review**, not a higher test count. No reduction in handoffs is promised: two repair rounds
+were followed by a design reassessment, and whether the seam shortens the next cycle is a prediction
+this evidence does not support.
+
 ## C1–C8 repair report
 
 Repair code: `qualification_evidence.py`, `qualification_gate.py`, `measure.py`, `qual_lib.py` and

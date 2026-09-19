@@ -1,8 +1,8 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — Round 2 independently reviewed at `6a98cd33` / `c76d1b2e`; complete decision path not accepted. Two-round repair authority is exhausted; the user authorized a bounded design reassessment, not Round 3.
+Status: evidence — Round 2 independently reviewed at `6a98cd33` / `c76d1b2e`; complete decision path not accepted. Two-round repair authority is exhausted. The bounded reassessment is delivered at `82184e6c` and awaits user-mediated independent design review; no implementation is authorized.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
-Current guidance: [reassessment prompt](q-typescript-reassessment-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
+Current guidance: [bounded reassessment](q-typescript-reassessment.md), [reassessment prompt](q-typescript-reassessment-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
 
@@ -133,3 +133,20 @@ The demonstrated defect is not the precedence table: independently decidable fac
 Retain TypeScript, raw-source snapshots, the no-bundle-input boundary, runner authority, strict parsing regressions, accepted historical fixes, and honestly unsupported observations. Existing tests remain useful but are not a sufficient acceptance oracle. Do not infer that all six Round 1 families are complete from the passing suite. This review was targeted and finite; it did not independently establish the absence of sibling defects across the whole boundary.
 
 The approved next activity is evidence-backed comparison of bounded mapping repair versus a focused finding/publication seam change, with a recommendation, migration proposal and independent verification strategy. It is not an approved redesign. No third repair round is authorized. User-mediated independent design review must precede implementation.
+
+## Reassessment delivered at `82184e6c` (proposed, awaiting design review)
+
+The authorized reassessment is delivered as [q-typescript-reassessment.md](q-typescript-reassessment.md). It is documentation only: no source, test, producer, requirement, tolerance, pin, budget or UI change, and `canopi-kqpp` stays open. This review's status moves from "repair rounds exhausted" to "awaiting user-mediated independent design review of a proposed bounded change". The four Round 2 families above remain the accepted record and are neither withdrawn nor superseded.
+
+The reassessment re-reproduced R2-A to R2-D from the coherent synthetic control through the emitted CLI and verified its own build identity by recompiling the inspected source and diffing the emitted output. It added two families that neither the implementer rounds nor this review reported, both in the same defect class but outside the three files this review attributed:
+
+| Finding / contract | Minimal mutation and observation | Demonstrated cause |
+| --- | --- | --- |
+| N-1 — C4/C8 route attribution | Reduce `q6resources.measurements` to the labelled candidate record: `reference-measurements-labelled-separately=inconclusive`, `measurement-is-of-candidate-route=pass`. Delete that record's `routeRole`: `measurement-is-of-candidate-route=inconclusive` and `reference-measurements-labelled-separately=**pass**` | `evidence/resources.ts` treats every record whose `routeRole` is not `candidate` — including a record with no role at all — as a separately labelled reference measurement |
+| N-2 — C7 publication in `--reports` mode | Valid contract with `--out` on a declared report file: refused, file preserved, nothing written. Unreadable contract, same destination: the declared report file is replaced by a `kind:'rejected-input'` document | the same derivation order as R2-D — report paths are registered only once the request builds, although the nine report file names are statically declared and need no validation |
+
+Retained as evidence by the reassessment: the recompilation build-identity check; the refuted `void gap` hypothesis (admission reports the merged shape's gaps, so a missing `identity.runId` does reach the decision — dead code, not a lost finding); and the comparison against the retained Python gate, which shows R2-C's sample/count reconciliation and N-1's undeclared-role rule are migration regressions that the retained implementation still enforces and tests, while R2-A's page-error check is a new TypeScript check that no retained path performs.
+
+Review-coverage gaps recorded for the debrief: the Round 2 sweep and adversarial pass did not reach `resources.ts` route attribution or the directory-mode publication path, and the retained Python oracle for the undeclared-role rule asserts the *requirement* verdict, which stays `inconclusive` in the TypeScript path even when the individual assertion is wrongly promoted to `pass`. A whole-requirement non-pass is therefore not a sufficient oracle for individual assertions, in tests as well as in reviews.
+
+No independent design review has examined the reassessment. Implementation, Q experiments, remaining Python migration and N1 remain unauthorized.
