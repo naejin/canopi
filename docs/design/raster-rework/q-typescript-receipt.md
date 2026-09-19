@@ -608,3 +608,132 @@ than an internal defect.
   fewer latencies than rendered tiles will now fail. That is the intended relationship, and the first
   real reconciliation after this change must report the decision diff per requirement;
 * time and cost remain unknown: they were not measured.
+
+## B1–B3 boundary repair (implementation response)
+
+Revision `95028481`, baseline `d6b3f8e1`, design `ac68fb64`. This is the implementer's report for the
+[bounded boundary-repair handoff](q-final-boundary-repair-agent-prompt.md); it claims no acceptance, and
+the three families remain open until the reviewer confirms them.
+
+### What changed
+
+| Family | Repair |
+| --- | --- |
+| B1 — absent-input aliases | `canonicalInput` resolves an absent input through its nearest existing ancestor and appends the unresolved suffix, so the comparison with the destination is made in the same canonical space. The review's reproduction (an input declared as `alias/not-yet.json` with `alias` a symlink to `actual`, and the output written as `actual/not-yet.json`) now refuses with exit 2, leaves the absent input absent, and publishes the diagnostic into a freshly owned directory. Only genuine absence takes that route: an existing ancestor that cannot be resolved refuses publication instead of guessing. Nothing is created, and the existing-file, dangling-link and creation-race guards are unchanged |
+| B2 — independent failures | Window dimensions, ledger counters, the validated-window count and the sidecar observations are parsed and judged individually before any comparison that needs a second operand. A width above the edge limit fails without a height; a negative byte or request count fails without its sibling; the unusable operand is recorded as a gap beside the failure, so both classes survive at assertion and requirement level. Sidecar survival is read whatever the policy says, so a disappearance observed after recorded presence fails and a missing policy is a separate gap; a genuinely not-applicable declaration without contradicting observations still passes |
+| B3 — malformed versus absent | A present but unusable required leaf fails; genuine absence gaps. Window width `"bad"`, `null`, a list, an object, a boolean, zero, fractional and negative values fail; `routeRole` `null`, a number, a list, an object, an empty string and an unknown label fail on both the candidate and the reference side. No coercion or truthiness is used, and unsupported resource-policy gaps are unchanged |
+
+### Same-family sweep results
+
+One bounded sweep over the changed checks and their shared helpers, as tables rather than copy-pasted
+cases: 15 window leaves, 11 ledger leaves, 14 sidecar/policy combinations, 9 role-label forms, record
+permutations (violation first, violation second, unusable sibling) and both publication entry modes.
+
+Four counterexamples were found and fixed before delivery:
+
+1. a **negative validated-window count** was accepted as a positive count, because the counter reader
+   admitted any finite number; negative counts are now unusable input;
+2. a **negative byte or request count** participated in the corroboration arithmetic, so it could both
+   fail and be reasoned about as a measurement; unusable values are now excluded from the comparison;
+3. an **unmeasured window record** (`classification` other than `measured`) was silently skipped; it is
+   now reported as a gap naming the classification, so a skipped window is visible;
+4. **evidence references were resolved too strictly**: against the retained producer report shapes, an
+   ordinary missing-field gap (a report with no `windows` list, or no identity block) was classified as
+   an internal-check defect and made the run exit input-class. References are now resolved only for an
+   outcome that claims the fact is satisfied, because a failure or gap that cites a field the report
+   does not carry is reporting that absence. Found by running the decision path read-only over the
+   retained producer reports, and it is the reason that reconciliation now exits 1 with no defects.
+
+### Controls corrected
+
+Two existing expectations contradicted the accepted contract and were corrected with the reason
+recorded: the sweep's "window size substituted with an unusable value" expected `inconclusive` and now
+expects `fail` (that expectation encoded the B3 defect), and one window gap message now names the
+dimension that is missing instead of a collapsed "usable size". No test was weakened; both corrections
+make the expectation match the contract's malformed-versus-absent rule.
+
+### Guard-removal probes (isolated copies of the sources)
+
+| Guard removed | Detected by |
+| --- | --- |
+| absent-input alias normalization | 4 failures (request-mode alias both sides, dangling ancestor, nested alias) |
+| window independent-failure retention | 4 failures (width without height, area without operands, two sweep tables) |
+| ledger independent-failure retention | 3 failures (negative bytes without requests, two sweep tables) |
+| sidecar survival independent of policy | 2 failures |
+| malformed window dimension classified as absent | 2 failures |
+| malformed role classified as absent, candidate side | 2 failures |
+| malformed role classified as absent, reference side | 2 failures |
+
+No probe was a zero result, and each failed the intended cases rather than an unrelated permanent gap.
+The directory-mode alias case did **not** fail under the alias probe: there the destination's parent is
+canonicalized on the output side, so the input-side normalization is redundant for that direction. That
+redundancy is reported rather than credited as coverage.
+
+### Gate commands actually run
+
+`desktop/web/node_modules/.bin/tsc -p scripts/raster-qualification/ts/tsconfig.json`; `node --test
+'scripts/raster-qualification/ts/dist/tests/*.test.js'` (266 passing, from 255 before the repair); the
+same compile and test from a fresh output directory; `python3 -m unittest discover -s
+scripts/raster-qualification/tests` (261 passing, frozen reference); `bash
+scripts/raster-qualification/tests/test_runner_exit.sh` (18 passing); `bash -n
+scripts/raster-qualification/run_all_experiments.sh`; `python3 scripts/check_docs.py`; `git diff
+--check`. The private experiment runner was not invoked, no producer was changed, and no identity was
+fabricated for an old report.
+
+### Limitations
+
+The sweep is finite; it is not proof that no other leaf is misclassified. No engine, browser, platform or
+private experiment was run. Time and cost remain unmeasured. The read-only reconciliation over the
+retained producer reports is a local re-decision over already-collected evidence: it is not a
+qualification run, and its reports predate parts of the current consumer vocabulary.
+
+## Measurement-readiness handoff
+
+What a fresh bounded qualification run needs, requirement by requirement. This maps the existing
+mandatory gaps to producer and host availability; it changes no acceptance limit and claims no
+measurement. Sources are the tracked producer code (`measure.py`, `qual_lib.py`, `run_display_trace.mjs`,
+`run_all_experiments.sh`, `ts/src/request.ts`) and the read-only reconciliation above.
+
+**Kind of gap**: *missing producer* means no code emits the observation; *missing run* means a producer
+exists but the evidence has not been collected with the current vocabulary; *missing environment* means
+the producer exists but its host or fixture is unavailable; *wiring* means the evidence is produced but
+the decision path reads a different file or field.
+
+| Requirement | Observation needed | Current availability | Kind |
+| --- | --- | --- | --- |
+| all roles | the `identity` block (`id`, `experiment`, `command`, `environment`, `routeId`, `host`, `transport`, `runId`, `recordedAt`, `fixturePolicy`, `fixtures`, `artifact`) that admission requires | no producer writes an `identity` block; `Report.payload()` in `qual_lib.py` has no such key, and only the frozen Python consumer references the vocabulary. 11 of 12 requirements report the missing block on the retained reports | **missing producer** (envelope), prerequisite for everything else |
+| `Q-LOCAL-1` | bounded numeric windows over the plan's scoped local bridge: `testedWindows`, `windows[].window.{w,h}` and the ledger in the report the decision path reads | `measure.py q2-numeric` writes exactly that vocabulary today; the retained report predates it. `measure.py q2-local-bridge` (bounded access to stripped local files) is produced by the runner but **not read by the decision path**, which maps role `q2` to `q2-numeric.json` | **missing run** (current producer) + **wiring decision**: which report carries the scoped local bridge |
+| `Q-HOST-1` | a Desktop WebView host report recording `identity.host = desktop-webview` and the bundled worker/asset path | no producer emits a host report, and no source role `host` has declared expectations in the decision path, so the accepting rule is reachable only from a test | **missing producer** + consumer schema decision + **missing environment** (packaged Desktop WebView) |
+| `Q-DISPLAY-1` | one cold and three warm runs with at least 100 tile requests and 100 usable latencies each, reconciled against renders | `run_display_trace.mjs` exists and writes `runs`; the retained probe has 1 cold and 1 warm run. The enveloped trace lives inside the resources report (`displayTrace`), while the decision path reads the raw probe as role `trace` | **missing run** + **wiring decision** (which file is the declared trace) + **missing environment** (Chromium present; Desktop hosting still absent) |
+| `Q-RES-1` | candidate-route memory, sampling, counters and the display disk-cache bound | `measure.py q6-resources` exists and writes candidate/reference measurement rows; the retained rows carry no `routeRole` label. The 512 MiB disk-cache bound and the staging/free-space policy have no producer at all | **missing run** for the counters, **missing producer** for the two plan bounds |
+| `Q-ART-1` | bench-verified versions, integrity, license and source correspondence | `bootstrap_bench.py` plus `candidates.json` exist; no artifact report carries the identity envelope or the correspondence chain | **missing run** |
+| `Q-PREP-1`, `Q-MEMBER-1`, `Q-VALUE-1`, `Q-CRS-1` | preparation, member, slope and CRS verdicts | the `measure.py` subcommands and probes exist and the runner routes them; they need the identity envelope, the prepared fixtures and the private originals | **missing run** + **missing environment** (private IGN fixtures) |
+| `Q-CANCEL-1` | cancellation with work in flight on the plan's route | the recorded probe slices a resident buffer, which is a different operation | **missing producer** (capability) |
+| `Q-TEARDOWN-1` | resource release observed on the route's own handles | release is asserted from a flag rather than observed | **missing producer** (observation) |
+| `Q-FAILINJ-1` | a forced disk-write failure | no probe injects one | **missing producer** (capability) |
+| `Q-MEMBER-1` overview precedence, `Q-VALUE-1` fixture-class coverage | an overview-precedence comparison and a per-fixture-class coverage assertion | no probe or assertion exists | **missing producer** |
+
+### Prerequisites for the first scoped-local-bridge Desktop WebView measurement
+
+In dependency order, so a later authorization can size the work:
+
+1. **Producer envelope.** Every report must record the `identity` block above; without it no requirement
+   is admitted, and a run would only reproduce the 11-of-12 identity gaps. This is a producer change and
+   is outside this slice.
+2. **Host role decision.** The decision path rejects a source whose role is `host`, because no declared
+   expectations exist for it. A Desktop WebView measurement needs either a declared host role or a
+   declared expectation recording the host on an existing role.
+3. **Local-bridge wiring.** Decide which report carries the scoped local bridge — the stripped-local
+   `q2-local-bridge` producer or the numeric probe — and align `REPORT_FILES` and the declared transport
+   accordingly. Both files are already produced by the runner.
+4. **Bounded-read prerequisite.** The recorded numeric limitation stands (`Q` receipt limitation 1): a
+   bounded numeric read needs a prepared tiled derivative or a bounded legacy reader, so preparation
+   must precede numeric windows on the platform fixture.
+5. **Display trace source and shape.** Decide whether role `trace` reads the raw probe or the enveloped
+   `displayTrace`, and replay a fixed viewport with at least 100 requests across one cold and three warm
+   runs.
+6. **Run mechanics.** Each run needs a fresh output root: the decision CLI never replaces an existing
+   path, and the runner refuses to start when its final output already exists.
+7. **Then the remaining obligations**: the resource budgets and the two unobserved plan bounds, the
+   lifecycle capabilities (`Q-CANCEL-1`, `Q-TEARDOWN-1`, `Q-FAILINJ-1`) and the member/value coverage
+   gaps — none of which the local-bridge or host measurements would close.

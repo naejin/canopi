@@ -1,10 +1,15 @@
 # Qualification tooling — bounded boundary repair
 
-Status: proposed — ready for execution when forwarded by the user; not qualification or independent acceptance.
+Status: retired — executed and delivered at `95028481`; the delivery is recorded in the [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response) and awaits independent review. Kept for the assignment record; it authorizes nothing further.
+Current guidance: [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response), [measurement-readiness handoff](q-typescript-receipt.md#measurement-readiness-handoff), [standing review](q-typescript-review.md#b1b3-implementation-response-at-95028481-implementer-not-acceptance), [settled design](q-typescript-reassessment.md).
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
-Current guidance: [settled design](q-typescript-reassessment.md), [independent review](q-typescript-review.md#settled-design-independent-disposition), [C1–C8](q-admission-acceptance.md), [LiDAR guide](../../agent/lidar.md).
-
 ## Assignment and first action
+
+The text below is the historical assignment, not a current instruction. Delivered under it: the B1–B3
+repair, a bounded same-family sweep, seven guard-removal probes in isolated copies, the settled design's
+final gates (266 TypeScript tests in place and from a fresh output directory, 261 retained Python tests,
+18 runner checks, syntax, docs and diff checks), and a measurement-readiness handoff. Q remains
+unqualified and `canopi-kqpp` stays open.
 
 Repair the three confirmed families B1–B3 in the linked independent disposition. Complete the existing D1–D5 design, not a new architecture or language migration. The user remains the courier; the reviewer owns design and independent acceptance. One consolidated delivery, not a handoff after each case.
 

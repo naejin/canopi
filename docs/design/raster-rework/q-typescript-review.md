@@ -1,8 +1,8 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — settled-design delivery through `d6b3f8e1` independently reviewed; three blocking families remain. The design is retained; bounded repair is next.
+Status: evidence — settled-design delivery through `d6b3f8e1` independently reviewed with B1–B3 blocking; the bounded repair is delivered at `95028481` and awaits independent review. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
-Current guidance: [decision-complete design](q-typescript-reassessment.md), [bounded repair handoff](q-final-boundary-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [migration receipt](q-typescript-receipt.md), [debrief](review-and-debrief.md).
+Current guidance: [decision-complete design](q-typescript-reassessment.md), [repair receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response), [bounded repair handoff](q-final-boundary-repair-agent-prompt.md), [C1–C8 contract](q-admission-acceptance.md), [debrief](review-and-debrief.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
 
@@ -203,3 +203,27 @@ remaining zero results.
 Unchanged by this response: `canopi-kqpp` stays open, Q is not qualified, no independent review has
 examined the implementation, and no experiment, producer migration, engine work, Python deletion or N1
 is authorized.
+
+## B1–B3 implementation response at `95028481` (implementer, not acceptance)
+
+The bounded repair is delivered; the implementer's evidence is the [repair section of the migration
+receipt](q-typescript-receipt.md#b1b3-boundary-repair-implementation-response). Implementing a repair is
+not accepting it, and this response resolves nothing above.
+
+| Review finding | Response |
+| --- | --- |
+| B1 absent-input aliases | An absent input is canonicalized through its nearest existing ancestor with the unresolved suffix appended, and compared with the destination in the same canonical space. The reported reproduction now refuses with exit 2 and leaves the input absent; a genuine absence whose existing ancestor cannot be resolved (a dangling link) refuses publication instead of guessing; no directory is created. Existing-file, dangling-link and creation-race guards are unchanged and their tests still pass |
+| B2 numeric independent failures | Dimensions and ledger counters are parsed and judged individually before any cross-field comparison. `w=2048` without `h` fails on the edge bound and records the missing height as a gap; `fixtureBytesServed=-1` without `fixtureRequests` fails on the byte count and records the missing operand as a gap. Area and corroboration comparisons without operands gap without erasing either |
+| B2 sidecar independence | Survival is read whatever the policy says: a disappearance observed after recorded presence fails, and a missing policy is recorded as a gap beside it. A genuinely not-applicable declaration without contradicting observations still passes |
+| B3 malformed versus absent | A present unusable leaf fails; absence gaps. Window width `"bad"` and `routeRole: null` now fail, with the full matrix exercised (null, wrong primitive and container types, zero, fractional, negative, unknown label) plus valid boundary controls. No coercion or truthiness |
+
+Two further counterexamples were found by the bounded sweep and fixed in scope: negative counters were
+admitted as measurements, and — against the retained producer report shapes — ordinary missing-field
+gaps were classified as internal-check defects, which made a read-only reconciliation over real reports
+exit input-class. The second is a validity threat of the same family, so it was repaired here and is
+reported in the receipt.
+
+Known and reported rather than hidden: the directory-mode alias case is protected by the output-side
+canonicalization alone, so the input-side normalization is redundant in that direction; and the
+measurement-readiness handoff records that no producer currently writes the `identity` block admission
+requires, which is a prerequisite for any fresh qualification evidence and is outside this slice.

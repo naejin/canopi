@@ -167,6 +167,19 @@ The settled design was implemented at `5878f80e` (S1 `2b0a02c7`, S2 `70e51534`, 
 | Unavailable observations | No producer, engine, browser or private experiment ran. `Q-HOST-1`'s accepted-host rule is implemented but unreachable through the CLI, and the resource disk-cache/staging bounds and the lifecycle/member/value/host obligations remain explicit gaps |
 | Measured effort | Not measured; test count is not used as a proxy |
 
+### Boundary-repair debrief inputs
+
+The B1–B3 repair at `95028481` adds these inputs to the synthesis:
+
+| Dimension | Observation |
+| --- | --- |
+| Families the implementation review caught | Three remained after the S1–S5 delivery: an absent input could be created through a directory alias; a recorded numeric violation was lost when its sibling operand was absent; and a present unusable leaf became a gap instead of a failure. All three are the same "one fact hides another" shape the reassessment described, now at leaf granularity |
+| Counterexamples found by the repair's own sweep | Four: negative counters admitted as measurements, negative counters used in corroboration arithmetic, unmeasured window records dropped without a finding, and evidence references resolved too strictly so that ordinary missing-field gaps were reported as internal-check defects. The last one was found only by running the decision path read-only over the retained producer report shapes, not by synthetic fixtures |
+| Controls corrected | Two retained expectations contradicted the accepted contract: a sweep case expected an unusable window size to be inconclusive (the B3 defect itself), and a window reason collapsed the missing dimension into "usable size". Both were corrected with the reason recorded rather than by relaxing anything |
+| Guard-removal probes | Seven removals in isolated copies, all detected: alias normalization, window and ledger failure retention, sidecar retention, malformed window dimension, malformed role on each side. No zero results; one redundant direction (directory-mode alias) reported rather than credited |
+| Measurement readiness | The handoff distinguishes a missing producer from a missing run or environment. The headline prerequisite is producer-side: no producer writes the `identity` block the decision path requires, so 11 of 12 requirements cannot be admitted against real reports whatever else is fixed. The scoped local bridge and the display trace are produced but not wired to the roles the decision path reads |
+| Measured effort | Not measured; test count is not used as a proxy |
+
 ## C1–C8 repair report
 
 Repair code: `qualification_evidence.py`, `qualification_gate.py`, `measure.py`, `qual_lib.py` and
