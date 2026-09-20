@@ -15,7 +15,7 @@ use super::engine::{GdalEngine, GdalProgram};
 use super::grid::{
     self, GeoTransform, RasterGrid, ValidMask, classify_coverage, remap_mask_checked, union_grid,
 };
-use super::paths::{self, LidarPaths};
+use super::paths::LidarPaths;
 use super::prepared_raster::PreparedRaster;
 use common_types::lidar::{
     LidarImportDecisionPreview, LidarImportProgressPhase, LidarImportReview, LidarImportSourceFacts,
@@ -853,6 +853,11 @@ fn stage_source(
 /// The derivative belongs to the reader and is gone before this returns. A
 /// failed or cancelled attempt removes its partial outputs, so a failed
 /// staging attempt never leaves a half-written numeric asset behind.
+///
+/// Both staged outputs are written while the derivative is alive, so they are
+/// charged to the reader's combined working-set budget (four sample bytes and
+/// one validity byte per cell) rather than to a second, independent check that
+/// would see the same free bytes.
 #[allow(clippy::too_many_arguments)]
 fn stage_source_samples(
     engine: &GdalEngine,
@@ -870,17 +875,20 @@ fn stage_source_samples(
     let raw_bytes = cells
         .checked_mul(4)
         .ok_or_else(|| "source raster byte count overflows".to_string())?;
-    paths::require_free_space(
-        job_dir,
-        raw_bytes
-            .checked_add(cells)
-            .and_then(|bytes| bytes.checked_add(super::prepared_raster::FREE_SPACE_FLOOR_BYTES))
-            .ok_or_else(|| "staged source size overflows".to_string())?,
-        "the staged source outputs",
-    )?;
+    let staged_output_bytes = cells
+        .checked_mul(5)
+        .ok_or_else(|| "staged source size overflows".to_string())?;
 
     let staged = (|| -> Result<[f64; 2], String> {
-        let mut reader = PreparedRaster::open(engine, input, grid, nodata, job_dir, cancel)?;
+        let mut reader = PreparedRaster::open(
+            engine,
+            input,
+            grid,
+            nodata,
+            staged_output_bytes,
+            job_dir,
+            cancel,
+        )?;
         write_source_outputs(&mut reader, grid, raw_path, mask_path, cancel)
     })();
     match staged {
@@ -2952,6 +2960,125 @@ mod tests {
             leftovers.is_empty(),
             "derivative left behind: {leftovers:?}"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The import caller charges both staged outputs while the derivative is
+    /// alive. 265 MiB free passes each former separate check (261 MiB for the
+    /// outputs, 264 MiB for preparation), so only the combined estimate can
+    /// reject it - and it must reject before preparation or any output file.
+    #[test]
+    fn staged_source_rejects_an_insufficient_combined_budget_before_preparation() {
+        use crate::services::lidar::paths::capacity_probe;
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let dir = std::env::temp_dir().join(new_id("canopi-combined-budget"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let grid = RasterGrid {
+            width: 1024,
+            height: 1024,
+            geotransform: [0.0, 1.0, 0.0, 1024.0, 0.0, -1.0],
+        };
+        let raw_path = dir.join("source.raw");
+        let mask_path = dir.join("valid.bin");
+        let _guard = capacity_probe::override_available(265 * 1024 * 1024);
+        // A missing input never reaches GDAL: the capacity error proves the
+        // combined check ran before preparation.
+        let error = stage_source_samples(
+            &engine,
+            &dir.join("absent-input.tif"),
+            &grid,
+            None,
+            &dir,
+            &raw_path,
+            &mask_path,
+            &cancel,
+        )
+        .expect_err("the combined footprint must be rejected");
+        assert!(
+            error.contains("282066944"),
+            "names the required bytes: {error}"
+        );
+        assert!(
+            error.contains("277872640"),
+            "names the available bytes: {error}"
+        );
+        assert!(!raw_path.exists(), "no samples output on rejection");
+        assert!(!mask_path.exists(), "no validity output on rejection");
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("prepared-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "no derivative on rejection: {leftovers:?}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// At exactly the combined requirement the real caller proceeds, and one
+    /// byte less still rejects: the boundary is inclusive at the requirement
+    /// and the estimate is not over-conservative.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn staged_source_admits_exactly_the_combined_requirement() {
+        use crate::services::lidar::paths::capacity_probe;
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let dir = std::env::temp_dir().join(new_id("canopi-combined-boundary"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (width, height) = (1024u32, 1024u32);
+        let source = write_staging_fixture(&engine, &dir, "boundary", width, height, -9999.0);
+        let grid = RasterGrid {
+            width,
+            height,
+            geotransform: [0.0, 1.0, 0.0, height as f64, 0.0, -1.0],
+        };
+        let raw_path = dir.join("source-boundary.raw");
+        let mask_path = dir.join("valid-boundary.bin");
+        {
+            let _guard = capacity_probe::override_available(269 * 1024 * 1024);
+            let range = stage_source_samples(
+                &engine,
+                &source,
+                &grid,
+                Some(-9999.0),
+                &dir,
+                &raw_path,
+                &mask_path,
+                &cancel,
+            )
+            .expect("the exact combined requirement admits the work");
+            assert!(range[0].is_finite() && range[1].is_finite());
+            assert_eq!(
+                std::fs::metadata(&raw_path).unwrap().len(),
+                u64::from(width) * u64::from(height) * 4
+            );
+            assert_eq!(
+                std::fs::metadata(&mask_path).unwrap().len(),
+                u64::from(width) * u64::from(height)
+            );
+        }
+        std::fs::remove_file(&raw_path).unwrap();
+        std::fs::remove_file(&mask_path).unwrap();
+        {
+            let _guard = capacity_probe::override_available(269 * 1024 * 1024 - 1);
+            let error = stage_source_samples(
+                &engine,
+                &source,
+                &grid,
+                Some(-9999.0),
+                &dir,
+                &raw_path,
+                &mask_path,
+                &cancel,
+            )
+            .expect_err("one byte below the requirement must reject");
+            assert!(error.contains("282066944"), "{error}");
+            assert!(!raw_path.exists() && !mask_path.exists());
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 }

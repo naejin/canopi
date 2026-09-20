@@ -110,7 +110,7 @@ pub(crate) fn require_free_space(
     let available = available_bytes(directory)?;
     if available < required_bytes {
         return Err(format!(
-            "{what} needs at least {} MiB free in {}, but only {} MiB is available",
+            "{what} needs at least {} MiB ({required_bytes} bytes) free in {}, but only {} MiB ({available} bytes) is available",
             required_bytes / (1024 * 1024),
             directory.display(),
             available / (1024 * 1024),
@@ -120,7 +120,17 @@ pub(crate) fn require_free_space(
 }
 
 /// Free bytes available to this process on the filesystem holding `directory`.
+///
+/// This is a measurement, not a reservation: another process can consume the
+/// space immediately afterwards, so every caller still propagates ordinary
+/// write errors and rechecks between bounded writes.
 pub(crate) fn available_bytes(directory: &Path) -> Result<u64, String> {
+    #[cfg(test)]
+    {
+        if let Some(available) = capacity_probe::observed() {
+            return Ok(available);
+        }
+    }
     platform_available_bytes(directory).map_err(|error| {
         format!(
             "Cannot verify free space in {}: {error}",
@@ -190,4 +200,41 @@ fn self_prepared_dir(root: &Path) -> PathBuf {
 
 fn self_display_dir(root: &Path) -> PathBuf {
     root.join("display")
+}
+
+/// Test-only seam for the capacity observation.
+///
+/// Tests that must exercise a specific budget override the observation for
+/// their own thread instead of filling a real filesystem. Only the
+/// observation is replaced; the budget decision under test stays production
+/// code, and nothing in a production build reads this.
+#[cfg(test)]
+pub(crate) mod capacity_probe {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OBSERVED: Cell<Option<u64>> = const { Cell::new(None) };
+    }
+
+    pub(crate) fn observed() -> Option<u64> {
+        OBSERVED.with(Cell::get)
+    }
+
+    pub(crate) fn set(available: Option<u64>) {
+        OBSERVED.with(|slot| slot.set(available));
+    }
+
+    /// Override the observed capacity until the guard is dropped.
+    pub(crate) fn override_available(available: u64) -> Guard {
+        set(Some(available));
+        Guard
+    }
+
+    pub(crate) struct Guard;
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            set(None);
+        }
+    }
 }

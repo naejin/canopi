@@ -132,11 +132,17 @@ impl PreparedRaster {
     /// `nodata` is the effective validity rule already established by the
     /// GDAL probe for this interpretation; validity stays finite-and-not-NoData
     /// exactly as the previous full-buffer conversion defined it.
+    /// `additional_output_bytes` is the numeric output the caller will write
+    /// while this derivative is alive; it is charged together with the
+    /// derivative, its metadata allowance and the shared reserve, because all
+    /// of them coexist. Output that already exists on disk is already
+    /// reflected in the measured free space and must not be charged again.
     pub(super) fn open(
         engine: &GdalEngine,
         input: &Path,
         grid: &RasterGrid,
         nodata: Option<f32>,
+        additional_output_bytes: u64,
         job_scratch: &Path,
         cancel: &AtomicBool,
     ) -> Result<Self, String> {
@@ -144,12 +150,8 @@ impl PreparedRaster {
         if grid.width == 0 || grid.height == 0 {
             return Err("cannot prepare a raster with an empty grid".to_string());
         }
-        let padded = padded_cog_bytes(grid.width, grid.height)?;
-        let required = padded
-            .checked_add(METADATA_PREFIX_CEILING)
-            .and_then(|bytes| bytes.checked_add(FREE_SPACE_FLOOR_BYTES))
-            .ok_or_else(|| "raster derivative size overflows".to_string())?;
-        paths::require_free_space(job_scratch, required, "the temporary raster derivative")?;
+        let required = required_free_bytes(grid.width, grid.height, additional_output_bytes)?;
+        paths::require_free_space(job_scratch, required, "the prepared raster working set")?;
 
         let path = derivative_path(job_scratch, input);
         let prepared = engine.run(
@@ -237,13 +239,6 @@ impl PreparedRaster {
         let mut valid = vec![0u8; capacity];
         let mut y = 0u32;
         while y < self.grid.height {
-            // Recheck between bounded writes: the job must not fill the disk
-            // while a numeric output is still being produced.
-            paths::require_free_space(
-                &self.scratch_dir,
-                FREE_SPACE_FLOOR_BYTES,
-                "the raster window scan",
-            )?;
             let height = band.min(self.grid.height - y);
             let mut x = 0u32;
             while x < self.grid.width {
@@ -257,6 +252,13 @@ impl PreparedRaster {
                 };
                 let cells = window.cells()?;
                 self.read_into(window, &mut samples[..cells], &mut valid[..cells], cancel)?;
+                // Recheck at every consumer boundary: a wide row band would
+                // otherwise perform many bounded writes before its next check.
+                paths::require_free_space(
+                    &self.scratch_dir,
+                    FREE_SPACE_FLOOR_BYTES,
+                    "the raster window scan",
+                )?;
                 consume(&window, &samples[..cells], &valid[..cells])?;
                 x += width;
             }
@@ -374,6 +376,29 @@ pub(super) fn padded_cog_bytes(width: u32, height: u32) -> Result<u64, String> {
         .checked_mul(padded(height)?)
         .and_then(|cells| cells.checked_mul(4))
         .ok_or_else(|| "raster derivative size overflows".to_string())
+}
+
+/// Bytes that must be free before preparation starts.
+///
+/// The derivative, its metadata allowance, any numeric output written while
+/// the derivative is alive, and the shared reserve all coexist, so one checked
+/// estimate covers them. Independent per-allocation checks would each see the
+/// same free bytes and admit a footprint that does not fit.
+fn required_free_bytes(
+    width: u32,
+    height: u32,
+    additional_output_bytes: u64,
+) -> Result<u64, String> {
+    padded_cog_bytes(width, height)?
+        .checked_add(METADATA_PREFIX_CEILING)
+        .and_then(|bytes| bytes.checked_add(additional_output_bytes))
+        .and_then(|bytes| bytes.checked_add(FREE_SPACE_FLOOR_BYTES))
+        .ok_or_else(|| {
+            format!(
+                "the combined raster working set for {width}x{height} with \
+                 {additional_output_bytes} output bytes overflows"
+            )
+        })
 }
 
 fn prepare_arguments(input: &Path, output: &Path) -> Vec<String> {
@@ -1246,6 +1271,74 @@ mod tests {
         );
     }
 
+    // -----------------------------------------------------------------
+    // Combined working-set budget
+    // -----------------------------------------------------------------
+
+    /// One mebibyte, the unit the admission message reports.
+    const MIB: u64 = 1024 * 1024;
+
+    /// Independently calculated from the documented formula: a 1024x1024
+    /// Float32 raster has a 4 MiB padded derivative, a 4 MiB metadata
+    /// allowance, 5 MiB of staged outputs (four sample bytes plus one validity
+    /// byte per cell) and the 256 MiB reserve.
+    #[test]
+    fn combined_working_set_sums_every_simultaneously_live_allocation() {
+        let cells = 1024 * 1024;
+        assert_eq!(
+            required_free_bytes(1024, 1024, cells * 5).expect("estimate"),
+            269 * MIB
+        );
+        // With nothing new in flight the same grid keeps the preparation-only
+        // requirement.
+        assert_eq!(
+            required_free_bytes(1024, 1024, 0).expect("estimate"),
+            264 * MIB
+        );
+        // Both former independent checks admitted 265 MiB free (261 MiB for
+        // the outputs, 264 MiB for preparation); the combined one must not.
+        assert!(required_free_bytes(1024, 1024, cells * 5).expect("estimate") > 265 * MIB);
+        assert!(required_free_bytes(1024, 1024, cells * 5).expect("estimate") <= 269 * MIB);
+    }
+
+    #[test]
+    fn combined_working_set_overflow_is_a_named_error() {
+        let error = required_free_bytes(1024, 1024, u64::MAX).expect_err("overflow must fail");
+        assert!(error.contains("overflows"), "{error}");
+        let error = required_free_bytes(u32::MAX, u32::MAX, 0).expect_err("padded size must fail");
+        assert!(error.contains("overflows"), "{error}");
+    }
+
+    #[test]
+    fn scan_observes_capacity_at_every_window_boundary() {
+        let scratch = Scratch::new("window-capacity");
+        let fixture = TiffFixture::new(1100, 2100);
+        let path = scratch.write("window-capacity.tif", &fixture.bytes());
+        let mut raster = open_fixture(&path, &test_grid(1100, 2100), Some(-9999.0));
+        let _guard = paths::capacity_probe::override_available(FREE_SPACE_FLOOR_BYTES);
+        let mut consumed = 0u32;
+        let error = raster
+            .scan(&cancellation(), |_window, _samples, _valid| {
+                consumed += 1;
+                if consumed == 1 {
+                    // The space measured at the start is gone by the next
+                    // consumer boundary.
+                    paths::capacity_probe::set(Some(FREE_SPACE_FLOOR_BYTES - 1));
+                }
+                Ok(())
+            })
+            .expect_err("the scan must stop once the reserve is gone");
+        assert_eq!(
+            consumed, 1,
+            "the first window was delivered and the next was refused"
+        );
+        assert!(error.contains("the raster window scan"), "{error}");
+        assert!(
+            error.contains("255 MiB"),
+            "names the measured space: {error}"
+        );
+    }
+
     #[test]
     fn live_budget_rejects_a_window_above_the_cap() {
         let cap_cells = (MAX_WINDOW_SIDE as usize) * (MAX_WINDOW_SIDE as usize);
@@ -1497,6 +1590,7 @@ mod tests {
             source,
             grid,
             Some(F32_NODATA),
+            0,
             &scratch.dir,
             &cancel,
         )
@@ -1659,6 +1753,7 @@ mod tests {
             &source,
             &grid,
             Some(F32_NODATA),
+            0,
             &scratch.dir,
             &cancel,
         )
@@ -1671,6 +1766,7 @@ mod tests {
             &missing,
             &grid,
             Some(F32_NODATA),
+            0,
             &scratch.dir,
             &cancellation(),
         )

@@ -334,7 +334,9 @@ fn result_statistics(
     scratch: &Path,
     cancel: &AtomicBool,
 ) -> Result<(f64, f64, u64), String> {
-    let mut reader = PreparedRaster::open(engine, result, grid, nodata, scratch, cancel)?;
+    // The slope result and the quality mask already exist on disk here, so the
+    // measured free space already reflects them: no additional output bytes.
+    let mut reader = PreparedRaster::open(engine, result, grid, nodata, 0, scratch, cancel)?;
     let (mut min_value, mut max_value, mut result_cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
     reader.scan(cancel, |_window, samples, valid| {
         for (value, valid) in samples.iter().zip(valid.iter()) {
