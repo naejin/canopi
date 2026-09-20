@@ -12,11 +12,11 @@ Forward the handoff path and commit, then return the delivery with commit/branch
 
 ## One bounded loop
 
-Use the project-wide handoff and consolidated-review rules. The [index](README.md) names the sole current assignment and bd owns execution status. For native integration, the main agent has settled G1–G5 in advance: complete those internal milestones and routine repairs before one courier delivery. The user selected GeoLibre reuse; do not request the same decision again. Different engines, scientific contracts or material UI changes still require approval. Q remains frozen/unqualified, not an entry gate for this production assignment.
+Use the project-wide handoff and consolidated-review rules. The [index](README.md) names the sole current assignment and bd owns execution status. G1–G5 was delivered as one batch; the [current follow-up](geolibre-integration-followup-agent-prompt.md) closes its specific review findings without repeating that assignment. Complete internal steps and routine repairs before one courier delivery. The user selected GeoLibre reuse; do not request the same decision again. Different engines, scientific contracts or material UI changes still require approval. Q remains frozen/unqualified, not an entry gate for production work.
 
 ## Delivery evidence and continuous improvement
 
-The [qualification reset](qualification-reset.md) retains the harness freeze. The current [native integration assignment](geolibre-integration-agent-prompt.md) names real production callers and compatibility tests. Frozen-tooling defects block claims relying on those tools, not unrelated production work. Use focused TDD and risk-oriented self-review; no mandatory transcript volume, mutation count or evaluator campaign.
+The [qualification reset](qualification-reset.md) retains the harness freeze. The [native integration design](geolibre-integration-design.md) names real production callers and compatibility tests. Frozen-tooling defects block claims relying on those tools, not unrelated production work. Use focused TDD and risk-oriented self-review; no mandatory transcript volume, mutation count or evaluator campaign.
 
 The earlier caller/adapter test intervention remains historical evidence in the debrief: future implementation tests must not mock the behavior they claim to prove. Do not add a new reporting system around that lesson. Keep one concise receipt and one consolidated courier handoff. Acceptance remains proportional to the actual authorized outcome, not general completeness of the tools used along the way.
 

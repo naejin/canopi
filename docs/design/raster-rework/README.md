@@ -6,11 +6,13 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The user selected useful GeoLibre components with **existing UI/features first**. Forward the [native integration assignment](geolibre-integration-agent-prompt.md), governed by the [settled design](geolibre-integration-design.md). It authorizes G1–G5 as one production batch, not milestone-by-milestone courier approvals. Native extraction/postprocessing changes first; dense composition and capacity limits remain explicit. Q stays frozen/unqualified and is no longer a production prerequisite. Its known defects are not accepted. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and user courier/approval.
+The user selected useful GeoLibre components with **existing UI/features first**. G1–G5 was delivered on `feature/geolibre-native-raster-integration` at `3004e4d3`; it is not yet independently accepted or integrated into this checkout. Forward the [review-correction assignment](geolibre-integration-followup-agent-prompt.md), governed by the [independent disposition](geolibre-integration-review.md) and [settled design](geolibre-integration-design.md). Complete its disk-accounting correction and cleanup reporting in one batch. Dense composition and capacity limits remain explicit. Q stays frozen/unqualified and is no longer a production prerequisite. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and user courier/approval.
 
 | Artifact | Purpose |
 | --- | --- |
-| [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Sole current assignment: G1–G5 production integration, verification and one consolidated delivery |
+| [GeoLibre review-correction assignment](geolibre-integration-followup-agent-prompt.md) | Sole current assignment: combined disk budget, focused regression and truthful cleanup reporting |
+| [GeoLibre independent review](geolibre-integration-review.md) | Disposition of `3004e4d3`, retained progress, concrete blocker and evidence limitations |
+| [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Retired G1–G5 prompt; delivered at `3004e4d3`, review correction pending |
 | [GeoLibre integration design](geolibre-integration-design.md) | Selected native core/pin, private interface, ownership, compatibility, bounds and scope decisions |
 | [Qualification reset](qualification-reset.md) | Historical anti-overengineering decision; freeze retained, artifact-first sequencing superseded by selected native integration |
 | [Artifact decision handoff](q-engine-decision-agent-prompt.md) | Retired after brief delivery `71abad0f`; no continuing assignment |
