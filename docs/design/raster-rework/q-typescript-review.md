@@ -8,7 +8,9 @@ This is the single review record for the bounded TypeScript repair. Update it in
 
 ## Instrument completion independent disposition
 
-Reviewed `f9b5c10c` on `4564acc7`: **partial, not accepted**. Preserve observed-window regression coverage, exclusive roots/no-replace publication and fresh compilation. This is a remaining DB3/DB4 repair, not a reopened evaluator redesign. The [lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) owns the next bounded assignment when forwarded by the user.
+Scope update after this review: the user approved the [qualification reset](qualification-reset.md). The lifecycle assignment is withdrawn, not repaired or accepted. The defect findings below remain valid evidence; they do not authorize another implementation round. The sole next assignment is the [artifact brief](q-engine-decision-agent-prompt.md).
+
+Reviewed `f9b5c10c` on `4564acc7`: **partial, not accepted**. Preserve observed-window regression coverage, exclusive roots/no-replace publication and fresh compilation. The remaining defects are DB3/DB4 violations, not grounds for evaluator redesign. The subsequently proposed [lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) was withdrawn by the reset above.
 
 | Family / severity | Evidence and method | Existing contract violated |
 | --- | --- | --- |

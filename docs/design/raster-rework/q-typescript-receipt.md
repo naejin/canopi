@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — bounded NC1–NC2/MR1 accepted at `579880be`; evaluator repair loop closed. Desktop completion `f9b5c10c` independently reviewed as **partial, not accepted** with remaining DB3/DB4 lifecycle, limits and result-consistency blockers; saved retry cells confirmed correct. See the [disposition](q-typescript-review.md#instrument-completion-independent-disposition) and [lifecycle handoff](q-desktop-lifecycle-agent-prompt.md). Q remains unqualified. Historical delivery claims below are revision-specific, not acceptance.
+Status: evidence — bounded NC1–NC2/MR1 accepted at `579880be`; Desktop completion `f9b5c10c` partial with known DB3/DB4 defects and correct saved retry cells. The user-approved [reset](qualification-reset.md) freezes harness hardening; the [artifact brief](q-engine-decision-agent-prompt.md) is the sole next assignment. Q remains unqualified. Historical delivery claims below are revision-specific, not acceptance.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).

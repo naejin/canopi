@@ -10,4 +10,4 @@ launcher exits independent of the evaluator's whole-Q code — are maintained in
 [host guide](../../../scripts/raster-qualification/desktop-host/README.md) and the receipt. A retired assignment is
 not proof that its work is accepted. Delivery `f9b5c10c` was independently reviewed as partial;
 see the [disposition](q-typescript-review.md#instrument-completion-independent-disposition).
-The [lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) supersedes this assignment when forwarded by the user. Q remains unqualified.
+The subsequent lifecycle handoff was also withdrawn by the [qualification reset](qualification-reset.md). Q remains unqualified; no repair/run authority remains in this prompt.

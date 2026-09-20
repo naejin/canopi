@@ -6,11 +6,13 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The bounded numeric completion/MR1 slice is independently accepted at `579880be`; the evaluator repair loop is closed. Independent review of `f9b5c10c` preserved DB1/DB2 progress and confirmed the saved retry's correct cells, but found remaining DB3/DB4 lifecycle, supervision and exit-consistency blockers. The slice remains partial, not accepted. The sole next assignment is the [lifecycle completion handoff](q-desktop-lifecycle-agent-prompt.md), executable when forwarded by the user. Q remains unqualified; no production N1 or integration is authorized. The [collaboration protocol](collaboration-protocol.md) defines main-agent design/review, implementation-agent execution and the user's courier/approval role.
+The user approved a [qualification scope reset](qualification-reset.md): freeze harness hardening and resolve the engine/artifact decision first. The sole next assignment is the [artifact decision brief](q-engine-decision-agent-prompt.md), executable when forwarded by the user. Preserve accepted tooling and genuine pilot evidence; `f9b5c10c` remains partial with known DB3/DB4 defects, not accepted by this reset. Q remains unqualified and N1 blocked. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and the user's courier/approval role.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Desktop lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) | Sole next assignment: remaining DB3/DB4 transitions, process bounds and final results; one delivery through the user |
+| [Qualification reset](qualification-reset.md) | Current scope decision: artifact decision first, frozen tooling, exploratory versus production acceptance |
+| [Artifact decision handoff](q-engine-decision-agent-prompt.md) | Sole next assignment: short read-only evidence brief; no repairs, builds or experiments |
+| [Desktop lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) | Withdrawn, not completed; original instructions retained in Git at `a162c1a0` |
 | [Desktop bridge completion handoff](q-desktop-bridge-completion-agent-prompt.md) | Retired; delivery `f9b5c10c` independently reviewed as partial, with remaining DB3/DB4 blockers |
 | [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) | Retired; delivered in `fab0c381`, independently reviewed as partial with DB1–DB4 blockers |
 | [Collaboration protocol](collaboration-protocol.md) | User-mediated design, implementation, review and evidence-driven improvement loop |

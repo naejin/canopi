@@ -6,6 +6,20 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
+### User-approved stop to harness hardening
+
+After `a162c1a0`, the user approved the main agent's recommendation to [reset qualification scope](qualification-reset.md). The lifecycle prompt was withdrawn before any completion was established. Preserve any intervening work rather than assuming none exists. The next assignment is one artifact decision brief, with no code, builds or experiments. Full Q and production acceptance are unchanged.
+
+Main-agent accountability: repeated reviews found real defects, but I kept turning them into more harness infrastructure without sufficiently testing whether that work changed the engine decision or advanced the product. The artifact mismatch was already documented; more runs of the same published build could not resolve it. Roughly 4,800 added lines in `f9b5c10c`, repeated tooling-only deliveries and N1 still unstarted are evidence of scope growth; cost, token usage and comparative model performance were not measured. The earlier claim that more explicit handoffs would reduce cycling remains unproven.
+
+| Retain | Stop/defer | Evidence to evaluate the reset |
+| --- | --- | --- |
+| Correct saved numeric/transport observations, source/artifact identities, Rust bridge and decoder reuse, meaningful regression tests | General harness completion, reusable lifecycle perfection, further Python retirement and new producer/schema layers without a decision need | Does the next brief make the artifact choice actionable without a code-change round? |
+| Input preservation, bounded reads, honest failures, real termination/output safety for any future run | Treating process exit as proof of long-lived production cancellation; claiming the known launcher is safe because it once passed | Does the next approved experiment answer one unresolved engine risk with a small safe disposable instrument? |
+| User courier/engine/UI authority and main-agent architecture responsibility | Silent waiver of Q/production contracts or retrospective relabelling of defects as optional | Are any revised acceptance boundaries explicit before execution, and does work then advance toward the product? |
+
+For the final debrief, distinguish **necessary correctness repair** from **unnecessary scope creating more surfaces to repair**. A real bug can belong to both. Record what was reused, what was frozen, which decisions changed and subsequent product milestones; do not equate fewer reviews with better safety or more tests with progress. Keep this intervention provisional until outcomes exist. No new metrics framework or per-defect report is requested.
+
 ### Project-wide architecture ownership
 
 On 2026-09-20 the user approved making the main agent responsible for architectural coherence across Canopi, including resolving omissions in its handoffs. The [project-wide workflow](../../workflow/architecture-ownership.md) now owns responsibilities, proportional review triggers, routine implementation autonomy and the courier boundary; the raster protocol references it. This is an adopted operating decision, not a measured productivity gain or a change to the active Desktop pilot's scope.

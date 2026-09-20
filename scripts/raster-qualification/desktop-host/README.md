@@ -1,6 +1,6 @@
 # Isolated Desktop qualification host
 
-Review status at `f9b5c10c`: partial, not accepted. The documented lifecycle/exit rules below are intended contracts; independent review found remaining cancellation, process/output-limit and final-result violations. See the [disposition](../../../docs/design/raster-rework/q-typescript-review.md#instrument-completion-independent-disposition) and the user-forwarded [completion assignment](../../../docs/design/raster-rework/q-desktop-lifecycle-agent-prompt.md). Do not infer safe completion from a green pilot result alone.
+Status: frozen by the user-approved [qualification reset](../../../docs/design/raster-rework/qualification-reset.md). `f9b5c10c` remains partial with known cancellation, output-limit and final-result defects. Do not run or repair this host under retired prompts. Preserve code/tests and saved evidence; the commands below describe the existing instrument, not safe acceptance or new execution authority. The next assignment is a read-only [artifact decision brief](../../../docs/design/raster-rework/q-engine-decision-agent-prompt.md).
 
 A measurement instrument, not a product surface. This directory is its own Cargo
 workspace and is deliberately outside the production workspace: it does not register a
