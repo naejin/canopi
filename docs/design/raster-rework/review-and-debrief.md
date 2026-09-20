@@ -6,6 +6,16 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
+### Design correction before implementation — standard COG persistence
+
+At `24fd1a56`, the main agent prescribed a new durable raw Float32/byte-mask block format despite accepted `a5fc7d7b` already preparing and reading controlled COGs. The user challenged why those standard files were not retained. No implemented failure established that TIFF encoding was insufficient. Classification: **main-agent design overprescription and missing necessity/reuse check**, not an implementation deviation. The bounded/sparse/history requirements were valid; the custom pixel encoding was not shown necessary. No implementation of that proposal is claimed.
+
+The revised [design](bounded-generation-design.md#necessity-and-reuse-check) retains prepared source COGs and standard resolved COG chunks, keeps application history/index responsibilities, and explicitly budgets their extra storage. It settles source NoData versus composed NaN validity and separate quality storage without relying on unverified internal-mask support. This is a design correction, not evidence of successful interoperability or a measured cost reduction; B1's ordinary production round-trip must establish those claims before the remaining migration proceeds.
+
+The process intervention is a short necessity/reuse justification in the existing handoff and an early decisive integration test, with automatic continuation on success. Main agent owns architecture/review; implementer owns implementation and routine simplification; user remains courier/approval, not technical contradiction resolver. No added qualification framework, mandatory report or skill change.
+
+At the consolidated delivery/review, record: standard source files actually reused without re-preparation; durable custom payload stores avoided or unexpectedly added; old/new supported workflows demonstrated; assumptions challenged before dependent code; material design corrections returned through the courier; independent escapes by family; and known storage/performance costs. Record effort only when measured. A smaller encoding surface supports a maintenance hypothesis, not a claim that this whole architecture or the agent setup is optimal. Retain the intervention only if outcomes support it; revise it if it creates more ceremony or merely moves custom complexity elsewhere.
+
 ### Next intervention — one complete bounded-generation workflow
 
 G1–G5 plus one correction reached [independent acceptance](geolibre-integration-review.md#final-independent-acceptance--a5fc7d7b) at `a5fc7d7b`: 53 focused native and 7 GDAL-backed tests were independently repeated. No claim is made that the full private-fixture/platform evidence was repeated. Product progress is bounded production extraction/postprocessing; large sparse composition remains unimplemented. This closes the prior cycle rather than authorizing another generic hardening pass.

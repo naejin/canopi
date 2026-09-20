@@ -6,16 +6,16 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The user selected useful GeoLibre components with **existing UI/features first**. G1–G5 and its review correction are independently accepted at `a5fc7d7b`, not integrated into this checkout. Forward the [bounded-generation assignment](bounded-generation-agent-prompt.md), governed by the [complete design](bounded-generation-design.md): sparse storage and bounded readers through existing review/Apply, undo, display and slope, followed by capacity verification. Q stays frozen/unqualified and is no longer a production prerequisite. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and user courier/approval.
+The user selected useful GeoLibre components with **existing UI/features first**. G1–G5 and its review correction are independently accepted at `a5fc7d7b`, not integrated into this checkout. Forward the revised [bounded-generation assignment](bounded-generation-agent-prompt.md), governed by the [complete design](bounded-generation-design.md): retain standard source COGs, use standard resolved COG chunks with a sparse catalogue, and migrate existing review/Apply, undo, display and slope before capacity enablement. This replaces the unimplemented custom raw-block choice at `24fd1a56`; do not forward that older revision. Q stays frozen/unqualified and is no longer a production prerequisite. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and user courier/approval.
 
 | Artifact | Purpose |
 | --- | --- |
 | [Bounded-generation assignment](bounded-generation-agent-prompt.md) | Sole current assignment: B1–B5 complete caller migration and conditional capacity enablement |
 | [Bounded-generation design](bounded-generation-design.md) | Main-agent decisions: storage, compatibility, lifecycle, scientific/display semantics, resource policy and gates |
-| [Sparse-generation ADR](../../adr/0026-sparse-raster-generations.md) | Why ordered history plus sparse materialized blocks, rather than another full-union representation |
+| [Sparse-generation ADR](../../adr/0026-sparse-raster-generations.md) | Standard COG persistence, sparse resolved chunks and ordered history; prior bespoke encoding withdrawn |
 | [GeoLibre review-correction assignment](geolibre-integration-followup-agent-prompt.md) | Retired; D1/R1 accepted at `a5fc7d7b` |
 | [GeoLibre independent review](geolibre-integration-review.md) | Original findings and final bounded-scope acceptance, with independently rerun evidence |
-| [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Retired G1–G5 prompt; delivered at `3004e4d3`, review correction pending |
+| [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Retired G1–G5 prompt; correction independently accepted at `a5fc7d7b` |
 | [GeoLibre integration design](geolibre-integration-design.md) | Selected native core/pin, private interface, ownership, compatibility, bounds and scope decisions |
 | [Qualification reset](qualification-reset.md) | Historical anti-overengineering decision; freeze retained, artifact-first sequencing superseded by selected native integration |
 | [Artifact decision handoff](q-engine-decision-agent-prompt.md) | Retired after brief delivery `71abad0f`; no continuing assignment |

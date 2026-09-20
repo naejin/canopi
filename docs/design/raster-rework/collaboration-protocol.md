@@ -16,6 +16,8 @@ Use the project-wide handoff and consolidated-review rules. The [index](README.m
 
 ## Delivery evidence and continuous improvement
 
+For this batch, apply the project-wide necessity/reuse check already recorded in design §2, not another planning exercise. The main agent withdrew the unimplemented custom encoding from `24fd1a56` after the user's standard-format challenge. The revised assignment retains source COGs and standard resolved chunks; it does not abolish Canopi's necessary sparse catalogue/history. Its initial round-trip is an internal implementation gate, not a new courier round. Challenge a demonstrated architectural problem early; choose routine behavior-preserving simplifications locally. Record the outcome in the existing receipt/debrief, including whether it actually reduced rework; benefit remains unmeasured until delivery/review.
+
 The [qualification reset](qualification-reset.md) retains the harness freeze. The [native integration design](geolibre-integration-design.md) names real production callers and compatibility tests. Frozen-tooling defects block claims relying on those tools, not unrelated production work. Use focused TDD and risk-oriented self-review; no mandatory transcript volume, mutation count or evaluator campaign.
 
 The earlier caller/adapter test intervention remains historical evidence in the debrief: future implementation tests must not mock the behavior they claim to prove. Do not add a new reporting system around that lesson. Keep one concise receipt and one consolidated courier handoff. Acceptance remains proportional to the actual authorized outcome, not general completeness of the tools used along the way.
