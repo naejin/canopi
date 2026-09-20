@@ -1,10 +1,10 @@
 # GeoLibre adoption — compatibility-first native integration
 
-Delivery disposition: G1–G5 is implemented on `feature/geolibre-native-raster-integration` at `3004e4d3`, not integrated into this checkout. The [independent review](geolibre-integration-review.md) requires one disk-budget correction and truthful cleanup reporting; the [follow-up assignment](geolibre-integration-followup-agent-prompt.md) is the sole current execution contract. This design's scientific, compatibility and capacity decisions remain unchanged.
+Delivery disposition: G1–G5 plus its disk-budget/reporting correction is independently accepted at `a5fc7d7b` on `feature/geolibre-native-raster-integration`, not integrated into this checkout. The [independent review](geolibre-integration-review.md) records evidence and limits. The [bounded-generation assignment](bounded-generation-agent-prompt.md) is the next execution contract; this design records the completed predecessor, not authority to repeat it.
 
-Status: partial — first production assignment delivered on the implementation branch; review correction pending, not accepted or integrated.
+Status: completed — bounded integration independently accepted, not integrated or released.
 Tracking: `canopi-j571`; implementation `canopi-jv8a.1`, followed by the remaining `canopi-jv8a` foundation work.
-Current guidance: [current assignment](geolibre-integration-followup-agent-prompt.md), [LiDAR](../../agent/lidar.md), [architecture ownership](../../workflow/architecture-ownership.md), [long-term product contract](../raster-data-analysis-rework.md).
+Current guidance: [next assignment](bounded-generation-agent-prompt.md), [LiDAR](../../agent/lidar.md), [architecture ownership](../../workflow/architecture-ownership.md), [long-term product contract](../raster-data-analysis-rework.md).
 
 ## Decision and outcome
 
