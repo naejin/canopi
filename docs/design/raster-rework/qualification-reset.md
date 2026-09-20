@@ -1,51 +1,31 @@
 # Qualification reset — decision evidence before tooling completeness
 
-Status: active — user-approved scope reset; no engine selection or qualification acceptance.
-Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [main plan](../raster-data-analysis-rework.md), [decision brief assignment](q-engine-decision-agent-prompt.md), [review](q-typescript-review.md), [collaboration protocol](collaboration-protocol.md).
+Status: evidence — user-approved anti-overengineering reset; artifact-first sequence superseded by selected GeoLibre native integration.
+Tracking: historical `canopi-kqpp`; current production `canopi-jv8a.1`, parent epic `canopi-j571`.
+Current guidance: [native integration design](geolibre-integration-design.md), [assignment](geolibre-integration-agent-prompt.md), [review](q-typescript-review.md), [collaboration protocol](collaboration-protocol.md).
 
 ## Decision and rationale
 
-The user approved stopping the repeated harness-hardening loop. The main agent owns this correction: we treated completeness of a temporary instrument as the next product milestone even after useful transport evidence existed and the selected artifact remained unresolved. The `f9b5c10c` change added roughly 4,800 lines, while N1 remains unstarted. This shows disproportionate scope, not a measured language/model productivity comparison.
+The user approved stopping repeated harness hardening after `a162c1a0`. The main agent owns this correction: completeness of a temporary instrument became the next milestone even after useful transport evidence existed and the selected artifact remained unresolved. `f9b5c10c` added roughly 4,800 lines while production N1 remained unstarted. This shows disproportionate scope, not a measured language/model productivity comparison.
 
-Freeze the current harness and its tests. Do not delete useful Rust bridge/decoder work, TypeScript tooling, raw evidence or regressions. Do not run the known-incomplete launcher or repair L1–L3 under old authority. Remaining lifecycle, limits and exit defects stay open and documented; they are not reclassified as passes. If an agent has begun the superseded assignment, preserve its work, report its revision/state and stop before expanding it.
+Freeze the existing harness, tests and pilot evidence without accepting their known defects. The lifecycle assignment was withdrawn, not completed. Do not delete useful Rust/TypeScript work or restart its repairs/runs under historical prompts. The original reset and full scope wording are recoverable at `ac2c9085`.
 
-Separate three conclusions:
+## What happened next
 
-| Conclusion | Required evidence / authority |
-| --- | --- |
-| Exploratory feasibility | Narrow observations tied to exact bytes and environment. Existing saved Desktop windows support bounded transport feasibility for the measured published build only |
-| Engine/artifact decision | User chooses the artifact/route after the main agent explains the evidence and trade-offs. No automatic re-pin, source build or native substitution |
-| Production readiness | Existing scientific correctness, bounded resource use, cancellation, atomic persistence and release contracts. Full Q remains unqualified and N1 remains blocked under the current dependency graph |
+The read-only [artifact decision brief](q-typescript-receipt.md#artifact-decision-brief-after-qualification-reset) was delivered at `71abad0f`. It established that the measured published Whitebox build did not match the declared source pin; repetition could not fix source correspondence.
 
-The reset changes work ordering and the standard for a **decision brief**, not `requirements.json`, pins, scientific tolerances or product acceptance. A human-reviewed brief is not a second evaluator and cannot claim full Q. Any future reassignment of Q obligations to production slices requires an explicit plan/contract change before execution; do not quietly bypass the current Q→N1 dependency.
+The user then chose selective GeoLibre adoption, preserving existing Canopi features/UI before adding new features. The [settled design](geolibre-integration-design.md) supersedes the reset's artifact-first sequence and the old Q→production dependency. It names the actual native source/API and authorizes direct native builds plus production caller tests. No old measurement is relabelled and Q remains unqualified.
 
-## Minimum useful qualification sequence
+The first assignment deliberately retains dense-grid admission limits while replacing full-raster extraction and postprocessing. End-to-end capacity, sparse composition and new UI require their own next foundation design. This prevents a bounded decoder demonstration from being mistaken for a large-import solution.
 
-1. **Resolve artifact authority first.** `candidates.json` records that published `whitebox-wasm@0.5.1` does not match source pin `9c0ff4f…`. Inspect existing records/local source and build prerequisites. Return one brief identifying exactly what was tested, what is unavailable and the user decision needed. No new run can resolve a source mismatch by repetition.
-2. **After the user's artifact decision, measure only unresolved engine risks.** Main agent writes the smallest bounded assignment for the chosen artifact: exact numeric/validity behavior, bounded reads/working memory, native preparation/slope and actual Desktop loading where not already established for those bytes. Reuse valid existing observations; do not build a generic evidence framework or repeat a settled probe for presentation.
-3. **Before production work, explicitly settle its entry gate.** Map remaining correctness/lifecycle/persistence/resource obligations to their intended implementation owners. Do not implement production work, weaken Q or call an exploratory success production-ready in this reset.
+## Retained safety and evidence distinctions
 
-This sequence is not authority for steps 2–3. Only the linked brief assignment is executable when forwarded. Its blocker is the artifact decision, not completion of every harness feature.
+Exploratory feasibility is narrow evidence tied to exact artifact bytes and environment. An engine choice is a user decision, not numerical proof. Production acceptance requires the tests for the specific product path: compatible values/validity, originals/history, cancellation, publication and relevant resource bounds. Packaged platform claims still require platform evidence.
 
-## Simpler future experiment boundary
-
-Prefer one disposable process per fixed experiment with explicit read-only inputs and a fresh owned output root. On timeout/cancellation, stop the owned process group and verify termination; do not build reusable cooperative worker scheduling solely to prove a one-shot pilot. Process exit may establish disposal of that experiment's resources; it does **not** prove production cancellation, descriptor-release latency or absence of queued work in a long-lived app. Native/process limits must still be real and observations honest. Safety cannot be replaced with a disclaimer.
-
-Retain exact expected values/validity, bounded reads and allocations, input preservation, immutable evidence and truthful exit/report outcomes. Defer generic report admission expansion, reusable scheduler perfection, all-format/platform matrices and further Python retirement unless a named decision requires them. New experiments remain blocked until their smaller execution path has adequate termination and output bounds; this document does not declare the existing launcher safe or authorize building a replacement now.
-
-## Debrief outcome (facts)
-
-The artifact decision brief was delivered as a read-only investigation: see
-[Artifact decision brief after qualification reset](q-typescript-receipt.md#artifact-decision-brief-after-qualification-reset).
-Recorded facts: published `whitebox-wasm@0.5.1` (gitHead `6920ade…`) is the only artifact with measured transport
-behaviour and it does not correspond to the declared pin `9c0ff4f…`; no published artifact matches the pin and the
-pin's declared `0.6.0` is unpublished, so the mismatch is unresolved and local records cannot resolve it. A
-pinned-source build attempt has no locally available prerequisite (no source tree, no wasm target, no bindgen
-tooling), so no build command is claimed. The brief recommends retaining the pin and resolving its build feasibility
-first, and names the single approval it needs. Q remains unqualified, the remaining L1–L3 defect disposition is
-unchanged, and no experiment, build, download or code change was performed.
+One-shot process exit does not prove long-lived application lifecycle. Frozen tooling defects continue to block claims relying on that tooling. Ordinary production tests should exercise real owners/callers without growing another generic instrument. Python retirement is not a milestone unless an authorized product change actually makes a consumed helper obsolete.
 
 ## Debrief criterion
 
-Success of this reset is an informed engine/artifact decision followed by relevant product progress, with fewer tooling-only repair cycles—not a smaller test count or less safety. The main agent must explain what decision each proposed test changes, why existing evidence is insufficient and when to stop. Record effort only when observed. Keep the unresolved defects and useful measurements distinguishable; do not erase history to make the reset look successful.
+Evaluate the new G1–G5 batch by accepted production callers and preserved workflows, not added lines, tests or Q assertion counts. Record necessary escalations, avoidable courier cycles and effort only when observed. Compare the main agent's up-front decisions with what implementation actually needed; classify design omissions and reviewer omissions as well as implementation defects.
+
+The expected improvement is more product work per consolidated handoff, not fewer safety checks. It remains a hypothesis until delivery/review. No new metrics framework, mandatory mutation campaign or skill/tool rewrite is requested.

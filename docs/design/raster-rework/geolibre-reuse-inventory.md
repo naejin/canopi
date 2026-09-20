@@ -1,6 +1,6 @@
 # GeoLibre reuse inventory for raster qualification (Q)
 
-Status: evidence — inspection record for the Q slice; selects no production dependency.
+Status: evidence — historical Q pattern inspection; the later [GeoLibre native integration design](geolibre-integration-design.md) owns production selection.
 Tracking: `canopi-kqpp`, parent epic `canopi-j571`.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md), and the [Q receipt](../raster-qualification-q.md).
 

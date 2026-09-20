@@ -6,6 +6,24 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
+### Current intervention — product integration and one consolidated handoff
+
+The user selected useful GeoLibre components with existing features/UI preserved first. The [settled native design](geolibre-integration-design.md) and [G1–G5 assignment](geolibre-integration-agent-prompt.md) now supersede artifact-brief sequencing and the Q→production dependency. Earlier entries below are revision-linked history, not current assignments. Q stays unqualified and frozen; known defects have not been accepted.
+
+The main agent inspected real import/analysis callers and GeoLibre's pinned native core, and settled source/build identity, private interfaces, preparation, cleanup, compatibility and scope before delegation. Important limits are explicit: this batch adopts a dependency used by GeoLibre, not the entire toolkit; it removes dense extraction/postprocessing, not dense composition; old capacity limits remain. No new ADR or glossary entry was needed for this reversible private adapter choice, and no domain terminology changed.
+
+Process hypothesis: one meaningful batch of production caller changes, with routine decisions delegated and one independent review through the user, will reduce avoidable exchanges. The user prefers concentrating implementation effort in the cost-effective agent; actual cost/time savings are not yet measured. Do not promise that review defects or necessary architecture decisions disappear.
+
+For the final debrief, add one outcome per delivered batch in this section, with the delivery revision and receipt link. Record:
+
+- Accepted application behavior and remaining user-visible limitation, not only source/test counts.
+- Which decisions were already settled, which routine choices the implementer made, and which courier escalations exposed design omissions.
+- Self-review discoveries, independent escapes and reviewer corrections; distinguish implementation deviation, test gap and design/review omission using evidence.
+- Actual implementation/review effort and courier exchanges where recorded; leave missing cost/time unknown.
+- Whether a smaller reusable test or documentation fix would prevent the demonstrated failure; promote it only when useful, without creating another framework or automatic skill rewrite.
+
+The implementation receipt supplies facts; the main agent adds independent acceptance and review effort afterward. Success means accepted product progress per handoff while preserving correctness, not the absence of review or completion of frozen Q tooling.
+
 ### User-approved stop to harness hardening
 
 After `a162c1a0`, the user approved the main agent's recommendation to [reset qualification scope](qualification-reset.md). The lifecycle prompt was withdrawn before any completion was established. Preserve any intervening work rather than assuming none exists. The next assignment is one artifact decision brief, with no code, builds or experiments. Full Q and production acceptance are unchanged.

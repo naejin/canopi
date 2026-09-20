@@ -1,17 +1,19 @@
 # Raster rework handoffs and debrief
 
 Status: active — supporting handoffs and review evidence, not a replacement implementation plan.
-Tracking: `canopi-j571`; qualification `canopi-kqpp`.
+Tracking: `canopi-j571`; current native integration `canopi-jv8a.1`; historical qualification `canopi-kqpp`.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md), and [delivery workflow](../../workflow/delivery.md).
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The user approved a [qualification scope reset](qualification-reset.md): freeze harness hardening and resolve the engine/artifact decision first. The sole next assignment is the [artifact decision brief](q-engine-decision-agent-prompt.md), executable when forwarded by the user. Preserve accepted tooling and genuine pilot evidence; `f9b5c10c` remains partial with known DB3/DB4 defects, not accepted by this reset. Q remains unqualified and N1 blocked. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and the user's courier/approval role.
+The user selected useful GeoLibre components with **existing UI/features first**. Forward the [native integration assignment](geolibre-integration-agent-prompt.md), governed by the [settled design](geolibre-integration-design.md). It authorizes G1–G5 as one production batch, not milestone-by-milestone courier approvals. Native extraction/postprocessing changes first; dense composition and capacity limits remain explicit. Q stays frozen/unqualified and is no longer a production prerequisite. Its known defects are not accepted. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and user courier/approval.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Qualification reset](qualification-reset.md) | Current scope decision: artifact decision first, frozen tooling, exploratory versus production acceptance |
-| [Artifact decision handoff](q-engine-decision-agent-prompt.md) | Sole next assignment: short read-only evidence brief; no repairs, builds or experiments |
+| [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Sole current assignment: G1–G5 production integration, verification and one consolidated delivery |
+| [GeoLibre integration design](geolibre-integration-design.md) | Selected native core/pin, private interface, ownership, compatibility, bounds and scope decisions |
+| [Qualification reset](qualification-reset.md) | Historical anti-overengineering decision; freeze retained, artifact-first sequencing superseded by selected native integration |
+| [Artifact decision handoff](q-engine-decision-agent-prompt.md) | Retired after brief delivery `71abad0f`; no continuing assignment |
 | [Desktop lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) | Withdrawn, not completed; original instructions retained in Git at `a162c1a0` |
 | [Desktop bridge completion handoff](q-desktop-bridge-completion-agent-prompt.md) | Retired; delivery `f9b5c10c` independently reviewed as partial, with remaining DB3/DB4 blockers |
 | [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) | Retired; delivered in `fab0c381`, independently reviewed as partial with DB1–DB4 blockers |
@@ -34,7 +36,7 @@ The user approved a [qualification scope reset](qualification-reset.md): freeze 
 | [Stable admission acceptance contract](q-admission-acceptance.md) | Single C1–C8 input/behavior/test matrix and blocker-versus-follow-up policy |
 | [Consolidated admission review](q-consolidated-admission-review.md) | Revision-linked reproductions, reviewed boundaries, retained repairs and evidence limits |
 | [Implementation plan](../raster-data-analysis-rework.md) | Scope, approved UI references, slice dependencies, contracts and qualification gates |
-| [Current Q receipt](../raster-qualification-q.md) | Living agent-reported evidence; historical versions are recoverable at `fd86de68` and `cfbb0c35`. Not independent acceptance. |
+| [Historical Q receipt](../raster-qualification-q.md) | Frozen evidence, not a production entry gate; historical versions recoverable at `fd86de68` and `cfbb0c35`. Not independent acceptance. |
 | [Q correction prompt](q-correction-agent-prompt.md) | Retired first corrective handoff, executed in `cfbb0c35`; retained for comparison |
 | [Q gate repair prompt](q-gate-repair-agent-prompt.md) | Retired handoff executed through `47b9d508`; repair not independently accepted |
 | [Q evidence integrity prompt](q-evidence-integrity-agent-prompt.md) | Retired handoff executed in `2c830b0d`; independent review requires further repair |
