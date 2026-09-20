@@ -23,6 +23,11 @@ sha2 = "0.10"
 ureq = "3"
 sys-locale = "0.3"
 tauri-plugin-mcp-bridge = "0.10"
+# Native tiled GeoTIFF/COG reader selected by GeoLibre. Reached only through the
+# private bounded reader in `services/lidar/prepared_raster.rs`; the pinned
+# revision and the migration rationale live in
+# docs/design/raster-rework/geolibre-integration-design.md.
+wbgeotiff = { git = "https://github.com/opengeos/whitebox-wasm", rev = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f" }
 
 [dev-dependencies]
 syn = { version = "2", features = ["full", "visit"] }
@@ -30,8 +35,15 @@ syn = { version = "2", features = ["full", "visit"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 lib-swift = { path = "../lib-swift" }
 
+[target.'cfg(unix)'.dependencies]
+# Free space is checked before a raster derivative or new numeric output is
+# written; neither std nor the existing dependency tree can report capacity.
+libc = "0.2"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 lib-cpp = { path = "../lib-cpp" }
+# Windows capacity check for the same preparation guard (see `libc` above).
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 lib-c = { path = "../lib-c" }

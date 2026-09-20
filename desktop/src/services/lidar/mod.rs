@@ -14,6 +14,7 @@ pub mod engine;
 pub mod grid;
 pub mod import;
 pub mod paths;
+mod prepared_raster;
 pub mod presentation;
 pub mod probe;
 
