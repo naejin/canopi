@@ -6,6 +6,7 @@
 //! bitmaps stored next to the prepared rasters they describe.
 
 use sha2::{Digest, Sha256};
+use std::io::{Read as _, Seek as _, Write as _};
 
 /// Affine geotransform: `[origin_x, pixel_w, rot_x, origin_y, rot_y, pixel_h]`.
 pub type GeoTransform = [f64; 6];
@@ -115,6 +116,9 @@ impl ValidMask {
             .expect("the infallible erosion checkpoint cannot fail")
     }
 
+    /// Dense erosion, retained as the independent oracle the streamed
+    /// [`erode_mask_file`] output must match byte for byte.
+    #[cfg(test)]
     pub fn eroded_checked(
         &self,
         mut checkpoint: impl FnMut(u32) -> Result<(), String>,
@@ -156,6 +160,150 @@ impl ValidMask {
             .map_err(|e| format!("Failed to read mask {}: {e}", path.display()))?;
         ValidMask::from_bytes(width, height, bytes)
     }
+}
+
+/// Columns processed per bounded block when eroding a persisted mask.
+const MASK_EROSION_BLOCK_COLUMNS: u32 = 4096;
+
+/// Erode a persisted coverage mask into `output` without loading it whole.
+///
+/// Byte-identical to [`ValidMask::eroded_checked`]: a cell stays valid only
+/// when its complete 3×3 neighborhood inside the raster is valid, so holes,
+/// outer edges and block seams all invalidate the same cells. Rows are read
+/// through a rolling three-row window over bounded column blocks, which keeps
+/// the working set constant instead of one byte per raster cell.
+pub fn erode_mask_file(
+    input: &std::path::Path,
+    output: &std::path::Path,
+    width: u32,
+    height: u32,
+    checkpoint: impl FnMut(u32) -> Result<(), String>,
+) -> Result<(), String> {
+    erode_mask_file_blocked(
+        input,
+        output,
+        width,
+        height,
+        MASK_EROSION_BLOCK_COLUMNS,
+        checkpoint,
+    )
+}
+
+/// The streaming erosion with an explicit block width, so tests can force
+/// many block seams across a small mask.
+fn erode_mask_file_blocked(
+    input: &std::path::Path,
+    output: &std::path::Path,
+    width: u32,
+    height: u32,
+    block_columns: u32,
+    mut checkpoint: impl FnMut(u32) -> Result<(), String>,
+) -> Result<(), String> {
+    if width == 0 || height == 0 {
+        return Err("coverage mask must not be empty".to_string());
+    }
+    if block_columns == 0 {
+        return Err("coverage mask block width must not be zero".to_string());
+    }
+    let cells = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| "coverage mask dimensions overflow".to_string())?;
+    let file_len = std::fs::metadata(input)
+        .map_err(|e| format!("Failed to inspect mask {}: {e}", input.display()))?
+        .len();
+    if file_len != cells {
+        return Err(format!(
+            "coverage mask {} has {file_len} bytes, expected {cells}",
+            input.display()
+        ));
+    }
+    let mut source = std::fs::File::open(input)
+        .map_err(|e| format!("Failed to read mask {}: {e}", input.display()))?;
+    let mut sink = std::fs::File::create(output)
+        .map_err(|e| format!("Failed to create mask {}: {e}", output.display()))?;
+
+    let block = block_columns.min(width);
+    let stride = block as usize + 2;
+    let mut above = vec![0u8; stride];
+    let mut center = vec![0u8; stride];
+    let mut below = vec![0u8; stride];
+    let mut eroded = vec![0u8; block as usize];
+    let mut x0 = 0u32;
+    while x0 < width {
+        let columns = block.min(width - x0);
+        let span = columns as usize + 2;
+        above[..span].fill(0);
+        center[..span].fill(0);
+        below[..span].fill(0);
+        read_mask_segment(&mut source, width, 0, x0, columns, &mut center[..span])?;
+        for y in 0..height {
+            if y + 1 < height {
+                read_mask_segment(&mut source, width, y + 1, x0, columns, &mut below[..span])?;
+            } else {
+                below[..span].fill(0);
+            }
+            for column in 0..columns as usize {
+                let complete = (0..3).all(|row| {
+                    let row = match row {
+                        0 => &above,
+                        1 => &center,
+                        _ => &below,
+                    };
+                    (0..3).all(|offset| row[column + offset] != 0)
+                });
+                eroded[column] = u8::from(complete);
+            }
+            checkpoint(y)?;
+            sink.seek(std::io::SeekFrom::Start(
+                u64::from(y) * u64::from(width) + u64::from(x0),
+            ))
+            .map_err(|e| format!("Failed to position mask {}: {e}", output.display()))?;
+            sink.write_all(&eroded[..columns as usize])
+                .map_err(|e| format!("Failed to write mask {}: {e}", output.display()))?;
+            std::mem::swap(&mut above, &mut center);
+            std::mem::swap(&mut center, &mut below);
+        }
+        x0 += columns;
+    }
+    sink.flush()
+        .map_err(|e| format!("Failed to flush mask {}: {e}", output.display()))?;
+    let written = std::fs::metadata(output)
+        .map_err(|e| format!("Failed to inspect mask {}: {e}", output.display()))?
+        .len();
+    if written != cells {
+        return Err(format!(
+            "eroded mask {} has {written} bytes, expected {cells}",
+            output.display()
+        ));
+    }
+    Ok(())
+}
+
+/// Read one row segment with a one-cell halo, zero-filling virtual columns
+/// outside the raster so edges erode exactly like the dense oracle.
+fn read_mask_segment(
+    source: &mut std::fs::File,
+    width: u32,
+    y: u32,
+    x0: u32,
+    columns: u32,
+    out: &mut [u8],
+) -> Result<(), String> {
+    out.fill(0);
+    let left = x0.saturating_sub(1);
+    let right = (x0 + columns + 1).min(width);
+    // Slot 0 always holds the left halo, so real data starts at index 1 when
+    // there is no left neighbour to read.
+    let start = usize::from(x0 == 0);
+    let length = (right - left) as usize;
+    let offset = u64::from(y) * u64::from(width) + u64::from(left);
+    source
+        .seek(std::io::SeekFrom::Start(offset))
+        .map_err(|e| format!("Failed to position mask read: {e}"))?;
+    source
+        .read_exact(&mut out[start..start + length])
+        .map_err(|e| format!("Failed to read mask row {y}: {e}"))?;
+    Ok(())
 }
 
 /// Build the exact valid-data mask from a little-endian Float32 raw buffer
@@ -497,5 +645,104 @@ mod tests {
         // x=1 overlap, x=2 uncovered, x=0 outside incoming.
         assert_eq!(class.overlap_cells, 1);
         assert_eq!(class.uncovered_cells, 1);
+    }
+
+    // -----------------------------------------------------------------
+    // Streamed mask erosion
+    // -----------------------------------------------------------------
+
+    fn erosion_scratch(label: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("canopi-erosion-{label}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        dir
+    }
+
+    fn mask_pattern(width: u32, height: u32, valid: impl Fn(u32, u32) -> bool) -> ValidMask {
+        let mut mask = ValidMask::empty(width, height);
+        for y in 0..height {
+            for x in 0..width {
+                mask.set(x, y, valid(x, y));
+            }
+        }
+        mask
+    }
+
+    #[test]
+    fn streamed_erosion_matches_the_dense_oracle_across_blocks_holes_and_edges() {
+        let patterns: Vec<(&str, Box<dyn Fn(u32, u32) -> bool>)> = vec![
+            ("all-valid", Box::new(|_, _| true)),
+            ("single-hole", Box::new(|x, y| !(x == 5 && y == 4))),
+            (
+                "edge-holes",
+                Box::new(|x, y| {
+                    !(x == 0 && y == 2)
+                        && !(x == 9 && y == 6)
+                        && !(x == 3 && y == 0)
+                        && !(x == 4 && y == 7)
+                        && !(x == 24 && y == 8)
+                }),
+            ),
+            ("checkerboard", Box::new(|x, y| (x + y) % 2 == 0)),
+            (
+                "block-seam",
+                Box::new(|x, y| !(x == 7 && y == 3) && !(x == 8 && y == 3) && !(x == 6 && y == 5)),
+            ),
+        ];
+        let (width, height) = (25u32, 9u32);
+        for (label, valid) in patterns {
+            let mask = mask_pattern(width, height, &valid);
+            let oracle = mask.eroded_checked(|_| Ok(())).expect("oracle erodes");
+            let dir = erosion_scratch(label);
+            let input = dir.join("mask.bin");
+            mask.write_to(&input).expect("mask writes");
+            for block in [1u32, 3, 7, 25, 64] {
+                let output = dir.join(format!("out-{block}.bin"));
+                erode_mask_file_blocked(&input, &output, width, height, block, |_| Ok(()))
+                    .expect("streamed erosion");
+                assert_eq!(
+                    std::fs::read(&output).expect("output reads"),
+                    oracle.bytes().to_vec(),
+                    "pattern {label} with {block}-column blocks"
+                );
+            }
+            let output = dir.join("out-default.bin");
+            erode_mask_file(&input, &output, width, height, |_| Ok(())).expect("default blocks");
+            assert_eq!(
+                std::fs::read(&output).expect("output reads"),
+                oracle.bytes().to_vec(),
+                "pattern {label} with the default block width"
+            );
+            std::fs::remove_dir_all(&dir).expect("scratch removed");
+        }
+    }
+
+    #[test]
+    fn streamed_erosion_stops_on_cancellation_and_rejects_wrong_sizes() {
+        let dir = erosion_scratch("errors");
+        let mask = mask_pattern(12, 4, |_, _| true);
+        let input = dir.join("mask.bin");
+        mask.write_to(&input).expect("mask writes");
+        let output = dir.join("out.bin");
+
+        let error = erode_mask_file_blocked(&input, &output, 12, 4, 5, |y| {
+            if y >= 2 {
+                Err("cancelled".to_string())
+            } else {
+                Ok(())
+            }
+        })
+        .expect_err("cancellation must stop the erosion");
+        assert_eq!(error, "cancelled");
+
+        let error = erode_mask_file(&input, &output, 12, 5, |_| Ok(())).expect_err("size mismatch");
+        assert!(error.contains("expected 60"), "{error}");
+
+        let missing = dir.join("absent.bin");
+        let error =
+            erode_mask_file(&missing, &output, 12, 4, |_| Ok(())).expect_err("missing mask");
+        assert!(error.contains("Failed to inspect"), "{error}");
+        std::fs::remove_dir_all(&dir).expect("scratch removed");
     }
 }

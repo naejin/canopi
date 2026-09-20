@@ -10,11 +10,11 @@
 use super::LidarLibrary;
 use super::catalogue::{self, new_id, now_iso};
 use super::display::ColorRamp;
-use super::grid::ValidMask;
+use super::grid::RasterGrid;
 use super::import::{
-    publish_display, raw_f32_bytes, read_generation_manifest, remove_display_publication,
-    validate_working_grid,
+    publish_display, read_generation_manifest, remove_display_publication, validate_working_grid,
 };
+use super::prepared_raster::PreparedRaster;
 use common_types::lidar::{LidarAnalysisKind, LidarSlopeUnit};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -102,50 +102,44 @@ pub fn run_slope_job(
         result_path.display().to_string(),
     ];
     if parameters.slope_unit == Some(LidarSlopeUnit::Percent) {
-        args.insert(2, "-p".to_string());
+        // `-p` is a mode flag for `slope`; it must precede `-s <scale>`, not
+        // be spliced into the scale option's argument pair.
+        args.insert(1, "-p".to_string());
     }
     engine.run(super::engine::GdalProgram::Dem, &args, Some(cancel))?;
 
     // Neighborhood quality mask: cells whose full 3×3 accepted neighborhood
-    // is not valid are flagged so unknown areas never masquerade as data.
-    let coverage = ValidMask::read_from(
+    // is not valid are flagged so unknown areas never masquerade as data. The
+    // persisted coverage mask is streamed rather than loaded whole.
+    let quality_path = staging_dir.join("quality.bin");
+    super::paths::require_free_space(
+        &staging_dir,
+        u64::from(manifest.grid.width) * u64::from(manifest.grid.height),
+        "the slope quality mask",
+    )?;
+    super::grid::erode_mask_file(
         Path::new(&head.coverage_mask_path),
+        &quality_path,
         manifest.grid.width,
         manifest.grid.height,
+        |_| super::import::check_cancel(cancel),
     )?;
-    let quality = coverage.eroded_checked(|_| super::import::check_cancel(cancel))?;
-    let quality_path = staging_dir.join("quality.bin");
-    quality.write_to(&quality_path)?;
 
     // The analysis engine chooses the output nodata marker; read it back so
     // statistics and display treat unknown cells as unknown.
     let result_info = super::display::gdalinfo_json(engine, cancel, &result_path)?;
     let result_nodata = super::display::band_nodata(&result_info).or(Some(manifest.nodata));
 
-    // Exact result statistics from the raw buffer.
-    let raw = raw_f32_bytes(
+    // Exact result statistics, streamed in bounded windows from the slope
+    // output's controlled derivative.
+    let (min_value, max_value, result_cells) = result_statistics(
         engine,
         &result_path,
-        manifest.grid.width,
-        manifest.grid.height,
+        &manifest.grid,
+        result_nodata,
+        &staging_dir,
         cancel,
     )?;
-    let (mut min_value, mut max_value, mut result_cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
-    for (index, chunk) in raw.chunks_exact(4).enumerate() {
-        if index % (256 * 1024) == 0 {
-            super::import::check_cancel(cancel)?;
-        }
-        let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-        if value.is_finite() && Some(value) != result_nodata {
-            result_cells += 1;
-            min_value = min_value.min(value as f64);
-            max_value = max_value.max(value as f64);
-        }
-    }
-    if !min_value.is_finite() {
-        min_value = 0.0;
-        max_value = 0.0;
-    }
 
     let engine_version = engine.discover().map(|t| t.version).unwrap_or_default();
     let result_manifest = ResultManifest {
@@ -323,6 +317,39 @@ pub fn run_slope_job(
     })
 }
 
+/// Exact result statistics from one bounded scan of the slope output.
+///
+/// Validity is the existing finite-and-not-NoData rule, using the NoData the
+/// analysis engine declared for this result. The reader owns its derivative
+/// and removes it before this returns, so the analysis staging directory can
+/// be renamed into its published generation without carrying a temporary file.
+fn result_statistics(
+    engine: &super::engine::GdalEngine,
+    result: &Path,
+    grid: &RasterGrid,
+    nodata: Option<f32>,
+    scratch: &Path,
+    cancel: &AtomicBool,
+) -> Result<(f64, f64, u64), String> {
+    let mut reader = PreparedRaster::open(engine, result, grid, nodata, scratch, cancel)?;
+    let (mut min_value, mut max_value, mut result_cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
+    reader.scan(cancel, |_window, samples, valid| {
+        for (value, valid) in samples.iter().zip(valid.iter()) {
+            if *valid != 0 {
+                result_cells += 1;
+                min_value = min_value.min(*value as f64);
+                max_value = max_value.max(*value as f64);
+            }
+        }
+        Ok(())
+    })?;
+    if !min_value.is_finite() {
+        min_value = 0.0;
+        max_value = 0.0;
+    }
+    Ok((min_value, max_value, result_cells))
+}
+
 pub fn definition_row(
     connection: &rusqlite::Connection,
     definition_id: &str,
@@ -449,4 +476,343 @@ pub fn recover_interrupted_jobs(connection: &rusqlite::Connection) -> Result<(),
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::atomic::AtomicBool;
+
+    /// GDAL-backed workflow expectations: a plane rising one metre per metre
+    /// eastward is 45 degrees, or 100 percent, everywhere it has neighbours.
+    #[derive(Debug)]
+    struct PublishedSlope {
+        result_path: PathBuf,
+        quality_path: PathBuf,
+        coverage_cells: u64,
+        min_value: f64,
+        max_value: f64,
+    }
+
+    fn scratch_root(label: &str) -> PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("canopi-slope-{label}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("scratch root");
+        root
+    }
+
+    /// A 45-degree plane with a NoData hole, published through the real
+    /// import review and apply path.
+    fn plane_layer(library: &LidarLibrary, root: &Path, width: u32, height: u32) -> String {
+        let engine = super::super::engine::GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let values: Vec<f32> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x, y)))
+            .map(|(x, y)| {
+                if (8..10).contains(&x) && (6..8).contains(&y) {
+                    -9999.0
+                } else {
+                    x as f32
+                }
+            })
+            .collect();
+        let raw = root.join("plane.raw");
+        super::super::import::write_f32_raw(&raw, &values).expect("plane raw");
+        let source = root.join("plane.tif");
+        let grid = RasterGrid {
+            width,
+            height,
+            geotransform: [0.0, 1.0, 0.0, height as f64, 0.0, -1.0],
+        };
+        super::super::import::raw_to_tif(
+            &engine,
+            &cancel,
+            &raw,
+            &source,
+            &grid,
+            "EPSG:3857",
+            -9999.0,
+        )
+        .expect("plane converts");
+
+        let layer_id = library
+            .create_layer(
+                "slope plane",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .expect("layer created");
+        publish_source(library, &layer_id, &source, false);
+        layer_id
+    }
+
+    /// Publish one source through the real review and apply path. An identical
+    /// reimport keeps the existing generation unless the caller replaces
+    /// overlap, which is how the layer head is advanced here.
+    fn publish_source(
+        library: &LidarLibrary,
+        layer_id: &str,
+        source: &Path,
+        replace_overlap: bool,
+    ) {
+        let cancel = AtomicBool::new(false);
+        let job_id = library.record_import_job(layer_id).expect("job recorded");
+        let output = super::super::import::stage_import(
+            library,
+            &job_id,
+            layer_id,
+            std::slice::from_ref(&source.to_path_buf()),
+            &cancel,
+        )
+        .expect("staging succeeds");
+        assert!(
+            output.review.compatible,
+            "plane must be admitted: {:?}",
+            output.review.issues
+        );
+        library.finish_staging(
+            &job_id,
+            Ok(super::super::import::StagingOutput {
+                review: output.review.clone(),
+            }),
+        );
+        let staging: super::super::import::StagedImport = serde_json::from_str(
+            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
+                .expect("staging json"),
+        )
+        .expect("staging parses");
+        library.prepare_apply(&job_id).expect("review accepted");
+        let outcome =
+            super::super::import::apply_import(library, &staging, true, replace_overlap, &cancel)
+                .expect("apply publishes");
+        assert!(outcome.changed, "{}", outcome.summary());
+    }
+
+    /// Create the analysis, run its first job as the orchestrator would.
+    fn run_first_slope_job(
+        library: &LidarLibrary,
+        layer_id: &str,
+        unit: LidarSlopeUnit,
+    ) -> (String, String) {
+        let receipt = library
+            .create_analysis(
+                layer_id,
+                LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(unit),
+                },
+            )
+            .expect("analysis created");
+        let (parameters, source_generation) = {
+            let connection = library.catalogue().expect("catalogue");
+            let parameters: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .expect("parameters");
+            let source_generation: String = connection
+                .query_row(
+                    "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
+                    [&receipt.job_id],
+                    |row| row.get(0),
+                )
+                .expect("source generation");
+            (parameters, source_generation)
+        };
+        let parameters = parse_parameters(&parameters).expect("parameters parse");
+        let outcome = run_slope_job(
+            library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &parameters,
+            &source_generation,
+            &AtomicBool::new(false),
+        )
+        .expect("slope job runs");
+        assert!(outcome.published && !outcome.stale, "{}", outcome.summary());
+        (receipt.job_id, receipt.definition_id)
+    }
+
+    fn published_slope(library: &LidarLibrary, definition_id: &str) -> PublishedSlope {
+        let connection = library.catalogue().expect("catalogue");
+        let generation_id: String = connection
+            .query_row(
+                "SELECT generation_id FROM lidar_analysis_heads WHERE definition_id = ?1",
+                [definition_id],
+                |row| row.get(0),
+            )
+            .expect("analysis head");
+        connection
+            .query_row(
+                "SELECT result_path, quality_mask_path, coverage_cells, min_value, max_value
+                 FROM lidar_analysis_generations WHERE id = ?1",
+                [&generation_id],
+                |row| {
+                    Ok(PublishedSlope {
+                        result_path: PathBuf::from(row.get::<_, String>(0)?),
+                        quality_path: PathBuf::from(row.get::<_, String>(1)?),
+                        coverage_cells: row.get::<_, i64>(2)? as u64,
+                        min_value: row.get(3)?,
+                        max_value: row.get(4)?,
+                    })
+                },
+            )
+            .expect("published generation")
+    }
+
+    /// Independently recompute the statistics from the published result with
+    /// the retained dense conversion.
+    fn oracle_statistics(
+        engine: &super::super::engine::GdalEngine,
+        published: &PublishedSlope,
+        grid: &RasterGrid,
+    ) -> (f64, f64, u64) {
+        let cancel = AtomicBool::new(false);
+        let raw = super::super::import::raw_f32_bytes(
+            engine,
+            &published.result_path,
+            grid.width,
+            grid.height,
+            &cancel,
+        )
+        .expect("result converts");
+        let info = super::super::display::gdalinfo_json(engine, &cancel, &published.result_path)
+            .expect("result info");
+        let nodata = super::super::display::band_nodata(&info);
+        let (mut min, mut max, mut cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
+        for chunk in raw.chunks_exact(4) {
+            let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            if value.is_finite() && Some(value) != nodata {
+                cells += 1;
+                min = min.min(value as f64);
+                max = max.max(value as f64);
+            }
+        }
+        if !min.is_finite() {
+            min = 0.0;
+            max = 0.0;
+        }
+        (min, max, cells)
+    }
+
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn slope_jobs_publish_streamed_statistics_and_quality_masks() {
+        let engine = super::super::engine::GdalEngine::new();
+        let root = scratch_root("streamed");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let (width, height) = (24u32, 18u32);
+        let layer_id = plane_layer(&library, &root, width, height);
+        let manifest = {
+            let connection = library.catalogue().expect("catalogue");
+            let head = catalogue::head_generation(&connection, &layer_id)
+                .expect("head read")
+                .expect("layer published");
+            read_generation_manifest(&head.manifest_json).expect("manifest")
+        };
+
+        super::super::prepared_raster::observability::reset();
+        let (_job_id, degrees_definition) =
+            run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Degrees);
+        let degrees = published_slope(&library, &degrees_definition);
+        assert!(
+            super::super::prepared_raster::observability::tiles_decoded() > 0,
+            "slope statistics must decode through the native tiled reader"
+        );
+
+        // Statistics and coverage match the retained dense conversion.
+        let (min, max, cells) = oracle_statistics(&engine, &degrees, &manifest.grid);
+        assert_eq!(degrees.min_value, min);
+        assert_eq!(degrees.max_value, max);
+        assert_eq!(degrees.coverage_cells, cells);
+        assert!(
+            (44.0..=46.0).contains(&degrees.max_value),
+            "a one-metre-per-metre plane is 45 degrees, got {}",
+            degrees.max_value
+        );
+
+        // The streamed quality mask is byte-identical to the dense erosion of
+        // the accepted coverage, including the hole and the outer edges.
+        let coverage_path = {
+            let connection = library.catalogue().expect("catalogue");
+            let head = catalogue::head_generation(&connection, &layer_id)
+                .expect("head read")
+                .expect("layer published");
+            PathBuf::from(head.coverage_mask_path)
+        };
+        let coverage = super::super::grid::ValidMask::read_from(&coverage_path, width, height)
+            .expect("coverage reads");
+        let oracle_quality = coverage.eroded_checked(|_| Ok(())).expect("dense erosion");
+        assert_eq!(
+            std::fs::read(&degrees.quality_path).expect("quality mask"),
+            oracle_quality.bytes().to_vec(),
+            "published quality mask must match the dense oracle"
+        );
+
+        // Percent reports the same plane as 100 percent.
+        let (_job_id, percent_definition) =
+            run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Percent);
+        let percent = published_slope(&library, &percent_definition);
+        let (percent_min, percent_max, percent_cells) =
+            oracle_statistics(&engine, &percent, &manifest.grid);
+        assert_eq!(percent.min_value, percent_min);
+        assert_eq!(percent.max_value, percent_max);
+        assert_eq!(percent.coverage_cells, percent_cells);
+        assert!(
+            (99.0..=101.0).contains(&percent.max_value),
+            "the same plane is 100 percent, got {}",
+            percent.max_value
+        );
+
+        // A job whose input generation is no longer the layer head publishes
+        // nothing and leaves the previous result in place.
+        let receipt = library
+            .create_analysis(
+                &layer_id,
+                LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(LidarSlopeUnit::Degrees),
+                },
+            )
+            .expect("stale analysis created");
+        // An identical reimport publishes only when it replaces overlap; that
+        // changed head is what makes the pending job stale.
+        publish_source(&library, &layer_id, &root.join("plane.tif"), true);
+        let (stale_parameters, stale_source_generation) = {
+            let connection = library.catalogue().expect("catalogue");
+            let parameters: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .expect("parameters");
+            let generation: String = connection
+                .query_row(
+                    "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
+                    [&receipt.job_id],
+                    |row| row.get(0),
+                )
+                .expect("source generation");
+            (parameters, generation)
+        };
+        let stale = run_slope_job(
+            &library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &parse_parameters(&stale_parameters).expect("parameters parse"),
+            &stale_source_generation,
+            &AtomicBool::new(false),
+        )
+        .expect("stale job settles");
+        assert!(stale.stale && !stale.published, "{}", stale.summary());
+        let unchanged = published_slope(&library, &degrees_definition);
+        assert_eq!(unchanged.min_value, min);
+        assert_eq!(unchanged.max_value, max);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

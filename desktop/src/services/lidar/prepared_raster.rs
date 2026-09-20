@@ -612,21 +612,21 @@ fn observe_tile() {}
 pub(super) mod observability {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    pub(super) static TILES_DECODED: AtomicU64 = AtomicU64::new(0);
-    pub(super) static WINDOWS_READ: AtomicU64 = AtomicU64::new(0);
-    pub(super) static PEAK_LIVE_BYTES: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static TILES_DECODED: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static WINDOWS_READ: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static PEAK_LIVE_BYTES: AtomicU64 = AtomicU64::new(0);
 
-    pub(super) fn reset() {
+    pub(crate) fn reset() {
         TILES_DECODED.store(0, Ordering::Relaxed);
         WINDOWS_READ.store(0, Ordering::Relaxed);
         PEAK_LIVE_BYTES.store(0, Ordering::Relaxed);
     }
 
-    pub(super) fn tiles_decoded() -> u64 {
+    pub(crate) fn tiles_decoded() -> u64 {
         TILES_DECODED.load(Ordering::Relaxed)
     }
 
-    pub(super) fn peak_live_bytes() -> u64 {
+    pub(crate) fn peak_live_bytes() -> u64 {
         PEAK_LIVE_BYTES.load(Ordering::Relaxed)
     }
 }
@@ -687,13 +687,6 @@ mod tests {
                 (12, 5) => -12.5,
                 _ => 1000.0 + x as f32 * 0.25 - y as f32 * 2.0,
             }
-        }
-
-        pub fn cells(&self) -> Vec<f32> {
-            (0..self.height)
-                .flat_map(|y| (0..self.width).map(move |x| (x, y)))
-                .map(|(x, y)| Self::value(x, y))
-                .collect()
         }
 
         pub fn bytes(&self) -> Vec<u8> {
