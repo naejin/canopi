@@ -161,6 +161,10 @@ impl ValidMask {
 /// Build the exact valid-data mask from a little-endian Float32 raw buffer
 /// (ENVI BSQ single band). Validity order: finite check, then declared NoData
 /// comparison in raw value space.
+///
+/// Import staging now streams this rule through its bounded reader, so this
+/// dense builder is retained as the independent oracle compatibility tests
+/// compare that streamed output against.
 #[cfg(test)]
 pub fn valid_mask_from_f32_raw(
     width: u32,
@@ -171,6 +175,7 @@ pub fn valid_mask_from_f32_raw(
     valid_mask_from_f32_raw_checked(width, height, raw, nodata, |_| Ok(()))
 }
 
+#[cfg(test)]
 pub fn valid_mask_from_f32_raw_checked(
     width: u32,
     height: u32,

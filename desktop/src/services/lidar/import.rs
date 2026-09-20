@@ -15,13 +15,14 @@ use super::engine::{GdalEngine, GdalProgram};
 use super::grid::{
     self, GeoTransform, RasterGrid, ValidMask, classify_coverage, remap_mask_checked, union_grid,
 };
-use super::paths::LidarPaths;
+use super::paths::{self, LidarPaths};
+use super::prepared_raster::PreparedRaster;
 use common_types::lidar::{
     LidarImportDecisionPreview, LidarImportProgressPhase, LidarImportReview, LidarImportSourceFacts,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::io::{Read as _, Write as _};
+use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -747,26 +748,27 @@ fn stage_source(
         );
     }
 
-    // Exact valid mask, value range and raw samples from the numeric buffer.
+    // Exact valid mask, value range and raw samples, streamed in bounded
+    // windows from one controlled derivative: the managed original is never
+    // loaded whole and the derivative is removed before this returns.
     let source_grid = RasterGrid {
         width: probe.width,
         height: probe.height,
         geotransform: probe.geotransform,
     };
     validate_working_grid(&source_grid, "source raster")?;
-    let raw = raw_f32_bytes(engine, &managed_original, probe.width, probe.height, cancel)?;
-    let mask = grid::valid_mask_from_f32_raw_checked(
-        probe.width,
-        probe.height,
-        &raw,
-        probe.nodata,
-        |_| check_cancel(cancel),
-    )?;
     let mask_path = job_dir.join(format!("valid-{sha256}.bin"));
-    mask.write_to(&mask_path)?;
     let raw_path = job_dir.join(format!("source-{sha256}.raw"));
-    std::fs::write(&raw_path, &raw).map_err(|e| format!("Failed to stage samples: {e}"))?;
-    let value_range = raw_value_range(&raw, cancel)?;
+    let value_range = stage_source_samples(
+        engine,
+        &managed_original,
+        &source_grid,
+        probe.nodata,
+        job_dir,
+        &raw_path,
+        &mask_path,
+        cancel,
+    )?;
 
     if let Some(expected) = layer_grid
         && let Err(error) = source_grid.compatible(expected)
@@ -840,6 +842,147 @@ fn stage_source(
         compatible: issues.is_empty(),
         issues,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Streamed source extraction
+// ---------------------------------------------------------------------------
+
+/// Stream one source's raw samples, valid mask and value range.
+///
+/// The derivative belongs to the reader and is gone before this returns. A
+/// failed or cancelled attempt removes its partial outputs, so a failed
+/// staging attempt never leaves a half-written numeric asset behind.
+#[allow(clippy::too_many_arguments)]
+fn stage_source_samples(
+    engine: &GdalEngine,
+    input: &Path,
+    grid: &RasterGrid,
+    nodata: Option<f32>,
+    job_dir: &Path,
+    raw_path: &Path,
+    mask_path: &Path,
+    cancel: &AtomicBool,
+) -> Result<[f64; 2], String> {
+    let cells = u64::from(grid.width)
+        .checked_mul(u64::from(grid.height))
+        .ok_or_else(|| "source raster dimensions overflow".to_string())?;
+    let raw_bytes = cells
+        .checked_mul(4)
+        .ok_or_else(|| "source raster byte count overflows".to_string())?;
+    paths::require_free_space(
+        job_dir,
+        raw_bytes
+            .checked_add(cells)
+            .ok_or_else(|| "staged source size overflows".to_string())?,
+        "the staged source outputs",
+    )?;
+
+    let staged = (|| -> Result<[f64; 2], String> {
+        let mut reader = PreparedRaster::open(engine, input, grid, nodata, job_dir, cancel)?;
+        write_source_outputs(&mut reader, grid, raw_path, mask_path, cancel)
+    })();
+    match staged {
+        Ok(range) => {
+            for (path, expected) in [(raw_path, raw_bytes), (mask_path, cells)] {
+                let written = std::fs::metadata(path)
+                    .map_err(|e| format!("Failed to inspect {}: {e}", path.display()))?
+                    .len();
+                if written != expected {
+                    let _ = std::fs::remove_file(raw_path);
+                    let _ = std::fs::remove_file(mask_path);
+                    return Err(format!(
+                        "staged {} has {written} bytes, expected {expected}",
+                        path.display()
+                    ));
+                }
+            }
+            Ok(range)
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(raw_path);
+            let _ = std::fs::remove_file(mask_path);
+            Err(error)
+        }
+    }
+}
+
+/// Write the exact persisted row-major layouts from a bounded window scan.
+fn write_source_outputs(
+    reader: &mut PreparedRaster,
+    grid: &RasterGrid,
+    raw_path: &Path,
+    mask_path: &Path,
+    cancel: &AtomicBool,
+) -> Result<[f64; 2], String> {
+    let mut raw = PositionedWriter::create(raw_path, "staged samples")?;
+    let mut mask = PositionedWriter::create(mask_path, "staged valid mask")?;
+    let mut row = Vec::new();
+    let (mut min, mut max) = (f64::INFINITY, f64::NEG_INFINITY);
+    reader.scan(cancel, |window, samples, valid| {
+        for line in 0..window.height {
+            let start = line as usize * window.width as usize;
+            let stop = start + window.width as usize;
+            row.clear();
+            for value in &samples[start..stop] {
+                row.extend_from_slice(&value.to_le_bytes());
+                if value.is_finite() {
+                    min = min.min(*value as f64);
+                    max = max.max(*value as f64);
+                }
+            }
+            let cell = u64::from(window.y + line) * u64::from(grid.width) + u64::from(window.x);
+            raw.write_at(cell * 4, &row)?;
+            mask.write_at(cell, &valid[start..stop])?;
+        }
+        Ok(())
+    })?;
+    raw.finish()?;
+    mask.finish()?;
+    if min.is_finite() {
+        Ok([min, max])
+    } else {
+        Ok([0.0, 0.0])
+    }
+}
+
+/// Row-addressed writer that keeps the persisted layout exact without
+/// buffering a whole row band.
+struct PositionedWriter {
+    file: std::fs::File,
+    next_offset: u64,
+    what: &'static str,
+}
+
+impl PositionedWriter {
+    fn create(path: &Path, what: &'static str) -> Result<Self, String> {
+        let file =
+            std::fs::File::create(path).map_err(|e| format!("Failed to create {what}: {e}"))?;
+        Ok(Self {
+            file,
+            next_offset: 0,
+            what,
+        })
+    }
+
+    fn write_at(&mut self, offset: u64, bytes: &[u8]) -> Result<(), String> {
+        if offset != self.next_offset {
+            self.file
+                .seek(SeekFrom::Start(offset))
+                .map_err(|e| format!("Failed to position {}: {e}", self.what))?;
+        }
+        self.file
+            .write_all(bytes)
+            .map_err(|e| format!("Failed to write {}: {e}", self.what))?;
+        self.next_offset = offset + bytes.len() as u64;
+        Ok(())
+    }
+
+    fn finish(mut self) -> Result<(), String> {
+        self.file
+            .flush()
+            .map_err(|e| format!("Failed to flush {}: {e}", self.what))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2286,26 +2429,6 @@ fn probe_gdalinfo(
     Ok(output.stdout)
 }
 
-fn raw_value_range(raw: &[u8], cancel: &AtomicBool) -> Result<[f64; 2], String> {
-    let mut min = f64::INFINITY;
-    let mut max = f64::NEG_INFINITY;
-    for (index, chunk) in raw.chunks_exact(4).enumerate() {
-        if index % (256 * 1024) == 0 {
-            check_cancel(cancel)?;
-        }
-        let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-        if value.is_finite() {
-            min = min.min(value as f64);
-            max = max.max(value as f64);
-        }
-    }
-    if !min.is_finite() {
-        Ok([0.0, 0.0])
-    } else {
-        Ok([min, max])
-    }
-}
-
 fn grid_for_source(source: &StagedSource) -> RasterGrid {
     RasterGrid {
         width: source.width,
@@ -2573,5 +2696,189 @@ mod tests {
         assert_eq!(mosaic.valid.count_valid(), 1);
         assert!(!mosaic.valid.get(1, 0));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    // -----------------------------------------------------------------
+    // Streamed staging through the real engine
+    // -----------------------------------------------------------------
+
+    /// Authored values for the staging compatibility fixtures.
+    fn staged_value(x: u32, y: u32) -> f32 {
+        match (x % 23, y % 17) {
+            (0, 0) => -9999.0,
+            (1, 1) => f32::NAN,
+            (2, 2) => f32::INFINITY,
+            (3, 3) => 0.0,
+            (4, 4) => -12.5,
+            _ => (x as f32) * 0.5 - (y as f32) * 0.25,
+        }
+    }
+
+    /// Independently recomputed value range for the retained conversion.
+    fn oracle_range(raw: &[u8]) -> [f64; 2] {
+        let mut min = f64::INFINITY;
+        let mut max = f64::NEG_INFINITY;
+        for chunk in raw.chunks_exact(4) {
+            let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            if value.is_finite() {
+                min = min.min(value as f64);
+                max = max.max(value as f64);
+            }
+        }
+        if min.is_finite() {
+            [min, max]
+        } else {
+            [0.0, 0.0]
+        }
+    }
+
+    fn write_staging_fixture(
+        engine: &GdalEngine,
+        dir: &Path,
+        name: &str,
+        width: u32,
+        height: u32,
+        nodata: f32,
+    ) -> PathBuf {
+        let values: Vec<f32> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x, y)))
+            .map(|(x, y)| staged_value(x, y))
+            .collect();
+        let raw = dir.join(format!("{name}.raw"));
+        write_f32_raw(&raw, &values).expect("fixture raw writes");
+        let tif = dir.join(format!("{name}.tif"));
+        raw_to_tif(
+            engine,
+            &AtomicBool::new(false),
+            &raw,
+            &tif,
+            &RasterGrid {
+                width,
+                height,
+                geotransform: [0.0, 1.0, 0.0, height as f64, 0.0, -1.0],
+            },
+            "EPSG:3857",
+            nodata,
+        )
+        .expect("fixture converts");
+        let _ = std::fs::remove_file(&raw);
+        let _ = std::fs::remove_file(raw.with_extension("hdr"));
+        tif
+    }
+
+    /// The streamed production staging path must persist exactly what the
+    /// retained dense GDAL conversion produced, for every special value the
+    /// Float32 contract covers, and must really decode through the native
+    /// tiled reader rather than a full-buffer fallback.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn staged_source_assets_match_the_gdal_conversion_oracle() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-staging-oracle"));
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "staging oracle",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .expect("layer created");
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+
+        let (width, height) = (60u32, 45u32);
+        let float_source =
+            write_staging_fixture(&engine, &root, "oracle-f32", width, height, -9999.0);
+        let int_source = root.join("oracle-int16.tif");
+        engine
+            .run(
+                GdalProgram::Translate,
+                &[
+                    "-q".to_string(),
+                    "-ot".to_string(),
+                    "Int16".to_string(),
+                    "-co".to_string(),
+                    "TILED=YES".to_string(),
+                    float_source.display().to_string(),
+                    int_source.display().to_string(),
+                ],
+                Some(&cancel),
+            )
+            .expect("int16 fixture converts");
+
+        use crate::services::lidar::prepared_raster::observability;
+        observability::reset();
+        let output = stage_import(
+            &library,
+            &job_id,
+            &layer_id,
+            &[float_source.clone(), int_source.clone()],
+            &cancel,
+        )
+        .expect("staging succeeds");
+        assert!(
+            output.review.compatible,
+            "fixtures must be admitted: {:?}",
+            output.review.issues
+        );
+        assert!(
+            observability::tiles_decoded() > 0,
+            "staging must decode through the native tiled reader"
+        );
+
+        let staging: StagedImport = serde_json::from_str(
+            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
+                .expect("staging json"),
+        )
+        .expect("staging parses");
+        assert_eq!(staging.sources.len(), 2);
+        for (source, fixture) in staging.sources.iter().zip([&float_source, &int_source]) {
+            assert_eq!(source.width, width);
+            assert_eq!(source.height, height);
+            assert_eq!(source.nodata, Some(-9999.0));
+            assert_eq!(source.size_bytes, std::fs::metadata(fixture).unwrap().len());
+
+            let oracle =
+                raw_f32_bytes(&engine, fixture, width, height, &cancel).expect("oracle conversion");
+            let oracle_mask = grid::valid_mask_from_f32_raw_checked(
+                width,
+                height,
+                &oracle,
+                Some(-9999.0),
+                |_| Ok(()),
+            )
+            .expect("oracle mask");
+            let persisted_raw = std::fs::read(&source.raw_samples_path).expect("persisted raw");
+            let persisted_mask = std::fs::read(&source.valid_mask_path).expect("persisted mask");
+            assert_eq!(persisted_raw.len(), oracle.len(), "raw byte count");
+            assert_eq!(persisted_mask, oracle_mask.bytes().to_vec(), "mask bytes");
+            for (index, chunk) in oracle.chunks_exact(4).enumerate() {
+                let expected = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                let got =
+                    f32::from_le_bytes(persisted_raw[index * 4..index * 4 + 4].try_into().unwrap());
+                if expected.is_nan() {
+                    assert!(got.is_nan(), "sample {index} must stay NaN");
+                } else {
+                    assert_eq!(got.to_bits(), expected.to_bits(), "sample {index}");
+                }
+            }
+            assert_eq!(
+                source.value_range,
+                oracle_range(&oracle),
+                "value range keeps the retained finite-NoData behaviour"
+            );
+        }
+
+        // The derivative is temporary: nothing prepared-* survives staging.
+        let leftovers: Vec<_> = std::fs::read_dir(library.inner.paths.job_dir(&job_id))
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("prepared-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "derivative left behind: {leftovers:?}"
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 }
