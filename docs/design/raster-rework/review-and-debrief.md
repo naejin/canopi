@@ -481,6 +481,20 @@ Delivered in one batch on `feature/geolibre-native-raster-integration`: import s
 | Self-review versus independent escapes | No independent review has run on this delivery. The receipt names what review should attack: the `-b 1` behavior change, the "only two paths are bounded" claim against the retained dense callers, the uncompiled Windows capacity branch, and the fact that CI cannot run any GDAL-backed test |
 | Reviewer oversight carried forward | The settled design promised "one managed MNT workflow" from an explicit fixture location, but the documented `0446_6807` tile is absent on this host. The run used the real `0445_6806` tile through the documented env override with its hash recorded; the design did not anticipate needing a fallback identity rule |
 
+
+### Review correction at the same branch (delivery record)
+
+The [independent disposition](geolibre-integration-review.md) retained the implementation and named one acceptance blocker (D1) plus one reporting correction (R1). The correction delivery keeps the architecture, dependencies, storage, science and capacity limits unchanged.
+
+| Question | Observed |
+| --- | --- |
+| Classification accuracy | D1 was an implementation deviation with a test gap; the design text did state the combined sum, but no acceptance example made the sum the sole admission rule, which was the reviewer's own handoff omission. R1 was a reporting/test-scope gap over inherited lifecycle debt, not a new defect from this integration and not evidence that every cleanup path is broken |
+| Decisions handled locally | One combined estimate in the private module with the caller passing `cells * 5` and its old preflight deleted; analysis passing zero additional bytes because its result and quality files already exist; the capacity observation seam being a `#[cfg(test)]` thread-local rather than an environment switch; the per-window recheck replacing (not joining) the row-band recheck |
+| Self-review discoveries | Tracing the analysis path showed the quality-mask check and the reader budget are sequential, so charging the mask again would have double-counted it; the boundary test showed the combined estimate is inclusive at the requirement; removing the caller preflight left exactly one formula, which is what the review asked for |
+| Design omission surfaced | The original design specified simultaneous allocation accounting but never fixed a decisive boundary example, so a reviewer had to construct the 265 MiB counterexample. The corrected acceptance cases now live in the receipt as fixed numbers rather than a formula restated from the code |
+| Inherited issue handled without widening scope | A cancelled or mid-pipeline-failed slope job leaves `prepared/analysis/<definition_id>/staging-*` behind; this was confirmed dynamically once (result and quality files were present in the abandoned directory) and tracked as `canopi-jv8a.3` rather than repaired here |
+| Evidence limits | Capacity tests use an observation seam, not a filled filesystem; no real out-of-space event was observed, and the check remains a measurement rather than an OS reservation. The reviewer's offline rerun is now reproducible through the recorded cache route, but the real MNT lifecycle remains implementer-run evidence |
+
 ## Final debrief procedure
 
 ### Result of the DB1–DB4 intervention

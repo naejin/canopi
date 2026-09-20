@@ -1,6 +1,6 @@
 # Complete the native integration review corrections
 
-Status: proposed — sole current implementation assignment, executable when forwarded by the user.
+Status: retired — executed as the sole review-correction assignment; outcome and evidence in the [integration receipt](geolibre-integration-receipt.md). Retained as debrief evidence, not execution authority.
 Tracking: reopen `canopi-jv8a.1` for its review correction; parent `canopi-jv8a`, epic `canopi-j571`. Track deferred cleanup separately in bd.
 Current guidance: [review disposition](geolibre-integration-review.md), [native design](geolibre-integration-design.md), [LiDAR](../../agent/lidar.md), [courier protocol](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 

@@ -12,7 +12,7 @@ Forward the handoff path and commit, then return the delivery with commit/branch
 
 ## One bounded loop
 
-Use the project-wide handoff and consolidated-review rules. The [index](README.md) names the sole current assignment and bd owns execution status. G1–G5 was delivered as one batch; the [current follow-up](geolibre-integration-followup-agent-prompt.md) closes its specific review findings without repeating that assignment. Complete internal steps and routine repairs before one courier delivery. The user selected GeoLibre reuse; do not request the same decision again. Different engines, scientific contracts or material UI changes still require approval. Q remains frozen/unqualified, not an entry gate for production work.
+Use the project-wide handoff and consolidated-review rules. The [index](README.md) names the sole current assignment and bd owns execution status. G1–G5 was delivered as one batch; the [review-correction assignment](geolibre-integration-followup-agent-prompt.md) closed its specific findings and is delivered in the [receipt](geolibre-integration-receipt.md), so no assignment is live until the main agent settles the next one after review. The user selected GeoLibre reuse; do not request the same decision again. Different engines, scientific contracts or material UI changes still require approval. Q remains frozen/unqualified, not an entry gate for production work.
 
 ## Delivery evidence and continuous improvement
 

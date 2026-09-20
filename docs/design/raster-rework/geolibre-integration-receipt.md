@@ -15,7 +15,10 @@ Current guidance: [settled design](geolibre-integration-design.md), [LiDAR](../.
 | G2 import caller | `b73f4f89` |
 | G3 analysis caller | `88bd1585` |
 | Self-review findings closed | `05b61319` |
-| Delivery (docs, receipt, guides, bead export) | the commit that adds this receipt |
+| Delivery (docs, receipt, guides, bead export) | `089b6f39`, `3004e4d3` |
+| Review disposition brought into the branch | `28f94d14` |
+| D1 combined-budget correction (code) | `6783fef6` |
+| R1 reporting correction, receipt, guides and debrief | the commit that carries this section |
 
 The primary checkout stayed on `feature/raster-html-references`; the user-owned edit in `desktop/src/native_operation.rs` was never staged, stashed or reset. Factual note: that edit is not `rustfmt`-clean under the pinned 1.97.1 toolchain (the committed file is), so repository formatting gates ran in the separate worktree.
 
@@ -24,7 +27,7 @@ The primary checkout stayed on `feature/raster-html-references`; the user-owned 
 - `desktop/Cargo.toml`: `wbgeotiff = { git = "https://github.com/opengeos/whitebox-wasm", rev = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f" }`, resolved by `Cargo.lock` to `wbgeotiff 0.1.2` (`git+…whitebox-wasm?rev=9c0ff4f…`). The pin is unchanged from the design.
 - `Cargo.lock` gained 27 packages (the reader plus its codec/threading closure: `jxl-*`, `webp-rust`, `zune-jpegxl`, `jpeg-decoder`, `jpeg-encoder`, `lz4_flex`, `weezl`, `bin-rs`, `crossbeam-*`, `rayon`, `rayon-core`, `twox-hash`, `either`). Resolved licenses are permissive: MIT, Apache-2.0, `MIT OR Apache-2.0`, `MIT OR Apache-2.0 OR Zlib`, and `(MIT OR Apache-2.0) AND IJG` for `jpeg-encoder`. `wbgeotiff` itself is `MIT OR Apache-2.0` and ships `LICENSE-MIT`/`LICENSE-APACHE` with the git source; the repository keeps no separate third-party notice file to update.
 - Two target-scoped additions for the capacity guard: `libc = "0.2"` (`cfg(unix)`) and `windows-sys` with `Win32_Storage_FileSystem` (`cfg(windows)`); both versions were already in the lock. Justification: `std` has no filesystem-capacity API (`std::fs::available_space` is not stable in 1.97.1 — checked by compiling a probe) and no existing dependency reports it, while "fail preparation by name rather than guessing" requires a real reading.
-- Build reproduction used `CARGO_HOME=<repo>/.rq-scratch/cargo-home` because the agent file sandbox cannot write `~/.cargo`; `cargo fetch` resolved the git pin and the crates.io closure over the network. This is a harness constraint, not a repository change.
+- Build reproduction used `CARGO_HOME=<repo>/.rq-scratch/cargo-home` because the agent file sandbox cannot write `~/.cargo`. The route that actually works: `CARGO_HOME=<repo>/.rq-scratch/cargo-home cargo fetch` once **with network** (it fetches the pinned git checkout and the crates.io closure, including `jpeg-encoder`, which the default `~/.cargo` cache lacks), then build and test with the same `CARGO_HOME`. The reviewer's `--offline` replay failed because that cache's `registry/index` was a symlink to the read-only global index, so cargo could not write the index cache entry for `jpeg-encoder`; replacing the symlink with a writable copy of the 62 MiB index cache and re-running `cargo fetch` made the reviewer's exact command work offline: `CARGO_HOME=/home/daylon/projects/canopi/.rq-scratch/cargo-home CANOPI_SKIP_BUNDLED_DB=1 cargo test --offline -p canopi-desktop services::lidar -- --test-threads=1`. Harness and cache only, no repository change.
 
 ## Production call sites
 
@@ -55,6 +58,35 @@ The primary checkout stayed on `feature/raster-html-references`; the user-owned 
 - Source range still includes finite NoData sentinels, preserving current `raw_value_range` behaviour; the valid-only discrepancy remains `canopi-jv8a.2`.
 - A synthetic 45° plane (1 m rise per metre) publishes 45.0 in degrees and 100.0 in percent, with `coverage_cells`, `min_value` and `max_value` exactly equal to the dense recomputation of the published result.
 
+## Review correction (D1) — combined working-set budget
+
+The [independent disposition](geolibre-integration-review.md) found that `stage_source_samples` checked raw/mask space and `PreparedRaster::open` separately checked derivative space, so both saw the same free bytes and neither established the combined footprint the design requires.
+
+One checked estimate now lives in `prepared_raster.rs` (`required_free_bytes`) and is enforced once, before GDAL preparation or any raw/mask creation:
+
+`padded_cog_bytes(width, height) + metadata_prefix_ceiling + additional_output_bytes + FREE_SPACE_FLOOR_BYTES`
+
+- `import::stage_source_samples` passes `cells * 5` (four sample bytes and one validity byte per cell) and no longer keeps a second preflight, so a single formula decides admission.
+- `analysis::result_statistics` passes `0`: the slope result and the quality mask already exist on disk when the reader opens, so measured free space already reflects them. The separate check that covers the not-yet-written quality mask is unchanged.
+- `scan` rechecks the reserve at every window's consumer boundary instead of once per row band, so a wide band cannot perform many writes between checks.
+- Sequential phases are not double-charged: the managed-original copy and the GDAL probe finish before the combined check runs, so their bytes are already reflected in the measured free space; the previously staged sources' outputs are on disk for the same reason.
+
+RED/GREEN evidence (fault injection, reverted before commit): with `additional_output_bytes` ignored — the reviewed defect — `combined_working_set_sums_every_simultaneously_live_allocation`, `combined_working_set_overflow_is_a_named_error` and `staged_source_rejects_an_insufficient_combined_budget_before_preparation` all fail; the caller test fails by reaching `gdal_translate` ("No such file or directory") instead of rejecting, which is exactly the reviewed behavior.
+
+Independently calculated cases, asserted through the production estimate and the real import caller (not a detached formula):
+
+| Case | Requirement | Observed |
+| --- | --- | --- |
+| 1024×1024 Float32 with staged outputs | 4 MiB derivative + 4 MiB metadata + 5 MiB outputs + 256 MiB reserve = **269 MiB (282066944 bytes)** | admitted at exactly 269 MiB; rejected one byte below |
+| Same grid with 265 MiB free | the former outputs check needed 261 MiB and the former preparation check 264 MiB, so both passed | rejected, naming 282066944 required and 277872640 available |
+| Same grid with no additional output | **264 MiB** | admitted at 264 MiB |
+| `additional_output_bytes = u64::MAX`, or `u32::MAX × u32::MAX` dimensions | — | named overflow error; no allocation, wraparound or panic |
+| Multi-window scan whose reserve disappears after the first window | — | first window delivered, second refused with the measured space named |
+
+Rejection is asserted before preparation (a missing input never reaches GDAL) and before any derivative, raw or mask file exists. The GDAL-backed caller control confirms the exact boundary admits the work and writes both outputs at their exact persisted sizes. No production build reads the test seam: it is a `#[cfg(test)]` thread-local observation override, and the budget decision itself stays production code.
+
+Limits of the check: it is a measurement, not an OS reservation; another process can consume the space immediately afterwards. Ordinary write errors still propagate, import partial outputs are still removed on failure, and there is no fallback to dense decoding on capacity failure.
+
 ## Cancellation, failure, cleanup and publication
 
 - Cancellation is checked before preparation, before each decoded tile, before each window, at each row band and before a successful return; the error string stays `cancelled`, which the job state machine still maps to the cancelled state.
@@ -62,6 +94,7 @@ The primary checkout stayed on `feature/raster-html-references`; the user-owned 
 - Failure injection: an output path occupied by a directory fails staging by name and leaves no partial mask; an unmeasurable scratch directory fails with "Cannot verify free space" instead of guessing; an impossible requirement reports the shortfall in MiB.
 - Publication is unchanged: the analysis publish transaction, stale-input guard and head replacement are untouched, and stale work publishes nothing while the previous result stays readable.
 - No prepared derivative was written beside a managed original (`GDAL_PAM_ENABLED NO`), and originals/accepted generations are never modified.
+- **Scope correction (review R1).** Established: the reader removes its own derivative (drop, preparation failure, validation failure, cancellation), import staging removes partial raw/mask outputs, and stale analysis work discards its staging directory before returning. **Not established: whole-analysis staging cleanup.** `analysis::run_slope_job` creates `prepared/analysis/<definition_id>/staging-<job_id>/` and every `?` before publication leaves it in place; the settlement caller only updates job state, and startup pruning never scans analysis staging directories. This inherited gap is tracked as `canopi-jv8a.3` with a dynamically observed example (a mid-pipeline capacity failure left `staging-anl-…/` holding `result.tif` and `quality.bin`; a pre-cancelled run left the empty directory). Accepted results, the published head and the numeric guarantees are unaffected, and this correction does not implement the cleanup fix.
 
 ## Gates on the delivered tree
 
@@ -70,10 +103,11 @@ The primary checkout stayed on `feature/raster-html-references`; the user-owned 
 | `cargo fmt --all -- --check` | pass |
 | `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings` | pass |
 | `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace` | pass |
-| `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace` | 347 passed, 0 failed, 9 ignored |
+| `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace` | 351 passed, 0 failed, 10 ignored |
 | `cargo test -p canopi-desktop native_command_policy::tests` | pass (included above) |
-| `cargo test -p canopi-desktop lidar::` | 49 passed, 0 failed, 7 ignored |
-| Ignored GDAL tests (`prepared_raster`, `import::tests`, `analysis::tests`, real e2e) | 7 passed |
+| `cargo test -p canopi-desktop lidar::` | 53 passed, 0 failed, 8 ignored |
+| Ignored GDAL tests (`prepared_raster`, `import::tests`, `analysis::tests`, real e2e) | 8 passed, 0 failed (includes the 79 s real MNT lifecycle) |
+| `CARGO_HOME=<repo>/.rq-scratch/cargo-home CANOPI_SKIP_BUNDLED_DB=1 cargo test --offline -p canopi-desktop services::lidar -- --test-threads=1` | pass (the reviewer's replay command, after the index cache fix) |
 | `npx tsc --noEmit` (frontend, worktree) | pass |
 | Focused frontend LiDAR tests (6 files) | 25 passed |
 | Full frontend suite (primary checkout, identical frontend tree) | 270 files / 2633 tests passed |
@@ -87,6 +121,8 @@ The primary checkout stayed on `feature/raster-html-references`; the user-owned 
 - The Windows capacity branch (`GetDiskFreeSpaceExW`) is not compiled or exercised here; only `x86_64-unknown-linux-gnu` is installed, and Windows CI would be the first compile of that branch.
 - The full frontend suite cannot run from the worktree (symlinked `node_modules`, Vite denies worker/asset module IDs). It ran green in the primary checkout instead; no frontend file differs between the two trees, so this is a harness limitation, not skipped coverage.
 - The 512 MiB/1 GiB/16-file/25-million-cell admission paths were not re-run at their limits; only the dense limit's rejection unit test ran.
+- The reviewer's offline rerun was blocked by dependency caches, not by the code; the exact working cache route and command are recorded above, and the offline replay now passes from the implementation worktree.
+- The capacity requirement is a measurement plus a per-window recheck, not an OS reservation. A concurrent process can still consume the space, and no run in this delivery observed a real out-of-space event; the tested cases use the observation seam rather than filling a filesystem.
 
 ## Unchanged limits and remaining dense callers
 
@@ -103,6 +139,10 @@ The primary checkout stayed on `feature/raster-html-references`; the user-owned 
 5. Pre-existing defect fixed in scope: `gdaldem slope -p` was spliced between `-s` and its scale argument, so **every percent slope job failed** with "Numeric value expected for -s". The new units test found it; the fix is one argument position and the test now covers both units.
 6. `valid_mask_from_f32_raw_checked` became a test-only oracle once staging migrated; `raw_f32_bytes` stays in production because composition still needs it. No production code can reach the dense extraction path from staging.
 7. The metadata-ceiling error names the attempted prefix size and file length, because the previous wording made a real diagnosis guesswork.
+8. The combined estimate lives in `prepared_raster.rs` and the import caller passes its output bytes to `open`; the alternative of duplicating the formula in the caller was rejected as the inconsistency the review found.
+9. Capacity observation is overridden in tests with a `#[cfg(test)]` thread-local seam rather than an environment switch, a filled filesystem or a mocked budget decision.
+10. The per-window recheck replaced the row-band recheck rather than being added to it, so one bounded write window is the unit of capacity observation.
+11. Whole-analysis staging cleanup is deliberately not implemented here; it is filed as `canopi-jv8a.3` instead of widening the review correction into a lifecycle rewrite.
 
 ## Next architectural dependency
 
