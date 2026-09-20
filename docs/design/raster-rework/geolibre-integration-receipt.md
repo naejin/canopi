@@ -14,7 +14,8 @@ Current guidance: [settled design](geolibre-integration-design.md), [LiDAR](../.
 | G1 native reader | `91288bfd` |
 | G2 import caller | `b73f4f89` |
 | G3 analysis caller | `88bd1585` |
-| Delivery (docs, receipt, guides) | this commit (branch tip) |
+| Self-review findings closed | `05b61319` |
+| Delivery (docs, receipt, guides, bead export) | this commit (branch tip) |
 
 The primary checkout stayed on `feature/raster-html-references`; the user-owned edit in `desktop/src/native_operation.rs` was never staged, stashed or reset. Factual note: that edit is not `rustfmt`-clean under the pinned 1.97.1 toolchain (the committed file is), so repository formatting gates ran in the separate worktree.
 
