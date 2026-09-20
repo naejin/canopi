@@ -4,9 +4,11 @@ Status: retired — executed and delivered at `fab0c381`; retained only as the a
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
 Current guidance: [migration receipt](q-typescript-receipt.md#desktop-bridge-transport-slice-implementation-response), [standing review](q-typescript-review.md#desktop-bridge-transport-slice-at-fab0c381-implementer-not-acceptance), [collaboration protocol](collaboration-protocol.md), [LiDAR guide](../../agent/lidar.md).
 
-The assignment is complete and its evidence is in the receipt. This prompt no longer
-authorizes work, and the isolated harness it scoped now carries its own operating
-instructions in [desktop-host/README.md](../../../scripts/raster-qualification/desktop-host/README.md).
+The assignment was delivered, not independently accepted. Review confirmed useful pilot
+observations and found DB1–DB4 completion blockers; see the [independent disposition](q-typescript-review.md#desktop-bridge-independent-disposition).
+This prompt authorizes nothing further. The [completion handoff](q-desktop-bridge-completion-agent-prompt.md)
+is the sole next assignment when forwarded by the user; the outcome table below records
+the original implementation claims, not acceptance.
 
 What it asked for, and where the result is recorded:
 

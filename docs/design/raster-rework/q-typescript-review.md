@@ -1,10 +1,27 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — bounded numeric completion and MR1 accepted at `579880be`; repair loop closed for this scope. Q remains unqualified.
+Status: evidence — numeric completion/MR1 accepted at `579880be`; Desktop bridge `fab0c381` independently reviewed as partial with DB1–DB4 blockers. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
 Current guidance: [migration receipt](q-typescript-receipt.md), [collaboration protocol](collaboration-protocol.md), [decision-complete design](q-typescript-reassessment.md), [C1–C8 contract](q-admission-acceptance.md), [debrief](review-and-debrief.md), [retired Desktop bridge handoff](q-desktop-bridge-agent-prompt.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
+
+## Desktop bridge independent disposition
+
+Reviewed implementation `fab0c381` and delivery through `bf65c479` on checkout `b95b8d1d`: **partial, not accepted as a complete instrument**. The earlier numeric/evaluator acceptance remains intact. The [completion handoff](q-desktop-bridge-completion-agent-prompt.md) settles the next repair's design; execution requires the user to forward it.
+
+Read-only inspection of saved `final-e` evidence independently checked all 81,920 cells against the specified formula, including two nodata cells, with no mismatch. Native/worker totals reconcile: 12 reads, 11,599,872 candidate bytes, maximum read 1,048,576 bytes. This is genuine exploratory progress, not full-Q qualification. No new Desktop run was performed during review.
+
+| ID / severity | Existing contract and evidence | Acceptance blocked |
+| --- | --- | --- |
+| DB1 / high | The original assignment requires every requested cell to be compared. Replaying the actual producer construction over saved host evidence with five `{id: origin, x: 0, y: 0, w: 0, h: 0, values: []}` windows yielded `result: pass`, no failures, zero checked cells and 81,920 claimed measured cells. `runPilot.mjs` checks list length and mismatch counts, then builds measured windows from requests | Trustworthy producer coverage, not the correctness of the original saved cells |
+| DB2 / high | Existing no-overwrite and ownership contract: the launcher guards only three names and directly overwrites other reports; native evidence is directly written while its existence is polled. An existing X11 socket is removed after connection failure without ownership proof. These are source-traced paths, not destructive experiments on user files | Safe publication and foreign-resource preservation |
+| DB3 / high | Original pilot lifecycle requires bounded cancellation, guarded disposal, native executor use and run ownership. WebView/worker lack guaranteed termination/disposal; native revocation retains descriptors; fixture admission hashes directly inside the async command. Source inspection also shows request reservation occurs inside serialized I/O and queue high water is not observed | Pilot safety; not a demand for full Q-CANCEL/Q-TEARDOWN capability evidence |
+| DB4 / medium | The promised reproducible command invokes disposable evaluator output without building it, catches evaluator failure and continues with a null decision. Summary reads `status` instead of `verdict`. Source-traced; a clean-checkout Desktop experiment was not run | Reproducible command and truthful terminal status |
+
+Review gates passed: emitted Node suite, 16 isolated Rust tests, 261 frozen Python tests, 18 runner checks, tooling TypeScript compilation, docs and diff checks. Repository Rust CI parity and fresh Desktop runs were not independently repeated. The pre-existing `desktop/src/native_operation.rs` edit was untouched. Passing helper suites do not cover DB1's real producer counterexample. This finite review does not establish absence of other defects.
+
+Disposition: retain the measured evidence and implementation; complete these four families in one bounded repair. Do not restart evaluator architecture work, relax requirements or advance to N1. The design now explicitly settles exclusive run roots, lifecycle completion and launcher exit semantics; its acceptance examples are reviewer-owned. New requirements outside this contract return through the user, not a retroactive repair demand.
 
 ## Numeric completion independent acceptance
 

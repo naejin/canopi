@@ -1,6 +1,6 @@
 # TypeScript qualification decision path — migration receipt
 
-Status: evidence — bounded NC1–NC2/MR1 slice independently accepted at `579880be`; the agreed repair loop is closed. See [independent acceptance](q-typescript-review.md#numeric-completion-independent-acceptance) for coverage and limits. The Desktop bridge transport slice at `fab0c381` reports measured Q-LOCAL-1 and Q-HOST-1 observations and awaits one independent review; Q remains unqualified. Historical delivery claims below are revision-specific, not full-Q acceptance.
+Status: evidence — bounded NC1–NC2/MR1 slice independently accepted at `579880be`; its evaluator repair loop is closed. Desktop bridge `fab0c381` has been independently reviewed as **partial, not accepted**, with DB1–DB4 instrument blockers; saved pilot cells were independently confirmed correct. See the [disposition](q-typescript-review.md#desktop-bridge-independent-disposition) and [completion handoff](q-desktop-bridge-completion-agent-prompt.md). Q remains unqualified. Historical delivery claims below are revision-specific, not acceptance.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).

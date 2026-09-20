@@ -2,10 +2,10 @@
 
 Status: evidence — **Q is not qualified.** Experiment subtest results are recorded below, but
 eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
-and the latest implementer-reported gate verdict is `fail` (one fail, eleven inconclusive).
-Independent review found further gate defects; that distribution is not independently accepted.
+and the retained legacy-record gate verdict is `fail` (one fail, eleven inconclusive).
+That legacy evidence set is distinct from the later exploratory Desktop pilot below; neither qualifies Q.
 The bounded numeric completion/MR1 slice is independently accepted at `579880be`; no real Q capability was added. The Desktop bridge transport slice at `fab0c381` measured the first positive observations — Q-LOCAL-1 and Q-HOST-1 pass on one generated tiled COG through the isolated host, with the other ten requirements inconclusive — and replaced and deleted `import_map.py`. It is one exploratory run on a synthetic fixture with the published engine, so **full Q remains unqualified**, the pinned-artifact correspondence failure is preserved, and private/large runs, production N1 and engine substitution remain unauthorized. See the [receipt section](raster-rework/q-typescript-receipt.md#desktop-bridge-transport-slice-implementation-response).
-Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
+Independent Desktop review confirmed saved pilot cells but found DB1–DB4 instrument blockers: the slice is partial, not accepted. See the [disposition](raster-rework/q-typescript-review.md#desktop-bridge-independent-disposition) and [completion handoff](raster-rework/q-desktop-bridge-completion-agent-prompt.md). Commands below describe the legacy harness, not authorization for new experiments. Ten passing subcommand names are not a qualification.
 Tracking: `canopi-kqpp` (parent epic `canopi-j571`); related follow-up `canopi-a9uy`.
 Spec: [raster rework](raster-data-analysis-rework.md).
 Current guidance: [LiDAR](../agent/lidar.md), [edition development](../agent/edition-development.md),
@@ -549,4 +549,4 @@ large fixtures and measurement output stay outside Git under the ignored `.rq-sc
   part.
 - **Branch and commits:** recorded in the accompanying delivery note.
 - **Status:** verified, **not integrated**. Pushing does not integrate.
-- **Next action:** one independent review, through the user, of the Desktop bridge transport slice at `fab0c381`: the harness code, the two pilot runs and the ten requirements that stay inconclusive. Preserve source-pin failures and remaining gaps. **Production N1 still requires Q acceptance, not tooling or pilot acceptance.**
+- **Next action:** user-forwarded [DB1–DB4 completion assignment](raster-rework/q-desktop-bridge-completion-agent-prompt.md), followed by one independent review. Preserve saved pilot evidence, source-pin failures and remaining gaps. **Production N1 still requires Q acceptance, not tooling or pilot acceptance.**

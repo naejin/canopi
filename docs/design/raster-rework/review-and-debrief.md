@@ -1,6 +1,6 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — seven implementation handoffs reviewed, plus one migration slice delivered through two repair rounds; final methodology conclusions pending.
+Status: evidence — revision-linked reviews and process interventions; Desktop bridge reviewed as partial with DB1–DB4 blockers; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated repair receipt](q-consolidated-repair-receipt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
 
@@ -413,6 +413,21 @@ run directory, and a generator that shared the expectation — and two of them
 were closed only because a probe or a failure pointed at them.
 
 ## Final debrief procedure
+
+### Desktop completion intervention: test the actual caller boundary
+
+The [Desktop independent disposition](q-typescript-review.md#desktop-bridge-independent-disposition) preserves the first genuine transport observations while rejecting instrument completeness. The next experiment in our working method is the [DB1–DB4 completion assignment](q-desktop-bridge-completion-agent-prompt.md), not a new evaluator rewrite or a claim about model capability.
+
+| Evidence / classification | Small process change and owner | Evidence of benefit on the next delivery |
+| --- | --- | --- |
+| DB1: zero checked cells became 81,920 claimed measured cells; implementation deviation plus test gap | Main agent specifies request/observation correspondence; implementer tests raw host evidence through the same producer and evaluator the launcher calls | Empty/duplicate/missing-window controls have the contract's verdict and reasons; real positive control still passes |
+| DB2: no-overwrite guard checked a few filenames rather than all writes; implementation deviation plus test gap | Main agent selects an exclusively created run root and one publication policy; implementer inventories each writer and cleanup target in the existing receipt | Partial-directory, publication-race and foreign-socket controls preserve bytes/resources through real orchestration |
+| DB3: component tests did not establish composed lifecycle; implementation deviation plus integration-test gap | Main agent assigns one run owner and terminal behavior; implementer exercises actual adapter/executor transitions rather than manually constructing internal state | Cancellation, duplicate queued request, disposal and failure tests observe settled ownership, not merely a closed flag |
+| DB4: whole-Q exit versus pilot exit was not explicitly settled in the original design; design omission, with a separate implementation error reading the wrong summary field | Main agent owns the exit table and clean-build contract; implementer verifies the documented subprocess entry point | Missing evaluator/decision cannot exit zero; a coherent incomplete-Q decision can still represent a successful bounded pilot |
+
+Reviewer responsibility: the original prompt named safety constraints but did not make the launcher terminal-state table explicit. This completion prompt resolves that omission; it must not be framed solely as implementer failure. The reviewed pilot's correct cells are evidence of progress, while the escaped producer path limits trust in future runs. These conclusions can coexist.
+
+For the next receipt, map each DB family to one observable contract, its regression entry point, meaningful RED/GREEN, sensitivity result and independent-review outcome. Also record self-review discoveries and any further reviewer escape with its original-contract citation. Do not require a new report per defect, an arbitrary test-count increase or a courier checkpoint per internal step. Record actual effort/courier cycles only when available; current cost comparison is unknown. Benefit remains **unproven** until independent review observes these detectors and no known DB blocker remains. A fresh successful pilot alone cannot demonstrate the failure-path repairs.
 
 ### Reviewer-owned design intervention
 
