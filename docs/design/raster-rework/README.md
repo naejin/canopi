@@ -29,7 +29,7 @@ The user approved a [qualification scope reset](qualification-reset.md): freeze 
 | [TypeScript agent prompt](q-typescript-agent-prompt.md) | Retired handoff executed in the TypeScript decision-path migration |
 | [TypeScript repair round 2 log](evidence/q-typescript-repair-round2.txt) | Reproduction of the Round 1 disposition's six families, the transport declaration correction, thirteen guard-removal probes and the three-round reconciliation |
 | [TypeScript repair round 1 log](evidence/q-typescript-repair-round1.txt) | Reproduction of the standing review's T1–T4 examples, the mutation sweep, the adversarial pass, eleven guard-removal probes and the read-only reconciliation |
-| [TypeScript migration receipt](q-typescript-receipt.md) | Revision-linked implementation reports, latest the Desktop bridge transport slice at `fab0c381` with measured Q-LOCAL-1/Q-HOST-1 observations; not acceptance |
+| [TypeScript migration receipt](q-typescript-receipt.md) | Revision-linked implementation reports, now including the [artifact decision brief](q-typescript-receipt.md#artifact-decision-brief-after-qualification-reset); not acceptance |
 | [Assertion evidence map](../../../scripts/raster-qualification/assertion_evidence_map.md) | The 68 contract assertions, the evidence that decides each, and the seven that are permanent gaps |
 | [Stable admission acceptance contract](q-admission-acceptance.md) | Single C1–C8 input/behavior/test matrix and blocker-versus-follow-up policy |
 | [Consolidated admission review](q-consolidated-admission-review.md) | Revision-linked reproductions, reviewed boundaries, retained repairs and evidence limits |

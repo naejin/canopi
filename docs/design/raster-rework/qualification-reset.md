@@ -34,6 +34,18 @@ Prefer one disposable process per fixed experiment with explicit read-only input
 
 Retain exact expected values/validity, bounded reads and allocations, input preservation, immutable evidence and truthful exit/report outcomes. Defer generic report admission expansion, reusable scheduler perfection, all-format/platform matrices and further Python retirement unless a named decision requires them. New experiments remain blocked until their smaller execution path has adequate termination and output bounds; this document does not declare the existing launcher safe or authorize building a replacement now.
 
+## Debrief outcome (facts)
+
+The artifact decision brief was delivered as a read-only investigation: see
+[Artifact decision brief after qualification reset](q-typescript-receipt.md#artifact-decision-brief-after-qualification-reset).
+Recorded facts: published `whitebox-wasm@0.5.1` (gitHead `6920ade…`) is the only artifact with measured transport
+behaviour and it does not correspond to the declared pin `9c0ff4f…`; no published artifact matches the pin and the
+pin's declared `0.6.0` is unpublished, so the mismatch is unresolved and local records cannot resolve it. A
+pinned-source build attempt has no locally available prerequisite (no source tree, no wasm target, no bindgen
+tooling), so no build command is claimed. The brief recommends retaining the pin and resolving its build feasibility
+first, and names the single approval it needs. Q remains unqualified, the remaining L1–L3 defect disposition is
+unchanged, and no experiment, build, download or code change was performed.
+
 ## Debrief criterion
 
 Success of this reset is an informed engine/artifact decision followed by relevant product progress, with fewer tooling-only repair cycles—not a smaller test count or less safety. The main agent must explain what decision each proposed test changes, why existing evidence is insufficient and when to stop. Record effort only when observed. Keep the unresolved defects and useful measurements distinguishable; do not erase history to make the reset look successful.
