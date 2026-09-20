@@ -35,7 +35,7 @@ const TILE_BYTES: u64 = (TILE_SAMPLES as u64) * 4;
 const METADATA_PREFIX_START: u64 = 64 * 1024;
 const METADATA_PREFIX_CEILING: u64 = 4 * 1024 * 1024;
 /// Free space kept beyond the derivative and any new numeric output.
-const FREE_SPACE_FLOOR_BYTES: u64 = 256 * 1024 * 1024;
+pub(super) const FREE_SPACE_FLOOR_BYTES: u64 = 256 * 1024 * 1024;
 /// Cap on buffers this adapter holds at once: one window (samples + validity),
 /// one encoded tile and its decoded samples.
 const MAX_LIVE_BYTES: u64 = 64 * 1024 * 1024;
@@ -1267,7 +1267,8 @@ mod tests {
 
     #[test]
     fn malformed_derivatives_are_rejected() {
-        let cases: Vec<(&str, Box<dyn Fn(&mut TiffFixture)>, &str)> = vec![
+        type Case = (&'static str, Box<dyn Fn(&mut TiffFixture)>, &'static str);
+        let cases: Vec<Case> = vec![
             (
                 "compressed",
                 Box::new(|fixture: &mut TiffFixture| fixture.compression = 8),

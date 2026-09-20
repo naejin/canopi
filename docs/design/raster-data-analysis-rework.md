@@ -1,6 +1,6 @@
 # Raster foundation, Data and Analysis workbenches
 
-Status: active — user selected compatibility-first GeoLibre adoption. The [settled native integration design](raster-rework/geolibre-integration-design.md) and [current assignment](raster-rework/geolibre-integration-agent-prompt.md) authorize the first production batch when forwarded. Q stays frozen and unqualified; completing its harness is no longer a production prerequisite. New UI and large-capacity work remain subsequent assignments.
+Status: active — user selected compatibility-first GeoLibre adoption. The [settled native integration design](raster-rework/geolibre-integration-design.md) has its first production batch implemented in the [integration receipt](raster-rework/geolibre-integration-receipt.md), pending independent review. Q stays frozen and unqualified; completing its harness is no longer a production prerequisite. New UI and large-capacity work remain subsequent assignments.
 Tracking: `canopi-j571`; current implementation `canopi-jv8a.1`, foundation `canopi-jv8a`, workbenches `canopi-j8mp`, historical qualification `canopi-kqpp`, deferred `canopi-5neg`.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 
@@ -18,7 +18,7 @@ This artifact retains the long-term product contract. The 2026-09-20 GeoLibre de
 
 ### Start and continuation contract
 
-On the current implementation instruction, read the [GeoLibre design and assignment](raster-rework/geolibre-integration-agent-prompt.md), inspect Git status and `canopi-jv8a.1`, and preserve accepted work. Execute all G1–G5 internal milestones before one consolidated courier delivery. Do not restart Q or treat `bd ready` as acceptance evidence.
+The [GeoLibre native integration](raster-rework/geolibre-integration-receipt.md) is delivered and awaits independent review; its design and assignment records stay linked for that review. Do not restart Q or treat `bd ready` as acceptance evidence. If review returns it, the same batch continues; if accepted, the main agent settles the next end-to-end bounded generation/composition assignment against actual code before any capacity limit moves.
 
 Work serially, one claimed bead and scoped branch at a time. Before a production slice, its bead must link its contract below, record satisfied prerequisites in `design`, and carry observable checks in `acceptance`. The existing coarse beads need this reconciliation at implementation kickoff; `canopi-j8mp.1` covers only the independently requested HTML reference authoring. Create the remaining bounded children specified in the execution table at that kickoff, reuse existing work, and leave blocked successors open. The slice names below are specification references, not a second status tracker; bd remains authoritative.
 

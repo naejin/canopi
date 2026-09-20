@@ -454,6 +454,21 @@ were closed only because a probe or a failure pointed at them.
 | Self-review counterexample | The first verification run failed on a launcher defect the unit tests could not see: the launcher republished the host's own atomically published evidence. The fix was in scope and the retry was the authorized second run |
 | Review coverage limit | Cancellation is covered by unit tests and a declared deadline, not an observed mid-flight cancellation; the native reservation path is covered by bridge tests plus one real run; both runs are the implementer's own |
 
+## GeoLibre native integration G1–G5 at `88bd1585` (delivery record)
+
+Delivered in one batch on `feature/geolibre-native-raster-integration`: import staging and slope result postprocessing now read through the GeoLibre-selected `wbgeotiff` core behind one private module, while persisted bytes, validity, IDs, IPC, storage and capacity limits are unchanged. Evidence and limits are in the [integration receipt](geolibre-integration-receipt.md). This is an implementer delivery record, not acceptance.
+
+| Question | Observed |
+| --- | --- |
+| Courier exchanges during implementation | None. One forwarded assignment, one consolidated handoff; no milestone, repair or decision was couriered. Wall-clock/token effort was not instrumented, so no cost comparison is claimed |
+| Decisions taken locally (delegated) | Validity rule passed into `open` rather than read from the derivative; `-b 1` so a multi-band source is excluded as an incompatible review item instead of aborting staging; `read_window` compiled for tests while production streams; GDAL tests `#[ignore]`d to match the repository's no-GDAL CI; target-scoped `libc`/`windows-sys` for capacity reporting; `valid_mask_from_f32_raw_checked` demoted to a test oracle |
+| Design omission found | The design's `open(engine, input, expected_grid, job_scratch, cancel)` did not name where the validity rule comes from when the derivative's declared NoData differs from the caller's effective rule (slope uses `band_nodata(result).or(manifest.nodata)`). Resolved locally without changing the settled contract; flagged in the receipt for review |
+| Design omission found | The design required the exact persisted row-major layout but did not say how a ≤1024-wide window writes into a wider raster. Implemented as row-addressed positional writes with a sequential fast path; local decision, no contract change |
+| Implementation defect found by a required test | The new units test found that `gdaldem slope -p` was spliced between `-s` and its scale argument, so **every** percent slope job had been failing. Pre-existing baseline defect with a test gap, fixed in scope (one argument position) and covered by the degrees/percent test |
+| Self-review discoveries | The caller's own raw/mask outputs were not included in the free-space requirement; the derivative-before-rename property was asserted only indirectly; the output-write failure path was untested. All three were fixed before handoff, plus a guard-removal probe proving the caller test fails when the native decode instrument is removed |
+| Self-review versus independent escapes | No independent review has run on this delivery. The receipt names what review should attack: the `-b 1` behavior change, the "only two paths are bounded" claim against the retained dense callers, the uncompiled Windows capacity branch, and the fact that CI cannot run any GDAL-backed test |
+| Reviewer oversight carried forward | The settled design promised "one managed MNT workflow" from an explicit fixture location, but the documented `0446_6807` tile is absent on this host. The run used the real `0445_6806` tile through the documented env override with its hash recorded; the design did not anticipate needing a fallback identity rule |
+
 ## Final debrief procedure
 
 ### Result of the DB1–DB4 intervention

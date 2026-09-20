@@ -1,8 +1,8 @@
 # Implement GeoLibre native integration in the existing application
 
-Status: proposed — sole current implementation assignment; executable when forwarded by the user.
+Status: retired — executed as the sole G1–G5 implementation assignment; outcome in the [integration receipt](geolibre-integration-receipt.md). Retained as debrief evidence, not execution authority.
 Tracking: `canopi-jv8a.1`, parent foundation `canopi-jv8a`, epic `canopi-j571`.
-Current guidance: [settled design](geolibre-integration-design.md), [LiDAR](../../agent/lidar.md), [courier protocol](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
+Current guidance: [integration receipt](geolibre-integration-receipt.md), [settled design](geolibre-integration-design.md), [LiDAR](../../agent/lidar.md), [courier protocol](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 You are the implementation agent. The main agent owns architecture and independent review; the user remains our courier. Complete **G1–G5 in the linked design as one substantial production batch**. Do not stop after dependency setup, a prototype, one caller, or an internal milestone. Fix in-scope test/self-review findings and continue to the agreed delivery boundary. No direct reviewer messaging or subagents.
 

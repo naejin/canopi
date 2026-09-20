@@ -114,7 +114,10 @@ pub fn run_slope_job(
     let quality_path = staging_dir.join("quality.bin");
     super::paths::require_free_space(
         &staging_dir,
-        u64::from(manifest.grid.width) * u64::from(manifest.grid.height),
+        u64::from(manifest.grid.width)
+            .checked_mul(u64::from(manifest.grid.height))
+            .and_then(|bytes| bytes.checked_add(super::prepared_raster::FREE_SPACE_FLOOR_BYTES))
+            .ok_or_else(|| "slope quality mask size overflows".to_string())?,
         "the slope quality mask",
     )?;
     super::grid::erode_mask_file(
@@ -812,6 +815,23 @@ mod tests {
         let unchanged = published_slope(&library, &degrees_definition);
         assert_eq!(unchanged.min_value, min);
         assert_eq!(unchanged.max_value, max);
+
+        // The derivative never reaches a published generation: it is removed
+        // before the staging directory is renamed.
+        let published_dir = unchanged
+            .result_path
+            .parent()
+            .expect("published generation directory");
+        let leftovers: Vec<_> = std::fs::read_dir(published_dir)
+            .expect("generation directory reads")
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("prepared-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "published generation carries a derivative: {leftovers:?}"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }

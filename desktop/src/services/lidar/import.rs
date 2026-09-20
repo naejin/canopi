@@ -874,6 +874,7 @@ fn stage_source_samples(
         job_dir,
         raw_bytes
             .checked_add(cells)
+            .and_then(|bytes| bytes.checked_add(super::prepared_raster::FREE_SPACE_FLOOR_BYTES))
             .ok_or_else(|| "staged source size overflows".to_string())?,
         "the staged source outputs",
     )?;
@@ -2880,5 +2881,77 @@ mod tests {
             "derivative left behind: {leftovers:?}"
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn staging_without_a_measurable_scratch_directory_fails_by_name() {
+        let engine = GdalEngine::new();
+        let missing = std::env::temp_dir().join(new_id("canopi-absent-scratch"));
+        let error = stage_source_samples(
+            &engine,
+            Path::new("unused.tif"),
+            &RasterGrid {
+                width: 4,
+                height: 4,
+                geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
+            },
+            None,
+            &missing,
+            &missing.join("source.raw"),
+            &missing.join("valid.bin"),
+            &AtomicBool::new(false),
+        )
+        .expect_err("unmeasurable capacity must fail");
+        assert!(error.contains("Cannot verify free space"), "{error}");
+    }
+
+    /// A failed numeric output must fail the job, not publish a partial asset.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn staged_output_write_failure_removes_partial_assets() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let dir = std::env::temp_dir().join(new_id("canopi-write-failure"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (width, height) = (40u32, 30u32);
+        let source = write_staging_fixture(&engine, &dir, "failure", width, height, -9999.0);
+        let grid = RasterGrid {
+            width,
+            height,
+            geotransform: [0.0, 1.0, 0.0, height as f64, 0.0, -1.0],
+        };
+
+        // A directory where the samples file belongs makes the first write
+        // fail; the validity mask must not be left behind.
+        let raw_path = dir.join("source-occupied.raw");
+        std::fs::create_dir(&raw_path).unwrap();
+        let mask_path = dir.join("valid-occupied.bin");
+        let error = stage_source_samples(
+            &engine,
+            &source,
+            &grid,
+            Some(-9999.0),
+            &dir,
+            &raw_path,
+            &mask_path,
+            &cancel,
+        )
+        .expect_err("an unwritable output must fail staging");
+        assert!(error.contains("Failed to create staged samples"), "{error}");
+        assert!(
+            !mask_path.exists(),
+            "a failed staging attempt leaves no partial mask"
+        );
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("prepared-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "derivative left behind: {leftovers:?}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

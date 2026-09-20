@@ -1,8 +1,8 @@
 # GeoLibre adoption — compatibility-first native integration
 
-Status: active — user-approved direction; settled first production assignment, not implemented or accepted.
+Status: partial — G1–G5 implemented and delivered for independent review on `feature/geolibre-native-raster-integration`; not accepted, integrated or released.
 Tracking: `canopi-j571`; implementation `canopi-jv8a.1`, followed by the remaining `canopi-jv8a` foundation work.
-Current guidance: [agent assignment](geolibre-integration-agent-prompt.md), [LiDAR](../../agent/lidar.md), [architecture ownership](../../workflow/architecture-ownership.md), [long-term product contract](../raster-data-analysis-rework.md).
+Current guidance: [integration receipt](geolibre-integration-receipt.md), [agent assignment](geolibre-integration-agent-prompt.md), [LiDAR](../../agent/lidar.md), [architecture ownership](../../workflow/architecture-ownership.md), [long-term product contract](../raster-data-analysis-rework.md).
 
 ## Decision and outcome
 

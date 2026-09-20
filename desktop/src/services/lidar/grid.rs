@@ -671,7 +671,8 @@ mod tests {
 
     #[test]
     fn streamed_erosion_matches_the_dense_oracle_across_blocks_holes_and_edges() {
-        let patterns: Vec<(&str, Box<dyn Fn(u32, u32) -> bool>)> = vec![
+        type Pattern = (&'static str, Box<dyn Fn(u32, u32) -> bool>);
+        let patterns: Vec<Pattern> = vec![
             ("all-valid", Box::new(|_, _| true)),
             ("single-hole", Box::new(|x, y| !(x == 5 && y == 4))),
             (
