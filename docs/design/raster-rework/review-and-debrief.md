@@ -6,6 +6,12 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
+### Project-wide architecture ownership
+
+On 2026-09-20 the user approved making the main agent responsible for architectural coherence across Canopi, including resolving omissions in its handoffs. The [project-wide workflow](../../workflow/architecture-ownership.md) now owns responsibilities, proportional review triggers, routine implementation autonomy and the courier boundary; the raster protocol references it. This is an adopted operating decision, not a measured productivity gain or a change to the active Desktop pilot's scope.
+
+For subsequent review entries, distinguish design omission, implementation deviation, test gap and reviewer oversight using revision-linked evidence; categories may overlap. Test the change on the next delivery by recording whether interfaces/ownership needed redesign during implementation, what decisions required a courier exchange, and which findings were genuinely new requirements. The main agent must resolve contradictory instructions rather than leaving that task to the user. Do not retroactively assign causes to earlier rounds without supporting evidence.
+
 Current disposition: bounded NC1–NC2/MR1 work is independently accepted at `579880be`; the [repair loop is closed](q-typescript-review.md#numeric-completion-independent-acceptance). The Desktop bridge transport slice is delivered at `fab0c381`: an isolated host measured Q-LOCAL-1 and Q-HOST-1 on a generated fixture and awaits one independent review, which is the next step. The [collaboration protocol](collaboration-protocol.md) assigns settled design and independent review to the main agent, execution/evidence to the implementation agent, and forwarding/approval to the user.
 
 ### Continuous-improvement checkpoint after tooling acceptance

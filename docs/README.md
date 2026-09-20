@@ -9,6 +9,7 @@ Start with the narrowest authority for the task. Current implementation guidance
 | Subsystem implementation guidance | [`docs/agent/`](agent/) via the links in `AGENTS.md` |
 | Desktop/Web/gallery daily development | [`docs/agent/edition-development.md`](agent/edition-development.md) |
 | Agent workflow, issue tracking, and integration | [`docs/workflow/`](workflow/delivery.md) |
+| Architecture ownership, implementation handoffs and user-mediated review | [Architecture ownership](workflow/architecture-ownership.md) |
 | UI hierarchy and reusable interaction patterns | [`.interface-design/system.md`](../.interface-design/system.md) |
 | Durable architecture decisions and supersession history | [`docs/adr/`](adr/) |
 | Release operation | [`docs/release.md`](release.md) and [`docs/agent/build-release.md`](agent/build-release.md) |

@@ -11,6 +11,13 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - Never weaken tests, type checks, lint rules, or architecture guardrails just to make a gate pass. If a guardrail is wrong, document why and replace it with an equivalent or stronger guardrail.
 - Do not introduce runtime dependencies unless the bead or PR explains why existing project patterns are insufficient.
 
+## Architecture Ownership
+
+- The main user-facing agent owns project-wide architectural coherence, decision-complete design handoffs and independent implementation review. Follow [architecture ownership and user-mediated delivery](docs/workflow/architecture-ownership.md).
+- The implementation agent owns execution, tests and routine local decisions within the accepted design. Escalate material changes to shared contracts, persistence, ownership, dependencies or cross-subsystem behavior; do not silently redesign or weaken acceptance.
+- The user retains product, priority, scope and consequential-risk authority and remains the courier between design/review and implementation unless explicitly changing that arrangement. This grants no automatic delegation, implementation, integration or release authority.
+- Distinguish design omissions, implementation deviations, test gaps and reviewer oversights when improving the workflow; the main agent owns resolving omissions in its design.
+
 ## Agent Docs Maintenance
 
 - Optimize all `docs/` content for agentic coding and development: retain actionable contracts, ownership, decision rationale, reproducible evidence, and release operations. Remove duplicated instructions, conversational history, expired execution prompts, and user tutorials that duplicate development contracts. Follow [documentation placement and authority](docs/README.md).
