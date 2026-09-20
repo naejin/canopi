@@ -19,9 +19,10 @@ mod native_operation;
 mod bridge;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use bridge::{verify_bundled_asset, BundledAsset, HostState, ReadLabel};
+use bridge::{read_exact_at, verify_bundled_asset, BundledAsset, HostState};
 use native_operation::{
     NativeOperationClass, NativeOperationClassLimits, NativeOperationExecutor,
     NativeOperationLimits,
@@ -71,6 +72,10 @@ struct RunSpec {
     asset_base: String,
     wasm_url: String,
     header_bytes: u64,
+    /// How long the WebView may work before it cancels the worker cooperatively. The
+    /// launcher's hard deadline is later, so a cancelled run still publishes evidence.
+    #[serde(default = "default_deadline_ms")]
+    deadline_ms: u64,
     windows: Vec<WindowSpec>,
     /// The frontend and engine bytes the launcher copied into the bundle. The host
     /// verifies them against its own embedded snapshot, so a stale bundle is a measured
@@ -80,6 +85,12 @@ struct RunSpec {
     /// Refused-read controls, issued over the real read path.
     #[serde(default)]
     refusals: Vec<RefusalSpec>,
+}
+
+/// Nine minutes: the launcher's hard deadline is ten, so cooperative cancellation
+/// happens while there is still time to record why.
+fn default_deadline_ms() -> u64 {
+    9 * 60 * 1000
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -99,6 +110,8 @@ struct HostRun {
     executor: NativeOperationExecutor,
     /// Filled by `setup` from the embedded assets, never from renderer input.
     bundled_assets: Arc<Mutex<Vec<BundledAsset>>>,
+    /// Evidence is published once per run.
+    finished: Arc<AtomicBool>,
 }
 
 #[derive(Serialize)]
@@ -125,68 +138,187 @@ struct ReadFailure {
     message: String,
 }
 
-/// The pilot input the WebView reads. It is launcher input, not renderer input.
-#[tauri::command]
-fn pilot_input(run: State<'_, HostRun>) -> RunSpec {
-    eprintln!("host: pilot_input served to the webview");
-    run.spec.clone()
+/// The run description the WebView reads.
+///
+/// It carries no path: the fixture is named, not located, and the run directory is the
+/// host's own business. The WebView receives the run nonce it must present on every
+/// later call, so a stale or foreign caller cannot act on this run.
+#[derive(Serialize)]
+struct RunDescription {
+    run: String,
+    asset_base: String,
+    wasm_url: String,
+    header_bytes: u64,
+    deadline_ms: u64,
+    windows: Vec<WindowSpec>,
+    refusals: Vec<RefusalSpec>,
+    bundled_assets: Vec<String>,
 }
 
 #[tauri::command]
-async fn admit_fixtures(run: State<'_, HostRun>) -> Result<Vec<FixtureHandle>, String> {
-    let declarations = run.spec.fixtures.clone();
-    let mut handles = Vec::new();
-    for fixture in declarations {
-        let path = PathBuf::from(&fixture.path);
-        let mut state = run
-            .state
-            .lock()
-            .map_err(|_| "host state poisoned".to_string())?;
-        let (sha256, length) = state.admit_fixture(&fixture.id, &path, &fixture.sha256)?;
-        let handle = state.open(&fixture.id)?;
-        handles.push(FixtureHandle {
-            fixture: fixture.id,
-            handle,
-            length,
-            sha256,
-        });
+fn pilot_input(run: State<'_, HostRun>) -> RunDescription {
+    eprintln!("host: pilot_input served to the webview");
+    RunDescription {
+        run: run.spec.run.clone(),
+        asset_base: run.spec.asset_base.clone(),
+        wasm_url: run.spec.wasm_url.clone(),
+        header_bytes: run.spec.header_bytes,
+        deadline_ms: run.spec.deadline_ms,
+        windows: run.spec.windows.clone(),
+        refusals: run.spec.refusals.clone(),
+        bundled_assets: run
+            .spec
+            .bundled_assets
+            .iter()
+            .map(|asset| asset.path.clone())
+            .collect(),
     }
-    Ok(handles)
+}
+
+#[tauri::command]
+async fn admit_fixtures(
+    run: State<'_, HostRun>,
+    nonce: String,
+) -> Result<Vec<FixtureHandle>, String> {
+    require_nonce(&run, &nonce)?;
+    let declarations = run.spec.fixtures.clone();
+    let executor = run.executor.clone();
+    let shared = Arc::clone(&run.state);
+    let results = executor
+        .run(
+            NativeOperationClass::Local,
+            "qualification-admit-fixtures",
+            move || -> Result<Vec<FixtureHandle>, String> {
+                let mut handles = Vec::new();
+                // The lock is held only for the state transitions; hashing happens in
+                // short operations that release it between fixtures.
+                for fixture in &declarations {
+                    let path = PathBuf::from(&fixture.path);
+                    let (sha256, length) = {
+                        let mut state = shared
+                            .lock()
+                            .map_err(|_| "host state poisoned".to_string())?;
+                        state.admit_fixture(&fixture.id, &path, &fixture.sha256)?
+                    };
+                    let handle = {
+                        let mut state = shared
+                            .lock()
+                            .map_err(|_| "host state poisoned".to_string())?;
+                        state.open(&fixture.id)?
+                    };
+                    handles.push(FixtureHandle {
+                        fixture: fixture.id.clone(),
+                        handle,
+                        length,
+                        sha256,
+                    });
+                }
+                Ok(handles)
+            },
+        )
+        .await;
+    match results {
+        Ok(handles) => Ok(handles),
+        Err(problem) => Err(problem),
+    }
+}
+
+/// Validate the caller's run nonce.
+///
+/// The host never supplies the current nonce on a caller's behalf: a request that does
+/// not name this run is refused, so a reply intended for another run cannot be accepted.
+fn require_nonce(run: &State<'_, HostRun>, nonce: &str) -> Result<(), String> {
+    if nonce != run.spec.run {
+        return Err(format!(
+            "wrong-run: this host is running {} but the request names {}",
+            run.spec.run, nonce
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]
 async fn read(
     run: State<'_, HostRun>,
+    nonce: String,
     handle: u64,
     offset: u64,
     length: u64,
     request_id: String,
-    label: Option<String>,
 ) -> Result<ReadReply, ReadFailure> {
-    let label = match label.as_deref() {
-        Some("reference") => ReadLabel::Reference,
-        _ => ReadLabel::Candidate,
-    };
+    // There is no label parameter: a renderer request is a candidate read, and the host
+    // owns that label. Preflight hashing is the host's own reference I/O.
+    if let Err(problem) = require_nonce(&run, &nonce) {
+        return Err(ReadFailure {
+            request_id,
+            code: "wrong-run".to_string(),
+            message: problem,
+        });
+    }
     let run_id = run.spec.run.clone();
     let executor = run.executor.clone();
     let shared = Arc::clone(&run.state);
-    let work_request = request_id.clone();
+
+    // Reservation first, under a short lock: identity, handle state, capacity and the
+    // interval are all decided before any work is queued, so two overlapping requests
+    // with the same identity cannot both execute and excess work is refused rather than
+    // queued without bound.
+    let reservation = {
+        let mut state = match shared.lock() {
+            Ok(state) => state,
+            Err(_) => {
+                return Err(ReadFailure {
+                    request_id,
+                    code: "host-state-poisoned".to_string(),
+                    message: "host state poisoned".to_string(),
+                })
+            }
+        };
+        state.reserve(handle, offset, length, &request_id, &run_id)
+    };
+    let mut reservation = match reservation {
+        Ok(reservation) => reservation,
+        Err(error) => {
+            return Err(ReadFailure {
+                request_id,
+                code: error.code().to_string(),
+                message: format!("read refused: {}", error.code()),
+            })
+        }
+    };
+
+    let work_shared = Arc::clone(&shared);
     let result = executor
         .run(
             NativeOperationClass::Local,
             "qualification-range-read",
-            move || {
-                // The lock is taken inside the blocking work so the UI thread never waits
-                // on it, and it is released before the reply is serialised.
-                let mut state = shared
-                    .lock()
-                    .map_err(|_| "host state poisoned".to_string())?;
-                state
-                    .read(handle, offset, length, &work_request, &run_id, label)
-                    .map_err(|error| error.code().to_string())
+            move || -> Result<Vec<u8>, String> {
+                // Start and settle take short locks; the read itself holds none, and it
+                // reads positionally through the reservation's own descriptor.
+                if let Ok(mut state) = work_shared.lock() {
+                    state.start(&mut reservation);
+                }
+                // One positional read: its bytes are the result and its outcome is what
+                // the ledger records.
+                let read = read_exact_at(&reservation.file, reservation.offset, reservation.length);
+                let bytes = read.as_ref().ok().cloned();
+                let outcome = read.map(|_| ()).map_err(|_| bridge::ReadError::OutOfRange);
+                if let Ok(mut state) = work_shared.lock() {
+                    state.settle(reservation, outcome);
+                    // Descriptors are dropped only once nothing is outstanding, so a
+                    // teardown can never pull a file out from under a running read.
+                    if state.outstanding() == 0 && state.is_torn_down() {
+                        state.drop_descriptors();
+                    }
+                }
+                match bytes {
+                    Some(bytes) => Ok(bytes),
+                    None => Err(bridge::ReadError::OutOfRange.code().to_string()),
+                }
             },
         )
         .await;
+
     match result {
         Ok(bytes) => Ok(ReadReply {
             request_id,
@@ -197,14 +329,15 @@ async fn read(
         }),
         Err(code) => Err(ReadFailure {
             request_id,
-            message: format!("read refused: {code}"),
+            message: format!("read failed: {code}"),
             code,
         }),
     }
 }
 
 #[tauri::command]
-async fn close(run: State<'_, HostRun>, handle: u64) -> Result<bool, String> {
+async fn close(run: State<'_, HostRun>, nonce: String, handle: u64) -> Result<bool, String> {
+    require_nonce(&run, &nonce)?;
     let mut state = run
         .state
         .lock()
@@ -220,8 +353,21 @@ async fn close(run: State<'_, HostRun>, handle: u64) -> Result<bool, String> {
 async fn finish(
     run: State<'_, HostRun>,
     app: tauri::AppHandle,
+    nonce: String,
     evidence: serde_json::Value,
 ) -> Result<String, String> {
+    require_nonce(&run, &nonce)?;
+    // Single-shot: the first finish publishes this run's evidence, and a second cannot
+    // replace it, whatever it carries.
+    if run
+        .finished
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(
+            "the evidence for this run was already published; finish is single-shot".to_string(),
+        );
+    }
     let revoked = {
         let mut state = run
             .state
@@ -264,12 +410,23 @@ async fn finish(
         "webviewOrigin": webview,
         "evidence": evidence,
     });
-    let target = PathBuf::from(&run.spec.run_directory).join("host-evidence.json");
-    std::fs::write(
-        &target,
-        format!("{}\n", serde_json::to_string_pretty(&payload).unwrap()),
-    )
-    .map_err(|error| format!("cannot write host evidence: {error}"))?;
+    let directory = PathBuf::from(&run.spec.run_directory);
+    let target = directory.join("host-evidence.json");
+    let document = format!("{}\n", serde_json::to_string_pretty(&payload).unwrap());
+    // Staged inside the run directory this host owns, then linked into place: the
+    // publication either happens completely or not at all, and never replaces an
+    // existing evidence document.
+    let staged = directory.join(format!(".host-evidence-stage-{}", std::process::id()));
+    std::fs::write(&staged, document)
+        .map_err(|error| format!("cannot stage host evidence: {error}"))?;
+    let published = std::fs::hard_link(&staged, &target);
+    let _ = std::fs::remove_file(&staged);
+    published.map_err(|error| {
+        format!(
+            "cannot publish host evidence at {} without replacement: {error}",
+            target.display()
+        )
+    })?;
     // The measurement is over once the evidence is on disk. The host stops itself
     // rather than waiting for a window that no one will close, so the launcher can
     // treat the run as finished without a deadline timeout.
@@ -305,12 +462,14 @@ fn main() {
     let state = HostState::new(spec.run.clone());
     let bundled_assets = Arc::new(Mutex::new(Vec::new()));
     let checks = Arc::clone(&bundled_assets);
+    let finished = Arc::new(AtomicBool::new(false));
     tauri::Builder::default()
         .manage(HostRun {
             spec,
             state: Arc::new(Mutex::new(state)),
             executor,
             bundled_assets,
+            finished,
         })
         .invoke_handler(tauri::generate_handler![
             pilot_input,

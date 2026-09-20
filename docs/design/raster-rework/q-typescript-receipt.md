@@ -962,3 +962,93 @@ qualification claim needs a separately authorized slice with the pinned artifact
 managed fixtures. **This slice adds two positively observed Q capabilities (Q-LOCAL-1 and
 Q-HOST-1, both as exploratory observations on a generated fixture) and zero qualified
 requirements.**
+
+## Desktop bridge instrument completion (DB1–DB4 implementation response)
+
+Revision delivered on `feature/raster-html-references` after baseline `b95b8d1d`; the exact commit is recorded in the
+handoff. This is the implementer's report for the [completion handoff](q-desktop-bridge-completion-agent-prompt.md)
+and it claims no acceptance. The saved `fab0c381` evidence is untouched and still stands as that revision's
+observation; the two runs below are new runs of the repaired instrument.
+
+### The contract trace the protocol asks for
+
+Each family, from the original contract through the real caller to the detector that fails when the guard is
+removed. This is the delivery's own summary; the tests named are the regression that carries it.
+
+| Family | Original contract | Real path exercised | Detector when the guard is removed |
+| --- | --- | --- | --- |
+| DB1 observed coverage | the first handoff required every requested cell to be compared; the disposition reproduced five empty duplicate windows producing `result: pass`, zero checked cells and 81 920 claimed | `producePilotReports` → `publishRunArtifacts` → the real evaluator CLI over the published `q2-numeric.json`/`host.json`, asserting the Q-LOCAL-1 verdict and its reasons | removing the coordinate/dimension validation fails three producer cases (the empty-duplicate counterexample, changed coordinate, changed value count) |
+| DB2 owned root and publication | no-replace publication and foreign-resource preservation | `createRunRoot` + `publishRunArtifacts` (the same no-replace primitive the evaluator publishes with) + the X11 relay policy | removing the run-root existence refusal fails the "existing directory refused untouched" case; making the publish step unlink before linking fails the no-replace case |
+| DB3 lifecycle | bounded cancellation, guarded disposal, host-owned labels, executor use, run ownership | the Rust bridge reserve/start/settle path, the single-shot atomic `finish`, the nonce-checked commands, and the WebView's one-worker terminal path | the Rust suite fails if a reservation can be taken twice, if capacity stops being enforced, if teardown admits new work, or if descriptors are dropped with work outstanding |
+| DB4 reproducible command and exit | the documented command must build current tooling, never run stale output, and report the pilot's own result | `tools/runPilot.mjs` compiles `ts/` into a fresh owned build directory and runs that exact `src/pilot/cli.js`; `runPilot` classifies; `cli.ts` propagates | the launcher cases fail if a stale decision is accepted, if a missing decision is treated as a result, or if a cleanup failure is swallowed |
+
+### What changed
+
+* **DB1 — the request is no longer an observation.** `ts/src/pilot/producer.ts` matches returned windows one-to-one
+  by declared id, requires exact coordinates and dimensions, whole-number sizes and exactly `w*h` values, refuses
+  duplicates, extras and malformed records, and counts only what it validated. Missing windows are gaps; a wrong
+  value elsewhere stays a failure. `testedWindows`, measured windows, checked cells and zero/negative retention are
+  derived from the observations. A refusal is matched by its **declared request identity** and code with a zero-byte
+  native record, and a ledger entry a renderer request produced can never be labelled `reference`.
+* **DB2 — one owned run root and atomic publication.** The run directory must be absent with a resolvable parent and
+  is created exclusively; empty, partial, failed, complete, symlinked and dangling destinations are all refused
+  without modification, including a directory that appears during creation. Every artifact is staged and hard-linked
+  into place through the extracted `publishDocumentNoReplace` primitive, so a failed write leaves no partial
+  document and a report is never labelled a decision. `host-evidence.json` is published by the host itself, staged
+  in the owned directory and linked without replacement. The log is created exclusively, bounded as bytes arrive,
+  closed on every path, and is never a completion marker. The X11 policy now reuses a reachable foreign socket
+  without touching it, refuses an unreachable one instead of deleting it, binds only an absent path, and abandons
+  its listener rather than closing a socket that was replaced under it.
+* **DB3 — one run lifecycle.** Native reads reserve their request identity before any work is queued, so two
+  overlapping identical requests cannot both execute; admission is two running with 32 waiting, excess is refused
+  with `queue-full`, and admitted/running/queued high-water marks observe real transitions. The state lock is held
+  only for reservation, start and settle; the read itself is positional through the reservation's own descriptor.
+  `crash`-free teardown revokes handles, refuses new work, cancels unstarted reservations and drops descriptors only
+  once nothing is outstanding, while fixture identity survives for the evidence. `finish` is single-shot and
+  nonce-checked, and every command validates the caller's run nonce. Labels are host-owned: the renderer can no
+  longer pass one. The WebView owns one worker, transfers read buffers instead of copying them, settles once, drops
+  replies for another run or an unknown request, and cancels cooperatively before a declared deadline with a
+  five-second grace before termination.
+* **DB4 — a reproducible command with its own exit.** `tools/runPilot.mjs` is now a bootstrap: it checks installed
+  tooling, compiles the current `ts/` into a fresh build directory, and runs that exact CLI, so an absent `ts/dist`
+  is irrelevant and a stale one can never be used. The launcher exits `0` only when the pilot completed, a
+  current-run decision was published and cites this run's report bytes, Q-LOCAL-1 and Q-HOST-1 pass and no
+  requirement fails; `1` when a measurement failed or required evidence is incomplete; `2` for every instrument
+  failure, including a missing or malformed decision, a wrong profile or version, a `rejected-input` diagnostic, a
+  timeout, or a cancellation. The summary preserves the decision's verdict and per-requirement reasons.
+
+### Measured
+
+Two runs of the same small generated-fixture Desktop pilot, both under network denial and in fresh directories:
+one 16.8 s run that exposed a launcher defect (republishing the host's own evidence) and, after that in-scope
+correction, one 13.3 s verification run (`pilot-1789907442506-21`) that completed with exit `0`:
+
+| Observation | Value |
+| --- | --- |
+| Windows | five of five observed, 81 920 of 81 920 cells compared, 2 of 2 expected nodata cells, 0 value and 0 validity mismatches |
+| Bounded transport | 12 candidate reads, 11 599 872 bytes, largest read 1 048 576 of 16 778 048, reconciled with the worker's counters |
+| Refusals | four of four controls matched by declared request identity and code, each with a zero-byte native record |
+| Bundled assets | six of six embedded files re-hashed inside the host and matched the declaration |
+| Evaluator | `desktop-local`, decision version 2, `synthetic: false`, Q-LOCAL-1 pass, Q-HOST-1 pass, ten requirements inconclusive, no requirement failed |
+
+**Q remains unqualified.** This is a safety and trustworthiness repair plus one confirmation run: the fixture is
+still synthetic, the engine is still the published artifact that `candidates.json` records as not corresponding to
+the source pin, and the other ten requirements still have no producer. This slice adds **zero qualified
+requirements** and no new engine capability; what it adds is that the instrument's own claims are now decided from
+observed records.
+
+### Gates and limitations
+
+TypeScript compilation into a fresh output directory and the full emitted Node suite (**328 passing**, 306 before),
+the host frontend typecheck, `cargo build/test/check/clippy --offline` (**20 passing**) and `rustfmt` on the host's
+own files, `python3 -W ignore::ResourceWarning -m unittest discover -s scripts/raster-qualification/tests` (261
+frozen), the runner stubs (18), `bash -n` on the touched launcher, `python3 scripts/check_docs.py` and
+`git diff --check` all pass at this revision. Repository Rust CI parity was not run: the production workspace is
+untouched and the isolated crate is outside it. The user's uncommitted `desktop/src/native_operation.rs` edit is
+still present and was neither staged nor reverted.
+
+Limitations stated plainly: the display relay is still the mechanism that keeps a graphical WebView reachable
+inside the network namespace, so "no network origin" is measured with a local socket relay rather than a firewall
+rule; the two authorized runs are the implementer's own; cancellation is exercised by unit tests and a declared
+deadline rather than by an observed mid-flight cancellation in a real run; and the native adapter's reservation
+path is covered by bridge tests plus the real run, not by a concurrent real-read test.

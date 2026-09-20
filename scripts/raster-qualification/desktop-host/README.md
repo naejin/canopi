@@ -26,9 +26,20 @@ policy rather than a second one. That production module is not modified here.
 ## Running it
 
 ```bash
-# From this directory. Writes everything under .qrun/, which is ignored.
+# From this directory. The run directory must not exist; the launcher creates it and
+# refuses to reuse, clean or overwrite one. Writes everything under .qrun/, ignored.
 node tools/runPilot.mjs --run-dir .qrun/pilot
 ```
+
+The command is a bootstrap: it compiles the current producer and evaluator TypeScript into a fresh build directory
+and runs that exact output, so an absent `ts/dist` is irrelevant and a stale one can never be measured. Its exit
+code is the pilot's own, not the evaluator's whole-Q result:
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | The bounded pilot completed, a current-run decision was published and cites this run's reports, Q-LOCAL-1 and Q-HOST-1 pass, and no requirement fails. Other requirements may stay inconclusive |
+| 1 | A pilot measurement or required check failed, or required positive evidence is incomplete |
+| 2 | Instrument failure: build, input, host launch, timeout, cancellation, malformed evidence, publication or evaluator |
 
 The launcher needs the bench engine assets at `.rq-scratch/bench` (override with
 `--bench <dir>`) and a local display. It performs, in order: TypeScript typecheck of the
@@ -39,6 +50,18 @@ and the real evaluator over those reports with the `desktop-local` profile.
 
 Useful flags: `--bench <dir>`, `--no-network-deny` (records the denial as not exercised),
 `QUAL_HOST_VISIBLE=1` to show the window.
+
+### Ownership and lifecycle invariants
+
+* One owned run root, created exclusively; an existing directory of any shape is refused untouched.
+* Every artifact is staged and hard-linked into place: complete or absent, never partial, never replacing.
+* `host-evidence.json` is published by the host itself, atomically and once; `finish` is single-shot and every
+  command validates the caller's run nonce.
+* Read requests reserve their identity before any work is queued (two running, 32 waiting, excess refused), and the
+  read itself is positional through the reservation's own descriptor with no state lock held.
+* Read labels are host-owned: a renderer request is always a candidate read.
+* Teardown revokes handles, refuses new work, cancels unstarted reservations and drops descriptors only once
+  nothing is outstanding; fixture identity survives for the evidence.
 
 ### Three properties that are easy to get wrong
 

@@ -314,3 +314,28 @@ wrong expected code fails Q-LOCAL-1.
 Review coverage limit stated plainly: the probes were run by the implementer on the same
 harness they exercise, the network namespace was exercised with a local X11 relay rather
 than a firewall rule, and no independent reproduction of these two runs has happened yet.
+
+## DB1–DB4 instrument completion (implementer, not acceptance)
+
+Delivered on `feature/raster-html-references` after baseline `b95b8d1d`; evidence is the
+[completion section of the migration receipt](q-typescript-receipt.md#desktop-bridge-instrument-completion-db1db4-implementation-response).
+This response resolves nothing in the disposition above and claims no acceptance.
+
+Each family now has a trace from its original contract through the real caller to the detector that fails when the
+guard is removed, recorded in the receipt. The two points most worth independent attack:
+
+* **The reviewer's counterexample is a test now.** Five empty duplicate windows flow through the real producer and
+  the real evaluator CLI and are refused on the duplicate identity and the missing dimensions; the run exits `1`
+  with the reasons preserved, not `0` with a claimed pass.
+* **The instrument can no longer publish what it did not own.** An existing run directory of any shape is refused
+  byte-for-byte, publication never replaces, the host publishes its own evidence atomically and once, and the
+  launcher only summarises a decision that cites this run's report bytes.
+
+One verification run of the repaired instrument completed with exit `0`: Q-LOCAL-1 and Q-HOST-1 pass, 81 920 of
+81 920 cells exact, 2 of 2 nodata cells, four of four refusal controls matched by declared request identity, six of
+six bundled assets verified, ledger reconciled. Q is still unqualified and no requirement is newly qualified.
+
+Coverage limit, stated plainly: the runs are the implementer's own; cancellation is covered by unit tests and a
+declared deadline rather than an observed mid-flight cancellation; the native reservation path is covered by bridge
+tests and the real run rather than by a concurrent real-read test; and the verification run preceded a
+whitespace-only `rustfmt` pass over the host sources.

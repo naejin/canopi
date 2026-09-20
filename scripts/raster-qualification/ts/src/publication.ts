@@ -72,7 +72,7 @@ export type PublicationRequest =
  * inert unless a test sets it: production code never does.
  */
 export const publicationFaultInjection: {
-  beforeLink?: (destination: string) => void;
+  beforeLink?: ((destination: string) => void) | undefined;
 } = {};
 
 export interface PublicationResult {
@@ -104,9 +104,20 @@ function detail(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Serialize a document exactly as this module publishes it.
+ *
+ * Exported so a caller that publishes its own raw documents uses the same bytes a
+ * decision would: maps become objects and non-finite numbers become null rather than
+ * invalid JSON.
+ */
+export function serializeForPublication(document: unknown): string {
+  return `${JSON.stringify(document, replacer, 2)}\n`;
+}
+
 /** Serialize once, before anything is created on disk. */
 function serialize(document: unknown): string {
-  return `${JSON.stringify(document, replacer, 2)}\n`;
+  return serializeForPublication(document);
 }
 
 type Canonical = { readonly ok: true; readonly path: string } | { readonly ok: false; readonly problem: string };
@@ -245,7 +256,10 @@ function destinationState(
  * so the hard link that publishes the document is always within one filesystem and
  * always fails rather than replaces when the destination appeared meanwhile.
  */
-function publishAt(destination: string, bytes: string): { readonly ok: true } | { readonly ok: false; readonly problem: string } {
+export function publishDocumentNoReplace(
+  destination: string,
+  bytes: string,
+): { readonly ok: true } | { readonly ok: false; readonly problem: string } {
   const parent = dirname(destination);
   let staging: string;
   try {
@@ -270,7 +284,12 @@ function publishAt(destination: string, bytes: string): { readonly ok: true } | 
     return { ok: false, problem: `cannot write the staged document: ${detail(error)}` };
   }
 
-  publicationFaultInjection.beforeLink?.(destination);
+  try {
+    publicationFaultInjection.beforeLink?.(destination);
+  } catch (error) {
+    rmSync(staging, { recursive: true, force: true });
+    return { ok: false, problem: `cannot publish ${destination}: ${detail(error)}` };
+  }
   try {
     linkSync(staged, destination);
   } catch (error) {
@@ -330,7 +349,7 @@ function publishFallback(
   }
   const destination = join(directory, DIAGNOSTIC_NAME);
   const bytes = serialize(diagnosticDocument(request.version, [...request.problems, ...reasons], request.generatedAt));
-  const published = publishAt(destination, bytes);
+  const published = publishDocumentNoReplace(destination, bytes);
   if (!published.ok) {
     rmSync(directory, { recursive: true, force: true });
     return {
@@ -378,7 +397,7 @@ export function publish(request: PublicationRequest): PublicationResult {
   const destination = destinationState(request.requestedOut, request.inputs, request.readSetComplete);
   if (!destination.ok) return refused(request, [destination.problem]);
 
-  const published = publishAt(destination.path, text);
+  const published = publishDocumentNoReplace(destination.path, text);
   if (!published.ok) return refused(request, [published.problem]);
 
   return {

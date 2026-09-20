@@ -412,6 +412,16 @@ wrong bytes. Here the answer was three separate staleness paths — embedded bun
 run directory, and a generator that shared the expectation — and two of them
 were closed only because a probe or a failure pointed at them.
 
+## DB1–DB4 completion (delivery record)
+
+| Question | Observed |
+| --- | --- |
+| Capability gained | None in engine terms. The instrument now refuses the reviewer's counterexample (five empty duplicate windows), owns one run root, publishes atomically, reserves request identities before queuing, and exits with its own classification instead of the evaluator's whole-Q code |
+| Reviewer discovery versus self-review | All four families were found by independent review, not by the implementer's own probes. DB1's counterexample existed in the delivered producer for a whole slice while its tests passed, because the tests asserted on declared windows rather than changed raw evidence |
+| Measurement defect found while probing | The first probe battery reported every guard as ineffective. The probe harness invoked a compiler through a wrong relative path and the tests ran against a stale build: an unverified probe is not evidence of absence. Probes must assert their own compile step |
+| Self-review counterexample | The first verification run failed on a launcher defect the unit tests could not see: the launcher republished the host's own atomically published evidence. The fix was in scope and the retry was the authorized second run |
+| Review coverage limit | Cancellation is covered by unit tests and a declared deadline, not an observed mid-flight cancellation; the native reservation path is covered by bridge tests plus one real run; both runs are the implementer's own |
+
 ## Final debrief procedure
 
 ### Desktop completion intervention: test the actual caller boundary
