@@ -15,7 +15,7 @@ Current guidance: [settled design](geolibre-integration-design.md), [LiDAR](../.
 | G2 import caller | `b73f4f89` |
 | G3 analysis caller | `88bd1585` |
 | Self-review findings closed | `05b61319` |
-| Delivery (docs, receipt, guides, bead export) | this commit (branch tip) |
+| Delivery (docs, receipt, guides, bead export) | the commit that adds this receipt |
 
 The primary checkout stayed on `feature/raster-html-references`; the user-owned edit in `desktop/src/native_operation.rs` was never staged, stashed or reset. Factual note: that edit is not `rustfmt`-clean under the pinned 1.97.1 toolchain (the committed file is), so repository formatting gates ran in the separate worktree.
 
@@ -77,7 +77,7 @@ The primary checkout stayed on `feature/raster-html-references`; the user-owned 
 | `npx tsc --noEmit` (frontend, worktree) | pass |
 | Focused frontend LiDAR tests (6 files) | 25 passed |
 | Full frontend suite (primary checkout, identical frontend tree) | 270 files / 2633 tests passed |
-| `python3 scripts/check_docs.py`, `git diff --check` | run at delivery; recorded in the final handoff |
+| `python3 scripts/check_docs.py`, `git diff --check` | pass (0 errors) |
 | Binding regeneration | not required — no shared contract, IPC or schema change |
 
 ## Unavailable environments and limitations
