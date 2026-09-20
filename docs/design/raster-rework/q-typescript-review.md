@@ -1,10 +1,24 @@
 # TypeScript qualification — standing independent review
 
-Status: evidence — numeric completion/MR1 accepted at `579880be`; Desktop bridge `fab0c381` independently reviewed as partial with DB1–DB4 blockers. Q remains unqualified.
+Status: evidence — numeric completion/MR1 accepted at `579880be`; Desktop completion `f9b5c10c` independently reviewed as partial with remaining DB3/DB4 blockers. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns work status.
 Current guidance: [migration receipt](q-typescript-receipt.md), [collaboration protocol](collaboration-protocol.md), [decision-complete design](q-typescript-reassessment.md), [C1–C8 contract](q-admission-acceptance.md), [debrief](review-and-debrief.md), [retired Desktop bridge handoff](q-desktop-bridge-agent-prompt.md).
 
 This is the single review record for the bounded TypeScript repair. Update it in place after each user-forwarded independent review. Implementers may append responses with revision/test references, but must not mark their own changes independently accepted. Preserve revision-linked findings; use bd for execution tracking rather than adding Markdown task lists.
+
+## Instrument completion independent disposition
+
+Reviewed `f9b5c10c` on `4564acc7`: **partial, not accepted**. Preserve observed-window regression coverage, exclusive roots/no-replace publication and fresh compilation. This is a remaining DB3/DB4 repair, not a reopened evaluator redesign. The [lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) owns the next bounded assignment when forwarded by the user.
+
+| Family / severity | Evidence and method | Existing contract violated |
+| --- | --- | --- |
+| L1 / high — cancellation | Executed the actual worker module with only its module-load dependency delayed: send run, send cancel, resolve import; observed `cancelled` followed by native `read` request `r0`. Source inspection: native reservation settlement exists only inside the executor closure; a dropped queued future cannot execute it. `start` does not reject teardown and `revoke_all` does not cancel queued closures | DB3 stops scheduling after cancellation, settles abandoned reservations and prevents queued work after revocation |
+| L2 / high — final outcomes | Replayed the real launcher with its existing coherent environment fixture. Control exits/saves 0. Evaluator exit 2 with the same matching decision also exits/saves 0. Cleanup failure returns 2 but saved `pilot-result.json` still records 0 | DB4 rejects inconsistent evaluator process/document outcomes and publishes the final instrument classification |
+| L3 / high — process/output limits | Source-traced, not a resource-exhaustion experiment: 256 MiB comparison reads only declared fixture bytes after preparation; total tree bytes are logged only. Fixture/evaluator synchronous subprocesses have no timeout; host alone has the experiment timer | DB3 bounds all non-compilation experiment work and aggregate generated/run outputs, not a final size report |
+
+Independently rechecked saved retry `pilot-1789907442506-21`: 81,920 cells, two nodata cells, zero mismatches; decision contains Q-LOCAL-1/Q-HOST-1 pass and ten inconclusive. No new Desktop experiment was run. Tooling compilation, 328 Node tests, 20 isolated Rust tests, docs and diff checks passed. This review did not rerun frozen Python, runner stubs or repository Rust CI parity; the implementation report's skipped parity reason (isolation) is not the waiver the contract explicitly disallowed. User-owned `desktop/src/native_operation.rs` remains untouched.
+
+The preceding intervention did not achieve one-pass acceptance. These findings cite already fixed behavior, not optional hardening. Process-adapter and suspended-operation tests remain necessary: a test that replaces the adapter cannot prove its cancellation or deadline behavior. Review remains finite; acceptance of retained progress does not establish an exhaustive safety proof. No files were changed during the diagnostic review; this disposition is recorded in the subsequent user-authorized documentation handoff.
 
 ## Desktop bridge independent disposition
 

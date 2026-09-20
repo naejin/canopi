@@ -424,6 +424,21 @@ were closed only because a probe or a failure pointed at them.
 
 ## Final debrief procedure
 
+### Result of the DB1–DB4 intervention
+
+Review of `f9b5c10c` **did not achieve one-pass acceptance**. It retained DB1's real producer/evaluator counterexample detector and DB2 publication improvements, but found the [remaining lifecycle/result families](q-typescript-review.md#instrument-completion-independent-disposition). Saved pilot cells remain correct. Do not describe the workflow problem as solved, or discard genuine progress because safety tests remain incomplete.
+
+| Escape / classification | Why the preceding evidence did not establish the claim | Small next intervention / owner |
+| --- | --- | --- |
+| Cancellation after delayed import; implementation deviation and test gap | A cancellation message did not persist across an await; unit tests did not execute that suspended worker path | Implementer tests the actual worker with delayed loading and checks no post-cancel reads; reviewer verifies the control rather than another success run |
+| Queued reservation abandonment; implementation deviation and adapter-test gap | Bridge helpers and production executor tests separately do not prove that their composition settles bridge ownership | Implementer uses real executor barriers through the same internal operation the command calls; reviewer inspects/executes the dropped-caller and teardown cases |
+| Evaluator exit ignored and saved success after cleanup failure; implementation deviation and assertion gap | Existing tests checked returned status, not process/document coherence and persisted status together | Implementer tests returned, printed and saved results from one settled classification; reviewer repeats the two concrete counterexamples |
+| Limits applied only to host/fixture; implementation deviation and supervision-test gap | Launcher tests mocked the very process adapter whose bounds they needed to establish | Main agent specifies a shared non-compilation budget and enforcement boundary; implementer tests real controlled child processes and byte-limited writers |
+
+Reviewer responsibility: the previous prompt required adapter-level tests, but that wording was insufficient to prevent replacing the behavior under test with a scripted environment. The next handoff names the actual suspended transitions and requires a compact statement of what each test mocks. This is a test-boundary correction, not proof that more detailed prompts are generally better. Hard-cap feasibility must be established before any new real run; an unavailable enforcement primitive is an explicit blocker, not implementer permission to claim a soft monitor is a hard limit.
+
+Evaluate the next slice using original-counterexample rejection, coherent positive controls, observed cleanup/child lifetimes, and remaining independent-review escapes. Keep one receipt and one courier delivery; internal steps need no approvals. Cost/time remain unmeasured. Do not rank languages/models, infer TDD history from test counts, or promote the intervention as effective before its review. Optional cleanup and broader tooling/skill changes remain separately authorized.
+
 ### Desktop completion intervention: test the actual caller boundary
 
 The [Desktop independent disposition](q-typescript-review.md#desktop-bridge-independent-disposition) preserves the first genuine transport observations while rejecting instrument completeness. The next experiment in our working method is the [DB1–DB4 completion assignment](q-desktop-bridge-completion-agent-prompt.md), not a new evaluator rewrite or a claim about model capability.

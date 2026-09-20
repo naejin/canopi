@@ -8,4 +8,6 @@ This assignment no longer authorizes work. Its durable design decisions — one 
 publication, host-owned read labels, reservation before queuing, single-shot finish, one worker terminal path, and
 launcher exits independent of the evaluator's whole-Q code — are maintained in the
 [host guide](../../../scripts/raster-qualification/desktop-host/README.md) and the receipt. A retired assignment is
-not proof that its work is accepted: the delivery awaits one independent review, and Q remains unqualified.
+not proof that its work is accepted. Delivery `f9b5c10c` was independently reviewed as partial;
+see the [disposition](q-typescript-review.md#instrument-completion-independent-disposition).
+The [lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) supersedes this assignment when forwarded by the user. Q remains unqualified.

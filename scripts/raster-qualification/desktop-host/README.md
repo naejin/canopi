@@ -1,5 +1,7 @@
 # Isolated Desktop qualification host
 
+Review status at `f9b5c10c`: partial, not accepted. The documented lifecycle/exit rules below are intended contracts; independent review found remaining cancellation, process/output-limit and final-result violations. See the [disposition](../../../docs/design/raster-rework/q-typescript-review.md#instrument-completion-independent-disposition) and the user-forwarded [completion assignment](../../../docs/design/raster-rework/q-desktop-lifecycle-agent-prompt.md). Do not infer safe completion from a green pilot result alone.
+
 A measurement instrument, not a product surface. This directory is its own Cargo
 workspace and is deliberately outside the production workspace: it does not register a
 Tauri command, change a Desktop manifest or touch application data.

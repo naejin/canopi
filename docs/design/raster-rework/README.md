@@ -6,11 +6,12 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The bounded numeric completion/MR1 slice is independently accepted at `579880be`; the evaluator repair loop is closed. Independent review of Desktop bridge implementation `fab0c381` found four instrument-completion families, DB1–DB4; the completion assignment was forwarded and delivered, and the repaired instrument completed one verification run with Q-LOCAL-1 and Q-HOST-1 passing. It awaits one independent review. Q remains unqualified. Q remains unqualified; no production N1 or integration is authorized. The [collaboration protocol](collaboration-protocol.md) defines main-agent design/review, implementation-agent execution and the user's courier/approval role.
+The bounded numeric completion/MR1 slice is independently accepted at `579880be`; the evaluator repair loop is closed. Independent review of `f9b5c10c` preserved DB1/DB2 progress and confirmed the saved retry's correct cells, but found remaining DB3/DB4 lifecycle, supervision and exit-consistency blockers. The slice remains partial, not accepted. The sole next assignment is the [lifecycle completion handoff](q-desktop-lifecycle-agent-prompt.md), executable when forwarded by the user. Q remains unqualified; no production N1 or integration is authorized. The [collaboration protocol](collaboration-protocol.md) defines main-agent design/review, implementation-agent execution and the user's courier/approval role.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Desktop bridge completion handoff](q-desktop-bridge-completion-agent-prompt.md) | Retired; executed as DB1–DB4, delivery reported in the migration receipt and awaiting one independent review |
+| [Desktop lifecycle handoff](q-desktop-lifecycle-agent-prompt.md) | Sole next assignment: remaining DB3/DB4 transitions, process bounds and final results; one delivery through the user |
+| [Desktop bridge completion handoff](q-desktop-bridge-completion-agent-prompt.md) | Retired; delivery `f9b5c10c` independently reviewed as partial, with remaining DB3/DB4 blockers |
 | [Desktop bridge handoff](q-desktop-bridge-agent-prompt.md) | Retired; delivered in `fab0c381`, independently reviewed as partial with DB1–DB4 blockers |
 | [Collaboration protocol](collaboration-protocol.md) | User-mediated design, implementation, review and evidence-driven improvement loop |
 | [Numeric completion handoff](q-numeric-counter-repair-agent-prompt.md) | Retired; bounded slice independently accepted at `579880be` |
