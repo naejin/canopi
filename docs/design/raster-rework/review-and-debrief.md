@@ -6,9 +6,21 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [con
 
 ## Purpose and evidence discipline
 
+### Native integration review — `3004e4d3`
+
+G1–G5 delivered real bounded extraction and slope postprocessing in one consolidated batch. Existing UI and dense composition limits remain. The [independent disposition](geolibre-integration-review.md) retains this progress and records one acceptance blocker, not a restart. Prior test/lifecycle results are implementer-reported: the reviewer inspected source but could not rerun tests with either available offline dependency cache. Cost/time savings are unmeasured.
+
+| Observation / classification | Small intervention and owner | What the next delivery must establish |
+| --- | --- | --- |
+| Separate disk checks miss simultaneous footprint; implementation deviation and test gap. The plan required the sum but omitted a decisive example. | Main agent supplies independently calculated combined-budget cases; implementer wires one estimate through actual preparation and import. | 265 MiB rejects a 269 MiB request before outputs, even though both old checks pass; exact-boundary control passes; caller includes raw and mask bytes. |
+| Derivative cleanup was generalized to whole-analysis cleanup; reporting/test-scope gap, partly inherited lifecycle debt. | Implementer narrows claims and tracks inherited staging cleanup separately; reviewer does not silently expand this repair into a lifecycle rewrite. | Receipt names the resource actually covered and links a concrete follow-up; no false claim that inherited debt is repaired. |
+| Independent rerun blocked by incomplete caches; environment limitation. | Implementer records the actual dependency/build route and exact commands; reviewer distinguishes reported from independently repeated evidence. | Reproducible commands and honest unavailable checks, not another qualification framework. |
+
+The [follow-up](geolibre-integration-followup-agent-prompt.md) delegates routine implementation, regression organization, in-scope repairs and dependency restoration through one delivery. Test this process change by closure of the named invariant at review and useful product progress retained, not by added tests/lines or inferred model cost. Record new reviewer escapes and design omissions, including this missing acceptance example; do not retroactively attribute all failures to skill use or model capability. No skill/tooling changes are authorized by this repair.
+
 ### Current intervention — product integration and one consolidated handoff
 
-The user selected useful GeoLibre components with existing features/UI preserved first. The [settled native design](geolibre-integration-design.md) and [G1–G5 assignment](geolibre-integration-agent-prompt.md) now supersede artifact-brief sequencing and the Q→production dependency. Earlier entries below are revision-linked history, not current assignments. Q stays unqualified and frozen; known defects have not been accepted.
+The user selected useful GeoLibre components with existing features/UI preserved first. The [settled native design](geolibre-integration-design.md) supersedes artifact-brief sequencing and the Q→production dependency. G1–G5 is delivered; the review correction above is current. Earlier entries below are revision-linked history, not current assignments. Q stays unqualified and frozen; known defects have not been accepted.
 
 The main agent inspected real import/analysis callers and GeoLibre's pinned native core, and settled source/build identity, private interfaces, preparation, cleanup, compatibility and scope before delegation. Important limits are explicit: this batch adopts a dependency used by GeoLibre, not the entire toolkit; it removes dense extraction/postprocessing, not dense composition; old capacity limits remain. No new ADR or glossary entry was needed for this reversible private adapter choice, and no domain terminology changed.
 

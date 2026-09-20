@@ -1,6 +1,6 @@
 # Implement GeoLibre native integration in the existing application
 
-Status: retired — executed as the sole G1–G5 implementation assignment; outcome in the [integration receipt](geolibre-integration-receipt.md). Retained as debrief evidence, not execution authority.
+Status: retired — G1–G5 delivered at `3004e4d3`; outcome in the [integration receipt](geolibre-integration-receipt.md). Retained as historical instructions, not execution authority; continue only under the [review-correction assignment](geolibre-integration-followup-agent-prompt.md).
 Tracking: `canopi-jv8a.1`, parent foundation `canopi-jv8a`, epic `canopi-j571`.
 Current guidance: [integration receipt](geolibre-integration-receipt.md), [settled design](geolibre-integration-design.md), [LiDAR](../../agent/lidar.md), [courier protocol](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 

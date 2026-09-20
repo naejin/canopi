@@ -1,6 +1,6 @@
 # Raster foundation, Data and Analysis workbenches
 
-Status: active — user selected compatibility-first GeoLibre adoption. The [settled native integration design](raster-rework/geolibre-integration-design.md) has its first production batch implemented in the [integration receipt](raster-rework/geolibre-integration-receipt.md), pending independent review. Q stays frozen and unqualified; completing its harness is no longer a production prerequisite. New UI and large-capacity work remain subsequent assignments.
+Status: active — compatibility-first GeoLibre G1–G5 is implemented in the [integration receipt](raster-rework/geolibre-integration-receipt.md) at `3004e4d3`, pending acceptance and integration. The [settled design](raster-rework/geolibre-integration-design.md) is retained; the [current assignment](raster-rework/geolibre-integration-followup-agent-prompt.md) closes the narrow independent-review findings. Q stays frozen and unqualified; completing its harness is no longer a production prerequisite. New UI and large-capacity work remain subsequent assignments.
 Tracking: `canopi-j571`; current implementation `canopi-jv8a.1`, foundation `canopi-jv8a`, workbenches `canopi-j8mp`, historical qualification `canopi-kqpp`, deferred `canopi-5neg`.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 
