@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 7;
+pub const CATALOGUE_VERSION: i32 = 8;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -109,68 +109,117 @@ fn migrate(connection: &Connection) -> Result<(), String> {
     let mut applied = version;
     while applied < CATALOGUE_VERSION {
         let next = applied + 1;
-        let transaction = connection
-            .unchecked_transaction()
-            .map_err(|e| format!("Failed to start LiDAR catalogue migration v{next}: {e}"))?;
-        let script = match next {
-            1 => SCHEMA_V1,
-            2 => SCHEMA_V2,
-            3 => SCHEMA_V3,
-            4 => "",
-            5 => SCHEMA_V5,
-            6 => "",
-            7 => SCHEMA_V7,
-            _ => unreachable!("catalogue migration gap"),
-        };
-        transaction
-            .execute_batch(script)
-            .map_err(|e| format!("Failed to apply LiDAR catalogue schema v{next}: {e}"))?;
-        if next == 2 && !table_has_column(&transaction, "lidar_acceptance_regions", "job_id")? {
-            transaction
-                .execute(
-                    "ALTER TABLE lidar_acceptance_regions ADD COLUMN job_id TEXT",
-                    [],
-                )
-                .map_err(|e| format!("Failed to add LiDAR acceptance job identity: {e}"))?;
+        // SQLite cannot relax a NOT NULL constraint in place, so v8 rebuilds
+        // `lidar_layer_generations`. Its child tables reference that table with
+        // plain foreign keys, which would refuse the DROP while enforcement is
+        // on; enforcement is suspended for that single rebuild and the result
+        // is verified before the migration is reported as applied.
+        let rebuild = next == 8;
+        if rebuild {
+            connection
+                .execute_batch("PRAGMA foreign_keys=OFF")
+                .map_err(|e| {
+                    format!("Failed to suspend foreign keys for migration v{next}: {e}")
+                })?;
         }
-        if next == 4 && !table_has_column(&transaction, "lidar_generation_members", "job_id")? {
-            transaction
-                .execute(
-                    "ALTER TABLE lidar_generation_members ADD COLUMN job_id TEXT",
-                    [],
-                )
-                .map_err(|e| format!("Failed to add LiDAR member job identity: {e}"))?;
+        let migrated = apply_migration(connection, next);
+        if rebuild {
+            connection
+                .execute_batch("PRAGMA foreign_keys=ON")
+                .map_err(|e| format!("Failed to restore foreign keys after v{next}: {e}"))?;
         }
-        if next == 6 {
-            if !table_has_column(&transaction, "lidar_import_jobs", "progress_phase")? {
-                transaction
-                    .execute(
-                        "ALTER TABLE lidar_import_jobs ADD COLUMN progress_phase TEXT",
-                        [],
-                    )
-                    .map_err(|e| format!("Failed to add LiDAR import progress phase: {e}"))?;
-            }
-            if !table_has_column(&transaction, "lidar_import_jobs", "progress_percent")? {
-                transaction
-                    .execute(
-                        "ALTER TABLE lidar_import_jobs ADD COLUMN progress_percent INTEGER
-                         CHECK(progress_percent IS NULL OR progress_percent BETWEEN 0 AND 100)",
-                        [],
-                    )
-                    .map_err(|e| format!("Failed to add LiDAR import progress percent: {e}"))?;
-            }
+        migrated?;
+        if rebuild {
+            verify_foreign_keys(connection)?;
         }
+        applied = next;
+    }
+    Ok(())
+}
+
+/// Apply one numbered migration inside its own transaction, recording the new
+/// version in that same transaction so an interrupted upgrade stays coherent.
+fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|e| format!("Failed to start LiDAR catalogue migration v{next}: {e}"))?;
+    let script = match next {
+        1 => SCHEMA_V1,
+        2 => SCHEMA_V2,
+        3 => SCHEMA_V3,
+        4 => "",
+        5 => SCHEMA_V5,
+        6 => "",
+        7 => SCHEMA_V7,
+        8 => SCHEMA_V8,
+        _ => unreachable!("catalogue migration gap"),
+    };
+    transaction
+        .execute_batch(script)
+        .map_err(|e| format!("Failed to apply LiDAR catalogue schema v{next}: {e}"))?;
+    if next == 2 && !table_has_column(&transaction, "lidar_acceptance_regions", "job_id")? {
         transaction
             .execute(
-                "INSERT INTO lidar_catalogue_meta(key, value) VALUES('schema_version', ?1)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                [next.to_string()],
+                "ALTER TABLE lidar_acceptance_regions ADD COLUMN job_id TEXT",
+                [],
             )
-            .map_err(|e| format!("Failed to record catalogue version: {e}"))?;
+            .map_err(|e| format!("Failed to add LiDAR acceptance job identity: {e}"))?;
+    }
+    if next == 4 && !table_has_column(&transaction, "lidar_generation_members", "job_id")? {
         transaction
-            .commit()
-            .map_err(|e| format!("Failed to commit LiDAR catalogue migration v{next}: {e}"))?;
-        applied = next;
+            .execute(
+                "ALTER TABLE lidar_generation_members ADD COLUMN job_id TEXT",
+                [],
+            )
+            .map_err(|e| format!("Failed to add LiDAR member job identity: {e}"))?;
+    }
+    if next == 6 {
+        if !table_has_column(&transaction, "lidar_import_jobs", "progress_phase")? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_import_jobs ADD COLUMN progress_phase TEXT",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add LiDAR import progress phase: {e}"))?;
+        }
+        if !table_has_column(&transaction, "lidar_import_jobs", "progress_percent")? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_import_jobs ADD COLUMN progress_percent INTEGER
+                     CHECK(progress_percent IS NULL OR progress_percent BETWEEN 0 AND 100)",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add LiDAR import progress percent: {e}"))?;
+        }
+    }
+    transaction
+        .execute(
+            "INSERT INTO lidar_catalogue_meta(key, value) VALUES('schema_version', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [next.to_string()],
+        )
+        .map_err(|e| format!("Failed to record catalogue version: {e}"))?;
+    transaction
+        .commit()
+        .map_err(|e| format!("Failed to commit LiDAR catalogue migration v{next}: {e}"))
+}
+
+/// Fail the migration instead of leaving a catalogue whose rows no longer join.
+fn verify_foreign_keys(connection: &Connection) -> Result<(), String> {
+    let mut statement = connection
+        .prepare("PRAGMA foreign_key_check")
+        .map_err(|e| format!("Failed to verify catalogue foreign keys: {e}"))?;
+    let mut rows = statement
+        .query([])
+        .map_err(|e| format!("Failed to verify catalogue foreign keys: {e}"))?;
+    if let Some(row) = rows
+        .next()
+        .map_err(|e| format!("Failed to verify catalogue foreign keys: {e}"))?
+    {
+        let table: String = row.get(0).unwrap_or_else(|_| "unknown".to_string());
+        return Err(format!(
+            "LiDAR catalogue migration left a foreign key violation in {table}"
+        ));
     }
     Ok(())
 }
@@ -279,6 +328,40 @@ CREATE TABLE IF NOT EXISTS lidar_interpretation_regions (
     sum_value REAL,
     PRIMARY KEY (interpretation_id, block_x, block_y)
 );
+"#;
+
+/// v8: a generation may be stored as sparse resolved chunks instead of one
+/// dense mosaic, so the legacy mosaic/coverage columns become nullable.
+///
+/// Every existing row is copied unchanged and keeps both paths, which is what
+/// preserves preserved legacy generations. The paired-nullability check keeps
+/// the two columns meaningful for both storage formats: a generation either
+/// owns a dense pair or owns no dense file at all.
+const SCHEMA_V8: &str = r#"
+CREATE TABLE lidar_layer_generations_v8 (
+    id TEXT PRIMARY KEY,
+    layer_id TEXT NOT NULL REFERENCES lidar_source_layers(id),
+    created_at TEXT NOT NULL,
+    mosaic_path TEXT,
+    coverage_mask_path TEXT,
+    manifest_json TEXT NOT NULL,
+    coverage_cells INTEGER NOT NULL,
+    min_value REAL,
+    max_value REAL,
+    bounds_3857 TEXT NOT NULL,
+    CHECK ((mosaic_path IS NULL) = (coverage_mask_path IS NULL))
+);
+INSERT INTO lidar_layer_generations_v8(
+    id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+    coverage_cells, min_value, max_value, bounds_3857
+)
+SELECT id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+       coverage_cells, min_value, max_value, bounds_3857
+FROM lidar_layer_generations;
+DROP TABLE lidar_layer_generations;
+ALTER TABLE lidar_layer_generations_v8 RENAME TO lidar_layer_generations;
+CREATE INDEX IF NOT EXISTS idx_layer_generations_layer
+    ON lidar_layer_generations(layer_id);
 "#;
 
 const SCHEMA_V5: &str = r#"
@@ -448,8 +531,12 @@ pub struct LayerRow {
 #[derive(Debug, Clone)]
 pub struct GenerationRow {
     pub id: String,
-    pub mosaic_path: String,
-    pub coverage_mask_path: String,
+    /// Dense mosaic/coverage of a `legacy-dense-v1` generation. A generation
+    /// stored as sparse resolved chunks has neither, so both columns are null
+    /// together; readers must select their path from the manifest format
+    /// instead of falling back to a dense read.
+    pub mosaic_path: Option<String>,
+    pub coverage_mask_path: Option<String>,
     pub manifest_json: String,
     pub coverage_cells: i64,
     pub min_value: Option<f64>,
@@ -695,6 +782,10 @@ pub struct InterpretationRow {
     pub width: i64,
     pub height: i64,
     pub interp_hash: String,
+    /// Declared NoData of this interpretation. It is the effective validity
+    /// rule for lossless-validity sources and must never be replaced by
+    /// another member's sentinel.
+    pub nodata: Option<f64>,
 }
 
 pub fn get_interpretation(
@@ -703,7 +794,7 @@ pub fn get_interpretation(
 ) -> Result<Option<InterpretationRow>, String> {
     connection
         .query_row(
-            "SELECT geotransform, width, height, interp_hash
+            "SELECT geotransform, width, height, interp_hash, nodata
              FROM lidar_interpretations WHERE id = ?1",
             [interpretation_id],
             |row| {
@@ -712,6 +803,7 @@ pub fn get_interpretation(
                     width: row.get(1)?,
                     height: row.get(2)?,
                     interp_hash: row.get(3)?,
+                    nodata: row.get(4)?,
                 })
             },
         )
@@ -1006,10 +1098,6 @@ pub fn interpretation_region_page(
 }
 
 /// One published resolved-chunk reference.
-///
-/// Consumed by the B2 publication caller and the persisted-chunk reader
-/// tracked in `canopi-jv8a.4`; the temporary allowance goes with them.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenerationChunkRow {
     pub role: String,
@@ -1022,12 +1110,159 @@ pub struct GenerationChunkRow {
     pub sum_value: f64,
 }
 
+/// Metadata of one immutable content-addressed raster asset.
+///
+/// `rel_path` stays relative to the library root so a catalogue stays valid
+/// when the library is moved. Chunk rows reference the digest, so the asset
+/// row must exist before any chunk row names it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RasterAssetRow {
+    pub sha256: String,
+    pub rel_path: String,
+    pub bytes: i64,
+    pub profile: String,
+    pub width: i64,
+    pub height: i64,
+    pub geotransform: String,
+    pub crs_wkt: String,
+    pub nodata: Option<f64>,
+}
+
+/// One published chunk joined with the asset a reader must open.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChunkAssetRow {
+    pub role: String,
+    pub chunk_x: i64,
+    pub chunk_y: i64,
+    pub asset: RasterAssetRow,
+}
+
+/// Record asset metadata. Published assets are immutable, so an existing row
+/// with the same digest is left untouched and never rewritten.
+pub fn insert_raster_asset(connection: &Connection, asset: &RasterAssetRow) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT INTO lidar_raster_assets(
+                sha256, rel_path, bytes, profile, width, height, geotransform,
+                crs_wkt, nodata, created_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(sha256) DO NOTHING",
+            rusqlite::params![
+                asset.sha256,
+                asset.rel_path,
+                asset.bytes,
+                asset.profile,
+                asset.width,
+                asset.height,
+                asset.geotransform,
+                asset.crs_wkt,
+                asset.nodata,
+                now_iso(),
+            ],
+        )
+        .map_err(|e| format!("Failed to record raster asset {}: {e}", asset.sha256))?;
+    Ok(())
+}
+
+/// The retained standard COG of one prepared interpretation, when it has one,
+/// together with the interpretation's own effective NoData rule.
+pub fn interpretation_cog(
+    connection: &Connection,
+    interpretation_id: &str,
+) -> Result<Option<(RasterAssetRow, Option<f64>)>, String> {
+    connection
+        .query_row(
+            "SELECT a.sha256, a.rel_path, a.bytes, a.profile, a.width, a.height,
+                    a.geotransform, a.crs_wkt, a.nodata, c.nodata
+             FROM lidar_interpretation_cogs c
+             JOIN lidar_raster_assets a ON a.sha256 = c.asset_sha256
+             WHERE c.interpretation_id = ?1",
+            [interpretation_id],
+            |row| Ok((map_asset_row(row, 0)?, row.get(9)?)),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read interpretation COG: {e}"))
+}
+
+fn map_asset_row(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<RasterAssetRow> {
+    Ok(RasterAssetRow {
+        sha256: row.get(offset)?,
+        rel_path: row.get(offset + 1)?,
+        bytes: row.get(offset + 2)?,
+        profile: row.get(offset + 3)?,
+        width: row.get(offset + 4)?,
+        height: row.get(offset + 5)?,
+        geotransform: row.get(offset + 6)?,
+        crs_wkt: row.get(offset + 7)?,
+        nodata: row.get(offset + 8)?,
+    })
+}
+
+/// Published chunk references of one generation and role, ordered by position.
+///
+/// Only `published` rows are selected: an unpublished row belongs to a job
+/// that has not committed, so it must never be readable.
+pub fn generation_chunk_assets(
+    connection: &Connection,
+    generation_id: &str,
+    role: &str,
+) -> Result<Vec<ChunkAssetRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT g.role, g.chunk_x, g.chunk_y,
+                    a.sha256, a.rel_path, a.bytes, a.profile, a.width, a.height,
+                    a.geotransform, a.crs_wkt, a.nodata
+             FROM lidar_generation_chunks g
+             JOIN lidar_raster_assets a ON a.sha256 = g.asset_sha256
+             WHERE g.generation_id = ?1 AND g.role = ?2 AND g.state = 'published'
+             ORDER BY g.chunk_y, g.chunk_x",
+        )
+        .map_err(|e| format!("Failed to prepare chunk asset query: {e}"))?;
+    statement
+        .query_map(rusqlite::params![generation_id, role], |row| {
+            Ok(ChunkAssetRow {
+                role: row.get(0)?,
+                chunk_x: row.get(1)?,
+                chunk_y: row.get(2)?,
+                asset: map_asset_row(row, 3)?,
+            })
+        })
+        .map_err(|e| format!("Failed to read chunk assets: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read chunk assets: {e}"))
+}
+
+/// Drop chunk rows a job left behind before it committed a generation.
+///
+/// Unpublished rows are never readable, so removing them cannot revoke an
+/// accepted generation. Only physical assets are left to reclamation.
+pub fn discard_unpublished_chunks(connection: &Connection) -> Result<usize, String> {
+    connection
+        .execute(
+            "DELETE FROM lidar_generation_chunks WHERE state != 'published'",
+            [],
+        )
+        .map_err(|e| format!("Failed to discard unpublished chunk rows: {e}"))
+}
+
+/// Drop the unpublished chunk rows of one failed publication attempt.
+pub fn discard_unpublished_generation_chunks(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<usize, String> {
+    connection
+        .execute(
+            "DELETE FROM lidar_generation_chunks WHERE generation_id = ?1 AND state != 'published'",
+            [generation_id],
+        )
+        .map_err(|e| format!("Failed to discard unpublished chunk rows: {e}"))
+}
+
 /// Insert chunk references as unpublished rows beside their asset metadata.
 ///
 /// Readers cannot select these rows until the generation's short publish
 /// transaction flips them, so a crashed or cancelled job leaves no readable
 /// index.
-#[allow(dead_code)]
 pub fn insert_unpublished_chunks(
     connection: &Connection,
     generation_id: &str,
@@ -1074,7 +1309,6 @@ pub fn insert_unpublished_chunks(
 }
 
 /// Publish every chunk row of one generation inside the caller's transaction.
-#[allow(dead_code)]
 pub fn publish_generation_chunks(
     connection: &Connection,
     generation_id: &str,
@@ -1088,6 +1322,8 @@ pub fn publish_generation_chunks(
 }
 
 /// One ordered page of published chunk references.
+// Not yet reachable from a production caller: region/aggregate paging into the
+// migrated consumers lands with B3/B4 (`canopi-jv8a.4`).
 #[allow(dead_code)]
 pub fn generation_chunk_page(
     connection: &Connection,
@@ -1439,7 +1675,7 @@ mod tests {
     }
 
     #[test]
-    fn v6_catalogue_is_backed_up_and_migrated_to_v7() {
+    fn v6_catalogue_is_backed_up_and_migrated_to_current() {
         let root = std::env::temp_dir().join(new_id("canopi-catalogue-v7"));
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("lidar-library.sqlite");
@@ -1452,7 +1688,7 @@ mod tests {
                     |row| row.get(0),
                 )
                 .unwrap();
-            assert_eq!(version, "7");
+            assert_eq!(version, CATALOGUE_VERSION.to_string());
         }
         // Present the same file as a v6 catalogue without its v7 tables.
         {
@@ -1468,7 +1704,7 @@ mod tests {
                 .unwrap();
         }
         let connection = open(&path).expect("v6 catalogue migrates");
-        assert_eq!(schema_version(&connection).unwrap(), 7);
+        assert_eq!(schema_version(&connection).unwrap(), 8);
         for table in [
             "lidar_raster_assets",
             "lidar_interpretation_cogs",
@@ -1496,6 +1732,138 @@ mod tests {
         // The backup is itself a complete readable catalogue at the old version.
         let backed_up = Connection::open(backup_path).unwrap();
         assert_eq!(schema_version(&backed_up).unwrap(), 6);
+        drop(backed_up);
+        drop(connection);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn v7_catalogue_gains_nullable_dense_paths_without_losing_rows() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v8"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_sources
+                        (sha256, original_filename, size_bytes, probe_json, imported_at)
+                     VALUES ('sha', 'source.tif', 4, '{}', '0');
+                     INSERT INTO lidar_interpretations
+                        (id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                         crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                     VALUES ('interp', 'sha', 1, 'ground-elevation', 'm', 1, 0,
+                             'EPSG:3857', 'unknown', -9999, '[0,1,0,45,0,-1]', 60, 45, 'hash');
+                     INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('generation', 'layer', '0', '/library/gen-1/mosaic.tif',
+                             '/library/gen-1/coverage.bin', '{\"format\":\"legacy-dense-v1\"}',
+                             12, -1, 9, '[0,0,1,1]');
+                     INSERT INTO lidar_generation_members
+                        (generation_id, interpretation_id, role, ordinal, job_id)
+                     VALUES ('generation', 'interp', 'add', 0, 'job');
+                     INSERT INTO lidar_layer_heads(layer_id, generation_id)
+                     VALUES ('layer', 'generation');",
+                )
+                .unwrap();
+        }
+        // Present the same file as a v7 catalogue with the old NOT NULL paths.
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    "PRAGMA foreign_keys=OFF;
+                     ALTER TABLE lidar_layer_generations RENAME TO lidar_layer_generations_v8;
+                     CREATE TABLE lidar_layer_generations (
+                        id TEXT PRIMARY KEY,
+                        layer_id TEXT NOT NULL REFERENCES lidar_source_layers(id),
+                        created_at TEXT NOT NULL,
+                        mosaic_path TEXT NOT NULL,
+                        coverage_mask_path TEXT NOT NULL,
+                        manifest_json TEXT NOT NULL,
+                        coverage_cells INTEGER NOT NULL,
+                        min_value REAL,
+                        max_value REAL,
+                        bounds_3857 TEXT NOT NULL
+                     );
+                     INSERT INTO lidar_layer_generations(
+                        id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                        coverage_cells, min_value, max_value, bounds_3857)
+                     SELECT id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                            coverage_cells, min_value, max_value, bounds_3857
+                     FROM lidar_layer_generations_v8;
+                     DROP TABLE lidar_layer_generations_v8;
+                     CREATE INDEX IF NOT EXISTS idx_layer_generations_layer
+                        ON lidar_layer_generations(layer_id);
+                     UPDATE lidar_catalogue_meta SET value = '7' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+
+        let connection = open(&path).expect("v7 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), 8);
+        // The preserved generation keeps its identity, paths and history.
+        let (mosaic, coverage, cells): (Option<String>, Option<String>, i64) = connection
+            .query_row(
+                "SELECT mosaic_path, coverage_mask_path, coverage_cells
+                 FROM lidar_layer_generations WHERE id = 'generation'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(mosaic.as_deref(), Some("/library/gen-1/mosaic.tif"));
+        assert_eq!(coverage.as_deref(), Some("/library/gen-1/coverage.bin"));
+        assert_eq!(cells, 12);
+        assert_eq!(
+            generation_members(&connection, "generation").unwrap(),
+            vec![(
+                "interp".to_string(),
+                "add".to_string(),
+                Some("job".to_string())
+            )]
+        );
+        assert_eq!(
+            head_generation(&connection, "layer")
+                .unwrap()
+                .expect("head survives")
+                .id,
+            "generation"
+        );
+        // A sparse generation may now own no dense file at all.
+        connection
+            .execute(
+                "INSERT INTO lidar_layer_generations
+                    (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                     coverage_cells, min_value, max_value, bounds_3857)
+                 VALUES ('sparse', 'layer', '1', NULL, NULL, '{}', 0, 0, 0, '[0,0,1,1]')",
+                [],
+            )
+            .unwrap();
+        // ... but never half a pair.
+        let half = connection.execute(
+            "INSERT INTO lidar_layer_generations
+                (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                 coverage_cells, min_value, max_value, bounds_3857)
+             VALUES ('half', 'layer', '2', '/only/mosaic.tif', NULL, '{}', 0, 0, 0, '[0,0,1,1]')",
+            [],
+        );
+        assert!(half.is_err(), "a lone dense path is rejected");
+
+        let backup: String = connection
+            .query_row(
+                "SELECT value FROM lidar_catalogue_meta WHERE key = 'last_backup_path'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let backup_path = std::path::Path::new(&backup);
+        assert!(backup_path.exists(), "backup {backup} exists");
+        let backed_up = Connection::open(backup_path).unwrap();
+        assert_eq!(schema_version(&backed_up).unwrap(), 7);
         drop(backed_up);
         drop(connection);
         let _ = std::fs::remove_dir_all(root);

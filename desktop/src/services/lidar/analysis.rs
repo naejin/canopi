@@ -83,6 +83,19 @@ pub fn run_slope_job(
         (definition, head, manifest)
     };
     validate_working_grid(&manifest.grid, "slope analysis")?;
+    // Slope still reads the accepted dense mosaic. A generation stored as
+    // sparse resolved chunks has none, so it is refused explicitly here until
+    // the bounded core+halo slope reader lands in B3 (`canopi-jv8a.4`) rather
+    // than being handed a path that does not exist.
+    let (Some(source_mosaic), Some(source_coverage)) = (
+        head.mosaic_path.as_deref(),
+        head.coverage_mask_path.as_deref(),
+    ) else {
+        return Err(
+            "slope analysis needs the dense source mosaic; sparse-generation slope is not implemented yet"
+                .to_string(),
+        );
+    };
 
     let job_dir_id = new_id("anl");
     let pipeline_dir = paths.analysis_pipeline_dir(definition_id);
@@ -98,7 +111,7 @@ pub fn run_slope_job(
         "-s".to_string(),
         "1".to_string(),
         "-q".to_string(),
-        Path::new(&head.mosaic_path).display().to_string(),
+        Path::new(source_mosaic).display().to_string(),
         result_path.display().to_string(),
     ];
     if parameters.slope_unit == Some(LidarSlopeUnit::Percent) {
@@ -121,7 +134,7 @@ pub fn run_slope_job(
         "the slope quality mask",
     )?;
     super::grid::erode_mask_file(
-        Path::new(&head.coverage_mask_path),
+        Path::new(source_coverage),
         &quality_path,
         manifest.grid.width,
         manifest.grid.height,
@@ -746,7 +759,11 @@ mod tests {
             let head = catalogue::head_generation(&connection, &layer_id)
                 .expect("head read")
                 .expect("layer published");
-            PathBuf::from(head.coverage_mask_path)
+            PathBuf::from(
+                head.coverage_mask_path
+                    .as_deref()
+                    .expect("dense generation has a coverage mask"),
+            )
         };
         let coverage = super::super::grid::ValidMask::read_from(&coverage_path, width, height)
             .expect("coverage reads");

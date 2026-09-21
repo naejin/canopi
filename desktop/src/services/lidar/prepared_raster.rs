@@ -691,8 +691,8 @@ fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
 #[cfg(test)]
 fn observe_window(cells: usize, tile_bytes: &[u8]) {
     let live = live_bytes(cells).saturating_sub(TILE_BYTES) + tile_bytes.len() as u64;
-    observability::WINDOWS_READ.fetch_add(1, Ordering::Relaxed);
-    observability::PEAK_LIVE_BYTES.fetch_max(live, Ordering::Relaxed);
+    observability::WINDOWS_READ.with(|value| value.set(value.get() + 1));
+    observability::PEAK_LIVE_BYTES.with(|value| value.set(value.get().max(live)));
 }
 
 #[cfg(not(test))]
@@ -700,7 +700,7 @@ fn observe_window(_cells: usize, _tile_bytes: &[u8]) {}
 
 #[cfg(test)]
 fn observe_tile() {
-    observability::TILES_DECODED.fetch_add(1, Ordering::Relaxed);
+    observability::TILES_DECODED.with(|value| value.set(value.get() + 1));
 }
 
 #[cfg(not(test))]
@@ -708,26 +708,32 @@ fn observe_tile() {}
 
 /// Test-only decode observations: proof that the native path produced the
 /// bytes a caller test inspects, and that its buffers stayed bounded.
+///
+/// The counters are thread-local because every reader call is synchronous: a
+/// test asserts on the work its own call did, so a concurrently running test
+/// resetting a process-global counter can no longer erase that evidence.
 #[cfg(test)]
 pub(super) mod observability {
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::cell::Cell;
 
-    pub(crate) static TILES_DECODED: AtomicU64 = AtomicU64::new(0);
-    pub(crate) static WINDOWS_READ: AtomicU64 = AtomicU64::new(0);
-    pub(crate) static PEAK_LIVE_BYTES: AtomicU64 = AtomicU64::new(0);
+    thread_local! {
+        pub(crate) static TILES_DECODED: Cell<u64> = const { Cell::new(0) };
+        pub(crate) static WINDOWS_READ: Cell<u64> = const { Cell::new(0) };
+        pub(crate) static PEAK_LIVE_BYTES: Cell<u64> = const { Cell::new(0) };
+    }
 
     pub(crate) fn reset() {
-        TILES_DECODED.store(0, Ordering::Relaxed);
-        WINDOWS_READ.store(0, Ordering::Relaxed);
-        PEAK_LIVE_BYTES.store(0, Ordering::Relaxed);
+        TILES_DECODED.with(|value| value.set(0));
+        WINDOWS_READ.with(|value| value.set(0));
+        PEAK_LIVE_BYTES.with(|value| value.set(0));
     }
 
     pub(crate) fn tiles_decoded() -> u64 {
-        TILES_DECODED.load(Ordering::Relaxed)
+        TILES_DECODED.with(Cell::get)
     }
 
     pub(crate) fn peak_live_bytes() -> u64 {
-        PEAK_LIVE_BYTES.load(Ordering::Relaxed)
+        PEAK_LIVE_BYTES.with(Cell::get)
     }
 }
 

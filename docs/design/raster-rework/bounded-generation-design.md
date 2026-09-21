@@ -1,6 +1,6 @@
 # Bounded raster generations behind the existing UI
 
-Status: partial — B1 storage primitives delivered and verified; the catalogue index/resolver and the B2–B5 caller migration are not implemented. See the [receipt](bounded-generation-receipt.md). Replaces the unimplemented raw-block choice at `24fd1a56`.
+Status: partial — B1 storage primitives and the first B2 caller vertical slice (stage → review → Apply → reopen → undo over persisted chunks) are delivered and caller-tested but **gated off in production**; display/slope consumption, the legacy-base overlay and B3–B5 remain. See the [receipt](bounded-generation-receipt.md). Replaces the unimplemented raw-block choice at `24fd1a56`.
 Tracking: foundation `canopi-jv8a`, epic `canopi-j571`; the implementer creates one scoped child for this batch. Accepted predecessor: `canopi-jv8a.1` at `a5fc7d7b`.
 Current guidance: [delivery receipt](bounded-generation-receipt.md), [agent assignment](bounded-generation-agent-prompt.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
@@ -134,7 +134,7 @@ These are internal milestones, not courier checkpoints. Keep each commit buildab
 | Step | Outcome / owned surfaces | Decisive evidence |
 | --- | --- | --- |
 | B1 | `prepared_raster`, existing GDAL export, `catalogue`, `paths`, private generation module, legacy adapters | First: source COG retention/reopen and resolved/quality COG round-trip through both GDAL and the native reader, with exact values/validity/geography. Then v6 migration/WAL backup/restart/future-version refusal; mixed old/new windows, negative coordinates, padding/corruption; no full-file helper reachable. |
-| B2 | `import`, review/Apply/undo and generation publication | Real staged caller counts/previews and exact committed windows; generation history survives restart; rollback keeps prior head. |
+| B2 | `import`, review/Apply/undo and generation publication | **First slice delivered and tested but gated off** (no production build can select `cog-chunks-v1`): real staged caller counts/previews, exact committed windows through persisted chunks, restart-readable head, preserved legacy generations, undo replaying the remaining sequence. Still open: display publication for a chunked head, the legacy-base overlay, source-COG retention and unreferenced-asset reclamation. |
 | B3 | `analysis`, shared job ownership/resource policy | GDAL core+halo equivalence in both units, seam/hole/outer-edge masks, stale-result guard, cancellation/failure cleanup including `canopi-jv8a.3`. |
 | B4 | `display`, tile commands/shared contracts, Desktop protocol/map adapter | Existing map/preview features work on both storage versions; bounded tile reads, empty/invalid transparency, cache/queue limits, disposal/late-response rejection; Web stays native-free. |
 | B5 | End-to-end verification, conditional admission switch, guides | Real batch, large plane and sparse-gap gates, unchanged Design identity, old library reuse; consolidated receipt and no remaining production dense paths for migrated flows. |

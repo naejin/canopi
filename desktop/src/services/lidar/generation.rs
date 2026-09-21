@@ -1,5 +1,3 @@
-#![allow(dead_code)] // Temporary: see the wiring note below.
-//!
 //! Bounded reads over ordered member occurrences.
 //!
 //! One resolver serves staged review candidates, published generations and
@@ -8,14 +6,17 @@
 //! occurrences in ordinal order with the accepted role semantics. No union
 //! raster, no absent-coordinate walk and no whole-extent buffer is created.
 //!
-//! Wiring status: publication and the preview/display/slope callers that
-//! consume this resolver land in B2–B4, so until then the compiler sees no
-//! production caller. The allowance is removed with the first wired caller
-//! (`canopi-jv8a.4`).
+//! Wiring status: publication and the review/undo callers consume this
+//! resolver through `import.rs`. The remaining consumers — slope (B3) and the
+//! bounded display transport (B4) — are still to come, so individual items
+//! keep a documented allowance until their caller lands (`canopi-jv8a.4`).
 
+use super::catalogue;
 use super::grid::RasterGrid;
+use super::paths::LidarPaths;
 use super::prepared_raster::{PreparedRaster, RasterWindow};
 use super::raster_assets::CogAsset;
+use rusqlite::Connection;
 use std::collections::BTreeSet;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -25,6 +26,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub(super) const CHUNK_SIDE: i64 = 1024;
 /// Largest requested window side, matching the reader's halo allowance.
 const MAX_WINDOW_SIDE: i64 = 1026;
+/// Catalogue role of a generation's resolved numeric chunks.
+pub(super) const RESULT_ROLE: &str = "result";
 
 /// How one occurrence participates in composition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +41,10 @@ pub(super) enum MemberRole {
 }
 
 impl MemberRole {
+    // Not yet reachable from a production caller: the sparse reader now serves
+    // publication, review and undo, but these items belong to the deferred
+    // legacy-base overlay and the B3/B4 consumers (`canopi-jv8a.4`).
+    #[allow(dead_code)]
     pub(super) fn as_str(self) -> &'static str {
         match self {
             Self::Add => "add",
@@ -88,12 +95,20 @@ pub(super) struct LatticeWindow {
 /// Resolved values and exact validity for one window.
 #[derive(Debug)]
 pub(super) struct ResolvedWindow {
+    // Not yet reachable from a production caller: the sparse reader now serves
+    // publication, review and undo, but these items belong to the deferred
+    // legacy-base overlay and the B3/B4 consumers (`canopi-jv8a.4`).
+    #[allow(dead_code)]
     pub grid: RasterGrid,
     pub samples: Vec<f32>,
     pub valid: Vec<u8>,
 }
 
 impl ResolvedWindow {
+    // Not yet reachable from a production caller: the sparse reader now serves
+    // publication, review and undo, but these items belong to the deferred
+    // legacy-base overlay and the B3/B4 consumers (`canopi-jv8a.4`).
+    #[allow(dead_code)]
     pub(super) fn cells(&self) -> usize {
         self.samples.len()
     }
@@ -402,11 +417,16 @@ pub(super) struct RegionAggregate {
 /// when it drops, so a caller never re-prepares per window. The preserved
 /// generation's own mask stays authoritative: it is read independently and
 /// overrides the derivative's validity.
+#[allow(dead_code)]
 pub(super) struct LegacyTiffLease {
     reader: PreparedRaster,
     mask: Option<PathBuf>,
 }
 
+// Not yet reachable from a production caller: the sparse reader now serves
+// publication, review and undo, but these items belong to the deferred
+// legacy-base overlay and the B3/B4 consumers (`canopi-jv8a.4`).
+#[allow(dead_code)]
 impl LegacyTiffLease {
     pub(super) fn open(
         engine: &super::engine::GdalEngine,
@@ -445,6 +465,7 @@ impl LegacyTiffLease {
 }
 
 /// Read only the requested rows of a preserved dense mask file.
+#[allow(dead_code)]
 fn read_legacy_mask_window(
     mask: &Path,
     grid: &RasterGrid,
@@ -483,6 +504,7 @@ fn read_legacy_mask_window(
 ///
 /// Blocks are visited one bounded window at a time; the member's own extent is
 /// enumerated, so absent coordinates outside it are never touched.
+#[allow(dead_code)]
 pub(super) fn member_regions(
     reader: &mut PreparedRaster,
     lattice: &RasterGrid,
@@ -707,6 +729,137 @@ fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
         return Err("cancelled".to_string());
     }
     Ok(())
+}
+
+/// Whether new publications may use sparse resolved chunks.
+///
+/// The chunked format is **not** enabled in production yet: the slope reader
+/// (B3) and the bounded display transport (B4) that must consume a chunked
+/// head are not migrated, so publishing one would leave a layer whose map
+/// display no accepted reader can render. Caller-level tests enable it for
+/// their own thread through [`chunked_publication`]; nothing in a production
+/// build can turn it on, and every caller must keep working when it is off.
+#[cfg(not(test))]
+pub(super) const fn chunked_publication_enabled() -> bool {
+    false
+}
+
+#[cfg(test)]
+pub(super) fn chunked_publication_enabled() -> bool {
+    chunked_publication::enabled()
+}
+
+/// Test-only seam for the storage format switch.
+///
+/// Mirrors `paths::capacity_probe`: the decision stays production code and
+/// only the switch is overridden per thread, so a test exercises the same
+/// publication path a production caller would take.
+#[cfg(test)]
+pub(super) mod chunked_publication {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ENABLED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn enabled() -> bool {
+        ENABLED.with(Cell::get)
+    }
+
+    /// Publish in the chunked format until the guard is dropped.
+    pub(crate) fn enable() -> Guard {
+        ENABLED.with(|slot| slot.set(true));
+        Guard
+    }
+
+    pub(crate) struct Guard;
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            ENABLED.with(|slot| slot.set(false));
+        }
+    }
+}
+
+/// Resolve one catalogue asset row into a readable, non-deleting COG handle.
+pub(super) fn cog_from_row(
+    paths: &LidarPaths,
+    row: &catalogue::RasterAssetRow,
+) -> Result<CogAsset, String> {
+    let grid = RasterGrid {
+        width: u32::try_from(row.width)
+            .map_err(|_| format!("asset {} has a negative width", row.sha256))?,
+        height: u32::try_from(row.height)
+            .map_err(|_| format!("asset {} has a negative height", row.sha256))?,
+        geotransform: super::import::parse_geotransform(&row.geotransform)?,
+    };
+    Ok(CogAsset {
+        sha256: row.sha256.clone(),
+        path: paths.root().join(&row.rel_path),
+        bytes: u64::try_from(row.bytes).unwrap_or(0),
+        grid,
+        nodata: row.nodata.map(|value| value as f32),
+    })
+}
+
+/// Record one created asset so chunk rows may reference its digest.
+pub(super) fn asset_row(
+    paths: &LidarPaths,
+    asset: &CogAsset,
+    crs_wkt: &str,
+) -> Result<catalogue::RasterAssetRow, String> {
+    let rel_path = asset
+        .path
+        .strip_prefix(paths.root())
+        .map_err(|_| format!("asset {} is outside the library root", asset.path.display()))?
+        .to_string_lossy()
+        .into_owned();
+    Ok(catalogue::RasterAssetRow {
+        sha256: asset.sha256.clone(),
+        rel_path,
+        bytes: i64::try_from(asset.bytes).unwrap_or(i64::MAX),
+        profile: super::raster_assets::COG_PROFILE.to_string(),
+        width: i64::from(asset.grid.width),
+        height: i64::from(asset.grid.height),
+        geotransform: super::import::format_geotransform(asset.grid.geotransform),
+        crs_wkt: crs_wkt.to_string(),
+        nodata: asset.nodata.map(f64::from),
+    })
+}
+
+/// Published resolved chunks of one generation, ready for the read path.
+pub(super) fn persisted_chunks(
+    connection: &Connection,
+    paths: &LidarPaths,
+    generation_id: &str,
+) -> Result<Vec<PersistedChunk>, String> {
+    let rows = catalogue::generation_chunk_assets(connection, generation_id, RESULT_ROLE)?;
+    let mut chunks = Vec::with_capacity(rows.len());
+    for row in rows {
+        let asset = cog_from_row(paths, &row.asset)?;
+        chunks.push(PersistedChunk {
+            chunk_x: row.chunk_x,
+            chunk_y: row.chunk_y,
+            nodata: asset.nodata,
+            asset,
+        });
+    }
+    Ok(chunks)
+}
+
+/// The retained standard COG of one prepared interpretation, when present.
+pub(super) fn retained_cog(
+    connection: &Connection,
+    paths: &LidarPaths,
+    interpretation_id: &str,
+) -> Result<Option<(CogAsset, Option<f32>)>, String> {
+    match catalogue::interpretation_cog(connection, interpretation_id)? {
+        Some((row, nodata)) => Ok(Some((
+            cog_from_row(paths, &row)?,
+            nodata.map(|value| value as f32),
+        ))),
+        None => Ok(None),
+    }
 }
 
 #[cfg(test)]

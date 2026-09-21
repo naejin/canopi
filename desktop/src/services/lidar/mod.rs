@@ -129,6 +129,16 @@ impl LidarLibrary {
         for (job_id, _state) in settled {
             let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(&job_id));
         }
+        // A job that crashed before its publish transaction left chunk rows
+        // that were never readable. Removing them cannot revoke an accepted
+        // generation; only physical assets remain for reclamation.
+        {
+            let connection = self.catalogue()?;
+            let discarded = catalogue::discard_unpublished_chunks(&connection)?;
+            if discarded > 0 {
+                tracing::info!(discarded, "discarded unpublished raster chunk rows");
+            }
+        }
         // Superseded generations keep their immutable numeric history but
         // lose their display tilesets (re-renderable on demand).
         let live_generation_ids: Vec<String> = {
@@ -363,6 +373,15 @@ impl LidarLibrary {
                 )
                 .map_err(|e| e.to_string())?;
         }
+        // Chunk rows carry no foreign key to their generation (they are
+        // inserted before it commits), so they are revoked with it explicitly.
+        transaction
+            .execute(
+                "DELETE FROM lidar_generation_chunks WHERE generation_id IN
+                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
+                [layer_id],
+            )
+            .map_err(|e| e.to_string())?;
         for sql in [
             "DELETE FROM lidar_source_footprints WHERE layer_id = ?1",
             "DELETE FROM lidar_layer_heads WHERE layer_id = ?1",
@@ -1237,6 +1256,26 @@ mod tests {
                 [0.0, 0.0, 1.0, 1.0],
             )
             .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_raster_assets
+                        (sha256, rel_path, bytes, profile, width, height, geotransform,
+                         crs_wkt, nodata, created_at)
+                     VALUES ('sha-asset-delete', 'assets/sha-asset-delete/cog.tif', 4,
+                             'cog-f32-t256-raw-v1', 1, 1, '[0,1,0,1,0,-1]', 'test', NULL, '0')",
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_generation_chunks
+                        (generation_id, role, chunk_x, chunk_y, asset_sha256,
+                         valid_cells, min_value, max_value, sum_value, state)
+                     VALUES ('source-gen', 'result', 0, 0, 'sha-asset-delete', 1, 1, 1, 1,
+                             'published')",
+                    [],
+                )
+                .unwrap();
             seed_analysis(&connection, &layer_id, "analysis-delete");
         }
 
@@ -1255,10 +1294,14 @@ mod tests {
             "lidar_analysis_generations",
             "lidar_dependencies",
             "lidar_analysis_definitions",
+            "lidar_generation_chunks",
         ] {
             assert_eq!(row_count(&connection, table), 0, "{table}");
         }
         assert_eq!(row_count(&connection, "lidar_interpretations"), 1);
+        // Immutable content-addressed assets outlive the generation that
+        // referenced them; only catalogue-aware reclamation removes bytes.
+        assert_eq!(row_count(&connection, "lidar_raster_assets"), 1);
         drop(connection);
         drop(library);
         std::fs::remove_dir_all(root).unwrap();

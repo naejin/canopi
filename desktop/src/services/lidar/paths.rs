@@ -37,25 +37,29 @@ impl LidarPaths {
         self.root.join("lidar-library.sqlite")
     }
 
+    /// Library root. Catalogue asset references stay relative to it, so a
+    /// moved library stays readable.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     pub fn display_cache_path(&self) -> PathBuf {
         self.root.join("lidar-display-cache.sqlite")
     }
 
     /// Immutable imported originals: `sources/<sha256>/original`.
-    // Retained-asset paths are consumed by the B2 resolver/publication caller
-    // tracked in `canopi-jv8a.4`; the temporary allowance goes with it.
+    // Retained source COGs are produced by the source-retention step tracked in
+    // `canopi-jv8a.4`; the temporary allowance goes with it.
     #[allow(dead_code)]
     pub fn source_cog(&self, sha256: &str) -> PathBuf {
         self.source_dir(sha256).join("source-cog.tif")
     }
 
     /// Content-addressed immutable resolved/quality COG assets.
-    #[allow(dead_code)]
     pub fn asset_dir(&self, sha256: &str) -> PathBuf {
         self.root.join("assets").join(sha256)
     }
 
-    #[allow(dead_code)]
     pub fn asset_cog(&self, sha256: &str) -> PathBuf {
         self.asset_dir(sha256).join("cog.tif")
     }
