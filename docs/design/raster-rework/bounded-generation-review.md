@@ -1,8 +1,32 @@
-# Bounded-generation review — `1fcab504`
+# Bounded-generation independent review
 
 Status: evidence — independent focused review: partial delivery, not accepted as complete; no integration or release approval.
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`.
-Current guidance: [correction assignment](bounded-generation-correction-agent-prompt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
+Current guidance: [completion assignment](bounded-generation-completion-agent-prompt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
+
+## Current disposition — `9ad85c18`
+
+Partial acceptance: preserve retained source COG wiring, complete display footprints/interpolation, paged tile queries and restored admission. Three existing-contract gaps remain below; no architecture restart is warranted. BG1's payload migration is demonstrated but its cleanup obligation remains; BG3's tile paging is repaired but the review caller still walks empty space; BG4's sampler is improved but its gate admits unusable evidence. This is not integration or release approval.
+
+Independently rerun on `feature/bounded-raster-generations` at `9ad85c18`:
+
+```sh
+CARGO_HOME=/home/daylon/projects/canopi/.rq-scratch/cargo-home CANOPI_SKIP_BUNDLED_DB=1 cargo test --offline -p canopi-desktop --lib services::lidar -- --include-ignored --skip services::lidar::e2e --test-threads=1
+python3 scripts/check_docs.py
+git diff --check
+```
+
+137 native/GDAL tests passed; docs and diff checks passed. The private MNT/MNH e2e module, full workspace/frontend suites, 400M run and platform smoke were not independently repeated. The implementer's reported resource runs remain attributed evidence, not invalidated merely because the gate has an uncovered failure mode.
+
+| ID | Evidence at `9ad85c18` | Disposition |
+| --- | --- | --- |
+| BG6 — empty-envelope review traversal | `import.rs::union_blocks` builds every envelope window; `review_coverage` consumes all of them. An isolated extraction of that exact function returns 977 windows for a 1,000,001×1 envelope containing two separated cells, versus one for adjacent cells. | Blocks sparse review completion. This is metadata/work proportional to empty area, not a full pixel-buffer allocation. The earlier review missed this caller: reviewer oversight as well as implementation gap. |
+| BG7 — unpublished source ownership | `stage_source_samples` calls `write_source_cog_asset`/`admit_staged_cog`, moving bytes globally before facts/regions and union admission. Error/startup cleanup removes job roots, not those global files. The shared-asset failure test protects reuse but does not assert cleanup of newly created assets. | Blocks new-job cleanup acceptance. Source inspection establishes the missing owner; no new dynamic end-to-end disk-leak test was run in this review. Historical orphan GC may remain deferred; newly owned unpublished cleanup may not. |
+| BG8 — incomplete sampler passes | An isolated copy of the real `measurement.rs` finish/gate path with baseline=peak=100, ten ticks, all ten incomplete returns `Some(0)` and passes. A healthy complete-sample control passes too. `snapshot_tree` also discards baseline completeness. | Blocks reliance on the gate for capacity acceptance. This is a seam-state reproduction, not a real `/proc` failure run. Require complete baseline/workload evidence and preserve observed over-budget lower bounds. |
+
+No source files were changed during this review. The temporary isolated reproductions are not product regression tests; the continuation must cover the real callers and measurement gate. Missing 400M and platform evidence remain separate limitations and admission limits remain unchanged.
+
+## Historical review — `1fcab504`
 
 ## Disposition and evidence boundary
 
@@ -33,4 +57,4 @@ This is a bounded review, not a guarantee that publication, cleanup, migration a
 
 ## Review closure
 
-The implementation response belongs in the existing branch's `bounded-generation-receipt.md`, with BG1–BG5 mapped to code and decisive tests. Reconcile stale current statements rather than appending contradictory updates. The main agent records an independent disposition here after the user forwards the corrected revision. Until then the disposition remains partial, regardless of passing test counts.
+The implementation response belongs in the existing branch's `bounded-generation-receipt.md`, now with BG6–BG8 mapped to code and decisive tests alongside delivered BG1–BG5 evidence. Reconcile stale current statements rather than appending contradictory updates. The main agent records the next independent disposition here after the user forwards the corrected revision. Until then the disposition remains partial, regardless of passing test counts.

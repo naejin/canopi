@@ -1,10 +1,22 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation delivery `1fcab504` independently reviewed as partial (BG1–BG5). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
+Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation correction `9ad85c18` independently reviewed as partial (BG6–BG8 remain). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [bounded-generation review](bounded-generation-review.md), [correction assignment](bounded-generation-correction-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
+Current guidance: [bounded-generation review](bounded-generation-review.md), [completion assignment](bounded-generation-completion-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
+
+### Correction review — `9ad85c18`
+
+137 native/GDAL tests independently passed and several production contracts improved; three gaps remain in the [review](bounded-generation-review.md). No measured total cost saving is established. The main agent missed the review-envelope traversal in its prior review; the response is a precise caller regression, not attributing all rework to the implementer.
+
+| Escaped invariant | Classification / owner | Small intervention in the next assignment |
+| --- | --- | --- |
+| Paged tile reads coexist with an empty-envelope review walk | Caller coverage gap and reviewer oversight; both agents | Compare actual review visits for adjacent versus million-cell-separated inputs; retain exact counts and Before/After values |
+| Shared assets survive, but new unpublished source assets lack cleanup ownership | Lifecycle implementation gap; main agent now settles ownership, implementer wires it | Job-owned staging through AwaitReview; recoverable promotion intent and atomic catalogue ownership; test new and reused assets separately |
+| Correct RSS summation still admits a run with no complete workload sample | Test/measurement gap; implementer fixes and main agent reviews claim boundary | Exercise real finish→gate with healthy, absent, incomplete and over-budget partial observations |
+
+At delivery, append only the outcome of these interventions: which cases failed before and pass after, in-scope defects caught before forwarding, independent escapes, and any remaining instruction ambiguity. The final debrief should compare delivered user workflows and independently accepted invariants with observed effort/courier decisions, not test counts. No further reporting framework, transcript quota or skill rewrite is authorized. A new skill rule is justified only by a reusable lesson that existing rules do not already cover.
 
 ### Bounded-generation delivery review — `1fcab504`
 
