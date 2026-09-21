@@ -8,7 +8,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 
 | Design step | State |
 | --- | --- |
-| B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver | **Substantially delivered, not yet wired**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, and the private resolver over ordered occurrences (role replay, signed lattice coordinates, sparse occupied-chunk enumeration, bounded legacy dense reads). What is missing: legacy *TIFF-only* derivative adapters, aggregate/region paging into the catalogue, and every production caller |
+| B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver, legacy adapters, paged regions | **Delivered and verified, not yet wired**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, the private resolver over ordered occurrences, the legacy TIFF-only derivative lease with an independently applied authoritative mask, and paged occupied-region aggregates. What is missing is B2–B5: every production caller (import/Apply/undo, slope, display), the Desktop tile protocol, the shared heavy-job lease and the capacity gates |
 | B2 — import/review/Apply/undo migration | Not started |
 | B3 — slope core+halo and shared job ownership | Not started (`canopi-jv8a.3` remains open) |
 | B4 — bounded display transport and Desktop protocol | Not started |
@@ -23,7 +23,8 @@ Production callers are unchanged: import staging, composition, slope, display an
 | Accepted predecessor baseline | `a5fc7d7b` on `feature/geolibre-native-raster-integration` |
 | Forwarded design + revision docs | merged in `be0d4d17` and `7f2e3bef` |
 | Reader/asset primitives and tests | `1b8683db` |
-| Catalogue v7 index, resolver and their tests | the commit that carries this receipt |
+| Catalogue v7 index, resolver and their tests | `9f1e5420` |
+| Legacy TIFF lease, paged region aggregates and their tests | the commit that carries this receipt |
 
 ## What the delivered primitives do
 
@@ -38,6 +39,8 @@ Production callers are unchanged: import staging, composition, slope, display an
 
 - `catalogue.rs` moved to schema v7 and creates `lidar_raster_assets`, `lidar_interpretation_cogs`, `lidar_generation_chunks` (unique on generation + role + signed chunk coordinates, indexed by asset) and `lidar_interpretation_regions`. Before any upgrade of an existing file it writes a `VACUUM INTO` copy beside the catalogue, syncs it, records its path in `lidar_catalogue_meta.last_backup_path`, and the test reopens that copy as a complete v6 database. A future schema version is still refused before writes.
 - `generation.rs` (new, private) resolves one half-open lattice window (≤1026 per side) over an ordered occurrence list: it validates ordinal order up front, maps each member's own frame through `RasterGrid::compatible` plus a rounded lattice offset, reads only the intersecting member window (committed COG through the production reader, or the preserved dense raw/mask pair row-wise), and applies the accepted roles — `add` fills only invalid cells, `replace` paints valid incoming cells anywhere, `replace-overlap` paints only already-valid cells, and invalid incoming samples never erase coverage.
+- `LegacyTiffLease` prepares one controlled derivative for a legacy TIFF-only generation and removes it on drop, so a caller never re-prepares per window; the preserved generation's own mask is read row-wise and overrides the derivative's validity. Tests prove one derivative per lease, its removal on drop, the mask override, that a plain legacy TIFF is rejected by the committed-profile check, and that `member_regions` aggregates the member's occupied chunk (valid count, min, max, exact f64 sum) while leaving padded cells untouched.
+- `catalogue::{replace_interpretation_regions, interpretation_region_page}` store and page per-block aggregates atomically; the test replaces a five-region page set, pages it, and proves a re-scan swaps rows instead of accumulating them.
 - Tests reproduce the design's history example (A=5, replace B=9, reimport A with replacement → 5, undo that occurrence → 9), add-only holes never erasing prior coverage, replace-overlap creating no new coverage, members above/left of the anchor resolving negative lattice cells, occupied-chunk enumeration over a million-cell gap (2 chunks, adjacency-only variation) and chunk straddling, exact bounded legacy window reads with a short-file rejection, and preconditions (empty/oversized window, out-of-order ordinals, unaligned member grids) failing before any file is read.
 
 ## Evidence

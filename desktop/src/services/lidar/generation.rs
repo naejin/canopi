@@ -302,6 +302,168 @@ fn read_member_window(
     }
 }
 
+/// Per-block aggregate of one interpretation's occupied coverage.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct RegionAggregate {
+    pub block_x: i64,
+    pub block_y: i64,
+    pub valid_cells: i64,
+    pub min_value: f64,
+    pub max_value: f64,
+    pub sum_value: f64,
+}
+
+/// A prepared, read-only lease over a legacy TIFF-only generation.
+///
+/// The controlled derivative is prepared once for the whole lease and removed
+/// when it drops, so a caller never re-prepares per window. The preserved
+/// generation's own mask stays authoritative: it is read independently and
+/// overrides the derivative's validity.
+pub(super) struct LegacyTiffLease {
+    reader: PreparedRaster,
+    mask: Option<PathBuf>,
+}
+
+impl LegacyTiffLease {
+    pub(super) fn open(
+        engine: &super::engine::GdalEngine,
+        tiff: &Path,
+        grid: &RasterGrid,
+        nodata: Option<f32>,
+        mask: Option<PathBuf>,
+        scratch: &Path,
+        cancel: &AtomicBool,
+    ) -> Result<Self, String> {
+        let reader = PreparedRaster::open(engine, tiff, grid, nodata, 0, scratch, cancel)?;
+        Ok(Self { reader, mask })
+    }
+
+    pub(super) fn grid(&self) -> &RasterGrid {
+        self.reader.grid()
+    }
+
+    /// Read one window, applying the authoritative legacy mask when present.
+    pub(super) fn read_window(
+        &mut self,
+        window: RasterWindow,
+        cancel: &AtomicBool,
+    ) -> Result<(Vec<f32>, Vec<u8>), String> {
+        let read = self.reader.read_window(window, cancel)?;
+        let samples = read.samples().to_vec();
+        let mut valid = read.valid().to_vec();
+        if let Some(mask) = &self.mask {
+            let authority = read_legacy_mask_window(mask, self.reader.grid(), window, cancel)?;
+            for (slot, byte) in valid.iter_mut().zip(authority) {
+                *slot = byte;
+            }
+        }
+        Ok((samples, valid))
+    }
+}
+
+/// Read only the requested rows of a preserved dense mask file.
+fn read_legacy_mask_window(
+    mask: &Path,
+    grid: &RasterGrid,
+    window: RasterWindow,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    let cells = validate_member_window(window, grid)?;
+    let expected = u64::from(grid.width) * u64::from(grid.height);
+    let len = std::fs::metadata(mask)
+        .map_err(|e| format!("Failed to inspect legacy mask {}: {e}", mask.display()))?
+        .len();
+    if len != expected {
+        return Err(format!(
+            "legacy mask {} has {len} bytes, expected {expected}",
+            mask.display()
+        ));
+    }
+    let mut file = std::fs::File::open(mask)
+        .map_err(|e| format!("Failed to read legacy mask {}: {e}", mask.display()))?;
+    let mut row = vec![0u8; window.width as usize];
+    let mut valid = vec![0u8; cells];
+    for y in 0..window.height {
+        check_cancel(cancel)?;
+        let start = u64::from(window.y + y) * u64::from(grid.width) + u64::from(window.x);
+        file.seek(SeekFrom::Start(start))
+            .and_then(|_| file.read_exact(&mut row))
+            .map_err(|e| format!("Failed to read legacy mask row: {e}"))?;
+        for (column, byte) in row.iter().enumerate() {
+            valid[y as usize * window.width as usize + column] = u8::from(*byte != 0);
+        }
+    }
+    Ok(valid)
+}
+
+/// Aggregate one member's occupied coverage into paged 1024×1024 blocks.
+///
+/// Blocks are visited one bounded window at a time; the member's own extent is
+/// enumerated, so absent coordinates outside it are never touched.
+pub(super) fn member_regions(
+    reader: &mut PreparedRaster,
+    lattice: &RasterGrid,
+    member_grid: &RasterGrid,
+    cancel: &AtomicBool,
+) -> Result<Vec<RegionAggregate>, String> {
+    let (offset_x, offset_y) = lattice_offset(lattice, member_grid)?;
+    let member = ResolvedMember {
+        ordinal: 0,
+        role: MemberRole::Add,
+        grid: member_grid.clone(),
+        nodata: None,
+        source: MemberSource::LegacyDense {
+            values: PathBuf::new(),
+            mask: PathBuf::new(),
+        },
+    };
+    let mut regions = Vec::new();
+    for (chunk_x, chunk_y) in occupied_chunks(std::slice::from_ref(&member), lattice)? {
+        let chunk = chunk_grid(lattice, chunk_x, chunk_y);
+        // Clip the chunk to the member's own extent.
+        let clip_x0 = (offset_x - chunk_x * CHUNK_SIDE).max(0);
+        let clip_y0 = (offset_y - chunk_y * CHUNK_SIDE).max(0);
+        let clip_x1 =
+            (offset_x + i64::from(member_grid.width) - chunk_x * CHUNK_SIDE).min(CHUNK_SIDE);
+        let clip_y1 =
+            (offset_y + i64::from(member_grid.height) - chunk_y * CHUNK_SIDE).min(CHUNK_SIDE);
+        if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
+            continue;
+        }
+        let window = RasterWindow {
+            x: clip_x0 as u32,
+            y: clip_y0 as u32,
+            width: (clip_x1 - clip_x0) as u32,
+            height: (clip_y1 - clip_y0) as u32,
+        };
+        let _ = chunk;
+        let read = reader.read_window(window, cancel)?;
+        let mut aggregate = RegionAggregate {
+            block_x: chunk_x,
+            block_y: chunk_y,
+            valid_cells: 0,
+            min_value: f64::INFINITY,
+            max_value: f64::NEG_INFINITY,
+            sum_value: 0.0,
+        };
+        for (value, valid) in read.samples().iter().zip(read.valid().iter()) {
+            if *valid == 0 {
+                continue;
+            }
+            aggregate.valid_cells += 1;
+            aggregate.min_value = aggregate.min_value.min(*value as f64);
+            aggregate.max_value = aggregate.max_value.max(*value as f64);
+            aggregate.sum_value += *value as f64;
+        }
+        if aggregate.valid_cells == 0 {
+            aggregate.min_value = 0.0;
+            aggregate.max_value = 0.0;
+        }
+        regions.push(aggregate);
+    }
+    Ok(regions)
+}
+
 /// Lattice cells from the layer anchor to a member grid's first cell.
 fn lattice_offset(lattice: &RasterGrid, grid: &RasterGrid) -> Result<(i64, i64), String> {
     lattice.compatible(grid)?;
@@ -708,5 +870,107 @@ mod tests {
         )
         .expect_err("unaligned member grids are rejected");
         assert!(error.contains("aligned"), "{error}");
+    }
+
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn legacy_tiff_lease_reads_windows_with_the_authoritative_mask() {
+        use crate::services::lidar::import::{raw_to_tif, write_f32_raw};
+        let engine = GdalEngine::new();
+        let dir = scratch("legacy-tiff");
+        let grid = member_grid(0, 0, 4, 3);
+        let values: Vec<f32> = vec![0.0, -1.0, 5.0, 7.0, 1.0, 2.0, 3.0, 4.0, 9.0, 8.0, 6.0, 5.0];
+        let raw = dir.join("legacy.raw");
+        write_f32_raw(&raw, &values).unwrap();
+        let tiff = dir.join("legacy.tif");
+        raw_to_tif(
+            &engine,
+            &cancellation(),
+            &raw,
+            &tiff,
+            &grid,
+            "EPSG:3857",
+            -9999.0,
+        )
+        .unwrap();
+        // The preserved generation's own mask is authoritative and disagrees
+        // with the numeric samples on purpose.
+        let mask = dir.join("legacy-mask.bin");
+        std::fs::write(&mask, [1u8, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1]).unwrap();
+
+        let mut lease = LegacyTiffLease::open(
+            &engine,
+            &tiff,
+            &grid,
+            Some(-9999.0),
+            Some(mask.clone()),
+            &dir,
+            &cancellation(),
+        )
+        .expect("legacy lease prepares once");
+        let window = RasterWindow {
+            x: 1,
+            y: 0,
+            width: 2,
+            height: 2,
+        };
+        let (samples, valid) = lease.read_window(window, &cancellation()).unwrap();
+        assert_eq!(samples, vec![-1.0, 5.0, 2.0, 3.0]);
+        assert_eq!(
+            valid,
+            vec![0, 1, 1, 0],
+            "the legacy mask overrides validity"
+        );
+        let prepared: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("prepared-"))
+            .collect();
+        assert!(
+            prepared.len() == 1,
+            "one derivative per lease: {prepared:?}"
+        );
+        drop(lease);
+        let left: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("prepared-"))
+            .collect();
+        assert!(
+            left.is_empty(),
+            "the lease removes its derivative: {left:?}"
+        );
+
+        // A legacy TIFF is not a controlled COG, which is exactly why the
+        // lease prepares a derivative once instead of reading it directly.
+        let rejected = PreparedRaster::open_committed(&tiff, &grid, Some(-9999.0))
+            .expect_err("a legacy TIFF is rejected by the committed-profile check");
+        assert!(rejected.contains("uncompressed"), "{rejected}");
+
+        // Region aggregates cover only the member's occupied chunk.
+        let mut reader = PreparedRaster::open(
+            &engine,
+            &tiff,
+            &grid,
+            Some(-9999.0),
+            0,
+            &dir,
+            &cancellation(),
+        )
+        .unwrap();
+        let regions = member_regions(&mut reader, &lattice(), &grid, &cancellation()).unwrap();
+        assert_eq!(regions.len(), 1, "one occupied chunk");
+        let region = &regions[0];
+        assert_eq!((region.block_x, region.block_y), (0, 0));
+        // Every authored sample is finite and differs from the declared NoData.
+        assert_eq!(region.valid_cells, 12);
+        assert_eq!(region.min_value, -1.0);
+        assert_eq!(region.max_value, 9.0);
+        let expected_sum: f64 = values.iter().map(|value| f64::from(*value)).sum();
+        assert_eq!(region.sum_value, expected_sum);
+        drop(reader);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

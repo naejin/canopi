@@ -921,6 +921,89 @@ pub fn new_id(prefix: &str) -> String {
     format!("{prefix}-{nanos:016x}{counter:04x}")
 }
 
+/// Replace one interpretation's paged occupied-region rows.
+///
+/// A re-scan replaces the previous page set atomically; individual pixels are
+/// never stored here, only per-block aggregates. Consumed by the B2
+/// publication caller tracked in `canopi-jv8a.4`; the allowance goes with it.
+#[allow(dead_code)]
+pub fn replace_interpretation_regions(
+    connection: &Connection,
+    interpretation_id: &str,
+    regions: &[(i64, i64, i64, f64, f64, f64)],
+) -> Result<(), String> {
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|e| format!("Failed to start region replacement: {e}"))?;
+    transaction
+        .execute(
+            "DELETE FROM lidar_interpretation_regions WHERE interpretation_id = ?1",
+            [interpretation_id],
+        )
+        .map_err(|e| format!("Failed to clear interpretation regions: {e}"))?;
+    {
+        let mut statement = transaction
+            .prepare(
+                "INSERT INTO lidar_interpretation_regions(
+                    interpretation_id, block_x, block_y, valid_cells, min_value, max_value, sum_value)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            )
+            .map_err(|e| format!("Failed to prepare region insert: {e}"))?;
+        for (block_x, block_y, valid_cells, min_value, max_value, sum_value) in regions {
+            statement
+                .execute(rusqlite::params![
+                    interpretation_id,
+                    block_x,
+                    block_y,
+                    valid_cells,
+                    min_value,
+                    max_value,
+                    sum_value,
+                ])
+                .map_err(|e| format!("Failed to insert interpretation region: {e}"))?;
+        }
+    }
+    transaction
+        .commit()
+        .map_err(|e| format!("Failed to commit interpretation regions: {e}"))
+}
+
+/// One paged occupied-region row: block coordinates plus its aggregate.
+pub type InterpretationRegionRow = (i64, i64, i64, f64, f64, f64);
+
+/// One ordered page of occupied-region rows.
+#[allow(dead_code)]
+pub fn interpretation_region_page(
+    connection: &Connection,
+    interpretation_id: &str,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<InterpretationRegionRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT block_x, block_y, valid_cells, min_value, max_value, sum_value
+             FROM lidar_interpretation_regions
+             WHERE interpretation_id = ?1
+             ORDER BY block_x, block_y
+             LIMIT ?2 OFFSET ?3",
+        )
+        .map_err(|e| format!("Failed to prepare region page: {e}"))?;
+    statement
+        .query_map(rusqlite::params![interpretation_id, limit, offset], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, f64>(3)?,
+                row.get::<_, f64>(4)?,
+                row.get::<_, f64>(5)?,
+            ))
+        })
+        .map_err(|e| format!("Failed to read region page: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read region page: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1312,6 +1395,50 @@ mod tests {
         }
         let error = open(&path).expect_err("a newer schema must be refused");
         assert!(error.contains("newer than supported"), "{error}");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn interpretation_regions_are_replaced_and_paged() {
+        let root = std::env::temp_dir().join(new_id("canopi-regions"));
+        std::fs::create_dir_all(&root).unwrap();
+        let connection = open(&root.join("lidar-library.sqlite")).unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_sources(sha256, original_filename, size_bytes, probe_json, imported_at)
+                 VALUES('sha-region', 'region.tif', 4, '{}', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_interpretations(
+                    id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                    crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                 VALUES('interp-region', 'sha-region', 1, 'ground-elevation', 'm', 1, 0,
+                    'EPSG:3857', 'unspecified', -9999, '[0,1,0,0,0,-1]', 4, 4, 'hash-region')",
+                [],
+            )
+            .unwrap();
+
+        let regions: Vec<(i64, i64, i64, f64, f64, f64)> = (0..5)
+            .map(|index| (index - 2, index, 10 + index, -1.5, 9.5, 42.0))
+            .collect();
+        replace_interpretation_regions(&connection, "interp-region", &regions).unwrap();
+        let first = interpretation_region_page(&connection, "interp-region", 0, 2).unwrap();
+        assert_eq!(first.len(), 2);
+        assert_eq!(first[0].0, -2);
+        assert_eq!(first[1].1, 1);
+        let second = interpretation_region_page(&connection, "interp-region", 4, 10).unwrap();
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].0, 2);
+
+        // Replacing a scan swaps the page set instead of accumulating rows.
+        replace_interpretation_regions(&connection, "interp-region", &[(-7, 3, 4, 0.0, 1.0, 2.0)])
+            .unwrap();
+        let replaced = interpretation_region_page(&connection, "interp-region", 0, 10).unwrap();
+        assert_eq!(replaced, vec![(-7, 3, 4, 0.0, 1.0, 2.0)]);
+        drop(connection);
         let _ = std::fs::remove_dir_all(root);
     }
 }
