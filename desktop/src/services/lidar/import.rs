@@ -565,6 +565,42 @@ pub fn render_decision_preview(
     })
 }
 
+/// The layer's fixed lattice, recorded from its first accepted source.
+///
+/// The anchor never moves, so a later import that extends the layer left or up
+/// keeps every unchanged member's chunk coordinates. Width and height describe
+/// only how far the lattice currently reaches right and down from the anchor;
+/// the sparse resolver addresses negative cells directly.
+fn layer_lattice_grid(
+    connection: &rusqlite::Connection,
+    layer_id: &str,
+    anchor: &RasterGrid,
+    crs_wkt: &str,
+) -> Result<RasterGrid, String> {
+    let row = catalogue::LayerLatticeRow {
+        origin_x: anchor.geotransform[0],
+        origin_y: anchor.geotransform[3],
+        pixel_x: anchor.geotransform[1],
+        pixel_y: anchor.geotransform[5],
+        crs_wkt: crs_wkt.to_string(),
+    };
+    catalogue::record_layer_lattice(connection, layer_id, &row)?;
+    let stored = catalogue::layer_lattice(connection, layer_id)?
+        .ok_or_else(|| "layer lattice was not recorded".to_string())?;
+    Ok(RasterGrid {
+        width: anchor.width,
+        height: anchor.height,
+        geotransform: [
+            stored.origin_x,
+            stored.pixel_x,
+            0.0,
+            stored.origin_y,
+            0.0,
+            stored.pixel_y,
+        ],
+    })
+}
+
 fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
     if source_paths.is_empty() {
         return Err("select at least one raster source".to_string());
@@ -1595,11 +1631,24 @@ pub fn apply_import(
                     .map(|s| s.crs_wkt.clone())
                     .unwrap_or_default()
             });
+            // The generation lattice is the layer's fixed anchor, never the
+            // re-anchored union: extending the layer must not shift the chunk
+            // coordinates of members that did not change. The anchor is the
+            // layer's recorded lattice, or the first accepted source's grid
+            // when this publication is the layer's first.
+            let anchor = staging
+                .layer_grid
+                .clone()
+                .unwrap_or_else(|| grid_for_source(compatible[0]));
+            let lattice = {
+                let connection = library.catalogue()?;
+                layer_lattice_grid(&connection, &layer_id, &anchor, &crs_wkt)?
+            };
             let request = ChunkedRequest {
                 scratch_scope: &format!("apply-{}", staging.job_id),
                 progress_job: Some(&staging.job_id),
                 occurrences: &occurrences,
-                lattice: &union,
+                lattice: &lattice,
                 crs_wkt: &crs_wkt,
                 nodata: staging.layer_nodata,
                 members: compatible
@@ -3009,12 +3058,21 @@ fn head_values_on_union(
     validate_working_grid(union, "accepted layer union")?;
     if let HeadNumeric::Chunks(chunks) = numeric {
         // A chunked head has no dense file: read the union one bounded window
-        // at a time from the published chunk rows. Absent chunks stay invalid,
-        // and no absent coordinate is visited.
+        // at a time from the published chunk rows. The head's lattice is its
+        // own fixed layer anchor, which may differ from this union's origin,
+        // so each union block is read at its lattice position. Absent chunks
+        // stay invalid and no absent coordinate is visited.
+        validate_working_grid(&manifest.grid, "accepted layer lattice")?;
         let cells = usize::try_from(u64::from(union.width) * u64::from(union.height))
             .map_err(|_| "accepted layer union is too large for this platform".to_string())?;
         let mut expanded = vec![nodata; cells];
         let mut valid = ValidMask::empty(union.width, union.height);
+        let offset_x = ((manifest.grid.geotransform[0] - union.geotransform[0])
+            / union.geotransform[1])
+            .round() as i64;
+        let offset_y = ((union.geotransform[3] - manifest.grid.geotransform[3])
+            / union.geotransform[5].abs())
+        .round() as i64;
         let side = generation::CHUNK_SIDE as u32;
         let mut y = 0u32;
         while y < union.height {
@@ -3025,10 +3083,10 @@ fn head_values_on_union(
                 let width = side.min(union.width - x);
                 let resolved = generation::read_persisted_window(
                     chunks,
-                    union,
+                    &manifest.grid,
                     generation::LatticeWindow {
-                        x: i64::from(x),
-                        y: i64::from(y),
+                        x: i64::from(x) - offset_x,
+                        y: i64::from(y) - offset_y,
                         width,
                         height,
                     },
@@ -4134,12 +4192,27 @@ mod tests {
             )
             .unwrap()
         };
+        // Read exactly the requested window: the layer lattice's origin is
+        // fixed, so window coordinates are lattice coordinates and a synthetic
+        // union equal to the window keeps the indexing trivial.
+        let union = RasterGrid {
+            width: window.width,
+            height: window.height,
+            geotransform: [
+                manifest.grid.geotransform[0] + window.x as f64 * manifest.grid.geotransform[1],
+                manifest.grid.geotransform[1],
+                0.0,
+                manifest.grid.geotransform[3] + window.y as f64 * manifest.grid.geotransform[5],
+                0.0,
+                manifest.grid.geotransform[5],
+            ],
+        };
         let (values, valid) = head_values_on_union(
             &library.inner.engine,
             Some(&head),
             Some(&manifest),
             &numeric,
-            &manifest.grid,
+            &union,
             manifest.nodata,
             &AtomicBool::new(false),
         )
@@ -4148,11 +4221,11 @@ mod tests {
         let valid = valid.expect("head has coverage");
         let mut samples = Vec::new();
         let mut mask = Vec::new();
-        for y in window.y..window.y + i64::from(window.height) {
-            for x in window.x..window.x + i64::from(window.width) {
-                let index = y as usize * manifest.grid.width as usize + x as usize;
+        for row in 0..window.height {
+            for column in 0..window.width {
+                let index = row as usize * window.width as usize + column as usize;
                 samples.push(values[index]);
-                mask.push(u8::from(valid.get(x as u32, y as u32)));
+                mask.push(u8::from(valid.get(column, row)));
             }
         }
         (samples, mask)
@@ -4537,15 +4610,19 @@ mod tests {
             .collect();
         assert_eq!(
             occupied.len(),
-            2,
+            3,
             "one chunk per occupied cell group: {occupied:?}"
         );
-        assert!(occupied.iter().any(|(x, _)| *x > 900), "{occupied:?}");
-        // Two chunks cost two chunks' bytes, never the union's area: the union
-        // is ~45M cells, so an area-proportional write would be hundreds of
-        // megabytes.
         assert!(
-            bytes < 2 * 8 * 1024 * 1024,
+            occupied.iter().any(|(x, _)| *x < 0),
+            "the left extension lives before the fixed anchor: {occupied:?}"
+        );
+        assert!(occupied.iter().any(|(x, _)| *x > 900), "{occupied:?}");
+        // Three chunks cost three chunks' bytes, never the union's area: the
+        // union is ~45M cells, so an area-proportional write would be hundreds
+        // of megabytes.
+        assert!(
+            bytes < 3 * 8 * 1024 * 1024,
             "written bytes must be chunk-sized, not area-proportional: {bytes}"
         );
         let gap_rows: i64 = {
@@ -4588,18 +4665,131 @@ mod tests {
             .unwrap();
             (window.samples[0], window.valid[0])
         };
-        // The union re-anchors on the expanded extent, so the left member owns
-        // the lattice origin and the first-selected anchor sits 500 cells in.
+        // The layer lattice is anchored on the first selected source, so the
+        // anchor keeps cell 0 and the left member sits before it.
         let (value, valid) = sample(0, 0);
-        assert_eq!((value, valid), (3.0, 1));
-        let (value, valid) = sample(500, 0);
         assert_eq!((value, valid), (5.0, 1));
+        let (value, valid) = sample(-500, 0);
+        assert_eq!((value, valid), (3.0, 1));
         let (_, valid) = sample(600, 0);
         assert_eq!(valid, 0, "the gap is exactly invalid");
         let (_, valid) = sample(999_999, 0);
         assert_eq!(valid, 0, "the gap is invalid for its whole width");
-        let (value, valid) = sample(1_000_500, 0);
+        let (value, valid) = sample(1_000_000, 0);
         assert_eq!((value, valid), (7.0, 1));
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    /// The layer anchor is fixed: extending the layer left does not move the
+    /// lattice, so an unchanged member keeps its chunk coordinates and the new
+    /// member lands in negative lattice cells.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn sparse_lattice_anchor_never_moves_when_the_layer_extends_left() {
+        let root = std::env::temp_dir().join(new_id("canopi-anchor"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let _gate = generation::chunked_publication::enable();
+
+        let anchor =
+            write_placed_fixture(&engine, &root, "anchor", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
+        let left = write_placed_fixture(
+            &engine, &root, "left", -1200.0, 1000.0, 40, 30, -9999.0, 3.0,
+        );
+
+        let layer_id = library
+            .create_layer(
+                "anchor",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job_one, staging_one) = stage_review(&library, &layer_id, &[anchor], &cancel);
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("first apply");
+        let first_head = head_of(&library, &layer_id);
+        let first_manifest = read_generation_manifest(&first_head.manifest_json).unwrap();
+        let first_chunks: Vec<(i64, i64)> = {
+            let connection = library.catalogue().unwrap();
+            catalogue::generation_chunk_assets(&connection, &first_head.id, "result")
+                .unwrap()
+                .into_iter()
+                .map(|chunk| (chunk.chunk_x, chunk.chunk_y))
+                .collect()
+        };
+        assert_eq!(first_chunks, vec![(0, 0)]);
+
+        // Extending left must keep the anchor and put the new member before it.
+        let (job_two, staging_two) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&left), &cancel);
+        assert!(
+            staging_two.union_grid.geotransform[0] < first_manifest.grid.geotransform[0],
+            "the union does extend left"
+        );
+        library.prepare_apply(&job_two).expect("review accepted");
+        apply_import(&library, &staging_two, true, false, &cancel).expect("second apply");
+        let head = head_of(&library, &layer_id);
+        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
+        assert_eq!(
+            manifest.grid.geotransform[0], first_manifest.grid.geotransform[0],
+            "the layer anchor never moves"
+        );
+        let chunks: Vec<(i64, i64)> = {
+            let connection = library.catalogue().unwrap();
+            catalogue::generation_chunk_assets(&connection, &head.id, "result")
+                .unwrap()
+                .into_iter()
+                .map(|chunk| (chunk.chunk_x, chunk.chunk_y))
+                .collect()
+        };
+        assert_eq!(
+            chunks,
+            vec![(-2, 0), (0, 0)],
+            "the unchanged member keeps chunk 0 and the extension lands before the anchor"
+        );
+        // Both members read back at their own lattice positions.
+        let chunk_list = {
+            let connection = library.catalogue().unwrap();
+            generation::persisted_chunks(
+                &connection,
+                &library.inner.paths,
+                &head.id,
+                generation::RESULT_ROLE,
+            )
+            .unwrap()
+        };
+        let sample = |x: i64, y: i64| -> (f32, u8) {
+            let window = generation::read_persisted_window(
+                &chunk_list,
+                &manifest.grid,
+                generation::LatticeWindow {
+                    x,
+                    y,
+                    width: 1,
+                    height: 1,
+                },
+                &cancel,
+            )
+            .unwrap();
+            (window.samples[0], window.valid[0])
+        };
+        assert_eq!(sample(0, 0), (5.0, 1));
+        assert_eq!(sample(-1200, 0), (3.0, 1));
+        assert_eq!(sample(-1000, 0).1, 0, "the gap between them stays invalid");
+
+        // Review over the sparse head maps the lattice onto the new union.
+        let (job_three, staging_three) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&left), &cancel);
+        assert_eq!(
+            staging_three.overlap_cells,
+            (40 * 30) as u64,
+            "the accepted left member is seen through the head read"
+        );
+        let overlap = staging_three.overlap_cells;
+        let _ = (job_three, overlap);
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);

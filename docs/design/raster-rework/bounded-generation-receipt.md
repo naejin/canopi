@@ -39,7 +39,8 @@ caller-level tests, not an inert module.
 | MapLibre raster protocol adapter, bounded display admission and cancellation | `0a0dedf5` |
 | Shared bounded display cache (memory + disk) with leases, eviction and invalidation | `6ae0ba0d` |
 | Reprojected lattice mapping fix, analysis tileset fix, sparse real-fixture lifecycle | `f7313624` |
-| Dense-ceiling test seam, bounded preview target, sparse-gap representative run | the commit that carries this receipt |
+| Dense-ceiling test seam, bounded preview target, sparse-gap representative run | `834043e5` |
+| Schema v10 fixed per-layer lattice inherited by sparse generations | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -216,6 +217,16 @@ Catalogue tests:
   means, and malformed-request rejection. The contract's wire shape is pinned
   by `common_types::lidar::tests::tile_source_wire_shape_is_tagged_and_stable`,
   and the frontend covers both URL forms plus raster-URL parsing and rejection.
+- Fixed layer lattice (GDAL required):
+  `sparse_lattice_anchor_never_moves_when_the_layer_extends_left` publishes a
+  member, extends the layer 1200 cells to its left, and asserts the manifest's
+  lattice origin is unchanged, the unchanged member still occupies chunk 0, the
+  extension lands in chunk -2, both members read back at their own lattice
+  cells, the space between them stays invalid, and a review over the sparse
+  head still sees the accepted member (through the union-to-lattice remap).
+  `v9_catalogue_gains_the_layer_lattice_and_never_moves_it` proves the v10
+  table migrates in, that recording twice never replaces an existing anchor,
+  and that deleting a layer takes its lattice with it.
 - Sparse-gap representative run (authored, GDAL required):
   `sparse_gap_import_stores_only_occupied_chunks` imports three members whose
   union spans ~1,000,000 columns and ~45M cells — far beyond the dense working
@@ -293,14 +304,15 @@ concurrently running reader test could reset another test's evidence.
   measurements that justify the change of default storage.
 - No `base_generation_id` overlay: a legacy head without durable member history
   still takes the accepted dense route (correct, but not the sparse target).
-- **Lattice anchor deviation.** `union_grid` re-anchors the union on the
-  expanded extent, so a member that extends the layer left or up moves the
-  lattice origin and shifts every chunk coordinate of the unchanged members
-  (content-addressed assets still dedupe by content, but the index rows move
-  and the design's "never move the layer anchor" rule is not yet met). The
-  resolver itself handles negative lattice cells correctly and is tested for
-  them; what is missing is a per-layer fixed lattice that generations inherit.
-  This is the first item to fix before the sparse format becomes the default.
+- **Lattice anchor.** Schema v10 records one lattice per layer, chosen by the
+  layer's first accepted source, and a sparse publication inherits it instead
+  of the re-anchored union, so extending a layer left or up no longer moves
+  unchanged members' chunk coordinates (verified: the anchored member keeps
+  chunk 0 while the extension lands in a negative chunk). What remains is that
+  a *dense* generation's mosaic still uses its own re-anchored union grid, so a
+  layer that was dense first and sparse later records the anchor from that
+  first dense publication; the sparse formats of one layer are consistent with
+  each other from then on.
 - Review classification still assembles a dense union buffer, so a
   million-column union is exercised through the raised test-only ceiling rather
   than by a block-wise review.

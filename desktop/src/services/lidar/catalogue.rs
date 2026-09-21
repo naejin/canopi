@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 9;
+pub const CATALOGUE_VERSION: i32 = 10;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -153,6 +153,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         7 => SCHEMA_V7,
         8 => SCHEMA_V8,
         9 => SCHEMA_V9,
+        10 => SCHEMA_V10,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -328,6 +329,24 @@ CREATE TABLE IF NOT EXISTS lidar_interpretation_regions (
     max_value REAL,
     sum_value REAL,
     PRIMARY KEY (interpretation_id, block_x, block_y)
+);
+"#;
+
+/// v10: a layer records the one lattice every generation shares.
+///
+/// The anchor is chosen by the layer's first accepted source and never moves,
+/// so extending the layer left or up cannot shift the chunk coordinates of
+/// data that has not changed. Only additions are needed: existing layers keep
+/// their published generations and gain their lattice on the next publication.
+const SCHEMA_V10: &str = r#"
+CREATE TABLE IF NOT EXISTS lidar_layer_lattices (
+    layer_id TEXT PRIMARY KEY REFERENCES lidar_source_layers(id) ON DELETE CASCADE,
+    origin_x REAL NOT NULL,
+    origin_y REAL NOT NULL,
+    pixel_x REAL NOT NULL,
+    pixel_y REAL NOT NULL,
+    crs_wkt TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 "#;
 
@@ -1195,6 +1214,69 @@ pub struct RasterAssetRow {
     pub nodata: Option<f64>,
 }
 
+/// The layer lattice every generation of that layer shares.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayerLatticeRow {
+    pub origin_x: f64,
+    pub origin_y: f64,
+    pub pixel_x: f64,
+    pub pixel_y: f64,
+    pub crs_wkt: String,
+}
+
+/// Record a layer's lattice the first time it is known, and never move it.
+///
+/// An existing row always wins: a later import that extends the layer left or
+/// up must not re-anchor it, or unchanged data would change chunk coordinates.
+pub fn record_layer_lattice(
+    connection: &Connection,
+    layer_id: &str,
+    lattice: &LayerLatticeRow,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT INTO lidar_layer_lattices(
+                layer_id, origin_x, origin_y, pixel_x, pixel_y, crs_wkt, created_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(layer_id) DO NOTHING",
+            rusqlite::params![
+                layer_id,
+                lattice.origin_x,
+                lattice.origin_y,
+                lattice.pixel_x,
+                lattice.pixel_y,
+                lattice.crs_wkt,
+                now_iso(),
+            ],
+        )
+        .map_err(|e| format!("Failed to record layer lattice: {e}"))?;
+    Ok(())
+}
+
+/// The layer's fixed lattice, when it has published anything yet.
+pub fn layer_lattice(
+    connection: &Connection,
+    layer_id: &str,
+) -> Result<Option<LayerLatticeRow>, String> {
+    connection
+        .query_row(
+            "SELECT origin_x, origin_y, pixel_x, pixel_y, crs_wkt
+             FROM lidar_layer_lattices WHERE layer_id = ?1",
+            [layer_id],
+            |row| {
+                Ok(LayerLatticeRow {
+                    origin_x: row.get(0)?,
+                    origin_y: row.get(1)?,
+                    pixel_x: row.get(2)?,
+                    pixel_y: row.get(3)?,
+                    crs_wkt: row.get(4)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read layer lattice: {e}"))
+}
+
 /// One published chunk joined with the asset a reader must open.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChunkAssetRow {
@@ -2010,7 +2092,7 @@ mod tests {
         }
 
         let connection = open(&path).expect("v8 catalogue migrates");
-        assert_eq!(schema_version(&connection).unwrap(), 9);
+        assert_eq!(schema_version(&connection).unwrap(), CATALOGUE_VERSION);
         let (result, quality, cells): (Option<String>, Option<String>, i64) = connection
             .query_row(
                 "SELECT result_path, quality_mask_path, coverage_cells
@@ -2066,6 +2148,59 @@ mod tests {
         let backed_up = Connection::open(std::path::Path::new(&backup)).unwrap();
         assert_eq!(schema_version(&backed_up).unwrap(), 8);
         drop(backed_up);
+        drop(connection);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn v9_catalogue_gains_the_layer_lattice_and_never_moves_it() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v10"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     DROP TABLE lidar_layer_lattices;
+                     UPDATE lidar_catalogue_meta SET value = '9' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+
+        let connection = open(&path).expect("v9 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), CATALOGUE_VERSION);
+        let first = LayerLatticeRow {
+            origin_x: 0.0,
+            origin_y: 1000.0,
+            pixel_x: 1.0,
+            pixel_y: -1.0,
+            crs_wkt: "EPSG:3857".to_string(),
+        };
+        record_layer_lattice(&connection, "layer", &first).unwrap();
+        assert_eq!(
+            layer_lattice(&connection, "layer").unwrap(),
+            Some(first.clone())
+        );
+        // A later import that extends the layer left or up records nothing:
+        // the anchor is fixed for the layer's whole history.
+        let moved = LayerLatticeRow {
+            origin_x: -500.0,
+            ..first.clone()
+        };
+        record_layer_lattice(&connection, "layer", &moved).unwrap();
+        assert_eq!(
+            layer_lattice(&connection, "layer").unwrap(),
+            Some(first),
+            "an existing lattice is never replaced"
+        );
+        // Deleting the layer takes its lattice with it.
+        connection
+            .execute("DELETE FROM lidar_source_layers WHERE id = 'layer'", [])
+            .unwrap();
+        assert_eq!(layer_lattice(&connection, "layer").unwrap(), None);
         drop(connection);
         let _ = std::fs::remove_dir_all(root);
     }
