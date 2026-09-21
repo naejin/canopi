@@ -52,6 +52,98 @@ pub(crate) struct LidarLibraryInner {
     /// One exclusive heavy raster job at a time, library-wide. Staging, apply,
     /// undo and analysis all hold it; awaiting review releases it.
     heavy_job: Mutex<Option<String>>,
+    /// Bounded display read admission, separate from the heavy lease.
+    display: Mutex<DisplayAdmission>,
+}
+
+/// Most display reads that may run at once, library-wide.
+pub(crate) const MAX_ACTIVE_DISPLAY_REQUESTS: usize = 2;
+/// Most display reads that may wait for a slot, library-wide.
+pub(crate) const MAX_QUEUED_DISPLAY_REQUESTS: usize = 32;
+
+/// Library-wide display read admission.
+///
+/// Display reads are bounded separately from the heavy raster lease: two may
+/// run at once, thirty-two may wait, and anything beyond that is declined by
+/// name instead of being allowed to exceed the bound. A cancelled request
+/// stops waiting or stops at its next bounded read.
+#[derive(Default)]
+struct DisplayAdmission {
+    active: HashMap<String, Arc<AtomicBool>>,
+    queued: Vec<(String, Arc<AtomicBool>)>,
+}
+
+/// One admitted display read. Dropping it frees its slot.
+pub(crate) struct DisplayTicket {
+    inner: Arc<LidarLibraryInner>,
+    request_id: String,
+    cancel: Arc<AtomicBool>,
+    active: bool,
+}
+
+impl DisplayTicket {
+    pub(crate) fn cancel_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cancel)
+    }
+
+    /// Whether this request has been cancelled while waiting or running.
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.cancel.load(Ordering::Relaxed)
+    }
+
+    /// Take a slot when one is free and this request is next in line.
+    pub(crate) fn try_activate(&mut self) -> Result<bool, String> {
+        if self.active {
+            return Ok(true);
+        }
+        if self.is_cancelled() {
+            return Err("cancelled".to_string());
+        }
+        let mut admission = self
+            .inner
+            .display
+            .lock()
+            .map_err(|_| "LiDAR display admission poisoned".to_string())?;
+        if admission.active.len() >= MAX_ACTIVE_DISPLAY_REQUESTS {
+            return Ok(false);
+        }
+        // Obsolete work is dropped first: a cancelled waiter never takes a
+        // slot from a newer viewport request.
+        while let Some((queued_id, flag)) = admission.queued.first() {
+            let cancelled = flag.load(Ordering::Relaxed);
+            let is_self = queued_id == &self.request_id;
+            if !cancelled {
+                break;
+            }
+            admission.queued.remove(0);
+            if is_self {
+                return Err("cancelled".to_string());
+            }
+        }
+        match admission.queued.first() {
+            Some((queued_id, _)) if queued_id == &self.request_id => {
+                admission.queued.remove(0);
+            }
+            // A newer viewport request supersedes waiting work.
+            _ => return Ok(false),
+        }
+        admission
+            .active
+            .insert(self.request_id.clone(), Arc::clone(&self.cancel));
+        self.active = true;
+        Ok(true)
+    }
+}
+
+impl Drop for DisplayTicket {
+    fn drop(&mut self) {
+        if let Ok(mut admission) = self.inner.display.lock() {
+            admission.active.remove(&self.request_id);
+            admission
+                .queued
+                .retain(|(queued_id, _)| queued_id != &self.request_id);
+        }
+    }
 }
 
 /// Exclusive ownership of the library's heavy raster work.
@@ -111,6 +203,7 @@ impl LidarLibrary {
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
+                display: Mutex::new(DisplayAdmission::default()),
             }),
         };
         // Recovery: interrupted jobs fail explicitly; published results and
@@ -515,6 +608,65 @@ impl LidarLibrary {
             .collect())
     }
 
+    /// Admit one display read, or decline it when the budget is full.
+    ///
+    /// The caller waits for a slot by polling [`DisplayTicket::try_activate`]
+    /// between short async sleeps, so a waiting display read never occupies a
+    /// Native Operation Executor permit behind another heavy job.
+    pub(crate) fn admit_display_request(&self, request_id: &str) -> Result<DisplayTicket, String> {
+        if request_id.is_empty() {
+            return Err("display request identity must not be empty".to_string());
+        }
+        let mut admission = self
+            .inner
+            .display
+            .lock()
+            .map_err(|_| "LiDAR display admission poisoned".to_string())?;
+        let cancel = Arc::new(AtomicBool::new(false));
+        if admission.active.len() >= MAX_ACTIVE_DISPLAY_REQUESTS {
+            if admission.queued.len() >= MAX_QUEUED_DISPLAY_REQUESTS {
+                return Err(format!(
+                    "the display request budget is full ({MAX_QUEUED_DISPLAY_REQUESTS} queued)"
+                ));
+            }
+            admission
+                .queued
+                .push((request_id.to_string(), Arc::clone(&cancel)));
+            return Ok(DisplayTicket {
+                inner: self.inner.clone(),
+                request_id: request_id.to_string(),
+                cancel,
+                active: false,
+            });
+        }
+        admission
+            .active
+            .insert(request_id.to_string(), Arc::clone(&cancel));
+        Ok(DisplayTicket {
+            inner: self.inner.clone(),
+            request_id: request_id.to_string(),
+            cancel,
+            active: true,
+        })
+    }
+
+    /// Cancel one display read: a waiting request stops waiting, a running one
+    /// stops at its next bounded read. Bounded in-memory state only.
+    pub fn cancel_display_request(&self, request_id: &str) {
+        if let Ok(admission) = self.inner.display.lock() {
+            if let Some(flag) = admission.active.get(request_id) {
+                flag.store(true, Ordering::Relaxed);
+            }
+            if let Some((_, flag)) = admission
+                .queued
+                .iter()
+                .find(|(queued_id, _)| queued_id == request_id)
+            {
+                flag.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+
     /// Render one bounded display tile as encoded PNG bytes.
     ///
     /// An empty tile returns the shared transparent PNG, so "no coverage" is a
@@ -530,6 +682,7 @@ impl LidarLibrary {
         z: u32,
         x: u32,
         y: u32,
+        cancel: &AtomicBool,
     ) -> Result<Vec<u8>, String> {
         let request = tiles::TileRequest {
             entity_kind: entity_kind.to_string(),
@@ -540,8 +693,7 @@ impl LidarLibrary {
             x,
             y,
         };
-        let cancel = AtomicBool::new(false);
-        match tiles::render_tile(self, &request, &cancel)? {
+        match tiles::render_tile(self, &request, cancel)? {
             tiles::TileOutcome::Png(bytes) => Ok(bytes),
             tiles::TileOutcome::Empty => Ok(tiles::transparent_tile()?.to_vec()),
         }
@@ -1526,6 +1678,58 @@ mod tests {
         );
         drop(HeavyJobLease::acquire(&library, &holding).unwrap());
 
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn display_reads_are_bounded_in_order_and_cancellable() {
+        let root = std::env::temp_dir().join(new_id("lidar-display-admission-test"));
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+
+        // Two reads may run at once.
+        let first = library.admit_display_request("tile-1").unwrap();
+        let second = library.admit_display_request("tile-2").unwrap();
+        // The next thirty-two wait their turn...
+        let mut queued = Vec::new();
+        for index in 0..MAX_QUEUED_DISPLAY_REQUESTS {
+            queued.push(
+                library
+                    .admit_display_request(&format!("tile-q{index}"))
+                    .unwrap(),
+            );
+        }
+        // ...and anything beyond the bound is declined by name.
+        let error = match library.admit_display_request("tile-overflow") {
+            Ok(_) => panic!("the display budget must decline extra work"),
+            Err(error) => error,
+        };
+        assert!(error.contains("budget is full"), "{error}");
+
+        // A waiting read neither runs early nor jumps the queue.
+        assert!(!queued[0].try_activate().unwrap());
+        let mut newcomer = {
+            drop(queued.pop().unwrap());
+            library.admit_display_request("tile-newcomer").unwrap()
+        };
+        drop(first);
+        assert!(queued[0].try_activate().unwrap());
+        assert!(!newcomer.try_activate().unwrap());
+
+        // Cancelling a waiter stops it instead of letting it take a slot.
+        library.cancel_display_request("tile-newcomer");
+        assert!(newcomer.try_activate().is_err());
+        drop(newcomer);
+
+        // Cancelling a running read signals its own flag.
+        let flag = second.cancel_flag();
+        assert!(!flag.load(Ordering::Relaxed));
+        library.cancel_display_request("tile-2");
+        assert!(flag.load(Ordering::Relaxed));
+
+        drop(second);
+        drop(queued);
         drop(library);
         std::fs::remove_dir_all(root).unwrap();
     }

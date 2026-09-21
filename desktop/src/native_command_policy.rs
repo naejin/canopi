@@ -45,6 +45,10 @@ const SYNC_COMMAND_ALLOWLIST: &[SyncCommandAllowance] = &[
         path: "commands::lidar::lidar_cancel_analysis_job",
         reason: "delivers a bounded in-memory cancellation flag that must bypass a busy Local raster queue",
     },
+    SyncCommandAllowance {
+        path: "commands::lidar::lidar_cancel_raster_tile",
+        reason: "delivers a bounded in-memory cancellation flag that must bypass the bounded display read queue",
+    },
 ];
 
 #[derive(Debug)]

@@ -17,6 +17,12 @@ export interface WorkspaceMapContributionSnapshot {
 export interface WorkspaceMapContributionAdapter {
   read(runtime: CanvasQuerySurface): WorkspaceMapContributionSnapshot | null
   readonly loadTerrainSupport?: (maplibre: MapLibreApi) => Promise<TerrainProtocolSupport>
+  /**
+   * Register any map protocols this edition serves itself. Desktop installs
+   * the bounded raster tile protocol here; an edition without it leaves the
+   * hook undefined and stays free of native raster transport.
+   */
+  readonly installRasterProtocol?: (maplibre: MapLibreApi) => void
   readonly publishViewBounds?: (bounds: [number, number, number, number] | null) => void
 }
 

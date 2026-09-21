@@ -5,6 +5,7 @@ import { publishLidarMapViewBounds } from '../lidar/camera-request'
 import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { theme } from '../settings/state'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
+import { installRasterProtocol } from '../../maplibre/raster-loader'
 import { resolveMapLibreSurfaceFrame } from '../../maplibre/canvas-surface-camera'
 import { lidarMapLayers } from './lidar'
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
@@ -12,6 +13,7 @@ import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter 
 export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapContributionAdapter {
   return {
     loadTerrainSupport: loadMapLibreTerrainSupport,
+    installRasterProtocol: (maplibre) => installRasterProtocol(maplibre),
     publishViewBounds: publishLidarMapViewBounds,
     read(runtime) {
       const sessionIdentity = designSessionStore.sessionIdentity.value

@@ -21,6 +21,7 @@ export interface WorkspaceMapContributionsOptions {
   readonly sessionIdentity: object
   readonly onFailure: (error: unknown) => void
   readonly loadTerrainSupport?: WorkspaceMapContributionAdapter['loadTerrainSupport']
+  readonly installRasterProtocol?: WorkspaceMapContributionAdapter['installRasterProtocol']
   readonly publishViewBounds?: WorkspaceMapContributionAdapter['publishViewBounds']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
   readonly publishDiagnostics?: (frame: MapFrame | null, extent: number | null) => void
@@ -53,6 +54,9 @@ export class WorkspaceMapContributions {
   attach(context: MapLibreSurfaceContext<MapLibreMapInstance>): void {
     if (this.disposed) return
     this.context = context
+    // A native tile source has no asset template, so its protocol must exist
+    // before any lidar layer that names it is added to the map.
+    this.options.installRasterProtocol?.(context.maplibre)
     const publishBounds = () => {
       if (this.live() && this.styleReady && this.snapshot) this.publishBounds()
     }

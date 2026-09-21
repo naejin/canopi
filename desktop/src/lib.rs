@@ -122,6 +122,7 @@ pub fn run() {
             commands::lidar::lidar_get_analysis_job_status,
             commands::lidar::lidar_cancel_analysis_job,
             commands::lidar::lidar_raster_tile,
+            commands::lidar::lidar_cancel_raster_tile,
             commands::lidar::lidar_delete_analysis,
             commands::lidar::lidar_layer_history,
             commands::lidar::lidar_undo_import,

@@ -205,6 +205,7 @@ pub async fn lidar_preview_import_decision(
 pub async fn lidar_raster_tile(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
+    request_id: String,
     entity_kind: String,
     entity_id: String,
     generation_id: String,
@@ -214,14 +215,45 @@ pub async fn lidar_raster_tile(
     y: u32,
 ) -> Result<tauri::ipc::Response, String> {
     let library = library.inner().clone();
+    let mut ticket = library.admit_display_request(&request_id)?;
+    // Wait for a slot without holding an executor permit, so a queued display
+    // read can never sit in front of a heavy raster job.
+    loop {
+        if ticket.try_activate()? {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+    }
+    let cancel = ticket.cancel_flag();
     let bytes = executor
         .run(
             crate::native_operation::NativeOperationClass::Local,
             "lidar raster tile",
-            move || library.render_tile(&entity_kind, &entity_id, &generation_id, &style, z, x, y),
+            move || {
+                let _ticket = ticket;
+                library.render_tile(
+                    &entity_kind,
+                    &entity_id,
+                    &generation_id,
+                    &style,
+                    z,
+                    x,
+                    y,
+                    &cancel,
+                )
+            },
         )
         .await?;
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// Stop waiting for, or stop rendering, one display tile.
+///
+/// Synchronous by design: it only signals bounded in-memory state, and the
+/// renderer checks it between bounded reads.
+#[tauri::command]
+pub fn lidar_cancel_raster_tile(library: State<'_, LidarLibrary>, request_id: String) {
+    library.cancel_display_request(&request_id);
 }
 
 #[tauri::command]
