@@ -1,6 +1,6 @@
 # Raster foundation, Data and Analysis workbenches
 
-Status: active — compatibility-first G1–G5 independently accepted at `a5fc7d7b`; bounded generations delivered through `1fcab504` are partially reviewed, not accepted as complete or integrated. The BG1–BG5 correction of that batch is delivered on the same branch through `3253543d`, recorded in the [receipt](raster-rework/bounded-generation-receipt.md), and awaits independent disposition. Q stays frozen/unqualified. New workbench UI remains subsequent work.
+Status: active — compatibility-first G1–G5 independently accepted at `a5fc7d7b`; bounded generations delivered through `9ad85c18` are partially reviewed, not accepted as complete or integrated. The [BG6–BG8 completion](raster-rework/bounded-generation-completion-agent-prompt.md) continues the [design](raster-rework/bounded-generation-design.md) on the same branch. Q stays frozen/unqualified. New workbench UI remains subsequent work.
 Tracking: `canopi-j571`; current implementation `canopi-jv8a.4`, accepted predecessor `canopi-jv8a.1`, foundation `canopi-jv8a`, workbenches `canopi-j8mp`, historical qualification `canopi-kqpp`, deferred `canopi-5neg`.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 
@@ -20,7 +20,7 @@ This artifact retains the long-term product contract. The 2026-09-20 GeoLibre de
 
 ### Start and continuation contract
 
-The bounded-generation correction continued from `1fcab504`, preserving accepted `a5fc7d7b`, and completed BG1–BG5 and their original caller contracts for one consolidated courier delivery; its [receipt](raster-rework/bounded-generation-receipt.md) records the evidence. Execution-window checkpoints need no new architecture assignment. Do not restart G1–G5 or Q or treat `bd ready` as acceptance evidence.
+On the current implementation instruction, read the [bounded-generation correction](raster-rework/bounded-generation-completion-agent-prompt.md), inspect Git status and `canopi-jv8a.4`, and continue from `9ad85c18` preserving accepted `a5fc7d7b`. Complete BG6–BG8 while preserving the delivered BG1–BG5 improvements before one consolidated courier delivery. Execution-window checkpoints need no new architecture assignment. Do not restart G1–G5 or Q or treat `bd ready` as acceptance evidence.
 
 Work serially, one claimed bead and scoped branch at a time. Before a production slice, its bead must link its contract below, record satisfied prerequisites in `design`, and carry observable checks in `acceptance`. The existing coarse beads need this reconciliation at implementation kickoff; `canopi-j8mp.1` covers only the independently requested HTML reference authoring. Create the remaining bounded children specified in the execution table at that kickoff, reuse existing work, and leave blocked successors open. The slice names below are specification references, not a second status tracker; bd remains authoritative.
 
@@ -280,7 +280,7 @@ Expected outcomes derive from user-approved simple import and edition scope, ADR
 
 ## Ordered execution and exit gates
 
-Continue `canopi-jv8a.4` serially under the [design](raster-rework/bounded-generation-design.md) and its delivered [receipt](raster-rework/bounded-generation-receipt.md), with one consolidated review; no subagents. G1–G5 is accepted at `a5fc7d7b`; the delivered bounded-generation branch starts this correction at `1fcab504`. The table below retains product outcomes, not a second executable sequence: B1–B5 combines its storage/caller dependencies while deliberately retaining existing review/Apply and deferring new import/definition UI. `canopi-j8mp` remains the workbench parent and `canopi-5neg` deferred analysis expansion. Do not create a competing epic or claim deferred product outcomes from the foundation batch.
+Continue the [BG6–BG8 completion](raster-rework/bounded-generation-completion-agent-prompt.md) serially on `canopi-jv8a.4`, with one consolidated review; no subagents. G1–G5 is accepted at `a5fc7d7b`; the delivered bounded-generation branch starts this correction at `9ad85c18`. The table below retains product outcomes, not a second executable sequence: B1–B5 combines its storage/caller dependencies while deliberately retaining existing review/Apply and deferring new import/definition UI. `canopi-j8mp` remains the workbench parent and `canopi-5neg` deferred analysis expansion. Do not create a competing epic or claim deferred product outcomes from the foundation batch.
 
 | Slice and prerequisite | Outcome and owned files/modules | Required exit evidence / stop |
 | --- | --- | --- |

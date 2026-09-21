@@ -1,10 +1,22 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation delivery `1fcab504` independently reviewed as partial (BG1–BG5), and the BG1–BG5 correction delivered through `3253543d` awaiting disposition. Historical Q/Desktop findings remain historical; final methodology conclusions pending.
+Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation correction `9ad85c18` independently reviewed as partial (BG6–BG8 remain). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [bounded-generation review](bounded-generation-review.md), [delivery receipt](bounded-generation-receipt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
+Current guidance: [bounded-generation review](bounded-generation-review.md), [completion assignment](bounded-generation-completion-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
+
+### Correction review — `9ad85c18`
+
+137 native/GDAL tests independently passed and several production contracts improved; three gaps remain in the [review](bounded-generation-review.md). No measured total cost saving is established. The main agent missed the review-envelope traversal in its prior review; the response is a precise caller regression, not attributing all rework to the implementer.
+
+| Escaped invariant | Classification / owner | Small intervention in the next assignment |
+| --- | --- | --- |
+| Paged tile reads coexist with an empty-envelope review walk | Caller coverage gap and reviewer oversight; both agents | Compare actual review visits for adjacent versus million-cell-separated inputs; retain exact counts and Before/After values |
+| Shared assets survive, but new unpublished source assets lack cleanup ownership | Lifecycle implementation gap; main agent now settles ownership, implementer wires it | Job-owned staging through AwaitReview; recoverable promotion intent and atomic catalogue ownership; test new and reused assets separately |
+| Correct RSS summation still admits a run with no complete workload sample | Test/measurement gap; implementer fixes and main agent reviews claim boundary | Exercise real finish→gate with healthy, absent, incomplete and over-budget partial observations |
+
+At delivery, append only the outcome of these interventions: which cases failed before and pass after, in-scope defects caught before forwarding, independent escapes, and any remaining instruction ambiguity. The final debrief should compare delivered user workflows and independently accepted invariants with observed effort/courier decisions, not test counts. No further reporting framework, transcript quota or skill rewrite is authorized. A new skill rule is justified only by a reusable lesson that existing rules do not already cover.
 
 ### Bounded-generation delivery review — `1fcab504`
 
@@ -20,44 +32,7 @@ The [independent review](bounded-generation-review.md) records real caller progr
 
 The main agent also contributed process ambiguity by describing a whole batch without clearly separating authorization from execution windows. The courier repeatedly forwarded continuation without an architectural decision. The updated [protocol](collaboration-protocol.md#one-bounded-loop) permits resumable checkpoints under the same authorization; it does not excuse partial work being labelled complete. The broad original design also lacked the decisive multi-chunk and multi-process examples now supplied. These contributions do not establish a model or skill failure.
 
-### Consolidated delivery outcome — BG1–BG5 correction
-
-The [receipt](bounded-generation-receipt.md)'s BG1–BG5 table records the outcome
-as `3253543d` on `feature/bounded-raster-generations`; the branch is not
-integrated and the main agent's independent disposition is still outstanding.
-
-- **Requirements lost across windows** were the ones with no caller: retained
-  source COGs and the sampled-tree memory measurement existed as design text and
-  helper code but had no production path, so each execution window could report
-  progress without them. The correction closed both by making a caller test the
-  acceptance artefact (`a_retained_source_cog_is_the_only_durable_member_payload`,
-  the four representative runs with recorded baselines). The seven-test review
-  and the paged-helper-without-callers gap had the same shape: the decisive test
-  had to exercise the caller, not the helper.
-- **The checkpoint rule prevented no courier round in this stretch.** Every
-  continuation arrived without a new architectural decision, and no window ended
-  in a state that needed one; the single genuinely lost item was an editing
-  accident inside one window (a `mod tests` brace), which self-review caught
-  before any commit. The rule did keep intermediate states honest: the bead notes
-  name each unfinished required outcome instead of calling a checkpoint complete.
-- **Defects caught before delivery versus independent escapes.** Self-review
-  caught: the silently changed source-range semantics (valid-only statistics
-  would have broken `canopi-jv8a.2`'s documented behaviour), an unrepresentable
-  level test expectation, a completeness check that marked ticks incomplete
-  because of unrelated system processes, and the reduction read budget that
-  counted cheap record lookups as raster reads. The independent escapes were the
-  original five review findings; BG1 and BG4 were the two that no amount of
-  local test count could have exposed, because their tests did not exist.
-- **Main-agent ambiguity that remained**: the assignment's "recheck at Apply"
-  and "grandfathered reads" were clear, but "whole-generation jobs may stream all
-  occupied pages" named no such job; this implementation has no whole-generation
-  reader left and did not add an unused streaming API. Capacity verification
-  stays incomplete, not failed: the 400M-cell plane still needs a host with 8 GiB
-  free and this one reports 5.5 GiB.
-- **Effort/cost is recorded only where measured**: the four representative runs
-  report sampled combined memory (49/51/64/75 MiB incremental over their
-  baselines) and wall time; no productivity claim is derived from commit count,
-  test totals or document length.
+On the next consolidated delivery, record whether the five original contracts are actually met, which same-family defects self-review caught, which escaped independently, and whether any courier exchange resolved a real decision rather than simply continuing work. Keep unavailable 400M/platform evidence separate. Use measured effort only; do not derive productivity from commits, tests or document length. No new evaluator, mandatory mutation campaign or upstream skill modification is authorized. Promote only lessons supported by subsequent outcomes into tooling or skills through a separately scoped change.
 
 ### Design correction before implementation — standard COG persistence
 
@@ -538,49 +513,6 @@ were closed only because a probe or a failure pointed at them.
 | Measurement defect found while probing | The first probe battery reported every guard as ineffective. The probe harness invoked a compiler through a wrong relative path and the tests ran against a stale build: an unverified probe is not evidence of absence. Probes must assert their own compile step |
 | Self-review counterexample | The first verification run failed on a launcher defect the unit tests could not see: the launcher republished the host's own atomically published evidence. The fix was in scope and the retry was the authorized second run |
 | Review coverage limit | Cancellation is covered by unit tests and a declared deadline, not an observed mid-flight cancellation; the native reservation path is covered by bridge tests plus one real run; both runs are the implementer's own |
-
-## GeoLibre native integration G1–G5 at `88bd1585` (delivery record)
-
-Delivered in one batch on `feature/geolibre-native-raster-integration`: import staging and slope result postprocessing now read through the GeoLibre-selected `wbgeotiff` core behind one private module, while persisted bytes, validity, IDs, IPC, storage and capacity limits are unchanged. Evidence and limits are in the [integration receipt](geolibre-integration-receipt.md). This is an implementer delivery record, not acceptance.
-
-| Question | Observed |
-| --- | --- |
-| Courier exchanges during implementation | None. One forwarded assignment, one consolidated handoff; no milestone, repair or decision was couriered. Wall-clock/token effort was not instrumented, so no cost comparison is claimed |
-| Decisions taken locally (delegated) | Validity rule passed into `open` rather than read from the derivative; `-b 1` so a multi-band source is excluded as an incompatible review item instead of aborting staging; `read_window` compiled for tests while production streams; GDAL tests `#[ignore]`d to match the repository's no-GDAL CI; target-scoped `libc`/`windows-sys` for capacity reporting; `valid_mask_from_f32_raw_checked` demoted to a test oracle |
-| Design omission found | The design's `open(engine, input, expected_grid, job_scratch, cancel)` did not name where the validity rule comes from when the derivative's declared NoData differs from the caller's effective rule (slope uses `band_nodata(result).or(manifest.nodata)`). Resolved locally without changing the settled contract; flagged in the receipt for review |
-| Design omission found | The design required the exact persisted row-major layout but did not say how a ≤1024-wide window writes into a wider raster. Implemented as row-addressed positional writes with a sequential fast path; local decision, no contract change |
-| Implementation defect found by a required test | The new units test found that `gdaldem slope -p` was spliced between `-s` and its scale argument, so **every** percent slope job had been failing. Pre-existing baseline defect with a test gap, fixed in scope (one argument position) and covered by the degrees/percent test |
-| Self-review discoveries | The caller's own raw/mask outputs were not included in the free-space requirement; the derivative-before-rename property was asserted only indirectly; the output-write failure path was untested. All three were fixed before handoff, plus a guard-removal probe proving the caller test fails when the native decode instrument is removed |
-| Self-review versus independent escapes | No independent review has run on this delivery. The receipt names what review should attack: the `-b 1` behavior change, the "only two paths are bounded" claim against the retained dense callers, the uncompiled Windows capacity branch, and the fact that CI cannot run any GDAL-backed test |
-| Reviewer oversight carried forward | The settled design promised "one managed MNT workflow" from an explicit fixture location, but the documented `0446_6807` tile is absent on this host. The run used the real `0445_6806` tile through the documented env override with its hash recorded; the design did not anticipate needing a fallback identity rule |
-
-
-### Review correction at the same branch (delivery record)
-
-The [independent disposition](geolibre-integration-review.md) retained the implementation and named one acceptance blocker (D1) plus one reporting correction (R1). The correction delivery keeps the architecture, dependencies, storage, science and capacity limits unchanged.
-
-| Question | Observed |
-| --- | --- |
-| Classification accuracy | D1 was an implementation deviation with a test gap; the design text did state the combined sum, but no acceptance example made the sum the sole admission rule, which was the reviewer's own handoff omission. R1 was a reporting/test-scope gap over inherited lifecycle debt, not a new defect from this integration and not evidence that every cleanup path is broken |
-| Decisions handled locally | One combined estimate in the private module with the caller passing `cells * 5` and its old preflight deleted; analysis passing zero additional bytes because its result and quality files already exist; the capacity observation seam being a `#[cfg(test)]` thread-local rather than an environment switch; the per-window recheck replacing (not joining) the row-band recheck |
-| Self-review discoveries | Tracing the analysis path showed the quality-mask check and the reader budget are sequential, so charging the mask again would have double-counted it; the boundary test showed the combined estimate is inclusive at the requirement; removing the caller preflight left exactly one formula, which is what the review asked for |
-| Design omission surfaced | The original design specified simultaneous allocation accounting but never fixed a decisive boundary example, so a reviewer had to construct the 265 MiB counterexample. The corrected acceptance cases now live in the receipt as fixed numbers rather than a formula restated from the code |
-| Inherited issue handled without widening scope | A cancelled or mid-pipeline-failed slope job leaves `prepared/analysis/<definition_id>/staging-*` behind; this was confirmed dynamically once (result and quality files were present in the abandoned directory) and tracked as `canopi-jv8a.3` rather than repaired here |
-| Evidence limits | Capacity tests use an observation seam, not a filled filesystem; no real out-of-space event was observed, and the check remains a measurement rather than an OS reservation. The reviewer's offline rerun is now reproducible through the recorded cache route, but the real MNT lifecycle remains implementer-run evidence |
-
-
-## Bounded-generation batch at `canopi-jv8a.4` (partial delivery record)
-
-The forwarded B1–B5 assignment (retained standard COGs plus sparse resolved chunks) was executed only as far as its verified storage primitives; the caller migration did not happen. The [receipt](bounded-generation-receipt.md) owns the exact boundary.
-
-| Question | Observed |
-| --- | --- |
-| Decisions handled locally | Window validation gained an explicit 1026-side halo cap while the scan keeps 1024-wide bands; the write-reserve recheck was tied to an explicit `capacity_guard` so a read-only committed lease never demands write headroom; the controlled COG profile was factored into one `controlled_cog_arguments` used by source preparation and chunk creation; assets are admitted only after the production reader validates them and are stored content-addressed |
-| Assumptions challenged before coding | The design's "retain the source COG" assumed the existing derivative could simply stop being deleted. Checking the code showed ownership and capacity semantics are entangled with preparation, so the reader needed a distinct non-deleting, non-charging committed open rather than a flag on the existing path |
-| Scope outcome | The batch is far larger than one execution window: catalogue v7 index plus migration, ordered-member resolver, review/Apply/undo publication, slope halo, display transport, Desktop protocol, job lease and the capacity gates were not attempted. Rather than switching production callers onto unverified storage, the delivery stops at inert, tested primitives and reports the boundary |
-| Self-review discoveries | The first asset module carried a dead ENVI helper and an over-broad test assertion, both removed; the halo cap silently changed an existing window-rejection expectation, which the retained test caught and now asserts against the halo cap; the two scan-capacity tests needed a guarded fixture reader to keep exercising the reserve check |
-| Honest limitation | The delivered module has no production caller, so it carries a documented temporary dead-code allowance and proves nothing about bounded import, composition or capacity. Reviewers should treat "no production dense path remains" and any capacity claim as **not** established |
-| Effort signal | No courier exchange was needed inside the batch; the work stopped at the delivered boundary rather than asking for scope approval. Test/line counts are not offered as progress evidence |
 
 ## Final debrief procedure
 
