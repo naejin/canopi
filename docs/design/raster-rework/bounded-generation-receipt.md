@@ -24,7 +24,8 @@ Production callers are unchanged: import staging, composition, slope, display an
 | Forwarded design + revision docs | merged in `be0d4d17` and `7f2e3bef` |
 | Reader/asset primitives and tests | `1b8683db` |
 | Catalogue v7 index, resolver and their tests | `9f1e5420` |
-| Legacy TIFF lease, paged region aggregates and their tests | the commit that carries this receipt |
+| Legacy TIFF lease, paged region aggregates and their tests | `3cf213e5` |
+| Persisted-chunk publication rows and read path | the commit that carries this receipt |
 
 ## What the delivered primitives do
 
@@ -41,6 +42,7 @@ Production callers are unchanged: import staging, composition, slope, display an
 - `generation.rs` (new, private) resolves one half-open lattice window (≤1026 per side) over an ordered occurrence list: it validates ordinal order up front, maps each member's own frame through `RasterGrid::compatible` plus a rounded lattice offset, reads only the intersecting member window (committed COG through the production reader, or the preserved dense raw/mask pair row-wise), and applies the accepted roles — `add` fills only invalid cells, `replace` paints valid incoming cells anywhere, `replace-overlap` paints only already-valid cells, and invalid incoming samples never erase coverage.
 - `LegacyTiffLease` prepares one controlled derivative for a legacy TIFF-only generation and removes it on drop, so a caller never re-prepares per window; the preserved generation's own mask is read row-wise and overrides the derivative's validity. Tests prove one derivative per lease, its removal on drop, the mask override, that a plain legacy TIFF is rejected by the committed-profile check, and that `member_regions` aggregates the member's occupied chunk (valid count, min, max, exact f64 sum) while leaving padded cells untouched.
 - `catalogue::{replace_interpretation_regions, interpretation_region_page}` store and page per-block aggregates atomically; the test replaces a five-region page set, pages it, and proves a re-scan swaps rows instead of accumulating them.
+- `read_persisted_window` is the published-generation read path: it selects only persisted chunk rows that intersect the window, so a published generation never replays member history, never opens a source COG and never walks absent coordinates. Chunk rows carry an explicit `state`, so `insert_unpublished_chunks` makes a crashed or cancelled job's index unreadable until `publish_generation_chunks` flips it inside the publish transaction. Tests prove unpublished rows are invisible, roles stay separate, windows inside a chunk read its exact values, a gap chunk yields an all-invalid mask, a distant chunk reads its own bytes, and a truncated chunk fails rather than reading as empty coverage.
 - Tests reproduce the design's history example (A=5, replace B=9, reimport A with replacement → 5, undo that occurrence → 9), add-only holes never erasing prior coverage, replace-overlap creating no new coverage, members above/left of the anchor resolving negative lattice cells, occupied-chunk enumeration over a million-cell gap (2 chunks, adjacency-only variation) and chunk straddling, exact bounded legacy window reads with a short-file rejection, and preconditions (empty/oversized window, out-of-order ordinals, unaligned member grids) failing before any file is read.
 
 ## Evidence

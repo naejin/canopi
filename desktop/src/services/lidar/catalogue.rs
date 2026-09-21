@@ -264,6 +264,7 @@ CREATE TABLE IF NOT EXISTS lidar_generation_chunks (
     min_value REAL,
     max_value REAL,
     sum_value REAL,
+    state TEXT NOT NULL DEFAULT 'unpublished',
     PRIMARY KEY (generation_id, role, chunk_x, chunk_y)
 );
 CREATE INDEX IF NOT EXISTS lidar_generation_chunks_asset_idx
@@ -1004,6 +1005,127 @@ pub fn interpretation_region_page(
         .map_err(|e| format!("Failed to read region page: {e}"))
 }
 
+/// One published resolved-chunk reference.
+///
+/// Consumed by the B2 publication caller and the persisted-chunk reader
+/// tracked in `canopi-jv8a.4`; the temporary allowance goes with them.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenerationChunkRow {
+    pub role: String,
+    pub chunk_x: i64,
+    pub chunk_y: i64,
+    pub asset_sha256: String,
+    pub valid_cells: i64,
+    pub min_value: f64,
+    pub max_value: f64,
+    pub sum_value: f64,
+}
+
+/// Insert chunk references as unpublished rows beside their asset metadata.
+///
+/// Readers cannot select these rows until the generation's short publish
+/// transaction flips them, so a crashed or cancelled job leaves no readable
+/// index.
+#[allow(dead_code)]
+pub fn insert_unpublished_chunks(
+    connection: &Connection,
+    generation_id: &str,
+    chunks: &[GenerationChunkRow],
+) -> Result<(), String> {
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|e| format!("Failed to start chunk insert: {e}"))?;
+    {
+        let mut statement = transaction
+            .prepare(
+                "INSERT INTO lidar_generation_chunks(
+                    generation_id, role, chunk_x, chunk_y, asset_sha256,
+                    valid_cells, min_value, max_value, sum_value, state)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'unpublished')
+                 ON CONFLICT(generation_id, role, chunk_x, chunk_y) DO UPDATE SET
+                    asset_sha256 = excluded.asset_sha256,
+                    valid_cells = excluded.valid_cells,
+                    min_value = excluded.min_value,
+                    max_value = excluded.max_value,
+                    sum_value = excluded.sum_value,
+                    state = 'unpublished'",
+            )
+            .map_err(|e| format!("Failed to prepare chunk insert: {e}"))?;
+        for chunk in chunks {
+            statement
+                .execute(rusqlite::params![
+                    generation_id,
+                    chunk.role,
+                    chunk.chunk_x,
+                    chunk.chunk_y,
+                    chunk.asset_sha256,
+                    chunk.valid_cells,
+                    chunk.min_value,
+                    chunk.max_value,
+                    chunk.sum_value,
+                ])
+                .map_err(|e| format!("Failed to insert chunk row: {e}"))?;
+        }
+    }
+    transaction
+        .commit()
+        .map_err(|e| format!("Failed to commit chunk rows: {e}"))
+}
+
+/// Publish every chunk row of one generation inside the caller's transaction.
+#[allow(dead_code)]
+pub fn publish_generation_chunks(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<usize, String> {
+    connection
+        .execute(
+            "UPDATE lidar_generation_chunks SET state = 'published' WHERE generation_id = ?1",
+            [generation_id],
+        )
+        .map_err(|e| format!("Failed to publish generation chunks: {e}"))
+}
+
+/// One ordered page of published chunk references.
+#[allow(dead_code)]
+pub fn generation_chunk_page(
+    connection: &Connection,
+    generation_id: &str,
+    role: &str,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<GenerationChunkRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT role, chunk_x, chunk_y, asset_sha256, valid_cells, min_value, max_value, sum_value
+             FROM lidar_generation_chunks
+             WHERE generation_id = ?1 AND role = ?2 AND state = 'published'
+             ORDER BY chunk_y, chunk_x
+             LIMIT ?3 OFFSET ?4",
+        )
+        .map_err(|e| format!("Failed to prepare chunk page: {e}"))?;
+    statement
+        .query_map(
+            rusqlite::params![generation_id, role, limit, offset],
+            |row| {
+                Ok(GenerationChunkRow {
+                    role: row.get(0)?,
+                    chunk_x: row.get(1)?,
+                    chunk_y: row.get(2)?,
+                    asset_sha256: row.get(3)?,
+                    valid_cells: row.get(4)?,
+                    min_value: row.get(5)?,
+                    max_value: row.get(6)?,
+                    sum_value: row.get(7)?,
+                })
+            },
+        )
+        .map_err(|e| format!("Failed to read chunk page: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read chunk page: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1438,6 +1560,53 @@ mod tests {
             .unwrap();
         let replaced = interpretation_region_page(&connection, "interp-region", 0, 10).unwrap();
         assert_eq!(replaced, vec![(-7, 3, 4, 0.0, 1.0, 2.0)]);
+        drop(connection);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn unpublished_chunk_rows_are_invisible_until_the_generation_publishes() {
+        let root = std::env::temp_dir().join(new_id("canopi-chunks"));
+        std::fs::create_dir_all(&root).unwrap();
+        let connection = open(&root.join("lidar-library.sqlite")).unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_raster_assets(
+                    sha256, rel_path, bytes, profile, width, height, geotransform, crs_wkt, nodata, created_at)
+                 VALUES('sha-chunk', 'assets/sha-chunk/cog.tif', 8, 'cog-f32-t256-raw-v1',
+                    1024, 1024, '[0,1,0,0,0,-1]', 'EPSG:3857', 'nan', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let rows = vec![GenerationChunkRow {
+            role: "resolved".to_string(),
+            chunk_x: 0,
+            chunk_y: 0,
+            asset_sha256: "sha-chunk".to_string(),
+            valid_cells: 12,
+            min_value: 1.0,
+            max_value: 3.0,
+            sum_value: 24.0,
+        }];
+        insert_unpublished_chunks(&connection, "gen-1", &rows).unwrap();
+        assert!(
+            generation_chunk_page(&connection, "gen-1", "resolved", 0, 10)
+                .unwrap()
+                .is_empty(),
+            "an unpublished generation exposes no chunk rows"
+        );
+        let published = publish_generation_chunks(&connection, "gen-1").unwrap();
+        assert_eq!(published, 1);
+        let page = generation_chunk_page(&connection, "gen-1", "resolved", 0, 10).unwrap();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].asset_sha256, "sha-chunk");
+        assert_eq!(page[0].sum_value, 24.0);
+        // A result role keeps its own rows.
+        assert!(
+            generation_chunk_page(&connection, "gen-1", "quality", 0, 10)
+                .unwrap()
+                .is_empty()
+        );
         drop(connection);
         let _ = std::fs::remove_dir_all(root);
     }

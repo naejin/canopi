@@ -302,6 +302,89 @@ fn read_member_window(
     }
 }
 
+/// One persisted resolved-chunk reference the reader can select.
+#[derive(Debug, Clone)]
+pub(super) struct PersistedChunk {
+    pub chunk_x: i64,
+    pub chunk_y: i64,
+    pub asset: CogAsset,
+    pub nodata: Option<f32>,
+}
+
+/// Read one window from persisted resolved chunks.
+///
+/// This is the published-generation read path: it never replays member
+/// history, never opens a source COG and never touches a coordinate without a
+/// chunk row. Absent chunks are invalid coverage; a corrupt asset is an error,
+/// not empty coverage.
+pub(super) fn read_persisted_window(
+    chunks: &[PersistedChunk],
+    lattice: &RasterGrid,
+    window: LatticeWindow,
+    cancel: &AtomicBool,
+) -> Result<ResolvedWindow, String> {
+    let cells = validate_window(window)?;
+    let width = window.width as usize;
+    let mut samples = vec![f32::NAN; cells];
+    let mut valid = vec![0u8; cells];
+    let first_chunk_x = window.x.div_euclid(CHUNK_SIDE);
+    let last_chunk_x = (window.x + i64::from(window.width) - 1).div_euclid(CHUNK_SIDE);
+    let first_chunk_y = window.y.div_euclid(CHUNK_SIDE);
+    let last_chunk_y = (window.y + i64::from(window.height) - 1).div_euclid(CHUNK_SIDE);
+    for chunk_y in first_chunk_y..=last_chunk_y {
+        for chunk_x in first_chunk_x..=last_chunk_x {
+            let Some(chunk) = chunks
+                .iter()
+                .find(|chunk| chunk.chunk_x == chunk_x && chunk.chunk_y == chunk_y)
+            else {
+                continue;
+            };
+            check_cancel(cancel)?;
+            let chunk_origin_x = chunk_x * CHUNK_SIDE;
+            let chunk_origin_y = chunk_y * CHUNK_SIDE;
+            let member_x0 = window.x - chunk_origin_x;
+            let member_y0 = window.y - chunk_origin_y;
+            let clip_x0 = member_x0.max(0);
+            let clip_y0 = member_y0.max(0);
+            let clip_x1 =
+                (member_x0 + i64::from(window.width)).min(i64::from(chunk.asset.grid.width));
+            let clip_y1 =
+                (member_y0 + i64::from(window.height)).min(i64::from(chunk.asset.grid.height));
+            if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
+                continue;
+            }
+            let member_window = RasterWindow {
+                x: clip_x0 as u32,
+                y: clip_y0 as u32,
+                width: (clip_x1 - clip_x0) as u32,
+                height: (clip_y1 - clip_y0) as u32,
+            };
+            let mut reader =
+                PreparedRaster::open_committed(&chunk.asset.path, &chunk.asset.grid, chunk.nodata)?;
+            let read = reader.read_window(member_window, cancel)?;
+            let dest_x = (clip_x0 + chunk_origin_x - window.x) as usize;
+            let dest_y = (clip_y0 + chunk_origin_y - window.y) as usize;
+            for row in 0..member_window.height as usize {
+                for column in 0..member_window.width as usize {
+                    let index = row * member_window.width as usize + column;
+                    if read.valid()[index] == 0 {
+                        continue;
+                    }
+                    let target = (dest_y + row) * width + dest_x + column;
+                    samples[target] = read.samples()[index];
+                    valid[target] = 1;
+                }
+            }
+        }
+    }
+    check_cancel(cancel)?;
+    Ok(ResolvedWindow {
+        grid: window_grid(lattice, window)?,
+        samples,
+        valid,
+    })
+}
+
 /// Per-block aggregate of one interpretation's occupied coverage.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct RegionAggregate {
@@ -971,6 +1054,83 @@ mod tests {
         let expected_sum: f64 = values.iter().map(|value| f64::from(*value)).sum();
         assert_eq!(region.sum_value, expected_sum);
         drop(reader);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn persisted_chunks_are_read_directly_and_absent_chunks_are_invalid() {
+        let engine = GdalEngine::new();
+        let dir = scratch("persisted");
+        let paths = LidarPaths::open(&dir).unwrap();
+        let lattice = lattice();
+        let chunk_side = CHUNK_SIDE as u32;
+        let mut chunks = Vec::new();
+        for (chunk_x, value) in [(0i64, 1.0f32), (2i64, 3.0f32)] {
+            let grid = chunk_grid(&lattice, chunk_x, 0);
+            let values = vec![value; (chunk_side * chunk_side) as usize];
+            let asset = write_cog_asset(
+                &engine,
+                &cancellation(),
+                &paths,
+                &dir,
+                &format!("chunk-{chunk_x}"),
+                &grid,
+                "EPSG:3857",
+                Some(f32::NAN),
+                &values,
+            )
+            .unwrap();
+            chunks.push(PersistedChunk {
+                chunk_x,
+                chunk_y: 0,
+                asset,
+                nodata: Some(f32::NAN),
+            });
+        }
+
+        // A window inside the first chunk.
+        let first =
+            read_persisted_window(&chunks, &lattice, full_window(0, 0, 4, 3), &cancellation())
+                .unwrap();
+        assert_eq!(first.valid, vec![1; 12]);
+        assert!(first.samples.iter().all(|value| *value == 1.0));
+
+        // The gap between chunk 0 and chunk 2 has no row: exact invalid mask,
+        // and no member replay or absent-coordinate walk produces coverage.
+        let gap = read_persisted_window(
+            &chunks,
+            &lattice,
+            full_window(1024, 0, 4, 3),
+            &cancellation(),
+        )
+        .unwrap();
+        assert!(gap.valid.iter().all(|valid| *valid == 0));
+        assert!(gap.samples.iter().all(|value| value.is_nan()));
+
+        // The distant chunk reads its own persisted bytes.
+        let far = read_persisted_window(
+            &chunks,
+            &lattice,
+            full_window(2 * CHUNK_SIDE, 0, 4, 3),
+            &cancellation(),
+        )
+        .unwrap();
+        assert!(far.samples.iter().all(|value| *value == 3.0));
+
+        // A truncated asset is an error, never empty coverage.
+        let corrupted = chunks.clone();
+        let path = corrupted[0].asset.path.clone();
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::write(&path, &bytes[..bytes.len() / 2]).unwrap();
+        let error = read_persisted_window(
+            &corrupted,
+            &lattice,
+            full_window(0, 0, 4, 3),
+            &cancellation(),
+        )
+        .expect_err("a corrupt chunk must fail the read");
+        assert!(!error.is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 }
