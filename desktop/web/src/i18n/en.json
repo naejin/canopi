@@ -533,7 +533,27 @@
       "history": "History",
       "historyCells": "cells",
       "historyHead": "current",
-      "historyUndo": "Undo import"
+      "historyUndo": "Undo import",
+      "sources": "Sources",
+      "loadingSources": "Loading sources…",
+      "sourceOrderHint": "Sources higher in the list cover valid data below. Order also affects analyses.",
+      "libraryOrderNote": "Source order is shared library data: it applies to every design that uses this layer.",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "removeSource": "Remove",
+      "removeSourceConfirm": "Remove this source from the current composition? Its data and every published version stay in the library.",
+      "removeSourceConfirmAction": "Remove source",
+      "previousComposition": "Previous composition",
+      "previousCompositionHint": "A preserved earlier merge; its internal order cannot be changed.",
+      "undoLastChange": "Undo last change",
+      "restoreVersion": "Restore this version",
+      "operation": {
+        "import": "Import",
+        "reorder": "Reorder",
+        "remove": "Remove",
+        "undo": "Undo",
+        "restore": "Restore"
+      }
     }
   },
   "worldMap": {

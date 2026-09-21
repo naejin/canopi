@@ -20,8 +20,8 @@ use rusqlite::Connection;
 use std::collections::BTreeSet;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 /// Spatial chunk side shared by resolved generation and result storage.
 pub(super) const CHUNK_SIDE: i64 = 1024;
@@ -73,12 +73,61 @@ pub(super) enum MemberSource {
     Cog(CogAsset),
     /// Preserved dense generation assets, read through the bounded adapter.
     LegacyDense { values: PathBuf, mask: PathBuf },
-    /// An opaque legacy head overlaid as one occurrence.
+    /// A preserved immutable generation replayed as one indivisible member.
     ///
-    /// The lease prepares one controlled derivative and removes it on drop, so
-    /// replaying this occurrence never re-prepares per window. Its authoritative
-    /// validity mask overrides the derivative's NoData tag.
-    LegacyHead(Arc<Mutex<Option<LegacyTiffLease>>>),
+    /// An ordered collection exposes a pre-transition head as a single
+    /// "previous composition" occurrence: its internals are never reordered,
+    /// and the reader visits only the windows this composition asks for.
+    Preserved(Arc<PreservedGeneration>),
+    /// A preserved dense generation read through one prepared lease.
+    ///
+    /// The lease is owned by the library, not by the member: a dense mosaic is
+    /// not in the controlled COG profile, so it needs one GDAL derivative, and
+    /// preparing it per read would cost a conversion per window. The library's
+    /// compatibility cache is the single lifecycle owner.
+    LegacyHead(Arc<std::sync::Mutex<Option<LegacyTiffLease>>>),
+}
+
+/// A preserved generation read as one member of an ordered collection.
+pub(super) struct PreservedGeneration {
+    library: super::LidarLibrary,
+    owner: GenerationChunkReader,
+    grid: RasterGrid,
+}
+
+impl PreservedGeneration {
+    /// Bind the published resolved chunks of a preserved generation.
+    pub(super) fn chunks(
+        library: &super::LidarLibrary,
+        generation_id: &str,
+        role: &str,
+        grid: RasterGrid,
+    ) -> Self {
+        Self {
+            library: library.clone(),
+            owner: GenerationChunkReader::new(generation_id, role),
+            grid,
+        }
+    }
+
+    fn read(
+        &self,
+        window: RasterWindow,
+        cancel: &AtomicBool,
+    ) -> Result<(Vec<f32>, Vec<u8>), String> {
+        let resolved = self.owner.read_window(
+            &self.library,
+            &self.grid,
+            LatticeWindow {
+                x: i64::from(window.x),
+                y: i64::from(window.y),
+                width: window.width,
+                height: window.height,
+            },
+            cancel,
+        )?;
+        Ok((resolved.samples, resolved.valid))
+    }
 }
 
 /// One ordered occurrence available for replay.
@@ -224,6 +273,225 @@ pub(super) fn occupied_chunks(
     Ok(chunks.into_iter().collect())
 }
 
+/// One immutable ordered source collection, read in bounded windows.
+///
+/// A Data Layer is an ordered list of independently prepared source COGs; its
+/// numeric value is the highest-priority valid sample at each location, and
+/// NoData reveals a valid sample below. Nothing is materialized: display,
+/// review and slope all resolve the same member list on demand, so a new
+/// snapshot costs member metadata rather than a merged elevation raster.
+///
+/// `members` is held in resolver iteration order — bottom-most first — so the
+/// existing ordered replay applies one uniform "paint the valid samples"
+/// rule and the highest-priority source wins by being painted last. The
+/// top-first list the UI and transport show is this list reversed; that
+/// conversion is internal and never persisted twice.
+#[derive(Clone)]
+pub(super) struct CollectionReader {
+    members: Vec<ResolvedMember>,
+    /// Stable occurrence identity of `members`, parallel to it.
+    /// The layer's fixed lattice, which every member coordinate is relative to.
+    lattice: RasterGrid,
+    /// The composition's occupied 1024-cell blocks, in lattice coordinates.
+    ///
+    /// Derived once from member extents: it is coordinates only, opens no
+    /// raster, and lets a reader answer "does this block hold coverage?" from
+    /// memory instead of consulting a store that does not exist.
+    occupied: Vec<(i64, i64)>,
+}
+
+impl CollectionReader {
+    /// Bind one snapshot's top-first member list.
+    pub(super) fn new(
+        members: Vec<(String, ResolvedMember)>,
+        lattice: RasterGrid,
+    ) -> Result<Self, String> {
+        let mut ordered = Vec::with_capacity(members.len());
+        // Reverse into resolver iteration order and renumber the ordinals, so
+        // the ascending-ordinal precondition holds without a second ordering
+        // concept.
+        for (index, (_member_id, mut member)) in members.into_iter().rev().enumerate() {
+            member.ordinal = i64::try_from(index).unwrap_or(i64::MAX);
+            ordered.push(member);
+        }
+        let occupied = occupied_chunks(&ordered, &lattice)?;
+        Ok(Self {
+            members: ordered,
+            lattice,
+            occupied,
+        })
+    }
+
+    /// The occurrence list in resolver iteration order (bottom-most first).
+    ///
+    /// Slope reuses it so analysis reads the same composed window the display
+    /// does, rather than a stack of independently computed per-file slopes.
+    pub(super) fn resolved(&self) -> &[ResolvedMember] {
+        &self.members
+    }
+
+    /// Occupied 1024-cell lattice chunks of the current composition.
+    ///
+    /// Arithmetic over member extents only: the empty space between separated
+    /// sources never contributes, and no raster is opened.
+    pub(super) fn occupied_chunks(&self) -> Result<Vec<(i64, i64)>, String> {
+        Ok(self.occupied.clone())
+    }
+
+    /// Whether one lattice block holds any of the composition's coverage.
+    pub(super) fn is_occupied(&self, chunk_x: i64, chunk_y: i64) -> bool {
+        self.occupied.binary_search(&(chunk_x, chunk_y)).is_ok()
+    }
+
+    /// Resolve one bounded window of the composed value.
+    pub(super) fn read_window(
+        &self,
+        window: LatticeWindow,
+        cancel: &AtomicBool,
+    ) -> Result<ResolvedWindow, String> {
+        resolve_window(&self.members, &self.lattice, window, cancel)
+    }
+
+    /// Exact valid-cell count and f64 sum over one reduced footprint.
+    ///
+    /// A collection has no stored per-chunk aggregates, so the footprint is
+    /// answered from its **occupied chunks**: each chunk the footprint
+    /// intersects is resolved once in a bounded window, and the empty space
+    /// inside the footprint contributes nothing. Work therefore follows the
+    /// stored coverage rather than the footprint's own area, which is what
+    /// keeps a deeply minified display tile affordable.
+    pub(super) fn aggregate(
+        &self,
+        rect: LatticeWindow,
+        cancel: &AtomicBool,
+    ) -> Result<Option<BlockAggregate>, String> {
+        let end_x = rect
+            .x
+            .checked_add(i64::from(rect.width))
+            .ok_or_else(|| "reduction footprint overflows".to_string())?;
+        let end_y = rect
+            .y
+            .checked_add(i64::from(rect.height))
+            .ok_or_else(|| "reduction footprint overflows".to_string())?;
+        let mut total = BlockAggregate {
+            sum_value: 0.0,
+            valid_cells: 0,
+        };
+        for (chunk_x, chunk_y) in self.occupied_chunks()? {
+            let origin_x = chunk_x
+                .checked_mul(CHUNK_SIDE)
+                .ok_or_else(|| "chunk origin overflows".to_string())?;
+            let origin_y = chunk_y
+                .checked_mul(CHUNK_SIDE)
+                .ok_or_else(|| "chunk origin overflows".to_string())?;
+            let clip_x0 = rect.x.max(origin_x);
+            let clip_y0 = rect.y.max(origin_y);
+            let clip_x1 = end_x.min(origin_x + CHUNK_SIDE);
+            let clip_y1 = end_y.min(origin_y + CHUNK_SIDE);
+            if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
+                continue;
+            }
+            check_cancel(cancel)?;
+            let window = resolve_window(
+                &self.members,
+                &self.lattice,
+                LatticeWindow {
+                    x: clip_x0,
+                    y: clip_y0,
+                    width: u32::try_from(clip_x1 - clip_x0)
+                        .map_err(|_| "reduction window is too wide".to_string())?,
+                    height: u32::try_from(clip_y1 - clip_y0)
+                        .map_err(|_| "reduction window is too tall".to_string())?,
+                },
+                cancel,
+            )?;
+            for (sample, valid) in window.samples.iter().zip(window.valid.iter()) {
+                if *valid == 0 {
+                    continue;
+                }
+                total.valid_cells = total.valid_cells.saturating_add(1);
+                if sample.is_finite() {
+                    total.sum_value += f64::from(*sample);
+                }
+            }
+        }
+        Ok((total.valid_cells > 0).then_some(total))
+    }
+}
+
+/// How an immutable generation's numbers are read.
+///
+/// The selection is explicit and derived from the manifest's format
+/// discriminator, so a collection can never fall back to a dense file it does
+/// not own and a preserved generation keeps its accepted read.
+#[derive(Clone)]
+pub(super) enum GenerationReader {
+    /// Published resolved chunks: the merge model's generations and every
+    /// persisted analysis result.
+    Chunks(GenerationChunkReader),
+    /// An ordered source collection resolved on demand.
+    Collection(Box<CollectionReader>),
+}
+
+impl GenerationReader {
+    pub(super) fn read_window(
+        &self,
+        library: &super::LidarLibrary,
+        lattice: &RasterGrid,
+        window: LatticeWindow,
+        cancel: &AtomicBool,
+    ) -> Result<ResolvedWindow, String> {
+        match self {
+            Self::Chunks(owner) => owner.read_window(library, lattice, window, cancel),
+            Self::Collection(collection) => collection.read_window(window, cancel),
+        }
+    }
+
+    pub(super) fn aggregate(
+        &self,
+        library: &super::LidarLibrary,
+        rect: LatticeWindow,
+        cancel: &AtomicBool,
+    ) -> Result<Option<BlockAggregate>, String> {
+        match self {
+            Self::Chunks(owner) => owner.aggregate(library, rect, cancel),
+            Self::Collection(collection) => collection.aggregate(rect, cancel),
+        }
+    }
+
+    /// The first published record, for a caller that only needs one
+    /// representative raster of a chunked generation.
+    /// Whether one whole-chunk reduction cell holds any composition coverage.
+    ///
+    /// A chunked generation answers from its published records; an ordered
+    /// collection answers from the block index derived from member extents. A
+    /// block that holds nothing is never opened.
+    pub(super) fn chunk_is_occupied(
+        &self,
+        library: &super::LidarLibrary,
+        chunk_x: i64,
+        chunk_y: i64,
+    ) -> Result<bool, String> {
+        match self {
+            Self::Chunks(owner) => Ok(owner.chunk_at(library, chunk_x, chunk_y)?.is_some()),
+            Self::Collection(collection) => Ok(collection.is_occupied(chunk_x, chunk_y)),
+        }
+    }
+
+    /// One published resolved chunk by exact coordinate.
+    pub(super) fn chunk_at(
+        &self,
+        library: &super::LidarLibrary,
+        chunk_x: i64,
+        chunk_y: i64,
+    ) -> Result<Option<PersistedChunk>, String> {
+        match self {
+            Self::Chunks(owner) => owner.chunk_at(library, chunk_x, chunk_y),
+            Self::Collection(_) => Ok(None),
+        }
+    }
+}
+
 /// The lattice grid of one chunk, clipped to the chunk's full square.
 pub(super) fn chunk_grid(lattice: &RasterGrid, chunk_x: i64, chunk_y: i64) -> RasterGrid {
     RasterGrid {
@@ -320,39 +588,61 @@ fn read_member_window(
         MemberSource::LegacyDense { values, mask } => {
             read_legacy_window(values, mask, &member.grid, window, cancel)
         }
+        MemberSource::Preserved(preserved) => preserved.read(window, cancel),
         MemberSource::LegacyHead(lease) => {
             let mut guard = lease
                 .lock()
-                .map_err(|_| "legacy head lease is poisoned".to_string())?;
-            let lease = guard
-                .as_mut()
-                .ok_or_else(|| "legacy head lease was released before the read".to_string())?;
+                .map_err(|_| "preserved composition lease is poisoned".to_string())?;
+            let lease = guard.as_mut().ok_or_else(|| {
+                "preserved composition lease was released before the read".to_string()
+            })?;
             lease.read_window(window, cancel)
         }
     }
 }
 
-/// Open the overlay occurrence of an opaque legacy head.
+/// A prepared, read-only lease over a legacy TIFF-only generation.
 ///
-/// `scratch` owns the prepared derivative; the returned occurrence keeps the
-/// lease alive, and dropping the occurrence removes the derivative.
-pub(super) fn legacy_head_member(
-    engine: &super::engine::GdalEngine,
-    tiff: &Path,
-    grid: &RasterGrid,
-    nodata: Option<f32>,
+/// The controlled derivative is prepared once for the whole lease and removed
+/// when it drops, so replaying a preserved composition never re-prepares per
+/// window. The preserved generation's own mask stays authoritative: it is read
+/// independently and overrides the derivative's validity.
+pub(super) struct LegacyTiffLease {
+    reader: PreparedRaster,
     mask: Option<PathBuf>,
-    scratch: &Path,
-    cancel: &AtomicBool,
-) -> Result<ResolvedMember, String> {
-    let lease = LegacyTiffLease::open(engine, tiff, grid, nodata, mask, scratch, cancel)?;
-    Ok(ResolvedMember {
-        ordinal: 0,
-        role: MemberRole::Add,
-        grid: grid.clone(),
-        nodata,
-        source: MemberSource::LegacyHead(Arc::new(Mutex::new(Some(lease)))),
-    })
+}
+
+impl LegacyTiffLease {
+    pub(super) fn open(
+        engine: &super::engine::GdalEngine,
+        tiff: &Path,
+        grid: &RasterGrid,
+        nodata: Option<f32>,
+        mask: Option<PathBuf>,
+        scratch: &Path,
+        cancel: &AtomicBool,
+    ) -> Result<Self, String> {
+        let reader = PreparedRaster::open(engine, tiff, grid, nodata, 0, scratch, cancel)?;
+        Ok(Self { reader, mask })
+    }
+
+    /// Read one window, applying the authoritative legacy mask when present.
+    pub(super) fn read_window(
+        &mut self,
+        window: RasterWindow,
+        cancel: &AtomicBool,
+    ) -> Result<(Vec<f32>, Vec<u8>), String> {
+        let read = self.reader.read_window(window, cancel)?;
+        let samples = read.samples().to_vec();
+        let mut valid = read.valid().to_vec();
+        if let Some(mask) = &self.mask {
+            let authority = read_legacy_mask_window(mask, self.reader.grid(), window, cancel)?;
+            for (slot, byte) in valid.iter_mut().zip(authority) {
+                *slot = byte;
+            }
+        }
+        Ok((samples, valid))
+    }
 }
 
 /// One persisted resolved-chunk reference the reader can select, with the
@@ -865,51 +1155,6 @@ pub(super) struct RegionAggregate {
 /// when it drops, so a caller never re-prepares per window. The preserved
 /// generation's own mask stays authoritative: it is read independently and
 /// overrides the derivative's validity.
-pub(super) struct LegacyTiffLease {
-    reader: PreparedRaster,
-    mask: Option<PathBuf>,
-}
-
-impl LegacyTiffLease {
-    pub(super) fn open(
-        engine: &super::engine::GdalEngine,
-        tiff: &Path,
-        grid: &RasterGrid,
-        nodata: Option<f32>,
-        mask: Option<PathBuf>,
-        scratch: &Path,
-        cancel: &AtomicBool,
-    ) -> Result<Self, String> {
-        let reader = PreparedRaster::open(engine, tiff, grid, nodata, 0, scratch, cancel)?;
-        Ok(Self { reader, mask })
-    }
-
-    /// Grid of the prepared derivative; the deferred legacy-base consumers that
-    /// need it are tracked in `canopi-jv8a.4`.
-    #[allow(dead_code)]
-    pub(super) fn grid(&self) -> &RasterGrid {
-        self.reader.grid()
-    }
-
-    /// Read one window, applying the authoritative legacy mask when present.
-    pub(super) fn read_window(
-        &mut self,
-        window: RasterWindow,
-        cancel: &AtomicBool,
-    ) -> Result<(Vec<f32>, Vec<u8>), String> {
-        let read = self.reader.read_window(window, cancel)?;
-        let samples = read.samples().to_vec();
-        let mut valid = read.valid().to_vec();
-        if let Some(mask) = &self.mask {
-            let authority = read_legacy_mask_window(mask, self.reader.grid(), window, cancel)?;
-            for (slot, byte) in valid.iter_mut().zip(authority) {
-                *slot = byte;
-            }
-        }
-        Ok((samples, valid))
-    }
-}
-
 /// Read only the requested rows of a preserved dense mask file.
 fn read_legacy_mask_window(
     mask: &Path,
@@ -1011,89 +1256,6 @@ pub(super) fn member_regions(
         regions.push(aggregate);
     }
     Ok(regions)
-}
-
-/// One materialized resolved chunk: its asset plus its aggregate.
-#[derive(Debug, Clone)]
-pub(super) struct MaterializedChunk {
-    pub chunk_x: i64,
-    pub chunk_y: i64,
-    pub asset: CogAsset,
-    pub aggregate: RegionAggregate,
-}
-
-/// Materialize every occupied chunk of an ordered sequence as a standard COG.
-///
-/// This is the publication step: each occupied chunk is resolved once through
-/// the ordered-occurrence replay, written as a resolved NaN-NoData COG, and
-/// aggregated for the index. Chunks the sequence does not occupy are never
-/// visited or written, and no union-sized file is produced.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn materialize_generation_chunks(
-    engine: &super::engine::GdalEngine,
-    cancel: &AtomicBool,
-    paths: &super::paths::LidarPaths,
-    scratch: &Path,
-    members: &[ResolvedMember],
-    lattice: &RasterGrid,
-    crs_wkt: &str,
-    stem: &str,
-) -> Result<Vec<MaterializedChunk>, String> {
-    let mut materialized = Vec::new();
-    for (chunk_x, chunk_y) in occupied_chunks(members, lattice)? {
-        check_cancel(cancel)?;
-        let grid = chunk_grid(lattice, chunk_x, chunk_y);
-        let resolved = resolve_window(
-            members,
-            lattice,
-            LatticeWindow {
-                x: chunk_x * CHUNK_SIDE,
-                y: chunk_y * CHUNK_SIDE,
-                width: CHUNK_SIDE as u32,
-                height: CHUNK_SIDE as u32,
-            },
-            cancel,
-        )?;
-        let mut aggregate = RegionAggregate {
-            block_x: chunk_x,
-            block_y: chunk_y,
-            valid_cells: 0,
-            min_value: f64::INFINITY,
-            max_value: f64::NEG_INFINITY,
-            sum_value: 0.0,
-        };
-        for (value, valid) in resolved.samples.iter().zip(resolved.valid.iter()) {
-            if *valid == 0 {
-                continue;
-            }
-            aggregate.valid_cells += 1;
-            aggregate.min_value = aggregate.min_value.min(*value as f64);
-            aggregate.max_value = aggregate.max_value.max(*value as f64);
-            aggregate.sum_value += *value as f64;
-        }
-        if aggregate.valid_cells == 0 {
-            // An all-invalid chunk has no index entry: absent means invalid.
-            continue;
-        }
-        let asset = super::raster_assets::write_cog_asset(
-            engine,
-            cancel,
-            paths,
-            scratch,
-            &format!("{stem}-{chunk_x}-{chunk_y}"),
-            &grid,
-            crs_wkt,
-            Some(f32::NAN),
-            &resolved.samples,
-        )?;
-        materialized.push(MaterializedChunk {
-            chunk_x,
-            chunk_y,
-            asset,
-            aggregate,
-        });
-    }
-    Ok(materialized)
 }
 
 /// Lattice cells from the layer anchor to a member grid's first cell.
@@ -1323,6 +1485,7 @@ mod tests {
     use crate::services::lidar::engine::GdalEngine;
     use crate::services::lidar::paths::LidarPaths;
     use crate::services::lidar::raster_assets::write_cog_asset;
+    use std::sync::Mutex;
 
     fn cancellation() -> AtomicBool {
         AtomicBool::new(false)
@@ -1648,103 +1811,224 @@ mod tests {
 
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn legacy_tiff_lease_reads_windows_with_the_authoritative_mask() {
+    fn preserved_composition_reads_exact_values_with_the_authoritative_mask() {
         use crate::services::lidar::import::{raw_to_tif, write_f32_raw};
         let engine = GdalEngine::new();
-        let dir = scratch("legacy-tiff");
+        let dir = scratch("preserved-composition");
         let grid = member_grid(0, 0, 4, 3);
         let values: Vec<f32> = vec![0.0, -1.0, 5.0, 7.0, 1.0, 2.0, 3.0, 4.0, 9.0, 8.0, 6.0, 5.0];
         let raw = dir.join("legacy.raw");
         write_f32_raw(&raw, &values).unwrap();
-        let tiff = dir.join("legacy.tif");
+        let mosaic = dir.join("mosaic.tif");
         raw_to_tif(
             &engine,
             &cancellation(),
             &raw,
-            &tiff,
+            &mosaic,
             &grid,
             "EPSG:3857",
             -9999.0,
         )
         .unwrap();
         // The preserved generation's own mask is authoritative and disagrees
-        // with the numeric samples on purpose.
+        // with the numeric samples on purpose, so the test detects a reader that
+        // silently fell back to the mosaic's NoData tag.
         let mask = dir.join("legacy-mask.bin");
         std::fs::write(&mask, [1u8, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1]).unwrap();
 
-        let mut lease = LegacyTiffLease::open(
+        // A dense mosaic is not in the controlled COG profile, which is exactly
+        // why one compatibility lease makes it readable.
+        let lease = LegacyTiffLease::open(
             &engine,
-            &tiff,
+            &mosaic,
             &grid,
-            Some(-9999.0),
+            None,
             Some(mask.clone()),
             &dir,
             &cancellation(),
         )
-        .expect("legacy lease prepares once");
-        let window = RasterWindow {
-            x: 1,
-            y: 0,
-            width: 2,
-            height: 2,
+        .expect("the compatibility lease prepares once");
+        let member = ResolvedMember {
+            ordinal: 0,
+            role: MemberRole::Replace,
+            grid: grid.clone(),
+            nodata: None,
+            source: MemberSource::LegacyHead(Arc::new(Mutex::new(Some(lease)))),
         };
-        let (samples, valid) = lease.read_window(window, &cancellation()).unwrap();
-        assert_eq!(samples, vec![-1.0, 5.0, 2.0, 3.0]);
-        assert_eq!(
-            valid,
-            vec![0, 1, 1, 0],
-            "the legacy mask overrides validity"
-        );
-        let prepared: Vec<String> = std::fs::read_dir(&dir)
-            .unwrap()
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("prepared-"))
-            .collect();
-        assert!(
-            prepared.len() == 1,
-            "one derivative per lease: {prepared:?}"
-        );
-        drop(lease);
-        let left: Vec<String> = std::fs::read_dir(&dir)
-            .unwrap()
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("prepared-"))
-            .collect();
-        assert!(
-            left.is_empty(),
-            "the lease removes its derivative: {left:?}"
-        );
-
-        // A legacy TIFF is not a controlled COG, which is exactly why the
-        // lease prepares a derivative once instead of reading it directly.
-        let rejected = PreparedRaster::open_committed(&tiff, &grid, Some(-9999.0))
-            .expect_err("a legacy TIFF is rejected by the committed-profile check");
-        assert!(rejected.contains("uncompressed"), "{rejected}");
-
-        // Region aggregates cover only the member's occupied chunk.
-        let mut reader = PreparedRaster::open(
-            &engine,
-            &tiff,
-            &grid,
-            Some(-9999.0),
-            0,
-            &dir,
+        let read = resolve_window(
+            std::slice::from_ref(&member),
+            &lattice(),
+            full_window(0, 0, 4, 3),
             &cancellation(),
         )
         .unwrap();
+        let mask_values = [1u8, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1];
+        let expected: Vec<f32> = values
+            .iter()
+            .zip(mask_values.iter())
+            .map(|(value, valid)| if *valid == 1 { *value } else { f32::NAN })
+            .collect();
+        // NaN is this resolver's "no sample here", so the comparison is
+        // NaN-aware: an invalid cell carries no value to compare.
+        assert!(
+            read.samples
+                .iter()
+                .zip(expected.iter())
+                .all(|(actual, want)| (actual.is_nan() && want.is_nan()) || actual == want),
+            "the preserved mosaic is replayed exactly where the mask admits it: {:?}",
+            read.samples
+        );
+        assert_eq!(
+            read.valid,
+            mask_values.to_vec(),
+            "the generation's own mask overrides the mosaic's NoData tag"
+        );
+
+        // A window read is bounded and clipped to the member, not a whole-raster
+        // read: the same member answers a sub-window with that window's values
+        // without re-preparing the derivative.
+        let clipped = resolve_window(
+            std::slice::from_ref(&member),
+            &lattice(),
+            LatticeWindow {
+                x: 1,
+                y: 0,
+                width: 2,
+                height: 2,
+            },
+            &cancellation(),
+        )
+        .unwrap();
+        assert!(
+            clipped
+                .samples
+                .iter()
+                .zip([f32::NAN, 5.0, 2.0, f32::NAN].iter())
+                .all(|(actual, want)| (actual.is_nan() && want.is_nan()) || actual == want),
+            "{:?}",
+            clipped.samples
+        );
+        assert_eq!(clipped.valid, vec![0, 1, 1, 0]);
+        let retained = match &member.source {
+            MemberSource::LegacyHead(lease) => lease.lock().unwrap().is_some(),
+            _ => false,
+        };
+        assert!(retained, "the lease stays owned for the next read");
+
+        // The deterministic oracle for the derivative conversion: every
+        // authored sample keeps the value GDAL wrote, and the region aggregate
+        // covers exactly the member's occupied chunk.
+        let mut reader =
+            PreparedRaster::open(&engine, &mosaic, &grid, None, 0, &dir, &cancellation()).unwrap();
         let regions = member_regions(&mut reader, &lattice(), &grid, &cancellation()).unwrap();
         assert_eq!(regions.len(), 1, "one occupied chunk");
         let region = &regions[0];
         assert_eq!((region.block_x, region.block_y), (0, 0));
-        // Every authored sample is finite and differs from the declared NoData.
         assert_eq!(region.valid_cells, 12);
         assert_eq!(region.min_value, -1.0);
         assert_eq!(region.max_value, 9.0);
         let expected_sum: f64 = values.iter().map(|value| f64::from(*value)).sum();
         assert_eq!(region.sum_value, expected_sum);
         drop(reader);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn ordered_collection_resolves_topmost_valid_without_materializing_anything() {
+        let engine = GdalEngine::new();
+        let dir = scratch("ordered-collection");
+        let registry = LidarPaths::open(&dir).unwrap();
+        let lattice = lattice();
+        let grid = member_grid(0, 0, 3, 1);
+
+        // Bottom A = [10,20,30]; top B = [100,NoData,0] on the same three
+        // cells. NoData reveals the valid sample below, and a valid zero and a
+        // valid negative both survive: neither is treated as absence.
+        let author = |name: &str, nodata: f32, values: &[f32]| {
+            let asset = write_cog_asset(
+                &engine,
+                &cancellation(),
+                &registry,
+                &dir,
+                name,
+                &grid,
+                "EPSG:3857",
+                Some(nodata),
+                values,
+            )
+            .expect("member COG is created");
+            ResolvedMember {
+                ordinal: 0,
+                role: MemberRole::Replace,
+                grid: grid.clone(),
+                nodata: Some(nodata),
+                source: MemberSource::Cog(asset),
+            }
+        };
+        let bottom = author("bottom", f32::NAN, &[10.0, 20.0, 30.0]);
+        let top = author("top", f32::NAN, &[100.0, f32::NAN, 0.0]);
+
+        // The reader is built from a top-first list, exactly as the UI and the
+        // transport present it.
+        let top_first = |first: &ResolvedMember, second: &ResolvedMember| {
+            CollectionReader::new(
+                vec![
+                    ("first".to_string(), first.clone()),
+                    ("second".to_string(), second.clone()),
+                ],
+                lattice.clone(),
+            )
+            .unwrap()
+        };
+        let window = LatticeWindow {
+            x: 0,
+            y: 0,
+            width: 3,
+            height: 1,
+        };
+        let resolved = top_first(&top, &bottom)
+            .read_window(window, &cancellation())
+            .unwrap();
+        assert_eq!(resolved.samples, vec![100.0, 20.0, 0.0]);
+        assert_eq!(resolved.valid, vec![1, 1, 1]);
+
+        // Moving the top source below the bottom one — the top-first list swap —
+        // changes the composed value, and this is the composition Undo restores.
+        let moved = top_first(&bottom, &top)
+            .read_window(window, &cancellation())
+            .unwrap();
+        assert_eq!(moved.samples, vec![10.0, 20.0, 30.0]);
+        assert!(moved.valid.iter().all(|valid| *valid == 1));
+        let restored = top_first(&top, &bottom)
+            .read_window(window, &cancellation())
+            .unwrap();
+        assert_eq!(restored.samples, vec![100.0, 20.0, 0.0]);
+
+        // No composed raster exists anywhere: the composition is resolved from
+        // the retained source COGs and nothing is re-encoded by reordering.
+        let reader = top_first(&top, &bottom);
+        assert_eq!(reader.occupied_chunks().unwrap(), vec![(0, 0)]);
+        assert_eq!(reader.resolved().len(), 2);
+        let composed: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains("gen") || name.contains("chunk"))
+            .collect();
+        assert!(
+            composed.is_empty(),
+            "an ordered composition materializes nothing: {composed:?}"
+        );
+
+        // A distant second member adds only its own occupied chunk, so the empty
+        // gap contributes neither work nor coverage.
+        let far = cog_member(
+            &engine, &registry, &dir, "far", 1_000_000, 0, 4, 3, 2.0, None,
+        );
+        let sparse =
+            CollectionReader::new(vec![("far".to_string(), far)], lattice.clone()).unwrap();
+        assert_eq!(sparse.occupied_chunks().unwrap(), vec![(976, 0)]);
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -1824,81 +2108,6 @@ mod tests {
         )
         .expect_err("a corrupt chunk must fail the read");
         assert!(!error.is_empty());
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn materialized_chunks_publish_and_read_back_without_member_replay() {
-        let engine = GdalEngine::new();
-        let dir = scratch("materialize");
-        let registry = LidarPaths::open(&dir).unwrap();
-        let lattice = lattice();
-
-        // Add A=5, then replace B=9 across the same cells.
-        let mut first = cog_member(&engine, &registry, &dir, "a", 0, 0, 4, 3, 5.0, None);
-        first.ordinal = 0;
-        let mut second = cog_member(&engine, &registry, &dir, "b", 0, 0, 4, 3, 9.0, None);
-        second.ordinal = 1;
-        second.role = MemberRole::Replace;
-
-        let chunks = materialize_generation_chunks(
-            &engine,
-            &cancellation(),
-            &registry,
-            &dir,
-            &[first, second],
-            &lattice,
-            "EPSG:3857",
-            "gen",
-        )
-        .expect("chunks materialize");
-        assert_eq!(chunks.len(), 1, "one occupied chunk for a 4x3 sequence");
-        assert_eq!(chunks[0].aggregate.valid_cells, 12);
-        assert_eq!(chunks[0].aggregate.min_value, 9.0);
-        assert_eq!(chunks[0].aggregate.sum_value, 108.0);
-
-        // The published read path uses only the persisted chunk rows.
-        let persisted: Vec<PersistedChunk> = chunks
-            .iter()
-            .map(|chunk| PersistedChunk {
-                chunk_x: chunk.chunk_x,
-                chunk_y: chunk.chunk_y,
-                asset: chunk.asset.clone(),
-                nodata: Some(f32::NAN),
-                valid_cells: chunk.aggregate.valid_cells,
-                sum_value: chunk.aggregate.sum_value,
-            })
-            .collect();
-        let read = read_persisted_window(
-            &persisted,
-            &lattice,
-            full_window(0, 0, 4, 3),
-            &cancellation(),
-        )
-        .unwrap();
-        assert!(read.valid.iter().all(|valid| *valid == 1));
-        assert!(read.samples.iter().all(|value| *value == 9.0));
-
-        // A distant second member adds only its own chunk.
-        let mut far = cog_member(
-            &engine, &registry, &dir, "far", 1_000_000, 0, 4, 3, 2.0, None,
-        );
-        far.ordinal = 0;
-        let mut near = cog_member(&engine, &registry, &dir, "near", 0, 0, 4, 3, 1.0, None);
-        near.ordinal = 0;
-        let sparse = materialize_generation_chunks(
-            &engine,
-            &cancellation(),
-            &registry,
-            &dir,
-            &[near, far],
-            &lattice,
-            "EPSG:3857",
-            "sparse",
-        )
-        .unwrap();
-        assert_eq!(sparse.len(), 2, "only the two occupied chunks are written");
         let _ = std::fs::remove_dir_all(dir);
     }
 

@@ -615,3 +615,83 @@
     animation: none;
   }
 }
+
+/* Ordered source priority: topmost source first, exactly as the resolver
+   reads it. Library data, so the list is the same in every design. */
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.sourceList h4 {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.sourceList h4 span {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.priorityList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.priorityEntry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  gap: var(--space-0-5) var(--space-1);
+  align-items: center;
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+}
+
+.priorityRank {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.priorityName {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.priorityName small {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.iconButton {
+  min-width: var(--space-5);
+  padding: 0 var(--space-1);
+}
+
+.confirmRow {
+  display: inline-flex;
+  gap: var(--space-1);
+  grid-column: 2 / -1;
+}
+
+.confirmHint {
+  grid-column: 2 / -1;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

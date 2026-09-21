@@ -20,7 +20,6 @@ vi.mock('../ipc/lidar', () => ({
   lidarRenameLayer: vi.fn(),
   lidarLayerHistory: vi.fn(),
   lidarStageImport: vi.fn(),
-  lidarUndoImport: vi.fn(),
 }))
 
 vi.mock('../app/design-edit/lidar', () => ({

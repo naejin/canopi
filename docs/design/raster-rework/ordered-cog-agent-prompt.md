@@ -1,8 +1,8 @@
 # Implement ordered COG Data Layers through the real Desktop workflow
 
-Status: active — sole current raster implementation assignment; replaces the materialized-source-merge completion prompt.
+Status: retired — delivered through one consolidated implementation on `feature/bounded-raster-generations`; the [receipt](ordered-cog-receipt.md) owns the evidence and the main agent's independent disposition is the next step. Retained as the assignment record, not live execution authority.
 Tracking: `canopi-jv8a.4`; reconcile `canopi-kko3`; parent `canopi-jv8a`, epic `canopi-j571`.
-Current guidance: [fixed design](ordered-cog-design.md), [collaboration protocol](collaboration-protocol.md), [LiDAR](../../agent/lidar.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief), [delivery](../../workflow/delivery.md).
+Current guidance: [receipt](ordered-cog-receipt.md), [fixed design](ordered-cog-design.md), [collaboration protocol](collaboration-protocol.md), [LiDAR](../../agent/lidar.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief), [delivery](../../workflow/delivery.md).
 
 ## Your assignment
 

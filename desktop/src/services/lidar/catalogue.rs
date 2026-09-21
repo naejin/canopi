@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 13;
+pub const CATALOGUE_VERSION: i32 = 15;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -157,6 +157,8 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         11 => "",
         12 => SCHEMA_V12,
         13 => SCHEMA_V13,
+        14 => SCHEMA_V14,
+        15 => SCHEMA_V15,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -195,6 +197,32 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
                 [],
             )
             .map_err(|e| format!("Failed to add the legacy base reference: {e}"))?;
+    }
+    // v15 is additive too, and guarded for the same reason: a catalogue that
+    // already carries the column (or a fixture presenting a newer shape at an
+    // older version) still migrates cleanly.
+    if next == 15 {
+        if !table_has_column(
+            &transaction,
+            "lidar_layer_generations",
+            "previous_generation_id",
+        )? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_layer_generations ADD COLUMN previous_generation_id TEXT
+                     REFERENCES lidar_layer_generations(id)",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add the snapshot predecessor: {e}"))?;
+        }
+        if !table_has_column(&transaction, "lidar_collection_members", "job_id")? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_collection_members ADD COLUMN job_id TEXT",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add the collection member job: {e}"))?;
+        }
     }
     if next == 6 {
         if !table_has_column(&transaction, "lidar_import_jobs", "progress_phase")? {
@@ -362,6 +390,62 @@ const SCHEMA_V13: &str = r#"
 CREATE INDEX IF NOT EXISTS lidar_interpretation_regions_order_idx
     ON lidar_interpretation_regions(interpretation_id, block_y, block_x);
 "#;
+
+/// v14: ordered source collections as first-class immutable snapshots.
+///
+/// A Data Layer is an ordered collection of independently prepared source
+/// COGs; its numeric value is the highest-priority valid sample at each
+/// location. `lidar_generation_members` stays the ordered-occurrence record of
+/// the superseded merge model (roles `add`/`replace`/`replace-overlap`), which
+/// is still how a preserved generation is read. Ordered snapshots record their
+/// own members here instead, so neither representation has to be reinterpreted
+/// as the other.
+///
+/// `member_id` is the stable occurrence identity a user edit names: repeated
+/// imports of the same bytes are distinct occurrences even though the
+/// interpretation (and therefore the retained COG) is deduplicated. `position`
+/// is the priority order, lowest first, and is exactly the list order the UI
+/// shows (topmost first). `kind` is `source` for an ordinary occurrence and
+/// `previous-composition` for the single indivisible member that exposes a
+/// preserved legacy head; the latter carries `base_generation_id` and no
+/// interpretation, and its internals are never reordered.
+///
+/// Additive only: existing generations keep no collection rows and continue to
+/// read through their own format.
+const SCHEMA_V14: &str = r#"
+CREATE TABLE IF NOT EXISTS lidar_collection_members (
+    generation_id TEXT NOT NULL REFERENCES lidar_layer_generations(id) ON DELETE CASCADE,
+    member_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('source', 'previous-composition')),
+    interpretation_id TEXT REFERENCES lidar_interpretations(id),
+    base_generation_id TEXT REFERENCES lidar_layer_generations(id),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (generation_id, member_id),
+    CHECK (
+        (kind = 'source' AND interpretation_id IS NOT NULL AND base_generation_id IS NULL)
+        OR (kind = 'previous-composition' AND interpretation_id IS NULL
+            AND base_generation_id IS NOT NULL)
+    )
+);
+CREATE INDEX IF NOT EXISTS lidar_collection_members_order_idx
+    ON lidar_collection_members(generation_id, position);
+CREATE UNIQUE INDEX IF NOT EXISTS lidar_collection_members_position_idx
+    ON lidar_collection_members(generation_id, position);
+"#;
+
+/// v15: undo/restore lineage for a layer's published snapshots.
+///
+/// `previous_generation_id` records which snapshot was the head when this one
+/// was published. Undo therefore restores the predecessor of the *user change*
+/// it is undoing, so repeated Undo walks backwards through prior changes
+/// instead of toggling between a restoration and the snapshot it replaced. An
+/// explicit "Restore this version" records the current head as its predecessor,
+/// which is what makes it a new user change that can itself be undone.
+///
+/// Additive only: existing generations keep no predecessor and a layer with no
+/// recorded lineage simply has nothing to undo.
+const SCHEMA_V15: &str = "";
 
 /// v12: an index matching the paged chunk read order.
 ///
@@ -647,6 +731,10 @@ pub struct GenerationRow {
     /// Immutable opaque legacy head this generation overlays, when its own
     /// member history was never recorded.
     pub base_generation_id: Option<String>,
+    /// Snapshot that was the head when this one was published. Undo restores
+    /// the predecessor of the change it is undoing, so the lineage records the
+    /// user-change sequence rather than the publication sequence.
+    pub previous_generation_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -729,7 +817,7 @@ pub fn head_generation(
         .query_row(
             "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
                     g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
-                    g.base_generation_id
+                    g.base_generation_id, g.previous_generation_id
              FROM lidar_layer_heads h
              JOIN lidar_layer_generations g ON g.id = h.generation_id
              WHERE h.layer_id = ?1",
@@ -751,6 +839,7 @@ fn map_generation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRow
         max_value: row.get(7)?,
         bounds_3857: row.get(8)?,
         base_generation_id: row.get(9)?,
+        previous_generation_id: row.get(10)?,
     })
 }
 
@@ -949,6 +1038,116 @@ pub fn generation_members(
 }
 
 // ---------------------------------------------------------------------------
+// Ordered source collections
+// ---------------------------------------------------------------------------
+
+/// One occurrence of an ordered collection snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectionMemberRow {
+    /// Stable occurrence identity, never reused within a snapshot.
+    pub member_id: String,
+    /// Priority order, lowest first: position 0 is the topmost source.
+    pub position: i64,
+    /// `source` or `previous-composition`.
+    pub kind: String,
+    pub interpretation_id: Option<String>,
+    pub base_generation_id: Option<String>,
+    /// Import job that added this occurrence, when one did.
+    pub job_id: Option<String>,
+}
+
+/// Measured coverage of one interpretation: valid cells and value range.
+///
+/// The occupied-region index already stores exact per-block sums and extrema, so
+/// a source list costs one aggregate query rather than a raster read.
+pub fn interpretation_coverage(
+    connection: &Connection,
+    interpretation_id: &str,
+) -> Result<(i64, Option<f64>, Option<f64>), String> {
+    connection
+        .query_row(
+            "SELECT COALESCE(SUM(valid_cells), 0), MIN(min_value), MAX(max_value)
+             FROM lidar_interpretation_regions WHERE interpretation_id = ?1",
+            [interpretation_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<f64>>(1)?,
+                    row.get::<_, Option<f64>>(2)?,
+                ))
+            },
+        )
+        .map_err(|e| format!("Failed to read interpretation coverage: {e}"))
+}
+
+/// Ordered members of a collection snapshot, topmost first.
+pub fn collection_members(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<Vec<CollectionMemberRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT member_id, position, kind, interpretation_id, base_generation_id, job_id
+             FROM lidar_collection_members WHERE generation_id = ?1 ORDER BY position",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map([generation_id], |row| {
+            Ok(CollectionMemberRow {
+                member_id: row.get(0)?,
+                position: row.get(1)?,
+                kind: row.get(2)?,
+                interpretation_id: row.get(3)?,
+                base_generation_id: row.get(4)?,
+                job_id: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+/// Write one snapshot's ordered members, replacing any rows already recorded.
+///
+/// Only ever called inside the publication transaction that creates the
+/// generation, so the rows and their head become visible together or not at
+/// all.
+pub fn replace_collection_members(
+    connection: &Connection,
+    generation_id: &str,
+    members: &[CollectionMemberRow],
+) -> Result<(), String> {
+    connection
+        .execute(
+            "DELETE FROM lidar_collection_members WHERE generation_id = ?1",
+            [generation_id],
+        )
+        .map_err(|e| format!("Failed to clear collection members: {e}"))?;
+    for member in members {
+        connection
+            .execute(
+                "INSERT INTO lidar_collection_members(
+                     generation_id, member_id, position, kind, interpretation_id,
+                     base_generation_id, job_id, created_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![
+                    generation_id,
+                    member.member_id,
+                    member.position,
+                    member.kind,
+                    member.interpretation_id,
+                    member.base_generation_id,
+                    member.job_id,
+                    now_iso(),
+                ],
+            )
+            .map_err(|e| format!("Failed to record collection member: {e}"))?;
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Footprints (R-tree indexed candidate lookup)
 // ---------------------------------------------------------------------------
 
@@ -1018,89 +1217,6 @@ pub fn footprint_candidates(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(rows)
-}
-
-// ---------------------------------------------------------------------------
-// Generation history
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct GenerationHistoryEntry {
-    pub id: String,
-    pub created_at: String,
-    pub coverage_cells: i64,
-    pub members: Vec<String>,
-    pub roles: Vec<String>,
-    pub job_ids: Vec<String>,
-    pub is_head: bool,
-}
-
-pub fn layer_history(
-    connection: &Connection,
-    layer_id: &str,
-) -> Result<Vec<GenerationHistoryEntry>, String> {
-    let head_id: Option<String> = connection
-        .query_row(
-            "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
-            [layer_id],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
-    let mut statement = connection
-        .prepare(
-            "SELECT g.id, g.created_at, g.coverage_cells FROM lidar_layer_generations g
-             WHERE g.layer_id = ?1 ORDER BY g.created_at, g.id",
-        )
-        .map_err(|e| e.to_string())?;
-    let mut entries = statement
-        .query_map([layer_id], |row| {
-            Ok(GenerationHistoryEntry {
-                id: row.get(0)?,
-                created_at: row.get(1)?,
-                coverage_cells: row.get(2)?,
-                members: Vec::new(),
-                roles: Vec::new(),
-                job_ids: Vec::new(),
-                is_head: false,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    drop(statement);
-    let mut member_statement = connection
-        .prepare(
-            "SELECT m.interpretation_id, m.role FROM lidar_generation_members m
-             WHERE m.generation_id = ?1 ORDER BY m.ordinal",
-        )
-        .map_err(|e| e.to_string())?;
-    let mut job_statement = connection
-        .prepare(
-            "SELECT DISTINCT job_id FROM lidar_acceptance_regions
-             WHERE generation_id = ?1 AND job_id IS NOT NULL",
-        )
-        .map_err(|e| e.to_string())?;
-    for entry in &mut entries {
-        entry.is_head = head_id.as_deref() == Some(entry.id.as_str());
-        let rows = member_statement
-            .query_map([&entry.id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })
-            .map_err(|e| e.to_string())?;
-        for row in rows {
-            let (interp, role) = row.map_err(|e| e.to_string())?;
-            entry.members.push(interp);
-            entry.roles.push(role);
-        }
-        let jobs = job_statement
-            .query_map([&entry.id], |row| row.get::<_, String>(0))
-            .map_err(|e| e.to_string())?;
-        for job in jobs {
-            entry.job_ids.push(job.map_err(|e| e.to_string())?);
-        }
-    }
-    Ok(entries)
 }
 
 pub fn now_iso() -> String {
@@ -1309,7 +1425,7 @@ pub fn generation_row(
         .query_row(
             "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
                     g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
-                    g.base_generation_id
+                    g.base_generation_id, g.previous_generation_id
              FROM lidar_layer_generations g WHERE g.id = ?1",
             [generation_id],
             map_generation_row,

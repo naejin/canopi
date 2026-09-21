@@ -9,12 +9,17 @@ import {
   lidarDeleteLayer,
   lidarDeleteLayerImpact,
   lidarRenameLayer,
+  lidarLayerCollection,
   lidarLayerHistory,
+  lidarMoveLayerSource,
+  lidarRemoveLayerSource,
+  lidarRestoreLayerVersion,
+  lidarUndoLayerChange,
   lidarPreviewImportDecision,
   lidarStageImport,
-  lidarUndoImport,
   type LidarGenerationHistoryEntry,
   type LidarImportDecisionPreview,
+  type LidarLayerCollection,
 } from '../../ipc/lidar'
 import { patchLidarEntryById, removeLidarEntries, upsertLidarEntry } from '../design-edit/lidar'
 import {
@@ -162,13 +167,55 @@ export async function fetchLayerHistory(
   return lidarLayerHistory(layerId)
 }
 
-/** Undo one accepted import; republishes the layer without it. */
-export async function undoAcceptedImport(jobId: string): Promise<void> {
+/** The ordered sources and published versions of one Data Layer. */
+export async function fetchLayerCollection(layerId: string): Promise<LidarLayerCollection> {
+  return lidarLayerCollection(layerId)
+}
+
+/**
+ * A source-priority edit is library data, so the Design is never dirtied by it.
+ * The refresh follows the settlement the backend reports rather than the
+ * acknowledgement of the request, and the open collection view is re-read from
+ * the same head so a late answer cannot replace a newer list.
+ */
+async function runCollectionEdit(work: () => Promise<void>): Promise<void> {
   await withLidarError(async () => {
-    await lidarUndoImport(jobId)
+    await work()
     ensureLidarPolling()
     await refreshLidarLibrary()
   })
+}
+
+export async function moveLayerSource(
+  layerId: string,
+  memberId: string,
+  towardsTop: boolean,
+  expectedHead: string | null,
+): Promise<void> {
+  await runCollectionEdit(() => lidarMoveLayerSource(layerId, memberId, towardsTop, expectedHead))
+}
+
+export async function removeLayerSource(
+  layerId: string,
+  memberId: string,
+  expectedHead: string | null,
+): Promise<void> {
+  await runCollectionEdit(() => lidarRemoveLayerSource(layerId, memberId, expectedHead))
+}
+
+export async function undoLayerChange(
+  layerId: string,
+  expectedHead: string | null,
+): Promise<void> {
+  await runCollectionEdit(() => lidarUndoLayerChange(layerId, expectedHead))
+}
+
+export async function restoreLayerVersion(
+  layerId: string,
+  versionId: string,
+  expectedHead: string | null,
+): Promise<void> {
+  await runCollectionEdit(() => lidarRestoreLayerVersion(layerId, versionId, expectedHead))
 }
 
 export function setLidarEntryVisibility(id: string, visible: boolean): void {

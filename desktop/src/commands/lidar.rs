@@ -5,6 +5,7 @@
 //! receipts or snapshots. All heavy work runs through the managed Native
 //! Operation Executor.
 
+use crate::services::lidar::import;
 use crate::{native_operation::NativeOperationExecutor, services::lidar::LidarLibrary};
 use common_types::lidar::{
     LidarAnalysisKind, LidarAnalysisParameters, LidarEngineStatus, LidarLibrarySnapshot,
@@ -303,21 +304,139 @@ pub async fn lidar_layer_history(
 }
 
 #[tauri::command]
-pub async fn lidar_undo_import(
+pub async fn lidar_layer_collection(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
-    job_id: String,
-) -> Result<(), String> {
-    let library_for_validate = library.inner().clone();
-    let job_id_for_validate = job_id.clone();
+    layer_id: String,
+) -> Result<common_types::lidar::LidarLayerCollection, String> {
+    let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
-            "lidar undo admission",
-            move || library_for_validate.validate_undo(&job_id_for_validate),
+            "lidar layer collection",
+            move || library.layer_collection(&layer_id),
+        )
+        .await
+}
+
+/// Admit one ordered-member edit before any work is created.
+async fn admit_layer_edit(
+    library: &LidarLibrary,
+    executor: &NativeOperationExecutor,
+    layer_id: String,
+    member_id: Option<String>,
+    expected_head: Option<String>,
+) -> Result<(), String> {
+    let library = library.clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar layer edit admission",
+            move || {
+                library.validate_layer_edit(
+                    &layer_id,
+                    member_id.as_deref(),
+                    expected_head.as_deref(),
+                )
+            },
+        )
+        .await
+}
+
+/// Move one source one position in the layer's priority list.
+#[tauri::command]
+pub async fn lidar_move_layer_source(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+    member_id: String,
+    towards_top: bool,
+    expected_head: Option<String>,
+) -> Result<(), String> {
+    admit_layer_edit(
+        library.inner(),
+        executor.inner(),
+        layer_id.clone(),
+        Some(member_id.clone()),
+        expected_head.clone(),
+    )
+    .await?;
+    library
+        .inner()
+        .begin_move_member(&layer_id, &member_id, towards_top, expected_head)
+}
+
+/// Detach one source from the layer's current composition.
+#[tauri::command]
+pub async fn lidar_remove_layer_source(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+    member_id: String,
+    expected_head: Option<String>,
+) -> Result<(), String> {
+    admit_layer_edit(
+        library.inner(),
+        executor.inner(),
+        layer_id.clone(),
+        Some(member_id.clone()),
+        expected_head.clone(),
+    )
+    .await?;
+    library
+        .inner()
+        .begin_remove_member(&layer_id, &member_id, expected_head)
+}
+
+/// Undo the layer's last change by publishing the preceding snapshot.
+#[tauri::command]
+pub async fn lidar_undo_layer_change(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+    expected_head: Option<String>,
+) -> Result<(), String> {
+    admit_layer_edit(
+        library.inner(),
+        executor.inner(),
+        layer_id.clone(),
+        None,
+        expected_head.clone(),
+    )
+    .await?;
+    library.inner().begin_undo_layer(&layer_id, expected_head)
+}
+
+/// Publish one older version as the layer's new head.
+#[tauri::command]
+pub async fn lidar_restore_layer_version(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+    version_id: String,
+    expected_head: Option<String>,
+) -> Result<(), String> {
+    let library_for_check = library.inner().clone();
+    let layer_for_check = layer_id.clone();
+    let version_for_check = version_id.clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar version admission",
+            move || {
+                let owner = import::version_layer(&library_for_check, &version_for_check)?;
+                if owner != layer_for_check {
+                    return Err(format!(
+                        "version {version_for_check} belongs to another layer"
+                    ));
+                }
+                Ok(())
+            },
         )
         .await?;
-    library.inner().begin_undo(&job_id)
+    library
+        .inner()
+        .begin_restore_version(&layer_id, &version_id, expected_head)
 }
 
 #[tauri::command]

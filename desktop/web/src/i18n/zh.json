@@ -533,7 +533,27 @@
       "history": "历史",
       "historyCells": "个像元",
       "historyHead": "当前",
-      "historyUndo": "撤销导入"
+      "historyUndo": "撤销导入",
+      "sources": "数据源",
+      "loadingSources": "正在加载数据源…",
+      "sourceOrderHint": "列表中越靠上的数据源会覆盖下方有效数据。顺序同样影响分析。",
+      "libraryOrderNote": "数据源顺序属于库共享数据：对使用该图层的所有设计生效。",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "removeSource": "移除",
+      "removeSourceConfirm": "从当前组合中移除此数据源？其数据和所有已发布版本都会保留在库中。",
+      "removeSourceConfirmAction": "移除数据源",
+      "previousComposition": "之前的组合",
+      "previousCompositionHint": "保留的早期合并，其内部顺序无法更改。",
+      "undoLastChange": "撤销上次更改",
+      "restoreVersion": "恢复此版本",
+      "operation": {
+        "import": "导入",
+        "reorder": "重新排序",
+        "remove": "移除",
+        "undo": "撤销",
+        "restore": "恢复"
+      }
     }
   },
   "worldMap": {

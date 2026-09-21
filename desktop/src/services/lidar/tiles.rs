@@ -93,7 +93,10 @@ impl TileRequest {
 /// The generation's manifest, whichever storage format describes it.
 enum DisplayManifest {
     Dense(GenerationManifest),
+    /// A generation with no stored pyramid: published resolved chunks.
     Sparse(GenerationManifest),
+    /// A generation with no stored pyramid: an ordered source collection.
+    Collection(GenerationManifest),
     SparseResult(ResultManifest),
 }
 
@@ -102,6 +105,7 @@ impl DisplayManifest {
         match self {
             Self::Dense(manifest) => &manifest.grid,
             Self::Sparse(manifest) => &manifest.grid,
+            Self::Collection(manifest) => &manifest.grid,
             Self::SparseResult(manifest) => &manifest.grid,
         }
     }
@@ -120,6 +124,7 @@ impl DisplayManifest {
         match self {
             Self::Dense(manifest) => &manifest.crs_wkt,
             Self::Sparse(manifest) => &manifest.crs_wkt,
+            Self::Collection(manifest) => &manifest.crs_wkt,
             Self::SparseResult(manifest) => &manifest.crs_wkt,
         }
     }
@@ -161,6 +166,9 @@ fn load_manifest(
                 .map_err(|e| format!("Invalid generation manifest: {e}"))?;
             match manifest.format {
                 GenerationStorageFormat::CogChunksV1 => Ok(DisplayManifest::Sparse(manifest)),
+                GenerationStorageFormat::OrderedMembersV1 => {
+                    Ok(DisplayManifest::Collection(manifest))
+                }
                 GenerationStorageFormat::LegacyDenseV1 => Ok(DisplayManifest::Dense(manifest)),
             }
         }
@@ -514,7 +522,36 @@ pub(super) fn render_tile(
     }
 }
 
-/// Render one tile from an immutable sparse generation.
+/// The reader that serves one generation's numbers.
+///
+/// A chunked generation (source or slope result) reads its published records; an
+/// ordered collection resolves its source COGs on demand. Either way the reader
+/// is bound to the immutable generation the request named.
+fn render_owner(
+    library: &super::LidarLibrary,
+    request: &TileRequest,
+    manifest: &DisplayManifest,
+) -> Result<generation::GenerationReader, String> {
+    match manifest {
+        DisplayManifest::Collection(manifest) => {
+            let collection =
+                super::collection::load_reader(library, &request.generation_id, manifest)?
+                    .ok_or_else(|| {
+                        "accepted collection is missing a source payload; the layer cannot be \
+                         displayed without inventing coverage"
+                            .to_string()
+                    })?;
+            Ok(generation::GenerationReader::Collection(Box::new(
+                collection,
+            )))
+        }
+        _ => Ok(generation::GenerationReader::Chunks(
+            generation::GenerationChunkReader::new(&request.generation_id, generation::RESULT_ROLE),
+        )),
+    }
+}
+
+/// Render one tile from an immutable generation.
 fn render_tile_uncached(
     library: &super::LidarLibrary,
     request: &TileRequest,
@@ -529,8 +566,7 @@ fn render_tile_uncached(
     // every reduction or window read fetches its own bounded page, so a tile
     // costs what its footprint intersects rather than what the whole
     // generation stores.
-    let owner =
-        generation::GenerationChunkReader::new(&request.generation_id, generation::RESULT_ROLE);
+    let owner = render_owner(library, request, &manifest)?;
     let lattice = manifest.grid().clone();
     let ramp = match request.style.as_str() {
         "slope" => ColorRamp::slope_degrees(),
@@ -726,7 +762,7 @@ type ChunkCells = std::collections::BTreeMap<(i64, i64), Vec<(u32, i64, i64)>>;
 /// encloses and reads only its boundary chunks. Nothing here grows with the
 /// generation: the plan is bounded by the tile's own samples.
 struct ReductionCells<'a> {
-    owner: &'a generation::GenerationChunkReader,
+    owner: &'a generation::GenerationReader,
     library: &'a super::LidarLibrary,
     lattice: &'a RasterGrid,
     cancel: &'a AtomicBool,
@@ -737,7 +773,7 @@ struct ReductionCells<'a> {
 
 impl<'a> ReductionCells<'a> {
     fn new(
-        owner: &'a generation::GenerationChunkReader,
+        owner: &'a generation::GenerationReader,
         library: &'a super::LidarLibrary,
         lattice: &'a RasterGrid,
         cancel: &'a AtomicBool,
@@ -820,15 +856,19 @@ impl<'a> ReductionCells<'a> {
         for ((chunk_x, chunk_y), cells) in by_chunk {
             // A record lookup is one indexed point query; only opening a chunk
             // page or aggregating a crossing footprint is a reduction read.
-            let record = self.owner.chunk_at(self.library, chunk_x, chunk_y)?;
-            let Some(record) = record else {
-                // An absent chunk is invalid coverage: it is never opened and
-                // every cell it would hold stays transparent.
+            // A block that holds no composition coverage is never opened: its
+            // cells stay transparent, which is what keeps a minified tile cheap
+            // far from the data.
+            if !self
+                .owner
+                .chunk_is_occupied(self.library, chunk_x, chunk_y)?
+            {
                 for (level, cell_x, cell_y) in cells {
                     self.means.insert((level, cell_x, cell_y), None);
                 }
                 continue;
-            };
+            }
+            let record = self.owner.chunk_at(self.library, chunk_x, chunk_y)?;
             let origin_x = chunk_x * generation::CHUNK_SIDE;
             let origin_y = chunk_y * generation::CHUNK_SIDE;
             let mut page: Option<generation::ResolvedWindow> = None;
@@ -836,7 +876,11 @@ impl<'a> ReductionCells<'a> {
                 let side = reduced_side(level)?;
                 let block_x = cell_x * side;
                 let block_y = cell_y * side;
-                let mean = if level == PAGE_LEVEL && block_x == origin_x && block_y == origin_y {
+                let mean = if level == PAGE_LEVEL
+                    && block_x == origin_x
+                    && block_y == origin_y
+                    && let Some(record) = &record
+                {
                     // The cell is exactly this stored chunk: its aggregate is
                     // already the valid-only sum and count.
                     record.mean()
@@ -885,7 +929,7 @@ impl<'a> ReductionCells<'a> {
 /// everywhere never allocates a native-scale window at all.
 #[allow(clippy::too_many_arguments)]
 fn read_dense_window(
-    owner: &generation::GenerationChunkReader,
+    owner: &generation::GenerationReader,
     library: &super::LidarLibrary,
     lattice: &RasterGrid,
     cells: &[(f64, f64)],
@@ -1363,7 +1407,10 @@ mod tests {
                 &values,
             );
         }
-        let owner = generation::GenerationChunkReader::new("generation-s", generation::RESULT_ROLE);
+        let owner = generation::GenerationReader::Chunks(generation::GenerationChunkReader::new(
+            "generation-s",
+            generation::RESULT_ROLE,
+        ));
         let lattice = RasterGrid {
             width: 1,
             height: 1,

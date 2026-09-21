@@ -1,8 +1,8 @@
 # Ordered COG Data Layers
 
-Status: active — user-selected replacement for materialized source merging; implementation authorized through the companion prompt, not yet delivered or integrated.
-Tracking: re-scope `canopi-jv8a.4` under `canopi-jv8a` / `canopi-j571`; reconcile `canopi-kko3` in the same implementation. bd owns progress.
-Current guidance: [implementation prompt](ordered-cog-agent-prompt.md), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR guide](../../agent/lidar.md), [collaboration](collaboration-protocol.md), [debrief](review-and-debrief.md).
+Status: partial — implemented on `feature/bounded-raster-generations` and awaiting independent disposition; not integrated or released. The [receipt](ordered-cog-receipt.md) owns revisions, evidence and limits.
+Tracking: `canopi-jv8a.4` (kept open) under `canopi-jv8a` / `canopi-j571`; `canopi-kko3` is resolved by the delivered recompute-after-Undo decision. bd owns progress.
+Current guidance: [delivery receipt](ordered-cog-receipt.md), [assignment](ordered-cog-agent-prompt.md), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR guide](../../agent/lidar.md), [collaboration](collaboration-protocol.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief).
 
 ## 1. Mandate and supersession
 

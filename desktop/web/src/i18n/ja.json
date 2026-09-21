@@ -533,7 +533,27 @@
       "history": "履歴",
       "historyCells": "セル",
       "historyHead": "現行",
-      "historyUndo": "取り込みを取り消す"
+      "historyUndo": "取り込みを取り消す",
+      "sources": "ソース",
+      "loadingSources": "ソースを読み込んでいます…",
+      "sourceOrderHint": "リストの上のソースが下の有効なデータを覆います。順序は解析にも影響します。",
+      "libraryOrderNote": "ソースの順序はライブラリの共有データです。このレイヤーを使うすべてのデザインに適用されます。",
+      "moveUp": "上へ移動",
+      "moveDown": "下へ移動",
+      "removeSource": "削除",
+      "removeSourceConfirm": "このソースを現在の構成から削除しますか？データと公開済みのすべてのバージョンはライブラリに残ります。",
+      "removeSourceConfirmAction": "ソースを削除",
+      "previousComposition": "以前の構成",
+      "previousCompositionHint": "保存された以前の合成です。内部の順序は変更できません。",
+      "undoLastChange": "最後の変更を元に戻す",
+      "restoreVersion": "このバージョンを復元",
+      "operation": {
+        "import": "インポート",
+        "reorder": "並べ替え",
+        "remove": "削除",
+        "undo": "元に戻す",
+        "restore": "復元"
+      }
     }
   },
   "worldMap": {

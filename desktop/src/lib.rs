@@ -125,7 +125,11 @@ pub fn run() {
             commands::lidar::lidar_cancel_raster_tile,
             commands::lidar::lidar_delete_analysis,
             commands::lidar::lidar_layer_history,
-            commands::lidar::lidar_undo_import,
+            commands::lidar::lidar_layer_collection,
+            commands::lidar::lidar_move_layer_source,
+            commands::lidar::lidar_remove_layer_source,
+            commands::lidar::lidar_undo_layer_change,
+            commands::lidar::lidar_restore_layer_version,
         ])
         .setup(|app| {
             // Logging

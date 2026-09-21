@@ -9,6 +9,7 @@ import type {
   LidarAnalysisReceipt,
   LidarAnalysisKind,
   LidarAnalysisParameters,
+  LidarLayerCollection,
   LidarLibrarySnapshot,
   LidarMeasurementKind,
 } from '../generated/contracts'
@@ -16,6 +17,8 @@ import type {
 export type {
   LidarTileset,
   LidarGenerationHistoryEntry,
+  LidarLayerCollection,
+  LidarLayerSource,
   LidarAnalysisSummary,
   LidarLayerSummary,
   LidarDeleteImpact,
@@ -113,6 +116,48 @@ export async function lidarLayerHistory(
   return invoke('lidar_layer_history', { layerId })
 }
 
-export async function lidarUndoImport(jobId: string): Promise<void> {
-  return invoke('lidar_undo_import', { jobId })
+/** The ordered sources and published versions of one Data Layer. */
+export async function lidarLayerCollection(layerId: string): Promise<LidarLayerCollection> {
+  return invoke('lidar_layer_collection', { layerId })
+}
+
+/**
+ * Move one source one position in the layer's priority list.
+ *
+ * `expectedHead` is the snapshot the caller saw: a stale edit fails by name
+ * instead of being applied to a newer order.
+ */
+export async function lidarMoveLayerSource(
+  layerId: string,
+  memberId: string,
+  towardsTop: boolean,
+  expectedHead: string | null,
+): Promise<void> {
+  return invoke('lidar_move_layer_source', { layerId, memberId, towardsTop, expectedHead })
+}
+
+/** Detach one source from the layer's current composition. */
+export async function lidarRemoveLayerSource(
+  layerId: string,
+  memberId: string,
+  expectedHead: string | null,
+): Promise<void> {
+  return invoke('lidar_remove_layer_source', { layerId, memberId, expectedHead })
+}
+
+/** Undo the layer's last change by publishing the preceding snapshot. */
+export async function lidarUndoLayerChange(
+  layerId: string,
+  expectedHead: string | null,
+): Promise<void> {
+  return invoke('lidar_undo_layer_change', { layerId, expectedHead })
+}
+
+/** Publish one older version as the layer's new head. */
+export async function lidarRestoreLayerVersion(
+  layerId: string,
+  versionId: string,
+  expectedHead: string | null,
+): Promise<void> {
+  return invoke('lidar_restore_layer_version', { layerId, versionId, expectedHead })
 }

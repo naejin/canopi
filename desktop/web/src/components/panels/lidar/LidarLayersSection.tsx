@@ -19,13 +19,17 @@ import {
   createLidarLayer,
   deleteLidarAnalysis,
   deleteLidarLayer,
+  fetchLayerCollection,
   fetchLayerHistory,
   fetchLidarLayerDeleteImpact,
+  moveLayerSource,
+  removeLayerSource,
+  restoreLayerVersion,
+  undoLayerChange,
   previewOpenImportDecision,
   setLidarEntryOpacity,
   setLidarEntryVisibility,
   startImportForLayer,
-  undoAcceptedImport,
 } from '../../../app/lidar/actions'
 import {
   lidarMapViewBounds,
@@ -37,6 +41,7 @@ import type {
   LidarDeleteImpact,
   LidarGenerationHistoryEntry,
   LidarImportDecisionPreview,
+  LidarLayerCollection,
 } from '../../../ipc/lidar'
 import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import layerStyles from '../../canvas/LayerPanel.module.css'
@@ -61,6 +66,8 @@ export function LidarLayersSection() {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [mode, setMode] = useState<DetailMode>('settings')
   const [history, setHistory] = useState<LidarGenerationHistoryEntry[] | null>(null)
+  const [collection, setCollection] = useState<LidarLayerCollection | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [deleteImpact, setDeleteImpact] = useState<LidarDeleteImpact | null>(null)
   const [analysisDeleteId, setAnalysisDeleteId] = useState<string | null>(null)
   const [showReturnToLocation, setShowReturnToLocation] = useState(false)
@@ -78,8 +85,38 @@ export function LidarLayersSection() {
     setSelectedId(id)
     setMode('settings')
     setHistory(null)
+    setCollection(null)
+    setConfirmRemove(null)
     setDeleteImpact(null)
     setAnalysisDeleteId(null)
+  }
+
+  /** Re-read the ordered composition the head the backend settled on. */
+  const loadCollection = (layerId: string): void => {
+    setCollection(null)
+    void fetchLayerCollection(layerId)
+      .then(setCollection)
+      .catch((error) => {
+        lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+      })
+  }
+
+  // The priority list is library data, so it is re-read whenever the library
+  // snapshot settles: a reorder, remove, Undo or a completed import all publish
+  // a new head, and the list must show that head rather than the one the panel
+  // happened to load first.
+  useEffect(() => {
+    if (mode !== 'settings' || selected?.kind !== 'Source') return
+    loadCollection(selected.id)
+  }, [mode, selected?.id, library])
+
+  const runEdit = (layerId: string, work: Promise<void>): void => {
+    void work
+      .then(() => loadCollection(layerId))
+      .catch((error) => {
+        lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+        loadCollection(layerId)
+      })
   }
 
   const submitCreate = (): void => {
@@ -94,11 +131,15 @@ export function LidarLayersSection() {
     select(item.id)
     setMode('history')
     setHistory(null)
+    setCollection(null)
     void fetchLayerHistory(item.id)
       .then(setHistory)
       .catch((error) => {
         lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
       })
+    void fetchLayerCollection(item.id)
+      .then(setCollection)
+      .catch(() => setCollection(null))
   }
 
   const openLayerDelete = (item: LidarPresentationItem): void => {
@@ -263,7 +304,20 @@ export function LidarLayersSection() {
             <span>{selected.visible ? t('canvas.layers.visible') : t('canvas.layers.hidden')}</span>
           </div>
           {mode === 'history' && selected.kind === 'Source' ? (
-            <HistoryDetail history={history} onBack={() => setMode('settings')} />
+            <HistoryDetail
+              history={history}
+              collection={collection}
+              onBack={() => setMode('settings')}
+              onUndo={() =>
+                runEdit(selected.id, undoLayerChange(selected.id, collection?.head_generation_id ?? null))
+              }
+              onRestore={(versionId) =>
+                runEdit(
+                  selected.id,
+                  restoreLayerVersion(selected.id, versionId, collection?.head_generation_id ?? null),
+                )
+              }
+            />
           ) : mode === 'delete' ? (
             <DeleteDetail
               item={selected}
@@ -284,6 +338,26 @@ export function LidarLayersSection() {
                   : `${t('canvas.lidar.slopeDegrees')} · ${stateLabel(selected.state)}`}
               </p>
               {selectedAnalysis?.detail && <p className={styles.errorMessage}>{selectedAnalysis.detail}</p>}
+              {selected.kind === 'Source' && (
+                <SourcePriorityList
+                  collection={collection}
+                  confirmRemove={confirmRemove}
+                  onConfirmRemove={setConfirmRemove}
+                  onMove={(memberId, towardsTop) =>
+                    runEdit(
+                      selected.id,
+                      moveLayerSource(selected.id, memberId, towardsTop, collection?.head_generation_id ?? null),
+                    )
+                  }
+                  onRemove={(memberId) => {
+                    setConfirmRemove(null)
+                    runEdit(
+                      selected.id,
+                      removeLayerSource(selected.id, memberId, collection?.head_generation_id ?? null),
+                    )
+                  }}
+                />
+              )}
               <OpacityControl item={selected} />
               {selected.kind === 'Source' && selectedLayer && (
                 <SourceActions
@@ -610,22 +684,139 @@ function SourceActions({ item, coverageCells, bounds, engineUnavailable, showRet
   )
 }
 
-function HistoryDetail({ history, onBack }: { readonly history: LidarGenerationHistoryEntry[] | null; onBack(): void }) {
+/**
+ * The layer's priority list, topmost first.
+ *
+ * A source order is shared library data: moving one changes the composition for
+ * every design that references the layer, so the panel says so once and never
+ * writes a mirrored order into the Design.
+ */
+function SourcePriorityList({ collection, confirmRemove, onConfirmRemove, onMove, onRemove }: {
+  readonly collection: LidarLayerCollection | null
+  readonly confirmRemove: string | null
+  onConfirmRemove(memberId: string | null): void
+  onMove(memberId: string, towardsTop: boolean): void
+  onRemove(memberId: string): void
+}) {
+  if (collection === null) return <p className={styles.detailSummary}>{t('canvas.lidar.loadingSources')}</p>
+  return (
+    <div className={styles.sourceList}>
+      <h4>{t('canvas.lidar.sources')} <span>{collection.sources.length}</span></h4>
+      <p className={styles.detailSummary}>{t('canvas.lidar.sourceOrderHint')}</p>
+      {collection.sources.length === 0 ? (
+        <p className={styles.emptyHint}>{t('canvas.lidar.empty')}</p>
+      ) : (
+        <ol className={styles.priorityList}>
+          {collection.sources.map((source, index) => (
+            <li key={source.member_id} className={styles.priorityEntry}>
+              <span className={styles.priorityRank}>{index + 1}</span>
+              <span className={styles.priorityName}>
+                {source.kind === 'previous-composition'
+                  ? t('canvas.lidar.previousComposition')
+                  : (source.filename ?? t('canvas.lidar.review.sources'))}
+                <small>
+                  {source.kind === 'previous-composition'
+                    ? t('canvas.lidar.previousCompositionHint')
+                    : `${Number(source.coverage_cells).toLocaleString()} ${t('canvas.lidar.historyCells')}`}
+                </small>
+              </span>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label={t('canvas.lidar.moveUp')}
+                disabled={index === 0}
+                onClick={() => onMove(source.member_id, true)}
+              >↑</button>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label={t('canvas.lidar.moveDown')}
+                disabled={index === collection.sources.length - 1}
+                onClick={() => onMove(source.member_id, false)}
+              >↓</button>
+              {confirmRemove === source.member_id ? (
+                <span className={styles.confirmRow}>
+                  <button type="button" className={styles.dangerButton} onClick={() => onRemove(source.member_id)}>
+                    {t('canvas.lidar.removeSourceConfirmAction')}
+                  </button>
+                  <button type="button" className={styles.secondaryButton} onClick={() => onConfirmRemove(null)}>
+                    {t('canvas.lidar.review.cancel')}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => onConfirmRemove(source.member_id)}
+                >{t('canvas.lidar.removeSource')}</button>
+              )}
+              {confirmRemove === source.member_id && (
+                <span className={styles.confirmHint}>{t('canvas.lidar.removeSourceConfirm')}</span>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      <button
+        type="button"
+        className={styles.secondaryButton}
+        disabled={!collection.can_undo}
+        onClick={undoLayerChangeFromHistory(collection)}
+      >{t('canvas.lidar.undoLastChange')}</button>
+      <p className={styles.detailSummary}>{t('canvas.lidar.libraryOrderNote')}</p>
+    </div>
+  )
+}
+
+/** Undo is exposed on the version list; this keeps the settings list honest. */
+function undoLayerChangeFromHistory(collection: LidarLayerCollection): () => void {
+  return () => {
+    void undoLayerChange(collection.layer_id, collection.head_generation_id)
+  }
+}
+
+/**
+ * Published versions of the layer, newest first.
+ *
+ * Each entry carries the user operation and its publication time with the
+ * generation's own identity, so two consecutive imports never read alike.
+ * Restoring publishes a new head and deletes nothing.
+ */
+function HistoryDetail({ history, collection, onBack, onUndo, onRestore }: {
+  readonly history: LidarGenerationHistoryEntry[] | null
+  readonly collection: LidarLayerCollection | null
+  onBack(): void
+  onUndo(): void
+  onRestore(versionId: string): void
+}) {
+  const head = history?.find((entry) => entry.is_head) ?? null
   return (
     <div className={styles.details}>
       <button type="button" className={styles.textButton} onClick={onBack}>‹ {t('canvas.lidar.backToSettings')}</button>
       <h4>{t('canvas.lidar.history')}</h4>
+      <button type="button" className={styles.secondaryButton} disabled={!(collection?.can_undo ?? false)} onClick={onUndo}>
+        {t('canvas.lidar.undoLastChange')}
+      </button>
       {history === null ? <p className={styles.detailSummary}>{t('canvas.lidar.loadingHistory')}</p> : (
         <ol className={styles.historyList}>
-          {history.flatMap((entry) => entry.job_ids.map((jobId, index) => (
-            <li key={`${entry.id}-${jobId}`} className={styles.historyEntry}>
-              <span>{t('canvas.lidar.importOperation', { number: index + 1 })}</span>
-              <small>{Number(entry.coverage_cells).toLocaleString()} {t('canvas.lidar.historyCells')}{entry.is_head ? ` · ${t('canvas.lidar.historyHead')}` : ''}</small>
-              <button type="button" className={styles.secondaryButton} onClick={() => void undoAcceptedImport(jobId)}>{t('canvas.lidar.historyUndo')}</button>
+          {history.map((entry) => (
+            <li key={entry.id} className={styles.historyEntry}>
+              <span>{t(`canvas.lidar.operation.${entry.operation}`)}</span>
+              <small>
+                {entry.created_at} · {Number(entry.coverage_cells).toLocaleString()} {t('canvas.lidar.historyCells')}
+                {entry.is_head ? ` · ${t('canvas.lidar.historyHead')}` : ''}
+              </small>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={entry.is_head}
+                onClick={() => onRestore(entry.id)}
+              >{t('canvas.lidar.restoreVersion')}</button>
             </li>
-          )))}
+          ))}
         </ol>
       )}
+      {head === null && <p className={styles.detailSummary}>{t('canvas.lidar.empty')}</p>}
     </div>
   )
 }

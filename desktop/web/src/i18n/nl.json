@@ -533,7 +533,27 @@
       "history": "Geschiedenis",
       "historyCells": "cellen",
       "historyHead": "huidig",
-      "historyUndo": "Import ongedaan maken"
+      "historyUndo": "Import ongedaan maken",
+      "sources": "Bronnen",
+      "loadingSources": "Bronnen laden…",
+      "sourceOrderHint": "Bronnen hoger in de lijst dekken geldige gegevens eronder af. De volgorde beïnvloedt ook analyses.",
+      "libraryOrderNote": "Bronvolgorde is gedeelde bibliotheekgegevens: hij geldt voor elk ontwerp dat deze laag gebruikt.",
+      "moveUp": "Omhoog",
+      "moveDown": "Omlaag",
+      "removeSource": "Verwijderen",
+      "removeSourceConfirm": "Deze bron uit de huidige samenstelling verwijderen? De gegevens en alle gepubliceerde versies blijven in de bibliotheek.",
+      "removeSourceConfirmAction": "Bron verwijderen",
+      "previousComposition": "Vorige samenstelling",
+      "previousCompositionHint": "Een bewaarde eerdere samenvoeging; de interne volgorde kan niet worden gewijzigd.",
+      "undoLastChange": "Laatste wijziging ongedaan maken",
+      "restoreVersion": "Deze versie herstellen",
+      "operation": {
+        "import": "Importeren",
+        "reorder": "Herordenen",
+        "remove": "Verwijderen",
+        "undo": "Ongedaan maken",
+        "restore": "Herstellen"
+      }
     }
   },
   "worldMap": {

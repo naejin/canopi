@@ -243,10 +243,57 @@ pub struct LidarGenerationHistoryEntry {
     pub coverage_cells: u64,
     pub members: Vec<String>,
     pub roles: Vec<String>,
-    /// Import jobs whose acceptance produced this generation; each can be
-    /// undone by republishing without its interpretation.
+    /// Import jobs whose acceptance produced this generation.
     pub job_ids: Vec<String>,
     pub is_head: bool,
+    /// User operation this version recorded, when it can be told apart
+    /// (`import`, `reorder`, `remove`, `undo`, `restore`).
+    pub operation: String,
+    /// Sources in this version's ordered composition.
+    pub source_count: u32,
+    /// Whether this version can be restored as the new head.
+    pub restorable: bool,
+}
+
+/// One occurrence in a Data Layer's priority list, topmost first.
+///
+/// `kind` is `source` for an ordinary independently prepared COG and
+/// `previous-composition` for the single indivisible member that exposes a
+/// preserved pre-transition head. A source member carries its own measured
+/// coverage; a previous-composition member reports the preserved generation's.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct LidarLayerSource {
+    pub member_id: String,
+    pub kind: String,
+    /// Display name of the source file, when this member has one.
+    pub filename: Option<String>,
+    pub interpretation_id: Option<String>,
+    /// Preserved generation this member replays, for a previous composition.
+    pub base_generation_id: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub pixel_size_m: f64,
+    pub coverage_cells: u64,
+    pub value_range: [f64; 2],
+}
+
+/// The ordered composition and published versions of one Data Layer.
+///
+/// `sources` is the layer's priority list exactly as the UI must show it:
+/// index 0 is the topmost source and its valid samples cover every source below
+/// it. `head_generation_id` is the immutable snapshot the list describes, which
+/// every edit echoes back so a stale edit fails by name instead of applying to
+/// a newer order.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct LidarLayerCollection {
+    pub layer_id: String,
+    pub head_generation_id: Option<String>,
+    /// Whether the head can be walked back to an earlier version.
+    pub can_undo: bool,
+    pub sources: Vec<LidarLayerSource>,
+    pub versions: Vec<LidarGenerationHistoryEntry>,
 }
 
 /// Impact summary shown before a layer deletion is confirmed.

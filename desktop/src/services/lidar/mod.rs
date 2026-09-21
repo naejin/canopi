@@ -8,6 +8,7 @@
 pub mod admission;
 pub mod analysis;
 pub mod catalogue;
+mod collection;
 pub mod display;
 #[cfg(test)]
 mod e2e;
@@ -41,6 +42,13 @@ use std::sync::{Arc, Mutex};
 
 pub type LidarSnapshot = common_types::lidar::LidarLibrarySnapshot;
 
+/// One ordered-member edit request, dispatched under the heavy raster lease.
+enum MemberEdit {
+    Move(String, bool),
+    Remove(String),
+    Restore(String),
+}
+
 #[derive(Clone)]
 pub struct LidarLibrary {
     pub(crate) inner: Arc<LidarLibraryInner>,
@@ -53,6 +61,14 @@ pub(crate) struct LidarLibraryInner {
     pub(crate) engine: GdalEngine,
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
     executor: Mutex<Option<crate::native_operation::NativeOperationExecutor>>,
+    /// Prepared compatibility leases for preserved dense compositions.
+    ///
+    /// A dense mosaic is not in the controlled COG profile, so replaying it
+    /// needs one GDAL derivative per preserved generation. This cache is the
+    /// single lifecycle owner: the derivative is prepared on first use, reused
+    /// by every later read, and released when the layer is deleted or the
+    /// library closes.
+    compat_leases: Mutex<HashMap<String, Arc<Mutex<Option<generation::LegacyTiffLease>>>>>,
     /// One exclusive heavy raster job at a time, library-wide. Staging, apply,
     /// undo and analysis all hold it; awaiting review releases it.
     heavy_job: Mutex<Option<String>>,
@@ -210,6 +226,7 @@ impl LidarLibrary {
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
+                compat_leases: Mutex::new(HashMap::new()),
                 display: Mutex::new(DisplayAdmission::default()),
                 tile_cache: Mutex::new(tile_cache::DisplayTileCache::open(&display_cache_dir)?),
             }),
@@ -604,6 +621,32 @@ impl LidarLibrary {
                 [layer_id],
             )
             .map_err(|e| e.to_string())?;
+        // Ordered snapshots keep their own member rows, which reference the
+        // generations deleted below.
+        transaction
+            .execute(
+                "DELETE FROM lidar_collection_members WHERE generation_id IN
+                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
+                [layer_id],
+            )
+            .map_err(|e| e.to_string())?;
+        // A snapshot may also be the predecessor of another snapshot; clear the
+        // lineage before the rows themselves so the self-reference never blocks
+        // the delete.
+        transaction
+            .execute(
+                "UPDATE lidar_layer_generations SET previous_generation_id = NULL
+                 WHERE layer_id = ?1",
+                [layer_id],
+            )
+            .map_err(|e| e.to_string())?;
+        transaction
+            .execute(
+                "UPDATE lidar_layer_generations SET base_generation_id = NULL
+                 WHERE layer_id = ?1",
+                [layer_id],
+            )
+            .map_err(|e| e.to_string())?;
         let removed_generations: Vec<String> = {
             let mut statement = transaction
                 .prepare("SELECT id FROM lidar_layer_generations WHERE layer_id = ?1")
@@ -658,6 +701,9 @@ impl LidarLibrary {
         self.remove_display_entity("source", layer_id);
         for generation_id in removed_generations {
             self.invalidate_tile_cache(&generation_id);
+            // The layer's preserved compositions stop being readable here, so
+            // this is the owner's release point for their prepared leases.
+            self.release_compat_lease(&generation_id);
         }
         let _ = std::fs::remove_dir_all(self.inner.paths.layer_pipeline_dir(layer_id));
         for definition_id in definition_ids {
@@ -673,19 +719,115 @@ impl LidarLibrary {
         layer_id: &str,
     ) -> Result<Vec<common_types::lidar::LidarGenerationHistoryEntry>, String> {
         let connection = self.catalogue()?;
-        let entries = catalogue::layer_history(&connection, layer_id)?;
+        let entries = collection::history(&connection, layer_id)?;
         Ok(entries
             .into_iter()
             .map(|entry| common_types::lidar::LidarGenerationHistoryEntry {
-                id: entry.id,
+                id: entry.generation_id,
                 created_at: entry.created_at,
                 coverage_cells: entry.coverage_cells.max(0) as u64,
+                source_count: u32::try_from(entry.members.len()).unwrap_or(u32::MAX),
                 members: entry.members,
                 roles: entry.roles,
                 job_ids: entry.job_ids,
-                is_head: entry.is_head,
+                is_head: entry.is_current,
+                operation: entry.operation,
+                restorable: entry.restorable,
             })
             .collect())
+    }
+
+    /// The ordered composition and published versions of one Data Layer.
+    ///
+    /// This is the read surface the source list and the version list consume:
+    /// membership and order are library data, so the Design is never dirtied by
+    /// a reorder and every referencing Design sees the same list.
+    pub fn layer_collection(
+        &self,
+        layer_id: &str,
+    ) -> Result<common_types::lidar::LidarLayerCollection, String> {
+        let connection = self.catalogue()?;
+        let head = catalogue::head_generation(&connection, layer_id)?;
+        let head_manifest = head
+            .as_ref()
+            .map(|row| import::read_generation_manifest(&row.manifest_json))
+            .transpose()?;
+        let ordered = head.as_ref().filter(|_| {
+            head_manifest
+                .as_ref()
+                .is_some_and(|manifest| manifest.format.is_ordered_collection())
+        });
+        let members = match ordered {
+            Some(head) => catalogue::collection_members(&connection, &head.id)?,
+            // A pre-transition head presents the one divisible member its next
+            // edit will produce, so the list agrees with the model the user is
+            // about to enter instead of appearing empty.
+            None => head
+                .as_ref()
+                .map(|head| {
+                    vec![catalogue::CollectionMemberRow {
+                        member_id: format!("prev-{}", head.id),
+                        position: 0,
+                        kind: collection::PREVIOUS_COMPOSITION_KIND.to_string(),
+                        interpretation_id: None,
+                        base_generation_id: Some(head.id.clone()),
+                        job_id: None,
+                    }]
+                })
+                .unwrap_or_default(),
+        };
+        let sources = members
+            .iter()
+            .map(|member| {
+                let interpretation = member
+                    .interpretation_id
+                    .as_deref()
+                    .map(|id| catalogue::get_interpretation(&connection, id))
+                    .transpose()?
+                    .flatten();
+                let (coverage_cells, min_value, max_value) =
+                    match member.interpretation_id.as_deref() {
+                        Some(id) => catalogue::interpretation_coverage(&connection, id)?,
+                        None => (0, None, None),
+                    };
+                let (width, height, pixel_size_m) = match &interpretation {
+                    Some(row) => (
+                        u32::try_from(row.width.max(0)).unwrap_or(u32::MAX),
+                        u32::try_from(row.height.max(0)).unwrap_or(u32::MAX),
+                        import::parse_geotransform(&row.geotransform)
+                            .map(|transform| transform[1].abs())
+                            .unwrap_or(0.0),
+                    ),
+                    None => (0, 0, 0.0),
+                };
+                Ok(common_types::lidar::LidarLayerSource {
+                    member_id: member.member_id.clone(),
+                    kind: member.kind.clone(),
+                    filename: interpretation
+                        .as_ref()
+                        .map(|row| row.interp_hash.chars().take(12).collect()),
+                    interpretation_id: member.interpretation_id.clone(),
+                    base_generation_id: member.base_generation_id.clone(),
+                    width,
+                    height,
+                    pixel_size_m,
+                    coverage_cells: coverage_cells.max(0) as u64,
+                    value_range: [min_value.unwrap_or(0.0), max_value.unwrap_or(0.0)],
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let versions = self.layer_history(layer_id)?;
+        let can_undo = versions
+            .iter()
+            .find(|version| version.is_head)
+            .is_some_and(|head| head.restorable);
+        Ok(common_types::lidar::LidarLayerCollection {
+            layer_id: layer_id.to_string(),
+            head_generation_id: head.map(|row| row.id),
+            can_undo,
+            sources,
+            versions,
+        })
     }
 
     /// Admit one display read, or decline it when the budget is full.
@@ -779,58 +921,277 @@ impl LidarLibrary {
         }
     }
 
-    /// Validate that an import job has an accepted publication to undo
-    /// (short catalogue read; called through the executor from the command).
-    pub fn validate_undo(&self, job_id: &str) -> Result<String, String> {
-        let connection = self.catalogue()?;
-        connection
-            .query_row(
-                "SELECT g.layer_id FROM lidar_acceptance_regions a
-                 JOIN lidar_layer_generations g ON g.id = a.generation_id
-                 WHERE a.job_id = ?1 LIMIT 1",
-                [job_id],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|_| "import has no accepted publication to undo".to_string())
+    /// The one prepared compatibility lease for a preserved dense generation.
+    ///
+    /// The library is the lifecycle owner: the derivative is prepared once for
+    /// the generation and every later read of the same preserved composition
+    /// reuses it. Two readers can hold the lease's handle at once, but only one
+    /// conversion ever runs.
+    fn compat_lease(
+        &self,
+        generation_id: &str,
+        mosaic: &std::path::Path,
+        grid: &grid::RasterGrid,
+        nodata: Option<f32>,
+        mask: Option<PathBuf>,
+        cancel: &AtomicBool,
+    ) -> Result<Arc<Mutex<Option<generation::LegacyTiffLease>>>, String> {
+        if let Some(existing) = self
+            .inner
+            .compat_leases
+            .lock()
+            .map_err(|_| "compatibility lease cache poisoned".to_string())?
+            .get(generation_id)
+            .cloned()
+        {
+            return Ok(existing);
+        }
+        let scratch = self
+            .inner
+            .paths
+            .prepared_dir()
+            .join(format!("compat-{generation_id}"));
+        std::fs::create_dir_all(&scratch)
+            .map_err(|e| format!("Failed to create compatibility scratch dir: {e}"))?;
+        let lease = generation::LegacyTiffLease::open(
+            &self.inner.engine,
+            mosaic,
+            grid,
+            nodata,
+            mask,
+            &scratch,
+            cancel,
+        )?;
+        let handle = Arc::new(Mutex::new(Some(lease)));
+        let mut cache = self
+            .inner
+            .compat_leases
+            .lock()
+            .map_err(|_| "compatibility lease cache poisoned".to_string())?;
+        // Another reader may have prepared the same generation meanwhile: keep
+        // the first handle so exactly one derivative exists per generation.
+        let entry = cache
+            .entry(generation_id.to_string())
+            .or_insert_with(|| handle.clone())
+            .clone();
+        Ok(entry)
     }
 
-    /// Spawn the undo: republish the layer without the import's
-    /// interpretation. Immutable history stays on disk.
-    pub fn begin_undo(&self, job_id: &str) -> Result<(), String> {
-        let lease = HeavyJobLease::acquire(self, job_id)?;
+    /// Release one preserved generation's compatibility lease and its scratch.
+    ///
+    /// Called when the generation stops being readable (its layer is deleted)
+    /// and at library close. Dropping the lease removes the derivative.
+    fn release_compat_lease(&self, generation_id: &str) {
+        let removed = self
+            .inner
+            .compat_leases
+            .lock()
+            .ok()
+            .and_then(|mut cache| cache.remove(generation_id));
+        if let Some(handle) = removed
+            && let Ok(mut slot) = handle.lock()
+        {
+            *slot = None;
+        }
+        let scratch = self
+            .inner
+            .paths
+            .prepared_dir()
+            .join(format!("compat-{generation_id}"));
+        let _ = std::fs::remove_dir_all(scratch);
+    }
+
+    /// Short admission read for one ordered-member edit.
+    ///
+    /// The command path runs this through the native executor before any work
+    /// is created, so a stale or unknown edit is refused without taking the
+    /// heavy raster lease or spawning a job.
+    pub fn validate_layer_edit(
+        &self,
+        layer_id: &str,
+        member_id: Option<&str>,
+        expected_head: Option<&str>,
+    ) -> Result<(), String> {
+        let connection = self.catalogue()?;
+        let head = catalogue::head_generation(&connection, layer_id)?
+            .ok_or_else(|| "layer has no accepted coverage".to_string())?;
+        if let Some(expected) = expected_head
+            && expected != head.id
+        {
+            return Err(
+                "the layer changed since this edit was prepared; refresh and try again".to_string(),
+            );
+        }
+        if let Some(member_id) = member_id {
+            let ordered = import::read_generation_manifest(&head.manifest_json)
+                .map(|manifest| manifest.format.is_ordered_collection())
+                .unwrap_or(false);
+            let members = if ordered {
+                catalogue::collection_members(&connection, &head.id)?
+            } else {
+                Vec::new()
+            };
+            // A pre-transition head has no ordered rows yet; it presents the one
+            // previous-composition member its next edit will produce.
+            let known = members.iter().any(|row| row.member_id == member_id)
+                || (!ordered && member_id == format!("prev-{}", head.id));
+            if !known {
+                return Err(format!("no source {member_id} in this layer"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Undo the last change of one layer from the version list.
+    pub fn begin_undo_layer(
+        &self,
+        layer_id: &str,
+        expected_head: Option<String>,
+    ) -> Result<(), String> {
+        self.begin_member_edit(layer_id, expected_head, None)
+    }
+
+    /// Restore one older version as the new head.
+    pub fn begin_restore_version(
+        &self,
+        layer_id: &str,
+        version_id: &str,
+        expected_head: Option<String>,
+    ) -> Result<(), String> {
+        let owned = version_id.to_string();
+        self.begin_member_edit(layer_id, expected_head, Some(MemberEdit::Restore(owned)))
+    }
+
+    /// Move one source one position in the layer's priority list.
+    pub fn begin_move_member(
+        &self,
+        layer_id: &str,
+        member_id: &str,
+        towards_top: bool,
+        expected_head: Option<String>,
+    ) -> Result<(), String> {
+        self.begin_member_edit(
+            layer_id,
+            expected_head,
+            Some(MemberEdit::Move(member_id.to_string(), towards_top)),
+        )
+    }
+
+    /// Detach one source from the layer's current composition.
+    pub fn begin_remove_member(
+        &self,
+        layer_id: &str,
+        member_id: &str,
+        expected_head: Option<String>,
+    ) -> Result<(), String> {
+        self.begin_member_edit(
+            layer_id,
+            expected_head,
+            Some(MemberEdit::Remove(member_id.to_string())),
+        )
+    }
+
+    /// Run one ordered-member edit under the heavy raster lease.
+    ///
+    /// Every snapshot edit shares this path: it takes the layer-wide lease
+    /// before creating work, runs the caller-level operation off the UI thread
+    /// and then applies the same settlement rules as an Apply — the snapshot is
+    /// refreshed and every dependent analysis is invalidated or refreshed.
+    fn begin_member_edit(
+        &self,
+        layer_id: &str,
+        expected_head: Option<String>,
+        edit: Option<MemberEdit>,
+    ) -> Result<(), String> {
+        let scope = format!("collection-{layer_id}");
+        let lease = HeavyJobLease::acquire(self, &scope)?;
         let executor = self.executor()?;
-        let flag = self.register_cancel(job_id);
+        let flag = self.register_cancel(&scope);
         let library = self.clone();
-        let job_id_for_work = job_id.to_string();
-        let job_id_owned = job_id.to_string();
+        let layer = layer_id.to_string();
+        let layer_for_work = layer.clone();
+        let scope_owned = scope.clone();
         tauri::async_runtime::spawn(async move {
             let library_for_work = library.clone();
             let outcome = executor
                 .run(
                     crate::native_operation::NativeOperationClass::Local,
-                    "lidar import undo",
+                    "lidar layer edit",
                     move || {
                         let _lease = lease;
-                        import::undo_import(&library_for_work, &job_id_for_work, &flag)
+                        let head = expected_head.as_deref();
+                        match edit {
+                            Some(MemberEdit::Move(member_id, towards_top)) => import::move_member(
+                                &library_for_work,
+                                &layer_for_work,
+                                &member_id,
+                                towards_top,
+                                head,
+                                &flag,
+                            ),
+                            Some(MemberEdit::Remove(member_id)) => import::remove_member(
+                                &library_for_work,
+                                &layer_for_work,
+                                &member_id,
+                                head,
+                                &flag,
+                            ),
+                            Some(MemberEdit::Restore(version_id)) => import::restore_version(
+                                &library_for_work,
+                                &layer_for_work,
+                                &version_id,
+                                head,
+                                &flag,
+                            ),
+                            None => import::undo_last_change(
+                                &library_for_work,
+                                &layer_for_work,
+                                head,
+                                &flag,
+                            ),
+                        }
                     },
                 )
                 .await;
-            match outcome {
-                Ok(applied) => {
-                    tracing::info!(
-                        job_id = job_id_owned,
-                        summary = applied.summary(),
-                        "LiDAR import undone"
-                    );
-                }
-                Err(error) => {
-                    tracing::warn!(job_id = job_id_owned, error, "LiDAR import undo failed");
-                }
-            }
-            library.settle_cancel(&job_id_owned);
-            library.refresh_snapshot_quiet();
+            library.settle_layer_edit(&layer, &scope_owned, outcome);
         });
         Ok(())
+    }
+
+    /// Settle one ordered-member edit.
+    ///
+    /// The spawned edit task and the caller-level tests both drive this, so a
+    /// committed snapshot cannot be reported as failed here and the
+    /// dependent-refresh path runs exactly once on the real settlement rather
+    /// than on the submission.
+    pub(crate) fn settle_layer_edit(
+        &self,
+        layer_id: &str,
+        scope: &str,
+        outcome: Result<import::ApplyOutcome, String>,
+    ) {
+        let mut published = false;
+        match outcome {
+            Ok(applied) => {
+                published = applied.changed;
+                tracing::info!(
+                    layer_id,
+                    summary = applied.summary(),
+                    "LiDAR layer snapshot published"
+                );
+            }
+            Err(error) => {
+                tracing::warn!(layer_id, error, "LiDAR layer edit failed");
+            }
+        }
+        self.settle_cancel(scope);
+        self.refresh_snapshot_quiet();
+        // A committed numeric edit invalidates every dependent result: the
+        // refresh is what keeps Ready from describing a composition the layer
+        // no longer has.
+        if published {
+            self.refresh_dependents(layer_id);
+        }
     }
 
     pub fn get_import_job(&self, job_id: &str) -> Result<Option<LidarImportJob>, String> {

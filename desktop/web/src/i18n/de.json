@@ -533,7 +533,27 @@
       "history": "Verlauf",
       "historyCells": "Zellen",
       "historyHead": "aktuell",
-      "historyUndo": "Import zurücknehmen"
+      "historyUndo": "Import zurücknehmen",
+      "sources": "Quellen",
+      "loadingSources": "Quellen werden geladen…",
+      "sourceOrderHint": "Weiter oben stehende Quellen überdecken gültige Daten darunter. Die Reihenfolge beeinflusst auch Analysen.",
+      "libraryOrderNote": "Die Quellenreihenfolge gehört zur Bibliothek: Sie gilt für jeden Entwurf, der diese Ebene verwendet.",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "removeSource": "Entfernen",
+      "removeSourceConfirm": "Diese Quelle aus der aktuellen Zusammensetzung entfernen? Ihre Daten und alle veröffentlichten Versionen bleiben in der Bibliothek.",
+      "removeSourceConfirmAction": "Quelle entfernen",
+      "previousComposition": "Vorherige Zusammensetzung",
+      "previousCompositionHint": "Eine erhaltene frühere Zusammenführung; ihre interne Reihenfolge kann nicht geändert werden.",
+      "undoLastChange": "Letzte Änderung rückgängig machen",
+      "restoreVersion": "Diese Version wiederherstellen",
+      "operation": {
+        "import": "Import",
+        "reorder": "Umsortieren",
+        "remove": "Entfernen",
+        "undo": "Rückgängig",
+        "restore": "Wiederherstellen"
+      }
     }
   },
   "worldMap": {

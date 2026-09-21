@@ -533,7 +533,27 @@
       "history": "기록",
       "historyCells": "셀",
       "historyHead": "현재",
-      "historyUndo": "가져오기 취소"
+      "historyUndo": "가져오기 취소",
+      "sources": "소스",
+      "loadingSources": "소스를 불러오는 중…",
+      "sourceOrderHint": "목록에서 위에 있는 소스가 아래의 유효한 데이터를 덮습니다. 순서는 분석에도 영향을 줍니다.",
+      "libraryOrderNote": "소스 순서는 라이브러리 공유 데이터입니다. 이 레이어를 사용하는 모든 디자인에 적용됩니다.",
+      "moveUp": "위로 이동",
+      "moveDown": "아래로 이동",
+      "removeSource": "제거",
+      "removeSourceConfirm": "현재 구성에서 이 소스를 제거할까요? 데이터와 게시된 모든 버전은 라이브러리에 남습니다.",
+      "removeSourceConfirmAction": "소스 제거",
+      "previousComposition": "이전 구성",
+      "previousCompositionHint": "보존된 이전 병합입니다. 내부 순서는 변경할 수 없습니다.",
+      "undoLastChange": "마지막 변경 실행 취소",
+      "restoreVersion": "이 버전 복원",
+      "operation": {
+        "import": "가져오기",
+        "reorder": "순서 변경",
+        "remove": "제거",
+        "undo": "실행 취소",
+        "restore": "복원"
+      }
     }
   },
   "worldMap": {

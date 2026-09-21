@@ -200,7 +200,14 @@ fn native_tilesets<M: NativeTileManifest>(
     let Some(manifest) = manifest else {
         return Vec::new();
     };
-    if manifest.format() != super::import::GenerationStorageFormat::CogChunksV1 {
+    // A generation with no stored display pyramid is rendered on demand: a
+    // published resolved-chunk generation and an ordered source collection
+    // alike. A preserved dense generation keeps its published asset pyramid.
+    if !matches!(
+        manifest.format(),
+        super::import::GenerationStorageFormat::CogChunksV1
+            | super::import::GenerationStorageFormat::OrderedMembersV1
+    ) {
         return Vec::new();
     }
     let Some(bounds) = bounds else {

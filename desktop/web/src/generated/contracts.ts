@@ -212,12 +212,18 @@ export type LidarGenerationHistoryEntry = {
 	coverage_cells: string,
 	members: string[],
 	roles: string[],
-	/**
-	 *  Import jobs whose acceptance produced this generation; each can be
-	 *  undone by republishing without its interpretation.
-	 */
+	// Import jobs whose acceptance produced this generation.
 	job_ids: string[],
 	is_head: boolean,
+	/**
+	 *  User operation this version recorded, when it can be told apart
+	 *  (`import`, `reorder`, `remove`, `undo`, `restore`).
+	 */
+	operation: string,
+	// Sources in this version's ordered composition.
+	source_count: number,
+	// Whether this version can be restored as the new head.
+	restorable: boolean,
 };
 
 /**
@@ -289,6 +295,47 @@ export type LidarImportSourceFacts = {
 	// Accepted into this staging; false entries carry `issues`.
 	compatible: boolean,
 	issues: string[],
+};
+
+/**
+ *  The ordered composition and published versions of one Data Layer.
+ *
+ *  `sources` is the layer's priority list exactly as the UI must show it:
+ *  index 0 is the topmost source and its valid samples cover every source below
+ *  it. `head_generation_id` is the immutable snapshot the list describes, which
+ *  every edit echoes back so a stale edit fails by name instead of applying to
+ *  a newer order.
+ */
+export type LidarLayerCollection = {
+	layer_id: string,
+	head_generation_id: string | null,
+	// Whether the head can be walked back to an earlier version.
+	can_undo: boolean,
+	sources: LidarLayerSource[],
+	versions: LidarGenerationHistoryEntry[],
+};
+
+/**
+ *  One occurrence in a Data Layer's priority list, topmost first.
+ *
+ *  `kind` is `source` for an ordinary independently prepared COG and
+ *  `previous-composition` for the single indivisible member that exposes a
+ *  preserved pre-transition head. A source member carries its own measured
+ *  coverage; a previous-composition member reports the preserved generation's.
+ */
+export type LidarLayerSource = {
+	member_id: string,
+	kind: string,
+	// Display name of the source file, when this member has one.
+	filename: string | null,
+	interpretation_id: string | null,
+	// Preserved generation this member replays, for a previous composition.
+	base_generation_id: string | null,
+	width: number,
+	height: number,
+	pixel_size_m: number,
+	coverage_cells: string,
+	value_range: [number, number],
 };
 
 // Library-side summary of a source layer.

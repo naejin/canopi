@@ -533,7 +533,27 @@
       "history": "Historique",
       "historyCells": "cellules",
       "historyHead": "actuel",
-      "historyUndo": "Annuler l’import"
+      "historyUndo": "Annuler l’import",
+      "sources": "Sources",
+      "loadingSources": "Chargement des sources…",
+      "sourceOrderHint": "Les sources plus haut couvrent les données valides situées en dessous. L’ordre influe aussi sur les analyses.",
+      "libraryOrderNote": "L’ordre des sources appartient à la bibliothèque : il s’applique à tous les projets qui utilisent cette couche.",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "removeSource": "Retirer",
+      "removeSourceConfirm": "Retirer cette source de la composition actuelle ? Ses données et toutes les versions publiées restent dans la bibliothèque.",
+      "removeSourceConfirmAction": "Retirer la source",
+      "previousComposition": "Composition précédente",
+      "previousCompositionHint": "Une fusion antérieure conservée ; son ordre interne ne peut pas être modifié.",
+      "undoLastChange": "Annuler la dernière modification",
+      "restoreVersion": "Restaurer cette version",
+      "operation": {
+        "import": "Import",
+        "reorder": "Réordonner",
+        "remove": "Retirer",
+        "undo": "Annuler",
+        "restore": "Restaurer"
+      }
     }
   },
   "worldMap": {

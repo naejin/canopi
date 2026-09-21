@@ -72,16 +72,48 @@ impl AnalysisOutcome {
     }
 }
 
+/// The accepted head's ordered occurrences, whichever representation records
+/// them.
+///
+/// A collection snapshot reads its source COG members; a preserved generation
+/// reads its accepted role-ordered members. `Ok(None)` means the generation
+/// predates durable member history and has no ordered representation at all.
+fn head_occurrences(
+    library: &LidarLibrary,
+    head: &catalogue::GenerationRow,
+    manifest: &GenerationManifest,
+) -> Result<Option<Vec<generation::ResolvedMember>>, String> {
+    if manifest.format.is_ordered_collection() {
+        return Ok(super::collection::load_reader(library, &head.id, manifest)?
+            .map(|reader| reader.resolved().to_vec()));
+    }
+    let connection = library.catalogue()?;
+    super::import::resolved_occurrences(&connection, &library.inner.paths, head)
+}
+
 /// A stored raster that carries the generation's CRS.
 ///
-/// A chunked generation owns no dense mosaic, so its first published chunk is
-/// the representative raster; the CRS check only needs one.
+/// A generation with no dense mosaic has no stored raster of its own, so one
+/// member's controlled COG is the representative raster; the CRS check only
+/// needs one, and every admitted member shares the layer's horizontal CRS.
 fn sparse_input_raster(
     library: &LidarLibrary,
     head: &catalogue::GenerationRow,
+    manifest: &GenerationManifest,
 ) -> Result<PathBuf, String> {
     if let Some(mosaic) = head.mosaic_path.as_deref() {
         return Ok(PathBuf::from(mosaic));
+    }
+    if manifest.format.is_ordered_collection() {
+        let members = super::collection::snapshot_members(library, &head.id)?
+            .ok_or_else(|| "generation has no stored raster to inspect".to_string())?;
+        return members
+            .iter()
+            .find_map(|member| match &member.resolved.source {
+                generation::MemberSource::Cog(cog) => Some(cog.path.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| "generation has no stored raster to inspect".to_string());
     }
     // Only the first published record is needed, and the paged reader loads one
     // bounded page rather than the generation's whole record set.
@@ -348,11 +380,7 @@ fn publish_sparse_slope(
 ) -> Result<AnalysisOutcome, String> {
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
-    let occurrences = {
-        let connection = library.catalogue()?;
-        super::import::resolved_occurrences(&connection, paths, head)?
-    };
-    let Some(occurrences) = occurrences else {
+    let Some(occurrences) = head_occurrences(library, head, manifest)? else {
         return Err(
             "slope requires reconstructible member history; this generation predates it"
                 .to_string(),
@@ -617,11 +645,8 @@ pub fn run_slope_job(
     // instead of handing a whole dense raster to GDAL. The path needs a
     // reconstructible member sequence and an eligible grid.
     let sparse_input = if super::generation::chunked_publication_enabled() {
-        let connection = library.catalogue()?;
-        let occurrences = super::import::resolved_occurrences(&connection, paths, &head)?;
-        drop(connection);
-        match occurrences {
-            Some(_) => Some(sparse_input_raster(library, &head)?),
+        match head_occurrences(library, &head, &manifest)? {
+            Some(_) => Some(sparse_input_raster(library, &head, &manifest)?),
             None => None,
         }
     } else {

@@ -533,7 +533,27 @@
       "history": "Historial",
       "historyCells": "celdas",
       "historyHead": "actual",
-      "historyUndo": "Deshacer importación"
+      "historyUndo": "Deshacer importación",
+      "sources": "Fuentes",
+      "loadingSources": "Cargando fuentes…",
+      "sourceOrderHint": "Las fuentes situadas más arriba cubren los datos válidos inferiores. El orden también afecta a los análisis.",
+      "libraryOrderNote": "El orden de las fuentes es dato compartido de la biblioteca: se aplica a todos los diseños que usan esta capa.",
+      "moveUp": "Subir",
+      "moveDown": "Bajar",
+      "removeSource": "Quitar",
+      "removeSourceConfirm": "¿Quitar esta fuente de la composición actual? Sus datos y todas las versiones publicadas permanecen en la biblioteca.",
+      "removeSourceConfirmAction": "Quitar fuente",
+      "previousComposition": "Composición anterior",
+      "previousCompositionHint": "Una fusión anterior conservada; su orden interno no puede cambiarse.",
+      "undoLastChange": "Deshacer el último cambio",
+      "restoreVersion": "Restaurar esta versión",
+      "operation": {
+        "import": "Importar",
+        "reorder": "Reordenar",
+        "remove": "Quitar",
+        "undo": "Deshacer",
+        "restore": "Restaurar"
+      }
     }
   },
   "worldMap": {
