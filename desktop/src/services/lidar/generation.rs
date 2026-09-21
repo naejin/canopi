@@ -547,6 +547,89 @@ pub(super) fn member_regions(
     Ok(regions)
 }
 
+/// One materialized resolved chunk: its asset plus its aggregate.
+#[derive(Debug, Clone)]
+pub(super) struct MaterializedChunk {
+    pub chunk_x: i64,
+    pub chunk_y: i64,
+    pub asset: CogAsset,
+    pub aggregate: RegionAggregate,
+}
+
+/// Materialize every occupied chunk of an ordered sequence as a standard COG.
+///
+/// This is the publication step: each occupied chunk is resolved once through
+/// the ordered-occurrence replay, written as a resolved NaN-NoData COG, and
+/// aggregated for the index. Chunks the sequence does not occupy are never
+/// visited or written, and no union-sized file is produced.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn materialize_generation_chunks(
+    engine: &super::engine::GdalEngine,
+    cancel: &AtomicBool,
+    paths: &super::paths::LidarPaths,
+    scratch: &Path,
+    members: &[ResolvedMember],
+    lattice: &RasterGrid,
+    crs_wkt: &str,
+    stem: &str,
+) -> Result<Vec<MaterializedChunk>, String> {
+    let mut materialized = Vec::new();
+    for (chunk_x, chunk_y) in occupied_chunks(members, lattice)? {
+        check_cancel(cancel)?;
+        let grid = chunk_grid(lattice, chunk_x, chunk_y);
+        let resolved = resolve_window(
+            members,
+            lattice,
+            LatticeWindow {
+                x: chunk_x * CHUNK_SIDE,
+                y: chunk_y * CHUNK_SIDE,
+                width: CHUNK_SIDE as u32,
+                height: CHUNK_SIDE as u32,
+            },
+            cancel,
+        )?;
+        let mut aggregate = RegionAggregate {
+            block_x: chunk_x,
+            block_y: chunk_y,
+            valid_cells: 0,
+            min_value: f64::INFINITY,
+            max_value: f64::NEG_INFINITY,
+            sum_value: 0.0,
+        };
+        for (value, valid) in resolved.samples.iter().zip(resolved.valid.iter()) {
+            if *valid == 0 {
+                continue;
+            }
+            aggregate.valid_cells += 1;
+            aggregate.min_value = aggregate.min_value.min(*value as f64);
+            aggregate.max_value = aggregate.max_value.max(*value as f64);
+            aggregate.sum_value += *value as f64;
+        }
+        if aggregate.valid_cells == 0 {
+            // An all-invalid chunk has no index entry: absent means invalid.
+            continue;
+        }
+        let asset = super::raster_assets::write_cog_asset(
+            engine,
+            cancel,
+            paths,
+            scratch,
+            &format!("{stem}-{chunk_x}-{chunk_y}"),
+            &grid,
+            crs_wkt,
+            Some(f32::NAN),
+            &resolved.samples,
+        )?;
+        materialized.push(MaterializedChunk {
+            chunk_x,
+            chunk_y,
+            asset,
+            aggregate,
+        });
+    }
+    Ok(materialized)
+}
+
 /// Lattice cells from the layer anchor to a member grid's first cell.
 fn lattice_offset(lattice: &RasterGrid, grid: &RasterGrid) -> Result<(i64, i64), String> {
     lattice.compatible(grid)?;
@@ -1131,6 +1214,79 @@ mod tests {
         )
         .expect_err("a corrupt chunk must fail the read");
         assert!(!error.is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn materialized_chunks_publish_and_read_back_without_member_replay() {
+        let engine = GdalEngine::new();
+        let dir = scratch("materialize");
+        let registry = LidarPaths::open(&dir).unwrap();
+        let lattice = lattice();
+
+        // Add A=5, then replace B=9 across the same cells.
+        let mut first = cog_member(&engine, &registry, &dir, "a", 0, 0, 4, 3, 5.0, None);
+        first.ordinal = 0;
+        let mut second = cog_member(&engine, &registry, &dir, "b", 0, 0, 4, 3, 9.0, None);
+        second.ordinal = 1;
+        second.role = MemberRole::Replace;
+
+        let chunks = materialize_generation_chunks(
+            &engine,
+            &cancellation(),
+            &registry,
+            &dir,
+            &[first, second],
+            &lattice,
+            "EPSG:3857",
+            "gen",
+        )
+        .expect("chunks materialize");
+        assert_eq!(chunks.len(), 1, "one occupied chunk for a 4x3 sequence");
+        assert_eq!(chunks[0].aggregate.valid_cells, 12);
+        assert_eq!(chunks[0].aggregate.min_value, 9.0);
+        assert_eq!(chunks[0].aggregate.sum_value, 108.0);
+
+        // The published read path uses only the persisted chunk rows.
+        let persisted: Vec<PersistedChunk> = chunks
+            .iter()
+            .map(|chunk| PersistedChunk {
+                chunk_x: chunk.chunk_x,
+                chunk_y: chunk.chunk_y,
+                asset: chunk.asset.clone(),
+                nodata: Some(f32::NAN),
+            })
+            .collect();
+        let read = read_persisted_window(
+            &persisted,
+            &lattice,
+            full_window(0, 0, 4, 3),
+            &cancellation(),
+        )
+        .unwrap();
+        assert!(read.valid.iter().all(|valid| *valid == 1));
+        assert!(read.samples.iter().all(|value| *value == 9.0));
+
+        // A distant second member adds only its own chunk.
+        let mut far = cog_member(
+            &engine, &registry, &dir, "far", 1_000_000, 0, 4, 3, 2.0, None,
+        );
+        far.ordinal = 0;
+        let mut near = cog_member(&engine, &registry, &dir, "near", 0, 0, 4, 3, 1.0, None);
+        near.ordinal = 0;
+        let sparse = materialize_generation_chunks(
+            &engine,
+            &cancellation(),
+            &registry,
+            &dir,
+            &[near, far],
+            &lattice,
+            "EPSG:3857",
+            "sparse",
+        )
+        .unwrap();
+        assert_eq!(sparse.len(), 2, "only the two occupied chunks are written");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

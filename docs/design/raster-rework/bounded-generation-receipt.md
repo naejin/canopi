@@ -25,7 +25,8 @@ Production callers are unchanged: import staging, composition, slope, display an
 | Reader/asset primitives and tests | `1b8683db` |
 | Catalogue v7 index, resolver and their tests | `9f1e5420` |
 | Legacy TIFF lease, paged region aggregates and their tests | `3cf213e5` |
-| Persisted-chunk publication rows and read path | the commit that carries this receipt |
+| Persisted-chunk publication rows and read path | `76d8aa8e` |
+| Resolved-chunk materialization for publication | the commit that carries this receipt |
 
 ## What the delivered primitives do
 
@@ -43,6 +44,7 @@ Production callers are unchanged: import staging, composition, slope, display an
 - `LegacyTiffLease` prepares one controlled derivative for a legacy TIFF-only generation and removes it on drop, so a caller never re-prepares per window; the preserved generation's own mask is read row-wise and overrides the derivative's validity. Tests prove one derivative per lease, its removal on drop, the mask override, that a plain legacy TIFF is rejected by the committed-profile check, and that `member_regions` aggregates the member's occupied chunk (valid count, min, max, exact f64 sum) while leaving padded cells untouched.
 - `catalogue::{replace_interpretation_regions, interpretation_region_page}` store and page per-block aggregates atomically; the test replaces a five-region page set, pages it, and proves a re-scan swaps rows instead of accumulating them.
 - `read_persisted_window` is the published-generation read path: it selects only persisted chunk rows that intersect the window, so a published generation never replays member history, never opens a source COG and never walks absent coordinates. Chunk rows carry an explicit `state`, so `insert_unpublished_chunks` makes a crashed or cancelled job's index unreadable until `publish_generation_chunks` flips it inside the publish transaction. Tests prove unpublished rows are invisible, roles stay separate, windows inside a chunk read its exact values, a gap chunk yields an all-invalid mask, a distant chunk reads its own bytes, and a truncated chunk fails rather than reading as empty coverage.
+- `materialize_generation_chunks` is the publication step: for every occupied chunk of an ordered sequence it resolves the window once, writes a resolved NaN-NoData COG through `write_cog_asset`, and returns the chunk plus its aggregate, skipping all-invalid chunks entirely. A GDAL test materializes an add-then-replace sequence (one chunk, aggregate 12 valid / min 9 / sum 108), reads it back only through persisted chunk rows, and proves a member a million cells away adds exactly one further chunk.
 - Tests reproduce the design's history example (A=5, replace B=9, reimport A with replacement → 5, undo that occurrence → 9), add-only holes never erasing prior coverage, replace-overlap creating no new coverage, members above/left of the anchor resolving negative lattice cells, occupied-chunk enumeration over a million-cell gap (2 chunks, adjacency-only variation) and chunk straddling, exact bounded legacy window reads with a short-file rejection, and preconditions (empty/oversized window, out-of-order ordinals, unaligned member grids) failing before any file is read.
 
 ## Evidence
