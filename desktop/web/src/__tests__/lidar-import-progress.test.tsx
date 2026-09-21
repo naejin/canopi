@@ -42,4 +42,90 @@ describe('LiDAR import progress', () => {
     expect(container.textContent).toContain('Rendering map')
     expect(container.textContent).toContain('68%')
   })
+
+  it('confirms an addition above the existing sources instead of a merge decision', async () => {
+    openImportJob.value = {
+      job_id: 'job-2',
+      layer_id: 'layer-1',
+      state: 'AwaitingReview',
+      review: {
+        job_id: 'job-2',
+        layer_id: 'layer-1',
+        compatible: true,
+        issues: [],
+        sources: [{
+          filename: 'mnt.tif',
+          sha256: 'a'.repeat(64),
+          size_bytes: '1024',
+          width: 4,
+          height: 4,
+          pixel_size_m: 1,
+          nodata: null,
+          value_range: [0, 9],
+          compatible: true,
+          issues: [],
+        }],
+        uncovered_cells: '16',
+        overlap_cells: '0',
+        invalid_cells: '0',
+        before_preview_path: null,
+        after_preview_path: null,
+      },
+      message: null,
+      progress: null,
+    }
+
+    await act(() => render(<LidarImportPanel />, container))
+
+    // The retired merge route offered "Add uncovered" / "Replace overlap" and
+    // a Before/After tab pair; the ordered route adds the selection as one
+    // group above the accepted sources and says so.
+    expect(container.textContent).not.toContain('Replace overlap')
+    expect(container.textContent).not.toContain('Before')
+    expect(container.textContent).toContain('The selected sources are added above')
+    const confirm = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Add sources')
+    expect(confirm).toBeDefined()
+    expect(confirm?.disabled).toBe(false)
+  })
+
+  it('refuses the confirmation while any selected source is incompatible', async () => {
+    openImportJob.value = {
+      job_id: 'job-3',
+      layer_id: 'layer-1',
+      state: 'AwaitingReview',
+      review: {
+        job_id: 'job-3',
+        layer_id: 'layer-1',
+        compatible: false,
+        issues: [],
+        sources: [{
+          filename: 'foreign.tif',
+          sha256: 'b'.repeat(64),
+          size_bytes: '1024',
+          width: 4,
+          height: 4,
+          pixel_size_m: 1,
+          nodata: null,
+          value_range: [0, 9],
+          compatible: false,
+          issues: ['horizontal CRS differs from the layer'],
+        }],
+        uncovered_cells: '0',
+        overlap_cells: '0',
+        invalid_cells: '0',
+        before_preview_path: null,
+        after_preview_path: null,
+      },
+      message: null,
+      progress: null,
+    }
+
+    await act(() => render(<LidarImportPanel />, container))
+
+    expect(container.textContent).toContain('horizontal CRS differs from the layer')
+    const confirm = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Add sources')
+    expect(confirm?.disabled).toBe(true)
+  })
 })

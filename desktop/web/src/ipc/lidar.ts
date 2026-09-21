@@ -4,7 +4,6 @@ import type {
   LidarGenerationHistoryEntry,
   LidarEngineStatus,
   LidarImportJob,
-  LidarImportDecisionPreview,
   LidarAnalysisJobStatus,
   LidarAnalysisReceipt,
   LidarAnalysisKind,
@@ -74,14 +73,6 @@ export async function lidarApplyImport(
   replaceOverlap: boolean,
 ): Promise<void> {
   return invoke('lidar_apply_import', { jobId, addUncovered, replaceOverlap })
-}
-
-export async function lidarPreviewImportDecision(
-  jobId: string,
-  addUncovered: boolean,
-  replaceOverlap: boolean,
-): Promise<LidarImportDecisionPreview> {
-  return invoke('lidar_preview_import_decision', { jobId, addUncovered, replaceOverlap })
 }
 
 export async function lidarCancelImport(jobId: string): Promise<void> {

@@ -15,10 +15,8 @@ import {
   lidarRemoveLayerSource,
   lidarRestoreLayerVersion,
   lidarUndoLayerChange,
-  lidarPreviewImportDecision,
   lidarStageImport,
   type LidarGenerationHistoryEntry,
-  type LidarImportDecisionPreview,
   type LidarLayerCollection,
 } from '../../ipc/lidar'
 import { patchLidarEntryById, removeLidarEntries, upsertLidarEntry } from '../design-edit/lidar'
@@ -90,23 +88,6 @@ export async function applyOpenImport(
     await refreshOpenImportJob()
     ensureLidarPolling()
   })
-}
-
-export async function previewOpenImportDecision(
-  addUncovered: boolean,
-  replaceOverlap: boolean,
-): Promise<LidarImportDecisionPreview> {
-  const job = openImportJob.value
-  if (job === null) {
-    throw new Error('Import review is no longer open')
-  }
-  lidarStatusMessage.value = null
-  try {
-    return await lidarPreviewImportDecision(job.job_id, addUncovered, replaceOverlap)
-  } catch (error) {
-    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
-    throw error
-  }
 }
 
 export async function cancelOpenImport(): Promise<void> {

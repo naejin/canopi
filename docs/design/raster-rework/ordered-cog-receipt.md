@@ -10,7 +10,7 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 | --- | --- |
 | 1. Catalogue + resolver + compatibility | **Delivered.** Schema v14 adds `lidar_collection_members` (stable `member_id`, top-first `position`, kind `source` \| `previous-composition`, originating job) and v15 adds the snapshot lineage `previous_generation_id`. `collection.rs` owns snapshot load, measurement, insertion and history; `generation.rs` owns one bounded resolver (`CollectionReader` + `GenerationReader`) over the ordered list. A pre-transition head becomes one indivisible bottom member that references the preserved generation directly, so no compatibility wrapper nests. Migration is additive, keeps the WAL-consistent `VACUUM INTO` backup and refuses a future schema version. |
 | 2. Import + edits + lifecycle + transport | **Delivered.** `apply_import` publishes an ordered snapshot — member rows plus one bounded measuring pass — and materializes nothing. `move_member`, `remove_member`, `undo_last_change` and `restore_version` publish a new head under the layer-wide heavy lease with expected-head validation, and `settle_layer_edit` runs the dependent-refresh path exactly once on settlement. Typed transport adds `LidarLayerCollection` / `LidarLayerSource` and five commands; the native command policy guard passes. Slope resolves the composed elevation window plus its halo before computing. |
-| 3. Dock + presentation | **Delivered.** The existing Layers dock shows the top-first source list with filename, coverage, move up/down and Remove (with its retained-history confirmation), plus an explicit "Undo last change" and per-version "Restore this version". All 11 locales carry the new strings. Group visibility remains one eye and never touches the composition. |
+| 3. Dock + presentation | **Delivered.** The existing Layers dock shows the top-first source list with filename, coverage, move up/down and Remove (with its retained-history confirmation), plus an explicit "Undo last change" and per-version "Restore this version". The import route now confirms **Add sources** with the ordered-insertion explanation and no longer offers the retired overlap decisions, exact overlap counters or Before/After merge tabs; its staged-source list still names every rejected input and its reason, and the confirmation is refused while any selection is incompatible. All 11 locales carry the new strings and the 13 retired preview/decision keys are removed. Group visibility remains one eye and never touches the composition. |
 | 4. Product verification + retirement | **Delivered.** The new-write merge machinery is removed (`prepare_chunked_generation`, `publish_applied_chunks`, `publish_undone_chunks`, `materialize_generation_chunks`, the opaque-base overlay occurrence and `undo_removes_member`), while every legacy reader a preserved generation needs is retained. Repository gates pass on the final candidate; the real-Desktop workflow is recorded as unavailable here with exact runnable steps. |
 
 ## Revisions
@@ -32,6 +32,7 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 - **Review reads the composition, not a store.** `HeadBlockSource` gained the format-driven reader variant, the accepted head's own lattice now seeds the review union for an ordered head, and `BlockStream::occupied` derives an ordered collection's occupied blocks arithmetically from member extents, so the empty gap inside the envelope still contributes neither work nor metadata.
 - **Reduction cells follow occupied blocks.** `CollectionReader` caches its occupied block set, `GenerationReader::chunk_is_occupied` lets the tile renderer skip a block that holds no coverage without opening anything, and `CollectionReader::aggregate` answers a reduced footprint from the occupied chunks it intersects. That keeps a deeply minified display tile affordable without inventing a second stored representation.
 - **The compatibility base is library-owned.** A dense mosaic is not in the controlled COG profile, so `LidarLibrary::compat_lease` prepares one GDAL derivative per preserved generation, reuses it for every later read, and releases it when the layer is deleted. `delete_layer` also clears the collection rows and the self-referencing lineage before removing generations.
+- **One deliberate retention.** The backend `lidar_preview_import_decision` command and its `render_decision_preview` caller remain, because the review's Before/After renderers are still the detector for "the accepted head's own composed values" (the preview regression reads them) and the design's later interaction slice owns retiring the old preview entry points. The frontend no longer exposes any path to them, so no user can reach a merge decision.
 - **Retired new-write machinery.** The merge-model publication paths and their helpers are gone; `lidar_generation_members`, `GenerationChunkReader`, `persisted_chunks` and the dense read remain, because preserved generations, persisted slope results and the compatibility tests still read through them.
 
 ## Evidence
@@ -52,7 +53,8 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 ### Frontend
 
 - `lidar-layer-collection.test.ts` covers the ordered actions: reading the collection, sending the expected head with a move so a stale edit fails by name, remove, snapshot Undo, per-version restore, and surfacing a rejected edit without refreshing the library.
-- `npm test` passes in full (272 files, 2 646 tests) and `npx tsc --noEmit` is clean.
+- `lidar-import-progress.test.tsx` covers the import route: the review creates the **Add sources** confirmation, asserts the retired "Replace overlap" decision and the Before/After tabs are gone, states the ordered-insertion rule, and refuses the confirmation while any selected source is incompatible (naming the reason).
+- `npm test` passes in full (272 files, 2 648 tests) and `npx tsc --noEmit` is clean.
 
 ### Repository gates on the final candidate
 
@@ -65,7 +67,7 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 | `services::lidar --include-ignored --skip services::lidar::e2e --test-threads=1` | **159 passed / 0 failed** in 474.34 s (log `.rq-scratch/final-lidar.log`, transient) |
 | `cargo test --workspace` | 41 + 352 + 1 + 7 + 2 passed / 0 failed |
 | `cd desktop/web && npx tsc --noEmit` | clean |
-| `cd desktop/web && npm test` | **2 646 passed / 0 failed** (272 files) |
+| `cd desktop/web && npm test` | **2 648 passed / 0 failed** (272 files) |
 | `cd desktop/web && npm run check:types` | generated bindings match (`bindings-gen --check`) |
 | `python3 scripts/check_docs.py` | 0 errors |
 | `git diff --check` | clean |
