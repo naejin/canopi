@@ -2,9 +2,17 @@
 
 Status: evidence — independent focused review: partial delivery, not accepted as complete; no integration or release approval.
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`.
-Current guidance: [completion assignment](bounded-generation-completion-agent-prompt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
+Current guidance: [ordered COG assignment](ordered-cog-agent-prompt.md), [design](ordered-cog-design.md), [courier protocol](collaboration-protocol.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief).
 
-## Current disposition — `6a5130b3`
+## Current disposition — `0696bd3d`
+
+C1/C2 are accepted within the assigned safety scope; full product closure is partial. Independently rerun: `a_collision_is_never_owned`, `unproven_ownership_preserves_an_interrupted_intent`, and `journal_clear_failure_retains_evidence_until_recovery` — all passed; documentation and diff checks passed. The reported broad gate totals are corroborated by transient `final-gates2.log`, not independently rerun. The smoke was inspected, not repeated.
+
+Remaining product findings: Undo leaves dependent slope tied to the undone head (confirmed through `begin_undo` and the smoke database); History/map remain stale until reopen/restart (reported smoke observation, canvas root cause not isolated). Evidence also needs correction: the interrupted-intent test does not construct equal-content destination/witness files, and the receipt retains contradictory storage/gating statements. These do not invalidate the accepted C1/C2 code behavior but prevent claiming complete workflow/evidence closure.
+
+The user subsequently selected ordered COG collections. The new assignment replaces source merging and includes live Undo/History/map/slope correctness; no separate continuation of the old freeze. Preserve useful tests and historical evidence. No integration/release approval.
+
+## Historical disposition — `6a5130b3`
 
 Preserve the globally ordered iterator and the corrected guard-before-promotion, startup root-preservation and irreversible publication-success structure. The independent focused run passed **152 native/GDAL tests**, 0 failures, in 482.58 seconds; docs and diff checks passed. It used the command below and excluded private `services::lidar::e2e`; private MNT/MNH, full workspace/frontend and platform checks were not independently repeated. No repository files changed during review.
 

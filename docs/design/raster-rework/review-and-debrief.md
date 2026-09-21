@@ -1,10 +1,54 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — bounded-generation `6a5130b3` reviewed with two remaining code edges and evidence corrections; user-approved product-closure scope freeze. Historical records remain evidence, not active assignments.
-Tracking: current `canopi-jv8a.4`; historical Q `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [bounded-generation review](bounded-generation-review.md), [completion assignment](bounded-generation-completion-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
+Status: evidence — historical raster delivery/review record and current ordered COG improvement/debrief contract. The source-merge architecture freeze is retired.
+Tracking: current `canopi-jv8a.4`, related `canopi-kko3`, parent `canopi-j571`; historical Q `canopi-kqpp`; bd remains the execution tracker.
+Current guidance: [ordered COG prompt](ordered-cog-agent-prompt.md), [design](ordered-cog-design.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md). Historical instructions below are evidence only.
 
-## Purpose and evidence discipline
+## Ordered COG delivery and final debrief
+
+The user selected independent ordered COG sources on 2026-09-21 rather than continuing materialized source merges, and asked for sustained implementation-agent execution and useful continuous improvement. The [design](ordered-cog-design.md) fixes the product and engineering decisions; this record evaluates delivery and process without reopening the choice. The main agent owns the complexity it previously prescribed. Retained preparation/reader/ownership work is useful; requiring merged-source publication is now withdrawn. The cost of that rework and any savings from the replacement are not measured yet.
+
+### Baseline disposition and lessons to test
+
+At `0696bd3d`, C1/C2 were independently accepted in their assigned safety scope, while product closure remained partial. The collision, interrupted-intent and journal-clear regressions independently passed (three tests), as did docs validation. Full-suite reported totals were corroborated in `.rq-scratch/final-gates2.log`, not independently rerun; the Desktop smoke was inspected through its receipt, selected screenshot and read-only profile database, not repeated. No integration or release occurred.
+
+The smoke database showed an undone layer head with a current analysis still pointing at the replaced generation; `begin_undo` omitted dependent refresh. Stale open History/map was observed; the canvas cause was not established. The current design settles recomputation and live settlement refresh rather than returning this choice to the implementer. The old freeze was not authority to defer a broken required workflow. This is an orchestration/test gap plus a main-agent obligation to make the new mutation contract explicit.
+
+Evidence corrections remain instructive: the stale-intent test uses a text destination and COG witness despite claiming equal content. It detects unconditional identity approval, but does not establish that claimed fixture. The old receipt also retained contradictory current storage/gating statements. Correct retained fixtures/claims in the replacement; no separate reporting campaign. The sensitivity log printed `RESTORE FAILED` because its restoration check compared with HEAD; the saved backup was independently byte-identical to the final source. Future local probes should compare with their saved starting bytes and fail clearly on a real restoration mismatch. Do not misreport the old log as proof of source corruption or verified clean restoration after each probe.
+
+| Observed problem | Small intervention in the ordered COG assignment | Evidence that could justify keeping it |
+| --- | --- | --- |
+| Architecture/detail expanded before the desired simple source workflow was settled | One authoritative ordered-source model; old merge prompts retired; implementer removes obsolete new-write machinery | Real add/reorder/Undo/display/slope workflow delivered, compatibility retained, no replacement merge subsystem disguised as a cache |
+| Green helpers omitted job settlement and UI refresh | Decisive examples end at real library callers and live map/History/slope settlement | In-scope stale-result failures caught and fixed before handoff; independent review checks current snapshot identity |
+| Claims exceeded fixture or command evidence | Audit only material receipt claims against actual bytes, assertions and revision-specific logs | False fixture/RED/platform claims corrected before delivery; named controls establish the claimed boundary |
+| Routine continuation required expensive courier/reviewer attention | One authorization through internal phases, resumable bead checkpoints and one consolidated delivery | Exchanges classified by actual decision versus avoidable resumption, with no hidden unimplemented phases |
+| Tool friction could repeat or become an unrelated project | Small tested fixes to existing task-local tooling; broader proposals deferred with evidence | Failed command/false-pass case now detected, healthy use preserved, product work resumes; no unmeasured benefit claim |
+
+### Record during implementation
+
+Use bd checkpoints for execution state and one `ordered-cog-receipt.md` for delivery evidence. Record only observations that affect correctness, repeatability or delivery cost: source revision, triggering behavior/command, classification, repair or unresolved decision, decisive test, and whether discovered before or after courier delivery. Keep fixture identities and useful command outputs without private rasters, absolute user paths or giant transcripts. No new metrics collector, reporting service or Markdown task tracker.
+
+Record elapsed work or cost only if directly available, with what the measure includes (implementation, tests, review, waiting and reruns). Otherwise write unknown. Do not reconstruct tokens/model settings from Git or use the user's cost motivation as a measured result. Distinguish a guard-removal sensitivity check from a recorded failing regression before the fix. Final gate evidence identifies the actual revision; identical code may reuse a successful run.
+
+### Consolidated delivery and independent disposition
+
+The implementer adds one compact outcome here after completing the prompt: demonstrated user workflows; legacy cases preserved; merge machinery removed/retained with reason; self-review discoveries; unresolved limitations; actual tooling/guide changes with their detector; observed effort/courier data or unknown. The main agent then adds one disposition with the reviewed revision, independently observed evidence, escaped defects and ownership. Do not claim independent acceptance from self-review.
+
+Normal-workflow/scientific/ownership failures stay required work or explicit acceptance blockers. Unrelated enhancements become follow-up beads. If the environment blocks a gate, name the exact command/prerequisite and residual risk. A deliberate stop produces a partial debrief, not a completed-delivery claim.
+
+### Final synthesis and adoption
+
+At acceptance or an explicit stop, replace interim summaries in this section with a concise synthesis linking the decisive revisions; preserve historical measurements below. Answer: what now works for the user, what was simplified, what necessary complexity remains, what caused avoidable rework, what the handoff omitted/overprescribed, what tests or tools gave false confidence, and which interventions actually helped.
+
+For each recommended improvement, record **observed failure → smallest change → evidence → keep/revise/drop → owner/follow-up**. Check whether the old instruction already required the behavior before proposing another rule. Classify design omission, implementation deviation, test/oracle gap, reviewer oversight and environment/tool limitation separately, allowing overlap. No general claim about a model/language follows from this one project.
+
+Apply verified task-local test/script/guide fixes within the assignment. Broader skill or shared workflow/tooling changes require their own scoped authority and evidence; list them for the user with the expected benefit and a falsifiable next-use check. Remove stale guidance rather than appending exceptions. The final handoff names improvements already applied versus proposals still untested. This is the continuous-improvement loop, not a second project that must finish before the Data Layer works.
+
+## Historical purpose and evidence discipline
+
+The records below retain revision-specific interventions. Statements such as “current design” or “next assignment” refer to their historical revision, not present execution authority.
+
+
 
 ### Product-closure reset after `6a5130b3`
 
@@ -534,50 +578,4 @@ were closed only because a probe or a failure pointed at them.
 
 ## Final debrief procedure
 
-### Result of the DB1–DB4 intervention
-
-Review of `f9b5c10c` **did not achieve one-pass acceptance**. It retained DB1's real producer/evaluator counterexample detector and DB2 publication improvements, but found the [remaining lifecycle/result families](q-typescript-review.md#instrument-completion-independent-disposition). Saved pilot cells remain correct. Do not describe the workflow problem as solved, or discard genuine progress because safety tests remain incomplete.
-
-| Escape / classification | Why the preceding evidence did not establish the claim | Small next intervention / owner |
-| --- | --- | --- |
-| Cancellation after delayed import; implementation deviation and test gap | A cancellation message did not persist across an await; unit tests did not execute that suspended worker path | Implementer tests the actual worker with delayed loading and checks no post-cancel reads; reviewer verifies the control rather than another success run |
-| Queued reservation abandonment; implementation deviation and adapter-test gap | Bridge helpers and production executor tests separately do not prove that their composition settles bridge ownership | Implementer uses real executor barriers through the same internal operation the command calls; reviewer inspects/executes the dropped-caller and teardown cases |
-| Evaluator exit ignored and saved success after cleanup failure; implementation deviation and assertion gap | Existing tests checked returned status, not process/document coherence and persisted status together | Implementer tests returned, printed and saved results from one settled classification; reviewer repeats the two concrete counterexamples |
-| Limits applied only to host/fixture; implementation deviation and supervision-test gap | Launcher tests mocked the very process adapter whose bounds they needed to establish | Main agent specifies a shared non-compilation budget and enforcement boundary; implementer tests real controlled child processes and byte-limited writers |
-
-Reviewer responsibility: the previous prompt required adapter-level tests, but that wording was insufficient to prevent replacing the behavior under test with a scripted environment. The next handoff names the actual suspended transitions and requires a compact statement of what each test mocks. This is a test-boundary correction, not proof that more detailed prompts are generally better. Hard-cap feasibility must be established before any new real run; an unavailable enforcement primitive is an explicit blocker, not implementer permission to claim a soft monitor is a hard limit.
-
-Evaluate the next slice using original-counterexample rejection, coherent positive controls, observed cleanup/child lifetimes, and remaining independent-review escapes. Keep one receipt and one courier delivery; internal steps need no approvals. Cost/time remain unmeasured. Do not rank languages/models, infer TDD history from test counts, or promote the intervention as effective before its review. Optional cleanup and broader tooling/skill changes remain separately authorized.
-
-### Desktop completion intervention: test the actual caller boundary
-
-The [Desktop independent disposition](q-typescript-review.md#desktop-bridge-independent-disposition) preserves the first genuine transport observations while rejecting instrument completeness. The next experiment in our working method is the [DB1–DB4 completion assignment](q-desktop-bridge-completion-agent-prompt.md), not a new evaluator rewrite or a claim about model capability.
-
-| Evidence / classification | Small process change and owner | Evidence of benefit on the next delivery |
-| --- | --- | --- |
-| DB1: zero checked cells became 81,920 claimed measured cells; implementation deviation plus test gap | Main agent specifies request/observation correspondence; implementer tests raw host evidence through the same producer and evaluator the launcher calls | Empty/duplicate/missing-window controls have the contract's verdict and reasons; real positive control still passes |
-| DB2: no-overwrite guard checked a few filenames rather than all writes; implementation deviation plus test gap | Main agent selects an exclusively created run root and one publication policy; implementer inventories each writer and cleanup target in the existing receipt | Partial-directory, publication-race and foreign-socket controls preserve bytes/resources through real orchestration |
-| DB3: component tests did not establish composed lifecycle; implementation deviation plus integration-test gap | Main agent assigns one run owner and terminal behavior; implementer exercises actual adapter/executor transitions rather than manually constructing internal state | Cancellation, duplicate queued request, disposal and failure tests observe settled ownership, not merely a closed flag |
-| DB4: whole-Q exit versus pilot exit was not explicitly settled in the original design; design omission, with a separate implementation error reading the wrong summary field | Main agent owns the exit table and clean-build contract; implementer verifies the documented subprocess entry point | Missing evaluator/decision cannot exit zero; a coherent incomplete-Q decision can still represent a successful bounded pilot |
-
-Reviewer responsibility: the original prompt named safety constraints but did not make the launcher terminal-state table explicit. This completion prompt resolves that omission; it must not be framed solely as implementer failure. The reviewed pilot's correct cells are evidence of progress, while the escaped producer path limits trust in future runs. These conclusions can coexist.
-
-For the next receipt, map each DB family to one observable contract, its regression entry point, meaningful RED/GREEN, sensitivity result and independent-review outcome. Also record self-review discoveries and any further reviewer escape with its original-contract citation. Do not require a new report per defect, an arbitrary test-count increase or a courier checkpoint per internal step. Record actual effort/courier cycles only when available; current cost comparison is unknown. Benefit remains **unproven** until independent review observes these detectors and no known DB blocker remains. A fresh successful pilot alone cannot demonstrate the failure-path repairs.
-
-### Reviewer-owned design intervention
-
-After `55d6f485`, the user separated responsibilities: the reviewer resolves engineering design; the implementation agent executes it, tests it and supplies evidence; the user remains the courier and scope authority. The five design-review gaps and their closure are recorded in the [standing review](q-typescript-review.md#reassessment-design-review-and-closure). The previous proposal is recoverable in Git; its D-A–D-F questions are not outstanding decisions.
-
-The [current design](q-typescript-reassessment.md) is the intervention to evaluate, not a proven improvement. Record one consolidated delivery/review per implementation assignment, not per internal phase. In the existing receipt, record revision, fixed acceptance family, intended behavior change, independently derived test/control, self-review discovery, reviewer-discovered escape, actual command evidence and unavailable observations. In the final synthesis compare recurrence of failure loss, false positive evidence and unsafe publication before/after this intervention. Separate true code regressions from invalid fixtures and test-oracle defects.
-
-Acceptance requires zero known blockers under C1–C8; “fewer defects” alone does not pass the gate. Test counts, check registrations, longer plans, skill names and green aggregate verdicts are not efficacy evidence. Record effort/cost only where measured, otherwise unknown. Preserve the possibility that the new seam adds complexity without reducing escaped defects. Changes to skills or general tooling require a separately authorized follow-up supported by observed results, not a causal claim about model capability or language.
-
-At completion or a deliberate stop, compare the reviewed revisions with repair receipts and independently verified outcomes. For each recurring issue, distinguish missing/ambiguous instruction, failure to follow explicit instruction, environment limitation, implementation defect, measurement defect and reviewer/handoff defect. Record a contributing cause only when evidence supports it; otherwise retain it as a hypothesis.
-
-Summarize which work was reusable, which needed rework, and what the review caught. Use observed command/run/review counts and durations only where logs exist; leave unavailable cost/time/model-setting data unknown. Do not reconstruct token usage, skill invocation or RED/GREEN history from a final commit.
-
-Evaluate candidate improvements by falsifiable outcomes: wrong evidence rejected, regression detects guard removal, failed shell step cannot exit zero, actual route demonstrably exercised, fewer recurring review findings. Separate experiment/test success from capability qualification and integration/release throughout.
-
-For each proposed tooling/method change, retain a compact evaluation record: triggering review IDs; whether the preceding prompt already required the behavior; delivered regression or tooling revision; independently observed detection; subsequent recurrence or no evidence yet. Compare example-only tests with the new set-coverage and failure-precedence invariants. Do not call an intervention effective merely because the suite grew from 14 to 64 to 115 tests. Record reviewer omissions and overly broad handoffs alongside implementer defects; final conclusions should explain which boundary was missed and which check now catches it, not rank models from unavailable cost/settings data.
-
-Promote confirmed lessons into the narrowest appropriate regression test, report schema, reusable checker, skill improvement or operating guide through a separately scoped bead. Link that delivered change and its verification here. Do not silently edit skills, relax Q, or convert this folder into an append-only conversation log. The final synthesis should retain decisive evidence and retire obsolete execution instructions while preserving their historical revision identity.
+Use [Ordered COG delivery and final debrief](#ordered-cog-delivery-and-final-debrief) for the current assignment and final synthesis. Historical DB/Q intervention details remain in the revision-linked review and receipt sections above; their old “next repair” instructions do not authorize further Q work. Evaluate their measured outcomes without restarting their workflows.

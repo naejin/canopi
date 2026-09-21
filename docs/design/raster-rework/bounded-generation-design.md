@@ -1,10 +1,10 @@
 # Bounded raster generations behind the existing UI
 
-Status: partial — implementation delivered on `feature/bounded-raster-generations` through `6a5130b3`; two cleanup edges and evidence corrections remain; architecture frozen for product closure. Not accepted as complete, integrated or released. The standard-COG contract replaces the unimplemented raw-block choice at `24fd1a56`.
-Tracking: `canopi-jv8a.4`, foundation `canopi-jv8a`, epic `canopi-j571`. Accepted predecessor: `canopi-jv8a.1` at `a5fc7d7b`.
-Current guidance: [completion assignment](bounded-generation-completion-agent-prompt.md), [independent review](bounded-generation-review.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Status: retired — source-merge design delivered through `0696bd3d` with partial product acceptance; superseded for new work by the ordered COG design. Historical assets/readers and useful safety/scientific tests remain supported.
+Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`, epic `canopi-j571`.
+Current guidance: [ordered COG design](ordered-cog-design.md), [current assignment](ordered-cog-agent-prompt.md), [ADR 0027](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The following sections remain the intended B1–B5 contract, not proof of implementation. Continue the existing branch from `6a5130b3`; do not recreate the initial baseline/worktree sequence below. The product-closure assignment freezes architecture, closes C1/C2 and evidence gaps, then verifies the real Desktop workflow; retain the established pagination and BG8 fixes. Preserve delivered work and reconcile branch-specific guides rather than replacing them with this planning checkout's older descriptions.
+The sections below record the previous B1–B5 design for interpreting delivered code and evidence. They are not execution instructions. The user has replaced materialized source merges and overlap decisions with ordered independent COGs; do not restore the old architecture freeze. Preserve compatibility and tested invariants as specified in the replacement. Earlier baseline/worktree, current-scope and future-work wording below is historical.
 
 ## 1. Outcome and authority
 
