@@ -1412,4 +1412,261 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(dir);
     }
+
+    /// The actual renderer over a generation whose two constant regions meet on
+    /// a chunk boundary: ramp colours at reduced-cell centres, interpolation
+    /// between centres, alpha at the coverage edges and negative chunk
+    /// coordinates all agree with the resolved means.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn native_tiles_interpolate_reduced_cells_across_a_chunk_boundary() {
+        let root = std::env::temp_dir().join(catalogue::new_id("canopi-tile-reduction"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = super::super::LidarLibrary::open(&root).expect("library opens");
+        let cancel = AtomicBool::new(false);
+        let layer_id = library
+            .create_layer(
+                "tile reduction",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .expect("layer created");
+        let generation_id = "generation-reduction";
+        // Twelve stored 1024-cell chunks: value 5 west of world x = 0 (negative
+        // chunk coordinates) and 25 east of it, so the value transition is
+        // exactly the chunk boundary between chunk -1 and chunk 0. Each side is
+        // three chunks wide so a whole tile fits inside one constant region.
+        let side = generation::CHUNK_SIDE as u32;
+        for chunk_y in 0..3 {
+            for chunk_x in -3..3 {
+                let value = if chunk_x < 0 { 5.0 } else { 25.0 };
+                let values = vec![value; (side * side) as usize];
+                generation::publish_test_chunk(
+                    &library,
+                    generation_id,
+                    chunk_x,
+                    chunk_y,
+                    side,
+                    side,
+                    &values,
+                );
+            }
+        }
+        // The layer lattice is the east region's own grid, exactly as a fixed
+        // anchor works in production: the west region was published later and
+        // therefore occupies negative lattice cells and negative chunk
+        // coordinates.
+        // The origin is deliberately not a round world coordinate: a value
+        // transition that coincides with a tile or sample edge would hide the
+        // between-centre interpolation this test exists to prove.
+        let grid = RasterGrid {
+            width: 3072,
+            height: 3072,
+            geotransform: [37.5, 1.0, 0.0, 1024.0, 0.0, -1.0],
+        };
+        let manifest = serde_json::json!({
+            "format": "cog-chunks-v1",
+            "grid": {
+                "width": grid.width,
+                "height": grid.height,
+                "geotransform": grid.geotransform,
+            },
+            "nodata": -99999.0,
+            "crs_wkt": "EPSG:3857",
+            "members": [],
+            "engine_version": "test",
+            "created_at": "0",
+        });
+        {
+            let connection = library.catalogue().unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations(
+                        id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                        coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES(?1, ?2, '0', NULL, NULL, ?3, ?4, 5.0, 25.0, '[-3072,-1024,3072,1024]')",
+                    rusqlite::params![
+                        generation_id,
+                        layer_id,
+                        manifest.to_string(),
+                        3072i64 * 3072,
+                    ],
+                )
+                .unwrap();
+        }
+
+        // Two zoom levels inside the advertised range, so the samples are
+        // minified (displacement about five native cells) and every value comes
+        // from reduced cells rather than a native window.
+        let max_zoom = (WEB_MERCATOR_WORLD / f64::from(TILE_PIXELS) / grid.geotransform[1])
+            .log2()
+            .floor() as u32;
+        let z = max_zoom - 2;
+        let span = WEB_MERCATOR_WORLD / f64::from(1u32 << z);
+        let half = WEB_MERCATOR_WORLD / 2.0;
+        let tile_x = |world_x: f64| ((world_x + half) / span).floor() as u32;
+        let tile_y = |world_y: f64| ((half - world_y) / span).floor() as u32;
+        let render = |x: u32, y: u32| -> TileOutcome {
+            let request = TileRequest {
+                entity_kind: "source".to_string(),
+                entity_id: layer_id.clone(),
+                generation_id: generation_id.to_string(),
+                style: "elevation".to_string(),
+                z,
+                x,
+                y,
+            };
+            render_tile(&library, &request, &cancel).expect("tile renders")
+        };
+        let pixels_of = |outcome: TileOutcome| -> Vec<u8> {
+            match outcome {
+                TileOutcome::Png(bytes) => {
+                    let (width, height, rgba) = decode(&bytes);
+                    assert_eq!((width, height), (TILE_PIXELS, TILE_PIXELS));
+                    rgba
+                }
+                TileOutcome::Empty => panic!("expected a painted tile"),
+            }
+        };
+        // The covered span in world coordinates: three chunks west and three
+        // east of the lattice origin, where the value changes.
+        let anchor = grid.geotransform[0];
+        let coverage_west = anchor - 3.0 * f64::from(side);
+        let coverage_east = anchor + 3.0 * f64::from(side);
+        let ramp = ColorRamp::elevation_range(5.0, 25.0);
+        let west = ramp.colour_for(5.0).expect("ramp covers the west value");
+        let east = ramp.colour_for(25.0).expect("ramp covers the east value");
+        // Every colour the ramp can produce between the two constants: a
+        // nearest-cell render can only ever produce the two endpoint colours.
+        let achievable: std::collections::HashSet<(u8, u8, u8)> = (0..=20_000)
+            .filter_map(|step| ramp.colour_for(5.0 + f64::from(step) * 0.001))
+            .collect();
+
+        // A tile fully inside the covered area vertically, and inside a single
+        // constant region horizontally: every pixel must then carry that
+        // region's constant, which only correct reduced-cell means can produce.
+        let mut row = None;
+        let coverage_south = grid.geotransform[3] - 3.0 * f64::from(side);
+        for y in tile_y(grid.geotransform[3])..=tile_y(coverage_south) {
+            let bounds = tile_bounds_3857(z, 0, y);
+            if bounds[1] >= coverage_south && bounds[3] <= grid.geotransform[3] {
+                row = Some(y);
+                break;
+            }
+        }
+        let row = row.expect("a tile fits inside the coverage vertically");
+        let mut inside_west = None;
+        for x in tile_x(coverage_west)..=tile_x(anchor - 4.0) {
+            let bounds = tile_bounds_3857(z, x, row);
+            if bounds[0] >= coverage_west && bounds[2] <= anchor - 4.0 {
+                inside_west = Some(x);
+                break;
+            }
+        }
+        let inside_west = inside_west.expect("a tile fits inside the west region");
+        for (index, pixel) in pixels_of(render(inside_west, row))
+            .chunks_exact(4)
+            .enumerate()
+        {
+            assert_eq!(
+                [pixel[0], pixel[1], pixel[2], pixel[3]],
+                [west.0, west.1, west.2, 255],
+                "west pixel {index}"
+            );
+        }
+        let mut inside_east = None;
+        for x in tile_x(anchor + 4.0)..=tile_x(coverage_east) {
+            let bounds = tile_bounds_3857(z, x, row);
+            if bounds[0] >= anchor + 4.0 && bounds[2] <= coverage_east {
+                inside_east = Some(x);
+                break;
+            }
+        }
+        let inside_east = inside_east.expect("a tile fits inside the east region");
+        for (index, pixel) in pixels_of(render(inside_east, row))
+            .chunks_exact(4)
+            .enumerate()
+        {
+            assert_eq!(
+                [pixel[0], pixel[1], pixel[2], pixel[3]],
+                [east.0, east.1, east.2, 255],
+                "east pixel {index}"
+            );
+        }
+
+        // The tile over the chunk boundary carries both constants and colours
+        // between them, which only interpolation between reduced-cell centres
+        // can produce.
+        let mut saw_west = false;
+        let mut saw_east = false;
+        let mut saw_between = false;
+        for pixel in pixels_of(render(tile_x(0.0), row)).chunks_exact(4) {
+            if pixel[3] == 0 {
+                continue;
+            }
+            assert_eq!(pixel[3], 255, "a painted pixel is opaque");
+            let colour = (pixel[0], pixel[1], pixel[2]);
+            assert!(
+                achievable.contains(&colour),
+                "every painted colour comes from the ramp between the constants: {colour:?}"
+            );
+            if colour == west {
+                saw_west = true;
+            } else if colour == east {
+                saw_east = true;
+            } else {
+                saw_between = true;
+            }
+        }
+        assert!(saw_west && saw_east, "both regions are drawn");
+        assert!(
+            saw_between,
+            "a pixel between the reduced-cell centres is interpolated, not painted from one chunk"
+        );
+
+        // The coverage's west edge is at world x = -3072: the adjacent tile is
+        // empty, and the covered tile's first painted column is the first sample
+        // centre inside the coverage, within one pixel of the mapped edge.
+        let edge = tile_x(coverage_west);
+        let edge_bounds = tile_bounds_3857(z, edge, row);
+        let neighbour_bounds = tile_bounds_3857(z, edge - 1, row);
+        assert!(
+            neighbour_bounds[2] <= coverage_west,
+            "the neighbouring tile lies outside coverage: {neighbour_bounds:?}"
+        );
+        assert!(
+            matches!(render(edge - 1, row), TileOutcome::Empty),
+            "a tile outside the coverage is explicitly empty"
+        );
+        let pixel_span = (edge_bounds[2] - edge_bounds[0]) / f64::from(TILE_PIXELS);
+        let expected_column = ((coverage_west - edge_bounds[0]) / pixel_span - 0.5).ceil() as i64;
+        let edge_pixels = pixels_of(render(edge, row));
+        let first_painted = (0..TILE_PIXELS as usize)
+            .find(|column| edge_pixels[column * 4 + 3] != 0)
+            .expect("the covered tile paints its coverage");
+        assert!(
+            (first_painted as i64 - expected_column).abs() <= 1,
+            "the west edge lands at column {expected_column}, painted from {first_painted}"
+        );
+        // The north edge behaves the same way: the tile straddling it paints
+        // from the first sample row inside the coverage.
+        let north_row = tile_y(grid.geotransform[3] - 200.0);
+        let north_bounds = tile_bounds_3857(z, inside_east, north_row);
+        assert!(
+            north_bounds[3] > grid.geotransform[3] && north_bounds[1] < grid.geotransform[3],
+            "the chosen tile straddles the north edge: {north_bounds:?}"
+        );
+        let coverage_north = grid.geotransform[3];
+        let expected_row = ((north_bounds[3] - coverage_north) / pixel_span - 0.5).ceil() as i64;
+        let north_pixels = pixels_of(render(inside_east, north_row));
+        let first_painted_row = (0..TILE_PIXELS as usize)
+            .find(|row| north_pixels[row * TILE_PIXELS as usize * 4 + 3] != 0)
+            .expect("the tile below the north edge paints its coverage");
+        assert!(
+            (first_painted_row as i64 - expected_row).abs() <= 1,
+            "the north edge lands at row {expected_row}, painted from {first_painted_row}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

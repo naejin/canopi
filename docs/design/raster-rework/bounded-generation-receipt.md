@@ -50,6 +50,7 @@ caller-level tests, not an inert module.
 | **BG1** — retained source COGs as the only durable member payload | `6477f74e` |
 | **BG3 + BG2** — paged generation reads (schema v12 read-order index) and the complete reduction footprint | `2782fa80` |
 | **BG4** — sampled process-tree combined-memory measurement | `3253543d` |
+| Renderer-level evidence for the corrected reduction footprint | the commit that carries this receipt |
 
 ## Correction response (BG1–BG5)
 
@@ -75,7 +76,7 @@ Independent review at `1fcab504` found five gaps against the original contract; 
 | State | Extent |
 | --- | --- |
 | Implemented | The complete batch: retained source COGs, committed/resolved/quality COG handling, paged generation reads, catalogue v7–v12 with backups and guarded migrations, the one resolver, the import caller migration (stage → review → Apply → reopen → undo, including the replacement and undo paths), the opaque legacy base overlay, bounded core+halo slope with sparse result and quality chunks, the exclusive heavy raster lease, bounded native display tiles with the complete reduction footprint and the Desktop protocol adapter, the shared tile cache, and the per-layer fixed lattice |
-| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored` (139 tests) including all three real-fixture lifecycles and the four representative runs with their sampled process-tree metrics |
+| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored` (140 tests) including all three real-fixture lifecycles and the four representative runs with their sampled process-tree metrics |
 | Measured | Sampled combined working set (baseline, peak total, incremental) and wall time for the representative runs, recorded under "Evidence" |
 | Not verified here | A real WebView smoke test, macOS and Windows compilation/behaviour, and the 400M-cell plane (host capacity) |
 | Not done | Integration into `main` and release |
@@ -268,6 +269,16 @@ format is the default for new publications.
   the test that blessed the level-10 clamp: 2048 cells selects level 11, 4096
   selects level 12, and a non-finite or above-level-30 displacement is refused
   rather than silently shortened.
+- `native_tiles_interpolate_reduced_cells_across_a_chunk_boundary` drives the
+  real tile entry point (PNG, ramp and alpha) over a generation whose value
+  transition sits on a chunk boundary at an off-grid lattice origin, with the
+  west half in negative chunk coordinates: tiles fully inside either constant
+  region paint every pixel with exactly that region's ramp colour and alpha 255;
+  the tile over the transition contains both endpoint colours *and* colours that
+  only interpolation between reduced-cell centres can produce (the achievable
+  ramp set is enumerated independently); the tile outside the coverage is
+  explicitly empty; and the first painted column/row at the west and north
+  coverage edges lands within one pixel of the analytically mapped edge.
 
 Caller-level tests (`services::lidar::import::tests`, GDAL required):
 
