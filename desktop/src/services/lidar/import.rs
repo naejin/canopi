@@ -2630,9 +2630,15 @@ fn directory_sync_unsupported(error: &std::io::Error) -> bool {
 /// swallowed into an "already clean" result. Every caller that removes a
 /// journal goes through here so the durability policy has one home.
 fn clear_promotion_journal(paths: &LidarPaths, job_id: &str) -> Result<(), String> {
-    promotion_probe::check(promotion_probe::FaultPoint::BeforeJournalClear)?;
     let path = promotion_journal_path(paths, job_id);
-    match std::fs::remove_file(&path) {
+    // The fault seam stands in for a failing unlink and is routed through the
+    // same error arm, so a caller that swallows a real I/O failure is caught by
+    // the same regression that injects one.
+    let removed = match promotion_probe::check(promotion_probe::FaultPoint::BeforeJournalClear) {
+        Ok(()) => std::fs::remove_file(&path),
+        Err(injected) => Err(std::io::Error::other(injected)),
+    };
+    match removed {
         Ok(()) => match path.parent() {
             Some(parent) => sync_journal_directory(parent),
             None => Ok(()),
@@ -9876,7 +9882,7 @@ mod tests {
         let paths = LidarPaths::open(&root).expect("library paths");
 
         let source = write_placed_fixture(&engine, &root, "source", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_id, _staging) =
+        let (job_id, staging) =
             stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
 
         // A file that looks like an asset of this digest but was not created by
@@ -9925,6 +9931,53 @@ mod tests {
         // file itself stays, because general reclamation is deferred.
         let _ = std::fs::remove_file(promotion_journal_path(&paths, &job_id));
         let reopened = LidarLibrary::open(&root).expect("library reopens");
+        assert!(destination.exists());
+        drop(reopened);
+
+        // A stale intent that does record a witness is still not proof: the
+        // destination is a separate file with the same content, so identity
+        // fails and the file is preserved with the uncertainty named.
+        let witness = staging.sources[0]
+            .source_cog
+            .as_ref()
+            .expect("retained COG")
+            .relative_path
+            .clone()
+            .expect("the retained COG records its job-relative location");
+        write_promotion_journal(
+            &paths,
+            &job_id,
+            &PromotionJournal {
+                entries: vec![PromotionEntry {
+                    interpretation_id: "interp-stale".to_string(),
+                    sha256: digest.to_string(),
+                    destination: destination
+                        .strip_prefix(paths.root())
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    witness: Some(witness),
+                }],
+            },
+        )
+        .unwrap();
+        let error = LidarLibrary::open(&root)
+            .err()
+            .expect("a foreign destination fails opening even with a witness");
+        assert!(error.contains("recovery is incomplete"), "{error}");
+        assert!(
+            error.contains("is not the file this job linked"),
+            "the uncertainty is named: {error}"
+        );
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"a separately created file",
+            "content equality is not identity"
+        );
+        assert!(journal_of_paths(&paths, &job_id).is_some());
+
+        let _ = std::fs::remove_file(promotion_journal_path(&paths, &job_id));
+        let reopened = LidarLibrary::open(&root).expect("library reopens cleanly");
         assert!(destination.exists());
         drop(reopened);
         let _ = std::fs::remove_dir_all(&root);

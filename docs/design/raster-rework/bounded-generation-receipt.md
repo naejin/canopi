@@ -188,12 +188,47 @@ schema change, no change to the promotion journal's file name or to the
 publication order, and the failure messages the frontend already surfaces are
 unchanged except for the new named collision refusal.
 
+### C1 controls, named
+
+The scope freeze asked for three controls beside the collision case, and they
+are committed as:
+
+| Control | Test |
+| --- | --- |
+| Normal new link | The first source of `a_collision_is_never_owned` links and is then removed by rollback, and both sources of `a_failure_during_a_later_source_still_rolls_back` publish on retry; `a_cleanup_failure_after_commit_is_still_a_successful_publication` publishes successfully through the real `finish_apply` |
+| Pre-existing shared asset | `a_failed_apply_leaves_a_reused_asset_and_the_head_intact` (a reused committed COG keeps its bytes and reference); the accepted asset is also asserted intact inside `a_collision_is_never_owned`, `unproven_ownership_preserves_an_interrupted_intent` and `journal_clear_failure_retains_evidence_until_recovery` |
+| Interrupted intent | `unproven_ownership_preserves_an_interrupted_intent`, which now covers both an intent that records no witness and a stale intent that records a witness for a different file (equal content, different inode) |
+
+### Regression strength on the C1/C2 boundaries
+
+The regressions were written with their fixes, so there is **no recorded
+RED-before-GREEN** for them and none is claimed. What is recorded instead is a
+guard-removal probe round on the delivered revision: each probe patches one
+guard, runs the named ignored test, and the file is restored and verified
+afterwards (log `.rq-scratch/sensitivity-probes.log`, transient).
+
+| Probe (guard removed) | Regression | Result |
+| --- | --- | --- |
+| Relinquish-on-collision dropped **and** file identity forced true | `a_collision_is_never_owned` | **FAILED** as required (the rival file was deleted) |
+| File identity forced true only | `unproven_ownership_preserves_an_interrupted_intent` | **FAILED** as required (a stale intent deleted a content-equal foreign file) |
+| Journal-clear errors swallowed | `journal_clear_failure_retains_evidence_until_recovery` | **FAILED** as required (the retained evidence was treated as clean) |
+| None (control) | all three | passed |
+
+The first probe round covered only the collision test and used a clear-failure
+seam that short-circuited *before* the unlink; it showed that a swallowed real
+unlink error and the identity comparison were each undetected. Both were closed
+in the delivery rather than reported as unverified obligations:
+`clear_promotion_journal` now routes the injected failure through the same error
+arm as a real `remove_file` failure, and
+`unproven_ownership_preserves_an_interrupted_intent` gained the stale-intent
+phase above.
+
 ## Delivery state
 
 | State | Extent |
 | --- | --- |
 | Implemented | The complete batch: retained source COGs, committed/resolved/quality COG handling, paged generation reads, catalogue v7–v12 with backups and guarded migrations, the one resolver, the import caller migration (stage → review → Apply → reopen → undo, including the replacement and undo paths), the opaque legacy base overlay, bounded core+halo slope with sparse result and quality chunks, the exclusive heavy raster lease, bounded native display tiles with the complete reduction footprint and the Desktop protocol adapter, the shared tile cache, and the per-layer fixed lattice |
-| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored --skip services::lidar::e2e` (158 tests, 0 failed, 586.58 s, the review's own verified route) and the fixture module with both real fixtures (`CANOPI_LIDAR_E2E_FIXTURE` + `CANOPI_LIDAR_MNH_DIR`: 3 passed, 0 failed, 222.62 s): the MNT lifecycle through both formats and the 12-tile MNH batch with the corrected sampler |
+| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored --skip services::lidar::e2e` (158 tests, 0 failed, 603.59 s, the review's own verified route) and the fixture module with both real fixtures (`CANOPI_LIDAR_E2E_FIXTURE` + `CANOPI_LIDAR_MNH_DIR`: 3 passed, 0 failed, 228.01 s): the MNT lifecycle through both formats and the 12-tile MNH batch with the corrected sampler |
 | Measured | Sampled combined working set (baseline, peak total, incremental) and wall time for the representative runs, recorded under "Evidence" |
 | Not verified here | An *automated* WebView smoke test (a scripted real-Desktop smoke was driven in an isolated profile — see "Real-Desktop smoke of the slice"), macOS and Windows compilation/behaviour, and the 400M-cell plane (host capacity) |
 | Not done | Integration into `main`, release, and the deferred general reclamation of old unreferenced published assets |
@@ -344,11 +379,17 @@ committed):
 | `cargo clippy --workspace --all-targets -- -D warnings` | clean |
 | `cargo check --workspace` | clean |
 | `cargo test -p canopi-desktop native_command_policy::tests` | 13 passed / 0 failed |
-| `services::lidar --include-ignored --skip services::lidar::e2e --test-threads=1` | **158 passed / 0 failed** in 586.58 s |
-| Fixture module, MNT + 12-tile MNH (`CANOPI_LIDAR_E2E_FIXTURE` and `CANOPI_LIDAR_MNH_DIR`) | **3 passed / 0 failed** in 222.62 s (the same three tests fail to find a fixture when only `CANOPI_LIDAR_MNH_DIR` is set — an environment mistake in the lane, not behaviour) |
-| `cargo test --workspace` | 41 + 352 + 1 + 7 + 2 + 13 passed / 0 failed |
+| `services::lidar --include-ignored --skip services::lidar::e2e --test-threads=1` | **158 passed / 0 failed** in 603.59 s |
+| Fixture module, MNT + 12-tile MNH (`CANOPI_LIDAR_E2E_FIXTURE` and `CANOPI_LIDAR_MNH_DIR`) | **3 passed / 0 failed** in 228.01 s (the same three tests fail to find a fixture when only `CANOPI_LIDAR_MNH_DIR` is set — an environment mistake in the lane, not behaviour) |
+| `cargo test --workspace` | 41 + 352 + 1 + 7 + 2 passed / 0 failed |
 | `python3 scripts/check_docs.py` | 0 errors |
 | `git diff --check` | clean |
+
+This lane is the one that covers the guard-removal probe round's fixes (the
+rerouted journal-clear seam and the stale-intent phase), so the numbers above
+belong to the delivered revision. No frontend or shared-contract file changed in
+this delivery, so the frontend typecheck/build gates and binding regeneration
+are not invalidated by it.
 
 The C1/C2 tests run inside the `services::lidar` lane:
 `a_collision_is_never_owned`,
@@ -649,7 +690,8 @@ committed.
 | Real import | The IGN MNT fixture (`CANOPI_LIDAR_E2E_FIXTURE`, 2000×2000 at 0.5 m) staged from the native file dialog; review reported **Uncovered 1 km², Overlap 0 m², Invalid 0**, and *Exact cell counts* read 4,000,000 / 0 / 0 — the same numbers the e2e lane asserts |
 | Preview | *After* rendered the incoming MNT hillshade; *Before* was identical with replacement off, which is the documented no-change behaviour |
 | Apply | `Import complete — the layer and its map tiles are ready`; the layer detail then read `0.5 m resolution · 1 km² coverage` |
-| Slope | `Create slope` produced `Ground · Slope (Slope (degrees) · ready)` |
+| Slope | `Create slope` produced `Ground · Slope (Slope (degrees) · ready)` and the analysis rendered on the map |
+| Slope refresh after the replacement | The replacement Apply enqueued the dependent refresh by itself: `anl-…0007` (20:57:23 → 20:57:31, `complete`) published `agen-…0008` from the MNT generation, and `anl-…0010` (started in the same second as the replacement generation, `complete` at 21:01:15) published `agen-…0011` from the replaced generation with `min_value` 0.0012 → 0.0 and `max_value` 66.76 → 89.23; `lidar_analysis_heads` pointed at the refreshed generation, so no stale result was presented as current. No layer row ever showed a persistent loading or error state, and the two app logs contain no application error or panic (the only `error:` lines are the private session's `fuse init failed` portal noise) |
 | Overlap review | A second import of an authored 400×400 (200 m) raster aligned to the same lattice reported **Uncovered 0, Overlap 40,000 m², Invalid 3,840,000**; checking *Replace overlap* changed the composed preview, and Apply published it (generation `min_value` moved 150.84 → **100.0**) |
 | Map | A **Design Location** was confirmed, *View coverage* flew to the coverage, and the sparse generation rendered on MapLibre with the replaced window visible as a flat patch; both the layer's and the analysis's visibility toggles changed the map, and pan/zoom worked |
 | Restart | The design was saved (spatial frame, LiDAR entries and visibility persisted in the file), the app was closed and relaunched, and the reopened design showed the layer ready with 1 km² coverage, the slope row hidden exactly as saved, and the coverage rendering again |
@@ -678,6 +720,18 @@ the frozen scope:
   job list, so two consecutive generations both read `Import 1`.
 - **Chunk seams.** At low zoom the rendered elevation raster shows the sparse
   chunk grid as faint seams (`.rq-scratch/smoke-profile-Ev4FZ3/shot-46-slope-off.png`).
+- **Analyses are not refreshed by an undo** (filed as `canopi-kko3`, not fixed
+  under the freeze because the design does not settle the behaviour).
+  `begin_undo` settles the undo without calling `refresh_dependents`, so after
+  the smoke's undo the layer head was the MNT-only generation while
+  `lidar_analysis_heads` still pointed at `agen-…0011`, computed from the undone
+  replacement — the slope of coverage the user had just removed stayed on
+  display as current. `analysis::enqueue_refreshes` already skips only when the
+  analysis head matches the layer head, so the Apply path's own mechanism would
+  close it; the open decision is whether to recompute (mirror Apply) or to
+  re-point at the still-valid historical analysis generation
+  (`agen-…0008` was computed from the generation the undo restored), which the
+  design and this receipt do not currently describe.
 
 This is a scripted XTEST drive of the real window, not an automated WebView
 test; no such test exists in the suite and none was added (the completion scope
@@ -782,7 +836,8 @@ limitations, plus a decision on whether an automated Desktop smoke is worth
 building (the scripted smoke covered the workflow once, by hand); (3) the
 observations the smoke raised, if the courier wants them fixed: the stale open
 History view and canvas after an undo, the `Invalid` label wording, the history
-entry numbering, and the low-zoom chunk seams; (4) the two open data-hygiene
+entry numbering, the low-zoom chunk seams, and `canopi-kko3` (analyses are not
+refreshed by an undo, with the recompute-versus-re-point decision); (4) the two open data-hygiene
 items above (unreferenced-asset reclamation and the dense mosaic's own
 re-anchored union grid); (5) integration into `main` and release, which are not
 authorized here. Do not remove a limit, delete the preserved dense callers or
