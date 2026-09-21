@@ -44,6 +44,8 @@ Preserve originals and sidecars; prepare stripped inputs before native tiled rea
 
 The library owns originals, masks, numeric results, jobs and caches; a Design owns only references and presentation. Shared workspace navigation never changes raster geography or scientific results. Use the current map/camera lifecycle rather than introducing a second map owner.
 
+Representative runs are explicit and fixture-gated: `CANOPI_LIDAR_E2E_FIXTURE` names the real MNT tile, `CANOPI_LIDAR_MNH_DIR` names the 12-tile MNH batch directory, and the large authored runs need no fixture. A run whose host precondition is missing (for example the 400M-cell plane's ≥8 GiB free RAM) is reported as an unavailable gate, never approximated.
+
 For native library changes, run the focused `services::lidar` tests and repository Rust gates. Tests that need the GDAL tools are ignored by default and run explicitly:
 
 ```bash

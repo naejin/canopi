@@ -768,3 +768,266 @@ fn e2e_sparse_generation_lifecycle() {
     drop(guard);
     let _ = std::fs::remove_dir_all(&work);
 }
+
+/// The kernel's own resident-set high-water mark for this process.
+///
+/// `VmHWM` is the exact peak the kernel recorded, not a sampling estimate.
+/// Short-lived child processes (GDAL) are not included, so their transient
+/// peaks are reported separately by the run that spawns them.
+fn process_peak_rss_bytes() -> u64 {
+    fn value(status: &str, key: &str) -> Option<u64> {
+        status
+            .lines()
+            .find(|line| line.starts_with(key))
+            .and_then(|line| line.split_whitespace().nth(1))
+            .and_then(|value| value.parse::<u64>().ok())
+    }
+    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+    value(&status, "VmHWM:")
+        .map(|kilobytes| kilobytes * 1024)
+        .unwrap_or(0)
+}
+
+/// The largest peak any currently live child of this process reports.
+fn live_child_peak_rss_bytes() -> u64 {
+    let children = std::fs::read_to_string(format!(
+        "/proc/{}/task/{}/children",
+        std::process::id(),
+        std::process::id()
+    ))
+    .unwrap_or_default();
+    children
+        .split_whitespace()
+        .filter_map(|pid| std::fs::read_to_string(format!("/proc/{pid}/status")).ok())
+        .filter_map(|status| {
+            status
+                .lines()
+                .find(|line| line.starts_with("VmHWM:"))
+                .and_then(|line| line.split_whitespace().nth(1))
+                .and_then(|value| value.parse::<u64>().ok())
+        })
+        .map(|kilobytes| kilobytes * 1024)
+        .max()
+        .unwrap_or(0)
+}
+
+/// The 12 MNH tiles of one IGN batch, enumerated rather than assumed.
+fn fixture_mnh_batch() -> Result<Vec<PathBuf>, String> {
+    let directory = std::env::var_os("CANOPI_LIDAR_MNH_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| dirs_home().join("Downloads").join("la magnerie"));
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&directory)
+        .map_err(|error| format!("MNH batch directory is unavailable: {error}"))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().contains("_MNH_"))
+                    .unwrap_or(false)
+        })
+        .collect();
+    files.sort();
+    if files.is_empty() {
+        return Err(format!(
+            "no MNH tiles found under {}; set CANOPI_LIDAR_MNH_DIR",
+            directory.display()
+        ));
+    }
+    Ok(files)
+}
+
+/// The authorized 12-tile MNH batch: a 48M-cell union imported as one batch,
+/// published sparsely, displayed on demand, and reopened. MNH is height above
+/// ground, so it is deliberately never used as slope input here.
+#[test]
+#[ignore = "requires system GDAL, the 12-tile MNH batch and a host with headroom; see CANOPI_LIDAR_MNH_DIR"]
+fn e2e_mnh_batch_import_apply_display_restart() {
+    let engine = engine::GdalEngine::new();
+    engine.discover().expect("GDAL engine must be available");
+    let files = match fixture_mnh_batch() {
+        Ok(files) => files,
+        Err(reason) => panic!("{reason}"),
+    };
+    println!("MNH batch: {} tiles", files.len());
+    for file in &files {
+        let (digest, bytes) =
+            super::raster_assets::hash_file(file).expect("tile hashes with bounded I/O");
+        println!(
+            "  {} {} bytes {}",
+            file.file_name().unwrap_or_default().to_string_lossy(),
+            bytes,
+            digest
+        );
+    }
+    let work = std::env::temp_dir().join(format!("canopi-lidar-e2e-mnh-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let cancel = AtomicBool::new(false);
+    let guard = generation::chunked_publication::enable();
+    // The 48M-cell union is exactly what the dense ceiling refuses; this run is
+    // authorized to raise it for its own thread only.
+    let ceiling = import::dense_working_probe::raise_to(64 * 1024 * 1024);
+
+    let library = LidarLibrary::open(&work).expect("library opens");
+    let layer_id = library
+        .create_layer(
+            "MNH batch",
+            common_types::lidar::LidarMeasurementKind::AboveGroundHeight,
+        )
+        .expect("layer created");
+    let job_id = library.record_import_job(&layer_id).expect("job recorded");
+    let staged = import::stage_import(&library, &job_id, &layer_id, &files, &cancel)
+        .expect("staging succeeds");
+    let review = &staged.review;
+    assert!(
+        review.compatible,
+        "every tile must be admitted: {:?}",
+        review.issues
+    );
+    let staged_cells = review.uncovered_cells;
+    println!(
+        "staged: uncovered={} overlap={} invalid={}",
+        review.uncovered_cells, review.overlap_cells, review.invalid_cells
+    );
+    assert_eq!(
+        staged_cells, 48_000_000,
+        "twelve 2000x2000 tiles aligned into an 8000x6000 union"
+    );
+    library.finish_staging(
+        &job_id,
+        Ok(import::StagingOutput {
+            review: review.clone(),
+        }),
+    );
+    let staging: import::StagedImport = serde_json::from_str(
+        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        (staging.union_grid.width, staging.union_grid.height),
+        (8000, 6000)
+    );
+    library.prepare_apply(&job_id).expect("review accepted");
+    let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    assert!(applied.changed);
+
+    let head = {
+        let connection = library.catalogue().unwrap();
+        catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .expect("head published")
+    };
+    let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
+    assert_eq!(
+        manifest.format,
+        import::GenerationStorageFormat::CogChunksV1,
+        "the batch publishes sparse chunks"
+    );
+    assert_eq!(head.coverage_cells, 48_000_000);
+    let chunks = {
+        let connection = library.catalogue().unwrap();
+        catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
+    };
+    // 8000x6000 over 1024-cell chunks: eight columns, six rows.
+    assert_eq!(chunks.len(), 48, "one chunk per occupied 1024-cell block");
+    println!(
+        "applied: {} cells, {} chunks, range {:?}..{:?}",
+        head.coverage_cells,
+        chunks.len(),
+        head.min_value,
+        head.max_value
+    );
+
+    // Display: the layer presents native tiles and a tile over the data draws.
+    let snapshot = library.library_snapshot().expect("snapshot");
+    let tileset = snapshot.layers[0]
+        .tilesets
+        .iter()
+        .find(|tileset| tileset.style == "elevation")
+        .expect("a sparse layer is displayable");
+    let generation_id = match &tileset.source {
+        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
+            generation_id.clone()
+        }
+        _ => panic!("a sparse generation has no asset template"),
+    };
+    let bounds: Vec<f64> = {
+        let connection = library.catalogue().unwrap();
+        let raw: String = connection
+            .query_row(
+                "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
+                [&generation_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        serde_json::from_str(&raw).unwrap()
+    };
+    let centre_x = (bounds[0] + bounds[2]) / 2.0;
+    let centre_y = (bounds[1] + bounds[3]) / 2.0;
+    let mut drawn = 0usize;
+    let mut drawn_bytes = 0usize;
+    for z in (tileset.min_zoom..=tileset.max_zoom).rev().take(4) {
+        let span = 40_075_016.685_578_49 / f64::from(1u32 << z);
+        let half = 20_037_508.342_789_244;
+        let x = ((centre_x + half) / span).floor() as u32;
+        let y = ((half - centre_y) / span).floor() as u32;
+        let bytes = library
+            .render_tile(
+                "source",
+                &layer_id,
+                &generation_id,
+                "elevation",
+                z,
+                x,
+                y,
+                &cancel,
+            )
+            .expect("tile renders");
+        let visible = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+            .map(|image| image.width() == 256 && image.height() == 256)
+            .unwrap_or(false);
+        println!(
+            "tile {z}/{x}/{y}: {} bytes{}",
+            bytes.len(),
+            if visible { "" } else { " (empty)" }
+        );
+        if visible {
+            drawn += 1;
+            drawn_bytes += bytes.len();
+        }
+    }
+    assert!(drawn > 0, "a tile over the batch centre must draw");
+    println!("drawn tiles: {drawn} ({drawn_bytes} bytes)");
+
+    // Restart reuse: the head, its chunks and its tiles survive.
+    drop(library);
+    let reopened = LidarLibrary::open(&work).expect("library reopens");
+    let snapshot = reopened.library_snapshot().expect("snapshot after restart");
+    assert_eq!(snapshot.layers[0].coverage_cells, 48_000_000);
+    assert!(matches!(
+        snapshot.layers[0].tilesets[0].source,
+        common_types::lidar::LidarTileSource::NativeGeneration { .. }
+    ));
+    println!("restart: {} cells", snapshot.layers[0].coverage_cells);
+
+    // The kernel's own high-water marks: exact for this process, plus the
+    // largest peak any still-live child reports.
+    let peak = process_peak_rss_bytes().max(live_child_peak_rss_bytes());
+    println!(
+        "peak resident set (VmHWM, this process plus live children): {} MiB",
+        peak / (1024 * 1024)
+    );
+    assert!(
+        peak <= 1024 * 1024 * 1024,
+        "the batch must stay inside the 1 GiB combined working-memory budget: {} MiB",
+        peak / (1024 * 1024)
+    );
+
+    drop(reopened);
+    drop(ceiling);
+    drop(guard);
+    let _ = std::fs::remove_dir_all(&work);
+}

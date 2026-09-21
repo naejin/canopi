@@ -605,11 +605,31 @@ fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
     if source_paths.is_empty() {
         return Err("select at least one raster source".to_string());
     }
-    if source_paths.len() > MAX_SOURCE_FILES_PER_IMPORT {
+    let file_limit = {
+        #[cfg(test)]
+        {
+            dense_working_probe::file_count_limit().unwrap_or(MAX_SOURCE_FILES_PER_IMPORT)
+        }
+        #[cfg(not(test))]
+        {
+            MAX_SOURCE_FILES_PER_IMPORT
+        }
+    };
+    if source_paths.len() > file_limit {
         return Err(format!(
-            "an import can contain at most {MAX_SOURCE_FILES_PER_IMPORT} source files"
+            "an import can contain at most {file_limit} source files"
         ));
     }
+    let source_byte_limit = {
+        #[cfg(test)]
+        {
+            dense_working_probe::source_bytes_limit().unwrap_or(MAX_SOURCE_FILE_BYTES)
+        }
+        #[cfg(not(test))]
+        {
+            MAX_SOURCE_FILE_BYTES
+        }
+    };
     let mut total_bytes = 0u64;
     for path in source_paths {
         let metadata = std::fs::metadata(path)
@@ -617,11 +637,11 @@ fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
         if !metadata.is_file() {
             return Err(format!("{} is not a regular file", path.display()));
         }
-        if metadata.len() > MAX_SOURCE_FILE_BYTES {
+        if metadata.len() > source_byte_limit {
             return Err(format!(
                 "{} is larger than the {} MiB per-source limit",
                 path.display(),
-                MAX_SOURCE_FILE_BYTES / (1024 * 1024),
+                source_byte_limit / (1024 * 1024),
             ));
         }
         total_bytes = total_bytes
@@ -665,22 +685,54 @@ fn dense_working_limit() -> u64 {
     MAX_DENSE_WORKING_CELLS
 }
 
-/// Test-only seam for the dense working-area ceiling.
+/// Test-only seam for the admission ceilings a representative run must exceed.
+///
+/// Only the approved large-fixture runs raise these, only for their own
+/// thread, and only for the quantities named here: the dense working area, the
+/// source-file count and the per-source byte cap. Production keeps every
+/// accepted limit, so an unsupported large job is still refused by name.
 #[cfg(test)]
 pub(crate) mod dense_working_probe {
     use std::cell::Cell;
 
     thread_local! {
-        static LIMIT: Cell<Option<u64>> = const { Cell::new(None) };
+        static LIMITS: Cell<Option<TestAdmission>> = const { Cell::new(None) };
+    }
+
+    /// Raised ceilings for one thread.
+    #[derive(Clone, Copy)]
+    struct TestAdmission {
+        cells: u64,
+        files: usize,
+        source_bytes: u64,
     }
 
     pub(crate) fn override_limit() -> Option<u64> {
-        LIMIT.with(Cell::get)
+        LIMITS.with(Cell::get).map(|limits| limits.cells)
     }
 
-    /// Raise the ceiling until the guard is dropped.
+    pub(crate) fn file_count_limit() -> Option<usize> {
+        LIMITS.with(Cell::get).map(|limits| limits.files)
+    }
+
+    pub(crate) fn source_bytes_limit() -> Option<u64> {
+        LIMITS.with(Cell::get).map(|limits| limits.source_bytes)
+    }
+
+    /// Raise the ceilings until the guard is dropped.
     pub(crate) fn raise_to(limit: u64) -> Guard {
-        LIMIT.with(|slot| slot.set(Some(limit)));
+        raise(limit, 4096, 64 * 1024 * 1024 * 1024)
+    }
+
+    /// Raise every ceiling a multi-file representative run needs.
+    pub(crate) fn raise(cells: u64, files: usize, source_bytes: u64) -> Guard {
+        LIMITS.with(|slot| {
+            slot.set(Some(TestAdmission {
+                cells,
+                files,
+                source_bytes,
+            }))
+        });
         Guard
     }
 
@@ -688,7 +740,7 @@ pub(crate) mod dense_working_probe {
 
     impl Drop for Guard {
         fn drop(&mut self) {
-            LIMIT.with(|slot| slot.set(None));
+            LIMITS.with(|slot| slot.set(None));
         }
     }
 }
@@ -4790,6 +4842,103 @@ mod tests {
         );
         let overlap = staging_three.overlap_cells;
         let _ = (job_three, overlap);
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    /// The authorized 24-tile authored run: more tiles than the production
+    /// file-count ceiling allows, spread across a million-cell gap, imported
+    /// as one batch and stored as occupied chunks only.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn sparse_twenty_four_tile_batch_stays_chunk_sized() {
+        let root = std::env::temp_dir().join(new_id("canopi-24-tile"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let _gate = generation::chunked_publication::enable();
+        // Twenty-four files exceed the production file ceiling, and the gaps
+        // push the union past the dense working ceiling: both are raised for
+        // this thread only, exactly as the batch's representative runs allow.
+        let _admission = dense_working_probe::raise(256 * 1024 * 1024, 64, 8 * 1024 * 1024 * 1024);
+
+        // Three columns eight rows apart, each column 100,000 cells from the
+        // next, so the union is far larger than the data it holds.
+        let mut sources = Vec::new();
+        for column in 0..3u32 {
+            for row in 0..8u32 {
+                let name = format!("tile-{column}-{row}");
+                sources.push(write_placed_fixture(
+                    &engine,
+                    &root,
+                    &name,
+                    f64::from(column) * 100_000.0,
+                    1000.0 - f64::from(row) * 40.0,
+                    32,
+                    24,
+                    -9999.0,
+                    10.0 + f64::from(row) as f32,
+                ));
+            }
+        }
+        assert!(sources.len() > MAX_SOURCE_FILES_PER_IMPORT);
+
+        let layer_id = library
+            .create_layer(
+                "24 tiles",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job_id, staging) = stage_review(&library, &layer_id, &sources, &cancel);
+        assert_eq!(staging.uncovered_cells, 24 * 32 * 24);
+        library.prepare_apply(&job_id).expect("review accepted");
+        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
+        assert!(applied.changed);
+
+        let head = head_of(&library, &layer_id);
+        assert_eq!(head.coverage_cells, 24 * 32 * 24);
+        let chunks = {
+            let connection = library.catalogue().unwrap();
+            catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
+        };
+        assert_eq!(
+            chunks.len(),
+            3,
+            "one occupied chunk per column; the eight rows share it: {:?}",
+            chunks
+                .iter()
+                .map(|chunk| (chunk.chunk_x, chunk.chunk_y))
+                .collect::<Vec<_>>()
+        );
+        let total_bytes: i64 = {
+            let connection = library.catalogue().unwrap();
+            connection
+                .query_row(
+                    "SELECT COALESCE(SUM(a.bytes), 0) FROM lidar_generation_chunks g
+                     JOIN lidar_raster_assets a ON a.sha256 = g.asset_sha256
+                     WHERE g.generation_id = ?1 AND g.state = 'published'",
+                    [&head.id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        let union_cells =
+            u64::from(staging.union_grid.width) * u64::from(staging.union_grid.height);
+        println!(
+            "24 tiles: {} cells in {} chunks, {total_bytes} bytes, union {union_cells} cells",
+            24 * 32 * 24,
+            chunks.len()
+        );
+        assert!(
+            union_cells > 25_000_000,
+            "the arranged union exceeds the old dense ceiling"
+        );
+        assert!(
+            total_bytes < 3 * 8 * 1024 * 1024,
+            "three chunks' worth of bytes, not the union's area: {total_bytes}"
+        );
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);

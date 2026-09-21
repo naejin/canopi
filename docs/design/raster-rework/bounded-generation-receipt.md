@@ -12,7 +12,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
 | B3 — slope core+halo and shared job ownership | **Delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning); slope computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history; and the library now owns one exclusive heavy raster job lease shared by staging, apply, undo and analysis refresh, refusing a competing user submission promptly without creating running work |
 | B4 — bounded display transport and Desktop protocol | **Partly delivered**: the presentation contract carries a tagged tile source (preserved asset pyramid vs native generation), the library renders bounded 256×256 tiles from an immutable sparse generation through an executor-backed command returning raw PNG bytes or an explicit empty/unavailable outcome, and the frontend installs the `canopi-raster://` MapLibre protocol adapter with per-request cancellation, display reads are admitted library-wide at two active and thirty-two queued with a synchronous cancel command, and encoded tiles are served from a shared bounded memory and disk cache with leases, LRU eviction, generation-scoped invalidation and atomic owned writes. Still open: lifting the publication gate and the B5 verification runs |
-| B5 — end-to-end verification and conditional limit removal | **In progress**: the real IGN MNT 0445_6806 lifecycle passes through both storage formats with identical slope ranges (`7b877304…76ad`, 4,000,000 cells, 4 occupied chunks, native tile 24,504 bytes, 4 result + 4 quality chunks), plus the authored dense↔sparse equivalence, cache and admission tests. Still open: the 24-tile sparse-gap run, the 12-tile MNH batch, the 400M-cell plane (host RAM gate), the sampled memory measurement, the admission-limit switch and the gate flip |
+| B5 — end-to-end verification and conditional limit removal | **Representative runs done; the capacity switch is not**. Verified on real and authored data: the IGN MNT lifecycle through both formats with identical slope ranges, the authorized 12-tile MNH batch (48,000,000 cells, 48 chunks, four drawn tiles at zooms 15–18, restart reuse, **kernel peak RSS (VmHWM) 315 MiB**), the 24-tile authored batch (60.8M-cell union stored as 3 chunks / 12.6 MB), and the sparse-gap and fixed-anchor runs. The 400M-cell plane is **unavailable here**: the host reports 6.5 GiB available against the required ≥8 GiB, so per the design its gate is recorded, not faked. Production admission limits are therefore **retained**, and the format gate is still off |
 
 Production behaviour is unchanged: the storage-format switch is `false` in every
 non-test build, so import, review, Apply, undo, slope and display still publish
@@ -40,7 +40,8 @@ caller-level tests, not an inert module.
 | Shared bounded display cache (memory + disk) with leases, eviction and invalidation | `6ae0ba0d` |
 | Reprojected lattice mapping fix, analysis tileset fix, sparse real-fixture lifecycle | `f7313624` |
 | Dense-ceiling test seam, bounded preview target, sparse-gap representative run | `834043e5` |
-| Schema v10 fixed per-layer lattice inherited by sparse generations | the commit that carries this receipt |
+| Schema v10 fixed per-layer lattice inherited by sparse generations | `fdb907b3` |
+| Extended admission test seam, 12-tile MNH and 24-tile representative runs | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -217,6 +218,24 @@ Catalogue tests:
   means, and malformed-request rejection. The contract's wire shape is pinned
   by `common_types::lidar::tests::tile_source_wire_shape_is_tagged_and_stable`,
   and the frontend covers both URL forms plus raster-URL parsing and rejection.
+- Authorized 12-tile MNH batch (`e2e_mnh_batch_import_apply_display_restart`, run
+  here against `~/Downloads/la magnerie`): all twelve 16,000,513-byte tiles
+  enumerated and hashed individually, staged as one batch, 48,000,000
+  uncovered cells with no overlap, an 8000×6000 union, published as exactly
+  **48** resolved chunks with range −1.70…39.28 m, four native tiles drawn at
+  zooms 18/17/16/15 (41–72 KB each) from the batch centre, the head and its
+  tileset intact after a restart, and a **peak resident set of 315 MiB** — the
+  kernel's own `VmHWM` high-water mark for the test process, which is exact for
+  that process rather than a sampling estimate, plus the largest peak any
+  still-live child reported; short-lived GDAL children are excluded, which is
+  the residual uncertainty. That is well inside the design's 1 GiB combined
+  working-memory budget. MNH is height above ground and
+  is deliberately never used as slope input.
+- Authorized 24-tile authored batch (`sparse_twenty_four_tile_batch_stays_chunk_sized`):
+  twenty-four files — more than the production 16-file ceiling — arranged in
+  three widely separated columns produce a 60,809,728-cell union and are stored
+  as **3 occupied chunks totalling 12.6 MB**, one per column, with the count and
+  dense-area ceilings raised for that thread only.
 - Fixed layer lattice (GDAL required):
   `sparse_lattice_anchor_never_moves_when_the_layer_extends_left` publishes a
   member, extends the layer 1200 cells to its left, and asserts the manifest's
@@ -325,18 +344,30 @@ concurrently running reader test could reset another test's evidence.
 - A no-change Apply materializes chunks and leaves unreferenced
   content-addressed assets behind, because the no-change decision needs the
   resolved counts. Asset reclamation for unreferenced published assets is open.
-- The real 48M-cell batch, 24-source sparse case, 400M-cell plane and 12-tile
-  MNH run were not attempted; no capacity limit was removed and no disk/memory
-  measurement of retained chunks was made.
+- The memory measurement is a process high-water mark, not a sampled
+  process-tree trace: a GDAL child's own transient peak is not captured, so the
+  number is a lower bound for the tree. The design's sampled-tree measurement
+  remains open.
+- The **400M-cell plane was not attempted**: its preflight needs at least 8 GiB
+  of free host RAM and this host reported 31.3 GiB total but only **6.5 GiB
+  available** (88.9 GiB disk free, 8 cores), so the design's rule applies —
+  finish everything else, retain the production admission limits and report
+  this exact incomplete gate rather than calling capacity enabled. The retained
+  resolved chunks' disk cost was measured only for the runs above (12.6 MB for
+  3 chunks, 48 chunks for the MNH batch); no disk-budget sweep was made.
 - Windows capacity/asset behaviour remains uncompiled here, as recorded in the
   predecessor receipt.
 
 ## Next dependency
 
-The next session needs, in order: the B3 slope reader over resolved core+halo
-windows (which removes the explicit chunked-head refusal in `analysis.rs`) and
-the shared heavy-job lease with `canopi-jv8a.3`; then B4's bounded display
-transport and Desktop tile protocol, which is what allows the publication gate
-to be lifted; then the legacy-base overlay and source-COG retention; then B5's
-capacity gates. Do not enable the gate, remove production limits or delete the
-dense callers before those land.
+Everything the migrated workflows need now exists and is exercised on real
+data, so the next session's order is: (1) block-wise review classification, so
+the union no longer has to be assembled densely and the review stops being the
+reason a 48M-cell import needs a test-only ceiling; (2) the legacy-base overlay
+(`base_generation_id`) for heads whose member history is not reconstructible,
+and retained source COGs, so no preserved legacy head keeps the dense route;
+(3) the conditional admission switch, which may remove the 16-file, 512 MiB,
+1 GiB and 25M-cell limits only after (1) and (2) land and the 400M-cell plane
+gate can actually run on a host with 8 GiB free; (4) then the format gate flip,
+the consolidated receipt and the LiDAR/build/MapLibre guide updates. Do not
+flip the gate, remove a limit or delete the dense callers before those land.
