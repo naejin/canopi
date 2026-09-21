@@ -2,7 +2,7 @@
 
 Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation correction `9ad85c18` independently reviewed as partial (BG6–BG8 remain). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [bounded-generation review](bounded-generation-review.md), [completion assignment](bounded-generation-completion-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
+Current guidance: [bounded-generation review](bounded-generation-review.md), [delivery receipt](bounded-generation-receipt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
 
@@ -33,6 +33,41 @@ The [independent review](bounded-generation-review.md) records real caller progr
 The main agent also contributed process ambiguity by describing a whole batch without clearly separating authorization from execution windows. The courier repeatedly forwarded continuation without an architectural decision. The updated [protocol](collaboration-protocol.md#one-bounded-loop) permits resumable checkpoints under the same authorization; it does not excuse partial work being labelled complete. The broad original design also lacked the decisive multi-chunk and multi-process examples now supplied. These contributions do not establish a model or skill failure.
 
 On the next consolidated delivery, record whether the five original contracts are actually met, which same-family defects self-review caught, which escaped independently, and whether any courier exchange resolved a real decision rather than simply continuing work. Keep unavailable 400M/platform evidence separate. Use measured effort only; do not derive productivity from commits, tests or document length. No new evaluator, mandatory mutation campaign or upstream skill modification is authorized. Promote only lessons supported by subsequent outcomes into tooling or skills through a separately scoped change.
+
+### Consolidated delivery outcome — BG6–BG8 completion
+
+The [receipt](bounded-generation-receipt.md)'s completion response table records
+the outcome of the second correction on `feature/bounded-raster-generations`;
+the main agent's independent disposition is still outstanding.
+
+- **Defects caught internally versus escaped.** Self-review caught the
+  monotone-stream defect the first implementation attempt hid: translating a
+  source's 1024-cell occupied blocks onto a lattice whose origin is not
+  aligned can revisit an earlier lattice row, and the MNH representative run
+  reported 102,394,880 incoming cells against a 48,000,000-cell envelope before
+  the stream was sorted and floor-filtered. It also caught a stale `Before`
+  preview (composed values instead of the accepted head's), an ordinal bug that
+  made a third sparse import into one layer fail outright, a path-containment
+  check that `Path::starts_with` accepts for `../` components, and a settlement
+  rule that removed a failed job's directory only at the next startup. The
+  escaped defect was the review's own: the preamble rule it amended had already
+  made `awaiting_review` jobs unrecoverable at restart, which only surfaced when
+  the new acceptance test restarted a staged job.
+- **Remaining design ambiguity.** The assignment's three findings were
+  decision-complete; the one judgement call left open was whether an
+  `awaiting_review` import survives a restart, and the lifecycle requirement
+  ("preserve intact AwaitReview jobs and their local sources") settles it, so
+  startup recovery now fails only genuinely running work.
+- **Courier value.** No exchange in this stretch resolved an architectural
+  decision: the forwarded documentation commit was the only input, and every
+  continuation resumed execution. The one ambiguity above was resolvable from
+  the assignment text.
+- **Evidence boundary.** The verified local route excludes the private fixture
+  module; the MNT and 12-tile MNH runs were executed separately and recorded
+  with fixture identities, baselines, complete/incomplete tick counts and
+  incremental totals. The 400M-cell plane remains unavailable on this host and
+  the production admission limits stay retained. Test totals are verification,
+  not productivity, and no cost saving is claimed from them.
 
 ### Design correction before implementation — standard COG persistence
 

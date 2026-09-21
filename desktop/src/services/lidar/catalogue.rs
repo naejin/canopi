@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 12;
+pub const CATALOGUE_VERSION: i32 = 13;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -156,6 +156,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         10 => SCHEMA_V10,
         11 => "",
         12 => SCHEMA_V12,
+        13 => SCHEMA_V13,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -350,6 +351,16 @@ CREATE TABLE IF NOT EXISTS lidar_interpretation_regions (
     sum_value REAL,
     PRIMARY KEY (interpretation_id, block_x, block_y)
 );
+"#;
+
+/// v13: an index matching the paged occupied-region read order.
+///
+/// A sparse review walks each source's occupied regions as an ordered stream,
+/// so the index carries `(block_y, block_x)` after the interpretation key.
+/// Additive only: no data changes.
+const SCHEMA_V13: &str = r#"
+CREATE INDEX IF NOT EXISTS lidar_interpretation_regions_order_idx
+    ON lidar_interpretation_regions(interpretation_id, block_y, block_x);
 "#;
 
 /// v12: an index matching the paged chunk read order.
@@ -1166,6 +1177,94 @@ pub type InterpretationRegionRow = (i64, i64, i64, f64, f64, f64);
 
 /// One ordered page of occupied-region rows.
 #[allow(dead_code)]
+/// One bounded page of a source's occupied regions, in `(block_y, block_x)`
+/// order starting strictly after `after`.
+///
+/// The review walks occupied regions as an ordered stream, so it pages with a
+/// keyset cursor: a page never re-reads or skips a row, and the index carries
+/// the order.
+/// Whether any interpretation references one asset digest.
+///
+/// Promotion cleanup asks this before removing a file: a digest with a
+/// committed reference belongs to accepted history and is never deleted, even
+/// when the promoting job's journal still lists it.
+pub fn asset_reference_exists(connection: &Connection, sha256: &str) -> Result<bool, String> {
+    connection
+        .query_row(
+            "SELECT 1 FROM lidar_interpretation_cogs WHERE asset_sha256 = ?1 LIMIT 1",
+            [sha256],
+            |_| Ok(()),
+        )
+        .optional()
+        .map(|row| row.is_some())
+        .map_err(|e| format!("Failed to read asset references: {e}"))
+}
+
+/// Whether one interpretation has any occupied-region rows.
+///
+/// A review decides between the occupied index and an extent scan from this,
+/// without loading the index itself.
+pub fn interpretation_has_regions(
+    connection: &Connection,
+    interpretation_id: &str,
+) -> Result<bool, String> {
+    connection
+        .query_row(
+            "SELECT 1 FROM lidar_interpretation_regions
+             WHERE interpretation_id = ?1 LIMIT 1",
+            [interpretation_id],
+            |_| Ok(()),
+        )
+        .optional()
+        .map(|row| row.is_some())
+        .map_err(|e| format!("Failed to read interpretation regions: {e}"))
+}
+
+pub fn interpretation_region_keyset_page(
+    connection: &Connection,
+    interpretation_id: &str,
+    after: Option<(i64, i64)>,
+    limit: usize,
+) -> Result<Vec<InterpretationRegionRow>, String> {
+    let (after_y, after_x) = match after {
+        Some((block_y, block_x)) => (Some(block_y), Some(block_x)),
+        None => (None, None),
+    };
+    let mut statement = connection
+        .prepare(
+            "SELECT block_x, block_y, valid_cells, min_value, max_value, sum_value
+             FROM lidar_interpretation_regions
+             WHERE interpretation_id = ?1
+               AND (?2 IS NULL OR block_y > ?2 OR (block_y = ?2 AND block_x > ?3))
+             ORDER BY block_y, block_x
+             LIMIT ?4",
+        )
+        .map_err(|e| format!("Failed to prepare region page: {e}"))?;
+    statement
+        .query_map(
+            rusqlite::params![
+                interpretation_id,
+                after_y,
+                after_x,
+                i64::try_from(limit).unwrap_or(i64::MAX),
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, f64>(3)?,
+                    row.get::<_, f64>(4)?,
+                    row.get::<_, f64>(5)?,
+                ))
+            },
+        )
+        .map_err(|e| format!("Failed to read region page: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read region page: {e}"))
+}
+
+#[cfg(test)]
 pub fn interpretation_region_page(
     connection: &Connection,
     interpretation_id: &str,

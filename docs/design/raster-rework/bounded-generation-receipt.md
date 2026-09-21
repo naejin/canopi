@@ -1,6 +1,6 @@
 # Bounded raster generations — delivery receipt
 
-Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. The five gaps the [independent review](bounded-generation-review.md) found at `1fcab504` are answered by the BG1–BG5 correction recorded below. Independently reviewed: no — the correction itself is awaiting the main agent's disposition. Integrated or released: no.
+Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. The five gaps the [independent review](bounded-generation-review.md) found at `1fcab504` are answered by the BG1–BG5 correction, and the three gaps it found at `9ad85c18` by the BG6–BG8 completion recorded below. Independently reviewed: no — the completion itself is awaiting the main agent's disposition. Integrated or released: no.
 Tracking: `canopi-jv8a.4` (parent `canopi-jv8a`, epic `canopi-j571`); `canopi-jv8a.3` is linked work inside B3.
 Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
@@ -50,7 +50,11 @@ caller-level tests, not an inert module.
 | **BG1** — retained source COGs as the only durable member payload | `6477f74e` |
 | **BG3 + BG2** — paged generation reads (schema v12 read-order index) and the complete reduction footprint | `2782fa80` |
 | **BG4** — sampled process-tree combined-memory measurement | `3253543d` |
-| Renderer-level evidence for the corrected reduction footprint | the commit that carries this receipt |
+| Renderer-level evidence for the corrected reduction footprint | `9ad85c18` |
+| Forwarded sparse-review and publication completion assignment | `aa7a1a4a` |
+| **BG6** — occupied-region review traversal (schema v13 region order index) | the commit that carries this receipt |
+| **BG7** — job-owned source COGs, promotion journal, recovery and publication-time references | the commit that carries this receipt |
+| **BG8** — a combined-memory gate that refuses incomplete evidence | the commit that carries this receipt |
 
 ## Correction response (BG1–BG5)
 
@@ -62,6 +66,56 @@ Independent review at `1fcab504` found five gaps against the original contract; 
 | BG1 — retained source COGs | **Delivered** | Staging converts the managed original once into a controlled source COG (`raster_assets::write_source_cog_asset` → digest → content-addressed admission) and records `RetainedSourceCog { sha256, bytes, nodata, value_range }` on the staged source with no raw/mask paths. Source facts and occupied regions are derived from that COG in bounded windows; review reads sources through the committed reader; Apply records the immutable asset row plus the `lidar_interpretation_cogs` reference (`publish_member_cog`) and writes no `values.raw`, `valid.bin` or `native.tif`; sparse occurrences and the preserved dense replay read `MemberPayload::Cog`/`LegacyDense`; undo resolves retained COGs first. Decisive tests are listed under "BG1 — retained source COG persistence" below |
 | BG3/BG2 — paged reads and complete reduction | **Delivered** | BG3: `catalogue::generation_chunk_page` pages published records in `(chunk_y, chunk_x)` order with a keyset cursor, an exact signed `ChunkWindow` spatial filter evaluated in SQL and `CHUNK_PAGE_MAX = 256`; schema v12 adds the matching index, and the plan is asserted to need no temp b-tree. `generation::GenerationChunkReader` binds the immutable generation/role, fetches each page under a short catalogue lock, releases it before opening committed assets, and serves `first`/`chunk_at`/`read_window`/`aggregate`; `persisted_chunks` and `generation_chunk_assets` are now `#[cfg(test)]` oracles, so no production caller (tiles, review, head read, undo, analysis representative raster) materializes a generation's records. BG2: the `MAX_LEVEL = 10` clamp is gone; `level_for_displacement` refuses non-finite or above-level-30 displacements instead of shortening them; reduced cells use centres at `(k + 0.5) * side`; minified samples bilinearly interpolate the four surrounding reduced-cell means with valid-only normalization; whole-chunk cells use stored aggregates, sub-chunk cells share one bounded page read per chunk, and a footprint crossing chunks adds stored sum/count for enclosed chunks and reads only its boundary chunks. Decisive tests under "BG2/BG3 — paging and the complete reduction footprint" below |
 | BG4 — process-tree measurement | **Delivered** | `desktop/src/services/lidar/measurement.rs` (test-only) samples `/proc` every 50 ms from a recorded idle baseline until the workload settles: it walks from the root through every observed descendant, including children launched from worker threads, sums `VmRSS` per member, keys identity by `(pid, starttime)`, dedupes within a tick, excludes a tick from the peak when any tree member was unreadable, and reports baseline, peak total, incremental total, ticks and incomplete ticks. Non-Linux or an unsampled baseline reports `Unsupported`; the gate helper fails loudly if a Linux measurement is missing and never reads a missing sample as zero. The `VmHWM` `max(parent, live child)` helpers and assertion are deleted. Serial representative runs (1 GiB incremental gate, all pass): sparse MNT lifecycle 39 → 103 MiB (incremental 64 MiB, 501 ticks, 38 incomplete); sparse gap run 48 → 98 (49 MiB, 154 ticks, 10 incomplete); 24-tile batch 49 → 101 (51 MiB, 439 ticks, 47 incomplete); 12-tile MNH batch 18 → 94 (75 MiB, 2268 ticks, 100 incomplete). RSS summation double-counts shared pages and sampling can miss shorter peaks; both are disclosed in every report |
+
+## Completion response (BG6–BG8)
+
+The independent review at `9ad85c18` found three remaining gaps; the forwarded
+completion assignment settled them on the same branch.
+
+| Item | State | Decisive evidence |
+| --- | --- | --- |
+| BG6 — empty-envelope review traversal | **Delivered** | `review_coverage` no longer walks the envelope: it merges bounded, ordered, deduplicated coordinate streams — each source's persisted occupied regions (keyset-paged through the new schema-v13 order index, translated from the source's block grid onto the fixed layer lattice) and the accepted head's own occupied records (paged chunk records, or a lazy extent stream for a dense/opaque head) — and composes one 1024-cell lattice block per visit. A caller-level test observation (`review_probe`) reports the real visits and page fetches from the actual `stage_import`/`render_decision_preview` path. Two single cells 1,000,000 cells apart visit three blocks and 999,999 invalid cells by arithmetic; adjacent placement visits two blocks, ten times the gap visits the same three, duplicate members are visited once, and a seeded 601-record source pages in three bounded pages and survives cancellation followed by a healthy call. The Before preview now uses the accepted head's own values, so replacing 5 by 9 shows 5 Before and 9 After |
+| BG7 — unpublished source ownership | **Delivered** | Staging converts the managed original into one controlled COG inside the job directory and records a validated job-relative location; the digest stays identity, never proof of a global file. Review, AwaitReview and Apply read the job-local COG without re-preparation. Publication promotes it with a same-filesystem no-replace link after durably journalling intent in the job's `promotions.json`, validates the destination, and writes the asset and interpretation references inside the same transaction as the generation and head. A `PromotionGuard` rolls back only destinations this job created and no committed reference owns; recovery settles pending journals before new heavy jobs, keeps committed assets and intact AwaitReview payloads, and retains a journal it cannot settle. An awaiting-review job now survives a restart (startup no longer fails it) and applies from its own file. Acceptance runs inject faults after promotion, before the transaction and after the commit: rollback removes the new asset, keeps the reused accepted asset and its reference, leaves the head unchanged, and recovery is idempotent at intent-before-promotion, promotion-before-transaction and commit-before-cleanup, including a reused global asset and an old-format staged job with no job-local record |
+| BG8 — incomplete sampling cannot pass a memory gate | **Delivered** | `TreeMeasurement` records baseline completeness, complete and incomplete tick counts, the complete-tick peak and the largest observed subtotal. A verdict requires a complete baseline *and* at least one complete sample of the workload interval; zero ticks, only-incomplete ticks or an incomplete baseline are explicitly unavailable, and a stop before the first tick invents no evidence. An observed subtotal that already exceeds the budget fails even when other samples are missing, while a partial low subtotal never promotes to a passing peak. Focused tests cover the complete-baseline pass, the reported ten-incomplete-tick reproduction, the incomplete baseline, the over-budget subtotal with missing child data, the complete/incomplete report split and the stop-before-first-tick case, alongside the retained summation, child-lifetime and live-child tests |
+
+### Corrected measurements (BG8 sampler)
+
+Serial runs on this host, with the private fixture module executed separately and
+`--test-threads=1`; each reports a complete idle baseline and complete workload
+samples, and each stays far inside the 1 GiB incremental gate:
+
+| Run | Identity | Baseline | Sampled peak | Incremental | Complete / incomplete ticks |
+| --- | --- | --- | --- | --- | --- |
+| Sparse MNT lifecycle | `LHD_FXX_0445_6806_MNT_O_0M50_LAMB93_IGN69` (`CANOPI_LIDAR_E2E_FIXTURE`) | 29 MiB | 104 MiB | **74 MiB** | 443 / 35 |
+| 12-tile MNH batch | `~/Downloads/la magnerie` (12 `_MNH_` tiles, 48,000,000 covered cells) | 29 MiB | 112 MiB | **83 MiB** | 2098 / 100 |
+
+Both figures are sampled lower bounds: resident-set summation double-counts
+shared pages and sampling can miss peaks shorter than 50 ms. Incomplete ticks are
+reported and excluded from the peak; they are never read as zero. The earlier
+39 MiB and 315 MiB `VmHWM` observations remain superseded history (see above).
+
+### Precisely what the completion changed
+
+- **Traversal frame.** Review windows are fixed-lattice blocks; envelope cells are
+  derived only for the preview targets (`union_offset_x/y`), so a union whose
+  origin differs from the layer anchor no longer shifts what the head reader
+  reads. Legacy dense and opaque heads are indexed through the same reference
+  lattice.
+- **Reused versus new.** Only destinations this job actually created are
+  journalled; a destination that already existed is validated and referenced
+  non-owningly. Cleanup and recovery both re-check committed references before
+  removing anything, so accepted history, analysis results and other jobs'
+  payloads are never candidates.
+- **Awaiting review is not interrupted work.** Startup recovery now fails only
+  `staging` and `applying` import jobs; an `awaiting_review` job keeps its state
+  and its own prepared bytes, which is what makes restart-and-apply possible.
+- **Settled jobs own nothing.** A failed or cancelled staging removes its job
+  directory at settlement instead of deferring to the next startup.
+- **Affected in-scope defect fixed.** `incoming_occurrences` numbered the
+  current job's occurrences from zero, so a third sparse import into one layer
+  replayed ordinals `[0, 1, 0]` and failed with "member ordinal 0 is out of
+  order after 1". Occurrents now continue after the accepted history, and the
+  three-import caller test covers it.
 
 ### Interim admission, precisely
 
@@ -76,10 +130,10 @@ Independent review at `1fcab504` found five gaps against the original contract; 
 | State | Extent |
 | --- | --- |
 | Implemented | The complete batch: retained source COGs, committed/resolved/quality COG handling, paged generation reads, catalogue v7–v12 with backups and guarded migrations, the one resolver, the import caller migration (stage → review → Apply → reopen → undo, including the replacement and undo paths), the opaque legacy base overlay, bounded core+halo slope with sparse result and quality chunks, the exclusive heavy raster lease, bounded native display tiles with the complete reduction footprint and the Desktop protocol adapter, the shared tile cache, and the per-layer fixed lattice |
-| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored` (140 tests) including all three real-fixture lifecycles and the four representative runs with their sampled process-tree metrics |
+| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored --skip services::lidar::e2e` (150 tests, the review's own verified route) and the private fixture module separately: the MNT lifecycle through both formats and the 12-tile MNH batch with the corrected sampler |
 | Measured | Sampled combined working set (baseline, peak total, incremental) and wall time for the representative runs, recorded under "Evidence" |
 | Not verified here | A real WebView smoke test, macOS and Windows compilation/behaviour, and the 400M-cell plane (host capacity) |
-| Not done | Integration into `main` and release |
+| Not done | Integration into `main`, release, and the deferred general reclamation of old unreferenced published assets |
 
 ### Production caller inventory
 
@@ -280,6 +334,50 @@ format is the default for new publications.
   explicitly empty; and the first painted column/row at the west and north
   coverage edges lands within one pixel of the analytically mapped edge.
 
+### BG6–BG8 — traversal, ownership and measurement evidence
+
+- `sparse_review_visits_only_occupied_blocks` (BG6): two single-cell sources
+  1,000,000 cells apart stage through the real caller with `uncovered_cells == 2`
+  and `invalid_cells == 999,999`, visiting three occupied blocks and at most two
+  region pages instead of 977 envelope windows; adjacent placement visits two,
+  a duplicate member is visited once, and a 10,000,001-cell gap visits the same
+  three blocks, so gap length does not drive review work.
+- `sparse_review_previews_keep_accepted_values_before_the_change` (BG6): after
+  an accepted 5 is replaced by 9, the decision preview's Before PNG paints the
+  accepted 5 in every covered pixel and After paints 9.
+- `sparse_review_counts_once_and_keeps_accepted_values_under_invalid_input`
+  (BG6): overlapping members count each valid cell once, invalid incoming cells
+  leave accepted values and coverage intact, `replace-overlap` adds no coverage,
+  the Before/After PNGs show both, and an extension into negative lattice cells
+  is discovered from its own occupied region.
+- `sparse_review_pages_many_occupied_regions_and_survives_cancellation` (BG6):
+  601 occupied coordinates page in three bounded pages, the preview still
+  paints, cancellation between pages stops cleanly and the next healthy call
+  succeeds.
+- `a_failed_publication_rolls_back_only_its_own_promotions` (BG7): an injected
+  failure before the transaction removes the job's new asset and its pending
+  reference, keeps the reused accepted asset and reference, keeps the job-local
+  COG for retry and leaves the head unchanged; the retry publishes; a failure
+  after the commit keeps the asset, retains the journal, and a restart settles
+  it while the generation still reads exactly.
+- `refused_or_cancelled_staging_leaves_no_owned_payloads` (BG7): an
+  over-envelope staging prepares COGs, is refused, and leaves no global asset,
+  no job directory and untouched original bytes; a cancelled job's job-local COG
+  is removed at settlement.
+- `promotion_recovery_is_idempotent_at_every_interruption_point` (BG7):
+  intent-without-promotion removes nothing, promotion-without-transaction
+  removes exactly the uncommitted asset, a journal with an escaping destination
+  is refused and retained, and settling one awaiting-review job leaves another's
+  payload intact.
+- `awaiting_review_jobs_survive_restart_and_old_staged_jobs_stay_readable`
+  (BG7): an awaiting-review job survives a restart with its COG byte-identical
+  (no re-preparation), previews and applies from it, and a pre-BG7 staged job
+  reading a global digest neither owns nor loses that asset.
+- `measurement::tests` (BG8): complete-baseline pass, ten-incomplete-tick
+  refusal, incomplete baseline, over-budget subtotal with missing child data,
+  stop-before-first-tick, plus the retained summation, child-lifetime and
+  live-child discovery tests.
+
 Caller-level tests (`services::lidar::import::tests`, GDAL required):
 
 - `chunked_stage_review_apply_reopen_and_undo_keep_exact_values` runs the whole
@@ -471,27 +569,35 @@ concurrently running reader test could reset another test's evidence.
   layer that was dense first and sparse later records the anchor from that
   first dense publication; the sparse formats of one layer are consistent with
   each other from then on.
-- Review classification is block-wise. `stage_import` and
-  `render_decision_preview` walk the union in 1024-cell blocks: each block unions
-  the incoming sources' validity (so overlapping files count once), compares it
-  once with the accepted head through the paged resolver, and reduces the result
-  into both previews on a bounded target of at most 512 per side. The envelope's
-  cell count is arithmetic, so the gap is a number rather than a walk, and
-  `invalid_cells` keeps its meaning as envelope minus unique incoming valid
-  cells. The 12-tile MNH batch (48M cells) and the 45M-cell sparse-gap and
+- Review traversal is occupied-region driven (BG6). `stage_import` and
+  `render_decision_preview` merge bounded, ordered coordinate streams — the
+  incoming sources' persisted occupied regions and the accepted head's own
+  occupied records — deduplicate them, and compose one 1024-cell lattice block
+  at a time. Neither the work nor the metadata depends on the empty gap inside
+  the envelope: a 1,000,001-cell envelope holding two single cells visits two to
+  three blocks, not 977 windows, and ten times the gap visits the same blocks.
+  The envelope's cell count stays arithmetic, so `invalid_cells` keeps its
+  meaning as envelope minus unique incoming valid cells. Legacy raw/mask and
+  opaque-TIFF heads without an occupied index are scanned over their own stored
+  extent only. The 12-tile MNH batch (48M cells) and the 45M-cell sparse-gap and
   60.8M-cell 24-tile runs are representative runs *outside* the production
   envelope, so each raises it for its own thread through the test-only
   `admission::limits_probe`; production submissions keep the 25M bound.
-- Source persistence is closed (BG1): a new import retains one controlled source
-  COG and writes no durable raw/mask or duplicate `native.tif`, and members
-  resolve from that COG after a restart. Legacy raw/mask members stay readable
-  through their adapter; no bulk conversion or deletion was performed.
-- Review classification still assembles a dense union buffer before classifying;
-  reads are bounded, the assembly is not. Block-wise classification without
-  visiting the gap remains open.
-- A no-change Apply materializes chunks and leaves unreferenced
-  content-addressed assets behind, because the no-change decision needs the
-  resolved counts. Asset reclamation for unreferenced published assets is open.
+- Source persistence and new-job ownership are closed (BG1, BG7): a new import
+  prepares one controlled source COG inside its own job directory, reads it
+  there through review and AwaitReview without re-preparation, promotes it into
+  the immutable store only at publication, and commits the reference that makes
+  it authoritative inside the same transaction as the generation and head.
+  Rollback removes only destinations this job created with no committed owner;
+  a reused asset, accepted history and analysis results are never deleted. A
+  failed or cancelled staging owns nothing durable, and an AwaitReview job
+  survives a restart. Legacy raw/mask members and pre-BG7 staged jobs stay
+  readable through their adapters; no bulk conversion, no historical-orphan GC
+  and no broad asset reclamation were performed.
+- A no-change Apply materializes chunks and leaves unreferenced *published*
+  assets behind, because the no-change decision needs the resolved counts. That
+  is the deferred general reclamation of old unreferenced assets, which is a
+  different obligation from the mandatory new-job cleanup BG7 delivers.
 - Combined memory is now measured as a sampled process tree (BG4); the report
   discloses that resident-set summation double-counts shared pages and that
   sampling can miss shorter peaks, so the figure is a conservative lower bound

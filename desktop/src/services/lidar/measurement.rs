@@ -34,14 +34,22 @@ pub(super) const SAMPLE_INTERVAL: Duration = Duration::from_millis(50);
 pub(super) enum TreeMeasurement {
     /// Sampled totals in bytes.
     Sampled {
-        /// Resident total observed once before the workload started.
+        /// Resident total observed before the workload started.
         baseline_bytes: u64,
-        /// Largest complete-tick total observed while sampling.
+        /// Whether every member of the baseline tree was readable. An incomplete
+        /// baseline is not evidence, so no incremental figure can be derived.
+        baseline_complete: bool,
+        /// Largest total over ticks whose tree was fully readable; zero when no
+        /// complete workload tick exists.
         peak_total_bytes: u64,
-        /// `peak_total_bytes` minus the baseline, floored at zero.
-        peak_incremental_bytes: u64,
-        /// Completed sampling ticks.
-        ticks: u64,
+        /// `peak_total_bytes` over the baseline, or `None` without a complete
+        /// baseline or at least one complete workload tick.
+        peak_incremental_bytes: Option<u64>,
+        /// Largest total over *any* tick, complete or not: with a complete
+        /// baseline this is a lower bound on the workload's peak.
+        peak_subtotal_bytes: u64,
+        /// Complete sampling ticks taken while the workload interval was active.
+        complete_ticks: u64,
         /// Ticks where at least one observed member could not be read.
         incomplete_ticks: u64,
         /// Milliseconds between samples.
@@ -52,13 +60,13 @@ pub(super) enum TreeMeasurement {
 }
 
 impl TreeMeasurement {
-    /// The peak incremental total, or `None` when no measurement was possible.
+    /// The sampled incremental peak, or `None` when the evidence is incomplete.
     pub(super) fn peak_incremental_bytes(&self) -> Option<u64> {
         match self {
             Self::Sampled {
                 peak_incremental_bytes,
                 ..
-            } => Some(*peak_incremental_bytes),
+            } => *peak_incremental_bytes,
             Self::Unsupported(_) => None,
         }
     }
@@ -68,22 +76,99 @@ impl TreeMeasurement {
         match self {
             Self::Sampled {
                 baseline_bytes,
+                baseline_complete,
                 peak_total_bytes,
                 peak_incremental_bytes,
-                ticks,
+                peak_subtotal_bytes,
+                complete_ticks,
                 incomplete_ticks,
                 interval_ms,
-            } => format!(
-                "process tree sample every {interval_ms} ms: baseline {} MiB, peak total {} MiB, \
-                 incremental {} MiB over {ticks} ticks ({incomplete_ticks} incomplete; RSS sums \
-                 double-count shared pages and sampling can miss shorter peaks)",
-                baseline_bytes / (1024 * 1024),
-                peak_total_bytes / (1024 * 1024),
-                peak_incremental_bytes / (1024 * 1024),
-            ),
+            } => {
+                let incremental = match peak_incremental_bytes {
+                    Some(bytes) => format!("{} MiB", bytes / (1024 * 1024)),
+                    None => "unavailable (no complete workload sample)".to_string(),
+                };
+                format!(
+                    "process tree sample every {interval_ms} ms: baseline {} MiB{}, peak total \
+                     {} MiB, incremental {incremental}, largest observed subtotal {} MiB over \
+                     {complete_ticks} complete and {incomplete_ticks} incomplete ticks (RSS sums \
+                     double-count shared pages and sampling can miss shorter peaks)",
+                    baseline_bytes / (1024 * 1024),
+                    if *baseline_complete {
+                        ""
+                    } else {
+                        " (incomplete)"
+                    },
+                    peak_total_bytes / (1024 * 1024),
+                    peak_subtotal_bytes / (1024 * 1024),
+                )
+            }
             Self::Unsupported(reason) => format!("process tree measurement unavailable: {reason}"),
         }
     }
+
+    /// The gate's verdict for one measurement.
+    pub(super) fn budget_outcome(&self) -> BudgetOutcome {
+        let Self::Sampled {
+            baseline_bytes,
+            baseline_complete,
+            peak_incremental_bytes,
+            peak_subtotal_bytes,
+            complete_ticks,
+            incomplete_ticks,
+            ..
+        } = self
+        else {
+            return BudgetOutcome::Unavailable("this platform cannot sample the tree".to_string());
+        };
+        if !baseline_complete {
+            return BudgetOutcome::Unavailable(
+                "the idle baseline was incomplete, so no incremental total is evidence".to_string(),
+            );
+        }
+        let over_budget =
+            (*peak_subtotal_bytes).saturating_sub(*baseline_bytes) > COMBINED_MEMORY_BUDGET_BYTES;
+        if over_budget {
+            // A known subtotal that already exceeds the budget fails the gate
+            // even when other samples are missing: missing data cannot lower a
+            // measured lower bound.
+            return BudgetOutcome::OverBudget {
+                observed_bytes: (*peak_subtotal_bytes).saturating_sub(*baseline_bytes),
+                complete_ticks: *complete_ticks,
+                incomplete_ticks: *incomplete_ticks,
+            };
+        }
+        match peak_incremental_bytes {
+            Some(bytes) => BudgetOutcome::Within {
+                incremental_bytes: *bytes,
+                complete_ticks: *complete_ticks,
+                incomplete_ticks: *incomplete_ticks,
+            },
+            None => BudgetOutcome::Unavailable(format!(
+                "no complete sample covered the workload interval ({complete_ticks} complete, \
+                 {incomplete_ticks} incomplete)"
+            )),
+        }
+    }
+}
+
+/// The combined-memory gate's verdict for one measurement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum BudgetOutcome {
+    /// The sampled peak is inside the budget.
+    Within {
+        incremental_bytes: u64,
+        complete_ticks: u64,
+        incomplete_ticks: u64,
+    },
+    /// An observed subtotal already exceeds the budget.
+    OverBudget {
+        observed_bytes: u64,
+        complete_ticks: u64,
+        incomplete_ticks: u64,
+    },
+    /// The measurement cannot support a verdict; it is not a pass.
+    Unavailable(String),
 }
 
 /// Combined incremental working-memory gate for a representative run: at most
@@ -93,25 +178,36 @@ pub(super) const COMBINED_MEMORY_BUDGET_BYTES: u64 = 1024 * 1024 * 1024;
 /// Report one representative run's sampled total and enforce the combined
 /// budget, returning the incremental bytes for the caller's own log.
 ///
-/// An unavailable measurement is never a pass: on Linux it fails loudly, and
-/// elsewhere it is reported as unavailable instead of silently succeeding.
+/// An incomplete measurement is never a pass: a missing baseline or a workload
+/// interval with no complete sample is reported as unavailable, and on Linux an
+/// unavailable measurement fails loudly instead of quietly succeeding. A known
+/// subtotal that already exceeds the budget fails even when other samples are
+/// missing.
 pub(super) fn gate_combined_budget(label: &str, measurement: &TreeMeasurement) -> Option<u64> {
     println!("{label}: {}", measurement.report());
-    match measurement.peak_incremental_bytes() {
-        Some(bytes) => {
-            assert!(
-                bytes <= COMBINED_MEMORY_BUDGET_BYTES,
-                "{label} must stay inside the {} MiB combined working-memory budget: {} MiB over baseline",
-                COMBINED_MEMORY_BUDGET_BYTES / (1024 * 1024),
-                bytes / (1024 * 1024)
+    match measurement.budget_outcome() {
+        BudgetOutcome::Within {
+            incremental_bytes,
+            complete_ticks,
+            incomplete_ticks,
+        } => {
+            println!(
+                "{label}: {complete_ticks} complete samples, {incomplete_ticks} incomplete; \
+                 the sampled peak is a lower bound, not an exhaustive maximum"
             );
-            Some(bytes)
+            Some(incremental_bytes)
         }
-        None => {
+        BudgetOutcome::OverBudget { observed_bytes, .. } => panic!(
+            "{label} must stay inside the {} MiB combined working-memory budget: an observed subtotal \
+             already reached {} MiB over baseline",
+            COMBINED_MEMORY_BUDGET_BYTES / (1024 * 1024),
+            observed_bytes / (1024 * 1024)
+        ),
+        BudgetOutcome::Unavailable(reason) => {
             if cfg!(target_os = "linux") {
-                panic!("{label}: the process-tree measurement must be available on Linux");
+                panic!("{label}: the combined-memory gate has no usable evidence: {reason}");
             }
-            println!("{label}: combined-memory gate unavailable on this platform");
+            println!("{label}: combined-memory gate unavailable on this platform: {reason}");
             None
         }
     }
@@ -161,10 +257,14 @@ impl Sampler {
 /// A running sampler; dropping it stops the sampling loop.
 pub(super) struct ProcessTreeSampler {
     stop: Arc<AtomicBool>,
+    /// Largest total over fully readable ticks.
     peak: Arc<AtomicU64>,
-    ticks: Arc<AtomicU64>,
+    /// Largest total over any tick.
+    subtotal: Arc<AtomicU64>,
+    complete: Arc<AtomicU64>,
     incomplete: Arc<AtomicU64>,
     baseline_bytes: u64,
+    baseline_complete: bool,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -172,26 +272,48 @@ impl ProcessTreeSampler {
     /// Sample the idle baseline, then start sampling until [`Self::finish`].
     #[cfg(test)]
     fn start() -> Result<Self, String> {
-        let baseline = match snapshot_tree() {
-            Some(total) => total,
-            None => return Err("the idle baseline could not be sampled".to_string()),
+        // Retry briefly so a transient unreadable member at idle does not
+        // disqualify the baseline; a baseline that never completes is an error
+        // rather than an unmeasured zero.
+        let mut last = String::from("the idle baseline could not be sampled");
+        let mut baseline = None;
+        for _ in 0..BASELINE_ATTEMPTS {
+            match snapshot_tree() {
+                Some((bytes, true)) => {
+                    baseline = Some((bytes, true));
+                    break;
+                }
+                Some((bytes, false)) => {
+                    last = "the idle baseline had an unreadable member".to_string();
+                    baseline = Some((bytes, false));
+                }
+                None => last = "the idle baseline could not be sampled".to_string(),
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let Some((baseline_bytes, baseline_complete)) = baseline else {
+            return Err(last);
         };
         let stop = Arc::new(AtomicBool::new(false));
-        let peak = Arc::new(AtomicU64::new(baseline));
-        let ticks = Arc::new(AtomicU64::new(0));
+        let peak = Arc::new(AtomicU64::new(0));
+        let subtotal = Arc::new(AtomicU64::new(baseline_bytes));
+        let complete = Arc::new(AtomicU64::new(0));
         let incomplete = Arc::new(AtomicU64::new(0));
         let worker = spawn_sampling_loop(
             stop.clone(),
             peak.clone(),
-            ticks.clone(),
+            subtotal.clone(),
+            complete.clone(),
             incomplete.clone(),
         );
         Ok(Self {
             stop,
             peak,
-            ticks,
+            subtotal,
+            complete,
             incomplete,
-            baseline_bytes: baseline,
+            baseline_bytes,
+            baseline_complete,
             handle: Some(worker),
         })
     }
@@ -203,11 +325,18 @@ impl ProcessTreeSampler {
             let _ = handle.join();
         }
         let peak_total_bytes = self.peak.load(Ordering::Relaxed);
+        let complete_ticks = self.complete.load(Ordering::Relaxed);
+        // Incremental evidence needs a complete baseline and at least one
+        // complete sample taken while the workload interval was active.
+        let peak_incremental_bytes = (self.baseline_complete && complete_ticks > 0)
+            .then(|| peak_total_bytes.saturating_sub(self.baseline_bytes));
         TreeMeasurement::Sampled {
             baseline_bytes: self.baseline_bytes,
+            baseline_complete: self.baseline_complete,
             peak_total_bytes,
-            peak_incremental_bytes: peak_total_bytes.saturating_sub(self.baseline_bytes),
-            ticks: self.ticks.load(Ordering::Relaxed),
+            peak_incremental_bytes,
+            peak_subtotal_bytes: self.subtotal.load(Ordering::Relaxed),
+            complete_ticks,
             incomplete_ticks: self.incomplete.load(Ordering::Relaxed),
             interval_ms: u64::try_from(SAMPLE_INTERVAL.as_millis()).unwrap_or(100),
         }
@@ -224,40 +353,59 @@ impl ProcessTreeSampler {
 fn spawn_sampling_loop(
     stop: Arc<AtomicBool>,
     peak: Arc<AtomicU64>,
-    ticks: Arc<AtomicU64>,
+    subtotal: Arc<AtomicU64>,
+    complete: Arc<AtomicU64>,
     incomplete: Arc<AtomicU64>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) {
             std::thread::sleep(SAMPLE_INTERVAL);
-            sample_once(&peak, &incomplete);
-            ticks.fetch_add(1, Ordering::Relaxed);
+            // A tick after stop cannot supply workload evidence: the interval it
+            // would cover is already over.
+            if stop.load(Ordering::Relaxed) {
+                break;
+            }
+            sample_once(&peak, &subtotal, &complete, &incomplete);
         }
     })
 }
+
+/// Attempts to capture a complete idle baseline before giving up.
+const BASELINE_ATTEMPTS: u32 = 5;
 
 /// Sample the tree, folding complete ticks into `peak`.
 ///
 /// A tick where any observed member could not be read is counted as incomplete
 /// and never contributes to the peak: an unreadable sample is not a low
 /// measurement to compare against a budget.
-fn sample_once(peak: &AtomicU64, incomplete: &AtomicU64) -> Option<u64> {
+fn sample_once(
+    peak: &AtomicU64,
+    subtotal: &AtomicU64,
+    complete: &AtomicU64,
+    incomplete: &AtomicU64,
+) -> Option<u64> {
     let processes = read_processes();
-    let Some((total, complete)) = tree_total(&processes, std::process::id()) else {
+    let Some((total, complete_tree)) = tree_total(&processes, std::process::id()) else {
         incomplete.fetch_add(1, Ordering::Relaxed);
         return None;
     };
-    if !complete {
+    // Every tick's readable subtotal is a lower bound; only a fully readable
+    // tick may become the sampled peak.
+    subtotal.fetch_max(total, Ordering::Relaxed);
+    if complete_tree {
+        peak.fetch_max(total, Ordering::Relaxed);
+        complete.fetch_add(1, Ordering::Relaxed);
+    } else {
         incomplete.fetch_add(1, Ordering::Relaxed);
-        return Some(total);
     }
-    peak.fetch_max(total, Ordering::Relaxed);
     Some(total)
 }
 
-/// Resident total of one instantaneous snapshot, or `None` without a root.
-fn snapshot_tree() -> Option<u64> {
-    tree_total(&read_processes(), std::process::id()).map(|(total, _)| total)
+/// Resident total and completeness of one instantaneous snapshot.
+///
+/// `None` means the root itself could not be read, which is not a measurement.
+fn snapshot_tree() -> Option<(u64, bool)> {
+    tree_total(&read_processes(), std::process::id())
 }
 
 /// Sum the root and every observed live descendant, each counted once, and
@@ -510,6 +658,92 @@ mod tests {
         assert_eq!(resident_bytes("Name:\tcanopi\n"), None);
     }
 
+    fn measured(
+        baseline_bytes: u64,
+        baseline_complete: bool,
+        peak_total: Option<u64>,
+        peak_subtotal_bytes: u64,
+        complete_ticks: u64,
+        incomplete_ticks: u64,
+    ) -> TreeMeasurement {
+        TreeMeasurement::Sampled {
+            baseline_bytes,
+            baseline_complete,
+            peak_total_bytes: peak_total.unwrap_or(0),
+            peak_incremental_bytes: peak_total.map(|peak| peak.saturating_sub(baseline_bytes)),
+            peak_subtotal_bytes,
+            complete_ticks,
+            incomplete_ticks,
+            interval_ms: 50,
+        }
+    }
+
+    #[test]
+    fn a_complete_baseline_and_one_complete_sample_can_pass() {
+        let measurement = measured(10, true, Some(20), 20, 1, 0);
+        assert_eq!(
+            measurement.budget_outcome(),
+            BudgetOutcome::Within {
+                incremental_bytes: 10,
+                complete_ticks: 1,
+                incomplete_ticks: 0,
+            }
+        );
+        assert_eq!(measurement.peak_incremental_bytes(), Some(10));
+    }
+
+    #[test]
+    fn incomplete_ticks_without_one_complete_sample_never_pass() {
+        // The reported reproduction: ten incomplete ticks and no complete
+        // workload sample must not become an incremental zero.
+        let measurement = measured(100, true, None, 100, 0, 10);
+        assert!(matches!(
+            measurement.budget_outcome(),
+            BudgetOutcome::Unavailable(_)
+        ));
+        assert_eq!(measurement.peak_incremental_bytes(), None);
+        // Zero ticks are the same: no evidence is not a pass.
+        let measurement = measured(100, true, None, 0, 0, 0);
+        assert!(matches!(
+            measurement.budget_outcome(),
+            BudgetOutcome::Unavailable(_)
+        ));
+    }
+
+    #[test]
+    fn an_incomplete_baseline_is_not_evidence() {
+        let outcome = measured(100, false, Some(700), 700, 3, 2).budget_outcome();
+        assert!(
+            matches!(outcome, BudgetOutcome::Unavailable(ref reason) if reason.contains("baseline")),
+            "{outcome:?}"
+        );
+    }
+
+    #[test]
+    fn an_observed_over_budget_subtotal_fails_despite_missing_samples() {
+        // A later healthy tick plus an incomplete tick whose known subtotal
+        // already exceeds the budget: the violation survives missing data.
+        let outcome = measured(
+            100,
+            true,
+            Some(200),
+            COMBINED_MEMORY_BUDGET_BYTES + 512,
+            1,
+            4,
+        )
+        .budget_outcome();
+        assert!(
+            matches!(outcome, BudgetOutcome::OverBudget { .. }),
+            "{outcome:?}"
+        );
+        // A partial low subtotal never promotes to a passing peak.
+        let outcome = measured(100, true, None, 150, 0, 3).budget_outcome();
+        assert!(
+            matches!(outcome, BudgetOutcome::Unavailable(_)),
+            "{outcome:?}"
+        );
+    }
+
     #[test]
     fn sampling_reports_a_baseline_and_a_peak_of_the_live_tree() {
         let sampler = match Sampler::start() {
@@ -518,14 +752,16 @@ mod tests {
         };
         // Allocate a measurable amount so a later tick must exceed the baseline.
         let ballast = vec![7u8; 32 * 1024 * 1024];
+        std::thread::sleep(Duration::from_millis(150));
         let measurement = sampler.finish();
         std::hint::black_box(&ballast);
         match measurement {
             TreeMeasurement::Sampled {
                 baseline_bytes,
+                baseline_complete,
                 peak_total_bytes,
                 peak_incremental_bytes,
-                ticks,
+                complete_ticks,
                 interval_ms,
                 ..
             } => {
@@ -533,16 +769,45 @@ mod tests {
                     baseline_bytes > 0,
                     "the idle baseline is a real measurement"
                 );
+                assert!(baseline_complete, "an idle tree is fully readable");
+                assert!(complete_ticks > 0, "at least one complete tick completed");
                 assert!(peak_total_bytes >= baseline_bytes);
                 assert_eq!(
                     peak_incremental_bytes,
-                    peak_total_bytes - baseline_bytes,
+                    Some(peak_total_bytes - baseline_bytes),
                     "incremental is exactly the baseline-relative peak"
                 );
-                assert!(ticks > 0, "at least one tick completed");
                 assert!(interval_ms <= 100, "the interval stays within the contract");
             }
             other => panic!("expected a sampled measurement: {other:?}"),
         }
+    }
+
+    #[test]
+    fn stopping_before_the_first_tick_invents_no_workload_evidence() {
+        let sampler = match Sampler::start() {
+            Sampler::Running(sampler) => sampler,
+            Sampler::Unavailable(reason) => panic!("this platform samples /proc: {reason}"),
+        };
+        // Finish immediately: no interval has completed, so there is no
+        // workload sample and the gate cannot pass.
+        let measurement = sampler.finish();
+        match &measurement {
+            TreeMeasurement::Sampled {
+                complete_ticks,
+                incomplete_ticks,
+                peak_incremental_bytes,
+                ..
+            } => {
+                assert_eq!(*complete_ticks, 0, "a stopped sampler adds no tick");
+                assert_eq!(*incomplete_ticks, 0);
+                assert_eq!(*peak_incremental_bytes, None);
+            }
+            other => panic!("expected a sampled measurement: {other:?}"),
+        }
+        assert!(matches!(
+            measurement.budget_outcome(),
+            BudgetOutcome::Unavailable(_)
+        ));
     }
 }

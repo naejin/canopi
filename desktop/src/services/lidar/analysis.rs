@@ -1049,11 +1049,12 @@ pub fn enqueue_refreshes(
 /// Startup recovery: jobs interrupted by a restart fail explicitly so the UI
 /// never reports ghost activity; published results are unaffected.
 pub fn recover_interrupted_jobs(connection: &rusqlite::Connection) -> Result<(), String> {
+    // An import job awaiting review is not interrupted work: its staging is
+    // complete and its prepared payload is owned by the job directory, so a
+    // restart leaves it reviewable and appliable as it was. Only work that was
+    // actually running is failed.
     for (table, transient) in [
-        (
-            "lidar_import_jobs",
-            vec!["staging", "awaiting_review", "applying"],
-        ),
+        ("lidar_import_jobs", vec!["staging", "applying"]),
         ("lidar_analysis_jobs", vec!["preparing", "refreshing"]),
     ] {
         for state in transient {

@@ -594,7 +594,7 @@ impl GenerationChunkReader {
 
     /// One page of records intersecting `window`, or the whole generation when
     /// no window is given. The catalogue lock is held only for this query.
-    fn page(
+    pub(super) fn page(
         &self,
         library: &super::LidarLibrary,
         window: Option<LatticeWindow>,

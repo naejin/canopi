@@ -123,30 +123,25 @@ pub(super) fn write_cog_asset(
     admit_staged_cog(paths, &staged, grid, nodata)
 }
 
-/// Create one retained source-sized COG from an existing raster.
+/// Create one controlled source COG inside the job directory that owns it.
 ///
-/// The conversion streams through GDAL from the input file: no whole-source
-/// buffer is built in Rust, which is what lets a source COG be retained
-/// instead of a durable raw/mask pair. `additional_output_bytes` is the numeric
-/// output the caller will write while the conversion is alive, charged together
-/// with the conversion itself and the shared reserve.
+/// Nothing is admitted here: the file stays job-local until publication, so a
+/// cancelled or failed job owns exactly the bytes it created and no global
+/// asset appears for an import that was never accepted.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn write_source_cog_asset(
+pub(super) fn write_job_source_cog(
     engine: &GdalEngine,
     cancel: &AtomicBool,
-    paths: &LidarPaths,
-    scratch: &Path,
+    job_dir: &Path,
     stem: &str,
     input: &Path,
     grid: &RasterGrid,
     crs_wkt: &str,
     nodata: Option<f32>,
-    additional_output_bytes: u64,
 ) -> Result<CogAsset, String> {
-    let required =
-        prepared_raster::required_free_bytes(grid.width, grid.height, additional_output_bytes)?;
-    super::paths::require_free_space(scratch, required, "the retained source COG")?;
-    let staged = scratch.join(format!("{stem}.tif"));
+    let required = prepared_raster::required_free_bytes(grid.width, grid.height, 0)?;
+    super::paths::require_free_space(job_dir, required, "the staged source COG")?;
+    let staged = job_dir.join(format!("{stem}.tif"));
     let created = engine.run(
         GdalProgram::Translate,
         &prepared_raster::controlled_cog_arguments(input, &staged, crs_wkt, grid, nodata),
@@ -156,7 +151,22 @@ pub(super) fn write_source_cog_asset(
         let _ = std::fs::remove_file(&staged);
         return Err(error);
     }
-    admit_staged_cog(paths, &staged, grid, nodata)
+    let validated = (|| -> Result<CogAsset, String> {
+        let reader = PreparedRaster::open_committed(&staged, grid, nodata)?;
+        drop(reader);
+        let (sha256, bytes) = hash_file(&staged)?;
+        Ok(CogAsset {
+            sha256,
+            path: staged.clone(),
+            bytes,
+            grid: grid.clone(),
+            nodata,
+        })
+    })();
+    if validated.is_err() {
+        let _ = std::fs::remove_file(&staged);
+    }
+    validated
 }
 
 /// Validate, digest and admit one staged COG into the content-addressed store.

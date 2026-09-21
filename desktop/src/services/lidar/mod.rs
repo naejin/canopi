@@ -292,6 +292,31 @@ impl LidarLibrary {
                 .map_err(|e| e.to_string())?
         };
         drop(connection);
+        // Reconcile promotion journals before any settled job payload is
+        // removed: a committed asset stays, an uncommitted owned promotion is
+        // removed, and a journal that cannot be settled is retained as
+        // recoverable evidence instead of being silently declared clean.
+        let journal_jobs: Vec<String> = {
+            let connection = self.catalogue()?;
+            let mut statement = connection
+                .prepare("SELECT id FROM lidar_import_jobs")
+                .map_err(|e| e.to_string())?;
+            statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
+        match import::reconcile_promotion_journals(self, &journal_jobs) {
+            Ok(removed) if removed > 0 => {
+                tracing::info!(removed, "removed uncommitted promoted source assets");
+            }
+            Ok(_) => {}
+            Err(error) => {
+                // Retained journals stay on disk so the next start can retry.
+                tracing::warn!(error = %error, "promotion journal recovery is incomplete");
+            }
+        }
         for (job_id, _state) in settled {
             let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(&job_id));
         }
@@ -1014,6 +1039,11 @@ impl LidarLibrary {
                              progress_percent = NULL, updated_at = ?4 WHERE id = ?1",
                         rusqlite::params![job_id, state, message, now_iso()],
                     );
+                    // A settled job owns no payload: its job-local COGs and
+                    // scratch were never published, so they are removed here
+                    // rather than left for the next startup.
+                    drop(connection);
+                    let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(job_id));
                 }
             }
         }

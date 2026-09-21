@@ -2,7 +2,7 @@
 
 Status: evidence — independent focused review: partial delivery, not accepted as complete; no integration or release approval.
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`.
-Current guidance: [completion assignment](bounded-generation-completion-agent-prompt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
+Current guidance: [delivery receipt with the BG6–BG8 response](bounded-generation-receipt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
 
 ## Current disposition — `9ad85c18`
 
