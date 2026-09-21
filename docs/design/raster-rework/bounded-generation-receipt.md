@@ -1,6 +1,6 @@
 # Bounded raster generations — delivery receipt
 
-Status: evidence — partial implementer report for `canopi-jv8a.4` (B1–B5): **B1 storage primitives plus the first B2 production vertical slice**, which is implemented and tested but **deliberately gated off in production**. Not acceptance, integration or release.
+Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. Independently reviewed: no. Integrated or released: no.
 Tracking: `canopi-jv8a.4` (parent `canopi-jv8a`, epic `canopi-j571`); `canopi-jv8a.3` is linked work inside B3.
 Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
@@ -44,6 +44,34 @@ caller-level tests, not an inert module.
 | Extended admission test seam, 12-tile MNH and 24-tile representative runs | `4c86f6c6` |
 | Block-wise review classification and bounded previews | `4a0174bf` |
 | Opaque legacy base overlay (schema v11) and sparse publication as the production default | the commit that carries this receipt |
+
+## Delivery state
+
+| State | Extent |
+| --- | --- |
+| Implemented | The complete batch: retained/committed COG handling, resolved and quality chunk creation, catalogue v7–v11 with backups and guarded migrations, the one resolver, the import caller migration (stage → review → Apply → reopen → undo), the opaque legacy base overlay, bounded core+halo slope with sparse result and quality chunks, the exclusive heavy raster lease, bounded native display tiles with the Desktop protocol adapter and the shared tile cache, and the per-layer fixed lattice |
+| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored` (116 tests) including all three real-fixture lifecycles |
+| Measured | Peak resident set and wall time for the real runs, recorded under "Evidence" |
+| Not verified here | A real WebView smoke test, macOS and Windows compilation/behaviour, and the 400M-cell plane (host capacity) |
+| Not done | Integration into `main`, release, and the retained-source-COG storage win |
+
+### Production caller inventory
+
+| Caller | Route | Dense allocation |
+| --- | --- | --- |
+| `stage_import` / `render_decision_preview` | block-wise composed coverage and both previews (≤512 per side) | none |
+| `apply_import` (sparse) | occupied chunks only, ≤1026 windows | none |
+| `apply_import` (preserved dense, forced) | union mosaic and coverage pair | yes, and validated against the dense ceiling *by that branch* |
+| `undo_import` | remaining occurrences replayed into occupied chunks | none |
+| `analysis::run_slope_job` (chunked input) | core+halo blocks, sparse result/quality chunks | none |
+| `analysis::run_slope_job` (dense input) | accepted whole-raster GDAL route | yes, on the preserved path only |
+| `tiles::render_tile` | bounded windows and occupied reduction pages | none |
+| `presentation::library_snapshot` | catalogue rows and manifest metadata | none |
+| `publish_display` | legacy pyramid for a preserved dense generation | yes, on the preserved path only |
+
+No migrated workflow allocates by the union's area; the remaining dense reads
+belong to the preserved dense format, which stays readable while the sparse
+format is the default for new publications.
 
 ## What the caller slice does
 
@@ -384,6 +412,17 @@ concurrently running reader test could reset another test's evidence.
   3 chunks, 48 chunks for the MNH batch); no disk-budget sweep was made.
 - Windows capacity/asset behaviour remains uncompiled here, as recorded in the
   predecessor receipt.
+
+## Release limitations this environment could not remove
+
+- No real WebView smoke test: the raster protocol adapter is covered by unit
+  tests and the native tile command by caller tests, but no Desktop window was
+  driven here.
+- Windows and macOS are not compiled in this environment, so the platform
+  free-space, rename-durability and asset-URL behaviour remains as recorded in
+  the predecessor receipt.
+- The 400M-cell plane gate did not run (host RAM) and no disk-budget sweep of
+  retained chunks was made.
 
 ## Next dependency
 
