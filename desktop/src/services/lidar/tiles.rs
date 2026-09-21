@@ -196,10 +196,11 @@ pub(super) fn block_origin(cell: i64, level: u32) -> i64 {
 
 /// Lattice coordinates of a point, as fractional cell positions.
 struct LatticeMapper {
-    /// `[origin_x, pixel_x, _, origin_y, _, pixel_y]` when the generation is
-    /// already Web Mercator; otherwise a verified GDAL transform is used.
-    affine: Option<[f64; 6]>,
+    /// True when the generation lattice is already Web Mercator, so the world
+    /// point needs no reprojection and only the lattice geotransform applies.
+    identity: bool,
     crs_wkt: String,
+    geotransform: [f64; 6],
 }
 
 impl LatticeMapper {
@@ -216,32 +217,26 @@ impl LatticeMapper {
         grid: &RasterGrid,
         crs_wkt: &str,
     ) -> Result<Self, String> {
-        let affine = if crs_wkt.contains("3857") {
-            let probe = [(0.0f64, 0.0f64)];
-            let through_gdal = transform_points(engine, cancel, crs_wkt, &probe)?;
-            let identity = [
-                grid.geotransform[0],
-                grid.geotransform[1],
-                grid.geotransform[3],
-                grid.geotransform[5],
-            ];
-            let affine = [identity[0], identity[1], 0.0, identity[2], 0.0, identity[3]];
+        let geotransform = grid.geotransform;
+        let mut identity = false;
+        if crs_wkt.contains("3857") {
+            // Prove the shortcut against the projection authority once: when
+            // the lattice really is Web Mercator, GDAL's answer for a probe
+            // point must equal the geotransform's.
+            let through_gdal = transform_points(engine, cancel, crs_wkt, &[(0.0, 0.0)])?;
             if let Some((x, y)) = through_gdal.first() {
-                let expected = affine_point(&affine, 0.0, 0.0);
-                if (expected.0 - x).abs() < 1e-6 && (expected.1 - y).abs() < 1e-6 {
-                    Some(affine)
-                } else {
-                    None
+                let expected = lattice_point(&geotransform, *x, *y);
+                let shortcut = lattice_point(&geotransform, 0.0, 0.0);
+                if (expected.0 - shortcut.0).abs() < 1e-9 && (expected.1 - shortcut.1).abs() < 1e-9
+                {
+                    identity = true;
                 }
-            } else {
-                None
             }
-        } else {
-            None
-        };
+        }
         Ok(Self {
-            affine,
+            identity,
             crs_wkt: crs_wkt.to_string(),
+            geotransform,
         })
     }
 
@@ -252,20 +247,26 @@ impl LatticeMapper {
         cancel: &AtomicBool,
         points: &[(f64, f64)],
     ) -> Result<Vec<(f64, f64)>, String> {
-        if let Some(affine) = &self.affine {
-            return Ok(points
-                .iter()
-                .map(|(x, y)| affine_point(affine, *x, *y))
-                .collect());
-        }
-        transform_points(engine, cancel, &self.crs_wkt, points)
+        // A reprojected point is still a world coordinate: the lattice
+        // geotransform is what turns it into a cell, in both paths.
+        let projected = if self.identity {
+            points.to_vec()
+        } else {
+            transform_points(engine, cancel, &self.crs_wkt, points)?
+        };
+        Ok(projected
+            .iter()
+            .map(|(x, y)| lattice_point(&self.geotransform, *x, *y))
+            .collect())
     }
 }
 
-fn affine_point(affine: &[f64; 6], x: f64, y: f64) -> (f64, f64) {
-    let cell_x = (x - affine[0]) / affine[1];
-    let cell_y = (y - affine[3]) / affine[5];
-    (cell_x, cell_y)
+/// Fractional lattice cells of one point in the lattice's own CRS.
+fn lattice_point(geotransform: &[f64; 6], x: f64, y: f64) -> (f64, f64) {
+    (
+        (x - geotransform[0]) / geotransform[1],
+        (y - geotransform[3]) / geotransform[5],
+    )
 }
 
 /// Transform EPSG:3857 points into the generation's lattice cells through

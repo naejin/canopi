@@ -100,7 +100,11 @@ pub fn library_snapshot(
                     (Some(min), Some(max)) => Some([min, max]),
                     _ => None,
                 };
-                let manifest = super::import::read_generation_manifest(&result.manifest_json).ok();
+                // An analysis generation carries a result manifest, not a
+                // source manifest: parse it as what it is.
+                let manifest =
+                    serde_json::from_str::<super::analysis::ResultManifest>(&result.manifest_json)
+                        .ok();
                 let registered = tilesets_for(
                     display_connection,
                     "analysis",
@@ -149,6 +153,32 @@ pub fn library_snapshot(
     })
 }
 
+/// The parts of either manifest an on-demand tileset needs.
+trait NativeTileManifest {
+    fn format(&self) -> super::import::GenerationStorageFormat;
+    fn grid(&self) -> &super::grid::RasterGrid;
+}
+
+impl NativeTileManifest for super::import::GenerationManifest {
+    fn format(&self) -> super::import::GenerationStorageFormat {
+        self.format
+    }
+
+    fn grid(&self) -> &super::grid::RasterGrid {
+        &self.grid
+    }
+}
+
+impl NativeTileManifest for super::analysis::ResultManifest {
+    fn format(&self) -> super::import::GenerationStorageFormat {
+        self.format
+    }
+
+    fn grid(&self) -> &super::grid::RasterGrid {
+        &self.grid
+    }
+}
+
 /// Zoom ceiling shared with the legacy pyramid renderer.
 const MAX_ZOOM_CEILING: u32 = 22;
 /// Pyramid depth presented for an on-demand generation.
@@ -161,22 +191,22 @@ const WEB_MERCATOR_WORLD: f64 = 40_075_016.685_578_49;
 /// The zoom range mirrors the legacy pyramid rule (native resolution is the
 /// deepest level, four coarser levels above it), so switching a layer between
 /// storage formats does not change how it is framed on the map.
-fn native_tilesets(
+fn native_tilesets<M: NativeTileManifest>(
     style: &str,
     generation_id: &str,
-    manifest: Option<&super::import::GenerationManifest>,
+    manifest: Option<&M>,
     bounds: Option<[f64; 4]>,
 ) -> Vec<LidarTileset> {
     let Some(manifest) = manifest else {
         return Vec::new();
     };
-    if manifest.format != super::import::GenerationStorageFormat::CogChunksV1 {
+    if manifest.format() != super::import::GenerationStorageFormat::CogChunksV1 {
         return Vec::new();
     }
     let Some(bounds) = bounds else {
         return Vec::new();
     };
-    let pixel = manifest.grid.pixel_size().0;
+    let pixel = manifest.grid().pixel_size().0;
     if !(pixel.is_finite() && pixel > 0.0) {
         return Vec::new();
     }

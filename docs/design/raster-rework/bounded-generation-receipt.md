@@ -12,7 +12,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
 | B3 — slope core+halo and shared job ownership | **Delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning); slope computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history; and the library now owns one exclusive heavy raster job lease shared by staging, apply, undo and analysis refresh, refusing a competing user submission promptly without creating running work |
 | B4 — bounded display transport and Desktop protocol | **Partly delivered**: the presentation contract carries a tagged tile source (preserved asset pyramid vs native generation), the library renders bounded 256×256 tiles from an immutable sparse generation through an executor-backed command returning raw PNG bytes or an explicit empty/unavailable outcome, and the frontend installs the `canopi-raster://` MapLibre protocol adapter with per-request cancellation, display reads are admitted library-wide at two active and thirty-two queued with a synchronous cancel command, and encoded tiles are served from a shared bounded memory and disk cache with leases, LRU eviction, generation-scoped invalidation and atomic owned writes. Still open: lifting the publication gate and the B5 verification runs |
-| B5 — end-to-end verification and conditional limit removal | Not started |
+| B5 — end-to-end verification and conditional limit removal | **In progress**: the real IGN MNT 0445_6806 lifecycle passes through both storage formats with identical slope ranges (`7b877304…76ad`, 4,000,000 cells, 4 occupied chunks, native tile 24,504 bytes, 4 result + 4 quality chunks), plus the authored dense↔sparse equivalence, cache and admission tests. Still open: the 24-tile sparse-gap run, the 12-tile MNH batch, the 400M-cell plane (host RAM gate), the sampled memory measurement, the admission-limit switch and the gate flip |
 
 Production behaviour is unchanged: the storage-format switch is `false` in every
 non-test build, so import, review, Apply, undo, slope and display still publish
@@ -37,7 +37,8 @@ caller-level tests, not an inert module.
 | Exclusive library-wide heavy raster job lease (staging/apply/undo/refresh) | `f0715252` |
 | Tagged tile-source contract, bounded native tile renderer and command, raster URL builder | `4fe2f55a` |
 | MapLibre raster protocol adapter, bounded display admission and cancellation | `0a0dedf5` |
-| Shared bounded display cache (memory + disk) with leases, eviction and invalidation | the commit that carries this receipt |
+| Shared bounded display cache (memory + disk) with leases, eviction and invalidation | `6ae0ba0d` |
+| Reprojected lattice mapping fix, analysis tileset fix, sparse real-fixture lifecycle | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -214,6 +215,20 @@ Catalogue tests:
   means, and malformed-request rejection. The contract's wire shape is pinned
   by `common_types::lidar::tests::tile_source_wire_shape_is_tagged_and_stable`,
   and the frontend covers both URL forms plus raster-URL parsing and rejection.
+- Real fixture (IGN MNT `0445_6806`, hash `7b8773046c27d3f42d9f6548c7adc24fca810de19ea6ed5f49b29302e22076ad`):
+  `e2e_sparse_generation_lifecycle` publishes the 2000×2000 EPSG:2154 tile as
+  four occupied resolved chunks (4,000,000 cells, 150.84–191.81 m), renders a
+  native tile at zoom 18 through the real protocol command path (24,504 bytes,
+  repeated request served as a cache hit), publishes sparse slope result and
+  quality chunks whose value range (`0.0012363962596282363`–`66.75675964355469`)
+  is **identical to the dense lifecycle's** on the same fixture, reopens the
+  library and re-renders the same immutable head, and undoes the import while
+  history keeps its chunks. Run with
+  `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_sparse`.
+  This run also caught two real defects the authored fixtures could not: the
+  reprojected coordinate path returned world coordinates where lattice cells
+  were required, and an analysis result manifest was parsed as a source
+  manifest, so a sparse slope result presented no tileset.
 - Display cache (hermetic): `tiles_are_cached_in_memory_and_on_disk` (including
   re-accounting a reopened cache), `the_disk_budget_evicts_the_least_recently_used_entry`,
   `a_leased_entry_is_never_evicted`, `the_memory_budget_evicts_without_touching_the_disk_copy`,

@@ -494,9 +494,14 @@ fn e2e_sparse_generation_lifecycle() {
         )
         .expect("layer created");
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
-    let output =
-        import::stage_import(&library, &job_id, &layer_id, std::slice::from_ref(&fixture), &cancel)
-            .expect("staging succeeds");
+    let output = import::stage_import(
+        &library,
+        &job_id,
+        &layer_id,
+        std::slice::from_ref(&fixture),
+        &cancel,
+    )
+    .expect("staging succeeds");
     assert!(
         output.review.compatible,
         "fixture is compatible: {:?}",
@@ -511,7 +516,8 @@ fn e2e_sparse_generation_lifecycle() {
         }),
     );
     let staging: import::StagedImport = serde_json::from_str(
-        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json")).unwrap(),
+        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
+            .unwrap(),
     )
     .unwrap();
     library.prepare_apply(&job_id).expect("review accepted");
@@ -579,16 +585,27 @@ fn e2e_sparse_generation_lifecycle() {
         let centre_y = (bounds[1] + bounds[3]) / 2.0;
         let x = ((centre_x + half) / span).floor() as u32;
         let y = ((half - centre_y) / span).floor() as u32;
-        match library
-            .render_tile("source", &layer_id, &generation_id, "elevation", z, x, y, &cancel)
-            .expect("tile renders")
-        {
-            bytes if bytes.len() > 8 => {
-                tile_bytes = Some(bytes);
-                tile_coordinates = Some((z, x, y));
-                break 'outer;
-            }
-            _ => continue,
+        let bytes = library
+            .render_tile(
+                "source",
+                &layer_id,
+                &generation_id,
+                "elevation",
+                z,
+                x,
+                y,
+                &cancel,
+            )
+            .expect("tile renders");
+        // An empty tile is the shared transparent 1x1 PNG; a drawn tile is a
+        // full 256x256 image.
+        let drawn = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+            .map(|image| image.width() == 256 && image.height() == 256)
+            .unwrap_or(false);
+        if drawn {
+            tile_bytes = Some(bytes);
+            tile_coordinates = Some((z, x, y));
+            break 'outer;
         }
     }
     let (z, x, y) = tile_coordinates.expect("a rendered tile at some zoom");
@@ -599,7 +616,16 @@ fn e2e_sparse_generation_lifecycle() {
     // A second request is served from the bounded cache.
     let (hits_before, _) = library.tile_cache().unwrap().counters();
     let again = library
-        .render_tile("source", &layer_id, &generation_id, "elevation", z, x, y, &cancel)
+        .render_tile(
+            "source",
+            &layer_id,
+            &generation_id,
+            "elevation",
+            z,
+            x,
+            y,
+            &cancel,
+        )
         .expect("tile renders again");
     let (hits_after, _) = library.tile_cache().unwrap().counters();
     assert_eq!(again, bytes, "the cached tile is the drawn tile");
@@ -642,7 +668,11 @@ fn e2e_sparse_generation_lifecycle() {
         &cancel,
     )
     .expect("slope job runs");
-    assert!(outcome.published, "slope result published: {}", outcome.summary());
+    assert!(
+        outcome.published,
+        "slope result published: {}",
+        outcome.summary()
+    );
     let analysis_head = {
         let connection = library.catalogue().unwrap();
         catalogue::head_analysis_generation(&connection, &receipt.definition_id)
@@ -697,9 +727,21 @@ fn e2e_sparse_generation_lifecycle() {
         common_types::lidar::LidarTileSource::NativeGeneration { .. }
     ));
     let rendered = reopened
-        .render_tile("source", &layer_id, &generation_id, "elevation", z, x, y, &cancel)
+        .render_tile(
+            "source",
+            &layer_id,
+            &generation_id,
+            "elevation",
+            z,
+            x,
+            y,
+            &cancel,
+        )
         .expect("tile renders after restart");
-    assert_eq!(rendered, bytes, "the same immutable head renders the same tile");
+    assert_eq!(
+        rendered, bytes,
+        "the same immutable head renders the same tile"
+    );
 
     // 5. Undo republishes from the remaining occurrences.
     let undone = import::undo_import(&reopened, &job_id, &cancel).expect("undo publishes");
