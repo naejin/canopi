@@ -2373,42 +2373,88 @@ pub fn member_prepared_dir(paths: &LidarPaths, interp_hash: &str) -> PathBuf {
 /// out of production behaviour without a second implementation.
 pub(crate) mod promotion_probe {
     #[cfg(test)]
-    use std::cell::Cell;
+    use std::cell::RefCell;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub(crate) enum FaultPoint {
+        /// Immediately before a job-local COG is hard-linked into the store.
+        ///
+        /// The armed action runs here, between the destination check and the
+        /// link, so a collision timing is exercised deterministically.
+        BeforePromotionLink,
         /// After a job-local COG has been promoted, before any catalogue write.
         AfterPromotion,
         /// Immediately before the publication transaction begins.
         BeforeTransaction,
         /// After the publication transaction commits, before journal cleanup.
         AfterCommitBeforeCleanup,
+        /// Immediately before a promotion journal is cleared.
+        BeforeJournalClear,
     }
+
+    /// One seam and the action a test runs when that seam is reached.
+    #[cfg(test)]
+    type ArmedAction = (FaultPoint, Box<dyn Fn()>);
 
     #[cfg(test)]
     thread_local! {
-        static FAIL_AT: Cell<Option<FaultPoint>> = const { Cell::new(None) };
+        static ARMED: RefCell<Vec<FaultPoint>> = const { RefCell::new(Vec::new()) };
+        static ACTIONS: RefCell<Vec<ArmedAction>> = const { RefCell::new(Vec::new()) };
     }
 
     #[cfg(test)]
     pub(crate) fn fail_at(point: FaultPoint) {
-        FAIL_AT.with(|value| value.set(Some(point)));
+        ARMED.with(|armed| armed.borrow_mut().push(point));
+    }
+
+    /// Run one action at every occurrence of a fault point, then continue.
+    ///
+    /// Actions stay armed until [`clear`], so an action can behave differently
+    /// on its second call — which is how a collision on the second source is
+    /// exercised deterministically.
+    #[cfg(test)]
+    pub(crate) fn act_at(point: FaultPoint, action: impl Fn() + 'static) {
+        ACTIONS.with(|actions| actions.borrow_mut().push((point, Box::new(action))));
     }
 
     #[cfg(test)]
     pub(crate) fn clear() {
-        FAIL_AT.with(|value| value.set(None));
+        ARMED.with(|armed| armed.borrow_mut().clear());
+        ACTIONS.with(|actions| actions.borrow_mut().clear());
     }
 
+    /// Consume one armed failure at this point, before any action runs.
     pub(crate) fn check(point: FaultPoint) -> Result<(), String> {
         #[cfg(test)]
         {
-            if FAIL_AT.with(Cell::get) == Some(point) {
+            let armed = ARMED.with(|armed| {
+                let mut armed = armed.borrow_mut();
+                armed
+                    .iter()
+                    .position(|armed| *armed == point)
+                    .map(|position| armed.remove(position))
+            });
+            if armed.is_some() {
                 return Err(format!("injected failure at {point:?}"));
             }
         }
         let _ = point;
         Ok(())
+    }
+
+    /// Run any armed actions for this point; failures come from [`check`].
+    pub(crate) fn run(point: FaultPoint) {
+        #[cfg(test)]
+        {
+            ACTIONS.with(|actions| {
+                for (armed, action) in actions.borrow().iter() {
+                    if *armed == point {
+                        action();
+                    }
+                }
+            });
+        }
+        let _ = point;
     }
 }
 
@@ -2469,6 +2515,15 @@ struct PromotionEntry {
     interpretation_id: String,
     sha256: String,
     destination: String,
+    /// Job-relative location of the file this job hard-linked to the
+    /// destination.
+    ///
+    /// Positive file identity with this witness — not a matching digest and not
+    /// the intent itself — is what licenses deleting an uncommitted
+    /// destination. An entry written before witnesses existed has none, so its
+    /// destination is preserved and reported as unproven ownership.
+    #[serde(default)]
+    witness: Option<String>,
 }
 
 /// The promotions one job has attempted, in the order it attempted them.
@@ -2568,6 +2623,95 @@ fn directory_sync_unsupported(error: &std::io::Error) -> bool {
     )
 }
 
+/// Remove one job's promotion journal, treating an absent file as idempotent
+/// success.
+///
+/// Clearing is fallible: an unlink or directory-sync error is reported, never
+/// swallowed into an "already clean" result. Every caller that removes a
+/// journal goes through here so the durability policy has one home.
+fn clear_promotion_journal(paths: &LidarPaths, job_id: &str) -> Result<(), String> {
+    promotion_probe::check(promotion_probe::FaultPoint::BeforeJournalClear)?;
+    let path = promotion_journal_path(paths, job_id);
+    match std::fs::remove_file(&path) {
+        Ok(()) => match path.parent() {
+            Some(parent) => sync_journal_directory(parent),
+            None => Ok(()),
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "Failed to clear the promotion journal {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+/// Whether two paths name the very same file.
+///
+/// Positive identity is one file reachable through two names, which is what a
+/// hard link creates; equal content is not identity, because a separately
+/// created copy can match a digest. `None` means this platform cannot answer,
+/// and every caller treats that as "not proven" rather than as permission.
+fn same_file(left: &Path, right: &Path) -> Option<bool> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        let left = std::fs::metadata(left).ok()?;
+        let right = std::fs::metadata(right).ok()?;
+        Some(left.dev() == right.dev() && left.ino() == right.ino())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (left, right);
+        None
+    }
+}
+
+/// Remove one uncommitted destination only if this job provably created it.
+///
+/// The proof is positive file identity with the journalled job-local witness:
+/// an absent witness, a missing witness file, a different file or a platform
+/// that cannot answer all preserve the destination and report recoverable
+/// uncertainty instead of deleting it.
+fn remove_owned_destination(
+    paths: &LidarPaths,
+    job_id: &str,
+    entry: &PromotionEntry,
+) -> Result<bool, String> {
+    let destination = resolve_under_root(paths.root(), &entry.destination)?;
+    // A recorded path that leaves the owned root is refused whether or not it
+    // exists; a destination that does not exist needs no ownership at all.
+    if !destination.exists() {
+        return Ok(false);
+    }
+    let Some(witness) = entry.witness.as_deref() else {
+        return Err(format!(
+            "promotion of {} records no job-local witness; ownership is unproven",
+            entry.destination
+        ));
+    };
+    let witness = resolve_under_root(&paths.job_dir(job_id), witness).map_err(|error| {
+        format!(
+            "promotion of {} has an unusable witness: {error}",
+            entry.destination
+        )
+    })?;
+    match same_file(&destination, &witness) {
+        Some(true) => {
+            std::fs::remove_file(&destination)
+                .map_err(|error| format!("Failed to remove {}: {error}", destination.display()))?;
+            Ok(true)
+        }
+        Some(false) => Err(format!(
+            "{} is not the file this job linked; preserving it",
+            destination.display()
+        )),
+        None => Err(format!(
+            "file identity is unavailable on this platform; preserving {}",
+            destination.display()
+        )),
+    }
+}
+
 /// Promote every staged source COG this job owns into the immutable store.
 ///
 /// Intent is journalled before each promotion, and the catalogue reference is
@@ -2604,21 +2748,54 @@ fn promote_source_cogs(
             // A job-local file being promoted is charged as a second copy: the
             // job keeps its own until publication succeeds.
             super::paths::require_free_space(parent, cog.bytes, "the promoted source COG")?;
+            let local = cog.resolve(paths, source.job_id.as_deref())?;
+            let witness = source
+                .source_cog
+                .as_ref()
+                .and_then(|cog| cog.relative_path.clone());
             journal.entries.push(PromotionEntry {
                 interpretation_id: interpretation_id.clone(),
                 sha256: cog.sha256.clone(),
-                destination: destination_rel,
+                destination: destination_rel.clone(),
+                witness,
             });
             write_promotion_journal(paths, &staging.job_id, &journal)?;
-            let local = cog.resolve(paths, source.job_id.as_deref())?;
+            promotion_probe::check(promotion_probe::FaultPoint::BeforePromotionLink)?;
+            promotion_probe::run(promotion_probe::FaultPoint::BeforePromotionLink);
             // Same-filesystem, no-replace link: an unbudgeted copy fallback is
             // refused rather than silently doubling the footprint.
             match std::fs::hard_link(&local, &destination) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    // Another publisher won the race; that asset is not ours.
+                    // A collision is not ownership. Give the intent up before any
+                    // further fallible work, so neither this job's rollback nor a
+                    // later restart can treat a file this job did not create as
+                    // its own, and refuse the conflicting attempt by name.
+                    journal.entries.retain(|entry| {
+                        !(entry.sha256 == cog.sha256 && entry.destination == destination_rel)
+                    });
+                    if let Err(cleanup) = write_promotion_journal(paths, &staging.job_id, &journal)
+                    {
+                        tracing::warn!(
+                            job_id = staging.job_id,
+                            error = %cleanup,
+                            "could not record the relinquished promotion intent"
+                        );
+                    }
+                    // Ownership is decided by file identity, so a stale intent
+                    // cannot license deletion even if the journal write failed.
+                    return Err(format!(
+                        "asset {} already exists; refusing to adopt a file this job did not create",
+                        destination.display()
+                    ));
                 }
                 Err(error) => {
+                    if !destination.exists() {
+                        journal.entries.retain(|entry| {
+                            !(entry.sha256 == cog.sha256 && entry.destination == destination_rel)
+                        });
+                        let _ = write_promotion_journal(paths, &staging.job_id, &journal);
+                    }
                     return Err(format!(
                         "Failed to promote staged source COG {} to {} without copying: {error}",
                         local.display(),
@@ -2788,29 +2965,18 @@ fn rollback_promotions(
         if referenced {
             continue;
         }
-        let destination = match resolve_under_root(paths.root(), &entry.destination) {
-            Ok(destination) => destination,
-            Err(error) => {
-                failures.push(format!("journal destination: {error}"));
-                continue;
-            }
-        };
-        if destination.exists()
-            && let Err(error) = std::fs::remove_file(&destination)
-        {
-            failures.push(format!("{}: {error}", destination.display()));
+        if let Err(error) = remove_owned_destination(paths, &staging.job_id, entry) {
+            failures.push(error);
         }
     }
     let _ = owned;
-    if failures.is_empty() {
-        let _ = std::fs::remove_file(promotion_journal_path(paths, &staging.job_id));
-        Ok(())
-    } else {
-        Err(format!(
+    if !failures.is_empty() {
+        return Err(format!(
             "promotion cleanup left recoverable evidence: {}",
             failures.join("; ")
-        ))
+        ));
     }
+    clear_promotion_journal(paths, &staging.job_id)
 }
 
 /// Record that the publication committed, so recovery keeps the assets.
@@ -2818,17 +2984,7 @@ fn mark_promotions_committed(library: &LidarLibrary, staging: &StagedImport) -> 
     // The publication is already committed here: an interruption before the
     // journal is cleared is exactly the state recovery resolves.
     promotion_probe::check(promotion_probe::FaultPoint::AfterCommitBeforeCleanup)?;
-    let paths = &library.inner.paths;
-    let path = promotion_journal_path(paths, &staging.job_id);
-    if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| {
-            format!(
-                "Failed to clear the promotion journal {}: {e}",
-                path.display()
-            )
-        })?;
-    }
-    Ok(())
+    clear_promotion_journal(&library.inner.paths, &staging.job_id)
 }
 
 /// Settle one job's root: reconcile its promotion journal, then remove it.
@@ -2869,7 +3025,6 @@ pub fn reconcile_promotion_journals(
                 continue;
             }
         };
-        let mut settled = true;
         for entry in &journal.entries {
             let referenced = {
                 let connection = library.catalogue()?;
@@ -2878,26 +3033,18 @@ pub fn reconcile_promotion_journals(
             if referenced {
                 continue;
             }
-            let destination = match resolve_under_root(paths.root(), &entry.destination) {
-                Ok(destination) => destination,
-                Err(error) => {
-                    settled = false;
-                    failures.push(format!("journal destination: {error}"));
-                    continue;
-                }
-            };
-            if destination.exists() {
-                match std::fs::remove_file(&destination) {
-                    Ok(()) => removed += 1,
-                    Err(error) => {
-                        settled = false;
-                        failures.push(format!("{}: {error}", destination.display()));
-                    }
-                }
+            match remove_owned_destination(paths, job_id, entry) {
+                Ok(true) => removed += 1,
+                Ok(false) => {}
+                Err(error) => failures.push(error),
             }
         }
-        if settled {
-            let _ = std::fs::remove_file(promotion_journal_path(paths, job_id));
+        // The journal is cleared only when every entry was resolved: an
+        // unresolved entry keeps the evidence for the next attempt.
+        if failures.is_empty()
+            && let Err(error) = clear_promotion_journal(paths, job_id)
+        {
+            failures.push(error);
         }
     }
     if failures.is_empty() {
@@ -8267,6 +8414,24 @@ mod tests {
     // BG7: job-owned source COGs, promotion journals and recovery
     // -----------------------------------------------------------------------
 
+    fn generation_count(library: &LidarLibrary, layer_id: &str) -> i64 {
+        let connection = library.catalogue().unwrap();
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_layer_generations WHERE layer_id = ?1",
+                [layer_id],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
+    /// Journal contents by path, for assertions after the library is dropped.
+    fn journal_of_paths(paths: &LidarPaths, job_id: &str) -> Option<PromotionJournal> {
+        std::fs::read_to_string(promotion_journal_path(paths, job_id))
+            .ok()
+            .map(|json| serde_json::from_str(&json).expect("journal parses"))
+    }
+
     /// The catalogue's view of one source: its committed reference, when any.
     fn committed_asset(library: &LidarLibrary, interp_hash: &str) -> Option<String> {
         let connection = library.catalogue().unwrap();
@@ -8519,6 +8684,7 @@ mod tests {
                     interpretation_id: format!("interp-{}", staging.sources[0].interp_hash),
                     sha256: cog.sha256.clone(),
                     destination: relative.clone(),
+                    witness: None,
                 }],
             },
         )
@@ -8533,6 +8699,12 @@ mod tests {
         // uncommitted asset and keeps the job's own file.
         std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
         std::fs::hard_link(&local, &destination).unwrap();
+        // The journal records the job-local file it linked, which is what
+        // licenses deleting the destination later.
+        let witness = cog
+            .relative_path
+            .clone()
+            .expect("a staged COG records its job-relative location");
         write_promotion_journal(
             paths,
             &job_id,
@@ -8541,6 +8713,7 @@ mod tests {
                     interpretation_id: format!("interp-{}", staging.sources[0].interp_hash),
                     sha256: cog.sha256.clone(),
                     destination: relative.clone(),
+                    witness: Some(witness),
                 }],
             },
         )
@@ -8561,13 +8734,14 @@ mod tests {
                     interpretation_id: "interp-unknown".to_string(),
                     sha256: "unknown-digest".to_string(),
                     destination: "../outside/cog.tif".to_string(),
+                    witness: None,
                 }],
             },
         )
         .unwrap();
         let error = reconcile_promotion_journals(&library, std::slice::from_ref(&job_id))
             .expect_err("an escaping destination is refused");
-        assert!(error.contains("journal destination"), "{error}");
+        assert!(error.contains("leaves its owning root"), "{error}");
         assert!(
             journal_of(&library, &job_id).is_some(),
             "recoverable evidence is retained for retry"
@@ -9028,12 +9202,14 @@ mod tests {
         apply_import(&library, &staging_anchor, true, false, &cancel).expect("anchor publishes");
 
         // 257 index regions in one source row, one cell below the anchor, so the
-        // source origin is not lattice-aligned on the y axis. The last 1024
-        // cells are declared NoData: their absence from the incoming count
-        // proves the final region page was read rather than dropped.
+        // source origin is not lattice-aligned on the y axis. The sentinel block
+        // sits in the middle and the final index page stays fully valid, so
+        // dropping that page loses authored coverage from the count and the
+        // published values rather than merely omitting an all-NoData block.
         let width = 263_168usize;
+        let sentinel_block = 128usize;
         let mut values = vec![7.0f32; width];
-        for value in values.iter_mut().skip(width - 1024) {
+        for value in values.iter_mut().skip(sentinel_block * 1024).take(1024) {
             *value = -9999.0;
         }
         let wide = write_oracle_fixture(
@@ -9054,7 +9230,7 @@ mod tests {
         let incoming = u64::try_from(width - 1024).unwrap();
         assert_eq!(
             staging.uncovered_cells, incoming,
-            "every authored finite cell is incoming coverage, including the far page"
+            "every authored finite cell is incoming coverage, including the final page"
         );
         assert_eq!(staging.overlap_cells, 0, "the anchor occupies another row");
         assert_eq!(
@@ -9088,7 +9264,669 @@ mod tests {
             assert_eq!(image.width(), 512);
         }
 
+        // Apply publishes the reviewed coverage, and the last index page's own
+        // values are readable while the middle sentinel block stays invalid.
+        library.prepare_apply(&job).expect("review accepted");
+        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
+        assert!(applied.changed);
+        let (far_values, far_valid) = head_window(
+            &library,
+            &layer_id,
+            generation::LatticeWindow {
+                x: (width - 1024) as i64,
+                y: 4,
+                width: 1024,
+                height: 1,
+            },
+        );
+        assert!(
+            far_valid.iter().all(|byte| *byte == 1),
+            "the final index page is covered"
+        );
+        assert!(
+            far_values.iter().all(|value| *value == 7.0),
+            "the final index page carries its authored values"
+        );
+        let (sentinel_values, sentinel_valid) = head_window(
+            &library,
+            &layer_id,
+            generation::LatticeWindow {
+                x: (sentinel_block * 1024) as i64,
+                y: 4,
+                width: 1024,
+                height: 1,
+            },
+        );
+        assert!(
+            sentinel_valid.iter().all(|byte| *byte == 0),
+            "the authored NoData block stays invalid"
+        );
+        assert!(
+            sentinel_values
+                .iter()
+                .all(|value| !value.is_finite() || *value == -9999.0),
+            "invalid cells carry the layer marker, not authored data"
+        );
+
         drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // -----------------------------------------------------------------------
+    // Product closure: collision ownership (C1) and journal clearing (C2)
+    // -----------------------------------------------------------------------
+
+    /// The rollback owner exists before the first promotion, so a failure while
+    /// a later source is being prepared still removes what already landed.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_failure_during_a_later_source_still_rolls_back() {
+        use promotion_probe::FaultPoint;
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-later-source"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "later source",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let paths = LidarPaths::open(&root).expect("library paths");
+
+        let accepted =
+            write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
+        let (job_one, staging_one) = stage_review(
+            &library,
+            &layer_id,
+            std::slice::from_ref(&accepted),
+            &cancel,
+        );
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        let accepted_asset =
+            committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
+        let head_before = head_of(&library, &layer_id);
+
+        let first = write_placed_fixture(&engine, &root, "first", 16.0, 8.0, 4, 4, -9999.0, 7.0);
+        let second = write_placed_fixture(&engine, &root, "second", 32.0, 8.0, 4, 4, -9999.0, 9.0);
+        let (job_two, staging_two) = stage_review(
+            &library,
+            &layer_id,
+            &[first.clone(), second.clone()],
+            &cancel,
+        );
+        library.prepare_apply(&job_two).expect("review accepted");
+        let hashes: Vec<String> = staging_two
+            .sources
+            .iter()
+            .map(|source| source.interp_hash.clone())
+            .collect();
+        let assets: Vec<_> = staging_two
+            .sources
+            .iter()
+            .map(|source| {
+                paths.asset_cog(&source.source_cog.as_ref().expect("retained COG").sha256)
+            })
+            .collect();
+        promotion_probe::fail_at(FaultPoint::AfterPromotion);
+        let error = apply_import(&library, &staging_two, true, false, &cancel)
+            .err()
+            .expect("the injected failure refuses the publication");
+        promotion_probe::clear();
+        assert!(error.contains("injected failure"), "{error}");
+        for (asset, hash) in assets.iter().zip(&hashes) {
+            assert!(
+                !asset.exists(),
+                "a promotion that landed before the failure is removed: {}",
+                asset.display()
+            );
+            assert_eq!(committed_asset(&library, hash), None);
+        }
+        assert_eq!(head_of(&library, &layer_id).id, head_before.id);
+        assert!(paths.asset_cog(&accepted_asset).exists());
+        assert!(
+            journal_of(&library, &job_two).is_none(),
+            "the journal is settled"
+        );
+        for source in &staging_two.sources {
+            let local = source
+                .source_cog
+                .as_ref()
+                .expect("retained COG")
+                .resolve(&paths, source.job_id.as_deref())
+                .expect("job-local COG");
+            assert!(local.exists(), "the job keeps its own COG for retry");
+        }
+
+        let applied =
+            apply_import(&library, &staging_two, true, false, &cancel).expect("retry applies");
+        assert!(applied.changed);
+        for (asset, hash) in assets.iter().zip(&hashes) {
+            assert!(asset.exists());
+            assert!(committed_asset(&library, hash).is_some());
+        }
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A collision is not ownership: a matching file this job did not create is
+    /// preserved through rollback and restart, and the conflicting attempt is
+    /// refused by name.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_collision_is_never_owned() {
+        use promotion_probe::FaultPoint;
+        use std::cell::Cell;
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-collision"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "collision",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let paths = LidarPaths::open(&root).expect("library paths");
+
+        let accepted =
+            write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
+        let (job_one, staging_one) = stage_review(
+            &library,
+            &layer_id,
+            std::slice::from_ref(&accepted),
+            &cancel,
+        );
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        let accepted_asset =
+            committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
+        let head_before = head_of(&library, &layer_id);
+
+        // Two new sources: the first links normally, the second collides.
+        let first = write_placed_fixture(&engine, &root, "first", 16.0, 8.0, 4, 4, -9999.0, 7.0);
+        let second = write_placed_fixture(&engine, &root, "second", 32.0, 8.0, 4, 4, -9999.0, 9.0);
+        let (job_two, staging_two) = stage_review(&library, &layer_id, &[first, second], &cancel);
+        library.prepare_apply(&job_two).expect("review accepted");
+        let locals: Vec<PathBuf> = staging_two
+            .sources
+            .iter()
+            .map(|source| {
+                source
+                    .source_cog
+                    .as_ref()
+                    .expect("retained COG")
+                    .resolve(&paths, source.job_id.as_deref())
+                    .expect("job-local COG")
+            })
+            .collect();
+        let destinations: Vec<PathBuf> = staging_two
+            .sources
+            .iter()
+            .map(|source| {
+                paths.asset_cog(&source.source_cog.as_ref().expect("retained COG").sha256)
+            })
+            .collect();
+        // Create the competing file between the destination check and the link
+        // of the second source: identical content, a different file.
+        let calls = Cell::new(0u32);
+        let rival_local = locals[1].clone();
+        let rival_destination = destinations[1].clone();
+        promotion_probe::act_at(FaultPoint::BeforePromotionLink, move || {
+            let call = calls.get();
+            calls.set(call + 1);
+            if call == 1 {
+                std::fs::copy(&rival_local, &rival_destination).expect("rival asset is created");
+            }
+        });
+        let error = apply_import(&library, &staging_two, true, false, &cancel)
+            .err()
+            .expect("the collision refuses the publication");
+        promotion_probe::clear();
+        assert!(error.contains("refusing to adopt"), "{error}");
+        assert!(
+            error.contains(&destinations[1].display().to_string()),
+            "the refusal names the destination: {error}"
+        );
+
+        // The competing file is byte-for-byte intact and never referenced.
+        let declared = staging_two.sources[1]
+            .source_cog
+            .as_ref()
+            .expect("retained COG")
+            .clone();
+        assert!(
+            destinations[1].exists(),
+            "a file this job did not create is preserved"
+        );
+        assert_eq!(
+            crate::services::lidar::raster_assets::hash_file(&destinations[1]).unwrap(),
+            (declared.sha256.clone(), declared.bytes),
+            "its content still matches the declared digest by construction"
+        );
+        assert_eq!(
+            committed_asset(&library, &staging_two.sources[1].interp_hash),
+            None,
+            "no reference adopts the competing file"
+        );
+        // The job's own earlier promotion rolls back, and nothing else moves.
+        assert!(
+            !destinations[0].exists(),
+            "an asset this job created before the collision is removed"
+        );
+        assert_eq!(
+            committed_asset(&library, &staging_two.sources[0].interp_hash),
+            None
+        );
+        assert_eq!(head_of(&library, &layer_id).id, head_before.id);
+        assert!(paths.asset_cog(&accepted_asset).exists());
+        assert!(
+            journal_of(&library, &job_two).is_none(),
+            "the journal is settled"
+        );
+        for local in &locals {
+            assert!(local.exists(), "the job keeps its own COG for retry");
+        }
+
+        // Restart preserves the collision file and the library opens cleanly.
+        drop(library);
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        assert!(destinations[1].exists(), "recovery preserves it too");
+        assert_eq!(
+            crate::services::lidar::raster_assets::hash_file(&destinations[1]).unwrap(),
+            (declared.sha256, declared.bytes)
+        );
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// An unresolved recovery keeps its evidence, fails library opening with a
+    /// named error, and completes idempotently once the fault is removed.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn unresolved_recovery_keeps_the_root_and_fails_open() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-unresolved-recovery"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "unresolved recovery",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let paths = LidarPaths::open(&root).expect("library paths");
+
+        let waiting = write_placed_fixture(&engine, &root, "waiting", 0.0, 8.0, 4, 4, -9999.0, 5.0);
+        let (job_wait, staging_wait) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&waiting), &cancel);
+        let wait_local = staging_wait.sources[0]
+            .source_cog
+            .as_ref()
+            .expect("retained COG")
+            .resolve(&paths, staging_wait.sources[0].job_id.as_deref())
+            .expect("job-local COG");
+
+        let other = write_placed_fixture(&engine, &root, "other", 16.0, 8.0, 4, 4, -9999.0, 7.0);
+        let (job_bad, _staging_bad) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&other), &cancel);
+        write_promotion_journal(
+            &paths,
+            &job_bad,
+            &PromotionJournal {
+                entries: vec![PromotionEntry {
+                    interpretation_id: "interp-unknown".to_string(),
+                    sha256: "unknown-digest".to_string(),
+                    destination: "../outside/cog.tif".to_string(),
+                    witness: None,
+                }],
+            },
+        )
+        .unwrap();
+
+        drop(library);
+        let error = LidarLibrary::open(&root)
+            .err()
+            .expect("unresolved recovery fails library opening");
+        assert!(
+            error.contains("recovery is incomplete"),
+            "the error names recoverability: {error}"
+        );
+        assert!(
+            journal_of_paths(&paths, &job_bad).is_some(),
+            "the unresolved journal is retained"
+        );
+        assert!(paths.job_dir(&job_bad).exists(), "its root is intact");
+        assert!(
+            wait_local.exists(),
+            "an awaiting-review payload is untouched"
+        );
+
+        let _ = std::fs::remove_file(promotion_journal_path(&paths, &job_bad));
+        let reopened = LidarLibrary::open(&root).expect("recovery completes on reopen");
+        assert!(journal_of(&reopened, &job_bad).is_none());
+        assert!(paths.job_dir(&job_wait).exists());
+        assert!(wait_local.exists());
+        let staged_json = std::fs::read_to_string(paths.job_dir(&job_wait).join("staging.json"))
+            .expect("the awaiting-review job survives");
+        let restaged: StagedImport = serde_json::from_str(&staged_json).unwrap();
+        let preview = render_decision_preview(&reopened, &restaged, true, false, &cancel)
+            .expect("the intact job still previews");
+        assert!(preview.after_preview_path.ends_with(".png"));
+        reopened.prepare_apply(&job_wait).expect("review accepted");
+        let applied = apply_import(&reopened, &restaged, true, false, &cancel)
+            .expect("the intact job still applies");
+        assert!(applied.changed);
+        drop(reopened);
+        let twice = LidarLibrary::open(&root).expect("the second reopen is clean");
+        drop(twice);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A committed publication is irreversible success: a journal-clear failure
+    /// keeps the retry evidence, reports a diagnostic, and still settles as a
+    /// complete job through the real caller, including its dependent refresh.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_cleanup_failure_after_commit_is_still_a_successful_publication() {
+        use promotion_probe::FaultPoint;
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-commit-success"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "commit success",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let paths = LidarPaths::open(&root).expect("library paths");
+
+        let accepted =
+            write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
+        let (job_one, staging_one) = stage_review(
+            &library,
+            &layer_id,
+            std::slice::from_ref(&accepted),
+            &cancel,
+        );
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+
+        let incoming =
+            write_placed_fixture(&engine, &root, "incoming", 16.0, 8.0, 4, 4, -9999.0, 7.0);
+        let (job_two, staging_two) = stage_review(
+            &library,
+            &layer_id,
+            std::slice::from_ref(&incoming),
+            &cancel,
+        );
+        let staged = library.prepare_apply(&job_two).expect("review accepted");
+        let hash = staging_two.sources[0].interp_hash.clone();
+        let asset = paths.asset_cog(
+            &staging_two.sources[0]
+                .source_cog
+                .as_ref()
+                .expect("retained COG")
+                .sha256,
+        );
+
+        promotion_probe::fail_at(FaultPoint::BeforeJournalClear);
+        let applied = apply_import(&library, &staged, true, false, &cancel)
+            .expect("a committed publication reports success");
+        promotion_probe::clear();
+        assert!(applied.changed, "the generation is published");
+        let diagnostic = applied
+            .message
+            .as_deref()
+            .expect("the retained evidence is reported as a diagnostic");
+        assert!(
+            diagnostic.contains("promotion evidence retained"),
+            "{diagnostic}"
+        );
+        let head = head_of(&library, &layer_id);
+        assert_eq!(head.id, applied.generation_id);
+        assert!(asset.exists(), "the promoted asset is published");
+        assert!(committed_asset(&library, &hash).is_some());
+        assert!(
+            journal_of(&library, &job_two).is_some(),
+            "the journal survives for recovery"
+        );
+
+        // A dependent of the layer, so the committed success must run the
+        // existing refresh path rather than a failed-publication settlement.
+        {
+            let connection = library.catalogue().unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_analysis_definitions(
+                        id, layer_id, kind, version, parameters_json, created_at)
+                     VALUES('definition-commit', ?1, 'slope', 1, '{}', '0')",
+                    [&layer_id],
+                )
+                .unwrap();
+        }
+        library.finish_apply(&job_two, Ok(applied));
+        {
+            let connection = library.catalogue().unwrap();
+            let state = catalogue::get_import_job(&connection, &job_two)
+                .unwrap()
+                .expect("job row")
+                .state;
+            assert_eq!(state, "complete", "a committed apply settles as complete");
+            let refreshes: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM lidar_analysis_jobs
+                     WHERE definition_id = 'definition-commit'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(
+                refreshes >= 1,
+                "the committed layer enqueued its dependent refresh"
+            );
+        }
+
+        let generations_before = generation_count(&library, &layer_id);
+        drop(library);
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        assert!(journal_of(&reopened, &job_two).is_none());
+        assert_eq!(generation_count(&reopened, &layer_id), generations_before);
+        let (values, valid) = head_window(
+            &reopened,
+            &layer_id,
+            generation::LatticeWindow {
+                x: 16,
+                y: 0,
+                width: 4,
+                height: 4,
+            },
+        );
+        assert!(valid.iter().all(|byte| *byte == 1));
+        assert!(values.iter().all(|value| *value == 7.0));
+
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A journal that cannot be cleared keeps its evidence through the failed
+    /// publication, blocks a destructive settlement, and retries cleanly.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn journal_clear_failure_retains_evidence_until_recovery() {
+        use promotion_probe::FaultPoint;
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-journal-clear"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "journal clear",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let paths = LidarPaths::open(&root).expect("library paths");
+
+        let accepted =
+            write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
+        let (job_one, staging_one) = stage_review(
+            &library,
+            &layer_id,
+            std::slice::from_ref(&accepted),
+            &cancel,
+        );
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        let accepted_asset =
+            committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
+
+        let incoming =
+            write_placed_fixture(&engine, &root, "incoming", 16.0, 8.0, 4, 4, -9999.0, 7.0);
+        let (job_two, staging_two) = stage_review(
+            &library,
+            &layer_id,
+            std::slice::from_ref(&incoming),
+            &cancel,
+        );
+        let staged = library.prepare_apply(&job_two).expect("review accepted");
+        let asset = paths.asset_cog(
+            &staging_two.sources[0]
+                .source_cog
+                .as_ref()
+                .expect("retained COG")
+                .sha256,
+        );
+
+        // The publication fails before the commit and the rollback cannot clear
+        // its journal: the evidence must survive rather than report clean.
+        promotion_probe::fail_at(FaultPoint::BeforeTransaction);
+        promotion_probe::fail_at(FaultPoint::BeforeJournalClear);
+        let error = apply_import(&library, &staged, true, false, &cancel)
+            .err()
+            .expect("the injected failure refuses the publication");
+        promotion_probe::clear();
+        assert!(error.contains("injected failure"), "{error}");
+        assert!(!asset.exists(), "the uncommitted promotion is removed");
+        assert!(
+            journal_of(&library, &job_two).is_some(),
+            "a journal that could not be cleared is retained"
+        );
+        assert!(paths.job_dir(&job_two).exists(), "its root is retained");
+        assert!(paths.asset_cog(&accepted_asset).exists());
+
+        // The fault now hits opening: recovery reports the named error and
+        // keeps the evidence instead of deleting the root.
+        promotion_probe::fail_at(FaultPoint::BeforeJournalClear);
+        drop(library);
+        let error = LidarLibrary::open(&root)
+            .err()
+            .expect("an uncleared journal fails opening");
+        promotion_probe::clear();
+        assert!(error.contains("recovery is incomplete"), "{error}");
+        assert!(journal_of_paths(&paths, &job_two).is_some());
+        assert!(paths.job_dir(&job_two).exists());
+        assert!(paths.asset_cog(&accepted_asset).exists());
+
+        // Removing the fault completes cleanup, and it is idempotent.
+        let reopened = LidarLibrary::open(&root).expect("cleanup completes on reopen");
+        assert!(journal_of(&reopened, &job_two).is_none());
+        assert!(
+            !paths.job_dir(&job_two).exists(),
+            "the settled root is removed"
+        );
+        assert!(paths.asset_cog(&accepted_asset).exists());
+        drop(reopened);
+        let twice = LidarLibrary::open(&root).expect("the second reopen is clean");
+        drop(twice);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Ownership that cannot be proven preserves the file and reports
+    /// uncertainty, including for journals written before witnesses existed.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn unproven_ownership_preserves_an_interrupted_intent() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-unproven"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "unproven",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let paths = LidarPaths::open(&root).expect("library paths");
+
+        let source = write_placed_fixture(&engine, &root, "source", 0.0, 8.0, 4, 4, -9999.0, 5.0);
+        let (job_id, _staging) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
+
+        // A file that looks like an asset of this digest but was not created by
+        // this job, with an intent that records no witness.
+        let digest = "unproven-digest";
+        let destination = paths.asset_cog(digest);
+        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        std::fs::write(&destination, b"a separately created file").unwrap();
+        write_promotion_journal(
+            &paths,
+            &job_id,
+            &PromotionJournal {
+                entries: vec![PromotionEntry {
+                    interpretation_id: "interp-unproven".to_string(),
+                    sha256: digest.to_string(),
+                    destination: destination
+                        .strip_prefix(paths.root())
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    witness: None,
+                }],
+            },
+        )
+        .unwrap();
+
+        drop(library);
+        let error = LidarLibrary::open(&root)
+            .err()
+            .expect("unproven ownership fails opening");
+        assert!(error.contains("recovery is incomplete"), "{error}");
+        assert!(
+            destination.exists(),
+            "an unproven destination is preserved, never deleted"
+        );
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"a separately created file"
+        );
+        assert!(
+            journal_of_paths(&paths, &job_id).is_some(),
+            "the journal is retained"
+        );
+
+        // Removing the unresolvable intent lets reopening finish; the orphan
+        // file itself stays, because general reclamation is deferred.
+        let _ = std::fs::remove_file(promotion_journal_path(&paths, &job_id));
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        assert!(destination.exists());
+        drop(reopened);
         let _ = std::fs::remove_dir_all(&root);
     }
 }
