@@ -1,10 +1,26 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation batch designed next. Historical Q/Desktop findings remain historical; final methodology conclusions pending.
+Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation delivery `1fcab504` independently reviewed as partial (BG1–BG5). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated repair receipt](q-consolidated-repair-receipt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
+Current guidance: [bounded-generation review](bounded-generation-review.md), [correction assignment](bounded-generation-correction-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
+
+### Bounded-generation delivery review — `1fcab504`
+
+The [independent review](bounded-generation-review.md) records real caller progress and five incomplete contracts; seven tile tests were independently rerun, not the entire delivery. Preserve this distinction: production wiring is progress, but an implementation receipt cannot redefine retained source COGs as optional or a parent-process observation as combined memory evidence. No total cost/time saving is established.
+
+| Observed escape | Classification / response owner | Small intervention to test in the correction |
+| --- | --- | --- |
+| Explicit source-COG retention became future work after several windows | Scope/implementation deviation and handoff drift; implementer completes, main agent checks original requirement | One real stage→Apply→reopen test asserts retained source identity and absence of new durable raw/mask duplicates; checkpoint notes preserve unfinished required outcomes |
+| Tests bless a level-10 display clamp; complete footprint crosses chunks | Implementation/test-oracle gap; main agent supplies independent cases, implementer fixes | Four equal-area chunks 0/10/20/30 → 15; unequal valid counts → weighted mean; actual tile test beyond one-chunk footprint |
+| Paged helpers exist but a tile still collects the entire generation | Caller-wiring/coverage gap; implementer traces live callers | Multi-page real catalogue case measures bounded page size and excludes irrelevant rows, including whole-generation jobs that must stream |
+| End-of-run maximum presented as combined memory; a constant retained while admission bypasses it | Measurement and effective-policy gaps; implementer repairs, main agent checks claim boundaries | Simultaneous parent/descendant sampling plus controlled child; real sparse admission refuses one-over-limit before publication |
+| Receipt contains mutually exclusive current states | Documentation drift across windows; implementer reconciles, reviewer verifies | One current scope/admission/measurement summary; old observations revision-labelled, not competing instructions |
+
+The main agent also contributed process ambiguity by describing a whole batch without clearly separating authorization from execution windows. The courier repeatedly forwarded continuation without an architectural decision. The updated [protocol](collaboration-protocol.md#one-bounded-loop) permits resumable checkpoints under the same authorization; it does not excuse partial work being labelled complete. The broad original design also lacked the decisive multi-chunk and multi-process examples now supplied. These contributions do not establish a model or skill failure.
+
+On the next consolidated delivery, record whether the five original contracts are actually met, which same-family defects self-review caught, which escaped independently, and whether any courier exchange resolved a real decision rather than simply continuing work. Keep unavailable 400M/platform evidence separate. Use measured effort only; do not derive productivity from commits, tests or document length. No new evaluator, mandatory mutation campaign or upstream skill modification is authorized. Promote only lessons supported by subsequent outcomes into tooling or skills through a separately scoped change.
 
 ### Design correction before implementation — standard COG persistence
 
@@ -16,7 +32,7 @@ The process intervention is a short necessity/reuse justification in the existin
 
 At the consolidated delivery/review, record: standard source files actually reused without re-preparation; durable custom payload stores avoided or unexpectedly added; old/new supported workflows demonstrated; assumptions challenged before dependent code; material design corrections returned through the courier; independent escapes by family; and known storage/performance costs. Record effort only when measured. A smaller encoding surface supports a maintenance hypothesis, not a claim that this whole architecture or the agent setup is optimal. Retain the intervention only if outcomes support it; revise it if it creates more ceremony or merely moves custom complexity elsewhere.
 
-### Next intervention — one complete bounded-generation workflow
+### Prior intervention at `ced5a1aa` — one complete bounded-generation workflow
 
 G1–G5 plus one correction reached [independent acceptance](geolibre-integration-review.md#final-independent-acceptance--a5fc7d7b) at `a5fc7d7b`: 53 focused native and 7 GDAL-backed tests were independently repeated. No claim is made that the full private-fixture/platform evidence was repeated. Product progress is bounded production extraction/postprocessing; large sparse composition remains unimplemented. This closes the prior cycle rather than authorizing another generic hardening pass.
 

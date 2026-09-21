@@ -1,8 +1,10 @@
 # Bounded raster generations behind the existing UI
 
-Status: proposed — revised standard-COG foundation design; executable through the paired user-forwarded assignment, not implemented. Replaces the unimplemented raw-block choice at `24fd1a56`.
-Tracking: foundation `canopi-jv8a`, epic `canopi-j571`; the implementer creates one scoped child for this batch. Accepted predecessor: `canopi-jv8a.1` at `a5fc7d7b`.
-Current guidance: [agent assignment](bounded-generation-agent-prompt.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Status: partial — implementation delivered on `feature/bounded-raster-generations` through `1fcab504`; independent focused review found BG1–BG5 outstanding. Not accepted as complete, integrated or released. The standard-COG contract replaces the unimplemented raw-block choice at `24fd1a56`.
+Tracking: `canopi-jv8a.4`, foundation `canopi-jv8a`, epic `canopi-j571`. Accepted predecessor: `canopi-jv8a.1` at `a5fc7d7b`.
+Current guidance: [correction assignment](bounded-generation-correction-agent-prompt.md), [independent review](bounded-generation-review.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+
+The following sections remain the intended B1–B5 contract, not proof of implementation. Continue the existing branch from `1fcab504`; do not recreate the initial baseline/worktree sequence below. The correction assignment fixes BG1–BG5 against this contract, including exact interim admission behavior and decisive reduction/paging/resource cases. Preserve delivered work and reconcile branch-specific guides rather than replacing them with this planning checkout's older descriptions.
 
 ## 1. Outcome and authority
 
