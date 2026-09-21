@@ -865,9 +865,10 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
-    // No admission ceiling is raised: twelve files are inside the production
-    // file count, and the 48M-cell union is handled block by block rather than
-    // by its envelope's area.
+    // Twelve files are inside the production file count, but the 48M-cell
+    // union is over the interim admission envelope: this authorized
+    // representative run raises it for its own thread only.
+    let _admission = admission::limits_probe::raise(128 * 1024 * 1024, 16, 1024 * 1024 * 1024);
 
     let library = LidarLibrary::open(&work).expect("library opens");
     let layer_id = library

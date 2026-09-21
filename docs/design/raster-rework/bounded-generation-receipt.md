@@ -45,6 +45,25 @@ caller-level tests, not an inert module.
 | Block-wise review classification and bounded previews | `4a0174bf` |
 | Opaque legacy base overlay (schema v11) and sparse publication as the production default | the commit that carries this receipt |
 
+## Correction response (BG1–BG5)
+
+Independent review at `1fcab504` found five gaps against the original contract; the correction assignment settles them. This table is the consolidated response and is completed as each item lands.
+
+| Item | State | Decisive evidence |
+| --- | --- | --- |
+| BG5 — admission preserved by behavior | **Delivered** | `desktop/src/services/lidar/admission.rs` is the one policy (16 files, 512 MiB per source, 1 GiB per import, 25,000,000-cell union envelope). It is enforced in selection validation, in the managed-original copy **and** verification loops, before review work that depends on the union, and rechecked at Apply before materialization; `validate_source_selection` returns the counted bytes so no caller re-derives a bound. Tests: exact-limit admission and one-cell-over refusal, file/byte boundaries, override lifetime, the separated-pair refusal through real sparse staging with no generation/head/chunk/lattice row published, a queue-at-the-limit import that publishes, grandfathered reads/display/undo/deletion after the override expires, and the copy/hash path obeying the policy. Representative runs raise the bounds through the thread-local test-only override, never an environment variable |
+| BG1 — retained source COGs | Open | — |
+| BG3/BG2 — paged reads and complete reduction | Open | — |
+| BG4 — process-tree measurement | Open | — |
+
+### Interim admission, precisely
+
+| Work | Bound |
+| --- | --- |
+| New import or replacement | 16 files, 512 MiB per source, 1 GiB of selected sources, and 25,000,000 cells in the resulting union envelope — one policy for dense **and** sparse publication |
+| Representative large-fixture runs | The same bounds raised for their own thread through `admission::limits_probe`; production code cannot raise them |
+| Reads, display, deletion, undo of existing generations | **No envelope bound**: grandfathered immutable history stays readable at any size, and undo restores accepted history without admitting new input |
+
 ## Delivery state
 
 | State | Extent |

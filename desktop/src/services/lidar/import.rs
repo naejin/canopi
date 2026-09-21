@@ -9,6 +9,7 @@
 //! one transaction.
 
 use super::LidarLibrary;
+use super::admission;
 use super::catalogue::{self, new_id, now_iso};
 use super::display::{self, ColorRamp};
 use super::engine::{GdalEngine, GdalProgram};
@@ -30,10 +31,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Canonical NoData used for a layer whose first source declares none.
 pub const FALLBACK_NODATA: f32 = -99999.0;
-const MAX_SOURCE_FILES_PER_IMPORT: usize = 16;
-const MAX_SOURCE_FILE_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_IMPORT_SOURCE_BYTES: u64 = 1024 * 1024 * 1024;
-pub(crate) const MAX_DENSE_WORKING_CELLS: u64 = 25_000_000;
+pub(crate) use super::admission::MAX_IMPORT_UNION_CELLS as MAX_DENSE_WORKING_CELLS;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StagedSource {
@@ -167,6 +165,12 @@ pub fn stage_import(
         union = union_grid(&union, &grid_for_source(source))?;
     }
     validate_lattice(&union, "import review")?;
+    // Admission is one policy for both storage branches and is decided before
+    // any review work depends on the union's envelope.
+    admission::check_union_envelope(
+        admission::union_envelope_cells(union.width, union.height)?,
+        "import review",
+    )?;
 
     // R-tree candidate guard: when every accepted member has a footprint,
     // an incoming extent intersecting none of them must classify without
@@ -634,35 +638,16 @@ fn layer_lattice_grid(
     })
 }
 
-fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
+/// Validate a selection against the one admission policy.
+///
+/// Returns the total selected bytes so callers reuse the counted value instead
+/// of re-deriving it. Every bound comes from `admission`, so an authorized
+/// representative run can raise it for its own thread and nothing else changes.
+fn validate_source_selection(source_paths: &[PathBuf]) -> Result<u64, String> {
     if source_paths.is_empty() {
         return Err("select at least one raster source".to_string());
     }
-    let file_limit = {
-        #[cfg(test)]
-        {
-            dense_working_probe::file_count_limit().unwrap_or(MAX_SOURCE_FILES_PER_IMPORT)
-        }
-        #[cfg(not(test))]
-        {
-            MAX_SOURCE_FILES_PER_IMPORT
-        }
-    };
-    if source_paths.len() > file_limit {
-        return Err(format!(
-            "an import can contain at most {file_limit} source files"
-        ));
-    }
-    let source_byte_limit = {
-        #[cfg(test)]
-        {
-            dense_working_probe::source_bytes_limit().unwrap_or(MAX_SOURCE_FILE_BYTES)
-        }
-        #[cfg(not(test))]
-        {
-            MAX_SOURCE_FILE_BYTES
-        }
-    };
+    admission::check_source_count(source_paths.len())?;
     let mut total_bytes = 0u64;
     for path in source_paths {
         let metadata = std::fs::metadata(path)
@@ -670,24 +655,13 @@ fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
         if !metadata.is_file() {
             return Err(format!("{} is not a regular file", path.display()));
         }
-        if metadata.len() > source_byte_limit {
-            return Err(format!(
-                "{} is larger than the {} MiB per-source limit",
-                path.display(),
-                source_byte_limit / (1024 * 1024),
-            ));
-        }
+        admission::check_source_bytes(path, metadata.len())?;
         total_bytes = total_bytes
             .checked_add(metadata.len())
             .ok_or_else(|| "selected source sizes overflow the import budget".to_string())?;
     }
-    if total_bytes > MAX_IMPORT_SOURCE_BYTES {
-        return Err(format!(
-            "selected sources exceed the {} MiB import limit",
-            MAX_IMPORT_SOURCE_BYTES / (1024 * 1024),
-        ));
-    }
-    Ok(())
+    admission::check_import_bytes(total_bytes)?;
+    Ok(total_bytes)
 }
 
 pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Result<(), String> {
@@ -709,68 +683,7 @@ pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Resul
 /// [`dense_working_probe`], so a 48M-cell batch or a million-pixel gap can be
 /// exercised without exposing unsupported large dense jobs to users.
 fn dense_working_limit() -> u64 {
-    #[cfg(test)]
-    {
-        if let Some(limit) = dense_working_probe::override_limit() {
-            return limit;
-        }
-    }
-    MAX_DENSE_WORKING_CELLS
-}
-
-/// Test-only seam for the admission ceilings a representative run must exceed.
-///
-/// Only the approved large-fixture runs raise these, only for their own
-/// thread, and only for the quantities named here: the dense working area, the
-/// source-file count and the per-source byte cap. Production keeps every
-/// accepted limit, so an unsupported large job is still refused by name.
-#[cfg(test)]
-pub(crate) mod dense_working_probe {
-    use std::cell::Cell;
-
-    thread_local! {
-        static LIMITS: Cell<Option<TestAdmission>> = const { Cell::new(None) };
-    }
-
-    /// Raised ceilings for one thread.
-    #[derive(Clone, Copy)]
-    struct TestAdmission {
-        cells: u64,
-        files: usize,
-        source_bytes: u64,
-    }
-
-    pub(crate) fn override_limit() -> Option<u64> {
-        LIMITS.with(Cell::get).map(|limits| limits.cells)
-    }
-
-    pub(crate) fn file_count_limit() -> Option<usize> {
-        LIMITS.with(Cell::get).map(|limits| limits.files)
-    }
-
-    pub(crate) fn source_bytes_limit() -> Option<u64> {
-        LIMITS.with(Cell::get).map(|limits| limits.source_bytes)
-    }
-
-    /// Raise every ceiling a multi-file representative run needs.
-    pub(crate) fn raise(cells: u64, files: usize, source_bytes: u64) -> Guard {
-        LIMITS.with(|slot| {
-            slot.set(Some(TestAdmission {
-                cells,
-                files,
-                source_bytes,
-            }))
-        });
-        Guard
-    }
-
-    pub(crate) struct Guard;
-
-    impl Drop for Guard {
-        fn drop(&mut self) {
-            LIMITS.with(|slot| slot.set(None));
-        }
-    }
+    admission::limits().union_cells
 }
 
 fn stage_managed_original(
@@ -804,13 +717,8 @@ fn stage_managed_original(
             total = total
                 .checked_add(read as u64)
                 .ok_or_else(|| "source byte count overflow".to_string())?;
-            if total > MAX_SOURCE_FILE_BYTES {
-                return Err(format!(
-                    "{} grew beyond the {} MiB per-source limit while being read",
-                    source_path.display(),
-                    MAX_SOURCE_FILE_BYTES / (1024 * 1024),
-                ));
-            }
+            admission::check_source_bytes(source_path, total)
+                .map_err(|error| format!("{error} while the managed original was being copied"))?;
             hasher.update(&buffer[..read]);
             target
                 .write_all(&buffer[..read])
@@ -885,9 +793,8 @@ fn hash_file_limited(path: &Path) -> Result<(String, u64), String> {
         total = total
             .checked_add(read as u64)
             .ok_or_else(|| "managed source size overflow".to_string())?;
-        if total > MAX_SOURCE_FILE_BYTES {
-            return Err("managed source exceeds the per-source limit".to_string());
-        }
+        admission::check_source_bytes(path, total)
+            .map_err(|error| format!("{error} while the managed original was verified"))?;
         hasher.update(&buffer[..read]);
     }
     Ok((format!("{:x}", hasher.finalize()), total))
@@ -2084,6 +1991,13 @@ pub fn apply_import(
         union = union_grid(&union, &grid_for_source(source))?;
         validate_lattice(&union, "import publication union")?;
     }
+    // Recheck at Apply against the selected sources and the expected head:
+    // admission is decided again immediately before anything is materialized
+    // or published, on whichever branch will run.
+    admission::check_union_envelope(
+        admission::union_envelope_cells(union.width, union.height)?,
+        "import publication",
+    )?;
     let _ = head_manifest;
     library.record_import_progress(
         &staging.job_id,
@@ -4069,7 +3983,7 @@ mod tests {
 
     #[test]
     fn source_selection_caps_count_and_bytes_before_staging() {
-        let too_many = vec![PathBuf::from("unused"); MAX_SOURCE_FILES_PER_IMPORT + 1];
+        let too_many = vec![PathBuf::from("unused"); admission::MAX_SOURCE_FILES_PER_IMPORT + 1];
         assert!(
             validate_source_selection(&too_many)
                 .unwrap_err()
@@ -4078,7 +3992,7 @@ mod tests {
 
         let path = std::env::temp_dir().join(new_id("canopi-oversized-source"));
         let file = std::fs::File::create(&path).unwrap();
-        file.set_len(MAX_SOURCE_FILE_BYTES + 1).unwrap();
+        file.set_len(admission::MAX_SOURCE_FILE_BYTES + 1).unwrap();
         let error = validate_source_selection(std::slice::from_ref(&path)).unwrap_err();
         assert!(error.contains("per-source limit"));
         let _ = std::fs::remove_file(path);
@@ -5103,8 +5017,10 @@ mod tests {
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
-        // The union spans ~45M cells and needs no raised ceiling: the review
-        // and the sparse publication are block-sized, which is the point.
+        // The union spans ~45M cells, so this representative run raises the
+        // interim admission envelope for its own thread: production keeps the
+        // 25M bound, while the block-wise review still costs only the data.
+        let _admission = admission::limits_probe::raise(128 * 1024 * 1024, 16, 1024 * 1024 * 1024);
 
         let left =
             write_placed_fixture(&engine, &root, "left", -500.0, 1000.0, 40, 30, -9999.0, 3.0);
@@ -5362,12 +5278,10 @@ mod tests {
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
-        // Twenty-four files exceed the production file-count ceiling, which is
-        // raised for this thread only; the 60M-cell union needs no ceiling at
-        // all, because the review and the sparse publication work in blocks.
-        let _admission =
-            dense_working_probe::raise(MAX_DENSE_WORKING_CELLS, 64, MAX_SOURCE_FILE_BYTES);
-        assert_ne!(MAX_DENSE_WORKING_CELLS, 0);
+        // Twenty-four files exceed the production file count and the union
+        // exceeds the admission envelope, so this representative run raises
+        // both for its own thread only.
+        let _admission = admission::limits_probe::raise(128 * 1024 * 1024, 64, 1024 * 1024 * 1024);
 
         // Three columns eight rows apart, each column 100,000 cells from the
         // next, so the union is far larger than the data it holds.
@@ -5388,7 +5302,7 @@ mod tests {
                 ));
             }
         }
-        assert!(sources.len() > MAX_SOURCE_FILES_PER_IMPORT);
+        assert!(sources.len() > admission::MAX_SOURCE_FILES_PER_IMPORT);
 
         let layer_id = library
             .create_layer(
@@ -5611,6 +5525,300 @@ mod tests {
         assert!(window.valid.iter().all(|byte| *byte == 1));
         assert!(window.samples.iter().all(|value| *value == 4.0));
 
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    // -----------------------------------------------------------------------
+    // BG5: admission is one policy, decided before review and rechecked at Apply
+    // -----------------------------------------------------------------------
+
+    /// Two sources whose data is tiny but whose union envelope is exactly the
+    /// admission limit: admitted through the real sparse staging and Apply.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn admission_admits_a_union_exactly_at_the_envelope_limit() {
+        let root = std::env::temp_dir().join(new_id("canopi-admit-exact"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        // A 5000x5000 envelope with four sample cells in each far corner.
+        let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
+        let north_east =
+            write_placed_fixture(&engine, &root, "ne", 4996.0, 5000.0, 4, 4, -9999.0, 7.0);
+        let layer_id = library
+            .create_layer(
+                "envelope exact",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job_id, staging) =
+            stage_review(&library, &layer_id, &[south_west, north_east], &cancel);
+        assert_eq!(
+            admission::union_envelope_cells(staging.union_grid.width, staging.union_grid.height)
+                .unwrap(),
+            25_000_000,
+            "5000x5000 is exactly the admitted envelope"
+        );
+        library.prepare_apply(&job_id).expect("review accepted");
+        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
+        assert!(applied.changed);
+        let head = head_of(&library, &layer_id);
+        assert_eq!(head.coverage_cells, 32);
+        let chunks = {
+            let connection = library.catalogue().unwrap();
+            catalogue::generation_chunk_assets(&connection, &head.id, generation::RESULT_ROLE)
+                .unwrap()
+        };
+        assert_eq!(
+            chunks.len(),
+            2,
+            "only the two occupied chunks are stored: {:?}",
+            chunks
+                .iter()
+                .map(|chunk| (chunk.chunk_x, chunk.chunk_y))
+                .collect::<Vec<_>>()
+        );
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The same two small sources, one lattice column further apart: the
+    /// envelope is over the limit, so staging refuses it before any review work
+    /// that depends on the union and nothing is published.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn admission_refuses_a_separated_pair_whose_union_exceeds_the_limit() {
+        let root = std::env::temp_dir().join(new_id("canopi-admit-over"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
+        let north_east =
+            write_placed_fixture(&engine, &root, "ne", 4997.0, 5000.0, 4, 4, -9999.0, 7.0);
+        let layer_id = library
+            .create_layer(
+                "envelope over",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let error = stage_import(
+            &library,
+            &job_id,
+            &layer_id,
+            &[south_west, north_east],
+            &cancel,
+        )
+        .err()
+        .expect("an envelope over the limit must be refused");
+        assert!(error.contains("import envelope limit"), "{error}");
+        // Nothing was published and no head was created.
+        let connection = library.catalogue().unwrap();
+        for table in [
+            "lidar_layer_generations",
+            "lidar_layer_heads",
+            "lidar_generation_chunks",
+            "lidar_layer_lattices",
+        ] {
+            assert_eq!(
+                {
+                    let mut statement = connection
+                        .prepare(&format!("SELECT COUNT(*) FROM {table}"))
+                        .unwrap();
+                    statement.query_row([], |row| row.get::<_, i64>(0)).unwrap()
+                },
+                0,
+                "{table} must stay empty after a refused import"
+            );
+        }
+        drop(connection);
+
+        // A production submission never inherits a test override: this thread
+        // has none, and the refusal above proves the path rejects without one.
+        assert_eq!(
+            admission::limits(),
+            admission::AdmissionLimits::production()
+        );
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A generation admitted under a representative-run override stays fully
+    /// readable, displayable and undoable once the override is gone.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn grandfathered_large_generations_stay_readable_after_the_override_expires() {
+        let root = std::env::temp_dir().join(new_id("canopi-grandfathered"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
+        let north_east =
+            write_placed_fixture(&engine, &root, "ne", 9000.0, 10_000.0, 4, 4, -9999.0, 7.0);
+        let layer_id = library
+            .create_layer(
+                "grandfathered",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+
+        // Admitted only because a representative run raised the envelope for
+        // both staging and the Apply recheck, which is how that run proceeds.
+        let (job_id, _staging, applied) = {
+            let _raised = admission::limits_probe::raise(128 * 1024 * 1024, 16, 1024 * 1024 * 1024);
+            let (job_id, staging) =
+                stage_review(&library, &layer_id, &[south_west, north_east], &cancel);
+            assert!(
+                admission::union_envelope_cells(
+                    staging.union_grid.width,
+                    staging.union_grid.height
+                )
+                .unwrap()
+                    > admission::MAX_IMPORT_UNION_CELLS
+            );
+            library.prepare_apply(&job_id).expect("review accepted");
+            let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
+            (job_id, staging, applied)
+        };
+        assert!(applied.changed);
+        assert_eq!(
+            admission::limits(),
+            admission::AdmissionLimits::production(),
+            "the override is gone before the reads below"
+        );
+
+        // Reads: the accepted window is exactly what was published.
+        let head = head_of(&library, &layer_id);
+        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
+        let chunk_list = {
+            let connection = library.catalogue().unwrap();
+            generation::persisted_chunks(
+                &connection,
+                &library.inner.paths,
+                &head.id,
+                generation::RESULT_ROLE,
+            )
+            .unwrap()
+        };
+        let window = generation::read_persisted_window(
+            &chunk_list,
+            &manifest.grid,
+            generation::LatticeWindow {
+                x: 9000,
+                // The far member lies above the anchor lattice: its own grid
+                // origin is y=10000 while the layer anchor is y=4.
+                y: -9996,
+                width: 4,
+                height: 4,
+            },
+            &cancel,
+        )
+        .unwrap();
+        assert!(window.valid.iter().all(|byte| *byte == 1));
+        assert!(window.samples.iter().all(|value| *value == 7.0));
+
+        // Display: the layer still presents and renders a native tile.
+        let snapshot = library.library_snapshot().expect("snapshot");
+        let tileset = snapshot.layers[0]
+            .tilesets
+            .iter()
+            .find(|tileset| tileset.style == "elevation")
+            .expect("displayable");
+        let generation_id = match &tileset.source {
+            common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
+                generation_id.clone()
+            }
+            _ => panic!("a sparse generation has no asset template"),
+        };
+        let span = 40_075_016.685_578_49 / f64::from(1u32 << 20);
+        let half = 20_037_508.342_789_244;
+        library
+            .render_tile(
+                "source",
+                &layer_id,
+                &generation_id,
+                "elevation",
+                20,
+                ((250.0 + half) / span).floor() as u32,
+                ((half - 250.0) / span).floor() as u32,
+                &cancel,
+            )
+            .expect("tile renders");
+
+        // Undo restores accepted history without re-admitting anything.
+        let undone = undo_import(&library, &job_id, &cancel).expect("undo publishes");
+        assert!(undone.changed);
+        let after = head_of(&library, &layer_id);
+        assert_eq!(
+            after.coverage_cells, 0,
+            "undoing the only import leaves no coverage"
+        );
+
+        // Deletion still removes the whole graph.
+        library.delete_layer(&layer_id).expect("layer deletes");
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The managed-original copy and verification paths read the same policy,
+    /// so a lowered bound stops a copy and a raised one lets it through: no
+    /// hidden hard-coded ceiling survives beside the policy.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn the_copy_and_hash_paths_are_governed_by_the_same_policy() {
+        let root = std::env::temp_dir().join(new_id("canopi-copy-policy"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let source =
+            write_placed_fixture(&engine, &root, "policy", 0.0, 64.0, 64, 64, -9999.0, 1.0);
+        let bytes = std::fs::metadata(&source).unwrap().len();
+        assert!(bytes > 1, "the fixture has content to copy");
+
+        let layer_id = library
+            .create_layer(
+                "copy policy",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+
+        // A lowered per-source bound refuses the selection by name.
+        {
+            // The bound is lowered below this file's own size, so the refusal
+            // can only come from the policy the copy path consults.
+            let _lowered = admission::limits_probe::set(admission::AdmissionLimits {
+                files: 4,
+                source_bytes: (bytes / 2).max(1),
+                import_bytes: 4096,
+                union_cells: 1_000_000,
+            });
+            let job_id = library.record_import_job(&layer_id).expect("job recorded");
+            let error = stage_import(
+                &library,
+                &job_id,
+                &layer_id,
+                std::slice::from_ref(&source),
+                &cancel,
+            )
+            .err()
+            .expect("a source over the lowered bound must be refused");
+            assert!(error.contains("per-source limit"), "{error}");
+        }
+
+        // The same file is staged once the policy allows it, so no other
+        // ceiling stands in the way.
+        let (job_id, staging) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
+        assert!(staging.uncovered_cells > 0);
+        let _ = job_id;
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }

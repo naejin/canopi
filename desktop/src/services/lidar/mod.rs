@@ -5,6 +5,7 @@
 //! never dirty a Design, and no catalogue lock is held during raster
 //! computation.
 
+pub mod admission;
 pub mod analysis;
 pub mod catalogue;
 pub mod display;
