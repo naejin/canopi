@@ -10,7 +10,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | --- | --- |
 | B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver, legacy adapters, paged regions | **Delivered and verified**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, the private resolver over ordered occurrences, the legacy TIFF-only derivative lease with an independently applied authoritative mask, and paged occupied-region aggregates |
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
-| B3 — slope core+halo and shared job ownership | **Partly delivered**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning, with failure/cancellation/pruning tests). Not started: the bounded core+halo slope reader over resolved windows, sparse result publication, and the library-wide exclusive heavy raster job lease; slope still refuses a chunked head explicitly |
+| B3 — slope core+halo and shared job ownership | **Mostly delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning), and slope now computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history. Still open: the library-wide exclusive heavy raster job lease (the resource-ownership half of B3) |
 | B4 — bounded display transport and Desktop protocol | Not started |
 | B5 — end-to-end verification and conditional limit removal | Not started |
 
@@ -31,7 +31,9 @@ caller-level tests, not an inert module.
 | Legacy TIFF lease, paged region aggregates and their tests | `3cf213e5` |
 | Persisted-chunk publication rows and read path | `76d8aa8e` |
 | Resolved-chunk materialization for publication | `d57cdfc9` |
-| Catalogue v8, format identity, gated stage→review→Apply→reopen→undo caller slice | the commit that carries this receipt |
+| Catalogue v8, format identity, gated stage→review→Apply→reopen→undo caller slice | `535d353a` |
+| Analysis staging guard, `staging-*` startup pruning and `canopi-jv8a.3` | `48aba35a` |
+| Catalogue v9, bounded core+halo slope with sparse result/quality chunks | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -77,6 +79,21 @@ caller-level tests, not an inert module.
   chunk rows explicitly (chunk rows carry no foreign key, because they are
   inserted before the generation commits). Immutable assets outlive their
   generation and are left to catalogue-aware reclamation.
+- **Bounded slope (B3).** `publish_sparse_slope` resolves the input generation
+  once and iterates only its occupied chunks. Each block resolves a 1026×1026
+  core+halo window, exports it as a bounded NaN-NoData scratch raster, runs the
+  existing fixed-argv Horn slope (`-s 1`, `-p` only for percent, no edge
+  interpolation) and stores the 1024×1024 core as an immutable resolved chunk,
+  with a separate 0/1 quality chunk for the exact 3×3 accepted-input
+  neighborhood. Statistics and coverage come from the stored chunk aggregates,
+  never from a concatenated result raster. GDAL marks uncomputed cells with its
+  own NoData marker (a NaN input marker does not survive `gdaldem`), so the
+  marker is read back and treated as invalid before anything is persisted; a
+  non-negative marker, which a real slope cell could equal, is refused by name.
+  Eligibility is checked against GDAL's own CRS report and the layer's units,
+  with the plan's explicit reason for geographic or non-metre grids. A
+  generation whose member history cannot be replayed keeps the accepted dense
+  whole-raster slope route, so compatibility is preserved while the gate holds.
 - **Analysis staging is owned (`canopi-jv8a.3`, B3 linked work).** A slope job's
   `staging-*` root is owned by a guard that removes it on any early return,
   propagated error, cancellation or panic, and is disarmed only once the
@@ -120,6 +137,18 @@ Catalogue tests:
 - `delete_layer_removes_all_referencing_rows_with_foreign_keys_enabled` now also
   seeds a published chunk row with its asset and proves the chunk rows are
   deleted with the layer while the immutable asset row remains.
+- Bounded slope (GDAL required):
+  `sparse_slope_matches_the_dense_oracle_in_both_units` imports the same two
+  plane members (a hole spans the member seam) once dense and once sparse,
+  runs slope through both storage formats, and asserts the sparse result equals
+  the accepted dense whole-raster oracle at every cell with a complete 3×3
+  neighborhood, that result validity and the 3×3 quality mask agree exactly
+  (including the generation's own outer boundary and the hole ring), that the
+  interior is exactly 45°/100 %, and that the dense oracle raster is real.
+  `cancelled_sparse_slope_publishes_nothing` asserts a cancelled bounded slope
+  publishes no analysis head, leaves no unpublished chunk row and removes its
+  scratch root; `slope_eligibility_refuses_non_metre_elevations` and
+  `slope_eligibility_accepts_a_projected_metre_grid` cover the eligibility gate.
 - Analysis staging (`canopi-jv8a.3`):
   `failed_slope_job_removes_its_staging_root_and_keeps_the_accepted_head` forces
   a failure after the slope step wrote its staged result (the message proves the

@@ -1115,6 +1115,15 @@ impl LidarLibrary {
 }
 
 fn delete_analysis_rows(connection: &Connection, definition_id: &str) -> Result<(), String> {
+    // Result and quality chunk rows carry no foreign key to their generation
+    // (they are inserted before it commits), so they are revoked with it.
+    connection
+        .execute(
+            "DELETE FROM lidar_generation_chunks WHERE generation_id IN
+             (SELECT id FROM lidar_analysis_generations WHERE definition_id = ?1)",
+            [definition_id],
+        )
+        .map_err(|e| e.to_string())?;
     for sql in [
         "DELETE FROM lidar_analysis_heads WHERE definition_id = ?1",
         "DELETE FROM lidar_analysis_jobs WHERE definition_id = ?1",

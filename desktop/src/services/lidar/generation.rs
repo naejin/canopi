@@ -15,7 +15,7 @@ use super::catalogue;
 use super::grid::RasterGrid;
 use super::paths::LidarPaths;
 use super::prepared_raster::{PreparedRaster, RasterWindow};
-use super::raster_assets::CogAsset;
+pub(super) use super::raster_assets::CogAsset;
 use rusqlite::Connection;
 use std::collections::BTreeSet;
 use std::io::{Read as _, Seek as _, SeekFrom};
@@ -28,6 +28,8 @@ pub(super) const CHUNK_SIDE: i64 = 1024;
 const MAX_WINDOW_SIDE: i64 = 1026;
 /// Catalogue role of a generation's resolved numeric chunks.
 pub(super) const RESULT_ROLE: &str = "result";
+/// Catalogue role of a result's separate 0/1 quality chunks.
+pub(super) const QUALITY_ROLE: &str = "quality";
 
 /// How one occurrence participates in composition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -400,6 +402,43 @@ pub(super) fn read_persisted_window(
     })
 }
 
+/// Read one window of a sparse 0/1 quality mask.
+///
+/// Absent quality chunks mean quality zero, and a present chunk must hold
+/// exact 0/1 samples: a corrupt mask can never read as partial coverage. The
+/// returned validity is complete, because quality zero is a value, not a gap.
+// Consumed by the bounded display transport's result tiles (`canopi-jv8a.4`,
+// B4); until that caller lands the allowance is deliberate.
+#[allow(dead_code)]
+pub(super) fn read_quality_chunks_window(
+    chunks: &[PersistedChunk],
+    lattice: &RasterGrid,
+    window: LatticeWindow,
+    cancel: &AtomicBool,
+) -> Result<ResolvedWindow, String> {
+    let resolved = read_persisted_window(chunks, lattice, window, cancel)?;
+    let mut samples = vec![0f32; resolved.samples.len()];
+    for (index, value) in resolved.samples.iter().enumerate() {
+        if resolved.valid[index] == 0 {
+            continue;
+        }
+        samples[index] = match *value {
+            0.0 => 0.0,
+            1.0 => 1.0,
+            other => {
+                return Err(format!(
+                    "quality chunk holds {other} at cell {index}, expected exact 0 or 1"
+                ));
+            }
+        };
+    }
+    Ok(ResolvedWindow {
+        grid: resolved.grid,
+        samples,
+        valid: vec![1u8; resolved.valid.len()],
+    })
+}
+
 /// Per-block aggregate of one interpretation's occupied coverage.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct RegionAggregate {
@@ -668,7 +707,10 @@ fn lattice_offset(lattice: &RasterGrid, grid: &RasterGrid) -> Result<(i64, i64),
     Ok((offset_x.round() as i64, offset_y.round() as i64))
 }
 
-fn window_grid(lattice: &RasterGrid, window: LatticeWindow) -> Result<RasterGrid, String> {
+pub(super) fn window_grid(
+    lattice: &RasterGrid,
+    window: LatticeWindow,
+) -> Result<RasterGrid, String> {
     let origin_x = lattice.geotransform[0] + window.x as f64 * lattice.geotransform[1];
     let origin_y = lattice.geotransform[3] + window.y as f64 * lattice.geotransform[5];
     if !origin_x.is_finite() || !origin_y.is_finite() {
@@ -827,13 +869,15 @@ pub(super) fn asset_row(
     })
 }
 
-/// Published resolved chunks of one generation, ready for the read path.
+/// Published resolved chunks of one generation and role, ready for the read
+/// path. Absent chunks stay invalid coverage.
 pub(super) fn persisted_chunks(
     connection: &Connection,
     paths: &LidarPaths,
     generation_id: &str,
+    role: &str,
 ) -> Result<Vec<PersistedChunk>, String> {
-    let rows = catalogue::generation_chunk_assets(connection, generation_id, RESULT_ROLE)?;
+    let rows = catalogue::generation_chunk_assets(connection, generation_id, role)?;
     let mut chunks = Vec::with_capacity(rows.len());
     for row in rows {
         let asset = cog_from_row(paths, &row.asset)?;

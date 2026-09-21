@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 8;
+pub const CATALOGUE_VERSION: i32 = 9;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -114,7 +114,7 @@ fn migrate(connection: &Connection) -> Result<(), String> {
         // plain foreign keys, which would refuse the DROP while enforcement is
         // on; enforcement is suspended for that single rebuild and the result
         // is verified before the migration is reported as applied.
-        let rebuild = next == 8;
+        let rebuild = matches!(next, 8 | 9);
         if rebuild {
             connection
                 .execute_batch("PRAGMA foreign_keys=OFF")
@@ -152,6 +152,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         6 => "",
         7 => SCHEMA_V7,
         8 => SCHEMA_V8,
+        9 => SCHEMA_V9,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -328,6 +329,41 @@ CREATE TABLE IF NOT EXISTS lidar_interpretation_regions (
     sum_value REAL,
     PRIMARY KEY (interpretation_id, block_x, block_y)
 );
+"#;
+
+/// v9: an analysis result may likewise be stored as sparse resolved chunks, so
+/// `result_path` becomes nullable while a dense quality mask still requires a
+/// dense result.
+const SCHEMA_V9: &str = r#"
+CREATE TABLE lidar_analysis_generations_v9 (
+    id TEXT PRIMARY KEY,
+    definition_id TEXT NOT NULL REFERENCES lidar_analysis_definitions(id),
+    source_generation_id TEXT NOT NULL,
+    engine_version TEXT NOT NULL,
+    state TEXT NOT NULL,
+    result_path TEXT,
+    quality_mask_path TEXT,
+    manifest_json TEXT NOT NULL,
+    coverage_cells INTEGER NOT NULL,
+    min_value REAL,
+    max_value REAL,
+    bounds_3857 TEXT NOT NULL,
+    published_at TEXT NOT NULL,
+    CHECK (result_path IS NOT NULL OR quality_mask_path IS NULL)
+);
+INSERT INTO lidar_analysis_generations_v9(
+    id, definition_id, source_generation_id, engine_version, state, result_path,
+    quality_mask_path, manifest_json, coverage_cells, min_value, max_value,
+    bounds_3857, published_at
+)
+SELECT id, definition_id, source_generation_id, engine_version, state, result_path,
+       quality_mask_path, manifest_json, coverage_cells, min_value, max_value,
+       bounds_3857, published_at
+FROM lidar_analysis_generations;
+DROP TABLE lidar_analysis_generations;
+ALTER TABLE lidar_analysis_generations_v9 RENAME TO lidar_analysis_generations;
+CREATE INDEX IF NOT EXISTS idx_analysis_generations_definition
+    ON lidar_analysis_generations(definition_id);
 "#;
 
 /// v8: a generation may be stored as sparse resolved chunks instead of one
@@ -1704,7 +1740,7 @@ mod tests {
                 .unwrap();
         }
         let connection = open(&path).expect("v6 catalogue migrates");
-        assert_eq!(schema_version(&connection).unwrap(), 8);
+        assert_eq!(schema_version(&connection).unwrap(), CATALOGUE_VERSION);
         for table in [
             "lidar_raster_assets",
             "lidar_interpretation_cogs",
@@ -1805,7 +1841,7 @@ mod tests {
         }
 
         let connection = open(&path).expect("v7 catalogue migrates");
-        assert_eq!(schema_version(&connection).unwrap(), 8);
+        assert_eq!(schema_version(&connection).unwrap(), CATALOGUE_VERSION);
         // The preserved generation keeps its identity, paths and history.
         let (mosaic, coverage, cells): (Option<String>, Option<String>, i64) = connection
             .query_row(
@@ -1864,6 +1900,134 @@ mod tests {
         assert!(backup_path.exists(), "backup {backup} exists");
         let backed_up = Connection::open(backup_path).unwrap();
         assert_eq!(schema_version(&backed_up).unwrap(), 7);
+        drop(backed_up);
+        drop(connection);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn v8_catalogue_gains_nullable_analysis_result_paths() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v9"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_analysis_definitions
+                        (id, layer_id, kind, version, parameters_json, created_at)
+                     VALUES ('definition', 'layer', 'slope', 1, '{}', '0');
+                     INSERT INTO lidar_analysis_generations
+                        (id, definition_id, source_generation_id, engine_version, state,
+                         result_path, quality_mask_path, manifest_json, coverage_cells,
+                         min_value, max_value, bounds_3857, published_at)
+                     VALUES ('analysis-generation', 'definition', 'source-generation', '3.8',
+                             'ready', '/library/agen-1/result.tif',
+                             '/library/agen-1/quality.bin',
+                             '{\"format\":\"legacy-dense-v1\"}', 12, -1, 9, '[0,0,1,1]', '0');
+                     INSERT INTO lidar_analysis_heads(definition_id, generation_id)
+                     VALUES ('definition', 'analysis-generation');",
+                )
+                .unwrap();
+        }
+        // Present the same file as a v8 catalogue with the old NOT NULL column.
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    "PRAGMA foreign_keys=OFF;
+                     ALTER TABLE lidar_analysis_generations
+                        RENAME TO lidar_analysis_generations_v9;
+                     CREATE TABLE lidar_analysis_generations (
+                        id TEXT PRIMARY KEY,
+                        definition_id TEXT NOT NULL REFERENCES lidar_analysis_definitions(id),
+                        source_generation_id TEXT NOT NULL,
+                        engine_version TEXT NOT NULL,
+                        state TEXT NOT NULL,
+                        result_path TEXT NOT NULL,
+                        quality_mask_path TEXT,
+                        manifest_json TEXT NOT NULL,
+                        coverage_cells INTEGER NOT NULL,
+                        min_value REAL,
+                        max_value REAL,
+                        bounds_3857 TEXT NOT NULL,
+                        published_at TEXT NOT NULL
+                     );
+                     INSERT INTO lidar_analysis_generations(
+                        id, definition_id, source_generation_id, engine_version, state,
+                        result_path, quality_mask_path, manifest_json, coverage_cells,
+                        min_value, max_value, bounds_3857, published_at)
+                     SELECT id, definition_id, source_generation_id, engine_version, state,
+                            result_path, quality_mask_path, manifest_json, coverage_cells,
+                            min_value, max_value, bounds_3857, published_at
+                     FROM lidar_analysis_generations_v9;
+                     DROP TABLE lidar_analysis_generations_v9;
+                     CREATE INDEX IF NOT EXISTS idx_analysis_generations_definition
+                        ON lidar_analysis_generations(definition_id);
+                     UPDATE lidar_catalogue_meta SET value = '8' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+
+        let connection = open(&path).expect("v8 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), 9);
+        let (result, quality, cells): (Option<String>, Option<String>, i64) = connection
+            .query_row(
+                "SELECT result_path, quality_mask_path, coverage_cells
+                 FROM lidar_analysis_generations WHERE id = 'analysis-generation'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(result.as_deref(), Some("/library/agen-1/result.tif"));
+        assert_eq!(quality.as_deref(), Some("/library/agen-1/quality.bin"));
+        assert_eq!(cells, 12);
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT generation_id FROM lidar_analysis_heads WHERE definition_id = 'definition'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .unwrap(),
+            "analysis-generation"
+        );
+        // A sparse result owns neither path...
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_generations
+                    (id, definition_id, source_generation_id, engine_version, state,
+                     result_path, quality_mask_path, manifest_json, coverage_cells,
+                     min_value, max_value, bounds_3857, published_at)
+                 VALUES ('sparse', 'definition', 'source-generation', '3.8', 'ready',
+                         NULL, NULL, '{}', 0, 0, 0, '[0,0,1,1]', '1')",
+                [],
+            )
+            .unwrap();
+        // ... but never a dense quality mask without a dense result.
+        let half = connection.execute(
+            "INSERT INTO lidar_analysis_generations
+                (id, definition_id, source_generation_id, engine_version, state,
+                 result_path, quality_mask_path, manifest_json, coverage_cells,
+                 min_value, max_value, bounds_3857, published_at)
+             VALUES ('half', 'definition', 'source-generation', '3.8', 'ready',
+                     NULL, '/only/quality.bin', '{}', 0, 0, 0, '[0,0,1,1]', '2')",
+            [],
+        );
+        assert!(half.is_err(), "quality without a dense result is rejected");
+
+        let backup: String = connection
+            .query_row(
+                "SELECT value FROM lidar_catalogue_meta WHERE key = 'last_backup_path'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let backed_up = Connection::open(std::path::Path::new(&backup)).unwrap();
+        assert_eq!(schema_version(&backed_up).unwrap(), 8);
         drop(backed_up);
         drop(connection);
         let _ = std::fs::remove_dir_all(root);

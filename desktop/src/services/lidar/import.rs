@@ -2421,7 +2421,7 @@ pub(crate) fn remove_display_publication(
 /// legacy snapshot whose members were never recorded. A caller must then keep
 /// the accepted dense route instead of fabricating occurrences it cannot
 /// prove.
-fn resolved_occurrences(
+pub(super) fn resolved_occurrences(
     connection: &rusqlite::Connection,
     paths: &LidarPaths,
     head: &catalogue::GenerationRow,
@@ -2944,7 +2944,7 @@ fn head_numeric_read(
     match manifest.format {
         GenerationStorageFormat::LegacyDenseV1 => Ok(HeadNumeric::Dense),
         GenerationStorageFormat::CogChunksV1 => Ok(HeadNumeric::Chunks(
-            generation::persisted_chunks(connection, paths, &head.id)?,
+            generation::persisted_chunks(connection, paths, &head.id, generation::RESULT_ROLE)?,
         )),
     }
 }
@@ -3191,7 +3191,7 @@ fn validate_f32_raw(raw: &[u8], width: u32, height: u32) -> Result<(), String> {
     Ok(())
 }
 
-fn f32_sample(raw: &[u8], index: usize) -> f32 {
+pub(crate) fn f32_sample(raw: &[u8], index: usize) -> f32 {
     let offset = index * 4;
     f32::from_le_bytes([
         raw[offset],

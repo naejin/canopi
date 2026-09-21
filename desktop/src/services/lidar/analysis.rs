@@ -10,9 +10,11 @@
 use super::LidarLibrary;
 use super::catalogue::{self, new_id, now_iso};
 use super::display::ColorRamp;
+use super::generation;
 use super::grid::RasterGrid;
 use super::import::{
-    publish_display, read_generation_manifest, remove_display_publication, validate_working_grid,
+    GenerationManifest, publish_display, read_generation_manifest, remove_display_publication,
+    validate_working_grid,
 };
 use super::prepared_raster::PreparedRaster;
 use common_types::lidar::{LidarAnalysisKind, LidarSlopeUnit};
@@ -34,8 +36,15 @@ pub struct ResultManifest {
     pub parameters: AnalysisParameters,
     pub engine_version: String,
     pub grid: super::grid::RasterGrid,
-    pub nodata: f32,
+    /// Dense-result NoData marker. Absent for a sparse result, whose validity
+    /// is carried by its resolved chunk assets.
+    #[serde(default)]
+    pub nodata: Option<f32>,
     pub created_at: String,
+    /// Absent in manifests written before sparse results existed, which are
+    /// dense by definition.
+    #[serde(default)]
+    pub format: super::import::GenerationStorageFormat,
 }
 
 #[derive(Debug)]
@@ -56,6 +65,479 @@ impl AnalysisOutcome {
             format!("no result published {detail}")
         }
     }
+}
+
+/// A stored raster that carries the generation's CRS.
+///
+/// A chunked generation owns no dense mosaic, so its first published chunk is
+/// the representative raster; the CRS check only needs one.
+fn sparse_input_raster(
+    library: &LidarLibrary,
+    head: &catalogue::GenerationRow,
+) -> Result<PathBuf, String> {
+    if let Some(mosaic) = head.mosaic_path.as_deref() {
+        return Ok(PathBuf::from(mosaic));
+    }
+    let connection = library.catalogue()?;
+    let rows = catalogue::generation_chunk_assets(&connection, &head.id, generation::RESULT_ROLE)?;
+    rows.first()
+        .map(|row| library.inner.paths.root().join(&row.asset.rel_path))
+        .ok_or_else(|| "generation has no stored raster to inspect".to_string())
+}
+
+/// Why a layer's grid cannot carry a Horn slope result.
+///
+/// Slope with `-s 1` is only meaningful on a projected grid whose horizontal
+/// and vertical units are metres: a geographic grid would silently treat
+/// degrees as metres. GDAL remains the projection authority, so the CRS is
+/// read from a stored raster instead of being parsed or reprojected here.
+fn slope_eligibility(
+    engine: &super::engine::GdalEngine,
+    cancel: &AtomicBool,
+    raster: &Path,
+    layer_units: &str,
+) -> Result<(), String> {
+    let normalized = layer_units.trim().to_ascii_lowercase();
+    if !matches!(
+        normalized.as_str(),
+        "m" | "metre" | "meter" | "metres" | "meters"
+    ) {
+        return Err(format!(
+            "slope requires metre elevations; this layer reports '{layer_units}'"
+        ));
+    }
+    let info = super::display::gdalinfo_json(engine, cancel, raster)?;
+    let wkt = info
+        .get("coordinateSystem")
+        .and_then(|system| system.get("wkt"))
+        .and_then(|wkt| wkt.as_str())
+        .unwrap_or("");
+    if wkt.is_empty() {
+        return Err(
+            "slope requires a projected metre grid; this raster reports no CRS".to_string(),
+        );
+    }
+    let upper = wkt.to_ascii_uppercase();
+    if !upper.contains("PROJCS[") && !upper.contains("PROJCRS[") {
+        return Err(
+            "slope requires a projected metre grid; this raster is geographic or unknown"
+                .to_string(),
+        );
+    }
+    if !upper.contains("METRE") && !upper.contains("METER") {
+        return Err(
+            "slope requires metre horizontal units; this raster declares another unit".to_string(),
+        );
+    }
+    Ok(())
+}
+
+/// One materialized analysis result block.
+struct SlopeChunk {
+    chunk_x: i64,
+    chunk_y: i64,
+    result: Option<(generation::CogAsset, generation::RegionAggregate)>,
+    quality: Option<generation::CogAsset>,
+}
+
+/// Compute one slope block through the bounded resolver.
+///
+/// The core is the generation's 1024×1024 chunk; the resolver supplies one
+/// extra cell on every side, because GDAL's Horn slope needs the full 3×3
+/// neighborhood and produces NoData wherever that neighborhood is incomplete.
+/// The scratch export uses NaN NoData so a valid finite sample can never
+/// collide with a transport sentinel.
+#[allow(clippy::too_many_arguments)]
+fn compute_slope_block(
+    engine: &super::engine::GdalEngine,
+    cancel: &AtomicBool,
+    paths: &super::paths::LidarPaths,
+    scratch: &Path,
+    occurrences: &[generation::ResolvedMember],
+    lattice: &RasterGrid,
+    crs_wkt: &str,
+    percent: bool,
+    chunk_x: i64,
+    chunk_y: i64,
+) -> Result<SlopeChunk, String> {
+    let side = generation::CHUNK_SIDE;
+    let halo_window = generation::LatticeWindow {
+        x: chunk_x * side - 1,
+        y: chunk_y * side - 1,
+        width: (side + 2) as u32,
+        height: (side + 2) as u32,
+    };
+    let resolved = generation::resolve_window(occurrences, lattice, halo_window, cancel)?;
+    let halo_grid = generation::window_grid(lattice, halo_window)?;
+    let halo_side = halo_window.width as usize;
+    let scratch_values: Vec<f32> = resolved
+        .samples
+        .iter()
+        .zip(resolved.valid.iter())
+        .map(|(value, valid)| if *valid == 0 { f32::NAN } else { *value })
+        .collect();
+
+    let raw = scratch.join(format!("slope-{chunk_x}-{chunk_y}.raw"));
+    super::import::write_f32_raw(&raw, &scratch_values)?;
+    let halo_path = scratch.join(format!("slope-{chunk_x}-{chunk_y}-halo.tif"));
+    let written = super::import::raw_to_tif(
+        engine,
+        cancel,
+        &raw,
+        &halo_path,
+        &halo_grid,
+        crs_wkt,
+        f32::NAN,
+    );
+    let _ = std::fs::remove_file(&raw);
+    written?;
+
+    let block_path = scratch.join(format!("slope-{chunk_x}-{chunk_y}-block.tif"));
+    let mut args = vec![
+        "slope".to_string(),
+        "-s".to_string(),
+        "1".to_string(),
+        "-q".to_string(),
+        halo_path.display().to_string(),
+        block_path.display().to_string(),
+    ];
+    if percent {
+        args.insert(1, "-p".to_string());
+    }
+    let computed = engine.run(super::engine::GdalProgram::Dem, &args, Some(cancel));
+    let _ = std::fs::remove_file(&halo_path);
+    computed?;
+
+    // GDAL marks uncomputed cells of the block with its own NoData marker
+    // (a NaN *input* marker does not survive `gdaldem`), so read it back and
+    // treat it as invalid before anything is persisted. A slope value can
+    // never be negative, so a negative marker is unambiguous; a non-negative
+    // one could collide with a real flat/sloped cell and is refused by name.
+    let info = super::display::gdalinfo_json(engine, cancel, &block_path)?;
+    let block_nodata = super::display::band_nodata(&info);
+    if let Some(marker) = block_nodata
+        && marker.is_finite()
+        && marker >= 0.0
+    {
+        let _ = std::fs::remove_file(&block_path);
+        return Err(format!(
+            "slope block output declares NoData {marker}, which a real slope cell could equal"
+        ));
+    }
+    let block_raw = super::import::raw_f32_bytes(
+        engine,
+        &block_path,
+        halo_window.width,
+        halo_window.height,
+        cancel,
+    );
+    let _ = std::fs::remove_file(&block_path);
+    let block_raw = block_raw?;
+
+    let core_side = side as usize;
+    let mut values = vec![f32::NAN; core_side * core_side];
+    let mut quality = vec![0f32; core_side * core_side];
+    let mut aggregate = generation::RegionAggregate {
+        block_x: chunk_x,
+        block_y: chunk_y,
+        valid_cells: 0,
+        min_value: f64::INFINITY,
+        max_value: f64::NEG_INFINITY,
+        sum_value: 0.0,
+    };
+    for row in 0..core_side {
+        for column in 0..core_side {
+            // The core cell sits one halo cell inside the resolved window.
+            let halo_x = column + 1;
+            let halo_y = row + 1;
+            let value = super::import::f32_sample(&block_raw, halo_y * halo_side + halo_x);
+            let index = row * core_side + column;
+            if value.is_finite() && Some(value) != block_nodata {
+                values[index] = value;
+                aggregate.valid_cells += 1;
+                aggregate.min_value = aggregate.min_value.min(f64::from(value));
+                aggregate.max_value = aggregate.max_value.max(f64::from(value));
+                aggregate.sum_value += f64::from(value);
+            }
+            if neighborhood_is_valid(&resolved.valid, halo_side, halo_x, halo_y) {
+                quality[index] = 1.0;
+            }
+        }
+    }
+
+    let core_grid = generation::chunk_grid(lattice, chunk_x, chunk_y);
+    let stem = format!("slope-{chunk_x}-{chunk_y}");
+    let result = if aggregate.valid_cells == 0 {
+        None
+    } else {
+        Some((
+            super::raster_assets::write_cog_asset(
+                engine,
+                cancel,
+                paths,
+                scratch,
+                &stem,
+                &core_grid,
+                crs_wkt,
+                Some(f32::NAN),
+                &values,
+            )?,
+            aggregate,
+        ))
+    };
+    // An all-zero quality chunk has no index entry: absent means quality zero.
+    let quality = if quality.contains(&1.0) {
+        Some(super::raster_assets::write_cog_asset(
+            engine,
+            cancel,
+            paths,
+            scratch,
+            &format!("{stem}-quality"),
+            &core_grid,
+            crs_wkt,
+            None,
+            &quality,
+        )?)
+    } else {
+        None
+    };
+    Ok(SlopeChunk {
+        chunk_x,
+        chunk_y,
+        result,
+        quality,
+    })
+}
+
+/// Whether the full 3×3 accepted-input neighborhood of one halo cell is valid.
+fn neighborhood_is_valid(valid: &[u8], side: usize, x: usize, y: usize) -> bool {
+    for row in y.saturating_sub(1)..=(y + 1).min(side - 1) {
+        for column in x.saturating_sub(1)..=(x + 1).min(side - 1) {
+            if valid[row * side + column] == 0 {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Publish one slope result as sparse resolved result and quality chunks.
+///
+/// Blocks are computed one occupied chunk at a time and never concatenated:
+/// the result is exactly the set of chunks the input generation occupies, and
+/// the final transaction publishes them only when the input is still the
+/// layer head.
+#[allow(clippy::too_many_arguments)]
+fn publish_sparse_slope(
+    library: &LidarLibrary,
+    job_id: &str,
+    definition_id: &str,
+    layer_id: &str,
+    parameters: &AnalysisParameters,
+    head: &catalogue::GenerationRow,
+    manifest: &GenerationManifest,
+    expected: &str,
+    cancel: &AtomicBool,
+) -> Result<AnalysisOutcome, String> {
+    let engine = &library.inner.engine;
+    let paths = &library.inner.paths;
+    let occurrences = {
+        let connection = library.catalogue()?;
+        super::import::resolved_occurrences(&connection, paths, head)?
+    };
+    let Some(occurrences) = occurrences else {
+        return Err(
+            "slope requires reconstructible member history; this generation predates it"
+                .to_string(),
+        );
+    };
+    let percent = parameters.slope_unit == Some(LidarSlopeUnit::Percent);
+    let scratch = paths.prepared_dir().join(format!("scratch-slope-{job_id}"));
+    std::fs::create_dir_all(&scratch)
+        .map_err(|e| format!("Failed to create slope scratch: {e}"))?;
+    let outcome = (|| -> Result<AnalysisOutcome, String> {
+        let blocks = generation::occupied_chunks(&occurrences, &manifest.grid)?;
+        let mut chunks = Vec::with_capacity(blocks.len());
+        for (chunk_x, chunk_y) in blocks {
+            super::import::check_cancel(cancel)?;
+            chunks.push(compute_slope_block(
+                engine,
+                cancel,
+                paths,
+                &scratch,
+                &occurrences,
+                &manifest.grid,
+                &manifest.crs_wkt,
+                percent,
+                chunk_x,
+                chunk_y,
+            )?);
+        }
+
+        let mut coverage_cells = 0u64;
+        let (mut min_value, mut max_value) = (f64::INFINITY, f64::NEG_INFINITY);
+        for chunk in &chunks {
+            if let Some((_, aggregate)) = &chunk.result {
+                coverage_cells = coverage_cells.saturating_add(aggregate.valid_cells.max(0) as u64);
+                min_value = min_value.min(aggregate.min_value);
+                max_value = max_value.max(aggregate.max_value);
+            }
+        }
+        if !min_value.is_finite() || !max_value.is_finite() {
+            min_value = 0.0;
+            max_value = 0.0;
+        }
+
+        let generation_id = new_id("agen");
+        let mut rows = Vec::new();
+        {
+            let connection = library.catalogue()?;
+            for chunk in &chunks {
+                if let Some((asset, aggregate)) = &chunk.result {
+                    catalogue::insert_raster_asset(
+                        &connection,
+                        &generation::asset_row(paths, asset, &manifest.crs_wkt)?,
+                    )?;
+                    rows.push(catalogue::GenerationChunkRow {
+                        role: generation::RESULT_ROLE.to_string(),
+                        chunk_x: chunk.chunk_x,
+                        chunk_y: chunk.chunk_y,
+                        asset_sha256: asset.sha256.clone(),
+                        valid_cells: aggregate.valid_cells,
+                        min_value: aggregate.min_value,
+                        max_value: aggregate.max_value,
+                        sum_value: aggregate.sum_value,
+                    });
+                }
+                if let Some(asset) = &chunk.quality {
+                    catalogue::insert_raster_asset(
+                        &connection,
+                        &generation::asset_row(paths, asset, &manifest.crs_wkt)?,
+                    )?;
+                    rows.push(catalogue::GenerationChunkRow {
+                        role: generation::QUALITY_ROLE.to_string(),
+                        chunk_x: chunk.chunk_x,
+                        chunk_y: chunk.chunk_y,
+                        asset_sha256: asset.sha256.clone(),
+                        valid_cells: 1,
+                        min_value: 0.0,
+                        max_value: 1.0,
+                        sum_value: 0.0,
+                    });
+                }
+            }
+            catalogue::insert_unpublished_chunks(&connection, &generation_id, &rows)?;
+        }
+
+        let result_manifest = ResultManifest {
+            definition_id: definition_id.to_string(),
+            kind: "slope".to_string(),
+            source_generation_id: expected.to_string(),
+            parameters: parameters.clone(),
+            engine_version: engine.discover().map(|t| t.version).unwrap_or_default(),
+            grid: manifest.grid.clone(),
+            nodata: None,
+            created_at: now_iso(),
+            format: super::import::GenerationStorageFormat::CogChunksV1,
+        };
+        let manifest_json = serde_json::to_string(&result_manifest).map_err(|e| e.to_string())?;
+
+        let published = (|| -> Result<(), String> {
+            let connection = library.catalogue()?;
+            connection
+                .execute_batch("BEGIN IMMEDIATE")
+                .map_err(|e| e.to_string())?;
+            let publish = (|| -> Result<(), String> {
+                let job_state = connection
+                    .query_row(
+                        "SELECT state FROM lidar_analysis_jobs WHERE id = ?1",
+                        [job_id],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .map_err(|e| e.to_string())?;
+                if !matches!(job_state.as_str(), "preparing" | "refreshing") {
+                    return Err(if job_state == "cancelled" {
+                        "cancelled".to_string()
+                    } else {
+                        format!("analysis job cannot publish from state {job_state}")
+                    });
+                }
+                let current_head = connection
+                    .query_row(
+                        "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
+                        [layer_id],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .map(Some)
+                    .or_else(|error| match error {
+                        rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                        other => Err(other.to_string()),
+                    })?;
+                if current_head.as_deref() != Some(expected) {
+                    return Err("source layer changed during analysis publication".to_string());
+                }
+                connection
+                    .execute(
+                        "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at)
+                         VALUES(?1, ?2, ?3, ?4, 'ready', NULL, NULL, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        rusqlite::params![
+                            generation_id,
+                            definition_id,
+                            expected,
+                            result_manifest.engine_version,
+                            manifest_json,
+                            coverage_cells as i64,
+                            min_value,
+                            max_value,
+                            head.bounds_3857,
+                            now_iso(),
+                        ],
+                    )
+                    .map_err(|e| e.to_string())?;
+                catalogue::publish_generation_chunks(&connection, &generation_id)?;
+                connection
+                    .execute(
+                        "INSERT INTO lidar_analysis_heads(definition_id, generation_id) VALUES(?1, ?2)
+                         ON CONFLICT(definition_id) DO UPDATE SET generation_id = excluded.generation_id",
+                        rusqlite::params![definition_id, generation_id],
+                    )
+                    .map_err(|e| e.to_string())?;
+                connection
+                    .execute(
+                        "UPDATE lidar_analysis_jobs SET state = 'complete', updated_at = ?2 WHERE id = ?1",
+                        rusqlite::params![job_id, now_iso()],
+                    )
+                    .map_err(|e| e.to_string())?;
+                Ok(())
+            })();
+            match publish {
+                Ok(()) => connection
+                    .execute_batch("COMMIT")
+                    .map_err(|e| e.to_string()),
+                Err(error) => {
+                    let _ = connection.execute_batch("ROLLBACK");
+                    Err(error)
+                }
+            }
+        })();
+        if let Err(error) = published {
+            if let Ok(connection) = library.catalogue() {
+                let _ =
+                    catalogue::discard_unpublished_generation_chunks(&connection, &generation_id);
+            }
+            return Err(error);
+        }
+        Ok(AnalysisOutcome {
+            published: true,
+            stale: false,
+            message: Some(format!(
+                "sparse slope result published: {coverage_cells} cells in {} blocks",
+                chunks.len()
+            )),
+        })
+    })();
+    let _ = std::fs::remove_dir_all(&scratch);
+    outcome
 }
 
 /// Owns one analysis job's staging root.
@@ -121,16 +603,56 @@ pub fn run_slope_job(
         (definition, head, manifest)
     };
     validate_working_grid(&manifest.grid, "slope analysis")?;
-    // Slope still reads the accepted dense mosaic. A generation stored as
-    // sparse resolved chunks has none, so it is refused explicitly here until
-    // the bounded core+halo slope reader lands in B3 (`canopi-jv8a.4`) rather
-    // than being handed a path that does not exist.
+
+    // Bounded slope: when the sparse publication path is enabled, resolve the
+    // input generation once and compute one core+halo block per occupied chunk
+    // instead of handing a whole dense raster to GDAL. The path needs a
+    // reconstructible member sequence and an eligible grid.
+    let sparse_input = if super::generation::chunked_publication_enabled() {
+        let connection = library.catalogue()?;
+        let occurrences = super::import::resolved_occurrences(&connection, paths, &head)?;
+        drop(connection);
+        match occurrences {
+            Some(_) => Some(sparse_input_raster(library, &head)?),
+            None => None,
+        }
+    } else {
+        None
+    };
+    if let Some(raster) = sparse_input {
+        let layer_units: String = {
+            let connection = library.catalogue()?;
+            connection
+                .query_row(
+                    "SELECT units FROM lidar_source_layers WHERE id = ?1",
+                    [&definition.layer_id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?
+        };
+        slope_eligibility(engine, cancel, &raster, &layer_units)?;
+        return publish_sparse_slope(
+            library,
+            job_id,
+            definition_id,
+            &definition.layer_id,
+            parameters,
+            &head,
+            &manifest,
+            &expected,
+            cancel,
+        );
+    }
+
+    // Dense fallback: a generation whose member history cannot be replayed
+    // still has its accepted mosaic, and the accepted whole-raster slope stays
+    // the route for it.
     let (Some(source_mosaic), Some(source_coverage)) = (
         head.mosaic_path.as_deref(),
         head.coverage_mask_path.as_deref(),
     ) else {
         return Err(
-            "slope analysis needs the dense source mosaic; sparse-generation slope is not implemented yet"
+            "slope analysis needs either reconstructible member history or a dense source mosaic"
                 .to_string(),
         );
     };
@@ -205,8 +727,9 @@ pub fn run_slope_job(
         parameters: parameters.clone(),
         engine_version: engine_version.clone(),
         grid: manifest.grid.clone(),
-        nodata: manifest.nodata,
+        nodata: Some(manifest.nodata),
         created_at: now_iso(),
+        format: super::import::GenerationStorageFormat::LegacyDenseV1,
     };
     let manifest_json = serde_json::to_string(&result_manifest).map_err(|e| e.to_string())?;
     std::fs::write(staging_dir.join("manifest.json"), &manifest_json)
@@ -1059,6 +1582,371 @@ mod tests {
             "a published generation directory is never pruned"
         );
         drop(reopened);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    // -----------------------------------------------------------------------
+    // B3: bounded slope through the resolver
+    // -----------------------------------------------------------------------
+
+    /// A plane source whose value equals the distance east of `origin_x`, with
+    /// a NoData column range so seams and holes can be placed deliberately.
+    #[allow(clippy::too_many_arguments)]
+    fn plane_member(
+        root: &Path,
+        name: &str,
+        origin_x: f64,
+        width: u32,
+        height: u32,
+        hole_columns: &[u32],
+    ) -> PathBuf {
+        let engine = super::super::engine::GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let values: Vec<f32> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x, y)))
+            .map(|(x, _)| {
+                if hole_columns.contains(&x) {
+                    -9999.0
+                } else {
+                    (origin_x + f64::from(x)) as f32
+                }
+            })
+            .collect();
+        let raw = root.join(format!("{name}.raw"));
+        super::super::import::write_f32_raw(&raw, &values).expect("plane raw");
+        let source = root.join(format!("{name}.tif"));
+        super::super::import::raw_to_tif(
+            &engine,
+            &cancel,
+            &raw,
+            &source,
+            &RasterGrid {
+                width,
+                height,
+                geotransform: [origin_x, 1.0, 0.0, height as f64, 0.0, -1.0],
+            },
+            "EPSG:3857",
+            -9999.0,
+        )
+        .expect("plane converts");
+        let _ = std::fs::remove_file(&raw);
+        let _ = std::fs::remove_file(raw.with_extension("hdr"));
+        source
+    }
+
+    /// Import sources through the real caller path and publish them dense.
+    fn sparse_layer_without_gate(library: &LidarLibrary, sources: &[PathBuf]) -> String {
+        import_layer(library, sources, "dense slope")
+    }
+
+    /// Import sources through the real caller path and publish them sparse.
+    fn sparse_layer(library: &LidarLibrary, sources: &[PathBuf]) -> String {
+        import_layer(library, sources, "bounded slope")
+    }
+
+    /// Import one layer through the real staging, review and apply callers,
+    /// publishing in whichever format the gate currently selects.
+    fn import_layer(library: &LidarLibrary, sources: &[PathBuf], name: &str) -> String {
+        let cancel = AtomicBool::new(false);
+        let layer_id = library
+            .create_layer(
+                name,
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .expect("layer created");
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let output =
+            super::super::import::stage_import(library, &job_id, &layer_id, sources, &cancel)
+                .expect("staging");
+        assert!(output.review.compatible, "{:?}", output.review.issues);
+        library.finish_staging(
+            &job_id,
+            Ok(super::super::import::StagingOutput {
+                review: output.review.clone(),
+            }),
+        );
+        let staging: super::super::import::StagedImport = serde_json::from_str(
+            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
+                .expect("staging json"),
+        )
+        .expect("staging parse");
+        library.prepare_apply(&job_id).expect("review accepted");
+        let applied = super::super::import::apply_import(library, &staging, true, false, &cancel)
+            .expect("apply publishes");
+        assert!(applied.changed);
+        layer_id
+    }
+
+    /// Read a window of an analysis head's sparse result and quality chunks.
+    fn sparse_result_window(
+        library: &LidarLibrary,
+        definition_id: &str,
+        window: generation::LatticeWindow,
+    ) -> (Vec<f32>, Vec<u8>, Vec<u8>) {
+        let connection = library.catalogue().expect("catalogue");
+        let (generation_id, manifest_json): (String, String) = connection
+            .query_row(
+                "SELECT g.id, g.manifest_json FROM lidar_analysis_heads h
+                 JOIN lidar_analysis_generations g ON g.id = h.generation_id
+                 WHERE h.definition_id = ?1",
+                [definition_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("analysis head");
+        let manifest: ResultManifest = serde_json::from_str(&manifest_json).expect("manifest");
+        assert_eq!(
+            manifest.format,
+            super::super::import::GenerationStorageFormat::CogChunksV1
+        );
+        let paths = &library.inner.paths;
+        let result_chunks = generation::persisted_chunks(
+            &connection,
+            paths,
+            &generation_id,
+            generation::RESULT_ROLE,
+        )
+        .expect("result chunks");
+        let quality_chunks = generation::persisted_chunks(
+            &connection,
+            paths,
+            &generation_id,
+            generation::QUALITY_ROLE,
+        )
+        .expect("quality chunks");
+        let cancel = AtomicBool::new(false);
+        let values =
+            generation::read_persisted_window(&result_chunks, &manifest.grid, window, &cancel)
+                .expect("result window");
+        let quality = generation::read_quality_chunks_window(
+            &quality_chunks,
+            &manifest.grid,
+            window,
+            &cancel,
+        )
+        .expect("quality window");
+        let quality = quality
+            .samples
+            .iter()
+            .map(|value| u8::from(*value == 1.0))
+            .collect();
+        (values.samples, values.valid, quality)
+    }
+
+    #[test]
+    fn slope_eligibility_refuses_non_metre_elevations() {
+        let engine = super::super::engine::GdalEngine::new();
+        let error = slope_eligibility(
+            &engine,
+            &AtomicBool::new(false),
+            Path::new("/nonexistent.tif"),
+            "ft",
+        )
+        .expect_err("non-metre elevations are not slope eligible");
+        assert!(error.contains("metre elevations"), "{error}");
+    }
+
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn slope_eligibility_accepts_a_projected_metre_grid() {
+        let root = scratch_root("eligibility");
+        let source = plane_member(&root, "eligible", 0.0, 8, 6, &[]);
+        let engine = super::super::engine::GdalEngine::new();
+        slope_eligibility(&engine, &AtomicBool::new(false), &source, "m")
+            .expect("a projected metre plane is eligible");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The bounded slope must reproduce the accepted whole-raster GDAL result
+    /// on the cells whose 3×3 input neighborhood is complete, in both units.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn sparse_slope_matches_the_dense_oracle_in_both_units() {
+        let root = scratch_root("sparse-equivalence");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let left = plane_member(&root, "left", 0.0, 24, 18, &[22, 23]);
+        // The hole spans the member seam: local columns 22..23 of the left
+        // member and local column 0 of the right one share union column 24.
+        let right = plane_member(&root, "right", 24.0, 24, 18, &[0]);
+
+        // The same data through both storage formats: a dense layer for the
+        // accepted whole-raster oracle, and a sparse layer for the bounded
+        // path. Both lattices share an origin, so cells are comparable.
+        let dense_layer = sparse_layer_without_gate(&library, &[left.clone(), right.clone()]);
+        let layer_id = {
+            let _guard = super::super::generation::chunked_publication::enable();
+            sparse_layer(&library, &[left, right])
+        };
+
+        // Sparse result for the bounded path.
+        let sparse = {
+            let _guard = super::super::generation::chunked_publication::enable();
+            let (_job, definition) =
+                run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Degrees);
+            definition
+        };
+        // Dense result for the accepted path, on its own dense generation.
+        let dense = run_first_slope_job(&library, &dense_layer, LidarSlopeUnit::Degrees).1;
+        let dense_publication = published_slope(&library, &dense);
+        assert!(
+            dense_publication.result_path.exists(),
+            "the dense oracle is a real raster"
+        );
+
+        // Both results must cover the same cells with the same values where the
+        // neighborhood is complete: a plane rising 1 m/m is 45 degrees.
+        let window = generation::LatticeWindow {
+            x: 0,
+            y: 0,
+            width: 48,
+            height: 18,
+        };
+        let (values, valid, quality) = sparse_result_window(&library, &sparse, window);
+        let dense_grid = {
+            let connection = library.catalogue().expect("catalogue");
+            read_generation_manifest(
+                &connection
+                    .query_row(
+                        "SELECT g.manifest_json FROM lidar_layer_heads h
+                         JOIN lidar_layer_generations g ON g.id = h.generation_id
+                         WHERE h.layer_id = ?1",
+                        [&dense_layer],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .expect("head manifest"),
+            )
+            .expect("manifest")
+            .grid
+        };
+        let dense_raw = super::super::import::raw_f32_bytes(
+            &library.inner.engine,
+            &dense_publication.result_path,
+            dense_grid.width,
+            dense_grid.height,
+            &AtomicBool::new(false),
+        )
+        .expect("dense result bytes");
+
+        let mut covered = 0usize;
+        for row in 0..18usize {
+            for column in 0..48usize {
+                let index = row * 48 + column;
+                // GDAL's Horn slope needs the full 3×3 input neighborhood, so
+                // the generation's own outer boundary is incomplete as well,
+                // and the hole columns 22..24 remove 21..25.
+                let inside_boundary = (1..=16).contains(&row) && (1..=46).contains(&column);
+                let expected_quality = inside_boundary && !(21..=25).contains(&column);
+                assert_eq!(
+                    quality[index],
+                    u8::from(expected_quality),
+                    "quality at {column},{row}"
+                );
+                assert_eq!(
+                    valid[index],
+                    u8::from(expected_quality),
+                    "result validity at {column},{row}"
+                );
+                if quality[index] == 0 {
+                    continue;
+                }
+                covered += 1;
+                assert!(
+                    (values[index] - 45.0).abs() < 0.001,
+                    "sparse slope at {column},{row} is {}",
+                    values[index]
+                );
+                let dense_value = super::super::import::f32_sample(&dense_raw, row * 48 + column);
+                assert!(
+                    (dense_value - values[index]).abs() < 1e-4,
+                    "sparse {} and dense {} disagree at {column},{row}",
+                    values[index],
+                    dense_value
+                );
+            }
+        }
+        assert_eq!(covered, 16 * 41, "the complete-neighborhood interior only");
+
+        // Percent is the same plane reported in the other unit.
+        let percent = {
+            let _guard = super::super::generation::chunked_publication::enable();
+            run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Percent).1
+        };
+        let (percent_values, percent_valid, _) = sparse_result_window(&library, &percent, window);
+        for row in 0..18usize {
+            for column in 0..48usize {
+                let index = row * 48 + column;
+                if percent_valid[index] == 0 {
+                    continue;
+                }
+                assert!(
+                    (percent_values[index] - 100.0).abs() < 0.01,
+                    "percent slope at {column},{row} is {}",
+                    percent_values[index]
+                );
+            }
+        }
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A cancelled bounded slope publishes nothing and leaves no scratch root
+    /// or unpublished index rows behind.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn cancelled_sparse_slope_publishes_nothing() {
+        let root = scratch_root("sparse-cancel");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let source = plane_member(&root, "cancel", 0.0, 16, 12, &[]);
+        let layer_id = {
+            let _guard = super::super::generation::chunked_publication::enable();
+            sparse_layer(&library, &[source])
+        };
+        let (job_id, definition_id, encoded) = queued_slope_job(&library, &layer_id);
+        let (parameters, source_generation) = encoded.split_once('|').expect("encoded pair");
+        let parameters = parse_parameters(parameters).expect("parameters parse");
+        let error = {
+            let _guard = super::super::generation::chunked_publication::enable();
+            run_slope_job(
+                &library,
+                &job_id,
+                &definition_id,
+                &parameters,
+                source_generation,
+                &AtomicBool::new(true),
+            )
+            .expect_err("a cancelled slope job must not publish")
+        };
+        assert_eq!(error, "cancelled");
+        let connection = library.catalogue().expect("catalogue");
+        let heads: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_analysis_heads WHERE definition_id = ?1",
+                [&definition_id],
+                |row| row.get(0),
+            )
+            .expect("head count");
+        assert_eq!(heads, 0, "a cancelled job publishes no analysis head");
+        let unpublished: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_generation_chunks WHERE state != 'published'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("chunk count");
+        assert_eq!(unpublished, 0, "no unpublished chunk rows survive");
+        drop(connection);
+        let scratch = library.inner.paths.prepared_dir();
+        let leftovers: Vec<String> = std::fs::read_dir(&scratch)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("scratch-slope-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "slope scratch left behind: {leftovers:?}"
+        );
+        drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }
 }
