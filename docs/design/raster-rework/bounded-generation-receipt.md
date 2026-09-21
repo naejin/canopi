@@ -1,6 +1,6 @@
 # Bounded raster generations — delivery receipt
 
-Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. The five gaps the [independent review](bounded-generation-review.md) found at `1fcab504` are answered by the BG1–BG5 correction, and the three gaps it found at `9ad85c18` by the BG6–BG8 completion recorded below. Independently reviewed: no — the completion itself is awaiting the main agent's disposition. Integrated or released: no.
+Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. The five gaps the [independent review](bounded-generation-review.md) found at `1fcab504` are answered by the BG1–BG5 correction, the three it found at `9ad85c18` by the BG6–BG8 completion, and the four it found at `eb64a853` by the BG6-A/BG7-A/B/C completion recorded below. Independently reviewed: no — this completion awaits the main agent's disposition. Integrated or released: no.
 Tracking: `canopi-jv8a.4` (parent `canopi-jv8a`, epic `canopi-j571`); `canopi-jv8a.3` is linked work inside B3.
 Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
@@ -54,7 +54,10 @@ caller-level tests, not an inert module.
 | Forwarded sparse-review and publication completion assignment | `aa7a1a4a` |
 | **BG6** — occupied-region review traversal (schema v13 region order index) | the commit that carries this receipt |
 | **BG7** — job-owned source COGs, promotion journal, recovery and publication-time references | the commit that carries this receipt |
-| **BG8** — a combined-memory gate that refuses incomplete evidence | the commit that carries this receipt |
+| **BG8** — a combined-memory gate that refuses incomplete evidence | `eb64a853` |
+| Forwarded pagination/lifecycle completion assignment | `622b11d5` |
+| **BG6-A** — globally ordered transformed coverage (four translated streams per source) | the commit that carries this receipt |
+| **BG7-A/B/C** — one owner through promotion, commit and cleanup | the commit that carries this receipt |
 
 ## Correction response (BG1–BG5)
 
@@ -86,8 +89,13 @@ samples, and each stays far inside the 1 GiB incremental gate:
 
 | Run | Identity | Baseline | Sampled peak | Incremental | Complete / incomplete ticks |
 | --- | --- | --- | --- | --- | --- |
-| Sparse MNT lifecycle | `LHD_FXX_0445_6806_MNT_O_0M50_LAMB93_IGN69` (`CANOPI_LIDAR_E2E_FIXTURE`) | 29 MiB | 104 MiB | **74 MiB** | 443 / 35 |
-| 12-tile MNH batch | `~/Downloads/la magnerie` (12 `_MNH_` tiles, 48,000,000 covered cells) | 29 MiB | 112 MiB | **83 MiB** | 2098 / 100 |
+| Sparse MNT lifecycle | `LHD_FXX_0445_6806_MNT_O_0M50_LAMB93_IGN69` (`CANOPI_LIDAR_E2E_FIXTURE`) | 26 MiB | 103 MiB | **77 MiB** | 437 / 36 |
+| 12-tile MNH batch | `~/Downloads/la magnerie` (12 `_MNH_` tiles, 48,000,000 covered cells) | 25 MiB | 112 MiB | **86 MiB** | 2314 / 91 |
+
+Both runs report the same authored coverage as before (`uncovered=4,000,000` for the
+MNT lifecycle and `uncovered=48,000,000` with `overlap=0` for the MNH batch), so
+the corrected traversal neither lost nor duplicated incoming cells in the
+representative workloads.
 
 Both figures are sampled lower bounds: resident-set summation double-counts
 shared pages and sampling can miss peaks shorter than 50 ms. Incomplete ticks are
@@ -116,6 +124,35 @@ reported and excluded from the peak; they are never read as zero. The earlier
   replayed ordinals `[0, 1, 0]` and failed with "member ordinal 0 is out of
   order after 1". Occurrents now continue after the accepted history, and the
   three-import caller test covers it.
+
+## Completion response (BG6-A, BG7-A/B/C)
+
+The independent review at `eb64a853` found four remaining gaps; the forwarded
+pagination/lifecycle assignment settled them.
+
+| Item | State | Decisive evidence |
+| --- | --- | --- |
+| BG6-A — transformed page ordering | **Delivered** | A source's occupied index is no longer sorted and truncated per page. The source-to-lattice cell offset is decomposed by Euclidean division (`offset = q * 1024 + r`, `0 <= r < 1024`) and the same keyset index is read as up to four constant-translated streams — one per quadrant, `q + {0}` when the remainder is zero and `q + {0, 1}` otherwise per axis. A constant translation preserves the index order, so every stream is monotone, the merge deduplicates globally, and an empty filtered page is never treated as EOF. Each sub-stream owns one bounded 256-record page, so a source costs at most four live pages; the merge advances exactly the sub-streams holding the smallest coordinate. The counterexample is proven through the real iterator: 257 regions in one row at offset `(0,1)` yield all 514 expanded coordinates in order exactly once, including `(0,256)`; offset zero is the control; a negative two-axis offset yields the exact 516-coordinate set; cross-source duplicates are visited once. Through the real caller, a 263,168×1 authored source placed one cell below the layer anchor (its last 1024 cells declared NoData) reports 262,144 incoming cells, reads three or more region pages and previews both images — a dropped final page would report 261,120 |
+| BG7-A — ownership before the first side effect | **Delivered** | `PromotionGuard::begin` constructs the rollback owner before anything is journalled or linked and performs the promotion itself, recording each destination as it lands, so an error in a later source, a validation failure or a cancellation still reaches rollback. A reused destination is verified against the declared digest and size with a bounded hash before it is referenced, and its readable layout is no longer treated as identity; a mismatch is refused. Cleanup removes only inventoried, newly owned promotions, and the committed-reference check now covers both source payloads (`lidar_interpretation_cogs`) and published generation/result chunks (`lidar_generation_chunks`), failing closed when ownership cannot be established. A job with two new sources and an injected failure after the first promotion leaves neither asset and no reference, keeps the accepted asset and the job-local COGs, and publishes both on retry |
+| BG7-B — cleanup failure preserves retry evidence | **Delivered** | One decision now governs both halves of cleanup: `settle_job_root` reconciles a job's journal and only then removes its root, and every caller uses it. Startup reconciles all journals before removing any settled root; an unresolved journal fails `LidarLibrary::open` with a named recoverable error ("LiDAR library recovery is incomplete … can be retried by reopening") and leaves the unresolved root, its journal and intact AwaitReview payloads in place. Removing the fault makes the next open complete cleanup, and a second open is clean. Journal publication propagates file-sync errors and syncs the directory where the platform supports it, with documented unsupported-platform behaviour rather than silently claiming durable intent. A failed staging job keeps its root when its journal cannot be settled instead of deleting the evidence |
+| BG7-C — committed publication is irreversible success | **Delivered** | The head transaction is the linearization point: `PromotionGuard::commit` marks the owner committed before any fallible cleanup and returns the cleanup failure as a diagnostic instead of an error, on both the sparse and the preserved dense Apply exit. A publication whose journal cleanup fails therefore returns a successful `ApplyOutcome` carrying "published; promotion evidence retained for recovery", keeps the retained journal, and settles through the real `finish_apply` as `complete` with the dependent-refresh path. Reopening reconciles the journal without publishing a second generation, and the published values still read exactly. Before-commit failures keep the old head and still roll back |
+
+### Precisely what this completion changed
+
+- **Ordering proof instead of a discard rule.** The previous attempt sorted each
+  expanded page and dropped coordinates at or below the prior page maximum,
+  which lost valid coordinates whenever a source block spanned two lattice
+  blocks. Streams now carry one constant translation each, so ordering is
+  structural; no page-sized buffer, no discard rule and no "one extra page"
+  heuristic.
+- **Bounded cost.** At most four translated keyset pages per admitted source are
+  live at once, all reading the same schema-v13 index; reads are still clipped to
+  the source and head extents, and coarse occupied-block overcoverage can only
+  produce an empty read, never omit coverage or walk the joined envelope.
+- **One owner, one decision.** Promotion inventory, journal reconciliation and
+  root removal are the same lifecycle: an unresolved journal is never deleted,
+  a committed publication is never reported as failed, and an unrecoverable
+  library open is a named recoverable error rather than silent loss of evidence.
 
 ### Interim admission, precisely
 

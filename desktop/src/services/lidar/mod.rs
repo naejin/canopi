@@ -307,18 +307,30 @@ impl LidarLibrary {
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| e.to_string())?
         };
+        // Recovery is a precondition for opening the library: an unresolved
+        // journal leaves the only record of what an interrupted job promoted, so
+        // opening fails with a named recoverable error and the unresolved root
+        // stays intact. Removing the fault and reopening completes cleanup; no
+        // retry loop and no background recovery service are involved.
         match import::reconcile_promotion_journals(self, &journal_jobs) {
             Ok(removed) if removed > 0 => {
                 tracing::info!(removed, "removed uncommitted promoted source assets");
             }
             Ok(_) => {}
             Err(error) => {
-                // Retained journals stay on disk so the next start can retry.
-                tracing::warn!(error = %error, "promotion journal recovery is incomplete");
+                return Err(format!(
+                    "LiDAR library recovery is incomplete; unresolved promotion evidence was retained and can be retried by reopening: {error}"
+                ));
             }
         }
         for (job_id, _state) in settled {
-            let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(&job_id));
+            // One cleanup decision per root: a journal that cannot be settled
+            // keeps its directory and its evidence.
+            if let Err(error) = import::settle_job_root(self, &job_id) {
+                return Err(format!(
+                    "LiDAR library recovery is incomplete; job {job_id} was retained for retry: {error}"
+                ));
+            }
         }
         // Display cache writes are owned and atomic; a session that died
         // mid-write leaves only temp files, which are never readable entries.
@@ -1039,11 +1051,17 @@ impl LidarLibrary {
                              progress_percent = NULL, updated_at = ?4 WHERE id = ?1",
                         rusqlite::params![job_id, state, message, now_iso()],
                     );
-                    // A settled job owns no payload: its job-local COGs and
-                    // scratch were never published, so they are removed here
-                    // rather than left for the next startup.
+                    // A settled job owns no payload, but its root is removed
+                    // only through the same reconciliation decision: a journal
+                    // that cannot be settled keeps its evidence for retry.
                     drop(connection);
-                    let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(job_id));
+                    if let Err(cleanup) = import::settle_job_root(self, job_id) {
+                        tracing::warn!(
+                            job_id,
+                            error = %cleanup,
+                            "failed staging kept its root for recovery"
+                        );
+                    }
                 }
             }
         }
@@ -1138,7 +1156,12 @@ impl LidarLibrary {
         Ok(())
     }
 
-    fn finish_apply(&self, job_id: &str, outcome: Result<import::ApplyOutcome, String>) {
+    /// Settle one apply attempt: mark the job from the publication result and
+    /// run the dependent-refresh path for a committed layer.
+    ///
+    /// The spawned apply task and the caller-level tests both drive this, so a
+    /// committed publication cannot be reported as failed here.
+    pub(crate) fn finish_apply(&self, job_id: &str, outcome: Result<import::ApplyOutcome, String>) {
         let mut published_layer: Option<String> = None;
         let mut refresh_stale_review = false;
         let connection = self.catalogue();

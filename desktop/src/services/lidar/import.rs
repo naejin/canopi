@@ -1652,20 +1652,21 @@ enum BlockStream {
         cursor: Option<(i64, i64)>,
         done: bool,
     },
-    /// One source's occupied regions, paged by keyset and translated from the
-    /// source's own 1024-block grid onto the layer lattice.
+    /// One source's occupied regions, read once and expanded as up to four
+    /// monotone translated streams.
+    ///
+    /// A source block covers 1024 source cells; when the source origin is not
+    /// lattice-aligned its lattice footprint starts mid-block, so the same
+    /// ordered index is walked under a constant translation per quadrant. A
+    /// constant translation preserves the index order, so every translated
+    /// stream is monotone and the merge needs no page-sized buffer and no
+    /// discard rule.
     Regions {
         interpretation_id: String,
-        offset_x: i64,
-        offset_y: i64,
-        page: Vec<(i64, i64)>,
-        index: usize,
-        cursor: Option<(i64, i64)>,
-        /// Last lattice block the previous page emitted: the merge needs one
-        /// non-decreasing stream per source, and a source block that straddles
-        /// lattice blocks would otherwise repeat an earlier row.
-        emitted: Option<(i64, i64)>,
-        done: bool,
+        streams: Vec<RegionStream>,
+        /// The coordinate this stream currently offers, cached so the merge can
+        /// advance exactly the sub-streams that produced it.
+        current: Option<(i64, i64)>,
     },
     /// Every block of one object's own stored extent, generated lazily.
     Extent {
@@ -1690,16 +1691,29 @@ impl BlockStream {
         }
     }
 
+    /// Up to four constant-translated streams over one source's region index.
+    ///
+    /// The source-to-lattice cell offset is decomposed by Euclidean division:
+    /// `offset = q * 1024 + r` with `0 <= r < 1024`. A source block then maps to
+    /// lattice blocks `q + {0}` when `r == 0`, otherwise `q + {0, 1}` on that
+    /// axis, for both axes independently.
     fn regions(interpretation_id: String, offset_x: i64, offset_y: i64) -> Self {
+        let qx = offset_x.div_euclid(generation::CHUNK_SIDE);
+        let qy = offset_y.div_euclid(generation::CHUNK_SIDE);
+        let rx = offset_x.rem_euclid(generation::CHUNK_SIDE);
+        let ry = offset_y.rem_euclid(generation::CHUNK_SIDE);
+        let dxs: &[i64] = if rx == 0 { &[0] } else { &[0, 1] };
+        let dys: &[i64] = if ry == 0 { &[0] } else { &[0, 1] };
+        let mut streams = Vec::with_capacity(dxs.len() * dys.len());
+        for dy in dys {
+            for dx in dxs {
+                streams.push(RegionStream::new(qx + dx, qy + dy));
+            }
+        }
         Self::Regions {
             interpretation_id,
-            offset_x,
-            offset_y,
-            page: Vec::new(),
-            index: 0,
-            cursor: None,
-            emitted: None,
-            done: false,
+            streams,
+            current: None,
         }
     }
 
@@ -1773,86 +1787,136 @@ impl BlockStream {
                 }
                 Self::Regions {
                     interpretation_id,
-                    offset_x,
-                    offset_y,
-                    page,
-                    index,
-                    cursor,
-                    emitted,
-                    done,
+                    streams,
+                    current,
                 } => {
-                    if *index < page.len() {
-                        return Ok(Some(page[*index]));
+                    if let Some(coord) = *current {
+                        return Ok(Some(coord));
                     }
-                    if *done {
-                        return Ok(None);
-                    }
-                    check_cancel(cancel)?;
-                    let rows = {
-                        let connection = library.catalogue()?;
-                        catalogue::interpretation_region_keyset_page(
-                            &connection,
-                            interpretation_id,
-                            *cursor,
-                            REVIEW_PAGE_MAX,
-                        )?
-                    };
-                    #[cfg(test)]
-                    review_probe::note_page();
-                    *done = rows.len() < REVIEW_PAGE_MAX;
-                    *cursor = rows.last().map(|row| (row.1, row.0));
-                    let mut coords: Vec<(i64, i64)> = Vec::with_capacity(rows.len() * 4);
-                    for (block_x, block_y, _, _, _, _) in &rows {
-                        let first_x = offset_x
-                            .checked_add(block_x.checked_mul(generation::CHUNK_SIDE).ok_or_else(
-                                || "occupied region coordinate overflows".to_string(),
-                            )?)
-                            .ok_or_else(|| "occupied region coordinate overflows".to_string())?;
-                        let first_y = offset_y
-                            .checked_add(block_y.checked_mul(generation::CHUNK_SIDE).ok_or_else(
-                                || "occupied region coordinate overflows".to_string(),
-                            )?)
-                            .ok_or_else(|| "occupied region coordinate overflows".to_string())?;
-                        let last_x = first_x + generation::CHUNK_SIDE - 1;
-                        let last_y = first_y + generation::CHUNK_SIDE - 1;
-                        // A source block may straddle up to four lattice blocks
-                        // because the source origin is not lattice-aligned.
-                        for y in first_y.div_euclid(generation::CHUNK_SIDE)
-                            ..=last_y.div_euclid(generation::CHUNK_SIDE)
+                    // Four constant translations of one ordered index: the
+                    // merge offers their minimum and, on advance, steps every
+                    // sub-stream that offered it. Each sub-stream refills at
+                    // most one bounded page, so a source costs at most four
+                    // live pages.
+                    let mut best: Option<(i64, i64)> = None;
+                    for stream in streams.iter_mut() {
+                        check_cancel(cancel)?;
+                        if let Some(coord) = stream.peek(library, interpretation_id)?
+                            && best.is_none_or(|current| coord < current)
                         {
-                            for x in first_x.div_euclid(generation::CHUNK_SIDE)
-                                ..=last_x.div_euclid(generation::CHUNK_SIDE)
-                            {
-                                coords.push((y, x));
-                            }
+                            best = Some(coord);
                         }
                     }
-                    coords.sort_unstable();
-                    coords.dedup();
-                    // One non-decreasing stream per source: anything the previous
-                    // page already emitted is dropped, and the rest is in lattice
-                    // order.
-                    if let Some(previous) = *emitted {
-                        coords.retain(|coord| *coord > previous);
-                    }
-                    *emitted = coords.last().copied().or(*emitted);
-                    *page = coords;
-                    *index = 0;
-                    if page.is_empty() {
-                        return Ok(None);
-                    }
-                    continue;
+                    *current = best;
+                    return Ok(best);
                 }
             }
         }
     }
 
-    fn advance(&mut self) {
+    /// Step past the coordinate this stream last offered.
+    ///
+    /// The merge only advances a stream that currently holds the smallest
+    /// coordinate, so a region stream steps exactly the sub-streams that
+    /// produced it and keeps its offered coordinate cached for the next call.
+    fn advance(&mut self, library: &LidarLibrary) -> Result<(), String> {
         match self {
             Self::Empty => {}
             Self::Extent { next, .. } => *next += 1,
-            Self::Chunks { index, .. } | Self::Regions { index, .. } => *index += 1,
+            Self::Chunks { index, .. } => *index += 1,
+            Self::Regions {
+                interpretation_id,
+                streams,
+                current,
+            } => {
+                let Some(coord) = current.take() else {
+                    return Ok(());
+                };
+                for stream in streams.iter_mut() {
+                    if stream.peek(library, interpretation_id)? == Some(coord) {
+                        stream.advance();
+                    }
+                }
+            }
         }
+        Ok(())
+    }
+}
+
+/// One constant-translated view of a source's occupied-region index.
+struct RegionStream {
+    /// Lattice-block translation for this quadrant.
+    dx: i64,
+    dy: i64,
+    page: Vec<(i64, i64)>,
+    index: usize,
+    /// Keyset cursor in the source's own block coordinates.
+    cursor: Option<(i64, i64)>,
+    exhausted: bool,
+}
+
+impl RegionStream {
+    fn new(dx: i64, dy: i64) -> Self {
+        Self {
+            dx,
+            dy,
+            page: Vec::new(),
+            index: 0,
+            cursor: None,
+            exhausted: false,
+        }
+    }
+
+    /// The next lattice block this stream will emit, refilling one bounded page
+    /// when the current one is spent.
+    fn peek(
+        &mut self,
+        library: &LidarLibrary,
+        interpretation_id: &str,
+    ) -> Result<Option<(i64, i64)>, String> {
+        loop {
+            if self.index < self.page.len() {
+                return Ok(Some(self.page[self.index]));
+            }
+            if self.exhausted {
+                return Ok(None);
+            }
+            let rows = {
+                let connection = library.catalogue()?;
+                catalogue::interpretation_region_keyset_page(
+                    &connection,
+                    interpretation_id,
+                    self.cursor,
+                    REVIEW_PAGE_MAX,
+                )?
+            };
+            #[cfg(test)]
+            review_probe::note_page();
+            self.exhausted = rows.len() < REVIEW_PAGE_MAX;
+            self.cursor = rows.last().map(|row| (row.1, row.0));
+            self.page.clear();
+            self.page.reserve(rows.len());
+            for (block_x, block_y, _, _, _, _) in &rows {
+                // Checked signed arithmetic: a source or journal coordinate that
+                // cannot be translated is an error, never a wrapped block.
+                let y = block_y
+                    .checked_add(self.dy)
+                    .ok_or_else(|| "occupied region coordinate overflows".to_string())?;
+                let x = block_x
+                    .checked_add(self.dx)
+                    .ok_or_else(|| "occupied region coordinate overflows".to_string())?;
+                self.page.push((y, x));
+            }
+            self.index = 0;
+            // An empty page is not EOF unless the index itself is exhausted.
+            if self.page.is_empty() && self.exhausted {
+                return Ok(None);
+            }
+        }
+    }
+
+    fn advance(&mut self) {
+        self.index += 1;
     }
 }
 
@@ -1909,7 +1973,7 @@ impl ReviewTraversal {
             // coordinate occupied by several members is visited once.
             for stream in &mut self.streams {
                 if stream.peek(library, cancel)? == Some(coord) {
-                    stream.advance();
+                    stream.advance(library)?;
                 }
             }
             if self.last == Some(coord) {
@@ -2462,11 +2526,46 @@ fn write_promotion_journal(
     }
     std::fs::rename(&staging, &path)
         .map_err(|e| format!("Failed to publish promotion journal: {e}"))?;
-    // The directory entry itself must survive a crash as well.
-    if let Ok(dir) = std::fs::File::open(parent) {
-        let _ = dir.sync_all();
+    sync_journal_directory(parent)
+}
+
+/// Make the journal's directory entry durable where the platform supports it.
+///
+/// A supported platform reports a sync failure: durable intent must not be
+/// claimed after ignoring one. Directory syncing is not available on every
+/// platform (Windows cannot open a directory for this), so an unsupported
+/// platform keeps the rename plus file sync as its documented limit instead of
+/// failing an otherwise valid publication.
+fn sync_journal_directory(parent: &Path) -> Result<(), String> {
+    let attempt = std::fs::File::open(parent).and_then(|dir| dir.sync_all());
+    match attempt {
+        Ok(()) => Ok(()),
+        Err(error) if directory_sync_unsupported(&error) => {
+            tracing::debug!(
+                directory = %parent.display(),
+                error = %error,
+                "directory syncing is unavailable on this platform; journal durability rests on the rename and file sync"
+            );
+            Ok(())
+        }
+        Err(error) => Err(format!(
+            "Failed to sync the promotion journal directory {}: {error}",
+            parent.display()
+        )),
     }
-    Ok(())
+}
+
+/// Whether a directory-sync failure means "this platform cannot do it".
+fn directory_sync_unsupported(error: &std::io::Error) -> bool {
+    if cfg!(unix) {
+        return false;
+    }
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::Unsupported
+            | std::io::ErrorKind::PermissionDenied
+            | std::io::ErrorKind::InvalidInput
+    )
 }
 
 /// Promote every staged source COG this job owns into the immutable store.
@@ -2480,10 +2579,10 @@ fn promote_source_cogs(
     library: &LidarLibrary,
     staging: &StagedImport,
     cancel: &AtomicBool,
-) -> Result<Vec<PromotedSourceCog>, String> {
+    promoted: &mut Vec<PromotedSourceCog>,
+) -> Result<(), String> {
     let paths = &library.inner.paths;
     let mut journal = read_promotion_journal(paths, &staging.job_id)?;
-    let mut promoted = Vec::new();
     for source in staging.sources.iter().filter(|source| source.compatible) {
         check_cancel(cancel)?;
         let Some(cog) = source.source_cog.as_ref() else {
@@ -2528,9 +2627,20 @@ fn promote_source_cogs(
                 }
             }
         }
-        // The destination must be readable before any catalogue row references
-        // it, whether this job created it or reused it.
+        // The destination must match the declared identity before any catalogue
+        // row references it: a readable layout is not proof that a reused file
+        // is the payload this source declares.
         let grid = grid_for_source(source);
+        let (destination_digest, destination_bytes) =
+            super::raster_assets::hash_file(&destination)?;
+        if destination_digest != cog.sha256 || destination_bytes != cog.bytes {
+            return Err(format!(
+                "asset {} holds {destination_bytes} bytes of {destination_digest}, not the declared {} bytes of {}",
+                destination.display(),
+                cog.bytes,
+                cog.sha256
+            ));
+        }
         let reader = PreparedRaster::open_committed(&destination, &grid, cog.nodata)?;
         drop(reader);
         promoted.push(PromotedSourceCog {
@@ -2544,7 +2654,7 @@ fn promote_source_cogs(
         });
         promotion_probe::check(promotion_probe::FaultPoint::AfterPromotion)?;
     }
-    Ok(promoted)
+    Ok(())
 }
 
 /// Rolls back this job's uncommitted promotions unless the publication arms it.
@@ -2562,27 +2672,51 @@ struct PromotionGuard<'a> {
 }
 
 impl<'a> PromotionGuard<'a> {
-    fn new(
-        library: &'a LidarLibrary,
-        staging: &'a StagedImport,
-        promoted: Vec<PromotedSourceCog>,
-    ) -> Self {
+    /// Take ownership of this job's promotions before the first side effect.
+    ///
+    /// The guard exists before any intent is journalled or any file is linked,
+    /// so an error during a later source, a validation failure or a
+    /// cancellation still reaches rollback: a guard built from a finished
+    /// promotion list would be too late for the work already done.
+    fn begin(library: &'a LidarLibrary, staging: &'a StagedImport) -> Self {
         Self {
             library,
             staging,
-            promoted,
+            promoted: Vec::new(),
             committed: false,
         }
+    }
+
+    /// Promote every staged source COG this job owns, recording each as it lands.
+    fn promote(&mut self, cancel: &AtomicBool) -> Result<(), String> {
+        promote_source_cogs(self.library, self.staging, cancel, &mut self.promoted)
     }
 
     fn promoted(&self) -> &[PromotedSourceCog] {
         &self.promoted
     }
 
-    /// The publication committed: keep the assets and clear the journal.
-    fn commit(mut self) -> Result<(), String> {
+    /// The publication committed: keep the assets, then clear the journal.
+    ///
+    /// The commit boundary is the head transaction, so this marks the owner
+    /// committed first — unconditionally — and reports a later journal-cleanup
+    /// failure as a diagnostic. The publication is authoritative either way;
+    /// the retained journal is retry evidence, not a failed Apply.
+    fn commit(mut self) -> Option<String> {
         self.committed = true;
-        mark_promotions_committed(self.library, self.staging)
+        match mark_promotions_committed(self.library, self.staging) {
+            Ok(()) => None,
+            Err(error) => {
+                tracing::warn!(
+                    job_id = self.staging.job_id,
+                    error = %error,
+                    "publication committed; promotion evidence retained for recovery"
+                );
+                Some(format!(
+                    "published; promotion evidence retained for recovery: {error}"
+                ))
+            }
+        }
     }
 }
 
@@ -2693,6 +2827,22 @@ fn mark_promotions_committed(library: &LidarLibrary, staging: &StagedImport) -> 
                 path.display()
             )
         })?;
+    }
+    Ok(())
+}
+
+/// Settle one job's root: reconcile its promotion journal, then remove it.
+///
+/// The journal decision and the directory removal are one decision. A root whose
+/// journal cannot be settled is retained with its evidence and reported, so the
+/// next normal recovery attempt can retry instead of losing the only record of
+/// what this job promoted.
+pub fn settle_job_root(library: &LidarLibrary, job_id: &str) -> Result<(), String> {
+    reconcile_promotion_journals(library, &[job_id.to_string()])?;
+    let root = library.inner.paths.job_dir(job_id);
+    if root.exists() {
+        std::fs::remove_dir_all(&root)
+            .map_err(|e| format!("Failed to remove settled job root {}: {e}", root.display()))?;
     }
     Ok(())
 }
@@ -3135,11 +3285,8 @@ pub fn apply_import(
             // the incoming occurrences below read global assets, and the
             // references that make them authoritative are written inside the
             // publication transaction.
-            let promotions = PromotionGuard::new(
-                library,
-                staging,
-                promote_source_cogs(library, staging, cancel)?,
-            );
+            let mut promotions = PromotionGuard::begin(library, staging);
+            promotions.promote(cancel)?;
             for (index, source) in compatible.iter().enumerate() {
                 check_cancel(cancel)?;
                 {
@@ -3258,7 +3405,9 @@ pub fn apply_import(
                 discard_materialization(library, &materialization.generation_id);
                 return Err(error);
             }
-            promotions.commit()?;
+            // The head transaction is the commit point: from here the
+            // publication is authoritative even if journal cleanup fails.
+            let diagnostic = promotions.commit();
             library.record_import_progress(
                 &staging.job_id,
                 LidarImportProgressPhase::Finalizing,
@@ -3268,7 +3417,7 @@ pub fn apply_import(
                 generation_id: materialization.generation_id,
                 published_cells: materialization.published_cells,
                 changed: true,
-                message: None,
+                message: diagnostic,
             });
         }
         // The head's history is not reconstructible: keep the accepted dense
@@ -3364,11 +3513,8 @@ pub fn apply_import(
         LidarImportProgressPhase::PreparingRaster,
         42,
     );
-    let promotions = PromotionGuard::new(
-        library,
-        staging,
-        promote_source_cogs(library, staging, cancel)?,
-    );
+    let mut promotions = PromotionGuard::begin(library, staging);
+    promotions.promote(cancel)?;
     for (index, source) in compatible.iter().enumerate() {
         check_cancel(cancel)?;
         {
@@ -3612,11 +3758,14 @@ pub fn apply_import(
         }
     }
 
+    // The head transaction committed above: report the publication as success
+    // and carry any retained promotion evidence as a diagnostic.
+    let diagnostic = promotions.commit();
     Ok(ApplyOutcome {
         generation_id,
         published_cells,
         changed: true,
-        message: None,
+        message: diagnostic,
     })
 }
 
@@ -7709,8 +7858,8 @@ mod tests {
         // not the 977 envelope windows that contain no data.
         assert_eq!(far_blocks, 3, "occupied blocks only: {far_blocks}");
         assert!(
-            review_probe::pages() <= 2,
-            "one bounded region page per source: {}",
+            review_probe::pages() <= 8,
+            "at most four translated pages per admitted source: {}",
             review_probe::pages()
         );
 
@@ -8278,11 +8427,18 @@ mod tests {
             .clone()
             .expect("retained COG");
         promotion_probe::fail_at(FaultPoint::AfterCommitBeforeCleanup);
-        let error = apply_import(&library, &staging_three, true, false, &cancel)
-            .err()
-            .expect("the injected failure surfaces after the commit");
+        let committed = apply_import(&library, &staging_three, true, false, &cancel)
+            .expect("a committed publication is success even when cleanup fails");
         promotion_probe::clear();
-        assert!(error.contains("injected failure"), "{error}");
+        assert!(committed.changed);
+        assert!(
+            committed
+                .message
+                .as_deref()
+                .is_some_and(|message| message.contains("promotion evidence retained")),
+            "the diagnostic names the retained evidence: {:?}",
+            committed.message
+        );
         let third_asset = paths.asset_cog(&third_cog.sha256);
         assert_eq!(
             committed_asset(&library, &third_hash),
@@ -8667,6 +8823,270 @@ mod tests {
         assert!(!local.exists(), "a cancelled job leaves no payload behind");
         assert!(!paths.asset_cog(&cog.sha256).exists());
         assert!(journal_of(&library, &job_two).is_none());
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // -----------------------------------------------------------------------
+    // BG6-A: globally ordered transformed coverage
+    // -----------------------------------------------------------------------
+
+    /// A staged source in the shape the traversal reads, without raster files:
+    /// the iterator tests below author the occupied index directly.
+    fn traversal_source(interp_hash: &str, origin_x: f64, origin_y: f64) -> StagedSource {
+        StagedSource {
+            filename: format!("{interp_hash}.tif"),
+            sha256: format!("sha-{interp_hash}"),
+            managed_original: PathBuf::new(),
+            interp_hash: interp_hash.to_string(),
+            width: 1024,
+            height: 1024,
+            geotransform: [origin_x, 1.0, 0.0, origin_y, 0.0, -1.0],
+            crs_wkt: "EPSG:3857".to_string(),
+            nodata: Some(-9999.0),
+            value_range: [0.0, 0.0],
+            size_bytes: 0,
+            job_id: None,
+            source_cog: None,
+            valid_mask_path: PathBuf::new(),
+            raw_samples_path: PathBuf::new(),
+            compatible: true,
+            issues: Vec::new(),
+        }
+    }
+
+    /// Seed one source's occupied-region index.
+    fn seed_regions(library: &LidarLibrary, interp_hash: &str, blocks: &[(i64, i64)]) {
+        let connection = library.catalogue().unwrap();
+        let interpretation_id = format!("interp-{interp_hash}");
+        let sha = format!("sha-{interp_hash}");
+        connection
+            .execute(
+                "INSERT INTO lidar_sources(sha256, original_filename, size_bytes, probe_json, imported_at)
+                 VALUES(?1, 'authored.tif', 4, '{}', '2026-01-01T00:00:00Z')
+                 ON CONFLICT(sha256) DO NOTHING",
+                rusqlite::params![sha],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_interpretations(
+                    id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                    crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                 VALUES(?1, ?2, 1, 'ground-elevation', 'm', 1, 0,
+                    'EPSG:3857', 'unspecified', -9999, '[0,1,0,0,0,-1]', 1024, 1024, ?3)
+                 ON CONFLICT(interp_hash) DO NOTHING",
+                rusqlite::params![interpretation_id, sha, interp_hash],
+            )
+            .unwrap();
+        let rows: Vec<(i64, i64, i64, f64, f64, f64)> = blocks
+            .iter()
+            .map(|(block_x, block_y)| (*block_x, *block_y, 4, 0.0, 1.0, 2.0))
+            .collect();
+        catalogue::replace_interpretation_regions(&connection, &interpretation_id, &rows).unwrap();
+    }
+
+    /// Every coordinate one traversal emits, in order.
+    fn traversal_blocks(
+        library: &LidarLibrary,
+        lattice: &RasterGrid,
+        source: &StagedSource,
+    ) -> Vec<(i64, i64)> {
+        let head = HeadBlockSource::None;
+        let cancel = AtomicBool::new(false);
+        let mut traversal =
+            ReviewTraversal::open(&head, std::slice::from_ref(&source), lattice, library)
+                .expect("traversal opens");
+        let mut blocks = Vec::new();
+        while let Some(block) = traversal.next_block(library, &cancel).expect("next block") {
+            blocks.push(block);
+        }
+        blocks
+    }
+
+    /// The counterexample the review found: 257 regions in one row, an offset
+    /// that expands each source block into two lattice rows, and a page boundary
+    /// in the middle. Every expanded coordinate must appear exactly once, in
+    /// order — the earlier per-page sort-and-discard dropped `(0, 256)`.
+    #[test]
+    fn transformed_region_pages_are_globally_ordered() {
+        let root = std::env::temp_dir().join(new_id("canopi-transformed-pages"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let lattice = RasterGrid {
+            width: 1024,
+            height: 1024,
+            geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+        };
+
+        // Control: an aligned source keeps one coordinate per region.
+        let aligned = traversal_source("aligned", 0.0, 0.0);
+        seed_regions(
+            &library,
+            "aligned",
+            &(0..257).map(|x| (x, 0)).collect::<Vec<_>>(),
+        );
+        let blocks = traversal_blocks(&library, &lattice, &aligned);
+        assert_eq!(blocks.len(), 257, "one lattice block per aligned region");
+        assert!(blocks.windows(2).all(|pair| pair[0] < pair[1]));
+
+        // The counterexample: one cell below the lattice origin, so each source
+        // block covers two lattice rows, split across a 256-record page.
+        let offset = traversal_source("offset", 0.0, -1.0);
+        seed_regions(
+            &library,
+            "offset",
+            &(0..257).map(|x| (x, 0)).collect::<Vec<_>>(),
+        );
+        let blocks = traversal_blocks(&library, &lattice, &offset);
+        let mut expected: Vec<(i64, i64)> = (0..257).flat_map(|x| [(0, x), (1, x)]).collect();
+        expected.sort_unstable();
+        assert_eq!(
+            blocks, expected,
+            "all 514 expanded coordinates, in order, exactly once"
+        );
+        assert!(
+            blocks.contains(&(0, 256)),
+            "the coordinate the discard rule dropped is present"
+        );
+
+        // Both axes non-aligned: each region expands to four lattice blocks.
+        // Offsets are (origin_x - lattice_x, lattice_top - origin_y): negative
+        // on both axes here, so both remainders are non-zero.
+        let both = traversal_source("both", -3.0, 5.0);
+        seed_regions(
+            &library,
+            "both",
+            &(0..257).map(|x| (x, 0)).collect::<Vec<_>>(),
+        );
+        let blocks = traversal_blocks(&library, &lattice, &both);
+        let mut expected: Vec<(i64, i64)> = (0..257)
+            .flat_map(|x| {
+                let qx = (-3i64).div_euclid(1024);
+                let rx = (-3i64).rem_euclid(1024);
+                let qy = (-5i64).div_euclid(1024);
+                let ry = (-5i64).rem_euclid(1024);
+                let dxs: Vec<i64> = if rx == 0 { vec![0] } else { vec![0, 1] };
+                let dys: Vec<i64> = if ry == 0 { vec![0] } else { vec![0, 1] };
+                dys.iter()
+                    .flat_map(|dy| dxs.iter().map(move |dx| (qy + dy, x + qx + dx)))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        expected.sort_unstable();
+        expected.dedup();
+        assert_eq!(blocks, expected, "negative two-axis offset stays exact");
+
+        // Duplicate coordinates from two sources are visited once.
+        let head = HeadBlockSource::None;
+        let cancel = AtomicBool::new(false);
+        let duplicate = traversal_source("duplicate", 0.0, 0.0);
+        seed_regions(&library, "duplicate", &[(0, 0), (1, 0)]);
+        let mut traversal =
+            ReviewTraversal::open(&head, &[&aligned, &duplicate], &lattice, &library)
+                .expect("traversal opens");
+        let mut shared = Vec::new();
+        while let Some(block) = traversal.next_block(&library, &cancel).expect("next") {
+            shared.push(block);
+        }
+        assert_eq!(
+            shared.iter().filter(|block| **block == (0, 0)).count(),
+            1,
+            "a coordinate two sources occupy is visited once"
+        );
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A real source wider than one index page, placed one cell below the layer
+    /// anchor: every incoming cell must reach the review classification and the
+    /// far end must appear in the decision preview with the authored value.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn wide_transformed_source_reviews_every_cell() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-wide-review"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "wide review",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+
+        // The anchor fixes the layer lattice at world (0, 4), 4x4 cells.
+        let anchor = write_placed_fixture(&engine, &root, "anchor", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let (job_anchor, staging_anchor) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&anchor), &cancel);
+        library.prepare_apply(&job_anchor).expect("review accepted");
+        apply_import(&library, &staging_anchor, true, false, &cancel).expect("anchor publishes");
+
+        // 257 index regions in one source row, one cell below the anchor, so the
+        // source origin is not lattice-aligned on the y axis. The last 1024
+        // cells are declared NoData: their absence from the incoming count
+        // proves the final region page was read rather than dropped.
+        let width = 263_168usize;
+        let mut values = vec![7.0f32; width];
+        for value in values.iter_mut().skip(width - 1024) {
+            *value = -9999.0;
+        }
+        let wide = write_oracle_fixture(
+            &engine,
+            &root,
+            "wide",
+            0.0,
+            0.0,
+            width as u32,
+            1,
+            -9999.0,
+            &values,
+        );
+        review_probe::reset();
+        let (job, staging) = stage_review(&library, &layer_id, &[wide], &cancel);
+        assert_eq!(staging.union_grid.width, width as u32);
+        assert_eq!(staging.union_grid.height, 5);
+        let incoming = u64::try_from(width - 1024).unwrap();
+        assert_eq!(
+            staging.uncovered_cells, incoming,
+            "every authored finite cell is incoming coverage, including the far page"
+        );
+        assert_eq!(staging.overlap_cells, 0, "the anchor occupies another row");
+        assert_eq!(
+            staging.invalid_cells,
+            u64::from(staging.union_grid.width) * u64::from(staging.union_grid.height) - incoming,
+            "the envelope gap is arithmetic"
+        );
+        assert!(
+            review_probe::pages() >= 3,
+            "more than two region pages were read: {}",
+            review_probe::pages()
+        );
+
+        // The decision preview walks the same traversal and completes for this
+        // extreme aspect ratio. Its 512x1 raster is a degenerate display
+        // derivative that GDAL renders transparent, so the preview is asserted
+        // to exist rather than to carry colour.
+        let preview = library
+            .preview_import_decision(&job, true, false)
+            .expect("decision preview");
+        let before_path = preview
+            .before_preview_path
+            .as_deref()
+            .expect("an accepted head has a before preview");
+        for path in [before_path, preview.after_preview_path.as_str()] {
+            let bytes = std::fs::read(path).expect("preview png exists");
+            let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+                .expect("preview decodes")
+                .to_rgba8();
+            assert_eq!(image.height(), 1, "the preview keeps the union aspect");
+            assert_eq!(image.width(), 512);
+        }
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);

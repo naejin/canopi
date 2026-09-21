@@ -77,6 +77,48 @@ the main agent's independent disposition is still outstanding.
   the production admission limits stay retained. Test totals are verification,
   not productivity, and no cost saving is claimed from them.
 
+### Consolidated delivery outcome — BG6-A/BG7-A/B/C completion
+
+The [receipt](bounded-generation-receipt.md)'s completion response table records
+the outcome of the third correction on `feature/bounded-raster-generations`; the
+main agent's independent disposition is outstanding.
+
+- **Which earlier tests stopped short of the caller.** Three helper-level or
+  adjacent-path tests gave false confidence. The BG6 test seeded 601 *aligned*
+  index rows with no matching raster payloads, so it never exercised a source
+  block expanding across two lattice blocks and never caught the dropped
+  `(0,256)`; it is kept as a paging case, but the decisive counterexample now
+  runs through the real iterator with independently authored expectations and a
+  second case stages a real 263,168-cell source one cell below the anchor. The
+  BG7-B retention test called `reconcile_promotion_journals` directly, so it
+  proved nothing about startup, which deleted the job root immediately after;
+  `unresolved_recovery_keeps_the_root_and_fails_open` now drives
+  `LidarLibrary::open` and asserts the named recoverable error plus retained
+  evidence. The BG7-A test injected its failure at `BeforeTransaction`, after
+  promotion had already been wrapped by the guard, so it could not see a partial
+  promotion; `a_failure_during_a_later_source_still_rolls_back` injects
+  `AfterPromotion` with two sources.
+- **Which new tests close those gaps.** The counterexample and wide-source
+  tests close BG6-A; the later-source rollback test closes BG7-A; the reopen
+  test closes BG7-B; `a_cleanup_failure_after_commit_is_still_a_successful_publication`
+  closes BG7-C through Apply, `finish_apply` settlement and a real reopen, and
+  the previously contradictory post-commit expectation was rewritten to assert
+  success plus retained evidence rather than an error.
+- **Defects caught internally versus independent escapes.** Internal review
+  caught a merge that advanced the wrong sub-stream (an infinite loop the moment
+  four translations per source existed) and an off-by-convention test fixture
+  whose "negative" y offset was actually positive. The escapes are the four
+  review findings themselves, all reached by reading the outer caller rather than
+  the helper: they are the recurring shape of this batch.
+- **Courier value.** No exchange in this stretch required a design decision: the
+  forwarded documentation commit was the only input, and every behaviour was
+  settled by the assignment text.
+- **Evidence boundary.** The verified local route excludes the private fixture
+  module, which was run separately with the real MNT and 12-tile MNH identities.
+  The 400M-cell plane remains unavailable on this host; the production admission
+  limits stay retained. Test totals are not an acceptance verdict and no cost
+  saving is claimed from them.
+
 ### Design correction before implementation — standard COG persistence
 
 At `24fd1a56`, the main agent prescribed a new durable raw Float32/byte-mask block format despite accepted `a5fc7d7b` already preparing and reading controlled COGs. The user challenged why those standard files were not retained. No implemented failure established that TIFF encoding was insufficient. Classification: **main-agent design overprescription and missing necessity/reuse check**, not an implementation deviation. The bounded/sparse/history requirements were valid; the custom pixel encoding was not shown necessary. No implementation of that proposal is claimed.

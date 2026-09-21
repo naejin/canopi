@@ -1183,15 +1183,19 @@ pub type InterpretationRegionRow = (i64, i64, i64, f64, f64, f64);
 /// The review walks occupied regions as an ordered stream, so it pages with a
 /// keyset cursor: a page never re-reads or skips a row, and the index carries
 /// the order.
-/// Whether any interpretation references one asset digest.
+/// Whether any committed catalogue row references one asset digest.
 ///
-/// Promotion cleanup asks this before removing a file: a digest with a
-/// committed reference belongs to accepted history and is never deleted, even
-/// when the promoting job's journal still lists it.
+/// Promotion cleanup asks this before removing a file: a digest referenced as a
+/// source payload *or* as a published generation/result chunk belongs to
+/// accepted history and is never deleted, even when the promoting job's journal
+/// still lists it. Ownership that cannot be established fails closed.
 pub fn asset_reference_exists(connection: &Connection, sha256: &str) -> Result<bool, String> {
     connection
         .query_row(
-            "SELECT 1 FROM lidar_interpretation_cogs WHERE asset_sha256 = ?1 LIMIT 1",
+            "SELECT 1 FROM lidar_interpretation_cogs WHERE asset_sha256 = ?1
+             UNION ALL
+             SELECT 1 FROM lidar_generation_chunks WHERE asset_sha256 = ?1
+             LIMIT 1",
             [sha256],
             |_| Ok(()),
         )
