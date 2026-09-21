@@ -8,7 +8,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 
 | Design step | State |
 | --- | --- |
-| B1 — retained source COG, resolved/quality COG creation, reader ownership | **Partially delivered**: the reader can open committed assets without deleting them, and one production-grade asset writer creates, validates, digests and stores resolved NaN-NoData chunks and separate 0/1 quality chunks in the controlled profile. The catalogue v7 index, the private generation resolver and the legacy adapters are **not** delivered |
+| B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver | **Substantially delivered, not yet wired**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, and the private resolver over ordered occurrences (role replay, signed lattice coordinates, sparse occupied-chunk enumeration, bounded legacy dense reads). What is missing: legacy *TIFF-only* derivative adapters, aggregate/region paging into the catalogue, and every production caller |
 | B2 — import/review/Apply/undo migration | Not started |
 | B3 — slope core+halo and shared job ownership | Not started (`canopi-jv8a.3` remains open) |
 | B4 — bounded display transport and Desktop protocol | Not started |
@@ -22,7 +22,8 @@ Production callers are unchanged: import staging, composition, slope, display an
 | --- | --- |
 | Accepted predecessor baseline | `a5fc7d7b` on `feature/geolibre-native-raster-integration` |
 | Forwarded design + revision docs | merged in `be0d4d17` and `7f2e3bef` |
-| Reader/asset primitives and tests | the commit that carries this receipt |
+| Reader/asset primitives and tests | `1b8683db` |
+| Catalogue v7 index, resolver and their tests | the commit that carries this receipt |
 
 ## What the delivered primitives do
 
@@ -32,6 +33,12 @@ Production callers are unchanged: import staging, composition, slope, display an
 - Every new asset is admitted only after `open_committed` validates its profile, then digested with bounded 64 KiB reads and moved into a content-addressed store (`assets/<sha256>/cog.tif`). Identical content reuses the existing file. A failed admission removes the staged file.
 - `read_quality_window` reads a 0/1 quality asset through the same reader and rejects any sample that is not exactly 0.0 or 1.0, so a corrupt mask cannot read as partial coverage.
 - `paths.rs` gained the retained source-COG path (`sources/<sha>/source-cog.tif`) and the content-addressed asset paths.
+
+## Resolver and catalogue evidence
+
+- `catalogue.rs` moved to schema v7 and creates `lidar_raster_assets`, `lidar_interpretation_cogs`, `lidar_generation_chunks` (unique on generation + role + signed chunk coordinates, indexed by asset) and `lidar_interpretation_regions`. Before any upgrade of an existing file it writes a `VACUUM INTO` copy beside the catalogue, syncs it, records its path in `lidar_catalogue_meta.last_backup_path`, and the test reopens that copy as a complete v6 database. A future schema version is still refused before writes.
+- `generation.rs` (new, private) resolves one half-open lattice window (≤1026 per side) over an ordered occurrence list: it validates ordinal order up front, maps each member's own frame through `RasterGrid::compatible` plus a rounded lattice offset, reads only the intersecting member window (committed COG through the production reader, or the preserved dense raw/mask pair row-wise), and applies the accepted roles — `add` fills only invalid cells, `replace` paints valid incoming cells anywhere, `replace-overlap` paints only already-valid cells, and invalid incoming samples never erase coverage.
+- Tests reproduce the design's history example (A=5, replace B=9, reimport A with replacement → 5, undo that occurrence → 9), add-only holes never erasing prior coverage, replace-overlap creating no new coverage, members above/left of the anchor resolving negative lattice cells, occupied-chunk enumeration over a million-cell gap (2 chunks, adjacency-only variation) and chunk straddling, exact bounded legacy window reads with a short-file rejection, and preconditions (empty/oversized window, out-of-order ordinals, unaligned member grids) failing before any file is read.
 
 ## Evidence
 
@@ -49,7 +56,7 @@ Regression status of the accepted layer: the full `services::lidar` suite passes
 
 ## Limits, unavailable evidence and known gaps
 
-- **The batch is not complete.** No caller migration, no catalogue v7 index or migration/backup, no resolver, no display transport, no Desktop protocol, no job lease, no capacity verification and no large-fixture run was delivered. The design's acceptance examples for B2–B5 have not been attempted.
+- **The batch is not complete.** No caller migration, no legacy TIFF-only adapter, no region/aggregate paging into the catalogue, no display transport, no Desktop protocol, no job lease, no capacity verification and no large-fixture run was delivered. The design's acceptance examples for B2–B5 have not been attempted, and the resolver is exercised only by its own tests rather than by a production caller.
 - The delivered module is not reachable from production, so it is not exercised by any real workflow. Its compiler-visible dead-code allowance (`#![allow(dead_code)]` in `raster_assets.rs` plus item-level allowances in `paths.rs`/`prepared_raster.rs`) is temporary and documented in place; it must be removed when B2 wires the resolver. This is a scaffold with verified behaviour, not an integrated storage layer.
 - Because no production path consumes the assets, "no full-file helper reachable" and "no production dense path remains" are **not** established; the accepted dense callers (`compose_values_cancellable`, `replay_members`, `head_values_on_union`, display generation) are untouched and still authoritative.
 - Retaining resolved chunks costs additional bytes and files; no disk or memory measurement of that trade-off was made in this batch, and the design's resource budgets are unverified.
@@ -58,4 +65,4 @@ Regression status of the accepted layer: the full `services::lidar` suite passes
 
 ## Next dependency
 
-The next session needs, in order: the catalogue v7 index and migration with WAL-consistent backup (`next after v6`), the private generation resolver (ordered-member replay, resolved-chunk and legacy-dense reads, paged occupied chunks and aggregates), then B2 publication/undo through that resolver. Do not remove production limits or wire display/slope before those land. `canopi-jv8a.3` (analysis staging cleanup) is still open and is delivered with B3, not here.
+The next session needs, in order: legacy TIFF-only derivative leasing, region/aggregate paging into the v7 tables, then B2 publication/undo through the resolver (chunk creation via `write_cog_asset`, ordered occurrence rows, prior-head retention), then B3–B5. Do not remove production limits or wire display/slope before those land. `canopi-jv8a.3` (analysis staging cleanup) is still open and is delivered with B3, not here.

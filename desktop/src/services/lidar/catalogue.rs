@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 6;
+pub const CATALOGUE_VERSION: i32 = 7;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -17,8 +17,69 @@ pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     connection
         .pragma_update(None, "foreign_keys", "ON")
         .map_err(|e| format!("Failed to enable foreign keys: {e}"))?;
+    let backup = backup_before_migration(&connection, path)?;
     migrate(&connection)?;
+    if let Some(backup) = backup {
+        record_backup(&connection, &backup)?;
+    }
     Ok(connection)
+}
+
+/// Capture a SQLite-consistent copy of a live catalogue before an upgrade.
+///
+/// `VACUUM INTO` writes a complete database (WAL content included) to a new
+/// file; copying only the main database file would lose committed WAL pages.
+/// A fresh or already-current catalogue needs no copy.
+fn backup_before_migration(
+    connection: &Connection,
+    path: &std::path::Path,
+) -> Result<Option<std::path::PathBuf>, String> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    // A file that exists but has no meta table yet is a fresh catalogue, not
+    // something to preserve.
+    let version = schema_version(connection).unwrap_or(0);
+    if version == 0 || version >= CATALOGUE_VERSION {
+        return Ok(None);
+    }
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "lidar-library.sqlite".to_string());
+    let stamp = now_iso().replace(':', "-");
+    let target = path.with_file_name(format!("{file_name}.backup-v{version}-{stamp}"));
+    connection
+        .execute("VACUUM INTO ?1", [target.display().to_string()])
+        .map_err(|e| format!("Failed to back up LiDAR catalogue before migration: {e}"))?;
+    std::fs::File::open(&target)
+        .and_then(|file| file.sync_all())
+        .map_err(|e| format!("Failed to sync LiDAR catalogue backup: {e}"))?;
+    Ok(Some(target))
+}
+
+fn schema_version(connection: &Connection) -> Result<i32, String> {
+    Ok(connection
+        .query_row(
+            "SELECT value FROM lidar_catalogue_meta WHERE key = 'schema_version'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read catalogue version: {e}"))?
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0))
+}
+
+fn record_backup(connection: &Connection, backup: &std::path::Path) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT INTO lidar_catalogue_meta(key, value) VALUES('last_backup_path', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [backup.display().to_string()],
+        )
+        .map_err(|e| format!("Failed to record catalogue backup: {e}"))?;
+    Ok(())
 }
 
 fn migrate(connection: &Connection) -> Result<(), String> {
@@ -58,6 +119,7 @@ fn migrate(connection: &Connection) -> Result<(), String> {
             4 => "",
             5 => SCHEMA_V5,
             6 => "",
+            7 => SCHEMA_V7,
             _ => unreachable!("catalogue migration gap"),
         };
         transaction
@@ -167,6 +229,57 @@ ALTER TABLE lidar_generation_members_v3 RENAME TO lidar_generation_members;
 /// the same source from participating in more than one user-owned layer. Keep
 /// footprint ids stable while replacing that constraint so the R-tree remains
 /// valid throughout the transactional migration.
+/// v7: sparse standard-COG assets plus paged index references.
+///
+/// Pixel data never lives in SQLite: these tables reference immutable
+/// content-addressed COG files by digest, keep entry coordinates as signed
+/// integers (a layer lattice extends left/up), and page per-chunk aggregates
+/// so generation statistics never require visiting absent coordinates.
+const SCHEMA_V7: &str = r#"
+CREATE TABLE IF NOT EXISTS lidar_raster_assets (
+    sha256 TEXT PRIMARY KEY,
+    rel_path TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    profile TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    geotransform TEXT NOT NULL,
+    crs_wkt TEXT NOT NULL,
+    nodata REAL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lidar_interpretation_cogs (
+    interpretation_id TEXT PRIMARY KEY REFERENCES lidar_interpretations(id) ON DELETE CASCADE,
+    asset_sha256 TEXT NOT NULL REFERENCES lidar_raster_assets(sha256),
+    nodata REAL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lidar_generation_chunks (
+    generation_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    chunk_x INTEGER NOT NULL,
+    chunk_y INTEGER NOT NULL,
+    asset_sha256 TEXT NOT NULL REFERENCES lidar_raster_assets(sha256),
+    valid_cells INTEGER NOT NULL,
+    min_value REAL,
+    max_value REAL,
+    sum_value REAL,
+    PRIMARY KEY (generation_id, role, chunk_x, chunk_y)
+);
+CREATE INDEX IF NOT EXISTS lidar_generation_chunks_asset_idx
+    ON lidar_generation_chunks(asset_sha256);
+CREATE TABLE IF NOT EXISTS lidar_interpretation_regions (
+    interpretation_id TEXT NOT NULL REFERENCES lidar_interpretations(id) ON DELETE CASCADE,
+    block_x INTEGER NOT NULL,
+    block_y INTEGER NOT NULL,
+    valid_cells INTEGER NOT NULL,
+    min_value REAL,
+    max_value REAL,
+    sum_value REAL,
+    PRIMARY KEY (interpretation_id, block_x, block_y)
+);
+"#;
+
 const SCHEMA_V5: &str = r#"
 CREATE TABLE lidar_source_footprints_v5 (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1118,5 +1231,87 @@ mod tests {
         let empty = footprint_candidates(&connection, [500.0, 500.0, 501.0, 501.0]).unwrap();
         assert!(empty.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn v6_catalogue_is_backed_up_and_migrated_to_v7() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v7"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            let version: String = connection
+                .query_row(
+                    "SELECT value FROM lidar_catalogue_meta WHERE key = 'schema_version'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(version, "7");
+        }
+        // Present the same file as a v6 catalogue without its v7 tables.
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    "DROP TABLE lidar_generation_chunks;
+                     DROP TABLE lidar_interpretation_regions;
+                     DROP TABLE lidar_interpretation_cogs;
+                     DROP TABLE lidar_raster_assets;
+                     UPDATE lidar_catalogue_meta SET value = '6' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+        let connection = open(&path).expect("v6 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), 7);
+        for table in [
+            "lidar_raster_assets",
+            "lidar_interpretation_cogs",
+            "lidar_generation_chunks",
+            "lidar_interpretation_regions",
+        ] {
+            let found: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(found, 1, "{table} exists after migration");
+        }
+        let backup: String = connection
+            .query_row(
+                "SELECT value FROM lidar_catalogue_meta WHERE key = 'last_backup_path'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let backup_path = std::path::Path::new(&backup);
+        assert!(backup_path.exists(), "backup {backup} exists");
+        // The backup is itself a complete readable catalogue at the old version.
+        let backed_up = Connection::open(backup_path).unwrap();
+        assert_eq!(schema_version(&backed_up).unwrap(), 6);
+        drop(backed_up);
+        drop(connection);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn newer_catalogue_version_is_refused_before_writes() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-future"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).unwrap();
+            connection
+                .execute(
+                    "UPDATE lidar_catalogue_meta SET value = '99' WHERE key = 'schema_version'",
+                    [],
+                )
+                .unwrap();
+        }
+        let error = open(&path).expect_err("a newer schema must be refused");
+        assert!(error.contains("newer than supported"), "{error}");
+        let _ = std::fs::remove_dir_all(root);
     }
 }

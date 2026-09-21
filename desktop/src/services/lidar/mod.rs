@@ -11,6 +11,7 @@ pub mod display;
 #[cfg(test)]
 mod e2e;
 pub mod engine;
+mod generation;
 pub mod grid;
 pub mod import;
 pub mod paths;
