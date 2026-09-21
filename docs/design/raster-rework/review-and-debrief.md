@@ -515,6 +515,20 @@ The [independent disposition](geolibre-integration-review.md) retained the imple
 | Inherited issue handled without widening scope | A cancelled or mid-pipeline-failed slope job leaves `prepared/analysis/<definition_id>/staging-*` behind; this was confirmed dynamically once (result and quality files were present in the abandoned directory) and tracked as `canopi-jv8a.3` rather than repaired here |
 | Evidence limits | Capacity tests use an observation seam, not a filled filesystem; no real out-of-space event was observed, and the check remains a measurement rather than an OS reservation. The reviewer's offline rerun is now reproducible through the recorded cache route, but the real MNT lifecycle remains implementer-run evidence |
 
+
+## Bounded-generation batch at `canopi-jv8a.4` (partial delivery record)
+
+The forwarded B1–B5 assignment (retained standard COGs plus sparse resolved chunks) was executed only as far as its verified storage primitives; the caller migration did not happen. The [receipt](bounded-generation-receipt.md) owns the exact boundary.
+
+| Question | Observed |
+| --- | --- |
+| Decisions handled locally | Window validation gained an explicit 1026-side halo cap while the scan keeps 1024-wide bands; the write-reserve recheck was tied to an explicit `capacity_guard` so a read-only committed lease never demands write headroom; the controlled COG profile was factored into one `controlled_cog_arguments` used by source preparation and chunk creation; assets are admitted only after the production reader validates them and are stored content-addressed |
+| Assumptions challenged before coding | The design's "retain the source COG" assumed the existing derivative could simply stop being deleted. Checking the code showed ownership and capacity semantics are entangled with preparation, so the reader needed a distinct non-deleting, non-charging committed open rather than a flag on the existing path |
+| Scope outcome | The batch is far larger than one execution window: catalogue v7 index plus migration, ordered-member resolver, review/Apply/undo publication, slope halo, display transport, Desktop protocol, job lease and the capacity gates were not attempted. Rather than switching production callers onto unverified storage, the delivery stops at inert, tested primitives and reports the boundary |
+| Self-review discoveries | The first asset module carried a dead ENVI helper and an over-broad test assertion, both removed; the halo cap silently changed an existing window-rejection expectation, which the retained test caught and now asserts against the halo cap; the two scan-capacity tests needed a guarded fixture reader to keep exercising the reserve check |
+| Honest limitation | The delivered module has no production caller, so it carries a documented temporary dead-code allowance and proves nothing about bounded import, composition or capacity. Reviewers should treat "no production dense path remains" and any capacity claim as **not** established |
+| Effort signal | No courier exchange was needed inside the batch; the work stopped at the delivered boundary rather than asking for scope approval. Test/line counts are not offered as progress evidence |
+
 ## Final debrief procedure
 
 ### Result of the DB1–DB4 intervention

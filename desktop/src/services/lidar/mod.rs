@@ -17,6 +17,7 @@ pub mod paths;
 mod prepared_raster;
 pub mod presentation;
 pub mod probe;
+mod raster_assets;
 
 use catalogue::{new_id, now_iso};
 use common_types::lidar::{

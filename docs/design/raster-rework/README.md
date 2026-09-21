@@ -10,7 +10,8 @@ The user selected useful GeoLibre components with **existing UI/features first**
 
 | Artifact | Purpose |
 | --- | --- |
-| [Bounded-generation assignment](bounded-generation-agent-prompt.md) | Sole current assignment: B1–B5 complete caller migration and conditional capacity enablement |
+| [Bounded-generation receipt](bounded-generation-receipt.md) | Partial delivery record: B1 storage primitives verified, B2–B5 and the resolver/catalogue still open |
+| [Bounded-generation assignment](bounded-generation-agent-prompt.md) | Retired after partial execution; remaining work is bounded by the receipt |
 | [Bounded-generation design](bounded-generation-design.md) | Main-agent decisions: storage, compatibility, lifecycle, scientific/display semantics, resource policy and gates |
 | [Sparse-generation ADR](../../adr/0026-sparse-raster-generations.md) | Standard COG persistence, sparse resolved chunks and ordered history; prior bespoke encoding withdrawn |
 | [GeoLibre integration receipt](geolibre-integration-receipt.md) | Accepted G1–G5 delivery and its D1/R1 correction: revisions, evidence, limits |

@@ -1,6 +1,6 @@
 # Raster foundation, Data and Analysis workbenches
 
-Status: active — compatibility-first GeoLibre G1–G5 and its review correction are independently accepted at `a5fc7d7b` (see the [integration receipt](raster-rework/geolibre-integration-receipt.md)), not integrated. The [bounded-generation design](raster-rework/bounded-generation-design.md) and [current assignment](raster-rework/bounded-generation-agent-prompt.md) settle the next end-to-end foundation batch and authorize its capacity verification. Q stays frozen/unqualified. New workbench UI remains subsequent work.
+Status: active — compatibility-first GeoLibre G1–G5 and its review correction are independently accepted at `a5fc7d7b` (see the [integration receipt](raster-rework/geolibre-integration-receipt.md)), not integrated. The [bounded-generation design](raster-rework/bounded-generation-design.md) settles the next end-to-end foundation batch; its [receipt](raster-rework/bounded-generation-receipt.md) records a partial delivery (B1 storage primitives) with the caller migration still open. Q stays frozen/unqualified. New workbench UI remains subsequent work.
 Tracking: `canopi-j571`; current implementation `canopi-jv8a.1`, foundation `canopi-jv8a`, workbenches `canopi-j8mp`, historical qualification `canopi-kqpp`, deferred `canopi-5neg`.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 

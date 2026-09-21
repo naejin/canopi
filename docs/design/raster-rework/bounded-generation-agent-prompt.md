@@ -1,6 +1,6 @@
 # Implement bounded generations with retained standard COGs
 
-Status: proposed — sole current implementation assignment; executable when forwarded by the user. This revision replaces the unimplemented custom raw-block assignment at `24fd1a56`.
+Status: retired — partially executed; the delivered boundary, evidence and remaining B1–B5 work are in the [bounded-generation receipt](bounded-generation-receipt.md). Retained as debrief evidence, not execution authority.
 Tracking: create/claim one scoped implementation child of `canopi-jv8a` for B1–B5; parent epic `canopi-j571`. Do not reopen the accepted `canopi-jv8a.1` or historical Q.
 Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [courier protocol](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 

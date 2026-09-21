@@ -4,7 +4,7 @@ Use this entry point for raster import, overlap review, the shared library, anal
 
 ## Accepted direction and current implementation
 
-The user selected [compatibility-first GeoLibre native integration](../design/raster-rework/geolibre-integration-design.md), independently accepted at `a5fc7d7b` on `feature/geolibre-native-raster-integration`, not integrated into this checkout (evidence in the [integration receipt](../design/raster-rework/geolibre-integration-receipt.md); the [review](../design/raster-rework/geolibre-integration-review.md) closes D1/R1). The [current assignment](../design/raster-rework/bounded-generation-agent-prompt.md) and [design](../design/raster-rework/bounded-generation-design.md) settle sparse generations and bounded review/Apply, undo, display and slope behind the existing UI; those contracts are planned, not yet implemented. GDAL and the pinned native reader remain the selected engines.
+The user selected [compatibility-first GeoLibre native integration](../design/raster-rework/geolibre-integration-design.md), independently accepted at `a5fc7d7b` on `feature/geolibre-native-raster-integration`, not integrated into this checkout (evidence in the [integration receipt](../design/raster-rework/geolibre-integration-receipt.md); the [review](../design/raster-rework/geolibre-integration-review.md) closes D1/R1). The [bounded-generation design](../design/raster-rework/bounded-generation-design.md) settles sparse generations and bounded review/Apply, undo, display and slope behind the existing UI. Only its B1 storage primitives are delivered so far — retained/committed COG reads, resolved and 0/1 quality chunk creation, digesting and content-addressed admission — and **no production caller uses them yet**; the [receipt](../design/raster-rework/bounded-generation-receipt.md) records that boundary, and production composition, slope and display remain the accepted dense code. GDAL and the pinned native reader remain the selected engines.
 
 Import extraction and slope result postprocessing now read through the GeoLibre-selected `wbgeotiff` native core behind one private module, `desktop/src/services/lidar/prepared_raster.rs`: it prepares one uncompressed single-band Float32 COG (256×256 blocks, no overviews) with the existing GDAL adapter, then streams it back in at most 1024×1024 windows. Neither path creates a whole-raster buffer, and neither reads a file whole when the controlled layout is unavailable. GDAL remains preparation, CRS, slope and display authority.
 
@@ -22,7 +22,8 @@ Preserve originals and sidecars; prepare stripped inputs before native tiled rea
 | --- | --- |
 | Catalogue migrations, generations, footprints, history | `desktop/src/services/lidar/catalogue.rs`, `import.rs`, `mod.rs` |
 | Input admission, validity, prepared grids | `desktop/src/services/lidar/probe.rs`, `grid.rs`, `import.rs` |
-| Controlled derivative, bounded native window reads | `desktop/src/services/lidar/prepared_raster.rs` |
+| Controlled derivative, bounded native window reads, committed-asset leases | `desktop/src/services/lidar/prepared_raster.rs` |
+| Standard COG asset creation, digests, 0/1 quality reads (B1 primitives) | `desktop/src/services/lidar/raster_assets.rs`; [receipt](../design/raster-rework/bounded-generation-receipt.md) |
 | Free-space checks before new derivative/output writes | `desktop/src/services/lidar/paths.rs` |
 | Streamed 3×3 quality-mask erosion | `desktop/src/services/lidar/grid.rs` (`erode_mask_file`) |
 | GDAL lifecycle, bounded native execution, packaged engine | [Build and release: LiDAR](build-release.md#lidar-raster-engine) |

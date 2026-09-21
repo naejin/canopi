@@ -1,8 +1,8 @@
 # Bounded raster generations behind the existing UI
 
-Status: proposed — revised standard-COG foundation design; executable through the paired user-forwarded assignment, not implemented. Replaces the unimplemented raw-block choice at `24fd1a56`.
+Status: partial — B1 storage primitives delivered and verified; the catalogue index/resolver and the B2–B5 caller migration are not implemented. See the [receipt](bounded-generation-receipt.md). Replaces the unimplemented raw-block choice at `24fd1a56`.
 Tracking: foundation `canopi-jv8a`, epic `canopi-j571`; the implementer creates one scoped child for this batch. Accepted predecessor: `canopi-jv8a.1` at `a5fc7d7b`.
-Current guidance: [agent assignment](bounded-generation-agent-prompt.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [delivery receipt](bounded-generation-receipt.md), [agent assignment](bounded-generation-agent-prompt.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 ## 1. Outcome and authority
 

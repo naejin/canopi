@@ -1,0 +1,61 @@
+# Bounded raster generations — delivery receipt
+
+Status: evidence — partial implementer report for `canopi-jv8a.4` (B1–B5): **B1 storage primitives only**; the caller migration (B1 remainder, B2–B5) is not delivered. Not acceptance, integration or release.
+Tracking: `canopi-jv8a.4` (parent `canopi-jv8a`, epic `canopi-j571`); `canopi-jv8a.3` is linked work inside B3.
+Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+
+## Scope actually delivered
+
+| Design step | State |
+| --- | --- |
+| B1 — retained source COG, resolved/quality COG creation, reader ownership | **Partially delivered**: the reader can open committed assets without deleting them, and one production-grade asset writer creates, validates, digests and stores resolved NaN-NoData chunks and separate 0/1 quality chunks in the controlled profile. The catalogue v7 index, the private generation resolver and the legacy adapters are **not** delivered |
+| B2 — import/review/Apply/undo migration | Not started |
+| B3 — slope core+halo and shared job ownership | Not started (`canopi-jv8a.3` remains open) |
+| B4 — bounded display transport and Desktop protocol | Not started |
+| B5 — end-to-end verification and conditional limit removal | Not started |
+
+Production callers are unchanged: import staging, composition, slope, display and the map path still run on the accepted `a5fc7d7b` code. No workflow is broken, no storage format is switched, and **no capacity limit was moved**. The new storage layer is not reachable from any production command, so a review of this branch must treat it as an inert, tested foundation rather than a migration.
+
+## Revisions
+
+| What | Revision |
+| --- | --- |
+| Accepted predecessor baseline | `a5fc7d7b` on `feature/geolibre-native-raster-integration` |
+| Forwarded design + revision docs | merged in `be0d4d17` and `7f2e3bef` |
+| Reader/asset primitives and tests | the commit that carries this receipt |
+
+## What the delivered primitives do
+
+- `prepared_raster.rs` gained `MAX_HALO_SIDE` (1026) so an explicitly requested window may carry the one-cell analysis halo, while the streaming scan keeps its 1024×1024 row-band windows. Window validation still rejects empty, oversized, overflowing and out-of-bounds requests before allocation.
+- `PreparedRaster::open_committed(path, grid, nodata)` opens an already-committed controlled COG: same prefix parse, same layout validation, **no** GDAL preparation, **no** capacity charge, and dropping it closes the handle without deleting the file (`owns_derivative = false`). The reserve recheck in `scan` is now tied to an explicit `capacity_guard`, so a read-only lease never demands write headroom.
+- `raster_assets.rs` (new, private) creates one controlled COG from bounded in-memory samples through the existing GDAL adapter and the same fixed profile as source preparation (`controlled_cog_arguments`, shared with `open`): `-of COG -ot Float32 -b 1 -mask none`, 256×256 blocks, `COMPRESS=NONE`, `OVERVIEWS=NONE`, `NUM_THREADS=1`, `STATISTICS=NO`, `SPARSE_OK=NO`, PAM disabled, plus `-a_srs`/`-a_ullr` and optional `-a_nodata`. The ENVI scratch pair is bounded and removed before returning.
+- Every new asset is admitted only after `open_committed` validates its profile, then digested with bounded 64 KiB reads and moved into a content-addressed store (`assets/<sha256>/cog.tif`). Identical content reuses the existing file. A failed admission removes the staged file.
+- `read_quality_window` reads a 0/1 quality asset through the same reader and rejects any sample that is not exactly 0.0 or 1.0, so a corrupt mask cannot read as partial coverage.
+- `paths.rs` gained the retained source-COG path (`sources/<sha>/source-cog.tif`) and the content-addressed asset paths.
+
+## Evidence
+
+Decisive B1 round-trip (GDAL + pinned native reader, `services::lidar::raster_assets`):
+
+- A resolved 4×3 chunk authored with valid zero, negative, a finite sentinel-like `-9999.0`, `-0.0`, and NaN holes round-trips: every finite sample compares **bitwise** and every NaN stays invalid, reopened through `open_committed` with **no** GDAL re-preparation.
+- The same file opened by GDAL reports `Float32`, `256×256` blocks, the authored geotransform origin and an EPSG:3857 CRS; the ENVI scratch pair is gone; the digest and byte count are stable; **the committed file still exists after the reader is dropped**.
+- Identical content re-created yields the same digest and the same file.
+- A separate quality chunk of exact 0/1 samples reads back as the authored mask bytes, and a chunk containing `0.5` is rejected as corrupt instead of silently rounding.
+- A truncated copy of a real chunk is rejected by profile validation.
+
+Hermetic additions: digest stability against an independently computed SHA-256, and a sample/grid mismatch rejected before any GDAL work.
+
+Regression status of the accepted layer: the full `services::lidar` suite passes with `--include-ignored` (64 tests), including the previous D1 budget cases, caller compatibility, erosion, degrees/percent slope and cancellation controls. The real MNT lifecycle was not re-run in this batch.
+
+## Limits, unavailable evidence and known gaps
+
+- **The batch is not complete.** No caller migration, no catalogue v7 index or migration/backup, no resolver, no display transport, no Desktop protocol, no job lease, no capacity verification and no large-fixture run was delivered. The design's acceptance examples for B2–B5 have not been attempted.
+- The delivered module is not reachable from production, so it is not exercised by any real workflow. Its compiler-visible dead-code allowance (`#![allow(dead_code)]` in `raster_assets.rs` plus item-level allowances in `paths.rs`/`prepared_raster.rs`) is temporary and documented in place; it must be removed when B2 wires the resolver. This is a scaffold with verified behaviour, not an integrated storage layer.
+- Because no production path consumes the assets, "no full-file helper reachable" and "no production dense path remains" are **not** established; the accepted dense callers (`compose_values_cancellable`, `replay_members`, `head_values_on_union`, display generation) are untouched and still authoritative.
+- Retaining resolved chunks costs additional bytes and files; no disk or memory measurement of that trade-off was made in this batch, and the design's resource budgets are unverified.
+- The real 48M-cell batch, 24-source sparse case, 400M-cell plane and 12-tile MNH run were not attempted; no capacity limit was removed.
+- Windows capacity/asset behaviour remains uncompiled here, as recorded in the predecessor receipt.
+
+## Next dependency
+
+The next session needs, in order: the catalogue v7 index and migration with WAL-consistent backup (`next after v6`), the private generation resolver (ordered-member replay, resolved-chunk and legacy-dense reads, paged occupied chunks and aggregates), then B2 publication/undo through that resolver. Do not remove production limits or wire display/slope before those land. `canopi-jv8a.3` (analysis staging cleanup) is still open and is delivered with B3, not here.

@@ -27,6 +27,9 @@ use wbgeotiff::{CogLevel, Compression, GeoTiff, SampleFormat};
 
 /// Largest side of one requested window, and the row band used by a scan.
 const MAX_WINDOW_SIDE: u32 = 1024;
+/// Largest side of an explicitly requested window: a scan window plus the
+/// one-cell analysis halo on each edge.
+pub(super) const MAX_HALO_SIDE: u32 = MAX_WINDOW_SIDE + 2;
 /// Controlled derivative geometry.
 const TILE_SIDE: u32 = 256;
 const TILE_SAMPLES: usize = (TILE_SIDE as usize) * (TILE_SIDE as usize);
@@ -52,13 +55,13 @@ pub(super) struct RasterWindow {
 impl RasterWindow {
     /// Exclusive right/bottom bounds, after rejecting every request this
     /// adapter must not attempt to allocate or read.
-    fn bounds(&self, grid: &RasterGrid) -> Result<(u32, u32), String> {
+    fn bounds(&self, grid: &RasterGrid, cap: u32) -> Result<(u32, u32), String> {
         if self.width == 0 || self.height == 0 {
             return Err("raster window must not be empty".to_string());
         }
-        if self.width > MAX_WINDOW_SIDE || self.height > MAX_WINDOW_SIDE {
+        if self.width > cap || self.height > cap {
             return Err(format!(
-                "raster window {}x{} exceeds the {MAX_WINDOW_SIDE}x{MAX_WINDOW_SIDE} window cap",
+                "raster window {}x{} exceeds the {cap}x{cap} window cap",
                 self.width, self.height
             ));
         }
@@ -90,17 +93,17 @@ impl RasterWindow {
 
 /// Samples and validity for one window, row-major and exactly window-sized.
 ///
-/// Production callers stream with [`PreparedRaster::scan`]; this owning form
-/// exists for focused window tests, which must be able to inspect one window
-/// without the scan's buffer reuse.
-#[cfg(test)]
+/// The owning window read and committed-asset open below are consumed by the
+/// B2 generation resolver (`canopi-jv8a.4`); until it lands they carry a
+/// documented dead-code allowance rather than disappearing from the reader.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub(super) struct WindowSamples {
     samples: Vec<f32>,
     valid: Vec<u8>,
 }
 
-#[cfg(test)]
+#[allow(dead_code)]
 impl WindowSamples {
     pub(super) fn samples(&self) -> &[f32] {
         &self.samples
@@ -117,6 +120,9 @@ pub(super) struct PreparedRaster {
     file: Option<File>,
     path: PathBuf,
     owns_derivative: bool,
+    /// True while this reader's consumer may write numeric output that shares
+    /// the volume; committed reads are read-only and carry no reserve.
+    capacity_guard: bool,
     scratch_dir: PathBuf,
     level: CogLevel,
     grid: RasterGrid,
@@ -163,15 +169,37 @@ impl PreparedRaster {
             remove_derivative(&path);
             return Err(error);
         }
-        let raster = match Self::open_derivative(path.clone(), grid, nodata, job_scratch, true) {
-            Ok(raster) => raster,
-            Err(error) => {
-                remove_derivative(&path);
-                return Err(error);
-            }
-        };
+        let raster =
+            match Self::open_derivative(path.clone(), grid, nodata, job_scratch, true, true) {
+                Ok(raster) => raster,
+                Err(error) => {
+                    remove_derivative(&path);
+                    return Err(error);
+                }
+            };
         check_cancel(cancel)?;
         Ok(raster)
+    }
+
+    /// Open one committed asset for bounded reads.
+    ///
+    /// The file must already be a validated controlled COG; nothing is
+    /// prepared, nothing is charged against free space, and dropping the
+    /// reader closes the handle without deleting the committed bytes.
+    #[allow(dead_code)]
+    pub(super) fn open_committed(
+        path: &Path,
+        grid: &RasterGrid,
+        nodata: Option<f32>,
+    ) -> Result<Self, String> {
+        let scratch = path.parent().unwrap_or_else(|| Path::new("."));
+        Self::open_derivative(path.to_path_buf(), grid, nodata, scratch, false, false)
+    }
+
+    /// Grid this reader was validated against.
+    #[allow(dead_code)]
+    pub(super) fn grid(&self) -> &RasterGrid {
+        &self.grid
     }
 
     /// Open and validate one derivative that already exists.
@@ -181,6 +209,7 @@ impl PreparedRaster {
         nodata: Option<f32>,
         job_scratch: &Path,
         owns_derivative: bool,
+        capacity_guard: bool,
     ) -> Result<Self, String> {
         let Ok(mut file) = File::open(&path) else {
             return Err(format!("prepared raster is missing: {}", path.display()));
@@ -194,6 +223,7 @@ impl PreparedRaster {
             file: Some(file),
             path,
             owns_derivative,
+            capacity_guard,
             scratch_dir: job_scratch.to_path_buf(),
             level,
             grid: grid.clone(),
@@ -203,13 +233,13 @@ impl PreparedRaster {
     }
 
     /// Read one half-open, in-bounds window.
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub(super) fn read_window(
         &mut self,
         window: RasterWindow,
         cancel: &AtomicBool,
     ) -> Result<WindowSamples, String> {
-        window.bounds(&self.grid)?;
+        window.bounds(&self.grid, MAX_HALO_SIDE)?;
         let cells = window.cells()?;
         ensure_live_budget(cells)?;
         let mut samples = vec![0f32; cells];
@@ -254,11 +284,15 @@ impl PreparedRaster {
                 self.read_into(window, &mut samples[..cells], &mut valid[..cells], cancel)?;
                 // Recheck at every consumer boundary: a wide row band would
                 // otherwise perform many bounded writes before its next check.
-                paths::require_free_space(
-                    &self.scratch_dir,
-                    FREE_SPACE_FLOOR_BYTES,
-                    "the raster window scan",
-                )?;
+                // Committed reads write nothing, so only an owned derivative
+                // carries the reserve requirement.
+                if self.capacity_guard {
+                    paths::require_free_space(
+                        &self.scratch_dir,
+                        FREE_SPACE_FLOOR_BYTES,
+                        "the raster window scan",
+                    )?;
+                }
                 consume(&window, &samples[..cells], &valid[..cells])?;
                 x += width;
             }
@@ -274,7 +308,7 @@ impl PreparedRaster {
         valid: &mut [u8],
         cancel: &AtomicBool,
     ) -> Result<(), String> {
-        let (x_end, y_end) = window.bounds(&self.grid)?;
+        let (x_end, y_end) = window.bounds(&self.grid, MAX_HALO_SIDE)?;
         let cells = window.cells()?;
         if samples.len() != cells || valid.len() != cells {
             return Err(format!(
@@ -399,6 +433,47 @@ fn required_free_bytes(
                  {additional_output_bytes} output bytes overflows"
             )
         })
+}
+
+/// Fixed GDAL arguments that create the controlled COG profile from an
+/// existing raster, including georeferencing for a freshly written scratch
+/// window. One profile definition is shared by source preparation and chunk
+/// creation; `None` NoData leaves the asset without a NoData tag.
+#[allow(dead_code)]
+pub(super) fn controlled_cog_arguments(
+    input: &Path,
+    output: &Path,
+    crs_wkt: &str,
+    grid: &RasterGrid,
+    nodata: Option<f32>,
+) -> Vec<String> {
+    let mut args = prepare_arguments(input, output);
+    // Insert georeferencing immediately before the positional arguments.
+    let position = args.len() - 2;
+    let georeferencing = [
+        "-a_srs".to_string(),
+        crs_wkt.to_string(),
+        "-a_ullr".to_string(),
+        format!("{}", grid.geotransform[0]),
+        format!("{}", grid.geotransform[3]),
+        format!(
+            "{}",
+            grid.geotransform[0] + grid.geotransform[1] * f64::from(grid.width)
+        ),
+        format!(
+            "{}",
+            grid.geotransform[3] + grid.geotransform[5] * f64::from(grid.height)
+        ),
+    ];
+    for (offset, argument) in georeferencing.into_iter().enumerate() {
+        args.insert(position + offset, argument);
+    }
+    if let Some(nodata) = nodata {
+        let position = args.len() - 2;
+        args.insert(position, "-a_nodata".to_string());
+        args.insert(position + 1, format!("{nodata}"));
+    }
+    args
 }
 
 fn prepare_arguments(input: &Path, output: &Path) -> Vec<String> {
@@ -949,6 +1024,21 @@ mod tests {
             nodata,
             path.parent().unwrap(),
             false,
+            false,
+        )
+        .expect("fixture opens")
+    }
+
+    /// A committed read that carries the write reserve, so capacity
+    /// observation can be exercised without a real preparation.
+    fn open_fixture_guarded(path: &Path, grid: &RasterGrid, nodata: Option<f32>) -> PreparedRaster {
+        PreparedRaster::open_derivative(
+            path.to_path_buf(),
+            grid,
+            nodata,
+            path.parent().unwrap(),
+            false,
+            true,
         )
         .expect("fixture opens")
     }
@@ -1109,7 +1199,7 @@ mod tests {
                 RasterWindow {
                     x: 0,
                     y: 0,
-                    width: 1025,
+                    width: MAX_HALO_SIDE + 1,
                     height: 1,
                 },
                 "cap",
@@ -1119,7 +1209,7 @@ mod tests {
                     x: 0,
                     y: 0,
                     width: 1,
-                    height: 1025,
+                    height: MAX_HALO_SIDE + 1,
                 },
                 "cap",
             ),
@@ -1181,6 +1271,7 @@ mod tests {
             &test_grid(600, 601),
             Some(-9999.0),
             &scratch.dir,
+            false,
             false,
         )
         .expect_err("mismatched grid must be rejected");
@@ -1314,7 +1405,7 @@ mod tests {
         let scratch = Scratch::new("window-capacity");
         let fixture = TiffFixture::new(1100, 2100);
         let path = scratch.write("window-capacity.tif", &fixture.bytes());
-        let mut raster = open_fixture(&path, &test_grid(1100, 2100), Some(-9999.0));
+        let mut raster = open_fixture_guarded(&path, &test_grid(1100, 2100), Some(-9999.0));
         let _guard = paths::capacity_probe::override_available(FREE_SPACE_FLOOR_BYTES);
         let mut consumed = 0u32;
         let error = raster
@@ -1409,6 +1500,7 @@ mod tests {
                 Some(-9999.0),
                 &scratch.dir,
                 false,
+                false,
             )
             .err()
             .unwrap_or_else(|| panic!("{label} derivative must be rejected"));
@@ -1436,6 +1528,7 @@ mod tests {
             Some(-9999.0),
             &scratch.dir,
             false,
+            false,
         )
         .expect_err("unavailable metadata must fail");
         assert!(
@@ -1452,6 +1545,7 @@ mod tests {
             &test_grid(4, 4),
             None,
             &scratch.dir,
+            false,
             false,
         )
         .expect_err("missing derivative must fail");
@@ -1476,6 +1570,7 @@ mod tests {
             &test_grid(1100, 2100),
             Some(-9999.0),
             &scratch.dir,
+            true,
             true,
         )
         .unwrap();
