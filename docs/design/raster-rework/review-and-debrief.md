@@ -1,8 +1,8 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — bounded-generation `6a5130b3` reviewed with two remaining code edges and evidence corrections; user-approved product-closure scope freeze. Historical records remain evidence, not active assignments.
+Status: evidence — the bounded-generation `6a5130b3` review's two code edges and evidence corrections were executed under the user-approved product-closure freeze, including the real-Desktop workflow; the delivery awaits independent disposition. Historical records remain evidence, not active assignments.
 Tracking: current `canopi-jv8a.4`; historical Q `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [bounded-generation review](bounded-generation-review.md), [completion assignment](bounded-generation-completion-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
+Current guidance: [bounded-generation review](bounded-generation-review.md), [implementation receipt](bounded-generation-receipt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
 
@@ -15,6 +15,18 @@ Observed review evidence: 152 native/GDAL tests independently passed in 482.58 s
 The [product-closure policy](collaboration-protocol.md#product-closure-policy) is the intervention: freeze architecture/scope; focused repair tests; required broad gates on the final candidate; real Desktop import→overlap→display→slope→restart→undo. The main agent's next review is diff/risk-focused. Unsupported UI access produces a runnable user smoke handoff, not a new harness.
 
 For the final debrief, compare actual workflows demonstrated, safety defects caught before versus after courier delivery, necessary decisions versus avoidable continuation messages, repeated runs on identical code, and effort/cost only where recorded. Name main-agent design/review omissions separately from implementation/test omissions and unsupported reporting. Record whether this narrower intervention actually improved delivery; do not declare success from shorter documents or higher test counts. Promote only demonstrated reusable lessons into tooling/skills under separate authority. One compact outcome in this record suffices.
+
+#### Product-closure outcome
+
+**Workflows demonstrated in the real Desktop** (isolated profile: private D-Bus session, fresh `XDG_*`, `devUrl` on 1430, hit-test-verified synthetic input, the user's own instance and ports 1420/1422 untouched): create a LiDAR layer → import the real IGN MNT fixture from the native file dialog → review reported 1 km² uncovered with exact counts 4,000,000 / 0 / 0 → Before/After previews → Apply → `Import complete`, `0.5 m resolution · 1 km² coverage` → slope analysis `ready` → a second, partially overlapping authored import reported 40,000 m² overlap and published the replacement → the sparse generation rendered on MapLibre with the replaced window visible → visibility toggles and pan/zoom → design saved, app closed, relaunched, design reopened with layer, coverage, visibility and spatial frame intact → history *Undo import* re-pointed the head (members reverted, composed `min_value` 100.0 → 150.84) → a foreign-CRS import was refused by name. Screenshots were transient; the command, profile layout and step list are in the [receipt](bounded-generation-receipt.md#real-desktop-smoke-of-the-slice-isolated-profile).
+
+**Safety defects caught before courier delivery**: three lifecycle tests the previous receipt counted as passing were absent from the committed tree (the independent review found this; they were re-added and pass); the collision path could have deleted a competing file the job did not create (C1 now refuses adoption and requires positive file identity); journal clearing swallowed unlink errors (C2 now routes commit, rollback and recovery through one fallible clear); the wide-fixture claim rested on a counterfactual cell count no test exercised (replaced by value-level assertions at the far page).
+
+**Defects that escaped to the courier** (observation-level, no data loss): after a successful undo the open History view and the canvas kept pre-undo state until the view was reopened and the app restarted; the preserved `invalid_cells` meaning reads as a data-quality verdict on partial imports; history entries are numbered within one generation's own job list; chunk seams are visible at low zoom.
+
+**Decisions that genuinely need the courier**: whether the `Invalid` label/definition should change (product wording, not a contract change); whether undo must live-refresh the open history view and the canvas (a small frontend fix outside the frozen scope); whether an automated Desktop smoke is worth building; the 400M-cell capacity gate (host RAM) that still holds the production limits.
+
+**Measured effort**: the native/GDAL route grew from 152 to 158 tests and the lane took 586.58 s on the final candidate; the fixture module separately took 226 s (MNT) and 132 s (MNH, one test meaningful, two blocked by a missing fixture path in that lane's environment); the workspace suite 21 s; the smoke needed one scripted XTEST drive per step with a handful of coordinate corrections. Token cost, model settings and per-review durations remain unrecorded and are not estimated here.
 
 ### Caller-boundary review — `eb64a853`
 

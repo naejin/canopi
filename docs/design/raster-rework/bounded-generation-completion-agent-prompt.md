@@ -1,6 +1,6 @@
 # Product closure: two repairs, truthful evidence, real Desktop workflow
 
-Status: proposed — sole current assignment, executable when forwarded by the user; architecture and scope frozen. Earlier instructions are retained in Git at `fcc6edbd`.
+Status: retired — executed on `feature/bounded-raster-generations`; C1, C2, the evidence corrections and the isolated real-Desktop smoke are delivered and await independent disposition. The [delivery receipt](bounded-generation-receipt.md) owns the evidence. The instructions executed here remain recoverable at `94fd0a8d` (incorporated as `f64b2d4e`); do not restart this assignment or its `6a5130b3` baseline.
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`; keep open for independent disposition.
 Current guidance: [review](bounded-generation-review.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md), [LiDAR](../../agent/lidar.md), [edition setup](../../agent/edition-development.md), [delivery](../../workflow/delivery.md).
 

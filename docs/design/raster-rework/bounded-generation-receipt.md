@@ -1,6 +1,6 @@
 # Bounded raster generations — delivery receipt
 
-Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. The five gaps the [independent review](bounded-generation-review.md) found at `1fcab504` are answered by the BG1–BG5 correction, the three it found at `9ad85c18` by the BG6–BG8 completion, and the four it found at `eb64a853` by the BG6-A/BG7-A/B/C completion recorded below. Independently reviewed: no — this completion awaits the main agent's disposition. Integrated or released: no.
+Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. The five gaps the [independent review](bounded-generation-review.md) found at `1fcab504` are answered by the BG1–BG5 correction, the three it found at `9ad85c18` by the BG6–BG8 completion, and the four it found at `eb64a853` by the BG6-A/BG7-A/B/C completion, both recorded below; the two product-closure corrections C1/C2 from the forwarded scope freeze are recorded below with their real-Desktop smoke evidence. Independently reviewed: no — this completion awaits the main agent's disposition. Integrated or released: no.
 Tracking: `canopi-jv8a.4` (parent `canopi-jv8a`, epic `canopi-j571`); `canopi-jv8a.3` is linked work inside B3.
 Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
@@ -58,6 +58,10 @@ caller-level tests, not an inert module.
 | Forwarded pagination/lifecycle completion assignment | `622b11d5` |
 | **BG6-A** — globally ordered transformed coverage (four translated streams per source) | the commit that carries this receipt |
 | **BG7-A/B/C** — one owner through promotion, commit and cleanup | the commit that carries this receipt |
+| Forwarded product-closure scope freeze | `f64b2d4e` |
+| **C1** — a destination this job did not create is never adopted or removed | the commit that carries this receipt |
+| **C2** — one fallible journal clear shared by commit, rollback and recovery | the commit that carries this receipt |
+| Real-Desktop smoke of stage → review → Apply → undo on the isolated profile | not committed (transient evidence, recorded below) |
 
 ## Correction response (BG1–BG5)
 
@@ -102,6 +106,12 @@ shared pages and sampling can miss peaks shorter than 50 ms. Incomplete ticks ar
 reported and excluded from the peak; they are never read as zero. The earlier
 39 MiB and 315 MiB `VmHWM` observations remain superseded history (see above).
 
+These byte figures come from the recorded measurement run. The final candidate's
+gate lane re-ran both fixture tests (MNT 226 s, MNH batch) and they re-asserted
+their budgets and authored coverage on the C1/C2 code, but `cargo test` captures
+the measurement stdout of a passing test, so no new byte totals were derived and
+none are claimed here.
+
 ### Precisely what the completion changed
 
 - **Traversal frame.** Review windows are fixed-lattice blocks; envelope cells are
@@ -132,7 +142,7 @@ pagination/lifecycle assignment settled them.
 
 | Item | State | Decisive evidence |
 | --- | --- | --- |
-| BG6-A — transformed page ordering | **Delivered** | A source's occupied index is no longer sorted and truncated per page. The source-to-lattice cell offset is decomposed by Euclidean division (`offset = q * 1024 + r`, `0 <= r < 1024`) and the same keyset index is read as up to four constant-translated streams — one per quadrant, `q + {0}` when the remainder is zero and `q + {0, 1}` otherwise per axis. A constant translation preserves the index order, so every stream is monotone, the merge deduplicates globally, and an empty filtered page is never treated as EOF. Each sub-stream owns one bounded 256-record page, so a source costs at most four live pages; the merge advances exactly the sub-streams holding the smallest coordinate. The counterexample is proven through the real iterator: 257 regions in one row at offset `(0,1)` yield all 514 expanded coordinates in order exactly once, including `(0,256)`; offset zero is the control; a negative two-axis offset yields the exact 516-coordinate set; cross-source duplicates are visited once. Through the real caller, a 263,168×1 authored source placed one cell below the layer anchor (its last 1024 cells declared NoData) reports 262,144 incoming cells, reads three or more region pages and previews both images — a dropped final page would report 261,120 |
+| BG6-A — transformed page ordering | **Delivered** | A source's occupied index is no longer sorted and truncated per page. The source-to-lattice cell offset is decomposed by Euclidean division (`offset = q * 1024 + r`, `0 <= r < 1024`) and the same keyset index is read as up to four constant-translated streams — one per quadrant, `q + {0}` when the remainder is zero and `q + {0, 1}` otherwise per axis. A constant translation preserves the index order, so every stream is monotone, the merge deduplicates globally, and an empty filtered page is never treated as EOF. Each sub-stream owns one bounded 256-record page, so a source costs at most four live pages; the merge advances exactly the sub-streams holding the smallest coordinate. The counterexample is proven through the real iterator: 257 regions in one row at offset `(0,1)` yield all 514 expanded coordinates in order exactly once, including `(0,256)`; offset zero is the control; a negative two-axis offset yields the exact 516-coordinate set; cross-source duplicates are visited once. Through the real caller, the test `wide_transformed_source_reviews_every_cell` authors a 263,168×1 source placed one cell below the layer anchor with a 1,024-cell NoData sentinel block in the middle and an **entirely valid final index page**, and proves visitation by value rather than by the absence of an empty page: staging reports exactly 262,144 incoming cells (263,168 − 1,024), reads three or more region pages, and previews both images; after Apply the final page reads valid with its authored 7.0 in every cell while the sentinel block stays invalid. An earlier version of this claim argued from a counterfactual cell count for a dropped page (261,120); that reasoning never exercised the drop and has been replaced by these value-level assertions |
 | BG7-A — ownership before the first side effect | **Delivered** | `PromotionGuard::begin` constructs the rollback owner before anything is journalled or linked and performs the promotion itself, recording each destination as it lands, so an error in a later source, a validation failure or a cancellation still reaches rollback. A reused destination is verified against the declared digest and size with a bounded hash before it is referenced, and its readable layout is no longer treated as identity; a mismatch is refused. Cleanup removes only inventoried, newly owned promotions, and the committed-reference check now covers both source payloads (`lidar_interpretation_cogs`) and published generation/result chunks (`lidar_generation_chunks`), failing closed when ownership cannot be established. A job with two new sources and an injected failure after the first promotion leaves neither asset and no reference, keeps the accepted asset and the job-local COGs, and publishes both on retry |
 | BG7-B — cleanup failure preserves retry evidence | **Delivered** | One decision now governs both halves of cleanup: `settle_job_root` reconciles a job's journal and only then removes its root, and every caller uses it. Startup reconciles all journals before removing any settled root; an unresolved journal fails `LidarLibrary::open` with a named recoverable error ("LiDAR library recovery is incomplete … can be retried by reopening") and leaves the unresolved root, its journal and intact AwaitReview payloads in place. Removing the fault makes the next open complete cleanup, and a second open is clean. Journal publication propagates file-sync errors and syncs the directory where the platform supports it, with documented unsupported-platform behaviour rather than silently claiming durable intent. A failed staging job keeps its root when its journal cannot be settled instead of deleting the evidence |
 | BG7-C — committed publication is irreversible success | **Delivered** | The head transaction is the linearization point: `PromotionGuard::commit` marks the owner committed before any fallible cleanup and returns the cleanup failure as a diagnostic instead of an error, on both the sparse and the preserved dense Apply exit. A publication whose journal cleanup fails therefore returns a successful `ApplyOutcome` carrying "published; promotion evidence retained for recovery", keeps the retained journal, and settles through the real `finish_apply` as `complete` with the dependent-refresh path. Reopening reconciles the journal without publishing a second generation, and the published values still read exactly. Before-commit failures keep the old head and still roll back |
@@ -162,14 +172,30 @@ pagination/lifecycle assignment settled them.
 | Representative large-fixture runs | The same bounds raised for their own thread through `admission::limits_probe`; production code cannot raise them |
 | Reads, display, deletion, undo of existing generations | **No envelope bound**: grandfathered immutable history stays readable at any size, and undo restores accepted history without admitting new input |
 
+## Correction response (C1, C2)
+
+The forwarded product-closure scope freeze named two remaining ownership
+questions. Both are implemented in
+`desktop/src/services/lidar/import.rs` with the promotion tests below.
+
+| Item | State | Decisive evidence |
+| --- | --- | --- |
+| C1 — a destination this job did not create is never adopted | **Delivered** | Every promotion journal entry now carries the `witness` this job recorded for the file it created (its path relative to the job root), `#[serde(default)]` so older journals still parse, and the new `FaultPoint::BeforePromotionLink` seam (with a repeatable `act_at` action) lets a test place a rival file at the destination between the guard's decision and the link. A link that reports `AlreadyExists` drops the intent, persists the relinquish best-effort and fails with "asset … already exists; refusing to adopt a file this job did not create". Removal is identity-checked: `remove_owned_destination` refuses a destination outside the root, refuses one this job cannot positively identify as its own file (`same_file`: device + inode on Unix), and otherwise preserves the file and reports recoverable uncertainty instead of deleting it. `a_collision_is_never_owned` (content-equal rival with a different inode is preserved through rollback and through a reopen; the earlier promotion of the same job is rolled back), `unproven_ownership_preserves_an_interrupted_intent` (an interrupted intent without a witness keeps the file and leaves a named recoverable error), `a_failure_during_a_later_source_still_rolls_back` (two new sources, an injected failure during the second: neither asset and no reference remain, the accepted asset and the job-local COGs survive, and a retry publishes both); `promotion_recovery_is_idempotent_at_every_interruption_point` was updated for the witness rule and the new message |
+| C2 — one fallible journal clear for commit, rollback and recovery | **Delivered** | `clear_promotion_journal` is now the single fallible clear used by `mark_promotions_committed`, `rollback_promotions` and `reconcile_promotion_journals`; `FaultPoint::BeforeJournalClear` injects a failure at the last step before the clear. Journal publication propagates file-sync errors and syncs the containing directory where the platform supports it, recording unsupported-platform behaviour explicitly rather than claiming durable intent. `a_cleanup_failure_after_commit_is_still_a_successful_publication` (a retained journal is a diagnostic, not a failure: the real `finish_apply` settles the job `complete` with its dependent analysis job enqueued, and reopening reconciles without publishing a second generation), `journal_clear_failure_retains_evidence_until_recovery` (the failing clear keeps the journal and the recoverable error, and a later clean open retires it), `unresolved_recovery_keeps_the_root_and_fails_open` (an unresolved journal fails `LidarLibrary::open` by name and keeps the root, its journal and its intact `awaiting_review` payloads) |
+
+Both corrections keep the accepted shape of the slice: no new dependency, no
+schema change, no change to the promotion journal's file name or to the
+publication order, and the failure messages the frontend already surfaces are
+unchanged except for the new named collision refusal.
+
 ## Delivery state
 
 | State | Extent |
 | --- | --- |
 | Implemented | The complete batch: retained source COGs, committed/resolved/quality COG handling, paged generation reads, catalogue v7–v12 with backups and guarded migrations, the one resolver, the import caller migration (stage → review → Apply → reopen → undo, including the replacement and undo paths), the opaque legacy base overlay, bounded core+halo slope with sparse result and quality chunks, the exclusive heavy raster lease, bounded native display tiles with the complete reduction footprint and the Desktop protocol adapter, the shared tile cache, and the per-layer fixed lattice |
-| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored --skip services::lidar::e2e` (150 tests, the review's own verified route) and the private fixture module separately: the MNT lifecycle through both formats and the 12-tile MNH batch with the corrected sampler |
+| Verified locally | Every gate in "Evidence" below, plus `services::lidar --include-ignored --skip services::lidar::e2e` (158 tests, 0 failed, 586.58 s, the review's own verified route) and the fixture module with both real fixtures (`CANOPI_LIDAR_E2E_FIXTURE` + `CANOPI_LIDAR_MNH_DIR`: 3 passed, 0 failed, 222.62 s): the MNT lifecycle through both formats and the 12-tile MNH batch with the corrected sampler |
 | Measured | Sampled combined working set (baseline, peak total, incremental) and wall time for the representative runs, recorded under "Evidence" |
-| Not verified here | A real WebView smoke test, macOS and Windows compilation/behaviour, and the 400M-cell plane (host capacity) |
+| Not verified here | An *automated* WebView smoke test (a scripted real-Desktop smoke was driven in an isolated profile — see "Real-Desktop smoke of the slice"), macOS and Windows compilation/behaviour, and the 400M-cell plane (host capacity) |
 | Not done | Integration into `main`, release, and the deferred general reclamation of old unreferenced published assets |
 
 ### Production caller inventory
@@ -305,6 +331,32 @@ format is the default for new publications.
   published `gen-*` directories, member assets or originals.
 
 ## Evidence
+
+### Final gate lane on the delivered candidate
+
+One lane re-ran every required gate in order on the committed code (log:
+`.rq-scratch/final-gates.log`, `.rq-scratch/final-e2e-both.log`; transient, not
+committed):
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | clean |
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `cargo check --workspace` | clean |
+| `cargo test -p canopi-desktop native_command_policy::tests` | 13 passed / 0 failed |
+| `services::lidar --include-ignored --skip services::lidar::e2e --test-threads=1` | **158 passed / 0 failed** in 586.58 s |
+| Fixture module, MNT + 12-tile MNH (`CANOPI_LIDAR_E2E_FIXTURE` and `CANOPI_LIDAR_MNH_DIR`) | **3 passed / 0 failed** in 222.62 s (the same three tests fail to find a fixture when only `CANOPI_LIDAR_MNH_DIR` is set — an environment mistake in the lane, not behaviour) |
+| `cargo test --workspace` | 41 + 352 + 1 + 7 + 2 + 13 passed / 0 failed |
+| `python3 scripts/check_docs.py` | 0 errors |
+| `git diff --check` | clean |
+
+The C1/C2 tests run inside the `services::lidar` lane:
+`a_collision_is_never_owned`,
+`unproven_ownership_preserves_an_interrupted_intent`,
+`a_failure_during_a_later_source_still_rolls_back`,
+`a_cleanup_failure_after_commit_is_still_a_successful_publication`,
+`journal_clear_failure_retains_evidence_until_recovery`,
+`unresolved_recovery_keeps_the_root_and_fails_open`.
 
 ### BG1 — retained source COG persistence
 
@@ -578,6 +630,59 @@ unavailable here. The hermetic observability counters used by three decode
 assertions are now thread-local, because they were process-global and a
 concurrently running reader test could reset another test's evidence.
 
+### Real-Desktop smoke of the slice (isolated profile)
+
+The completion prompt's remaining verification item was a real Desktop run. One
+was driven on this host against the built branch, in a **private profile**
+(fresh `XDG_CONFIG_HOME`/`XDG_DATA_HOME`/`XDG_CACHE_HOME`/`XDG_RUNTIME_DIR`, a
+private D-Bus session, `devUrl` moved to port 1430), so the user's own running
+instance and their dev servers on 1420/1422 were never touched. Clicks were
+issued only after the pointer's hit-tested window matched the smoke window
+(`xwininfo` geometry plus a window-chain check). Every screenshot below lives in
+the transient directory `.rq-scratch/smoke-profile-Ev4FZ3/` and is **not**
+committed.
+
+| Step | What the real window did |
+| --- | --- |
+| Welcome and document | Welcome screen with the plant-DB banner; **New Design** created an empty design |
+| Layer | **Add layer** created the LiDAR layer `Ground` (`GroundElevation`); the design became dirty |
+| Real import | The IGN MNT fixture (`CANOPI_LIDAR_E2E_FIXTURE`, 2000×2000 at 0.5 m) staged from the native file dialog; review reported **Uncovered 1 km², Overlap 0 m², Invalid 0**, and *Exact cell counts* read 4,000,000 / 0 / 0 — the same numbers the e2e lane asserts |
+| Preview | *After* rendered the incoming MNT hillshade; *Before* was identical with replacement off, which is the documented no-change behaviour |
+| Apply | `Import complete — the layer and its map tiles are ready`; the layer detail then read `0.5 m resolution · 1 km² coverage` |
+| Slope | `Create slope` produced `Ground · Slope (Slope (degrees) · ready)` |
+| Overlap review | A second import of an authored 400×400 (200 m) raster aligned to the same lattice reported **Uncovered 0, Overlap 40,000 m², Invalid 3,840,000**; checking *Replace overlap* changed the composed preview, and Apply published it (generation `min_value` moved 150.84 → **100.0**) |
+| Map | A **Design Location** was confirmed, *View coverage* flew to the coverage, and the sparse generation rendered on MapLibre with the replaced window visible as a flat patch; both the layer's and the analysis's visibility toggles changed the map, and pan/zoom worked |
+| Restart | The design was saved (spatial frame, LiDAR entries and visibility persisted in the file), the app was closed and relaunched, and the reopened design showed the layer ready with 1 km² coverage, the slope row hidden exactly as saved, and the coverage rendering again |
+| Undo | *Undo import* on the current generation published a new head whose members are the MNT add only and whose `min_value` is back to **150.84** — the 100.0 overlay value is gone from the composed range, so undo re-points the head and rewrites nothing |
+| Foreign CRS | An authored overlay that re-declared EPSG:2154 with a different WKT was refused live: `no source could join layer 'Ground': horizontal CRS differs from the layer; transforming foreign grids arrives in a later slice`, and the failed job published no generation |
+
+Observations from the smoke, recorded for the courier rather than fixed under
+the frozen scope:
+
+- **Live refresh after undo.** Persistence was correct immediately (new head, no
+  100.0 value, members reverted), but the open *History* view kept the pre-undo
+  entries — including the `· current` marker — until it was reopened, and the
+  canvas kept drawing the pre-undo generation's tiles until the app was
+  restarted, after which the reverted composition rendered correctly.
+  `undoAcceptedImport` refreshes the library but not an open history detail
+  (`desktop/web/src/app/lidar/actions.ts`,
+  `desktop/web/src/components/panels/lidar/LidarLayersSection.tsx`); whether the
+  canvas half is the map source identity or protocol tile caching was not
+  isolated.
+- **"Invalid" vocabulary.** `invalid_cells` keeps the design's preserved meaning
+  (`checked union-envelope cells − unique incoming valid cells`), so a partial
+  second import reports every cell the incoming file does not supply — 3,840,000
+  for a 400×400 overlay. The number is right by contract; the label reads like a
+  data-quality verdict and may deserve product wording.
+- **History numbering.** Entry labels use `index + 1` within one generation's own
+  job list, so two consecutive generations both read `Import 1`.
+- **Chunk seams.** At low zoom the rendered elevation raster shows the sparse
+  chunk grid as faint seams (`.rq-scratch/smoke-profile-Ev4FZ3/shot-46-slope-off.png`).
+
+This is a scripted XTEST drive of the real window, not an automated WebView
+test; no such test exists in the suite and none was added (the completion scope
+forbids new harness work).
+
 ## Limits, unavailable evidence and known gaps
 
 - **Sparse publication is the production default.** `chunked_publication_enabled`
@@ -652,9 +757,10 @@ concurrently running reader test could reset another test's evidence.
 
 ## Release limitations this environment could not remove
 
-- No real WebView smoke test: the raster protocol adapter is covered by unit
-  tests and the native tile command by caller tests, but no Desktop window was
-  driven here.
+- No automated WebView smoke test: the raster protocol adapter is covered by
+  unit tests and the native tile command by caller tests, and a scripted
+  real-Desktop smoke was driven in an isolated profile on this host (recorded
+  above), but no automated Desktop-window test exists in the suite.
 - Windows and macOS are not compiled in this environment, so the platform
   free-space, rename-durability and asset-URL behaviour remains as recorded in
   the predecessor receipt.
