@@ -14,6 +14,7 @@ use super::engine::{GdalEngine, GdalProgram};
 use super::generation;
 use super::grid::RasterGrid;
 use super::import::{GenerationManifest, GenerationStorageFormat};
+use super::tile_cache::TileKey;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
@@ -393,13 +394,53 @@ fn bilinear(
     }
 }
 
-/// Render one tile from an immutable sparse generation.
+/// Render one tile, serving a reproducible cached copy when one exists.
+///
+/// The cache is a pure accelerator: a hit is always the same pixels because
+/// the key names an immutable generation and an explicit style version, and a
+/// miss, an eviction or an interrupted write only costs a re-render.
 pub(super) fn render_tile(
     library: &super::LidarLibrary,
     request: &TileRequest,
     cancel: &AtomicBool,
 ) -> Result<TileOutcome, String> {
     request.validate()?;
+    let key = TileKey {
+        generation_id: request.generation_id.clone(),
+        style: request.style.clone(),
+        z: request.z,
+        x: request.x,
+        y: request.y,
+    };
+    {
+        let mut cache = library.tile_cache()?;
+        if let Some(bytes) = cache.get(&key) {
+            return Ok(TileOutcome::Png(bytes));
+        }
+        // Held across the render so eviction cannot drop what we are about to
+        // store, then released before the cache lock is taken again.
+        cache.begin(&key);
+    }
+    let outcome = render_tile_uncached(library, request, cancel);
+    let mut cache = library.tile_cache()?;
+    cache.end(&key);
+    match outcome {
+        Ok(TileOutcome::Png(bytes)) => {
+            cache.insert(&key, bytes.clone())?;
+            Ok(TileOutcome::Png(bytes))
+        }
+        // An empty tile costs nothing to re-derive and would only fill the
+        // cache with transparent entries.
+        other => other,
+    }
+}
+
+/// Render one tile from an immutable sparse generation.
+fn render_tile_uncached(
+    library: &super::LidarLibrary,
+    request: &TileRequest,
+    cancel: &AtomicBool,
+) -> Result<TileOutcome, String> {
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
     let (manifest, chunks) = {
@@ -968,6 +1009,29 @@ mod tests {
             ..request.clone()
         };
         assert!(render_tile(&library, &coarse, &cancel).is_ok());
+
+        // The render path caches: the second identical request is a hit, and
+        // deleting the layer drops the generation's cached tiles.
+        let cached = match render_tile(&library, &mixed, &cancel).unwrap() {
+            TileOutcome::Png(bytes) => bytes,
+            TileOutcome::Empty => panic!("the mixed tile must be drawn"),
+        };
+        let (hits, _) = library.tile_cache().unwrap().counters();
+        assert!(hits >= 1, "a repeated tile is served from the cache");
+        assert_eq!(
+            library.tile_cache().unwrap().get(&TileKey {
+                generation_id: generation_id.clone(),
+                style: "elevation".to_string(),
+                z: mixed.z,
+                x: mixed.x,
+                y: mixed.y,
+            }),
+            Some(cached),
+            "the cached tile is the drawn tile"
+        );
+        library.delete_layer(&layer_id).expect("layer deletes");
+        let (_, disk_bytes) = library.tile_cache().unwrap().bytes();
+        assert_eq!(disk_bytes, 0, "deletion drops the generation's tiles");
 
         // A generation that belongs to another entity is refused.
         let foreign = TileRequest {

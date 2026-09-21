@@ -19,6 +19,7 @@ mod prepared_raster;
 pub mod presentation;
 pub mod probe;
 mod raster_assets;
+mod tile_cache;
 mod tiles;
 
 use catalogue::{new_id, now_iso};
@@ -54,6 +55,8 @@ pub(crate) struct LidarLibraryInner {
     heavy_job: Mutex<Option<String>>,
     /// Bounded display read admission, separate from the heavy lease.
     display: Mutex<DisplayAdmission>,
+    /// Shared reproducible tile cache, bounded in memory and on disk.
+    tile_cache: Mutex<tile_cache::DisplayTileCache>,
 }
 
 /// Most display reads that may run at once, library-wide.
@@ -192,6 +195,7 @@ impl Drop for HeavyJobLease {
 impl LidarLibrary {
     pub fn open(app_data_dir: &std::path::Path) -> Result<Self, String> {
         let paths = LidarPaths::open(app_data_dir)?;
+        let display_cache_dir = paths.tile_cache_dir();
         let catalogue = catalogue::open(&paths.catalogue_path())?;
         let display_cache = open_display_cache(&paths.display_cache_path())?;
         let library = Self {
@@ -204,6 +208,7 @@ impl LidarLibrary {
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
                 display: Mutex::new(DisplayAdmission::default()),
+                tile_cache: Mutex::new(tile_cache::DisplayTileCache::open(&display_cache_dir)?),
             }),
         };
         // Recovery: interrupted jobs fail explicitly; published results and
@@ -239,6 +244,23 @@ impl LidarLibrary {
         )?))
     }
 
+    /// Drop cached display tiles of one generation. Best effort: the cache is
+    /// a reproducible derivative, so a failure here is never user-visible.
+    fn invalidate_tile_cache(&self, generation_id: &str) {
+        if let Ok(mut cache) = self.tile_cache() {
+            cache.invalidate_generation(generation_id);
+        }
+    }
+
+    pub(crate) fn tile_cache(
+        &self,
+    ) -> Result<MutexGuard<'_, tile_cache::DisplayTileCache>, String> {
+        self.inner
+            .tile_cache
+            .lock()
+            .map_err(|_| "LiDAR display tile cache poisoned".to_string())
+    }
+
     pub(crate) fn display(&self) -> Result<MutexGuard<'_, Connection>, String> {
         self.inner
             .display_cache
@@ -269,6 +291,11 @@ impl LidarLibrary {
         drop(connection);
         for (job_id, _state) in settled {
             let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(&job_id));
+        }
+        // Display cache writes are owned and atomic; a session that died
+        // mid-write leaves only temp files, which are never readable entries.
+        if let Ok(cache) = self.tile_cache() {
+            cache.discard_interrupted_writes();
         }
         // Write jobs that crashed before publication left `staging-*` roots
         // behind. Only staging roots are removed: published `gen-*` dirs,
@@ -537,6 +564,16 @@ impl LidarLibrary {
                 [layer_id],
             )
             .map_err(|e| e.to_string())?;
+        let removed_generations: Vec<String> = {
+            let mut statement = transaction
+                .prepare("SELECT id FROM lidar_layer_generations WHERE layer_id = ?1")
+                .map_err(|e| e.to_string())?;
+            statement
+                .query_map([layer_id], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
         let footprint_ids = {
             let mut statement = transaction
                 .prepare("SELECT id FROM lidar_source_footprints WHERE layer_id = ?1")
@@ -579,6 +616,9 @@ impl LidarLibrary {
         drop(connection);
 
         self.remove_display_entity("source", layer_id);
+        for generation_id in removed_generations {
+            self.invalidate_tile_cache(&generation_id);
+        }
         let _ = std::fs::remove_dir_all(self.inner.paths.layer_pipeline_dir(layer_id));
         for definition_id in definition_ids {
             self.remove_display_entity("analysis", &definition_id);
@@ -1361,6 +1401,16 @@ impl LidarLibrary {
             self.cancel_job(&job_id);
         }
         let connection = self.catalogue()?;
+        let result_generations: Vec<String> = {
+            let mut statement = connection
+                .prepare("SELECT id FROM lidar_analysis_generations WHERE definition_id = ?1")
+                .map_err(|e| e.to_string())?;
+            statement
+                .query_map([definition_id], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
         let transaction = connection
             .unchecked_transaction()
             .map_err(|e| e.to_string())?;
@@ -1368,6 +1418,7 @@ impl LidarLibrary {
         transaction.commit().map_err(|e| e.to_string())?;
         drop(connection);
         self.remove_display_entity("analysis", definition_id);
+        invalidate_tile_cache_for_collected(self, &result_generations);
         let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(definition_id));
         Ok(())
     }
@@ -1386,6 +1437,13 @@ impl LidarLibrary {
                 .join(entity_kind)
                 .join(entity_id),
         );
+    }
+}
+
+/// Drop cached display tiles of generations a deletion removed.
+fn invalidate_tile_cache_for_collected(library: &LidarLibrary, generation_ids: &[String]) {
+    for generation_id in generation_ids {
+        library.invalidate_tile_cache(generation_id);
     }
 }
 

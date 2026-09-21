@@ -24,6 +24,7 @@ impl LidarPaths {
             self_sources_dir(&root),
             self_prepared_dir(&root),
             self_display_dir(&root),
+            root.join("display-tiles"),
             root.join("assets"),
             root.join("jobs"),
         ] {
@@ -45,6 +46,12 @@ impl LidarPaths {
 
     pub fn display_cache_path(&self) -> PathBuf {
         self.root.join("lidar-display-cache.sqlite")
+    }
+
+    /// Reproducible on-demand display tiles. Never authority: entries are
+    /// derivatives of immutable generations and may be evicted at any time.
+    pub fn tile_cache_dir(&self) -> PathBuf {
+        self.root.join("display-tiles")
     }
 
     /// Immutable imported originals: `sources/<sha256>/original`.

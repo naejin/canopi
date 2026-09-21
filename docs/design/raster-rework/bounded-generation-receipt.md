@@ -11,7 +11,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver, legacy adapters, paged regions | **Delivered and verified**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, the private resolver over ordered occurrences, the legacy TIFF-only derivative lease with an independently applied authoritative mask, and paged occupied-region aggregates |
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
 | B3 — slope core+halo and shared job ownership | **Delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning); slope computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history; and the library now owns one exclusive heavy raster job lease shared by staging, apply, undo and analysis refresh, refusing a competing user submission promptly without creating running work |
-| B4 — bounded display transport and Desktop protocol | **Partly delivered**: the presentation contract carries a tagged tile source (preserved asset pyramid vs native generation), the library renders bounded 256×256 tiles from an immutable sparse generation through an executor-backed command returning raw PNG bytes or an explicit empty/unavailable outcome, and the frontend installs the `canopi-raster://` MapLibre protocol adapter with per-request cancellation, and display reads are admitted library-wide at two active and thirty-two queued with a synchronous cancel command. Still open: the display cache budgets and lifting the publication gate |
+| B4 — bounded display transport and Desktop protocol | **Partly delivered**: the presentation contract carries a tagged tile source (preserved asset pyramid vs native generation), the library renders bounded 256×256 tiles from an immutable sparse generation through an executor-backed command returning raw PNG bytes or an explicit empty/unavailable outcome, and the frontend installs the `canopi-raster://` MapLibre protocol adapter with per-request cancellation, display reads are admitted library-wide at two active and thirty-two queued with a synchronous cancel command, and encoded tiles are served from a shared bounded memory and disk cache with leases, LRU eviction, generation-scoped invalidation and atomic owned writes. Still open: lifting the publication gate and the B5 verification runs |
 | B5 — end-to-end verification and conditional limit removal | Not started |
 
 Production behaviour is unchanged: the storage-format switch is `false` in every
@@ -36,7 +36,8 @@ caller-level tests, not an inert module.
 | Catalogue v9, bounded core+halo slope with sparse result/quality chunks | `eea106d2` |
 | Exclusive library-wide heavy raster job lease (staging/apply/undo/refresh) | `f0715252` |
 | Tagged tile-source contract, bounded native tile renderer and command, raster URL builder | `4fe2f55a` |
-| MapLibre raster protocol adapter, bounded display admission and cancellation | the commit that carries this receipt |
+| MapLibre raster protocol adapter, bounded display admission and cancellation | `0a0dedf5` |
+| Shared bounded display cache (memory + disk) with leases, eviction and invalidation | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -109,6 +110,17 @@ caller-level tests, not an inert module.
   surface installs the protocol adapter when a map context attaches, so a
   native tile source is fetchable before its layer is added; the Web edition
   leaves the hook undefined and stays free of native raster transport.
+- **Bounded display cache (B4).** Encoded tiles are derivatives of an
+  immutable generation and an explicit style version, so they are cached
+  aggressively and discarded freely: a 128 MiB in-memory budget and a 512 MiB
+  reproducible disk budget are shared across every source and result
+  generation, enforced by byte accounting with least-recently-used eviction. An
+  entry a render currently holds is never evicted, an entry that cannot be
+  admitted is simply not cached (the tile is still served), writes go through
+  an owned temp file and a rename so an interrupted write is never a readable
+  entry, a restart re-accounts what the previous session left and discards its
+  temp files, and deleting a layer or analysis drops that generation's cached
+  tiles. Nothing in the cache is authority: a miss only costs a re-render.
 - **Bounded slope (B3).** `publish_sparse_slope` resolves the input generation
   once and iterates only its occupied chunks. Each block resolves a 1026×1026
   core+halo window, exports it as a bounded NaN-NoData scratch raster, runs the
@@ -202,6 +214,14 @@ Catalogue tests:
   means, and malformed-request rejection. The contract's wire shape is pinned
   by `common_types::lidar::tests::tile_source_wire_shape_is_tagged_and_stable`,
   and the frontend covers both URL forms plus raster-URL parsing and rejection.
+- Display cache (hermetic): `tiles_are_cached_in_memory_and_on_disk` (including
+  re-accounting a reopened cache), `the_disk_budget_evicts_the_least_recently_used_entry`,
+  `a_leased_entry_is_never_evicted`, `the_memory_budget_evicts_without_touching_the_disk_copy`,
+  `an_oversized_tile_is_served_but_not_cached`,
+  `invalidating_a_generation_drops_its_tiles_only` and
+  `interrupted_writes_are_not_readable_entries`; the caller-level tile test also
+  proves a repeated request is a cache hit and that deleting the layer empties
+  the generation's cached bytes.
 - Display transport (hermetic):
   `display_reads_are_bounded_in_order_and_cancellable` admits two running and
   thirty-two waiting reads, declines the next by name, proves a waiter neither
@@ -240,10 +260,10 @@ concurrently running reader test could reset another test's evidence.
   publish `cog-chunks-v1` yet. The gate exists because the display path is not
   finished: the native renderer and its command exist, but MapLibre reaches a
   tile through the raster protocol adapter, which is not installed yet, so a
-  chunked generation would render through the protocol adapter but with no
-  display cache budget in place, so repeated viewport work would re-render every
-  tile from the resolver. Enabling the switch before those budgets land would
-  leave a Ready layer the map can draw but cannot draw affordably.
+  chunked generation now renders through the protocol adapter behind a bounded
+  shared cache, but the switch still waits for the B5 verification runs: the
+  real-fixture lifecycle, the sparse-gap case and the recorded resource
+  measurements that justify the change of default storage.
 - No `base_generation_id` overlay: a legacy head without durable member history
   still takes the accepted dense route (correct, but not the sparse target).
 - The retained source COG is still not written by staging, so sparse members are

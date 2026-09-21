@@ -462,3 +462,267 @@ fn e2e_import_publish_slope_restart_reuse() {
 
     let _ = std::fs::remove_dir_all(&work);
 }
+
+/// Sparse-format vertical slice on the real IGN MNT fixture.
+///
+/// The same real workflow as the dense lifecycle above, but published through
+/// the sparse resolved-chunk format: multi-chunk import, native display tiles
+/// from the immutable lattice, slope over the chunked head with sparse result
+/// and quality chunks, restart reuse, and undo. Run with:
+/// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_sparse --nocapture`
+#[test]
+#[ignore = "requires system GDAL and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
+fn e2e_sparse_generation_lifecycle() {
+    let engine = engine::GdalEngine::new();
+    engine.discover().expect("GDAL engine must be available");
+    let fixture = match fixture_mnt() {
+        Ok(path) => path,
+        Err(reason) => panic!("{reason}"),
+    };
+    let work = std::env::temp_dir().join(format!("canopi-lidar-e2e-sparse-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let cancel = AtomicBool::new(false);
+    let guard = generation::chunked_publication::enable();
+
+    // 1. Real import published as sparse resolved chunks.
+    let library = LidarLibrary::open(&work).expect("library opens");
+    let layer_id = library
+        .create_layer(
+            "IGN ground sparse",
+            common_types::lidar::LidarMeasurementKind::GroundElevation,
+        )
+        .expect("layer created");
+    let job_id = library.record_import_job(&layer_id).expect("job recorded");
+    let output =
+        import::stage_import(&library, &job_id, &layer_id, std::slice::from_ref(&fixture), &cancel)
+            .expect("staging succeeds");
+    assert!(
+        output.review.compatible,
+        "fixture is compatible: {:?}",
+        output.review.issues
+    );
+    let reviewed_cells = output.review.uncovered_cells;
+    assert!(reviewed_cells > 3_000_000, "4M-cell tile: {reviewed_cells}");
+    library.finish_staging(
+        &job_id,
+        Ok(import::StagingOutput {
+            review: output.review.clone(),
+        }),
+    );
+    let staging: import::StagedImport = serde_json::from_str(
+        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json")).unwrap(),
+    )
+    .unwrap();
+    library.prepare_apply(&job_id).expect("review accepted");
+    let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    assert!(applied.changed);
+
+    let head = {
+        let connection = library.catalogue().unwrap();
+        catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .expect("head published")
+    };
+    let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
+    assert_eq!(
+        manifest.format,
+        import::GenerationStorageFormat::CogChunksV1,
+        "the sparse route publishes resolved chunks"
+    );
+    assert!(head.mosaic_path.is_none(), "a sparse head owns no mosaic");
+    assert!(head.coverage_cells > 3_000_000, "{}", head.coverage_cells);
+    let chunks = {
+        let connection = library.catalogue().unwrap();
+        catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
+    };
+    // A 2000x2000 lattice is exactly four 1024-cell chunks.
+    assert_eq!(chunks.len(), 4, "only occupied chunks are stored");
+    println!(
+        "sparse import: {} cells in {} chunks, value range {:?}..{:?}",
+        head.coverage_cells,
+        chunks.len(),
+        head.min_value,
+        head.max_value
+    );
+
+    // 2. The layer presents an on-demand tileset and renders real pixels.
+    let snapshot = library.library_snapshot().expect("snapshot");
+    let tileset = snapshot.layers[0]
+        .tilesets
+        .iter()
+        .find(|tileset| tileset.style == "elevation")
+        .expect("a sparse layer is displayable");
+    let generation_id = match &tileset.source {
+        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
+            generation_id.clone()
+        }
+        _ => panic!("a sparse generation has no asset template"),
+    };
+    let mut tile_bytes = None;
+    let mut tile_coordinates = None;
+    'outer: for z in (0..=tileset.max_zoom).rev() {
+        let span = 40_075_016.685_578_49 / f64::from(1u32 << z);
+        let half = 20_037_508.342_789_244;
+        let bounds = {
+            let connection = library.catalogue().unwrap();
+            let raw: String = connection
+                .query_row(
+                    "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
+                    [&generation_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            serde_json::from_str::<Vec<f64>>(&raw).unwrap()
+        };
+        let centre_x = (bounds[0] + bounds[2]) / 2.0;
+        let centre_y = (bounds[1] + bounds[3]) / 2.0;
+        let x = ((centre_x + half) / span).floor() as u32;
+        let y = ((half - centre_y) / span).floor() as u32;
+        match library
+            .render_tile("source", &layer_id, &generation_id, "elevation", z, x, y, &cancel)
+            .expect("tile renders")
+        {
+            bytes if bytes.len() > 8 => {
+                tile_bytes = Some(bytes);
+                tile_coordinates = Some((z, x, y));
+                break 'outer;
+            }
+            _ => continue,
+        }
+    }
+    let (z, x, y) = tile_coordinates.expect("a rendered tile at some zoom");
+    let bytes = tile_bytes.unwrap();
+    println!("native tile {z}/{x}/{y}: {} bytes", bytes.len());
+    assert!(bytes.len() > 100, "a drawn tile is a real PNG");
+
+    // A second request is served from the bounded cache.
+    let (hits_before, _) = library.tile_cache().unwrap().counters();
+    let again = library
+        .render_tile("source", &layer_id, &generation_id, "elevation", z, x, y, &cancel)
+        .expect("tile renders again");
+    let (hits_after, _) = library.tile_cache().unwrap().counters();
+    assert_eq!(again, bytes, "the cached tile is the drawn tile");
+    assert!(hits_after > hits_before, "the repeat is a cache hit");
+
+    // 3. Slope over the chunked head publishes sparse result and quality.
+    let receipt = library
+        .create_analysis(
+            &layer_id,
+            common_types::lidar::LidarAnalysisKind::Slope,
+            common_types::lidar::LidarAnalysisParameters {
+                slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+            },
+        )
+        .expect("analysis created");
+    let (parameters, source_generation) = {
+        let connection = library.catalogue().unwrap();
+        let parameters: String = connection
+            .query_row(
+                "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                [&receipt.definition_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let source_generation: String = connection
+            .query_row(
+                "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
+                [&receipt.job_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        (parameters, source_generation)
+    };
+    let outcome = analysis::run_slope_job(
+        &library,
+        &receipt.job_id,
+        &receipt.definition_id,
+        &analysis::parse_parameters(&parameters).unwrap(),
+        &source_generation,
+        &cancel,
+    )
+    .expect("slope job runs");
+    assert!(outcome.published, "slope result published: {}", outcome.summary());
+    let analysis_head = {
+        let connection = library.catalogue().unwrap();
+        catalogue::head_analysis_generation(&connection, &receipt.definition_id)
+            .unwrap()
+            .expect("analysis head")
+    };
+    let analysis_manifest: analysis::ResultManifest =
+        serde_json::from_str(&analysis_head.manifest_json).unwrap();
+    assert_eq!(
+        analysis_manifest.format,
+        import::GenerationStorageFormat::CogChunksV1,
+        "the bounded slope publishes sparse chunks"
+    );
+    let (result_chunks, quality_chunks) = {
+        let connection = library.catalogue().unwrap();
+        (
+            catalogue::generation_chunk_assets(&connection, &analysis_head.id, "result").unwrap(),
+            catalogue::generation_chunk_assets(&connection, &analysis_head.id, "quality").unwrap(),
+        )
+    };
+    assert!(!result_chunks.is_empty(), "result chunks published");
+    assert!(!quality_chunks.is_empty(), "quality chunks published");
+    println!(
+        "sparse slope: {} result chunks, {} quality chunks, range {:?}..{:?}",
+        result_chunks.len(),
+        quality_chunks.len(),
+        analysis_head.min_value,
+        analysis_head.max_value
+    );
+    let snapshot = library.library_snapshot().expect("snapshot after analysis");
+    let analysis_tileset = snapshot.analyses[0]
+        .tilesets
+        .iter()
+        .find(|tileset| tileset.style == "slope")
+        .expect("a sparse result is displayable");
+    assert!(matches!(
+        analysis_tileset.source,
+        common_types::lidar::LidarTileSource::NativeGeneration { .. }
+    ));
+
+    // 4. Restart reuse: the sparse head, its tiles and its result survive.
+    drop(library);
+    let reopened = LidarLibrary::open(&work).expect("library reopens");
+    let snapshot = reopened.library_snapshot().expect("snapshot after restart");
+    assert_eq!(
+        snapshot.layers[0].coverage_cells,
+        head.coverage_cells.max(0) as u64,
+        "coverage survives restart"
+    );
+    assert!(matches!(
+        snapshot.layers[0].tilesets[0].source,
+        common_types::lidar::LidarTileSource::NativeGeneration { .. }
+    ));
+    let rendered = reopened
+        .render_tile("source", &layer_id, &generation_id, "elevation", z, x, y, &cancel)
+        .expect("tile renders after restart");
+    assert_eq!(rendered, bytes, "the same immutable head renders the same tile");
+
+    // 5. Undo republishes from the remaining occurrences.
+    let undone = import::undo_import(&reopened, &job_id, &cancel).expect("undo publishes");
+    assert!(undone.changed, "{}", undone.summary());
+    let after_undo = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .expect("head after undo")
+    };
+    assert_eq!(after_undo.id, undone.generation_id);
+    assert_eq!(
+        after_undo.coverage_cells, 0,
+        "undoing the only import leaves no coverage"
+    );
+    // The replaced generation and its chunks stay as immutable history.
+    let history_chunks = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
+    };
+    assert_eq!(history_chunks.len(), 4, "history keeps its chunks");
+
+    drop(reopened);
+    drop(guard);
+    let _ = std::fs::remove_dir_all(&work);
+}
