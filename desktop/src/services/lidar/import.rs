@@ -605,12 +605,56 @@ pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Resul
     let cells = u64::from(grid.width)
         .checked_mul(u64::from(grid.height))
         .ok_or_else(|| format!("{operation} dimensions overflow"))?;
-    if cells > MAX_DENSE_WORKING_CELLS {
+    if cells > dense_working_limit() {
         return Err(format!(
             "{operation} requires {cells} cells; the current dense raster engine limit is {MAX_DENSE_WORKING_CELLS}"
         ));
     }
     Ok(())
+}
+
+/// The dense working-area ceiling in force for this call.
+///
+/// Production keeps the accepted limit. The representative large-fixture runs
+/// this batch is authorized to attempt raise it for their own thread through
+/// [`dense_working_probe`], so a 48M-cell batch or a million-pixel gap can be
+/// exercised without exposing unsupported large dense jobs to users.
+fn dense_working_limit() -> u64 {
+    #[cfg(test)]
+    {
+        if let Some(limit) = dense_working_probe::override_limit() {
+            return limit;
+        }
+    }
+    MAX_DENSE_WORKING_CELLS
+}
+
+/// Test-only seam for the dense working-area ceiling.
+#[cfg(test)]
+pub(crate) mod dense_working_probe {
+    use std::cell::Cell;
+
+    thread_local! {
+        static LIMIT: Cell<Option<u64>> = const { Cell::new(None) };
+    }
+
+    pub(crate) fn override_limit() -> Option<u64> {
+        LIMIT.with(Cell::get)
+    }
+
+    /// Raise the ceiling until the guard is dropped.
+    pub(crate) fn raise_to(limit: u64) -> Guard {
+        LIMIT.with(|slot| slot.set(Some(limit)));
+        Guard
+    }
+
+    pub(crate) struct Guard;
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            LIMIT.with(|slot| slot.set(None));
+        }
+    }
 }
 
 fn stage_managed_original(
@@ -4409,6 +4453,155 @@ mod tests {
         assert!(values.iter().all(|value| *value == 5.0));
         assert!(Path::new(&legacy_mosaic).exists());
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    // -----------------------------------------------------------------------
+    // B5: representative sparse-gap run
+    // -----------------------------------------------------------------------
+
+    /// Two members a million pixels apart plus one that extends the lattice
+    /// left of the anchor: only the occupied chunks may be stored, read and
+    /// displayed, and the gap must never be walked.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn sparse_gap_import_stores_only_occupied_chunks() {
+        let root = std::env::temp_dir().join(new_id("canopi-gap-run"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let _gate = generation::chunked_publication::enable();
+        // The union spans ~45M cells, which the dense working ceiling refuses
+        // on purpose: the sparse route must not need a union-sized buffer.
+        let _ceiling = dense_working_probe::raise_to(64 * 1024 * 1024);
+
+        let left =
+            write_placed_fixture(&engine, &root, "left", -500.0, 1000.0, 40, 30, -9999.0, 3.0);
+        let anchor =
+            write_placed_fixture(&engine, &root, "anchor", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
+        let far = write_placed_fixture(
+            &engine,
+            &root,
+            "far",
+            1_000_000.0,
+            1000.0,
+            32,
+            24,
+            -9999.0,
+            7.0,
+        );
+        let expected_cells = (60 * 45 + 40 * 30 + 32 * 24) as u64;
+
+        let layer_id = library
+            .create_layer(
+                "sparse gap",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        // The lattice anchors on the first selected source, so selecting the
+        // anchor first makes the left member extend it into negative cells.
+        let (job_id, staging) = stage_review(&library, &layer_id, &[anchor, left, far], &cancel);
+        assert!(
+            staging.union_grid.width > 1_000_000,
+            "the union spans the gap: {}",
+            staging.union_grid.width
+        );
+        assert_eq!(staging.uncovered_cells, expected_cells);
+        library.prepare_apply(&job_id).expect("review accepted");
+        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
+        assert!(applied.changed);
+
+        let head = head_of(&library, &layer_id);
+        assert_eq!(head.coverage_cells, expected_cells as i64);
+        assert_eq!(head.min_value, Some(3.0));
+        assert_eq!(head.max_value, Some(7.0));
+        let (chunks, bytes) = {
+            let connection = library.catalogue().unwrap();
+            let chunks =
+                catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap();
+            let bytes: i64 = connection
+                .query_row(
+                    "SELECT COALESCE(SUM(a.bytes), 0) FROM lidar_generation_chunks g
+                     JOIN lidar_raster_assets a ON a.sha256 = g.asset_sha256
+                     WHERE g.generation_id = ?1 AND g.state = 'published'",
+                    [&head.id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            (chunks, bytes)
+        };
+        let occupied: Vec<(i64, i64)> = chunks
+            .iter()
+            .map(|chunk| (chunk.chunk_x, chunk.chunk_y))
+            .collect();
+        assert_eq!(
+            occupied.len(),
+            2,
+            "one chunk per occupied cell group: {occupied:?}"
+        );
+        assert!(occupied.iter().any(|(x, _)| *x > 900), "{occupied:?}");
+        // Two chunks cost two chunks' bytes, never the union's area: the union
+        // is ~45M cells, so an area-proportional write would be hundreds of
+        // megabytes.
+        assert!(
+            bytes < 2 * 8 * 1024 * 1024,
+            "written bytes must be chunk-sized, not area-proportional: {bytes}"
+        );
+        let gap_rows: i64 = {
+            let connection = library.catalogue().unwrap();
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM lidar_generation_chunks
+                     WHERE generation_id = ?1 AND chunk_x BETWEEN 1 AND 900",
+                    [&head.id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(gap_rows, 0, "the gap holds no index row at all");
+
+        // Reads: exact values inside each member, exactly invalid in the gap.
+        let chunk_list = {
+            let connection = library.catalogue().unwrap();
+            generation::persisted_chunks(
+                &connection,
+                &library.inner.paths,
+                &head.id,
+                generation::RESULT_ROLE,
+            )
+            .unwrap()
+        };
+        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
+        let sample = |x: i64, y: i64| -> (f32, u8) {
+            let window = generation::read_persisted_window(
+                &chunk_list,
+                &manifest.grid,
+                generation::LatticeWindow {
+                    x,
+                    y,
+                    width: 1,
+                    height: 1,
+                },
+                &cancel,
+            )
+            .unwrap();
+            (window.samples[0], window.valid[0])
+        };
+        // The union re-anchors on the expanded extent, so the left member owns
+        // the lattice origin and the first-selected anchor sits 500 cells in.
+        let (value, valid) = sample(0, 0);
+        assert_eq!((value, valid), (3.0, 1));
+        let (value, valid) = sample(500, 0);
+        assert_eq!((value, valid), (5.0, 1));
+        let (_, valid) = sample(600, 0);
+        assert_eq!(valid, 0, "the gap is exactly invalid");
+        let (_, valid) = sample(999_999, 0);
+        assert_eq!(valid, 0, "the gap is invalid for its whole width");
+        let (value, valid) = sample(1_000_500, 0);
+        assert_eq!((value, valid), (7.0, 1));
+
+        drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

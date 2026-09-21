@@ -305,6 +305,33 @@ pub fn generate_pyramid(
     })
 }
 
+/// Largest preview side, matching the review surface's fixed-size target.
+const PREVIEW_MAX_SIDE: u32 = 512;
+
+/// Both preview dimensions, bounded to `1..=512` with the aspect preserved.
+fn preview_target_size(
+    engine: &GdalEngine,
+    cancel: &AtomicBool,
+    numeric_raster: &Path,
+) -> Result<(u32, u32), String> {
+    let info = gdalinfo_json(engine, cancel, numeric_raster)?;
+    let (width, height) = raster_size(&info)?;
+    if width == 0 || height == 0 {
+        return Err(format!(
+            "preview input {} has an empty raster size",
+            numeric_raster.display()
+        ));
+    }
+    let longest = width.max(height);
+    if longest <= PREVIEW_MAX_SIDE {
+        return Ok((width.max(1), height.max(1)));
+    }
+    let scale = f64::from(PREVIEW_MAX_SIDE) / f64::from(longest);
+    let scaled_width = ((f64::from(width) * scale).round() as u32).clamp(1, PREVIEW_MAX_SIDE);
+    let scaled_height = ((f64::from(height) * scale).round() as u32).clamp(1, PREVIEW_MAX_SIDE);
+    Ok((scaled_width, scaled_height))
+}
+
 /// Render one small fixed-style preview PNG for the import review surface.
 pub fn generate_preview(
     engine: &GdalEngine,
@@ -322,13 +349,17 @@ pub fn generate_preview(
     std::fs::create_dir_all(&scratch)
         .map_err(|e| format!("Failed to create preview scratch: {e}"))?;
     let warped = scratch.join("preview.tif");
+    // A fixed 512-wide target collapses an extreme aspect ratio to zero rows
+    // (or columns), which GDAL refuses. Both preview dimensions are therefore
+    // bounded to 1..=512 with the aspect ratio preserved.
+    let (target_width, target_height) = preview_target_size(engine, cancel, numeric_raster)?;
     let mut warp_args = vec![
         "-q".to_string(),
         "-t_srs".to_string(),
         "EPSG:3857".to_string(),
         "-ts".to_string(),
-        "512".to_string(),
-        "0".to_string(),
+        target_width.to_string(),
+        target_height.to_string(),
         "-r".to_string(),
         "bilinear".to_string(),
         "-ot".to_string(),

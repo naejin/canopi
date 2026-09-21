@@ -38,7 +38,8 @@ caller-level tests, not an inert module.
 | Tagged tile-source contract, bounded native tile renderer and command, raster URL builder | `4fe2f55a` |
 | MapLibre raster protocol adapter, bounded display admission and cancellation | `0a0dedf5` |
 | Shared bounded display cache (memory + disk) with leases, eviction and invalidation | `6ae0ba0d` |
-| Reprojected lattice mapping fix, analysis tileset fix, sparse real-fixture lifecycle | the commit that carries this receipt |
+| Reprojected lattice mapping fix, analysis tileset fix, sparse real-fixture lifecycle | `f7313624` |
+| Dense-ceiling test seam, bounded preview target, sparse-gap representative run | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -215,6 +216,17 @@ Catalogue tests:
   means, and malformed-request rejection. The contract's wire shape is pinned
   by `common_types::lidar::tests::tile_source_wire_shape_is_tagged_and_stable`,
   and the frontend covers both URL forms plus raster-URL parsing and rejection.
+- Sparse-gap representative run (authored, GDAL required):
+  `sparse_gap_import_stores_only_occupied_chunks` imports three members whose
+  union spans ~1,000,000 columns and ~45M cells — far beyond the dense working
+  ceiling, which the run raises only for its own thread through the new
+  test-only `dense_working_probe` seam — and asserts the whole flow stays
+  chunk-sized: two occupied chunks (one of them 977 chunks away), no index row
+  anywhere in the gap, written bytes bounded by two chunks, and window reads
+  that return each member's exact value while the gap is exactly invalid. The
+  run also caught a pre-existing preview defect: the fixed 512-wide review
+  target collapsed an extreme aspect ratio to zero rows, so both preview
+  dimensions are now bounded to 1..=512 with the aspect preserved.
 - Real fixture (IGN MNT `0445_6806`, hash `7b8773046c27d3f42d9f6548c7adc24fca810de19ea6ed5f49b29302e22076ad`):
   `e2e_sparse_generation_lifecycle` publishes the 2000×2000 EPSG:2154 tile as
   four occupied resolved chunks (4,000,000 cells, 150.84–191.81 m), renders a
@@ -281,6 +293,17 @@ concurrently running reader test could reset another test's evidence.
   measurements that justify the change of default storage.
 - No `base_generation_id` overlay: a legacy head without durable member history
   still takes the accepted dense route (correct, but not the sparse target).
+- **Lattice anchor deviation.** `union_grid` re-anchors the union on the
+  expanded extent, so a member that extends the layer left or up moves the
+  lattice origin and shifts every chunk coordinate of the unchanged members
+  (content-addressed assets still dedupe by content, but the index rows move
+  and the design's "never move the layer anchor" rule is not yet met). The
+  resolver itself handles negative lattice cells correctly and is tested for
+  them; what is missing is a per-layer fixed lattice that generations inherit.
+  This is the first item to fix before the sparse format becomes the default.
+- Review classification still assembles a dense union buffer, so a
+  million-column union is exercised through the raised test-only ceiling rather
+  than by a block-wise review.
 - The retained source COG is still not written by staging, so sparse members are
   read from durable dense raw/mask assets; retained source COGs and their
   content-addressed admission remain open.
