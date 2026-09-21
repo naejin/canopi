@@ -1,19 +1,12 @@
-#![allow(dead_code)] // Temporary: see the module note below.
 //!
 //! Standard COG assets: creation, digesting, admission and 0/1 quality reads.
 //!
 //! One controlled profile carries every persisted raster: single-band
 //! Float32, 256×256 internal TIFF tiles, uncompressed, no overviews and no
-//! internal mask. Source preparation, resolved generation chunks and analysis
-//! quality chunks all use it, so one reader validates them all. Assets are
-//! content-addressed and immutable; a reader never deletes one.
-//!
-//! Wiring status: the generation resolver and publication caller that consume
-//! these primitives land in B2, so until then the compiler sees no production
-//! caller and this module (plus the reader/path items only it uses) carries an
-//! explicit dead-code allowance. Its behaviour is exercised by the GDAL and
-//! native-reader round-trip tests below. Remove the allowance when the
-//! resolver is wired (`canopi-jv8a.4`).
+//! internal mask. Retained source COGs, resolved generation chunks and
+//! analysis quality chunks all use it, so one reader validates them all.
+//! Assets are content-addressed and immutable; a reader never deletes one, and
+//! a cancelled or failed job only removes files it staged itself.
 
 use super::engine::{GdalEngine, GdalProgram};
 use super::grid::RasterGrid;
@@ -127,15 +120,64 @@ pub(super) fn write_cog_asset(
     let _ = std::fs::remove_file(&header);
     created?;
 
+    admit_staged_cog(paths, &staged, grid, nodata)
+}
+
+/// Create one retained source-sized COG from an existing raster.
+///
+/// The conversion streams through GDAL from the input file: no whole-source
+/// buffer is built in Rust, which is what lets a source COG be retained
+/// instead of a durable raw/mask pair. `additional_output_bytes` is the numeric
+/// output the caller will write while the conversion is alive, charged together
+/// with the conversion itself and the shared reserve.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn write_source_cog_asset(
+    engine: &GdalEngine,
+    cancel: &AtomicBool,
+    paths: &LidarPaths,
+    scratch: &Path,
+    stem: &str,
+    input: &Path,
+    grid: &RasterGrid,
+    crs_wkt: &str,
+    nodata: Option<f32>,
+    additional_output_bytes: u64,
+) -> Result<CogAsset, String> {
+    let required =
+        prepared_raster::required_free_bytes(grid.width, grid.height, additional_output_bytes)?;
+    super::paths::require_free_space(scratch, required, "the retained source COG")?;
+    let staged = scratch.join(format!("{stem}.tif"));
+    let created = engine.run(
+        GdalProgram::Translate,
+        &prepared_raster::controlled_cog_arguments(input, &staged, crs_wkt, grid, nodata),
+        Some(cancel),
+    );
+    if let Err(error) = created {
+        let _ = std::fs::remove_file(&staged);
+        return Err(error);
+    }
+    admit_staged_cog(paths, &staged, grid, nodata)
+}
+
+/// Validate, digest and admit one staged COG into the content-addressed store.
+///
+/// Validation happens before the asset can be referenced: opening the staged
+/// file through the production reader rejects a wrong layout or truncation.
+/// An identical digest already on disk is reused, and a staged file that is not
+/// admitted is removed, so a failed conversion leaves nothing behind.
+pub(super) fn admit_staged_cog(
+    paths: &LidarPaths,
+    staged: &Path,
+    grid: &RasterGrid,
+    nodata: Option<f32>,
+) -> Result<CogAsset, String> {
     let admitted = (|| -> Result<CogAsset, String> {
-        // Validate the profile before the asset can be referenced: opening it
-        // through the production reader rejects a wrong layout or truncation.
-        let reader = PreparedRaster::open_committed(&staged, grid, nodata)?;
+        let reader = PreparedRaster::open_committed(staged, grid, nodata)?;
         drop(reader);
-        let (sha256, bytes) = hash_file(&staged)?;
+        let (sha256, bytes) = hash_file(staged)?;
         let target = paths.asset_cog(&sha256);
         if target.exists() {
-            let _ = std::fs::remove_file(&staged);
+            let _ = std::fs::remove_file(staged);
         } else {
             std::fs::create_dir_all(
                 target
@@ -143,7 +185,7 @@ pub(super) fn write_cog_asset(
                     .ok_or_else(|| "asset path has no directory".to_string())?,
             )
             .map_err(|e| format!("Failed to create asset directory: {e}"))?;
-            std::fs::rename(&staged, &target)
+            std::fs::rename(staged, &target)
                 .map_err(|e| format!("Failed to publish raster asset: {e}"))?;
         }
         Ok(CogAsset {
@@ -155,7 +197,7 @@ pub(super) fn write_cog_asset(
         })
     })();
     if admitted.is_err() {
-        let _ = std::fs::remove_file(&staged);
+        let _ = std::fs::remove_file(staged);
     }
     admitted
 }
@@ -164,6 +206,9 @@ pub(super) fn write_cog_asset(
 ///
 /// Quality assets carry no NoData tag and every sample must be exactly 0.0 or
 /// 1.0; anything else is a corrupt asset rather than a silent partial mask.
+// No production caller yet: the quality display consumer is deferred, and this
+// read surface exists so the B1 round-trip is exercised end to end.
+#[allow(dead_code)]
 pub(super) fn read_quality_window(
     asset: &CogAsset,
     window: RasterWindow,

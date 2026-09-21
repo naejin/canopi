@@ -25,7 +25,7 @@ use common_types::lidar::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -46,10 +46,43 @@ pub struct StagedSource {
     pub nodata: Option<f32>,
     pub value_range: [f64; 2],
     pub size_bytes: u64,
+    /// The retained controlled source COG this interpretation reads from.
+    ///
+    /// Absent only in a staged job written before source retention existed:
+    /// such a job is still reviewable and publishable through its disposable
+    /// raw/mask scratch, which is why those paths stay optional.
+    #[serde(default)]
+    pub source_cog: Option<RetainedSourceCog>,
+    #[serde(default)]
     pub valid_mask_path: PathBuf,
+    #[serde(default)]
     pub raw_samples_path: PathBuf,
     pub compatible: bool,
     pub issues: Vec<String>,
+}
+
+/// One retained controlled source COG, as a staged job records it.
+///
+/// The digest names the immutable content-addressed asset; the grid lives on
+/// the staged source itself, and the effective NoData is this source's own
+/// rule, never another member's sentinel.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RetainedSourceCog {
+    pub sha256: String,
+    pub bytes: u64,
+    pub nodata: Option<f32>,
+    pub value_range: [f64; 2],
+}
+
+impl RetainedSourceCog {
+    /// Open this source's retained COG for bounded reads.
+    pub(super) fn open(
+        &self,
+        paths: &LidarPaths,
+        grid: &RasterGrid,
+    ) -> Result<PreparedRaster, String> {
+        PreparedRaster::open_committed(&paths.asset_cog(&self.sha256), grid, self.nodata)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,6 +271,7 @@ pub fn stage_import(
         review_coverage(
             &head_source,
             &compatible,
+            paths,
             &union,
             layer_nodata,
             true,
@@ -443,6 +477,7 @@ pub fn render_decision_preview(
         review_coverage(
             &head_source,
             &compatible,
+            paths,
             &staging.union_grid,
             staging.layer_nodata,
             add_uncovered,
@@ -895,27 +930,27 @@ fn stage_source(
         );
     }
 
-    // Exact valid mask, value range and raw samples, streamed in bounded
-    // windows from one controlled derivative: the managed original is never
-    // loaded whole and the derivative is removed before this returns.
+    // One retained controlled source COG carries this interpretation's numbers
+    // from here on; the managed original is never loaded whole and no durable
+    // raw/mask pair is written beside it.
     let source_grid = RasterGrid {
         width: probe.width,
         height: probe.height,
         geotransform: probe.geotransform,
     };
     validate_working_grid(&source_grid, "source raster")?;
-    let mask_path = job_dir.join(format!("valid-{sha256}.bin"));
-    let raw_path = job_dir.join(format!("source-{sha256}.raw"));
-    let value_range = stage_source_samples(
+    let (source_cog, regions) = stage_source_samples(
         engine,
+        cancel,
+        paths,
         &managed_original,
         &source_grid,
+        &probe.crs_wkt,
         probe.nodata,
         job_dir,
-        &raw_path,
-        &mask_path,
-        cancel,
+        &sha256,
     )?;
+    let value_range = source_cog.value_range;
 
     if let Some(expected) = layer_grid
         && let Err(error) = source_grid.compatible(expected)
@@ -970,6 +1005,26 @@ fn stage_source(
             ],
         )
         .map_err(|e| format!("Failed to record interpretation: {e}"))?;
+    if !regions.is_empty() {
+        let rows: Vec<(i64, i64, i64, f64, f64, f64)> = regions
+            .iter()
+            .map(|region| {
+                (
+                    region.block_x,
+                    region.block_y,
+                    region.valid_cells,
+                    region.min_value,
+                    region.max_value,
+                    region.sum_value,
+                )
+            })
+            .collect();
+        catalogue::replace_interpretation_regions(
+            &connection,
+            &format!("interp-{interp_hash}"),
+            &rows,
+        )?;
+    }
     let _ = layer_id;
 
     Ok(StagedSource {
@@ -984,8 +1039,9 @@ fn stage_source(
         nodata: probe.nodata,
         value_range,
         size_bytes,
-        valid_mask_path: mask_path,
-        raw_samples_path: raw_path,
+        source_cog: Some(source_cog),
+        valid_mask_path: PathBuf::new(),
+        raw_samples_path: PathBuf::new(),
         compatible: issues.is_empty(),
         issues,
     })
@@ -1008,136 +1064,66 @@ fn stage_source(
 #[allow(clippy::too_many_arguments)]
 fn stage_source_samples(
     engine: &GdalEngine,
+    cancel: &AtomicBool,
+    paths: &LidarPaths,
     input: &Path,
     grid: &RasterGrid,
+    crs_wkt: &str,
     nodata: Option<f32>,
     job_dir: &Path,
-    raw_path: &Path,
-    mask_path: &Path,
-    cancel: &AtomicBool,
-) -> Result<[f64; 2], String> {
-    let cells = u64::from(grid.width)
-        .checked_mul(u64::from(grid.height))
-        .ok_or_else(|| "source raster dimensions overflow".to_string())?;
-    let raw_bytes = cells
-        .checked_mul(4)
-        .ok_or_else(|| "source raster byte count overflows".to_string())?;
-    let staged_output_bytes = cells
-        .checked_mul(5)
-        .ok_or_else(|| "staged source size overflows".to_string())?;
-
-    let staged = (|| -> Result<[f64; 2], String> {
-        let mut reader = PreparedRaster::open(
-            engine,
-            input,
-            grid,
+    sha256: &str,
+) -> Result<(RetainedSourceCog, Vec<generation::RegionAggregate>), String> {
+    let stem = format!("source-cog-{}", &sha256[..sha256.len().min(16)]);
+    // The conversion streams through GDAL and the admitted COG is the durable
+    // output, so no additional numeric output is charged beside it. The
+    // combined footprint is measured against the job scratch, which holds the
+    // conversion until it is admitted.
+    let asset = super::raster_assets::write_source_cog_asset(
+        engine, cancel, paths, job_dir, &stem, input, grid, crs_wkt, nodata, 0,
+    )?;
+    // Facts and occupied regions are derived from the retained COG itself, in
+    // bounded windows: no second durable payload is created to describe it.
+    let mut reader = PreparedRaster::open_committed(&asset.path, grid, nodata)?;
+    let (value_range, _valid_cells) = scan_source_facts(&mut reader, cancel)?;
+    let regions = generation::member_regions(&mut reader, grid, grid, cancel)?;
+    drop(reader);
+    Ok((
+        RetainedSourceCog {
+            sha256: asset.sha256,
+            bytes: asset.bytes,
             nodata,
-            staged_output_bytes,
-            job_dir,
-            cancel,
-        )?;
-        write_source_outputs(&mut reader, grid, raw_path, mask_path, cancel)
-    })();
-    match staged {
-        Ok(range) => {
-            for (path, expected) in [(raw_path, raw_bytes), (mask_path, cells)] {
-                let written = std::fs::metadata(path)
-                    .map_err(|e| format!("Failed to inspect {}: {e}", path.display()))?
-                    .len();
-                if written != expected {
-                    let _ = std::fs::remove_file(raw_path);
-                    let _ = std::fs::remove_file(mask_path);
-                    return Err(format!(
-                        "staged {} has {written} bytes, expected {expected}",
-                        path.display()
-                    ));
-                }
-            }
-            Ok(range)
-        }
-        Err(error) => {
-            let _ = std::fs::remove_file(raw_path);
-            let _ = std::fs::remove_file(mask_path);
-            Err(error)
-        }
-    }
+            value_range,
+        },
+        regions,
+    ))
 }
 
-/// Write the exact persisted row-major layouts from a bounded window scan.
-fn write_source_outputs(
+/// Value range of one retained source, scanned in bounded windows.
+fn scan_source_facts(
     reader: &mut PreparedRaster,
-    grid: &RasterGrid,
-    raw_path: &Path,
-    mask_path: &Path,
     cancel: &AtomicBool,
-) -> Result<[f64; 2], String> {
-    let mut raw = PositionedWriter::create(raw_path, "staged samples")?;
-    let mut mask = PositionedWriter::create(mask_path, "staged valid mask")?;
-    let mut row = Vec::new();
+) -> Result<([f64; 2], u64), String> {
     let (mut min, mut max) = (f64::INFINITY, f64::NEG_INFINITY);
-    reader.scan(cancel, |window, samples, valid| {
-        for line in 0..window.height {
-            let start = line as usize * window.width as usize;
-            let stop = start + window.width as usize;
-            row.clear();
-            for value in &samples[start..stop] {
-                row.extend_from_slice(&value.to_le_bytes());
-                if value.is_finite() {
-                    min = min.min(*value as f64);
-                    max = max.max(*value as f64);
-                }
+    let mut valid_cells = 0u64;
+    reader.scan(cancel, |_window, samples, valid| {
+        for (value, valid) in samples.iter().zip(valid.iter()) {
+            // The accepted source-range behaviour spans every finite sample,
+            // declared finite NoData sentinels included; the valid-only
+            // discrepancy stays tracked in `canopi-jv8a.2`.
+            if value.is_finite() {
+                min = min.min(f64::from(*value));
+                max = max.max(f64::from(*value));
             }
-            let cell = u64::from(window.y + line) * u64::from(grid.width) + u64::from(window.x);
-            raw.write_at(cell * 4, &row)?;
-            mask.write_at(cell, &valid[start..stop])?;
+            if *valid != 0 {
+                valid_cells = valid_cells.saturating_add(1);
+            }
         }
         Ok(())
     })?;
-    raw.finish()?;
-    mask.finish()?;
     if min.is_finite() {
-        Ok([min, max])
+        Ok(([min, max], valid_cells))
     } else {
-        Ok([0.0, 0.0])
-    }
-}
-
-/// Row-addressed writer that keeps the persisted layout exact without
-/// buffering a whole row band.
-struct PositionedWriter {
-    file: std::fs::File,
-    next_offset: u64,
-    what: &'static str,
-}
-
-impl PositionedWriter {
-    fn create(path: &Path, what: &'static str) -> Result<Self, String> {
-        let file =
-            std::fs::File::create(path).map_err(|e| format!("Failed to create {what}: {e}"))?;
-        Ok(Self {
-            file,
-            next_offset: 0,
-            what,
-        })
-    }
-
-    fn write_at(&mut self, offset: u64, bytes: &[u8]) -> Result<(), String> {
-        if offset != self.next_offset {
-            self.file
-                .seek(SeekFrom::Start(offset))
-                .map_err(|e| format!("Failed to position {}: {e}", self.what))?;
-        }
-        self.file
-            .write_all(bytes)
-            .map_err(|e| format!("Failed to write {}: {e}", self.what))?;
-        self.next_offset = offset + bytes.len() as u64;
-        Ok(())
-    }
-
-    fn finish(mut self) -> Result<(), String> {
-        self.file
-            .flush()
-            .map_err(|e| format!("Failed to flush {}: {e}", self.what))
+        Ok(([0.0, 0.0], valid_cells))
     }
 }
 
@@ -1340,6 +1326,108 @@ struct ComposedBlock {
     incoming: Vec<u8>,
 }
 
+/// Open readers reused across one bounded walk, keyed by source digest.
+///
+/// Opening a retained COG validates its layout but prepares nothing and charges
+/// nothing, so one open per source serves a whole review walk.
+#[derive(Default)]
+struct SourceReaders {
+    open: std::collections::HashMap<String, PreparedRaster>,
+}
+
+impl SourceReaders {
+    fn release(&mut self) {
+        self.open.clear();
+    }
+}
+
+/// Read one incoming source window.
+///
+/// A source with a retained COG reads through the production reader, so its
+/// validity is the source's own effective NoData rule; a staged job written
+/// before retention still reads its disposable raw/mask scratch.
+fn read_source_window(
+    source: &StagedSource,
+    paths: &LidarPaths,
+    readers: &mut SourceReaders,
+    window: RasterWindow,
+    cancel: &AtomicBool,
+) -> Result<(Vec<f32>, Vec<u8>), String> {
+    let grid = grid_for_source(source);
+    let Some(cog) = source.source_cog.as_ref() else {
+        return generation::read_legacy_window(
+            &source.raw_samples_path,
+            &source.valid_mask_path,
+            &grid,
+            window,
+            cancel,
+        );
+    };
+    if !readers.open.contains_key(&cog.sha256) {
+        readers
+            .open
+            .insert(cog.sha256.clone(), cog.open(paths, &grid)?);
+    }
+    let reader = readers
+        .open
+        .get_mut(&cog.sha256)
+        .ok_or_else(|| "source reader cache lost its entry".to_string())?;
+    let read = reader.read_window(window, cancel)?;
+    Ok((read.samples().to_vec(), read.valid().to_vec()))
+}
+
+/// Read a whole incoming source payload for the preserved dense composition.
+///
+/// That branch is source-sized by design; a retained COG is scanned in bounded
+/// windows into its buffer, while a pre-retention staged job reads its raw/mask
+/// scratch directly.
+fn read_source_payload(
+    source: &StagedSource,
+    paths: &LidarPaths,
+    cancel: &AtomicBool,
+) -> Result<(Vec<f32>, Vec<u8>), String> {
+    let grid = grid_for_source(source);
+    match source.source_cog.as_ref() {
+        Some(cog) => read_cog_payload(cog, paths, &grid, cancel),
+        None => {
+            let raw = std::fs::read(&source.raw_samples_path)
+                .map_err(|e| format!("Failed to read staged samples: {e}"))?;
+            validate_f32_raw(&raw, source.width, source.height)?;
+            let valid = ValidMask::read_from(&source.valid_mask_path, source.width, source.height)?;
+            Ok((f32_values(&raw), valid.bytes().to_vec()))
+        }
+    }
+}
+
+/// Read one whole retained COG payload in bounded windows.
+///
+/// The values are the source's own numbers with its effective NoData rule
+/// already applied to the returned validity, so no caller needs a second
+/// sentinel convention.
+fn read_cog_payload(
+    cog: &RetainedSourceCog,
+    paths: &LidarPaths,
+    grid: &RasterGrid,
+    cancel: &AtomicBool,
+) -> Result<(Vec<f32>, Vec<u8>), String> {
+    let cells = usize::try_from(u64::from(grid.width) * u64::from(grid.height))
+        .map_err(|_| "source raster is too large for this platform".to_string())?;
+    let mut values = vec![0f32; cells];
+    let mut valid = vec![0u8; cells];
+    let mut reader = cog.open(paths, grid)?;
+    reader.scan(cancel, |window, samples, window_valid| {
+        for row in 0..window.height {
+            let start = row as usize * window.width as usize;
+            let target = (window.y + row) as usize * grid.width as usize + window.x as usize;
+            let width = window.width as usize;
+            values[target..target + width].copy_from_slice(&samples[start..start + width]);
+            valid[target..target + width].copy_from_slice(&window_valid[start..start + width]);
+        }
+        Ok(())
+    })?;
+    Ok((values, valid))
+}
+
 /// Compose one bounded union block from the accepted head and the incoming
 /// sources, applying the accepted roles.
 ///
@@ -1349,6 +1437,8 @@ struct ComposedBlock {
 fn compose_union_block(
     head: &HeadBlockSource,
     sources: &[&StagedSource],
+    readers: &mut SourceReaders,
+    paths: &LidarPaths,
     union: &RasterGrid,
     window: LatticeWindow,
     nodata: f32,
@@ -1364,13 +1454,8 @@ fn compose_union_block(
         if window_in_source.width == 0 || window_in_source.height == 0 {
             continue;
         }
-        let (source_values, source_valid) = generation::read_legacy_window(
-            &source.raw_samples_path,
-            &source.valid_mask_path,
-            &grid_for_source(source),
-            window_in_source,
-            cancel,
-        )?;
+        let (source_values, source_valid) =
+            read_source_window(source, paths, readers, window_in_source, cancel)?;
         let offset_x = ((source.geotransform[0] - union.geotransform[0]) / union.geotransform[1])
             .round() as i64;
         let offset_y = ((union.geotransform[3] - source.geotransform[3])
@@ -1468,6 +1553,7 @@ struct ReviewCoverage {
 fn review_coverage(
     head: &HeadBlockSource,
     sources: &[&StagedSource],
+    paths: &LidarPaths,
     union: &RasterGrid,
     nodata: f32,
     add_uncovered: bool,
@@ -1485,11 +1571,14 @@ fn review_coverage(
     let mut overlap_cells = 0u64;
     let mut incoming_cells = 0u64;
     let (mut preview_min, mut preview_max) = (f64::INFINITY, f64::NEG_INFINITY);
+    let mut readers = SourceReaders::default();
     for window in union_blocks(union) {
         check_cancel(cancel)?;
         let composed = compose_union_block(
             head,
             sources,
+            &mut readers,
+            paths,
             union,
             window,
             nodata,
@@ -1537,6 +1626,7 @@ fn review_coverage(
             }
         }
     }
+    readers.release();
     if !preview_min.is_finite() {
         preview_min = 0.0;
         preview_max = 0.0;
@@ -1579,18 +1669,19 @@ fn compose_values_cancellable(
     layer_values_on_union: Option<&[f32]>,
     layer_on_union: Option<&ValidMask>,
     sources: &[&StagedSource],
+    paths: &LidarPaths,
     union: &RasterGrid,
     nodata: f32,
     add_uncovered: bool,
     replace_overlap: bool,
-    cancel: Option<&AtomicBool>,
+    cancel: &AtomicBool,
 ) -> Result<ComposedMosaic, String> {
     validate_working_grid(union, "raster composition")?;
     let mut values = vec![nodata; (union.width as usize) * (union.height as usize)];
     let mut valid = ValidMask::empty(union.width, union.height);
     if let Some(layer_mask) = layer_on_union {
         for y in 0..union.height {
-            check_optional_cancel(cancel, y)?;
+            check_cancel(cancel)?;
             for x in 0..union.width {
                 if layer_mask.get(x, y) {
                     valid.set(x, y, true);
@@ -1619,18 +1710,16 @@ fn compose_values_cancellable(
         }
     }
     for source in sources {
-        let raw = std::fs::read(&source.raw_samples_path)
-            .map_err(|e| format!("Failed to read staged samples: {e}"))?;
-        validate_f32_raw(&raw, source.width, source.height)?;
-        let source_mask =
-            ValidMask::read_from(&source.valid_mask_path, source.width, source.height)?;
+        // A retained source reads through its own COG; only a staged job
+        // written before retention still reads disposable raw/mask scratch.
+        let (source_values, source_valid) = read_source_payload(source, paths, cancel)?;
         let offset_x = ((source.geotransform[0] - union.geotransform[0]) / union.geotransform[1])
             .round() as i64;
         let offset_y = ((union.geotransform[3] - source.geotransform[3])
             / union.geotransform[5].abs())
         .round() as i64;
         for y in 0..source.height {
-            check_optional_cancel(cancel, y)?;
+            check_cancel(cancel)?;
             let ty = offset_y + y as i64;
             if ty < 0 || ty >= union.height as i64 {
                 continue;
@@ -1640,7 +1729,8 @@ fn compose_values_cancellable(
                 if tx < 0 || tx >= union.width as i64 {
                     continue;
                 }
-                if !source_mask.get(x, y) {
+                let index = (y * source.width + x) as usize;
+                if source_valid[index] == 0 {
                     continue;
                 }
                 let covered = valid.get(tx as u32, ty as u32);
@@ -1650,7 +1740,7 @@ fn compose_values_cancellable(
                     add_uncovered
                 };
                 if paint {
-                    let sample = f32_sample(&raw, (y * source.width + x) as usize);
+                    let sample = source_values[index];
                     values[ty as usize * union.width as usize + tx as usize] = sample;
                     valid.set(tx as u32, ty as u32, true);
                     if sample.is_finite() {
@@ -1687,8 +1777,92 @@ pub struct MemberSource {
     pub role: String,
     pub job_id: Option<String>,
     pub grid: RasterGrid,
-    pub raw_samples_path: PathBuf,
-    pub valid_mask_path: PathBuf,
+    pub payload: MemberPayload,
+}
+
+/// Durable payload one dense replay member's samples come from.
+///
+/// A member published with source retention reads its own content-addressed
+/// COG; only history written before retention still reads a raw/mask pair.
+#[derive(Debug, Clone)]
+pub enum MemberPayload {
+    Cog {
+        sha256: String,
+        /// Effective NoData rule of this member's own samples.
+        nodata: Option<f32>,
+    },
+    LegacyDense {
+        raw_samples_path: PathBuf,
+        valid_mask_path: PathBuf,
+    },
+}
+
+/// The durable payload one staged source publishes.
+///
+/// A retained source COG is already the durable payload; a staged job written
+/// before retention carries its disposable raw/mask pair instead.
+fn member_payload_of(source: &StagedSource) -> MemberPayload {
+    match source.source_cog.as_ref() {
+        Some(cog) => MemberPayload::Cog {
+            sha256: cog.sha256.clone(),
+            nodata: cog.nodata,
+        },
+        None => MemberPayload::LegacyDense {
+            raw_samples_path: source.raw_samples_path.clone(),
+            valid_mask_path: source.valid_mask_path.clone(),
+        },
+    }
+}
+
+impl MemberPayload {
+    /// Read this member's whole payload: the dense route is source-sized by
+    /// design, and a retained COG still reads in bounded windows.
+    fn read(
+        &self,
+        paths: &LidarPaths,
+        grid: &RasterGrid,
+        cancel: &AtomicBool,
+    ) -> Result<(Vec<f32>, Vec<u8>), String> {
+        match self {
+            Self::Cog { sha256, nodata } => {
+                let cog = RetainedSourceCog {
+                    sha256: sha256.clone(),
+                    bytes: 0,
+                    nodata: *nodata,
+                    value_range: [0.0, 0.0],
+                };
+                let mut reader = cog.open(paths, grid)?;
+                let cells = usize::try_from(u64::from(grid.width) * u64::from(grid.height))
+                    .map_err(|_| "member raster is too large for this platform".to_string())?;
+                let mut values = vec![0f32; cells];
+                let mut valid = vec![0u8; cells];
+                reader.scan(cancel, |window, samples, window_valid| {
+                    for row in 0..window.height {
+                        let start = row as usize * window.width as usize;
+                        let target =
+                            (window.y + row) as usize * grid.width as usize + window.x as usize;
+                        let width = window.width as usize;
+                        values[target..target + width]
+                            .copy_from_slice(&samples[start..start + width]);
+                        valid[target..target + width]
+                            .copy_from_slice(&window_valid[start..start + width]);
+                    }
+                    Ok(())
+                })?;
+                Ok((values, valid))
+            }
+            Self::LegacyDense {
+                raw_samples_path,
+                valid_mask_path,
+            } => {
+                let raw = std::fs::read(raw_samples_path)
+                    .map_err(|e| format!("Failed to read member samples: {e}"))?;
+                validate_f32_raw(&raw, grid.width, grid.height)?;
+                let mask = ValidMask::read_from(valid_mask_path, grid.width, grid.height)?;
+                Ok((f32_values(&raw), mask.bytes().to_vec()))
+            }
+        }
+    }
 }
 
 /// Directory of the durable prepared assets for one interpretation.
@@ -1696,15 +1870,61 @@ pub fn member_prepared_dir(paths: &LidarPaths, interp_hash: &str) -> PathBuf {
     paths.prepared_dir().join("sources").join(interp_hash)
 }
 
+/// Record one retained source COG as an interpretation's durable payload.
+///
+/// Content-addressed assets are shared and immutable, so an interpretation that
+/// already references this digest keeps its reference and a legacy
+/// interpretation's own files are never touched. The caller publishes the
+/// generation in its own transaction; this only makes the asset reference
+/// resolvable.
+fn publish_member_cog(
+    connection: &rusqlite::Connection,
+    paths: &LidarPaths,
+    source: &StagedSource,
+    cog: &RetainedSourceCog,
+) -> Result<PathBuf, String> {
+    let grid = grid_for_source(source);
+    let asset = super::raster_assets::CogAsset {
+        sha256: cog.sha256.clone(),
+        path: paths.asset_cog(&cog.sha256),
+        bytes: cog.bytes,
+        grid: grid.clone(),
+        nodata: source.nodata,
+    };
+    let interpretation_id = format!("interp-{}", source.interp_hash);
+    catalogue::insert_raster_asset(
+        connection,
+        &generation::asset_row(paths, &asset, &source.crs_wkt)?,
+    )?;
+    connection
+        .execute(
+            "INSERT INTO lidar_interpretation_cogs(
+                interpretation_id, asset_sha256, nodata, created_at)
+             VALUES(?1, ?2, ?3, ?4)
+             ON CONFLICT(interpretation_id) DO NOTHING",
+            rusqlite::params![interpretation_id, cog.sha256, source.nodata, now_iso(),],
+        )
+        .map_err(|e| format!("Failed to record interpretation COG: {e}"))?;
+    Ok(paths.asset_cog(&cog.sha256))
+}
+
 /// Persist the durable per-interpretation assets for a staged source. The
 /// staged raw samples and valid mask move from the job dir into managed
 /// storage; GeoTIFF conversion is metadata-stable and idempotent.
 pub fn write_member_assets(
+    connection: &rusqlite::Connection,
     engine: &GdalEngine,
     paths: &LidarPaths,
     cancel: &AtomicBool,
     source: &StagedSource,
 ) -> Result<PathBuf, String> {
+    // A source that retained its controlled COG already owns its durable
+    // payload: record the immutable asset and the interpretation's reference to
+    // it, and write no second durable copy. A staged job written before
+    // retention still publishes the legacy raw/mask pair it carries.
+    if let Some(cog) = source.source_cog.as_ref() {
+        return publish_member_cog(connection, paths, source, cog);
+    }
     let dir = member_prepared_dir(paths, &source.interp_hash);
     if prepared_member_is_valid(&dir, source) {
         return Ok(dir);
@@ -1781,6 +2001,7 @@ fn prepared_member_is_valid(dir: &Path, source: &StagedSource) -> bool {
 /// Replay accepted members in publication order. `add` members paint only
 /// cells the sequence has not accepted yet; `replace` members paint over.
 fn replay_members(
+    paths: &LidarPaths,
     members: &[MemberSource],
     union: &RasterGrid,
     nodata: f32,
@@ -1792,14 +2013,12 @@ fn replay_members(
     let mut min_value = f64::INFINITY;
     let mut max_value = f64::NEG_INFINITY;
     for member in members {
-        let raw = std::fs::read(&member.raw_samples_path)
-            .map_err(|e| format!("Failed to read member samples: {e}"))?;
-        validate_f32_raw(&raw, member.grid.width, member.grid.height)?;
-        let mask = ValidMask::read_from(
-            &member.valid_mask_path,
-            member.grid.width,
-            member.grid.height,
-        )?;
+        let (member_values, member_valid) = match cancel {
+            Some(cancel) => member.payload.read(paths, &member.grid, cancel)?,
+            None => member
+                .payload
+                .read(paths, &member.grid, &AtomicBool::new(false))?,
+        };
         let offset_x = ((member.grid.geotransform[0] - union.geotransform[0])
             / union.geotransform[1])
             .round() as i64;
@@ -1823,14 +2042,15 @@ fn replay_members(
                 if tx < 0 || tx >= union.width as i64 {
                     continue;
                 }
-                if !mask.get(x, y) {
+                let index = (y * member.grid.width + x) as usize;
+                if member_valid[index] == 0 {
                     continue;
                 }
                 let covered = valid.get(tx as u32, ty as u32);
                 if (covered && !replace_overlap) || (!covered && !add_uncovered) {
                     continue;
                 }
-                let sample = f32_sample(&raw, (y * member.grid.width + x) as usize);
+                let sample = member_values[index];
                 values[ty as usize * union.width as usize + tx as usize] = sample;
                 valid.set(tx as u32, ty as u32, true);
                 if sample.is_finite() {
@@ -1906,15 +2126,32 @@ pub fn apply_import(
                         (interpretation_id.clone(), role.clone(), job_id.clone());
                     let interp = catalogue::get_interpretation(&connection, &interpretation_id)?
                         .ok_or_else(|| format!("missing interpretation {interpretation_id}"))?;
-                    let dir = member_prepared_dir(paths, &interp.interp_hash);
-                    let raw = dir.join("values.raw");
-                    let mask = dir.join("valid.bin");
-                    if !raw.exists() || !mask.exists() {
-                        // History written before durable member assets existed:
-                        // fall back to the legacy head-snapshot composition.
-                        resolved.clear();
-                        break;
-                    }
+                    let interp_nodata = interp.nodata.map(|value| value as f32);
+                    let payload =
+                        match generation::retained_cog(&connection, paths, &interpretation_id)? {
+                            // A retained COG is this member's durable payload; its
+                            // own effective NoData rule wins over the row.
+                            Some((asset, cog_nodata)) => MemberPayload::Cog {
+                                sha256: asset.sha256,
+                                nodata: cog_nodata.or(interp_nodata),
+                            },
+                            None => {
+                                let dir = member_prepared_dir(paths, &interp.interp_hash);
+                                let raw = dir.join("values.raw");
+                                let mask = dir.join("valid.bin");
+                                if !raw.exists() || !mask.exists() {
+                                    // History written before durable member assets
+                                    // existed: fall back to the legacy head-snapshot
+                                    // composition.
+                                    resolved.clear();
+                                    break;
+                                }
+                                MemberPayload::LegacyDense {
+                                    raw_samples_path: raw,
+                                    valid_mask_path: mask,
+                                }
+                            }
+                        };
                     let gt = parse_geotransform(&interp.geotransform)?;
                     resolved.push(MemberSource {
                         interpretation_id,
@@ -1925,8 +2162,7 @@ pub fn apply_import(
                             height: interp.height as u32,
                             geotransform: gt,
                         },
-                        raw_samples_path: raw,
-                        valid_mask_path: mask,
+                        payload,
                     });
                 }
                 let legacy = resolved.is_empty() && !members.is_empty();
@@ -2039,7 +2275,10 @@ pub fn apply_import(
             );
             for (index, source) in compatible.iter().enumerate() {
                 check_cancel(cancel)?;
-                write_member_assets(engine, paths, cancel, source)?;
+                {
+                    let connection = library.catalogue()?;
+                    write_member_assets(&connection, engine, paths, cancel, source)?;
+                }
                 let completed = u64::try_from(index + 1).unwrap_or(u64::MAX);
                 let total = u64::try_from(compatible.len()).unwrap_or(u64::MAX).max(1);
                 let percent = 42 + u8::try_from(completed.saturating_mul(8) / total).unwrap_or(8);
@@ -2200,11 +2439,12 @@ pub fn apply_import(
                 layer_values.as_deref(),
                 layer_mask.as_ref(),
                 &compatible,
+                paths,
                 &union,
                 staging.layer_nodata,
                 add_uncovered,
                 replace_overlap,
-                Some(cancel),
+                cancel,
             )?
         }
         _ => {
@@ -2215,11 +2455,10 @@ pub fn apply_import(
                     role: incoming_role.to_string(),
                     job_id: Some(staging.job_id.clone()),
                     grid: grid_for_source(source),
-                    raw_samples_path: source.raw_samples_path.clone(),
-                    valid_mask_path: source.valid_mask_path.clone(),
+                    payload: member_payload_of(source),
                 });
             }
-            replay_members(&sequence, &union, staging.layer_nodata, Some(cancel))?
+            replay_members(paths, &sequence, &union, staging.layer_nodata, Some(cancel))?
         }
     };
     let published_cells = composed.valid.count_valid();
@@ -2257,7 +2496,10 @@ pub fn apply_import(
     );
     for (index, source) in compatible.iter().enumerate() {
         check_cancel(cancel)?;
-        write_member_assets(engine, paths, cancel, source)?;
+        {
+            let connection = library.catalogue()?;
+            write_member_assets(&connection, engine, paths, cancel, source)?;
+        }
         let completed = u64::try_from(index + 1).unwrap_or(u64::MAX);
         let total = u64::try_from(compatible.len()).unwrap_or(u64::MAX).max(1);
         let percent = 42 + u8::try_from(completed.saturating_mul(8) / total).unwrap_or(8);
@@ -2577,12 +2819,27 @@ pub fn undo_import(
         for (member_id, role, member_job_id) in remaining_members.iter() {
             let interp = catalogue::get_interpretation(&connection, member_id)?
                 .ok_or_else(|| format!("missing interpretation {member_id}"))?;
-            let dir = member_prepared_dir(paths, &interp.interp_hash);
-            let raw = dir.join("values.raw");
-            let mask = dir.join("valid.bin");
-            if !raw.exists() || !mask.exists() {
-                return Err("cannot undo: this import predates durable member history".to_string());
-            }
+            let interp_nodata = interp.nodata.map(|value| value as f32);
+            let payload = match generation::retained_cog(&connection, paths, member_id)? {
+                Some((asset, cog_nodata)) => MemberPayload::Cog {
+                    sha256: asset.sha256,
+                    nodata: cog_nodata.or(interp_nodata),
+                },
+                None => {
+                    let dir = member_prepared_dir(paths, &interp.interp_hash);
+                    let raw = dir.join("values.raw");
+                    let mask = dir.join("valid.bin");
+                    if !raw.exists() || !mask.exists() {
+                        return Err(
+                            "cannot undo: this import predates durable member history".to_string()
+                        );
+                    }
+                    MemberPayload::LegacyDense {
+                        raw_samples_path: raw,
+                        valid_mask_path: mask,
+                    }
+                }
+            };
             let gt = parse_geotransform(&interp.geotransform)?;
             resolved.push(MemberSource {
                 interpretation_id: member_id.clone(),
@@ -2593,8 +2850,7 @@ pub fn undo_import(
                     height: interp.height as u32,
                     geotransform: gt,
                 },
-                raw_samples_path: raw,
-                valid_mask_path: mask,
+                payload,
             });
         }
         resolved
@@ -2693,7 +2949,13 @@ pub fn undo_import(
         });
     }
 
-    let composed = replay_members(&remaining, &union, head_manifest.nodata, Some(cancel))?;
+    let composed = replay_members(
+        paths,
+        &remaining,
+        &union,
+        head_manifest.nodata,
+        Some(cancel),
+    )?;
     let published_cells = composed.valid.count_valid();
 
     // Publish the new generation without the undone interpretation.
@@ -3051,21 +3313,42 @@ fn incoming_occurrences(
     let role = generation::MemberRole::parse(role)?;
     let mut occurrences = Vec::with_capacity(sources.len());
     for (ordinal, source) in sources.iter().enumerate() {
-        let dir = member_prepared_dir(paths, &source.interp_hash);
-        let values = dir.join("values.raw");
-        let mask = dir.join("valid.bin");
-        if !values.exists() || !mask.exists() {
-            return Err(format!(
-                "staged source {} has no durable member assets",
-                source.filename
-            ));
-        }
+        let grid = grid_for_source(source);
+        let (payload, nodata) = match source.source_cog.as_ref() {
+            // The retained COG is the incoming occurrence's own payload; its
+            // effective NoData rule is the one it was admitted with.
+            Some(cog) => (
+                generation::MemberSource::Cog(super::raster_assets::CogAsset {
+                    sha256: cog.sha256.clone(),
+                    path: paths.asset_cog(&cog.sha256),
+                    bytes: cog.bytes,
+                    grid: grid.clone(),
+                    nodata: cog.nodata,
+                }),
+                cog.nodata.or(source.nodata),
+            ),
+            None => {
+                let dir = member_prepared_dir(paths, &source.interp_hash);
+                let values = dir.join("values.raw");
+                let mask = dir.join("valid.bin");
+                if !values.exists() || !mask.exists() {
+                    return Err(format!(
+                        "staged source {} has no durable member assets",
+                        source.filename
+                    ));
+                }
+                (
+                    generation::MemberSource::LegacyDense { values, mask },
+                    source.nodata,
+                )
+            }
+        };
         occurrences.push(generation::ResolvedMember {
             ordinal: i64::try_from(ordinal).unwrap_or(i64::MAX),
             role,
-            grid: grid_for_source(source),
-            nodata: source.nodata,
-            source: generation::MemberSource::LegacyDense { values, mask },
+            grid,
+            nodata,
+            source: payload,
         });
     }
     Ok(occurrences)
@@ -4039,6 +4322,13 @@ mod tests {
         assert!(parse_geotransform("0,1,0,1,0,NaN").is_err());
     }
 
+    /// Paths for legacy-payload replay tests: those payloads are read by
+    /// absolute path, so the library root is not touched.
+    fn member_paths() -> LidarPaths {
+        LidarPaths::open(&std::env::temp_dir().join(new_id("canopi-replay")))
+            .expect("library paths")
+    }
+
     fn member_fixture(
         dir: &std::path::Path,
         name: &str,
@@ -4064,8 +4354,10 @@ mod tests {
             role: role.to_string(),
             job_id: None,
             grid: grid.clone(),
-            raw_samples_path: raw,
-            valid_mask_path: mask,
+            payload: MemberPayload::LegacyDense {
+                raw_samples_path: raw,
+                valid_mask_path: mask,
+            },
         }
     }
 
@@ -4083,19 +4375,34 @@ mod tests {
         let dir = std::env::temp_dir().join("canopi-replay-test");
         // First member: add covers both cells (1.0, 2.0).
         let first = member_fixture(&dir, "m1", &grid, "add", &[1.0, 2.0]);
-        let mosaic = replay_members(std::slice::from_ref(&first), &grid, -99999.0, None).unwrap();
+        let mosaic = replay_members(
+            &member_paths(),
+            std::slice::from_ref(&first),
+            &grid,
+            -99999.0,
+            None,
+        )
+        .unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
 
         // Second member: add only paints where the first left invalid.
         let second = member_fixture(&dir, "m2", &grid, "add", &[9.0, 3.0]);
-        let mosaic = replay_members(&[first.clone(), second], &grid, -99999.0, None).unwrap();
+        let mosaic = replay_members(
+            &member_paths(),
+            &[first.clone(), second],
+            &grid,
+            -99999.0,
+            None,
+        )
+        .unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
 
         // Replace member paints over accepted coverage.
         let third = member_fixture(&dir, "m3", &grid, "replace", &[7.0, 8.0]);
-        let mosaic = replay_members(&[first, third], &grid, -99999.0, None).unwrap();
+        let mosaic =
+            replay_members(&member_paths(), &[first, third], &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 7.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 8.0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -4113,8 +4420,14 @@ mod tests {
         let first = member_fixture(&dir, "a", &grid, "add", &[1.0, -9999.0]);
         // Second import would cover both; accepted as uncovered-additions only.
         let second = member_fixture(&dir, "b", &grid, "add", &[9.0, 3.0]);
-        let with_both =
-            replay_members(&[first.clone(), second.clone()], &grid, -99999.0, None).unwrap();
+        let with_both = replay_members(
+            &member_paths(),
+            &[first.clone(), second.clone()],
+            &grid,
+            -99999.0,
+            None,
+        )
+        .unwrap();
         assert_eq!(
             sample(&with_both, &grid, 0, 0),
             1.0,
@@ -4128,7 +4441,7 @@ mod tests {
         assert_eq!(with_both.valid.count_valid(), 2);
 
         // Undo the second import: replay only the first member.
-        let after_undo = replay_members(&[first], &grid, -99999.0, None).unwrap();
+        let after_undo = replay_members(&member_paths(), &[first], &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&after_undo, &grid, 0, 0), 1.0);
         assert_eq!(
             after_undo.valid.count_valid(),
@@ -4149,7 +4462,8 @@ mod tests {
         let first = member_fixture(&dir, "base", &grid, "add", &[5.0, 6.0]);
         // Replace member whose second cell is nodata: cell 1 must keep 6.0.
         let replacer = member_fixture(&dir, "repl", &grid, "replace", &[4.0, -9999.0]);
-        let mosaic = replay_members(&[first, replacer], &grid, -99999.0, None).unwrap();
+        let mosaic =
+            replay_members(&member_paths(), &[first, replacer], &grid, -99999.0, None).unwrap();
         assert_eq!(sample(&mosaic, &grid, 0, 0), 4.0);
         assert_eq!(sample(&mosaic, &grid, 1, 0), 6.0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -4176,7 +4490,14 @@ mod tests {
             "replace-overlap",
             &[7.0, 8.0],
         );
-        let mosaic = replay_members(&[base, incoming], &incoming_grid, -99999.0, None).unwrap();
+        let mosaic = replay_members(
+            &member_paths(),
+            &[base, incoming],
+            &incoming_grid,
+            -99999.0,
+            None,
+        )
+        .unwrap();
         assert_eq!(sample(&mosaic, &incoming_grid, 0, 0), 7.0);
         assert_eq!(mosaic.valid.count_valid(), 1);
         assert!(!mosaic.valid.get(1, 0));
@@ -4332,14 +4653,35 @@ mod tests {
                 |_| Ok(()),
             )
             .expect("oracle mask");
-            let persisted_raw = std::fs::read(&source.raw_samples_path).expect("persisted raw");
-            let persisted_mask = std::fs::read(&source.valid_mask_path).expect("persisted mask");
-            assert_eq!(persisted_raw.len(), oracle.len(), "raw byte count");
-            assert_eq!(persisted_mask, oracle_mask.bytes().to_vec(), "mask bytes");
+            let cog = source
+                .source_cog
+                .as_ref()
+                .expect("staging retains one controlled source COG");
+            let grid = grid_for_source(source);
+            let mut reader = cog
+                .open(&library.inner.paths, &grid)
+                .expect("the retained COG opens through the production reader");
+            assert_eq!(reader.grid(), &grid);
+            let read = reader
+                .read_window(
+                    RasterWindow {
+                        x: 0,
+                        y: 0,
+                        width,
+                        height,
+                    },
+                    &cancel,
+                )
+                .expect("retained COG reads");
+            assert_eq!(read.samples().len(), oracle.len() / 4, "sample count");
+            assert_eq!(
+                read.valid().to_vec(),
+                oracle_mask.bytes().to_vec(),
+                "validity comes from this source's own effective NoData rule"
+            );
             for (index, chunk) in oracle.chunks_exact(4).enumerate() {
                 let expected = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                let got =
-                    f32::from_le_bytes(persisted_raw[index * 4..index * 4 + 4].try_into().unwrap());
+                let got = read.samples()[index];
                 if expected.is_nan() {
                     assert!(got.is_nan(), "sample {index} must stay NaN");
                 } else {
@@ -4353,43 +4695,58 @@ mod tests {
             );
         }
 
-        // The derivative is temporary: nothing prepared-* survives staging.
+        // Nothing durable beside the retained COG: no prepared derivative, no
+        // raw samples and no validity mask survive staging.
         let leftovers: Vec<_> = std::fs::read_dir(library.inner.paths.job_dir(&job_id))
             .unwrap()
             .filter_map(Result::ok)
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("prepared-"))
+            .filter(|name| {
+                name.starts_with("prepared-") || name.ends_with(".raw") || name.ends_with(".bin")
+            })
             .collect();
         assert!(
             leftovers.is_empty(),
-            "derivative left behind: {leftovers:?}"
+            "durable raw/mask or derivative left behind: {leftovers:?}"
         );
+        for source in &staging.sources {
+            assert!(
+                source.raw_samples_path.as_os_str().is_empty()
+                    && source.valid_mask_path.as_os_str().is_empty(),
+                "a retained source records no raw/mask payload"
+            );
+        }
         let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
     fn staging_without_a_measurable_scratch_directory_fails_by_name() {
         let engine = GdalEngine::new();
-        let missing = std::env::temp_dir().join(new_id("canopi-absent-scratch"));
+        let root = std::env::temp_dir().join(new_id("canopi-absent-scratch"));
+        let paths = LidarPaths::open(&root).expect("library paths");
+        let missing = root.join("absent-scratch");
         let error = stage_source_samples(
             &engine,
+            &AtomicBool::new(false),
+            &paths,
             Path::new("unused.tif"),
             &RasterGrid {
                 width: 4,
                 height: 4,
                 geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
             },
+            "EPSG:3857",
             None,
             &missing,
-            &missing.join("source.raw"),
-            &missing.join("valid.bin"),
-            &AtomicBool::new(false),
+            "0000000000000000",
         )
         .expect_err("unmeasurable capacity must fail");
         assert!(error.contains("Cannot verify free space"), "{error}");
+        let _ = std::fs::remove_dir_all(root);
     }
 
-    /// A failed numeric output must fail the job, not publish a partial asset.
+    /// A failed conversion must fail staging, retain nothing durable and leave
+    /// no partial asset behind.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn staged_output_write_failure_removes_partial_assets() {
@@ -4397,6 +4754,7 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let dir = std::env::temp_dir().join(new_id("canopi-write-failure"));
         std::fs::create_dir_all(&dir).unwrap();
+        let paths = LidarPaths::open(&dir).expect("library paths");
         let (width, height) = (40u32, 30u32);
         let source = write_staging_fixture(&engine, &dir, "failure", width, height, -9999.0);
         let grid = RasterGrid {
@@ -4405,44 +4763,57 @@ mod tests {
             geotransform: [0.0, 1.0, 0.0, height as f64, 0.0, -1.0],
         };
 
-        // A directory where the samples file belongs makes the first write
-        // fail; the validity mask must not be left behind.
-        let raw_path = dir.join("source-occupied.raw");
-        std::fs::create_dir(&raw_path).unwrap();
-        let mask_path = dir.join("valid-occupied.bin");
+        // A read-only scratch root makes the conversion's own output fail.
+        let scratch = dir.join("read-only-scratch");
+        std::fs::create_dir(&scratch).unwrap();
+        let mut permissions = std::fs::metadata(&scratch).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            permissions.set_mode(0o555);
+        }
+        std::fs::set_permissions(&scratch, permissions).unwrap();
+
         let error = stage_source_samples(
             &engine,
+            &cancel,
+            &paths,
             &source,
             &grid,
+            "EPSG:3857",
             Some(-9999.0),
-            &dir,
-            &raw_path,
-            &mask_path,
-            &cancel,
+            &scratch,
+            "0123456789abcdef",
         )
-        .expect_err("an unwritable output must fail staging");
-        assert!(error.contains("Failed to create staged samples"), "{error}");
-        assert!(
-            !mask_path.exists(),
-            "a failed staging attempt leaves no partial mask"
-        );
-        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+        .expect_err("an unwritable conversion must fail staging");
+        assert!(!error.is_empty());
+        // Nothing durable was admitted, and no staged file survives.
+        let assets: usize = std::fs::read_dir(paths.asset_dir(""))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .count();
+        assert_eq!(assets, 0, "no asset is admitted from a failed conversion");
+        let staged: Vec<_> = std::fs::read_dir(&scratch)
             .unwrap()
             .filter_map(Result::ok)
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("prepared-"))
             .collect();
-        assert!(
-            leftovers.is_empty(),
-            "derivative left behind: {leftovers:?}"
-        );
+        assert!(staged.is_empty(), "staged leftovers: {staged:?}");
+
+        let mut permissions = std::fs::metadata(&scratch).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            permissions.set_mode(0o755);
+        }
+        std::fs::set_permissions(&scratch, permissions).unwrap();
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    /// The import caller charges both staged outputs while the derivative is
-    /// alive. 265 MiB free passes each former separate check (261 MiB for the
-    /// outputs, 264 MiB for preparation), so only the combined estimate can
-    /// reject it - and it must reject before preparation or any output file.
+    /// The import caller charges the retained source COG, its conversion
+    /// scratch and the shared reserve together, and rejects before any GDAL
+    /// work when that combined footprint does not fit.
     #[test]
     fn staged_source_rejects_an_insufficient_combined_budget_before_preparation() {
         use crate::services::lidar::paths::capacity_probe;
@@ -4450,53 +4821,56 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let dir = std::env::temp_dir().join(new_id("canopi-combined-budget"));
         std::fs::create_dir_all(&dir).unwrap();
+        let paths = LidarPaths::open(&dir).expect("library paths");
         let grid = RasterGrid {
             width: 1024,
             height: 1024,
             geotransform: [0.0, 1.0, 0.0, 1024.0, 0.0, -1.0],
         };
-        let raw_path = dir.join("source.raw");
-        let mask_path = dir.join("valid.bin");
-        let _guard = capacity_probe::override_available(265 * 1024 * 1024);
+        let required = crate::services::lidar::prepared_raster::required_free_bytes(
+            grid.width,
+            grid.height,
+            0,
+        )
+        .unwrap();
+        let _guard = capacity_probe::override_available(required - 1);
         // A missing input never reaches GDAL: the capacity error proves the
-        // combined check ran before preparation.
+        // combined check ran before the conversion.
         let error = stage_source_samples(
             &engine,
+            &cancel,
+            &paths,
             &dir.join("absent-input.tif"),
             &grid,
+            "EPSG:3857",
             None,
             &dir,
-            &raw_path,
-            &mask_path,
-            &cancel,
+            "0123456789abcdef",
         )
         .expect_err("the combined footprint must be rejected");
         assert!(
-            error.contains("282066944"),
+            error.contains(&required.to_string()),
             "names the required bytes: {error}"
         );
         assert!(
-            error.contains("277872640"),
+            error.contains(&(required - 1).to_string()),
             "names the available bytes: {error}"
         );
-        assert!(!raw_path.exists(), "no samples output on rejection");
-        assert!(!mask_path.exists(), "no validity output on rejection");
-        let leftovers: Vec<_> = std::fs::read_dir(&dir)
-            .unwrap()
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("prepared-"))
-            .collect();
-        assert!(
-            leftovers.is_empty(),
-            "no derivative on rejection: {leftovers:?}"
+        assert_eq!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "tif"))
+                .count(),
+            0,
+            "no conversion output on rejection"
         );
         let _ = std::fs::remove_dir_all(dir);
     }
 
     /// At exactly the combined requirement the real caller proceeds, and one
     /// byte less still rejects: the boundary is inclusive at the requirement
-    /// and the estimate is not over-conservative.
+    /// and one retained COG is the only durable output.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn staged_source_admits_exactly_the_combined_requirement() {
@@ -4505,6 +4879,7 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let dir = std::env::temp_dir().join(new_id("canopi-combined-boundary"));
         std::fs::create_dir_all(&dir).unwrap();
+        let paths = LidarPaths::open(&dir).expect("library paths");
         let (width, height) = (1024u32, 1024u32);
         let source = write_staging_fixture(&engine, &dir, "boundary", width, height, -9999.0);
         let grid = RasterGrid {
@@ -4512,51 +4887,53 @@ mod tests {
             height,
             geotransform: [0.0, 1.0, 0.0, height as f64, 0.0, -1.0],
         };
-        let raw_path = dir.join("source-boundary.raw");
-        let mask_path = dir.join("valid-boundary.bin");
+        let required = crate::services::lidar::prepared_raster::required_free_bytes(
+            grid.width,
+            grid.height,
+            0,
+        )
+        .unwrap();
         {
-            let _guard = capacity_probe::override_available(269 * 1024 * 1024);
-            let range = stage_source_samples(
+            let _guard = capacity_probe::override_available(required);
+            let (cog, regions) = stage_source_samples(
                 &engine,
+                &cancel,
+                &paths,
                 &source,
                 &grid,
+                "EPSG:3857",
                 Some(-9999.0),
                 &dir,
-                &raw_path,
-                &mask_path,
-                &cancel,
+                "fedcba9876543210",
             )
             .expect("the exact combined requirement admits the work");
-            assert!(range[0].is_finite() && range[1].is_finite());
-            assert_eq!(
-                std::fs::metadata(&raw_path).unwrap().len(),
-                u64::from(width) * u64::from(height) * 4
+            assert!(cog.value_range[0].is_finite() && cog.value_range[1].is_finite());
+            assert!(cog.bytes > 0);
+            assert!(
+                paths.asset_cog(&cog.sha256).exists(),
+                "the admitted COG is the durable output"
             );
-            assert_eq!(
-                std::fs::metadata(&mask_path).unwrap().len(),
-                u64::from(width) * u64::from(height)
-            );
+            assert!(!regions.is_empty(), "occupied regions are derived from it");
         }
-        std::fs::remove_file(&raw_path).unwrap();
-        std::fs::remove_file(&mask_path).unwrap();
         {
-            let _guard = capacity_probe::override_available(269 * 1024 * 1024 - 1);
+            let _guard = capacity_probe::override_available(required - 1);
             let error = stage_source_samples(
                 &engine,
+                &cancel,
+                &paths,
                 &source,
                 &grid,
+                "EPSG:3857",
                 Some(-9999.0),
                 &dir,
-                &raw_path,
-                &mask_path,
-                &cancel,
+                "fedcba9876543210",
             )
             .expect_err("one byte below the requirement must reject");
-            assert!(error.contains("282066944"), "{error}");
-            assert!(!raw_path.exists() && !mask_path.exists());
+            assert!(error.contains(&required.to_string()), "{error}");
         }
         let _ = std::fs::remove_dir_all(dir);
     }
+
     // -----------------------------------------------------------------------
     // Sparse-generation caller slice: stage → review → Apply → reopen → undo
     // -----------------------------------------------------------------------
@@ -5819,6 +6196,591 @@ mod tests {
             stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
         assert!(staging.uncovered_cells > 0);
         let _ = job_id;
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // -----------------------------------------------------------------------
+    // BG1: a retained source COG is the durable member payload
+    // -----------------------------------------------------------------------
+
+    /// Exact Float32 oracle fixture: the caller's own numbers, sentinel cells
+    /// included, so a read compares without a tolerance.
+    #[allow(clippy::too_many_arguments)]
+    fn write_oracle_fixture(
+        engine: &GdalEngine,
+        dir: &Path,
+        name: &str,
+        origin_x: f64,
+        origin_y: f64,
+        width: u32,
+        height: u32,
+        nodata: f32,
+        values: &[f32],
+    ) -> PathBuf {
+        assert_eq!(
+            values.len(),
+            (width * height) as usize,
+            "the oracle covers the grid"
+        );
+        let raw = dir.join(format!("{name}.raw"));
+        write_f32_raw(&raw, values).expect("oracle fixture writes");
+        let tif = dir.join(format!("{name}.tif"));
+        raw_to_tif(
+            engine,
+            &AtomicBool::new(false),
+            &raw,
+            &tif,
+            &RasterGrid {
+                width,
+                height,
+                geotransform: [origin_x, 1.0, 0.0, origin_y, 0.0, -1.0],
+            },
+            "EPSG:3857",
+            nodata,
+        )
+        .expect("fixture converts");
+        let _ = std::fs::remove_file(&raw);
+        let _ = std::fs::remove_file(raw.with_extension("hdr"));
+        tif
+    }
+
+    /// Every file under a directory, as relative path and size, in a stable
+    /// order: enough to prove a caller created or rewrote nothing.
+    fn tree_files(root: &Path) -> Vec<(String, u64)> {
+        fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(root, &path, out);
+                } else if let Ok(meta) = std::fs::metadata(&path) {
+                    out.push((
+                        path.strip_prefix(root)
+                            .unwrap_or(&path)
+                            .to_string_lossy()
+                            .into_owned(),
+                        meta.len(),
+                    ));
+                }
+            }
+        }
+        let mut files = Vec::new();
+        walk(root, root, &mut files);
+        files.sort();
+        files
+    }
+
+    /// A grid whose Float32 values are exactly representable, with two declared
+    /// sentinel cells so validity is exercised beside the values.
+    fn oracle_grid(width: u32, height: u32) -> (Vec<f32>, Vec<u8>) {
+        let mut values: Vec<f32> = (0..(width * height))
+            .map(|index| index as f32 * 0.25 - 3.5)
+            .collect();
+        values[7] = -9999.0;
+        values[19] = -9999.0;
+        let valid = values
+            .iter()
+            .map(|value| u8::from(*value != -9999.0))
+            .collect();
+        (values, valid)
+    }
+
+    /// The production vertical slice with source retention: staging keeps one
+    /// controlled COG, review and Apply read it, no durable raw/mask/native.tif
+    /// copy appears, a restart reads the published generation without preparing
+    /// anything, and replacement and undo leave the shared asset immutable.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_retained_source_cog_is_the_only_durable_member_payload() {
+        use crate::services::lidar::prepared_raster::observability;
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-retained-payload"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let (width, height) = (6u32, 5u32);
+        let (first_values, first_valid) = oracle_grid(width, height);
+        let second_values: Vec<f32> = first_values
+            .iter()
+            .map(|value| {
+                if *value == -9999.0 {
+                    *value
+                } else {
+                    *value + 100.0
+                }
+            })
+            .collect();
+        let first = write_oracle_fixture(
+            &engine,
+            &root,
+            "retained",
+            0.0,
+            100.0,
+            width,
+            height,
+            -9999.0,
+            &first_values,
+        );
+        let second = write_oracle_fixture(
+            &engine,
+            &root,
+            "replacement",
+            0.0,
+            100.0,
+            width,
+            height,
+            -9999.0,
+            &second_values,
+        );
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "retained payload",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job_one, staging_one) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&first), &cancel);
+
+        // Staging retained exactly one COG and no disposable second payload.
+        let staged = &staging_one.sources[0];
+        let retained = staged
+            .source_cog
+            .as_ref()
+            .expect("staging retains a source COG");
+        assert!(staged.raw_samples_path.as_os_str().is_empty());
+        assert!(staged.valid_mask_path.as_os_str().is_empty());
+        let asset = library.inner.paths.asset_cog(&retained.sha256);
+        assert!(asset.exists(), "the admitted asset is on disk");
+        let staged_files = tree_files(&library.inner.paths.job_dir(&job_one));
+        assert!(
+            staged_files
+                .iter()
+                .all(|(path, _)| !path.ends_with("values.raw")
+                    && !path.ends_with("valid.bin")
+                    && !path.ends_with(".tif")),
+            "job scratch keeps no raster payload: {staged_files:?}"
+        );
+        // The review read the source through its own effective rule.
+        assert_eq!(staging_one.uncovered_cells, u64::from(width * height) - 2);
+        assert_eq!(staging_one.overlap_cells, 0);
+
+        library.prepare_apply(&job_one).expect("review accepted");
+        let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        assert!(applied.changed);
+
+        // The interpretation references the shared digest, and no per-member
+        // durable raw/mask/native.tif copy exists anywhere.
+        let interpretation_id = format!("interp-{}", staged.interp_hash);
+        {
+            let connection = library.catalogue().unwrap();
+            let (row, nodata) = catalogue::interpretation_cog(&connection, &interpretation_id)
+                .unwrap()
+                .expect("the interpretation references its retained COG");
+            assert_eq!(row.sha256, retained.sha256);
+            assert_eq!(nodata, Some(-9999.0));
+        }
+        let member_dir = member_prepared_dir(&library.inner.paths, &staged.interp_hash);
+        assert!(!member_dir.exists(), "no legacy member payload is written");
+        assert_eq!(std::fs::metadata(&asset).unwrap().len(), retained.bytes);
+
+        // Restart: the accepted head reads back exactly through the committed
+        // reader, and reading prepares nothing.
+        drop(library);
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        observability::reset();
+        let before_read = tree_files(&root);
+        let window = generation::LatticeWindow {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        };
+        let head = head_of(&reopened, &layer_id);
+        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
+        assert_eq!(manifest.format, GenerationStorageFormat::CogChunksV1);
+        let (values, valid) = head_window(&reopened, &layer_id, window);
+        assert_eq!(valid, first_valid, "validity is the source's own rule");
+        assert_eq!(values, first_values, "Float32 values round-trip exactly");
+        assert!(
+            observability::tiles_decoded() > 0,
+            "the committed reader decoded the published chunks"
+        );
+        assert_eq!(
+            tree_files(&root),
+            before_read,
+            "reading a published generation prepares nothing"
+        );
+
+        // A replacement publishes from its own retained source; the first
+        // source's shared asset stays byte-identical.
+        let shared_before = crate::services::lidar::raster_assets::hash_file(&asset).unwrap();
+        let (job_two, staging_two) =
+            stage_review(&reopened, &layer_id, std::slice::from_ref(&second), &cancel);
+        let replacement = staging_two.sources[0]
+            .source_cog
+            .as_ref()
+            .expect("the replacement retains its own COG");
+        assert_ne!(
+            replacement.sha256, retained.sha256,
+            "different content is a different asset"
+        );
+        reopened.prepare_apply(&job_two).expect("review accepted");
+        let replaced =
+            apply_import(&reopened, &staging_two, false, true, &cancel).expect("replace applies");
+        assert!(replaced.changed);
+        let (values, valid) = head_window(&reopened, &layer_id, window);
+        assert_eq!(valid, first_valid);
+        assert_eq!(values, second_values);
+        assert_eq!(
+            crate::services::lidar::raster_assets::hash_file(&asset).unwrap(),
+            shared_before,
+            "a retained asset is immutable"
+        );
+
+        // Undo removes the replacement and restores the first source exactly,
+        // still from its own retained COG.
+        let undone = undo_import(&reopened, &job_two, &cancel).expect("undo publishes");
+        assert!(undone.changed);
+        let (values, valid) = head_window(&reopened, &layer_id, window);
+        assert_eq!(valid, first_valid);
+        assert_eq!(values, first_values, "undo restores the retained source");
+        {
+            let connection = reopened.catalogue().unwrap();
+            let (row, _) = catalogue::interpretation_cog(&connection, &interpretation_id)
+                .unwrap()
+                .expect("the first reference survives undo");
+            assert_eq!(row.sha256, retained.sha256);
+        }
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A member published before source retention keeps its raw/mask payload and
+    /// replays beside a retained COG member: mixed history stays exact, and undo
+    /// removes only the occurrence it names.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn legacy_and_retained_members_replay_together_and_undo_exactly() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-mixed-history"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let (width, height) = (6u32, 5u32);
+        let (first_values, first_valid) = oracle_grid(width, height);
+        let first = write_oracle_fixture(
+            &engine,
+            &root,
+            "legacy",
+            0.0,
+            100.0,
+            width,
+            height,
+            -9999.0,
+            &first_values,
+        );
+        let overlap_width = 3u32;
+        let overlap_values: Vec<f32> = (0..(overlap_width * height))
+            .map(|index| 40.0 + index as f32)
+            .collect();
+        let overlap = write_oracle_fixture(
+            &engine,
+            &root,
+            "retained-overlap",
+            0.0,
+            100.0,
+            overlap_width,
+            height,
+            -9999.0,
+            &overlap_values,
+        );
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "mixed history",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+
+        // Stage the first source, then rewrite its job into the shape a
+        // pre-retention import had: no retained COG, an explicit raw/mask pair.
+        let (job_one, mut staging_one) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&first), &cancel);
+        let job_dir = library.inner.paths.job_dir(&job_one);
+        let raw = job_dir.join("values.raw");
+        write_f32_raw(&raw, &first_values).expect("legacy samples write");
+        let mask = job_dir.join("valid.bin");
+        let mut legacy_mask = ValidMask::empty(width, height);
+        for (index, valid) in first_valid.iter().enumerate() {
+            if *valid == 1 {
+                legacy_mask.set(index as u32 % width, index as u32 / width, true);
+            }
+        }
+        legacy_mask.write_to(&mask).expect("legacy mask writes");
+        {
+            let source = &mut staging_one.sources[0];
+            source.source_cog = None;
+            source.raw_samples_path = raw;
+            source.valid_mask_path = mask;
+        }
+        std::fs::write(
+            job_dir.join("staging.json"),
+            serde_json::to_string(&staging_one).unwrap(),
+        )
+        .unwrap();
+        let staging_one: StagedImport =
+            serde_json::from_str(&std::fs::read_to_string(job_dir.join("staging.json")).unwrap())
+                .unwrap();
+
+        // The preserved dense route records this member the old way.
+        {
+            let _dense = generation::chunked_publication::without_sparse();
+            library.prepare_apply(&job_one).expect("review accepted");
+            let applied = apply_import(&library, &staging_one, true, false, &cancel)
+                .expect("the legacy member publishes");
+            assert!(applied.changed);
+        }
+        let legacy_interp = format!("interp-{}", staging_one.sources[0].interp_hash);
+        let legacy_dir =
+            member_prepared_dir(&library.inner.paths, &staging_one.sources[0].interp_hash);
+        {
+            let connection = library.catalogue().unwrap();
+            assert!(
+                catalogue::interpretation_cog(&connection, &legacy_interp)
+                    .unwrap()
+                    .is_none(),
+                "the first member predates retention"
+            );
+        }
+        for name in ["values.raw", "valid.bin", "native.tif"] {
+            assert!(
+                legacy_dir.join(name).exists(),
+                "the old member keeps {name}"
+            );
+        }
+        let legacy_digest =
+            crate::services::lidar::raster_assets::hash_file(&legacy_dir.join("values.raw"))
+                .unwrap();
+
+        // Publish the retained source over it: the head's history is now a
+        // legacy payload and a retained COG at once.
+        let (job_two, staging_two) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&overlap), &cancel);
+        assert!(
+            staging_two.sources[0].source_cog.is_some(),
+            "the new member retains its COG"
+        );
+        library.prepare_apply(&job_two).expect("review accepted");
+        let applied =
+            apply_import(&library, &staging_two, false, true, &cancel).expect("sparse apply");
+        assert!(applied.changed);
+        let head = head_of(&library, &layer_id);
+        assert_eq!(
+            read_generation_manifest(&head.manifest_json)
+                .unwrap()
+                .format,
+            GenerationStorageFormat::CogChunksV1,
+            "a mixed history still publishes sparse chunks"
+        );
+        let retained_interp = format!("interp-{}", staging_two.sources[0].interp_hash);
+        {
+            let connection = library.catalogue().unwrap();
+            let members = catalogue::generation_members(&connection, &head.id).unwrap();
+            assert_eq!(members.len(), 2, "both occurrences are recorded");
+            assert_eq!(members[0].0, legacy_interp);
+            assert_eq!(members[1].0, retained_interp);
+            assert!(
+                catalogue::interpretation_cog(&connection, &retained_interp)
+                    .unwrap()
+                    .is_some(),
+                "the new member references its retained COG"
+            );
+        }
+
+        // A restart replays the legacy member from raw/mask and the retained
+        // member from its COG, with no cell invented and no value shifted.
+        drop(library);
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        let window = generation::LatticeWindow {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        };
+        let (values, valid) = head_window(&reopened, &layer_id, window);
+        for index in 0..(width * height) as usize {
+            let column = index as u32 % width;
+            let row = index as u32 / width;
+            if first_valid[index] == 0 {
+                assert_eq!(valid[index], 0, "cell {index} stays uncovered");
+                continue;
+            }
+            assert_eq!(valid[index], 1, "cell {index} stays covered");
+            let expected = if column < overlap_width {
+                overlap_values[(row * overlap_width + column) as usize]
+            } else {
+                first_values[index]
+            };
+            assert_eq!(values[index], expected, "cell ({column},{row})");
+        }
+
+        // Undo removes the retained occurrence and restores the legacy member
+        // untouched, still from its own raw/mask payload.
+        let undone = undo_import(&reopened, &job_two, &cancel).expect("undo publishes");
+        assert!(undone.changed);
+        let (values, valid) = head_window(&reopened, &layer_id, window);
+        assert_eq!(valid, first_valid);
+        assert_eq!(values, first_values, "undo restores the legacy member");
+        assert!(legacy_dir.join("values.raw").exists());
+        assert_eq!(
+            crate::services::lidar::raster_assets::hash_file(&legacy_dir.join("values.raw"))
+                .unwrap(),
+            legacy_digest,
+            "undo never rewrites a legacy payload"
+        );
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// An Apply that fails after its review publishes nothing, and a shared
+    /// asset another publication already references survives exactly as it was.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_failed_apply_leaves_a_reused_asset_and_the_head_intact() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-reused-asset"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "reused asset",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+
+        // One small source published normally: its COG is now a shared asset.
+        let small = write_placed_fixture(&engine, &root, "small", 0.0, 4.0, 4, 4, -9999.0, 3.0);
+        let (job_one, staging_one) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&small), &cancel);
+        let retained = staging_one.sources[0]
+            .source_cog
+            .clone()
+            .expect("the published source retains its COG");
+        library.prepare_apply(&job_one).expect("review accepted");
+        let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        assert!(applied.changed);
+        let asset = library.inner.paths.asset_cog(&retained.sha256);
+        let shared_digest = crate::services::lidar::raster_assets::hash_file(&asset).unwrap();
+        let head_before = head_of(&library, &layer_id);
+
+        // A second job reuses the same file and is cancelled before it
+        // publishes: nothing changes and the shared asset is untouched.
+        let (job_two, staging_two) =
+            stage_review(&library, &layer_id, std::slice::from_ref(&small), &cancel);
+        assert_eq!(
+            staging_two.sources[0]
+                .source_cog
+                .as_ref()
+                .expect("the same content retains the same digest")
+                .sha256,
+            retained.sha256,
+            "content addressing reuses the admitted asset"
+        );
+        library.prepare_apply(&job_two).expect("review accepted");
+        cancel.store(true, Ordering::Relaxed);
+        let cancelled = apply_import(&library, &staging_two, true, false, &cancel)
+            .err()
+            .expect("a cancelled Apply publishes nothing");
+        assert!(cancelled.contains("cancelled"), "{cancelled}");
+        cancel.store(false, Ordering::Relaxed);
+        assert_eq!(
+            crate::services::lidar::raster_assets::hash_file(&asset).unwrap(),
+            shared_digest,
+            "a cancelled Apply never touches a shared asset"
+        );
+        assert_eq!(head_of(&library, &layer_id).id, head_before.id);
+
+        // A third job reuses that file beside a far source, staged under a
+        // raised envelope so staging itself succeeds.
+        let far = write_placed_fixture(&engine, &root, "far", 5004.0, 5004.0, 4, 4, -9999.0, 7.0);
+        let (job_three, staging_three) = {
+            let _raised = admission::limits_probe::raise(u64::MAX / 2, 16, 512 * 1024 * 1024);
+            stage_review(&library, &layer_id, &[small.clone(), far], &cancel)
+        };
+        assert_eq!(
+            staging_three.sources[0]
+                .source_cog
+                .as_ref()
+                .expect("the reused source keeps its digest")
+                .sha256,
+            retained.sha256
+        );
+        let far_interp = format!("interp-{}", staging_three.sources[1].interp_hash);
+        {
+            let connection = library.catalogue().unwrap();
+            assert!(
+                catalogue::interpretation_cog(&connection, &far_interp)
+                    .unwrap()
+                    .is_none(),
+                "the new source has no reference yet"
+            );
+        }
+
+        // The review accepted the pair under the override; Apply rechecks the
+        // production envelope and refuses before publishing anything.
+        library.prepare_apply(&job_three).expect("review accepted");
+        let error = apply_import(&library, &staging_three, true, false, &cancel)
+            .err()
+            .expect("the envelope is rechecked at Apply");
+        assert!(error.contains("import publication"), "{error}");
+        let head_after = head_of(&library, &layer_id);
+        assert_eq!(head_after.id, head_before.id);
+        assert_eq!(head_after.coverage_cells, head_before.coverage_cells);
+        {
+            let connection = library.catalogue().unwrap();
+            assert!(
+                catalogue::interpretation_cog(&connection, &far_interp)
+                    .unwrap()
+                    .is_none(),
+                "a refused Apply writes no reference"
+            );
+            let generations: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM lidar_layer_generations WHERE layer_id = ?1",
+                    [&layer_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(generations, 1, "a refused Apply publishes nothing");
+        }
+        assert_eq!(
+            crate::services::lidar::raster_assets::hash_file(&asset).unwrap(),
+            shared_digest,
+            "the reused asset is untouched"
+        );
+        let (values, valid) = head_window(
+            &library,
+            &layer_id,
+            generation::LatticeWindow {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 4,
+            },
+        );
+        assert!(valid.iter().all(|byte| *byte == 1));
+        assert!(values.iter().all(|value| *value == 3.0));
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }

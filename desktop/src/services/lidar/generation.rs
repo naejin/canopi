@@ -104,9 +104,8 @@ pub(super) struct LatticeWindow {
 /// Resolved values and exact validity for one window.
 #[derive(Debug)]
 pub(super) struct ResolvedWindow {
-    // Not yet reachable from a production caller: the sparse reader now serves
-    // publication, review and undo, but these items belong to the deferred
-    // legacy-base overlay and the B3/B4 consumers (`canopi-jv8a.4`).
+    // The window's own grid: no production caller reads it yet, because the
+    // display/legacy-base consumers that need it are deferred (`canopi-jv8a.4`).
     #[allow(dead_code)]
     pub grid: RasterGrid,
     pub samples: Vec<f32>,
@@ -114,9 +113,7 @@ pub(super) struct ResolvedWindow {
 }
 
 impl ResolvedWindow {
-    // Not yet reachable from a production caller: the sparse reader now serves
-    // publication, review and undo, but these items belong to the deferred
-    // legacy-base overlay and the B3/B4 consumers (`canopi-jv8a.4`).
+    // Test-only convenience: production callers read `samples`/`valid` directly.
     #[allow(dead_code)]
     pub(super) fn cells(&self) -> usize {
         self.samples.len()
@@ -511,16 +508,11 @@ pub(super) struct RegionAggregate {
 /// when it drops, so a caller never re-prepares per window. The preserved
 /// generation's own mask stays authoritative: it is read independently and
 /// overrides the derivative's validity.
-#[allow(dead_code)]
 pub(super) struct LegacyTiffLease {
     reader: PreparedRaster,
     mask: Option<PathBuf>,
 }
 
-// Not yet reachable from a production caller: the sparse reader now serves
-// publication, review and undo, but these items belong to the deferred
-// legacy-base overlay and the B3/B4 consumers (`canopi-jv8a.4`).
-#[allow(dead_code)]
 impl LegacyTiffLease {
     pub(super) fn open(
         engine: &super::engine::GdalEngine,
@@ -535,6 +527,9 @@ impl LegacyTiffLease {
         Ok(Self { reader, mask })
     }
 
+    /// Grid of the prepared derivative; the deferred legacy-base consumers that
+    /// need it are tracked in `canopi-jv8a.4`.
+    #[allow(dead_code)]
     pub(super) fn grid(&self) -> &RasterGrid {
         self.reader.grid()
     }
@@ -559,7 +554,6 @@ impl LegacyTiffLease {
 }
 
 /// Read only the requested rows of a preserved dense mask file.
-#[allow(dead_code)]
 fn read_legacy_mask_window(
     mask: &Path,
     grid: &RasterGrid,
@@ -598,7 +592,6 @@ fn read_legacy_mask_window(
 ///
 /// Blocks are visited one bounded window at a time; the member's own extent is
 /// enumerated, so absent coordinates outside it are never touched.
-#[allow(dead_code)]
 pub(super) fn member_regions(
     reader: &mut PreparedRaster,
     lattice: &RasterGrid,

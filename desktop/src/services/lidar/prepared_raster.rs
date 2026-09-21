@@ -186,7 +186,6 @@ impl PreparedRaster {
     /// The file must already be a validated controlled COG; nothing is
     /// prepared, nothing is charged against free space, and dropping the
     /// reader closes the handle without deleting the committed bytes.
-    #[allow(dead_code)]
     pub(super) fn open_committed(
         path: &Path,
         grid: &RasterGrid,
@@ -197,7 +196,6 @@ impl PreparedRaster {
     }
 
     /// Grid this reader was validated against.
-    #[allow(dead_code)]
     pub(super) fn grid(&self) -> &RasterGrid {
         &self.grid
     }
@@ -418,7 +416,7 @@ pub(super) fn padded_cog_bytes(width: u32, height: u32) -> Result<u64, String> {
 /// the derivative is alive, and the shared reserve all coexist, so one checked
 /// estimate covers them. Independent per-allocation checks would each see the
 /// same free bytes and admit a footprint that does not fit.
-fn required_free_bytes(
+pub(super) fn required_free_bytes(
     width: u32,
     height: u32,
     additional_output_bytes: u64,

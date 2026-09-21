@@ -54,23 +54,22 @@ impl LidarPaths {
         self.root.join("display-tiles")
     }
 
-    /// Immutable imported originals: `sources/<sha256>/original`.
-    // Retained source COGs are produced by the source-retention step tracked in
-    // `canopi-jv8a.4`; the temporary allowance goes with it.
-    #[allow(dead_code)]
-    pub fn source_cog(&self, sha256: &str) -> PathBuf {
-        self.source_dir(sha256).join("source-cog.tif")
-    }
-
     /// Content-addressed immutable resolved/quality COG assets.
     pub fn asset_dir(&self, sha256: &str) -> PathBuf {
         self.root.join("assets").join(sha256)
     }
 
+    /// One immutable COG asset by digest: a retained source, a resolved
+    /// generation chunk or an analysis quality chunk.
     pub fn asset_cog(&self, sha256: &str) -> PathBuf {
         self.asset_dir(sha256).join("cog.tif")
     }
 
+    /// Immutable imported originals: `sources/<sha256>/original`.
+    ///
+    /// A retained source COG is not stored here: it is content-addressed under
+    /// `assets/<sha256>/cog.tif`, so identical content is shared rather than
+    /// copied beside the original.
     pub fn source_dir(&self, sha256: &str) -> PathBuf {
         self.root.join("sources").join(sha256)
     }
