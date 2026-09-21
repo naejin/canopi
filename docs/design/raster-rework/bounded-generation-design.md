@@ -1,10 +1,10 @@
 # Bounded raster generations behind the existing UI
 
-Status: partial — implementation delivered on `feature/bounded-raster-generations` through the BG6–BG8 completion; independent focused review found BG6–BG8 at `9ad85c18`, and that correction awaits disposition. Not accepted as complete, integrated or released. The standard-COG contract replaces the unimplemented raw-block choice at `24fd1a56`.
+Status: partial — implementation delivered on `feature/bounded-raster-generations` through `eb64a853`; independent focused review found BG6-A and BG7-A/B/C outstanding; BG8 requested cases verified. Not accepted as complete, integrated or released. The standard-COG contract replaces the unimplemented raw-block choice at `24fd1a56`.
 Tracking: `canopi-jv8a.4`, foundation `canopi-jv8a`, epic `canopi-j571`. Accepted predecessor: `canopi-jv8a.1` at `a5fc7d7b`.
-Current guidance: [delivery receipt and completion response](bounded-generation-receipt.md), [independent review](bounded-generation-review.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [completion assignment](bounded-generation-completion-agent-prompt.md), [independent review](bounded-generation-review.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The following sections remain the intended B1–B5 contract, not proof of implementation. Continue the existing branch; do not recreate the initial baseline/worktree sequence below. The delivered completion closes sparse review traversal, new-job asset ownership and incomplete measurement admission against this contract. Preserve delivered work and reconcile branch-specific guides rather than replacing them with this planning checkout's older descriptions.
+The following sections remain the intended B1–B5 contract, not proof of implementation. Continue the existing branch from `eb64a853`; do not recreate the initial baseline/worktree sequence below. The completion assignment closes transformed pagination and publication/recovery settlement against this contract; retain the verified BG8 incomplete-evidence cases. Preserve delivered work and reconcile branch-specific guides rather than replacing them with this planning checkout's older descriptions.
 
 ## 1. Outcome and authority
 
