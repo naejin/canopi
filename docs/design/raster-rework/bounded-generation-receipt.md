@@ -10,8 +10,8 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | --- | --- |
 | B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver, legacy adapters, paged regions | **Delivered and verified**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, the private resolver over ordered occurrences, the legacy TIFF-only derivative lease with an independently applied authoritative mask, and paged occupied-region aggregates |
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
-| B3 — slope core+halo and shared job ownership | **Mostly delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning), and slope now computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history. Still open: the library-wide exclusive heavy raster job lease (the resource-ownership half of B3) |
-| B4 — bounded display transport and Desktop protocol | Not started |
+| B3 — slope core+halo and shared job ownership | **Delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning); slope computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history; and the library now owns one exclusive heavy raster job lease shared by staging, apply, undo and analysis refresh, refusing a competing user submission promptly without creating running work |
+| B4 — bounded display transport and Desktop protocol | Not started (this is the gate that keeps sparse publication off) |
 | B5 — end-to-end verification and conditional limit removal | Not started |
 
 Production behaviour is unchanged: the storage-format switch is `false` in every
@@ -33,7 +33,8 @@ caller-level tests, not an inert module.
 | Resolved-chunk materialization for publication | `d57cdfc9` |
 | Catalogue v8, format identity, gated stage→review→Apply→reopen→undo caller slice | `535d353a` |
 | Analysis staging guard, `staging-*` startup pruning and `canopi-jv8a.3` | `48aba35a` |
-| Catalogue v9, bounded core+halo slope with sparse result/quality chunks | the commit that carries this receipt |
+| Catalogue v9, bounded core+halo slope with sparse result/quality chunks | `eea106d2` |
+| Exclusive library-wide heavy raster job lease (staging/apply/undo/refresh) | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -94,6 +95,16 @@ caller-level tests, not an inert module.
   with the plan's explicit reason for geographic or non-metre grids. A
   generation whose member history cannot be replayed keeps the accepted dense
   whole-raster slope route, so compatibility is preserved while the gate holds.
+- **One heavy job at a time (B3).** `HeavyJobLease` is the library's exclusive
+  heavy raster lease. Import staging, apply and undo acquire it before any
+  running work is created, so a competing user submission is refused promptly
+  with a named busy reason instead of competing for the same disk, memory and
+  GDAL children; the guard rides into the spawned work and releases when it
+  settles, which is also what releases staging for review before apply
+  reacquires it. An analysis refresh waits for the lease *before* taking a
+  Native Operation Executor permit, so a queued refresh never occupies a permit
+  behind another heavy job, and a refresh that was cancelled or superseded
+  while waiting stops instead of running.
 - **Analysis staging is owned (`canopi-jv8a.3`, B3 linked work).** A slope job's
   `staging-*` root is owned by a guard that removes it on any early return,
   propagated error, cancellation or panic, and is disarmed only once the
@@ -149,6 +160,13 @@ Catalogue tests:
   publishes no analysis head, leaves no unpublished chunk row and removes its
   scratch root; `slope_eligibility_refuses_non_metre_elevations` and
   `slope_eligibility_accepts_a_projected_metre_grid` cover the eligibility gate.
+- Heavy lease (hermetic):
+  `heavy_raster_lease_is_exclusive_and_released_on_every_path` holds the lease
+  for one job, proves a competing staging submission is refused with the busy
+  reason while its job row is left untouched, proves release admits the next
+  holder, and proves an early failure inside a submission releases the lease
+  rather than wedging the library. The refresh wait path is exercised end to
+  end by the B5 integration runs, not yet by an isolated test.
 - Analysis staging (`canopi-jv8a.3`):
   `failed_slope_job_removes_its_staging_root_and_keeps_the_accepted_head` forces
   a failure after the slope step wrote its staged result (the message proves the

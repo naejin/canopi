@@ -48,6 +48,52 @@ pub(crate) struct LidarLibraryInner {
     pub(crate) engine: GdalEngine,
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
     executor: Mutex<Option<crate::native_operation::NativeOperationExecutor>>,
+    /// One exclusive heavy raster job at a time, library-wide. Staging, apply,
+    /// undo and analysis all hold it; awaiting review releases it.
+    heavy_job: Mutex<Option<String>>,
+}
+
+/// Exclusive ownership of the library's heavy raster work.
+///
+/// The lease is held for exactly as long as the work runs and released when
+/// the guard drops, so a queued submission is refused promptly instead of
+/// creating running work that would compete for the same disk, memory and
+/// GDAL children.
+pub(crate) struct HeavyJobLease {
+    inner: Arc<LidarLibraryInner>,
+    job_id: String,
+}
+
+impl HeavyJobLease {
+    fn acquire(library: &LidarLibrary, job_id: &str) -> Result<Self, String> {
+        let mut holder = library
+            .inner
+            .heavy_job
+            .lock()
+            .map_err(|_| "LiDAR heavy job lease poisoned".to_string())?;
+        if let Some(current) = holder.as_deref()
+            && current != job_id
+        {
+            return Err(format!(
+                "another raster job is already running ({current}); retry when it finishes"
+            ));
+        }
+        *holder = Some(job_id.to_string());
+        Ok(Self {
+            inner: library.inner.clone(),
+            job_id: job_id.to_string(),
+        })
+    }
+}
+
+impl Drop for HeavyJobLease {
+    fn drop(&mut self) {
+        if let Ok(mut holder) = self.inner.heavy_job.lock()
+            && holder.as_deref() == Some(self.job_id.as_str())
+        {
+            *holder = None;
+        }
+    }
 }
 
 impl LidarLibrary {
@@ -63,6 +109,7 @@ impl LidarLibrary {
                 engine: GdalEngine::new(),
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
+                heavy_job: Mutex::new(None),
             }),
         };
         // Recovery: interrupted jobs fail explicitly; published results and
@@ -485,6 +532,7 @@ impl LidarLibrary {
     /// Spawn the undo: republish the layer without the import's
     /// interpretation. Immutable history stays on disk.
     pub fn begin_undo(&self, job_id: &str) -> Result<(), String> {
+        let lease = HeavyJobLease::acquire(self, job_id)?;
         let executor = self.executor()?;
         let flag = self.register_cancel(job_id);
         let library = self.clone();
@@ -496,7 +544,10 @@ impl LidarLibrary {
                 .run(
                     crate::native_operation::NativeOperationClass::Local,
                     "lidar import undo",
-                    move || import::undo_import(&library_for_work, &job_id_for_work, &flag),
+                    move || {
+                        let _lease = lease;
+                        import::undo_import(&library_for_work, &job_id_for_work, &flag)
+                    },
                 )
                 .await;
             match outcome {
@@ -670,6 +721,10 @@ impl LidarLibrary {
         layer_id: &str,
         source_paths: Vec<PathBuf>,
     ) -> Result<(), String> {
+        // Refuse a competing heavy job before any running work is created;
+        // the lease is released when staging settles, which is the moment the
+        // user takes over for review.
+        let lease = HeavyJobLease::acquire(self, job_id)?;
         let executor = self.executor()?;
         let flag = self.register_cancel(job_id);
         let library = self.clone();
@@ -683,6 +738,7 @@ impl LidarLibrary {
                     crate::native_operation::NativeOperationClass::Local,
                     "lidar import staging",
                     move || {
+                        let _lease = lease;
                         import::stage_import(
                             &library_for_work,
                             &job_id_for_work,
@@ -795,8 +851,9 @@ impl LidarLibrary {
         add_uncovered: bool,
         replace_overlap: bool,
     ) -> Result<(), String> {
-        let executor = self.executor()?;
         let job_id = staging.job_id.clone();
+        let lease = HeavyJobLease::acquire(self, &job_id)?;
+        let executor = self.executor()?;
         let flag = self.register_cancel(&job_id);
         let library = self.clone();
         let job_id_owned = job_id.to_string();
@@ -807,6 +864,7 @@ impl LidarLibrary {
                     crate::native_operation::NativeOperationClass::Local,
                     "lidar import apply",
                     move || {
+                        let _lease = lease;
                         import::apply_import(
                             &library_for_work,
                             &staging,
@@ -932,6 +990,34 @@ impl LidarLibrary {
         }
     }
 
+    /// Wait for the library-wide heavy lease without holding an executor
+    /// permit: a queued refresh must never occupy a permit while another heavy
+    /// job runs, and a refresh superseded meanwhile simply stops waiting.
+    async fn await_heavy_lease(&self, job_id: &str) -> Option<HeavyJobLease> {
+        loop {
+            match HeavyJobLease::acquire(self, job_id) {
+                Ok(lease) => return Some(lease),
+                Err(_) => {
+                    // Only a queued refresh keeps waiting; one that was
+                    // cancelled or superseded meanwhile stops here.
+                    let queued = self.catalogue().ok().is_some_and(|connection| {
+                        connection
+                            .query_row(
+                                "SELECT state FROM lidar_analysis_jobs WHERE id = ?1",
+                                [job_id],
+                                |row| row.get::<_, String>(0),
+                            )
+                            .is_ok_and(|state| matches!(state.as_str(), "preparing" | "refreshing"))
+                    });
+                    if !queued {
+                        return None;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+            }
+        }
+    }
+
     async fn run_refresh(
         self,
         job_id: String,
@@ -939,6 +1025,9 @@ impl LidarLibrary {
         parameters_json: String,
         source_generation_id: String,
     ) {
+        let Some(lease) = self.await_heavy_lease(&job_id).await else {
+            return;
+        };
         let Ok(executor) = self.executor() else {
             return;
         };
@@ -955,6 +1044,7 @@ impl LidarLibrary {
                 crate::native_operation::NativeOperationClass::Local,
                 "lidar analysis refresh",
                 move || {
+                    let _lease = lease;
                     analysis::run_slope_job(
                         &library_for_work,
                         &job_id_for_run,
@@ -1353,6 +1443,56 @@ mod tests {
         // referenced them; only catalogue-aware reclamation removes bytes.
         assert_eq!(row_count(&connection, "lidar_raster_assets"), 1);
         drop(connection);
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn heavy_raster_lease_is_exclusive_and_released_on_every_path() {
+        let root = std::env::temp_dir().join(new_id("lidar-heavy-lease-test"));
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+        let layer_id = library
+            .create_layer(
+                "Lease fixture",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let holding = library.record_import_job(&layer_id).unwrap();
+        let competing = library.record_import_job(&layer_id).unwrap();
+
+        // One heavy job holds the library-wide lease...
+        let lease = HeavyJobLease::acquire(&library, &holding).unwrap();
+        // ...so a competing submission is refused promptly instead of creating
+        // running work.
+        let error = library
+            .begin_staging(&competing, &layer_id, Vec::new())
+            .expect_err("a competing heavy submission must be refused");
+        assert!(error.contains("already running"), "{error}");
+        {
+            let connection = library.catalogue().unwrap();
+            let state: String = connection
+                .query_row(
+                    "SELECT state FROM lidar_import_jobs WHERE id = ?1",
+                    [&competing],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(state, "staging", "the refused job was left untouched");
+        }
+
+        // Releasing admits the next holder, and an early failure releases the
+        // lease instead of wedging the library for the rest of the session.
+        drop(lease);
+        drop(HeavyJobLease::acquire(&library, &competing).unwrap());
+        assert!(
+            library
+                .begin_staging(&holding, &layer_id, Vec::new())
+                .is_err(),
+            "no executor is attached in this fixture"
+        );
+        drop(HeavyJobLease::acquire(&library, &holding).unwrap());
+
         drop(library);
         std::fs::remove_dir_all(root).unwrap();
     }
