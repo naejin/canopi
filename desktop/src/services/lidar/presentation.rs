@@ -8,7 +8,7 @@ use super::catalogue;
 use super::engine::GdalEngine;
 use common_types::lidar::{
     LidarAnalysisKind, LidarAnalysisSummary, LidarEngineStatus, LidarLayerSummary,
-    LidarLibrarySnapshot, LidarResultState, LidarTileset,
+    LidarLibrarySnapshot, LidarResultState, LidarTileSource, LidarTileset,
 };
 use rusqlite::Connection;
 
@@ -34,14 +34,22 @@ pub fn library_snapshot(
                     (Some(min), Some(max)) => Some([min, max]),
                     _ => None,
                 };
+                let manifest = super::import::read_generation_manifest(&head.manifest_json).ok();
+                let registered =
+                    tilesets_for(display_connection, "source", &layer.id, head.id.clone());
+                let tilesets = if registered.is_empty() {
+                    native_tilesets("elevation", &head.id, manifest.as_ref(), bounds)
+                } else {
+                    registered
+                };
                 (
                     head.coverage_cells as u64,
-                    super::import::read_generation_manifest(&head.manifest_json)
-                        .ok()
+                    manifest
+                        .as_ref()
                         .map(|manifest| manifest.grid.pixel_size().0),
                     bounds,
                     range,
-                    tilesets_for(display_connection, "source", &layer.id, head.id.clone()),
+                    tilesets,
                 )
             }
             None => (0, None, None, None, Vec::new()),
@@ -92,16 +100,20 @@ pub fn library_snapshot(
                     (Some(min), Some(max)) => Some([min, max]),
                     _ => None,
                 };
-                (
-                    bounds,
-                    range,
-                    tilesets_for(
-                        display_connection,
-                        "analysis",
-                        &definition.id,
-                        result.id.clone(),
-                    ),
-                )
+                let manifest = super::import::read_generation_manifest(&result.manifest_json).ok();
+                let registered = tilesets_for(
+                    display_connection,
+                    "analysis",
+                    &definition.id,
+                    result.id.clone(),
+                );
+                // A sparse result owns no pyramid; it is rendered on demand.
+                let tilesets = if registered.is_empty() {
+                    native_tilesets("slope", &result.id, manifest.as_ref(), bounds)
+                } else {
+                    registered
+                };
+                (bounds, range, tilesets)
             }
             None => (None, None, Vec::new()),
         };
@@ -135,6 +147,53 @@ pub fn library_snapshot(
         analyses: analysis_summaries,
         engine: engine_status,
     })
+}
+
+/// Zoom ceiling shared with the legacy pyramid renderer.
+const MAX_ZOOM_CEILING: u32 = 22;
+/// Pyramid depth presented for an on-demand generation.
+const NATIVE_ZOOM_LEVELS: u32 = 5;
+/// Web Mercator world size in metres.
+const WEB_MERCATOR_WORLD: f64 = 40_075_016.685_578_49;
+
+/// Build the on-demand tileset of a generation that owns no display pyramid.
+///
+/// The zoom range mirrors the legacy pyramid rule (native resolution is the
+/// deepest level, four coarser levels above it), so switching a layer between
+/// storage formats does not change how it is framed on the map.
+fn native_tilesets(
+    style: &str,
+    generation_id: &str,
+    manifest: Option<&super::import::GenerationManifest>,
+    bounds: Option<[f64; 4]>,
+) -> Vec<LidarTileset> {
+    let Some(manifest) = manifest else {
+        return Vec::new();
+    };
+    if manifest.format != super::import::GenerationStorageFormat::CogChunksV1 {
+        return Vec::new();
+    }
+    let Some(bounds) = bounds else {
+        return Vec::new();
+    };
+    let pixel = manifest.grid.pixel_size().0;
+    if !(pixel.is_finite() && pixel > 0.0) {
+        return Vec::new();
+    }
+    let max_zoom = (WEB_MERCATOR_WORLD / 256.0 / pixel)
+        .log2()
+        .floor()
+        .clamp(0.0, f64::from(MAX_ZOOM_CEILING)) as u32;
+    vec![LidarTileset {
+        style: style.to_string(),
+        source: LidarTileSource::NativeGeneration {
+            generation_id: generation_id.to_string(),
+        },
+        min_zoom: max_zoom.saturating_sub(NATIVE_ZOOM_LEVELS - 1),
+        max_zoom,
+        tile_size: 256,
+        bounds,
+    }]
 }
 
 fn tilesets_for(
@@ -173,7 +232,9 @@ fn tilesets_for(
                 .and_then(|v| <[f64; 4]>::try_from(v).ok())?;
             Some(LidarTileset {
                 style,
-                path_template: template,
+                source: LidarTileSource::LegacyAsset {
+                    path_template: template,
+                },
                 min_zoom: min_zoom.clamp(0, 30) as u32,
                 max_zoom: max_zoom.clamp(0, 30) as u32,
                 tile_size: 256,

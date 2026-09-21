@@ -36,6 +36,11 @@ pub struct ResultManifest {
     pub parameters: AnalysisParameters,
     pub engine_version: String,
     pub grid: super::grid::RasterGrid,
+    /// CRS of the result lattice, so a sparse result can be sampled on demand
+    /// without re-reading its input generation. Absent in manifests written
+    /// before on-demand rendering existed.
+    #[serde(default)]
+    pub crs_wkt: String,
     /// Dense-result NoData marker. Absent for a sparse result, whose validity
     /// is carried by its resolved chunk assets.
     #[serde(default)]
@@ -436,6 +441,7 @@ fn publish_sparse_slope(
             parameters: parameters.clone(),
             engine_version: engine.discover().map(|t| t.version).unwrap_or_default(),
             grid: manifest.grid.clone(),
+            crs_wkt: manifest.crs_wkt.clone(),
             nodata: None,
             created_at: now_iso(),
             format: super::import::GenerationStorageFormat::CogChunksV1,
@@ -727,6 +733,7 @@ pub fn run_slope_job(
         parameters: parameters.clone(),
         engine_version: engine_version.clone(),
         grid: manifest.grid.clone(),
+        crs_wkt: manifest.crs_wkt.clone(),
         nodata: Some(manifest.nodata),
         created_at: now_iso(),
         format: super::import::GenerationStorageFormat::LegacyDenseV1,

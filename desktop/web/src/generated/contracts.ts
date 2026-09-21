@@ -158,7 +158,7 @@ export type LidarAnalysisJobStatus = {
  *  Registered analysis capability. Slice 1 ships slope only; later slices add
  *  the remaining ground-elevation and height analyses.
  */
-export type LidarAnalysisKind = 
+export type LidarAnalysisKind =
 // Terrain slope from a ground-elevation layer.
 "Slope";
 
@@ -315,17 +315,17 @@ export type LidarLibrarySnapshot = {
 
 /**
  *  Immutable measurement definition of a source layer.
- * 
+ *
  *  Measurement kind, units and reference establish capability; layer names,
  *  filenames and providers do not.
  */
-export type LidarMeasurementKind = 
+export type LidarMeasurementKind =
 // Bare-earth elevation (MNT/DTM).
-"GroundElevation" | 
+"GroundElevation" |
 // Top surface including vegetation and buildings (MNS/DSM).
-"SurfaceElevation" | 
+"SurfaceElevation" |
 // Height relative to compatible terrain (MNH).
-"AboveGroundHeight" | 
+"AboveGroundHeight" |
 // User-described continuous numeric value; numeric display only.
 "OtherContinuous";
 
@@ -355,16 +355,26 @@ export type LidarResultState = "Preparing" | "Ready" | "Refreshing" | "Incomplet
 export type LidarSlopeUnit = "Degrees" | "Percent";
 
 /**
- *  Display tile pyramid metadata. `url_template` is a platform-resolved local
- *  asset URL with MapLibre `{z}_{x}_{y}` substitution and `.png` extension.
+ *  Where one tileset's pixels come from.
+ *
+ *  The distinction is explicit so a generation stored as sparse resolved
+ *  chunks never has to invent a filesystem path it does not own: the desktop
+ *  either resolves a preserved legacy pyramid's asset directory, or renders
+ *  the immutable generation on demand behind the raster protocol.
  */
+export type LidarTileSource =
+/**
+ *  Preserved display pyramid: an absolute filesystem tile path template
+ *  ending in `{z}_{x}_{y}.png`, resolved to a local asset URL.
+ */
+{ kind: "legacy-asset"; path_template: string } |
+// Immutable generation rendered by the library on demand.
+{ kind: "native-generation"; generation_id: string };
+
+// Display tile metadata for one generation and style.
 export type LidarTileset = {
 	style: string,
-	/**
-	 *  Absolute filesystem tile path template ending in `{z}_{x}_{y}.png`;
-	 *  the frontend resolves it to a local asset URL for MapLibre.
-	 */
-	path_template: string,
+	source: LidarTileSource,
 	min_zoom: number,
 	max_zoom: number,
 	tile_size: number,

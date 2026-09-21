@@ -319,13 +319,29 @@ fn read_member_window(
     }
 }
 
-/// One persisted resolved-chunk reference the reader can select.
+/// One persisted resolved-chunk reference the reader can select, with the
+/// stored aggregate a minifying display can use without reading the chunk.
 #[derive(Debug, Clone)]
 pub(super) struct PersistedChunk {
     pub chunk_x: i64,
     pub chunk_y: i64,
     pub asset: CogAsset,
     pub nodata: Option<f32>,
+    /// Valid cell count of the chunk.
+    pub valid_cells: i64,
+    /// Exact f64 sum of the chunk's valid cells.
+    pub sum_value: f64,
+}
+
+impl PersistedChunk {
+    /// Valid-only mean of the whole chunk, when it holds any valid cell.
+    pub(super) fn mean(&self) -> Option<f64> {
+        if self.valid_cells <= 0 {
+            None
+        } else {
+            Some(self.sum_value / self.valid_cells as f64)
+        }
+    }
 }
 
 /// Read one window from persisted resolved chunks.
@@ -886,6 +902,8 @@ pub(super) fn persisted_chunks(
             chunk_y: row.chunk_y,
             nodata: asset.nodata,
             asset,
+            valid_cells: row.aggregate_valid_cells,
+            sum_value: row.aggregate_sum_value,
         });
     }
     Ok(chunks)
@@ -1366,6 +1384,8 @@ mod tests {
                 chunk_y: 0,
                 asset,
                 nodata: Some(f32::NAN),
+                valid_cells: i64::from(chunk_side) * i64::from(chunk_side),
+                sum_value: f64::from(value) * f64::from(chunk_side) * f64::from(chunk_side),
             });
         }
 
@@ -1453,6 +1473,8 @@ mod tests {
                 chunk_y: chunk.chunk_y,
                 asset: chunk.asset.clone(),
                 nodata: Some(f32::NAN),
+                valid_cells: chunk.aggregate.valid_cells,
+                sum_value: chunk.aggregate.sum_value,
             })
             .collect();
         let read = read_persisted_window(

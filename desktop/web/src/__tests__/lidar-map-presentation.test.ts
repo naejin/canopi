@@ -4,7 +4,10 @@ import {
   lidarMapLayers,
   type LidarMapLayer,
 } from '../app/canvas-map-surface/lidar'
-import { lidarTileUrlTemplate } from '../app/lidar/tile-urls'
+import {
+  lidarTileUrlTemplate,
+  parseNativeTileUrl,
+} from '../app/lidar/tile-urls'
 import { readLidarPresentation } from '../app/lidar/library-store'
 import type { LidarTileset } from '../ipc/lidar'
 import type {
@@ -16,11 +19,21 @@ import type {
 function tileset(style: string): LidarTileset {
   return {
     style,
-    path_template: '/data/lidar/display/source/lyr-1/gen-1/elevation/{z}_{x}_{y}.png',
+    source: {
+      kind: 'legacy-asset',
+      path_template: '/data/lidar/display/source/lyr-1/gen-1/elevation/{z}_{x}_{y}.png',
+    },
     min_zoom: 13,
     max_zoom: 17,
     tile_size: 256,
     bounds: [-0.43, 48.3, -0.41, 48.31],
+  }
+}
+
+function nativeTileset(style: string): LidarTileset {
+  return {
+    ...tileset(style),
+    source: { kind: 'native-generation', generation_id: 'gen-sparse' },
   }
 }
 
@@ -65,8 +78,14 @@ function snapshot(overrides: Partial<LidarLibrarySnapshot> = {}): LidarLibrarySn
 }
 
 describe('lidar tile URLs', () => {
-  it('resolves the directory through the asset protocol and keeps the tile marker', () => {
-    const url = lidarTileUrlTemplate(tileset('elevation'), (path) => `asset://test/${path}`)
+  const identity = { entityKind: 'source' as const, entityId: 'lyr-1' }
+
+  it('resolves a preserved pyramid through the asset protocol and keeps the tile marker', () => {
+    const url = lidarTileUrlTemplate(
+      tileset('elevation'),
+      identity,
+      (path) => `asset://test/${path}`,
+    )
     expect(url).toBe('asset://test//data/lidar/display/source/lyr-1/gen-1/elevation/{z}_{x}_{y}.png')
   })
 
@@ -74,12 +93,43 @@ describe('lidar tile URLs', () => {
     const originalPlatform = navigator.platform
     Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true })
     try {
-      const url = lidarTileUrlTemplate(tileset('elevation'))
+      const url = lidarTileUrlTemplate(tileset('elevation'), identity)
       expect(url.startsWith('http://asset.localhost/')).toBe(true)
       expect(url.endsWith('/{z}_{x}_{y}.png')).toBe(true)
     } finally {
       Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
     }
+  })
+
+  it('names the raster protocol for a generation with no pyramid', () => {
+    const url = lidarTileUrlTemplate(nativeTileset('slope'), {
+      entityKind: 'analysis',
+      entityId: 'adef-1',
+    })
+    expect(url).toBe(
+      'canopi-raster://tile/analysis/adef-1/gen-sparse/slope/{z}/{x}/{y}.png',
+    )
+    expect(url).not.toContain('asset')
+    expect(parseNativeTileUrl(url.replace('{z}/{x}/{y}', '14/8192/5461'))).toEqual({
+      entityKind: 'analysis',
+      entityId: 'adef-1',
+      generationId: 'gen-sparse',
+      style: 'slope',
+      z: 14,
+      x: 8192,
+      y: 5461,
+    })
+  })
+
+  it('rejects URLs that are not raster tile requests', () => {
+    expect(parseNativeTileUrl('asset://localhost/data/{z}_{x}_{y}.png')).toBeNull()
+    expect(parseNativeTileUrl('canopi-raster://tile/source/lyr-1/gen/elevation/1/2')).toBeNull()
+    expect(
+      parseNativeTileUrl('canopi-raster://tile/plants/lyr-1/gen/elevation/1/2/3.png'),
+    ).toBeNull()
+    expect(
+      parseNativeTileUrl('canopi-raster://tile/source/lyr-1/gen/elevation/1/-2/3.png'),
+    ).toBeNull()
   })
 })
 

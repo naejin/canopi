@@ -1,6 +1,6 @@
 import type { LidarTileset } from '../../ipc/lidar'
 import type { LidarPresentationItem } from '../lidar/library-store'
-import { lidarTileUrlTemplate } from '../lidar/tile-urls'
+import { lidarTileUrlTemplate, tileEntityKind } from '../lidar/tile-urls'
 import { styleForKind } from '../lidar/library-store'
 
 import type { LidarMapLayer } from './lidar-sync'
@@ -24,7 +24,10 @@ export function lidarMapLayers(items: LidarPresentationItem[]): LidarMapLayer[] 
       name: item.name,
       visible: item.visible,
       opacity: item.opacity,
-      urlTemplate: lidarTileUrlTemplate(tileset),
+      urlTemplate: lidarTileUrlTemplate(tileset, {
+        entityKind: tileEntityKind(item.kind),
+        entityId: item.id,
+      }),
       minZoom: tileset.min_zoom,
       maxZoom: tileset.max_zoom,
       bounds: tileset.bounds,

@@ -192,6 +192,38 @@ pub async fn lidar_preview_import_decision(
 
 /// Bounded cancellation signal delivery; must bypass queued executor work so
 /// a busy Local class cannot make Cancel unresponsive.
+/// Render one bounded display tile from an immutable generation.
+///
+/// Returns encoded PNG bytes (never base64) or an explicit failure, so the map
+/// protocol can mark a tile unavailable instead of drawing it as empty. Every
+/// value in the request is an identifier, a style name or an integer tile
+/// coordinate: no path, CRS string or engine argument crosses this boundary.
+// The command boundary takes one flat argument list so the generated contract
+// stays a plain set of scalars.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn lidar_raster_tile(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    entity_kind: String,
+    entity_id: String,
+    generation_id: String,
+    style: String,
+    z: u32,
+    x: u32,
+    y: u32,
+) -> Result<tauri::ipc::Response, String> {
+    let library = library.inner().clone();
+    let bytes = executor
+        .run(
+            crate::native_operation::NativeOperationClass::Local,
+            "lidar raster tile",
+            move || library.render_tile(&entity_kind, &entity_id, &generation_id, &style, z, x, y),
+        )
+        .await?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[tauri::command]
 pub fn lidar_cancel_import(library: State<'_, LidarLibrary>, job_id: String) {
     library.cancel_job(&job_id);

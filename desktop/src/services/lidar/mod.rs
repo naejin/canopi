@@ -19,6 +19,7 @@ mod prepared_raster;
 pub mod presentation;
 pub mod probe;
 mod raster_assets;
+mod tiles;
 
 use catalogue::{new_id, now_iso};
 use common_types::lidar::{
@@ -512,6 +513,38 @@ impl LidarLibrary {
                 is_head: entry.is_head,
             })
             .collect())
+    }
+
+    /// Render one bounded display tile as encoded PNG bytes.
+    ///
+    /// An empty tile returns the shared transparent PNG, so "no coverage" is a
+    /// successful draw of nothing; an unreadable generation returns an error,
+    /// which the caller must surface as unavailable rather than transparent.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_tile(
+        &self,
+        entity_kind: &str,
+        entity_id: &str,
+        generation_id: &str,
+        style: &str,
+        z: u32,
+        x: u32,
+        y: u32,
+    ) -> Result<Vec<u8>, String> {
+        let request = tiles::TileRequest {
+            entity_kind: entity_kind.to_string(),
+            entity_id: entity_id.to_string(),
+            generation_id: generation_id.to_string(),
+            style: style.to_string(),
+            z,
+            x,
+            y,
+        };
+        let cancel = AtomicBool::new(false);
+        match tiles::render_tile(self, &request, &cancel)? {
+            tiles::TileOutcome::Png(bytes) => Ok(bytes),
+            tiles::TileOutcome::Empty => Ok(tiles::transparent_tile()?.to_vec()),
+        }
     }
 
     /// Validate that an import job has an accepted publication to undo

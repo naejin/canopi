@@ -113,15 +113,31 @@ pub struct LidarEngineStatus {
     pub detail: Option<String>,
 }
 
-/// Display tile pyramid metadata. `url_template` is a platform-resolved local
-/// asset URL with MapLibre `{z}_{x}_{y}` substitution and `.png` extension.
+/// Where one tileset's pixels come from.
+///
+/// The distinction is explicit so a generation stored as sparse resolved
+/// chunks never has to invent a filesystem path it does not own: the desktop
+/// either resolves a preserved legacy pyramid's asset directory, or renders
+/// the immutable generation on demand behind the raster protocol.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind")]
+pub enum LidarTileSource {
+    /// Preserved display pyramid: an absolute filesystem tile path template
+    /// ending in `{z}_{x}_{y}.png`, resolved to a local asset URL.
+    #[serde(rename = "legacy-asset")]
+    LegacyAsset { path_template: String },
+    /// Immutable generation rendered by the library on demand.
+    #[serde(rename = "native-generation")]
+    NativeGeneration { generation_id: String },
+}
+
+/// Display tile metadata for one generation and style.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarTileset {
     pub style: String,
-    /// Absolute filesystem tile path template ending in `{z}_{x}_{y}.png`;
-    /// the frontend resolves it to a local asset URL for MapLibre.
-    pub path_template: String,
+    pub source: LidarTileSource,
     pub min_zoom: u32,
     pub max_zoom: u32,
     pub tile_size: u32,
@@ -318,3 +334,38 @@ pub struct LidarPresentationEntry {
 }
 
 pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The frontend reads these exact keys: a tagged tile source carries the
+    /// variant in `kind` and keeps snake_case payload fields, like every other
+    /// tagged contract in this crate.
+    #[test]
+    fn tile_source_wire_shape_is_tagged_and_stable() {
+        let legacy = LidarTileset {
+            style: "elevation".to_string(),
+            source: LidarTileSource::LegacyAsset {
+                path_template: "/data/{z}_{x}_{y}.png".to_string(),
+            },
+            min_zoom: 13,
+            max_zoom: 17,
+            tile_size: 256,
+            bounds: [-1.0, 48.0, 0.0, 49.0],
+        };
+        let json = serde_json::to_string(&legacy).unwrap();
+        assert!(json.contains(r#""kind":"legacy-asset""#), "{json}");
+        assert!(json.contains(r#""path_template""#), "{json}");
+        assert!(!json.contains("path-template"), "{json}");
+
+        let native = LidarTileSource::NativeGeneration {
+            generation_id: "gen-1".to_string(),
+        };
+        let json = serde_json::to_string(&native).unwrap();
+        assert_eq!(
+            json,
+            r#"{"kind":"native-generation","generation_id":"gen-1"}"#
+        );
+    }
+}

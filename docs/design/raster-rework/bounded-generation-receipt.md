@@ -11,7 +11,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver, legacy adapters, paged regions | **Delivered and verified**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, the private resolver over ordered occurrences, the legacy TIFF-only derivative lease with an independently applied authoritative mask, and paged occupied-region aggregates |
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
 | B3 — slope core+halo and shared job ownership | **Delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning); slope computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history; and the library now owns one exclusive heavy raster job lease shared by staging, apply, undo and analysis refresh, refusing a competing user submission promptly without creating running work |
-| B4 — bounded display transport and Desktop protocol | Not started (this is the gate that keeps sparse publication off) |
+| B4 — bounded display transport and Desktop protocol | **Partly delivered**: the presentation contract carries a tagged tile source (preserved asset pyramid vs native generation), the library renders bounded 256×256 tiles from an immutable sparse generation through an executor-backed command returning raw PNG bytes or an explicit empty/unavailable outcome, and the frontend builds and parses the `canopi-raster://` template. Still open: the MapLibre protocol adapter and its lifecycle, the display request/queue and cache budgets, and lifting the publication gate |
 | B5 — end-to-end verification and conditional limit removal | Not started |
 
 Production behaviour is unchanged: the storage-format switch is `false` in every
@@ -34,7 +34,8 @@ caller-level tests, not an inert module.
 | Catalogue v8, format identity, gated stage→review→Apply→reopen→undo caller slice | `535d353a` |
 | Analysis staging guard, `staging-*` startup pruning and `canopi-jv8a.3` | `48aba35a` |
 | Catalogue v9, bounded core+halo slope with sparse result/quality chunks | `eea106d2` |
-| Exclusive library-wide heavy raster job lease (staging/apply/undo/refresh) | the commit that carries this receipt |
+| Exclusive library-wide heavy raster job lease (staging/apply/undo/refresh) | `f0715252` |
+| Tagged tile-source contract, bounded native tile renderer and command, raster URL builder | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -80,6 +81,25 @@ caller-level tests, not an inert module.
   chunk rows explicitly (chunk rows carry no foreign key, because they are
   inserted before the generation commits). Immutable assets outlive their
   generation and are left to catalogue-aware reclamation.
+- **Bounded native tiles (B4, first half).** A sparse generation owns no PNG
+  pyramid and no filesystem path, so the presentation contract now carries a
+  tagged tile source: `legacy-asset` for a preserved pyramid (unchanged
+  behaviour) or `native-generation` for on-demand rendering. The renderer
+  selects a power-of-two reduction level per target sample from that sample's
+  own native displacement — so a sample shared by two tiles picks the same
+  level in both — and reads only what it needs: one bounded window for
+  native-scale samples, and one read per *occupied* reduction page for minified
+  samples, where a sample whose block is a whole chunk is answered from the
+  chunk's stored f64 sum/count with no raster I/O at all. Pages the index does
+  not hold are never visited, the level exponent and page count are bounded,
+  invalid cells stay transparent, valid zero/negative cells are coloured, and
+  the colour ramp clamps and interpolates exactly as the legacy relief ramp
+  does. The command returns encoded PNG bytes (never base64) or an error that
+  the caller must surface as unavailable; an empty tile is the shared 1×1
+  transparent PNG, so "no coverage" never masks "could not render". The
+  coordinate transform verifies the Web Mercator affine shortcut against GDAL
+  once and otherwise transforms bounded 4096-point batches, so the projection
+  authority is never bypassed silently.
 - **Bounded slope (B3).** `publish_sparse_slope` resolves the input generation
   once and iterates only its occupied chunks. Each block resolves a 1026×1026
   core+halo window, exports it as a bounded NaN-NoData scratch raster, runs the
@@ -160,6 +180,19 @@ Catalogue tests:
   publishes no analysis head, leaves no unpublished chunk row and removes its
   scratch root; `slope_eligibility_refuses_non_metre_elevations` and
   `slope_eligibility_accepts_a_projected_metre_grid` cover the eligibility gate.
+- Bounded native tiles (GDAL required):
+  `native_tiles_render_a_sparse_generation_and_report_empty_areas` publishes a
+  multi-chunk plane through the real callers, asserts the layer presents a
+  native tileset, renders a fully opaque tile inside the plane in the exact
+  elevation-ramp colour, renders a coarser tile with both painted and
+  transparent pixels, returns an explicit empty tile beyond the coverage,
+  completes a deep zoom-out that can only be answered from stored aggregates,
+  and refuses a generation that belongs to another entity. Hermetic tests cover
+  the XYZ bounds, the reduction-level rule including its bound, lattice-aligned
+  blocks including negative cells, stored-aggregate means, page-edge block
+  means, and malformed-request rejection. The contract's wire shape is pinned
+  by `common_types::lidar::tests::tile_source_wire_shape_is_tagged_and_stable`,
+  and the frontend covers both URL forms plus raster-URL parsing and rejection.
 - Heavy lease (hermetic):
   `heavy_raster_lease_is_exclusive_and_released_on_every_path` holds the lease
   for one job, proves a competing staging submission is refused with the busy
@@ -187,11 +220,12 @@ concurrently running reader test could reset another test's evidence.
 
 - **The sparse format is not enabled in production.** `chunked_publication_enabled`
   is a `const fn` returning `false` outside tests, so no user workflow can
-  publish `cog-chunks-v1` yet. The gate exists because the display reader is not
-  migrated: a chunked generation publishes no display tileset, and the accepted
-  slope job refuses a chunked head explicitly instead of reading a path that does
-  not exist. Enabling the switch before B3/B4 land would leave a Ready layer that
-  the map cannot render.
+  publish `cog-chunks-v1` yet. The gate exists because the display path is not
+  finished: the native renderer and its command exist, but MapLibre reaches a
+  tile through the raster protocol adapter, which is not installed yet, so a
+  chunked generation would still show nothing on the map (and its slope result
+  would carry no display either). Enabling the switch before that adapter and
+  the display budgets land would leave a Ready layer the map cannot render.
 - No `base_generation_id` overlay: a legacy head without durable member history
   still takes the accepted dense route (correct, but not the sparse target).
 - The retained source COG is still not written by staging, so sparse members are

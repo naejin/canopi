@@ -47,7 +47,15 @@ fn assert_tileset_has_visible_pixels(
     engine: &engine::GdalEngine,
     tileset: &common_types::lidar::LidarTileset,
 ) {
-    let directory = std::path::Path::new(&tileset.path_template)
+    let template = match &tileset.source {
+        common_types::lidar::LidarTileSource::LegacyAsset { path_template } => {
+            path_template.clone()
+        }
+        common_types::lidar::LidarTileSource::NativeGeneration { .. } => {
+            panic!("a published dense generation keeps its asset pyramid")
+        }
+    };
+    let directory = std::path::Path::new(&template)
         .parent()
         .expect("tileset template has a parent");
     let mut pngs = std::fs::read_dir(directory)

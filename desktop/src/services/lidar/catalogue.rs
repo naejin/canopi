@@ -596,6 +596,8 @@ pub struct AnalysisGenerationRow {
     pub min_value: Option<f64>,
     pub max_value: Option<f64>,
     pub bounds_3857: String,
+    /// Storage format and lattice of the published result.
+    pub manifest_json: String,
 }
 
 #[derive(Debug, Clone)]
@@ -734,7 +736,8 @@ pub fn head_analysis_generation(
 ) -> Result<Option<AnalysisGenerationRow>, String> {
     connection
         .query_row(
-            "SELECT g.id, g.source_generation_id, g.state, g.min_value, g.max_value, g.bounds_3857
+            "SELECT g.id, g.source_generation_id, g.state, g.min_value, g.max_value,
+                    g.bounds_3857, g.manifest_json
              FROM lidar_analysis_heads h
              JOIN lidar_analysis_generations g ON g.id = h.generation_id
              WHERE h.definition_id = ?1",
@@ -747,6 +750,7 @@ pub fn head_analysis_generation(
                     min_value: row.get(3)?,
                     max_value: row.get(4)?,
                     bounds_3857: row.get(5)?,
+                    manifest_json: row.get(6)?,
                 })
             },
         )
@@ -1133,6 +1137,33 @@ pub fn interpretation_region_page(
         .map_err(|e| format!("Failed to read region page: {e}"))
 }
 
+/// The manifest of one sparse generation, checked against its owner.
+///
+/// A tile request names an entity and a generation; the join is what makes
+/// "this generation belongs to this entity" a catalogue fact rather than a
+/// caller's assumption.
+pub fn chunked_generation_manifest(
+    connection: &Connection,
+    entity_kind: &str,
+    entity_id: &str,
+    generation_id: &str,
+) -> Result<Option<String>, String> {
+    let (table, owner_column) = match entity_kind {
+        "source" => ("lidar_layer_generations", "layer_id"),
+        "analysis" => ("lidar_analysis_generations", "definition_id"),
+        other => return Err(format!("unknown raster entity kind {other}")),
+    };
+    // The table and column names come from this closed match, never from a
+    // caller, and every bound value still travels as a placeholder.
+    let sql = format!("SELECT manifest_json FROM {table} WHERE id = ?1 AND {owner_column} = ?2");
+    connection
+        .query_row(&sql, rusqlite::params![generation_id, entity_id], |row| {
+            row.get::<_, String>(0)
+        })
+        .optional()
+        .map_err(|e| format!("Failed to read generation manifest: {e}"))
+}
+
 /// One published resolved-chunk reference.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenerationChunkRow {
@@ -1171,6 +1202,10 @@ pub struct ChunkAssetRow {
     pub chunk_x: i64,
     pub chunk_y: i64,
     pub asset: RasterAssetRow,
+    /// Stored valid count and exact f64 sum, so a minifying reader can use the
+    /// chunk's mean without opening its file.
+    pub aggregate_valid_cells: i64,
+    pub aggregate_sum_value: f64,
 }
 
 /// Record asset metadata. Published assets are immutable, so an existing row
@@ -1247,7 +1282,7 @@ pub fn generation_chunk_assets(
         .prepare(
             "SELECT g.role, g.chunk_x, g.chunk_y,
                     a.sha256, a.rel_path, a.bytes, a.profile, a.width, a.height,
-                    a.geotransform, a.crs_wkt, a.nodata
+                    a.geotransform, a.crs_wkt, a.nodata, g.valid_cells, g.sum_value
              FROM lidar_generation_chunks g
              JOIN lidar_raster_assets a ON a.sha256 = g.asset_sha256
              WHERE g.generation_id = ?1 AND g.role = ?2 AND g.state = 'published'
@@ -1261,6 +1296,8 @@ pub fn generation_chunk_assets(
                 chunk_x: row.get(1)?,
                 chunk_y: row.get(2)?,
                 asset: map_asset_row(row, 3)?,
+                aggregate_valid_cells: row.get(12)?,
+                aggregate_sum_value: row.get(13)?,
             })
         })
         .map_err(|e| format!("Failed to read chunk assets: {e}"))?

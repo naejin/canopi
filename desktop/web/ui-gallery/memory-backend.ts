@@ -31,7 +31,10 @@ let lidarLayers: LidarLayerSummary[] = state === 'empty' ? [] : [{
   value_range: [131.2, 287.8],
   tilesets: [{
     style: 'elevation',
-    path_template: '/lidar-prototype/assets/mnt-elevation-{z}.png',
+    source: {
+      kind: 'legacy-asset',
+      path_template: '/lidar-prototype/assets/mnt-elevation-{z}.png',
+    },
     min_zoom: 13,
     max_zoom: 17,
     tile_size: 256,
@@ -49,7 +52,10 @@ let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
   value_range: [0, 41.6],
   tilesets: [{
     style: 'slope',
-    path_template: '/lidar-prototype/assets/mnt-hillshade-{z}.png',
+    source: {
+      kind: 'legacy-asset',
+      path_template: '/lidar-prototype/assets/mnt-hillshade-{z}.png',
+    },
     min_zoom: 13,
     max_zoom: 17,
     tile_size: 256,

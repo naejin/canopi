@@ -102,6 +102,40 @@ impl ColorRamp {
         }
     }
 
+    /// Colour one value: clamped at the end stops and linearly interpolated
+    /// between them, exactly as the legacy `color-relief` ramp does.
+    pub fn colour_for(&self, value: f64) -> Option<(u8, u8, u8)> {
+        if !value.is_finite() || self.stops.is_empty() {
+            return None;
+        }
+        let first = self.stops.first()?;
+        if value <= first.0 {
+            return Some((first.1, first.2, first.3));
+        }
+        let last = self.stops.last()?;
+        if value >= last.0 {
+            return Some((last.1, last.2, last.3));
+        }
+        for pair in self.stops.windows(2) {
+            let (low, high) = (&pair[0], &pair[1]);
+            if value >= low.0 && value <= high.0 {
+                let span = high.0 - low.0;
+                let ratio = if span > 0.0 {
+                    (value - low.0) / span
+                } else {
+                    0.0
+                };
+                let mix = |a: u8, b: u8| -> u8 {
+                    (f64::from(a) + (f64::from(b) - f64::from(a)) * ratio)
+                        .round()
+                        .clamp(0.0, 255.0) as u8
+                };
+                return Some((mix(low.1, high.1), mix(low.2, high.2), mix(low.3, high.3)));
+            }
+        }
+        Some((last.1, last.2, last.3))
+    }
+
     fn write_color_file(&self, path: &Path) -> Result<(), String> {
         let mut content = String::from("nv 0 0 0 0\n");
         for (value, r, g, b) in &self.stops {
