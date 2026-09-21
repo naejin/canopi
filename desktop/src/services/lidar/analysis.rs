@@ -17,7 +17,7 @@ use super::import::{
 use super::prepared_raster::PreparedRaster;
 use common_types::lidar::{LidarAnalysisKind, LidarSlopeUnit};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +38,7 @@ pub struct ResultManifest {
     pub created_at: String,
 }
 
+#[derive(Debug)]
 pub struct AnalysisOutcome {
     pub published: bool,
     pub stale: bool,
@@ -53,6 +54,43 @@ impl AnalysisOutcome {
             format!("result published {detail}")
         } else {
             format!("no result published {detail}")
+        }
+    }
+}
+
+/// Owns one analysis job's staging root.
+///
+/// The guard exists so no early return, propagated `?`, cancellation or panic
+/// can leave an abandoned `staging-*` directory behind: the directory is
+/// removed on drop unless publication renamed it into a generation directory
+/// and disarmed the guard.
+struct StagingGuard {
+    dir: PathBuf,
+    kept: bool,
+}
+
+impl StagingGuard {
+    fn create(pipeline_dir: &Path, job_dir_id: &str) -> Result<Self, String> {
+        let dir = pipeline_dir.join(format!("staging-{job_dir_id}"));
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Failed to create analysis staging: {e}"))?;
+        Ok(Self { dir, kept: false })
+    }
+
+    fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// The staging contents became the published generation.
+    fn keep(mut self) {
+        self.kept = true;
+    }
+}
+
+impl Drop for StagingGuard {
+    fn drop(&mut self) {
+        if !self.kept {
+            let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
 }
@@ -99,9 +137,11 @@ pub fn run_slope_job(
 
     let job_dir_id = new_id("anl");
     let pipeline_dir = paths.analysis_pipeline_dir(definition_id);
-    let staging_dir = pipeline_dir.join(format!("staging-{job_dir_id}"));
-    std::fs::create_dir_all(&staging_dir)
-        .map_err(|e| format!("Failed to create analysis staging: {e}"))?;
+    // The job owns its staging root: a failure or cancellation anywhere below
+    // drops the guard and removes every unpublished artifact, so a partially
+    // written result can never be mistaken for a published one.
+    let staging = StagingGuard::create(&pipeline_dir, &job_dir_id)?;
+    let staging_dir = staging.dir().to_path_buf();
 
     // Numeric analysis via the pinned engine. Slope is terrain geometry in
     // layer units; scale 1 (vertical metres, horizontal metres), or percent.
@@ -188,8 +228,8 @@ pub fn run_slope_job(
             })?
     };
     if current_head.as_deref() != Some(expected.as_str()) {
-        // Stale completion: never replace a newer result; drop artifacts.
-        let _ = std::fs::remove_dir_all(&staging_dir);
+        // Stale completion: never replace a newer result; the guard drops the
+        // staging root on return.
         return Ok(AnalysisOutcome {
             published: false,
             stale: true,
@@ -202,6 +242,9 @@ pub fn run_slope_job(
     let generation_dir = pipeline_dir.join(format!("gen-{generation_id}"));
     std::fs::rename(&staging_dir, &generation_dir)
         .map_err(|e| format!("Failed to publish analysis dir: {e}"))?;
+    // Ownership moves to the published generation directory, which has its own
+    // removal on every later failure path.
+    staging.keep();
     let final_result = generation_dir.join("result.tif");
     let final_quality = generation_dir.join("quality.bin");
     if let Err(error) = publish_display(
@@ -499,7 +542,6 @@ pub fn recover_interrupted_jobs(connection: &rusqlite::Connection) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use std::sync::atomic::AtomicBool;
 
     /// GDAL-backed workflow expectations: a plane rising one metre per metre
@@ -852,6 +894,171 @@ mod tests {
             "published generation carries a derivative: {leftovers:?}"
         );
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    /// Names of the staging roots a definition currently owns.
+    fn staging_roots(library: &LidarLibrary, definition_id: &str) -> Vec<String> {
+        let dir = library.inner.paths.analysis_pipeline_dir(definition_id);
+        std::fs::read_dir(&dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("staging-"))
+            .collect()
+    }
+
+    /// Build one definition and its queued job without running it.
+    fn queued_slope_job(library: &LidarLibrary, layer_id: &str) -> (String, String, String) {
+        let receipt = library
+            .create_analysis(
+                layer_id,
+                LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(LidarSlopeUnit::Degrees),
+                },
+            )
+            .expect("analysis created");
+        let (parameters, source_generation) = {
+            let connection = library.catalogue().expect("catalogue");
+            let parameters: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .expect("parameters");
+            let source_generation: String = connection
+                .query_row(
+                    "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
+                    [&receipt.job_id],
+                    |row| row.get(0),
+                )
+                .expect("source generation");
+            (parameters, source_generation)
+        };
+        (
+            receipt.job_id,
+            receipt.definition_id,
+            format!("{parameters}|{source_generation}"),
+        )
+    }
+
+    /// A mid-pipeline failure must not leave the job's staging root behind,
+    /// and must leave the accepted head untouched.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn failed_slope_job_removes_its_staging_root_and_keeps_the_accepted_head() {
+        let root = scratch_root("staging-failure");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = plane_layer(&library, &root, 24, 18);
+        let (job_id, definition_id, encoded) = queued_slope_job(&library, &layer_id);
+        let (parameters, source_generation) = encoded.split_once('|').expect("encoded pair");
+        let parameters = parse_parameters(parameters).expect("parameters parse");
+        let head_before: String = {
+            let connection = library.catalogue().expect("catalogue");
+            connection
+                .query_row(
+                    "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
+                    [&layer_id],
+                    |row| row.get(0),
+                )
+                .expect("head")
+        };
+
+        // Fail after the staging root exists: the quality-mask free-space
+        // check cannot pass with no measurable capacity.
+        let error = {
+            let _guard = super::super::paths::capacity_probe::override_available(0);
+            run_slope_job(
+                &library,
+                &job_id,
+                &definition_id,
+                &parameters,
+                source_generation,
+                &AtomicBool::new(false),
+            )
+            .expect_err("a job without free space must fail")
+        };
+        assert!(
+            error.contains("slope quality mask"),
+            "the failure must happen after the slope step wrote its staged result: {error}"
+        );
+        assert!(
+            staging_roots(&library, &definition_id).is_empty(),
+            "failed job left {:?}",
+            staging_roots(&library, &definition_id)
+        );
+        let connection = library.catalogue().expect("catalogue");
+        let head_after: String = connection
+            .query_row(
+                "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
+                [&layer_id],
+                |row| row.get(0),
+            )
+            .expect("head");
+        assert_eq!(head_after, head_before);
+        drop(connection);
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A cancelled job must not leave its staging root behind either.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn cancelled_slope_job_removes_its_staging_root() {
+        let root = scratch_root("staging-cancel");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = plane_layer(&library, &root, 24, 18);
+        let (job_id, definition_id, encoded) = queued_slope_job(&library, &layer_id);
+        let (parameters, source_generation) = encoded.split_once('|').expect("encoded pair");
+        let parameters = parse_parameters(parameters).expect("parameters parse");
+
+        let error = run_slope_job(
+            &library,
+            &job_id,
+            &definition_id,
+            &parameters,
+            source_generation,
+            &AtomicBool::new(true),
+        )
+        .expect_err("a cancelled job must not publish");
+        assert_eq!(error, "cancelled");
+        assert!(
+            staging_roots(&library, &definition_id).is_empty(),
+            "cancelled job left {:?}",
+            staging_roots(&library, &definition_id)
+        );
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A staging root left by a crashed process is removed at startup, while
+    /// published generations and member assets are not candidates.
+    #[test]
+    fn startup_pruning_removes_abandoned_staging_roots_only() {
+        let root = scratch_root("staging-prune");
+        let definition_id = "definition-prune";
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let pipeline = library.inner.paths.analysis_pipeline_dir(definition_id);
+        let abandoned = pipeline.join("staging-anl-abandoned");
+        let published = pipeline.join("gen-agen-published");
+        std::fs::create_dir_all(&abandoned).expect("abandoned staging");
+        std::fs::create_dir_all(&published).expect("published dir");
+        std::fs::write(abandoned.join("result.tif"), b"partial").expect("partial result");
+        std::fs::write(published.join("result.tif"), b"accepted").expect("accepted result");
+        drop(library);
+
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        assert!(
+            !abandoned.exists(),
+            "an abandoned staging root must not survive startup"
+        );
+        assert!(
+            published.join("result.tif").exists(),
+            "a published generation directory is never pruned"
+        );
+        drop(reopened);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

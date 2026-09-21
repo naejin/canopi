@@ -10,7 +10,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | --- | --- |
 | B1 — retained source COG, resolved/quality COG creation, reader ownership, catalogue index, resolver, legacy adapters, paged regions | **Delivered and verified**: committed-asset leases, controlled resolved/quality chunk creation with digesting and content-addressed admission, catalogue schema v7 with a WAL-consistent pre-migration backup and future-version refusal, the private resolver over ordered occurrences, the legacy TIFF-only derivative lease with an independently applied authoritative mask, and paged occupied-region aggregates |
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
-| B3 — slope core+halo and shared job ownership | Not started (`canopi-jv8a.3` remains open); slope refuses a chunked head explicitly |
+| B3 — slope core+halo and shared job ownership | **Partly delivered**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning, with failure/cancellation/pruning tests). Not started: the bounded core+halo slope reader over resolved windows, sparse result publication, and the library-wide exclusive heavy raster job lease; slope still refuses a chunked head explicitly |
 | B4 — bounded display transport and Desktop protocol | Not started |
 | B5 — end-to-end verification and conditional limit removal | Not started |
 
@@ -77,6 +77,12 @@ caller-level tests, not an inert module.
   chunk rows explicitly (chunk rows carry no foreign key, because they are
   inserted before the generation commits). Immutable assets outlive their
   generation and are left to catalogue-aware reclamation.
+- **Analysis staging is owned (`canopi-jv8a.3`, B3 linked work).** A slope job's
+  `staging-*` root is owned by a guard that removes it on any early return,
+  propagated error, cancellation or panic, and is disarmed only once the
+  directory has been renamed into its published generation directory. Startup
+  pruning removes `staging-*` roots left by a crash, and never considers
+  published `gen-*` directories, member assets or originals.
 
 ## Evidence
 
@@ -114,6 +120,14 @@ Catalogue tests:
 - `delete_layer_removes_all_referencing_rows_with_foreign_keys_enabled` now also
   seeds a published chunk row with its asset and proves the chunk rows are
   deleted with the layer while the immutable asset row remains.
+- Analysis staging (`canopi-jv8a.3`):
+  `failed_slope_job_removes_its_staging_root_and_keeps_the_accepted_head` forces
+  a failure after the slope step wrote its staged result (the message proves the
+  failure point) and asserts the staging root is gone and the accepted layer head
+  is unchanged; `cancelled_slope_job_removes_its_staging_root` does the same for
+  a cancelled run; `startup_pruning_removes_abandoned_staging_roots_only` proves
+  a crashed run's staging root is pruned at startup while a published `gen-*`
+  directory survives.
 
 Regression status: the full `services::lidar` suite passes with
 `--include-ignored` (83 passed) except `e2e_import_publish_slope_restart_reuse`,

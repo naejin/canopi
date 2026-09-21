@@ -129,6 +129,10 @@ impl LidarLibrary {
         for (job_id, _state) in settled {
             let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(&job_id));
         }
+        // Write jobs that crashed before publication left `staging-*` roots
+        // behind. Only staging roots are removed: published `gen-*` dirs,
+        // member assets and immutable originals are never candidates.
+        self.prune_staging_roots()?;
         // A job that crashed before its publish transaction left chunk rows
         // that were never readable. Removing them cannot revoke an accepted
         // generation; only physical assets remain for reclamation.
@@ -217,6 +221,43 @@ impl LidarLibrary {
                     // entity generation.
                     if !live.contains(&key) {
                         let _ = std::fs::remove_dir_all(gen_dir.path());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove abandoned `staging-*` roots under the prepared pipeline dirs.
+    ///
+    /// Every staging root is unpublished scratch by construction, and no job
+    /// is running while startup pruning executes, so each one is stale. The
+    /// scan is one `read_dir` per pipeline directory.
+    fn prune_staging_roots(&self) -> Result<(), String> {
+        let prepared = self.inner.paths.prepared_dir();
+        for family in ["layers", "analysis"] {
+            let family_dir = prepared.join(family);
+            for entity in std::fs::read_dir(&family_dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                for entry in std::fs::read_dir(entity.path())
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                {
+                    let name = entry.file_name();
+                    let name = name.to_string_lossy();
+                    if !name.starts_with("staging-") {
+                        continue;
+                    }
+                    if let Err(error) = std::fs::remove_dir_all(entry.path()) {
+                        tracing::warn!(
+                            path = %entry.path().display(),
+                            error = %error,
+                            "failed to remove abandoned staging root"
+                        );
                     }
                 }
             }
