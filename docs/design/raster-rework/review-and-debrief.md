@@ -1,8 +1,8 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation delivery `1fcab504` independently reviewed as partial (BG1–BG5). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
+Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation delivery `1fcab504` independently reviewed as partial (BG1–BG5), and the BG1–BG5 correction delivered through `3253543d` awaiting disposition. Historical Q/Desktop findings remain historical; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
-Current guidance: [bounded-generation review](bounded-generation-review.md), [correction assignment](bounded-generation-correction-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
+Current guidance: [bounded-generation review](bounded-generation-review.md), [delivery receipt](bounded-generation-receipt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
 
@@ -20,7 +20,44 @@ The [independent review](bounded-generation-review.md) records real caller progr
 
 The main agent also contributed process ambiguity by describing a whole batch without clearly separating authorization from execution windows. The courier repeatedly forwarded continuation without an architectural decision. The updated [protocol](collaboration-protocol.md#one-bounded-loop) permits resumable checkpoints under the same authorization; it does not excuse partial work being labelled complete. The broad original design also lacked the decisive multi-chunk and multi-process examples now supplied. These contributions do not establish a model or skill failure.
 
-On the next consolidated delivery, record whether the five original contracts are actually met, which same-family defects self-review caught, which escaped independently, and whether any courier exchange resolved a real decision rather than simply continuing work. Keep unavailable 400M/platform evidence separate. Use measured effort only; do not derive productivity from commits, tests or document length. No new evaluator, mandatory mutation campaign or upstream skill modification is authorized. Promote only lessons supported by subsequent outcomes into tooling or skills through a separately scoped change.
+### Consolidated delivery outcome — BG1–BG5 correction
+
+The [receipt](bounded-generation-receipt.md)'s BG1–BG5 table records the outcome
+as `3253543d` on `feature/bounded-raster-generations`; the branch is not
+integrated and the main agent's independent disposition is still outstanding.
+
+- **Requirements lost across windows** were the ones with no caller: retained
+  source COGs and the sampled-tree memory measurement existed as design text and
+  helper code but had no production path, so each execution window could report
+  progress without them. The correction closed both by making a caller test the
+  acceptance artefact (`a_retained_source_cog_is_the_only_durable_member_payload`,
+  the four representative runs with recorded baselines). The seven-test review
+  and the paged-helper-without-callers gap had the same shape: the decisive test
+  had to exercise the caller, not the helper.
+- **The checkpoint rule prevented no courier round in this stretch.** Every
+  continuation arrived without a new architectural decision, and no window ended
+  in a state that needed one; the single genuinely lost item was an editing
+  accident inside one window (a `mod tests` brace), which self-review caught
+  before any commit. The rule did keep intermediate states honest: the bead notes
+  name each unfinished required outcome instead of calling a checkpoint complete.
+- **Defects caught before delivery versus independent escapes.** Self-review
+  caught: the silently changed source-range semantics (valid-only statistics
+  would have broken `canopi-jv8a.2`'s documented behaviour), an unrepresentable
+  level test expectation, a completeness check that marked ticks incomplete
+  because of unrelated system processes, and the reduction read budget that
+  counted cheap record lookups as raster reads. The independent escapes were the
+  original five review findings; BG1 and BG4 were the two that no amount of
+  local test count could have exposed, because their tests did not exist.
+- **Main-agent ambiguity that remained**: the assignment's "recheck at Apply"
+  and "grandfathered reads" were clear, but "whole-generation jobs may stream all
+  occupied pages" named no such job; this implementation has no whole-generation
+  reader left and did not add an unused streaming API. Capacity verification
+  stays incomplete, not failed: the 400M-cell plane still needs a host with 8 GiB
+  free and this one reports 5.5 GiB.
+- **Effort/cost is recorded only where measured**: the four representative runs
+  report sampled combined memory (49/51/64/75 MiB incremental over their
+  baselines) and wall time; no productivity claim is derived from commit count,
+  test totals or document length.
 
 ### Design correction before implementation — standard COG persistence
 

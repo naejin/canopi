@@ -2,7 +2,7 @@
 
 Status: evidence — independent focused review: partial delivery, not accepted as complete; no integration or release approval.
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`.
-Current guidance: [correction assignment](bounded-generation-correction-agent-prompt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
+Current guidance: [delivery receipt with the BG1–BG5 response](bounded-generation-receipt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
 
 ## Disposition and evidence boundary
 
@@ -34,3 +34,5 @@ This is a bounded review, not a guarantee that publication, cleanup, migration a
 ## Review closure
 
 The implementation response belongs in the existing branch's `bounded-generation-receipt.md`, with BG1–BG5 mapped to code and decisive tests. Reconcile stale current statements rather than appending contradictory updates. The main agent records an independent disposition here after the user forwards the corrected revision. Until then the disposition remains partial, regardless of passing test counts.
+
+Status note: the correction was delivered on `feature/bounded-raster-generations` through `3253543d` (BG5 `762d665a`, BG1 `6477f74e`, BG3/BG2 `2782fa80`, BG4 `3253543d`), and the branch receipt now carries the completed BG1–BG5 response table with its decisive tests. The findings above remain the record of the reviewed revision `1fcab504`; the disposition of the correction is still the main agent's to make.
