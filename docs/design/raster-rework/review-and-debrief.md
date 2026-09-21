@@ -1,10 +1,18 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation correction `9ad85c18` independently reviewed as partial (BG6–BG8 remain). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
+Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation `eb64a853` independently reviewed as partial (BG6-A and BG7-A/B/C remain; BG8 requested cases verified). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
 Current guidance: [bounded-generation review](bounded-generation-review.md), [completion assignment](bounded-generation-completion-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
+
+### Caller-boundary review — `eb64a853`
+
+150 native/GDAL tests independently passed; the [review](bounded-generation-review.md) nevertheless identifies transformed-page loss and three publication-lifecycle escapes. Useful implementation gains are retained. The cost of this review and implementation has not been measured comprehensively; more tests or fewer prompts cannot establish savings.
+
+The previous intervention improved helper behavior but tests still stopped before the decisive boundary: aligned synthetic index rows did not exercise transformed page ordering; recovery-helper retention excluded the following root deletion; post-commit fault tests excluded settlement. Classification is implementation/test coverage gaps **and** main-agent handoff omissions: the preceding plan did not supply the cross-page offset example or make outer settlement/startup the explicit test endpoint. Both agents own correction, not the courier.
+
+The next intervention is deliberately small: one globally monotone stream design, one promotion/commit/cleanup owner, and tests ending at real review, settlement and reopen. No new evaluator, checklist system or skill rewrite. At the consolidated response, record the exact cases that failed before repair, internally caught defects versus independent escapes, any remaining architectural ambiguity, and courier exchanges that resolved actual decisions versus merely resumed work. Carry these revision-linked outcomes into the final debrief. A reusable skills change requires evidence that existing instructions are insufficient—not simply another occurrence of a rule already stated.
 
 ### Correction review — `9ad85c18`
 

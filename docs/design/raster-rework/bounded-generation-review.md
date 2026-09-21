@@ -4,7 +4,22 @@ Status: evidence — independent focused review: partial delivery, not accepted 
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`.
 Current guidance: [completion assignment](bounded-generation-completion-agent-prompt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
 
-## Current disposition — `9ad85c18`
+## Current disposition — `eb64a853`
+
+Partial acceptance. Preserve job-local source COGs, Before/After value correction, the sparse traversal direction and earlier BG1–BG5 improvements. BG8's requested incomplete-baseline/sample and observed-over-budget cases are independently verified; it needs no further repair in this assignment. BG6 and BG7 remain incomplete for the four findings below, against their existing contracts.
+
+The focused command recorded below was independently rerun at `eb64a853`: **150 passed, 0 failed**, including ignored native/GDAL tests but excluding `services::lidar::e2e`; elapsed 405.81 seconds. Docs validation and diff checks passed; worktree remained clean. Private MNT/MNH, full workspace/frontend, 400M and platform evidence were not independently repeated. No repository files were changed during review.
+
+| ID | Evidence at `eb64a853` | Impact / disposition |
+| --- | --- | --- |
+| BG6-A — transformed page ordering | `import.rs:1830–1838` sorts expanded coordinates per page and discards coordinates below the prior page maximum. An executable extraction of this Rust transformation maps 257 regions at offset `(0,1)` to 513 of 514 expected coordinates, dropping `(0,256)`; offset-zero control retains all 257. | Blocks correct review counts/previews. This is an isolated production-logic reproduction, not a new full staging run. The existing multi-page test seeds aligned index rows without matching distant raster payloads. |
+| BG7-A — guard begins after promotion | At `import.rs:3138–3142` and the dense caller, `promote_source_cogs(...)?` finishes before `PromotionGuard` is constructed. | Source-confirmed early-error escape: partial promotion/cancellation has no rollback owner. The tested BeforeTransaction failure happens later and does not cover it. |
+| BG7-B — outer cleanup destroys recovery evidence | `mod.rs:310–321` logs reconciliation failure, then removes settled job roots containing unresolved journals. | Source-confirmed loss of retry evidence. A helper-only retention test does not establish startup retention. |
+| BG7-C — cleanup failure reverses reported success | `import.rs:3261` propagates post-commit cleanup failure; `mod.rs::finish_apply` unconditionally marks errors failed and skips the successful-publication refresh path. | Source-confirmed committed-head/job-state inconsistency. The new post-commit test expects an error and never exercises settlement. Publication success must survive cleanup failure. |
+
+The lifecycle findings are caller-path analysis, not independently executed new fault runs. The continuation makes those caller-level regressions mandatory and includes ownership-reference/reuse checks within the same touched cleanup boundary. No architecture restart, measurement framework or capacity-policy change is needed. Keep old asset reclamation and unavailable platform/capacity evidence separate.
+
+## Historical disposition — `9ad85c18`
 
 Partial acceptance: preserve retained source COG wiring, complete display footprints/interpolation, paged tile queries and restored admission. Three existing-contract gaps remain below; no architecture restart is warranted. BG1's payload migration is demonstrated but its cleanup obligation remains; BG3's tile paging is repaired but the review caller still walks empty space; BG4's sampler is improved but its gate admits unusable evidence. This is not integration or release approval.
 
@@ -57,4 +72,4 @@ This is a bounded review, not a guarantee that publication, cleanup, migration a
 
 ## Review closure
 
-The implementation response belongs in the existing branch's `bounded-generation-receipt.md`, now with BG6–BG8 mapped to code and decisive tests alongside delivered BG1–BG5 evidence. Reconcile stale current statements rather than appending contradictory updates. The main agent records the next independent disposition here after the user forwards the corrected revision. Until then the disposition remains partial, regardless of passing test counts.
+The implementation response belongs in the existing branch's `bounded-generation-receipt.md`, now mapping BG6-A and BG7-A/B/C to code and decisive caller tests alongside retained delivery evidence. Reconcile stale current statements rather than appending contradictory updates. The main agent records the next independent disposition here after the user forwards the corrected revision. Until then the disposition remains partial, regardless of passing test counts.
