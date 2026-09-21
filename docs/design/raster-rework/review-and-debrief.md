@@ -1,10 +1,20 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — revision-linked reviews and process interventions; Desktop bridge reviewed as partial with DB1–DB4 blockers; final methodology conclusions pending.
+Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation batch designed next. Historical Q/Desktop findings remain historical; final methodology conclusions pending.
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [consolidated repair receipt](q-consolidated-repair-receipt.md), [stable acceptance contract](q-admission-acceptance.md), and [delivery workflow](../../workflow/delivery.md).
 
 ## Purpose and evidence discipline
+
+### Next intervention — one complete bounded-generation workflow
+
+G1–G5 plus one correction reached [independent acceptance](geolibre-integration-review.md#final-independent-acceptance--a5fc7d7b) at `a5fc7d7b`: 53 focused native and 7 GDAL-backed tests were independently repeated. No claim is made that the full private-fixture/platform evidence was repeated. Product progress is bounded production extraction/postprocessing; large sparse composition remains unimplemented. This closes the prior cycle rather than authorizing another generic hardening pass.
+
+The [B1–B5 design](bounded-generation-design.md) is the next process intervention: main agent fixes the durable representation and all dependent caller contracts before delegation, implementation agent completes migration/verification in one batch, user forwards one consolidated delivery. Routine internal design choices and repairs are delegated; public ownership, scientific or engine changes outside that contract are not. New storage is not useful progress if review, undo, display or slope cannot consume it.
+
+At delivery, record acceptance examples actually demonstrated, production dense paths removed/retained, resource gates measured/unavailable and whether limits remained gated. Separate self-review discoveries from independent escapes. Compare the number and kind of **material decisions returned to the user**, not internal commit/test counts. Record cost/time only if observed. Benefit is unproven until review shows complete supported workflows and no known acceptance blocker; a large batch is not automatically cheaper or better.
+
+Retain the D1 lesson as a production capacity regression, not a new tool: sum simultaneous resources through the real caller and give an independently calculated boundary example. Retain R1's lesson by naming the resource owner actually tested; the new lifecycle migration explicitly includes its previously deferred cleanup. Any new omission in this design is the main agent's responsibility to settle, not evidence of implementer inability. At the final debrief, promote only demonstrated portable improvements through separately authorized skill/tooling changes.
 
 ### Native integration review — `3004e4d3`
 
@@ -16,11 +26,11 @@ G1–G5 delivered real bounded extraction and slope postprocessing in one consol
 | Derivative cleanup was generalized to whole-analysis cleanup; reporting/test-scope gap, partly inherited lifecycle debt. | Implementer narrows claims and tracks inherited staging cleanup separately; reviewer does not silently expand this repair into a lifecycle rewrite. | Receipt names the resource actually covered and links a concrete follow-up; no false claim that inherited debt is repaired. |
 | Independent rerun blocked by incomplete caches; environment limitation. | Implementer records the actual dependency/build route and exact commands; reviewer distinguishes reported from independently repeated evidence. | Reproducible commands and honest unavailable checks, not another qualification framework. |
 
-The [follow-up](geolibre-integration-followup-agent-prompt.md) delegates routine implementation, regression organization, in-scope repairs and dependency restoration through one delivery. Test this process change by closure of the named invariant at review and useful product progress retained, not by added tests/lines or inferred model cost. Record new reviewer escapes and design omissions, including this missing acceptance example; do not retroactively attribute all failures to skill use or model capability. No skill/tooling changes are authorized by this repair.
+The retired [follow-up](geolibre-integration-followup-agent-prompt.md) delegated routine implementation, regression organization, in-scope repairs and dependency restoration through one delivery; its findings are now closed at `a5fc7d7b`. That bounded outcome is evidence of closure, not proof of general cost savings or model/skill causation.
 
-### Current intervention — product integration and one consolidated handoff
+### Predecessor intervention — product integration and one consolidated handoff
 
-The user selected useful GeoLibre components with existing features/UI preserved first. The [settled native design](geolibre-integration-design.md) supersedes artifact-brief sequencing and the Q→production dependency. G1–G5 is delivered; the review correction above is current. Earlier entries below are revision-linked history, not current assignments. Q stays unqualified and frozen; known defects have not been accepted.
+The user selected useful GeoLibre components with existing features/UI preserved first. The [settled native design](geolibre-integration-design.md) supersedes artifact-brief sequencing and the Q→production dependency. G1–G5 and its correction are accepted; B1–B5 above is current. Earlier entries below are revision-linked history, not current assignments. Q stays unqualified and frozen; known defects have not been accepted.
 
 The main agent inspected real import/analysis callers and GeoLibre's pinned native core, and settled source/build identity, private interfaces, preparation, cleanup, compatibility and scope before delegation. Important limits are explicit: this batch adopts a dependency used by GeoLibre, not the entire toolkit; it removes dense extraction/postprocessing, not dense composition; old capacity limits remain. No new ADR or glossary entry was needed for this reversible private adapter choice, and no domain terminology changed.
 

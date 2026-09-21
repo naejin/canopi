@@ -1,0 +1,34 @@
+# Implement bounded generations end to end
+
+Status: proposed — sole current implementation assignment; executable when forwarded by the user.
+Tracking: create/claim one scoped implementation child of `canopi-jv8a` for B1–B5; parent epic `canopi-j571`. Do not reopen the accepted `canopi-jv8a.1` or historical Q.
+Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [courier protocol](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
+
+You are the implementation agent. The main agent has settled the architecture in the linked design; the user remains courier and acceptance authority. Implement **B1–B5 as one end-to-end production batch**. Do not stop after schema setup, a reader, one migrated caller, or a passing synthetic test. Complete routine repairs, verification and documentation before one consolidated handoff. No direct reviewer messaging or subagents.
+
+## First actions
+
+1. Read AGENTS, the complete design/ADR, current LiDAR/build guidance and relevant map/frontend guides before their changes. Inspect Git status, worktrees, accepted ancestry, `bd show canopi-jv8a` and existing children so you do not create duplicate work.
+2. Base a new scoped branch/worktree on accepted **`a5fc7d7b`** (`feature/geolibre-native-raster-integration`), retaining the feature stack and approved UI `0e696722`. Bring in the forwarded docs commit; resolve docs overlaps by retaining delivered production descriptions and installing this assignment as current. The primary checkout's `desktop/src/native_operation.rs` edit and `.beads.gate.lock` are not yours. Do not stash, reset, stage or copy that edit over the accepted baseline. Follow repository main/ancestry rules without dropping accepted commits; escalate an actual conflict, not merely differing branch names.
+3. Create/reuse and claim one implementation bead for this whole batch, with the design path and acceptance scope. Link `canopi-jv8a.3` cleanup as covered by the lifecycle migration; keep unrelated source-range, platform and CI follow-ups separate. Execution state stays in bd, not a parallel Markdown checklist.
+4. Use available **tdd** and **craft**, reading required references. Use **codebase-design** to preserve the settled ownership boundaries, not to repeat architecture discovery. Missing skills/tools are reported honestly; they are not grounds to halt unrelated work or invent compliance.
+
+## Execute without routine courier rounds
+
+The design fixes encoding, lattice, storage migration, member/history semantics, legacy support, resolver, publication, scheduler, slope, display transport, budgets, resource cases and conditional limit removal. Read it completely. Implement in its B1–B5 order with buildable commits; private names/helper boundaries, query tuning, regression organization, dependency-cache restoration and ordinary build retries are delegated. Correct in-scope bugs found through the real caller paths before handoff. Do not ask the user to approve these internal milestones.
+
+Keep existing review/Apply, undo, map and slope features working throughout the transition. This is **not** permission for the new Data/Analysis UI, one-action import, new engines, lossless numeric-format migration, new analyses or Web features. Rust owns native work and TypeScript the Desktop bridge/measurement orchestration. Reuse accepted `wbgeotiff`/GDAL; don't replace them or import the whole GeoLibre app. No Q harness repairs/runs, Python raster tooling, generic evaluator, custom TIFF codec or new dependency without a concrete necessity and scope explanation.
+
+Add focused RED→GREEN cases at each changed contract, with independent expected values and healthy controls. Test through actual production caller/command seams when wiring, cancellation or publication is the claim. A memory counter is not measured process RSS; a mocked command is not a real GDAL/IPC test. Keep useful dense oracles only in tests/necessary bounded legacy adapters, never as a large-input fallback. Capture concise command/results in one receipt; no transcript quota or mutation campaign.
+
+The existing small real tests and the design's isolated 48M-cell batch, 24-source sparse case and 400M-cell plane runs are authorized, after resource preflight. Original managed/private data is read-only; record hashes and never commit it. Missing fixtures/platforms block only those claims: finish safe work, keep production admission limits where the capacity gate is missing, and report the precise limitation. Never remove limits first and call the resulting code bounded.
+
+## Self-review and delivery
+
+Before handoff trace: selected original → prepared member blocks → review candidate → Apply → immutable head → tile/slope → restart → replacement → targeted undo. Audit all production uses of dense helpers and allocation by width×height, including preview dimensions, masks, member metadata and GDAL intermediates. Check the million-pixel gap does not reappear as a file/VRT/SQL-row enumeration. Check numeric Ready does not depend on cache success, stale work cannot publish, and deletion/cancellation settle leases. Fix in-scope findings without another courier round.
+
+Run the design's full required gates, regenerate changed bindings and verify Desktop/Web boundaries. Authorize no main integration, release, engine substitution, scientific tolerance change or subsequent UI assignment yourself. A material contradiction affecting storage compatibility, scientific semantics, engine feasibility or public ownership is a stop for the affected work: report observed evidence, the decision needed and your recommendation; continue independent in-scope work. Optional optimization goes to follow-up beads. Do not deliver known broken supported workflows as complete.
+
+Create one `bounded-generation-receipt.md` in this folder. Include baseline/final commits, actual caller changes, migration compatibility, failure/cancellation/restart outcomes, measured resource/fixture evidence, limits enabled or retained, all gates and unavailable evidence, user work preserved and the next dependency. Update affected current guides and long-term plan status to match implementation; retire this prompt. Add one compact revision-linked outcome in `review-and-debrief.md`: decisions handled locally, self-review defects, design omissions, remaining review risks and observed effort only. Do not equate test/line count with progress or infer cost savings without data.
+
+Reconcile/close the implementation bead only at its verified boundary, export intended bd changes, commit and push the scoped branch, sync Dolt as configured, and return **one consolidated delivery through the user**. Delivery is not independent acceptance, integration or release. Stop there.

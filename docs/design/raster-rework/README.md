@@ -1,18 +1,21 @@
 # Raster rework handoffs and debrief
 
 Status: active — supporting handoffs and review evidence, not a replacement implementation plan.
-Tracking: `canopi-j571`; current native integration `canopi-jv8a.1`; historical qualification `canopi-kqpp`.
+Tracking: `canopi-j571`; current bounded-generation batch under `canopi-jv8a`; accepted predecessor `canopi-jv8a.1`; historical qualification `canopi-kqpp`.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md), and [delivery workflow](../../workflow/delivery.md).
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The user selected useful GeoLibre components with **existing UI/features first**. G1–G5 was delivered on `feature/geolibre-native-raster-integration` at `3004e4d3` and reported in the [integration receipt](geolibre-integration-receipt.md); it is not yet independently accepted or integrated into this checkout. The [review-correction assignment](geolibre-integration-followup-agent-prompt.md) was executed and its disk-accounting correction plus cleanup reporting are delivered in the receipt, awaiting re-review against the [independent disposition](geolibre-integration-review.md) and [settled design](geolibre-integration-design.md). Native extraction/postprocessing changed first; dense composition and capacity limits remain explicit. Q stays frozen/unqualified and is no longer a production prerequisite. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and user courier/approval.
+The user selected useful GeoLibre components with **existing UI/features first**. G1–G5 and its review correction are independently accepted at `a5fc7d7b`, not integrated into this checkout. Forward the [bounded-generation assignment](bounded-generation-agent-prompt.md), governed by the [complete design](bounded-generation-design.md): sparse storage and bounded readers through existing review/Apply, undo, display and slope, followed by capacity verification. Q stays frozen/unqualified and is no longer a production prerequisite. The [collaboration protocol](collaboration-protocol.md) preserves main-agent architecture/review, implementation-agent execution and user courier/approval.
 
 | Artifact | Purpose |
 | --- | --- |
-| [GeoLibre review-correction assignment](geolibre-integration-followup-agent-prompt.md) | Retired assignment: combined disk budget, focused regression and truthful cleanup reporting; delivered in the receipt |
-| [GeoLibre independent review](geolibre-integration-review.md) | Disposition of `3004e4d3`, retained progress, concrete blocker and evidence limitations |
-| [GeoLibre integration receipt](geolibre-integration-receipt.md) | Implementer's revision-linked delivery report for G1–G5 and its review correction; not acceptance |
+| [Bounded-generation assignment](bounded-generation-agent-prompt.md) | Sole current assignment: B1–B5 complete caller migration and conditional capacity enablement |
+| [Bounded-generation design](bounded-generation-design.md) | Main-agent decisions: storage, compatibility, lifecycle, scientific/display semantics, resource policy and gates |
+| [Sparse-generation ADR](../../adr/0026-sparse-raster-generations.md) | Why ordered history plus sparse materialized blocks, rather than another full-union representation |
+| [GeoLibre integration receipt](geolibre-integration-receipt.md) | Accepted G1–G5 delivery and its D1/R1 correction: revisions, evidence, limits |
+| [GeoLibre review-correction assignment](geolibre-integration-followup-agent-prompt.md) | Retired; D1/R1 accepted at `a5fc7d7b` |
+| [GeoLibre independent review](geolibre-integration-review.md) | Original findings and final bounded-scope acceptance, with independently rerun evidence |
 | [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Retired G1–G5 prompt; delivered at `3004e4d3`, review correction pending |
 | [GeoLibre integration design](geolibre-integration-design.md) | Selected native core/pin, private interface, ownership, compatibility, bounds and scope decisions |
 | [Qualification reset](qualification-reset.md) | Historical anti-overengineering decision; freeze retained, artifact-first sequencing superseded by selected native integration |

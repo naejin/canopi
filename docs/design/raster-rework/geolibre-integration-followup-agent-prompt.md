@@ -1,6 +1,6 @@
 # Complete the native integration review corrections
 
-Status: retired — executed as the sole review-correction assignment; outcome and evidence in the [integration receipt](geolibre-integration-receipt.md). Retained as debrief evidence, not execution authority.
+Status: retired — D1/R1 delivered and independently accepted at `a5fc7d7b` (evidence in the [integration receipt](geolibre-integration-receipt.md)); not continuing execution authority. Next work uses the [bounded-generation assignment](bounded-generation-agent-prompt.md).
 Tracking: reopen `canopi-jv8a.1` for its review correction; parent `canopi-jv8a`, epic `canopi-j571`. Track deferred cleanup separately in bd.
 Current guidance: [review disposition](geolibre-integration-review.md), [native design](geolibre-integration-design.md), [LiDAR](../../agent/lidar.md), [courier protocol](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
