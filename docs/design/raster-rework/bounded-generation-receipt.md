@@ -771,14 +771,19 @@ forbids new harness work).
 
 ## Next dependency
 
-The BG1–BG5 correction is delivered on the branch and awaits the main agent's
-independent disposition. What remains is verification breadth, the capacity
-decision and delivery: (1) the conditional admission switch, which may remove
-the 16-file, 512 MiB, 1 GiB and 25M-cell limits only once the 400M-cell plane
-gate can run on a host with 8 GiB free — unavailable on this one; (2) WebView
-and macOS/Windows evidence, which this environment cannot produce and which must
-be recorded as release limitations; (3) the two open data-hygiene items above
-(unreferenced-asset reclamation and the dense mosaic's own re-anchored union
-grid); (4) integration into `main` and release, which are not authorized here.
-Do not remove a limit, delete the preserved dense callers or integrate the
-branch before those land.
+The product-closure delivery (C1, C2, the corrected evidence and the isolated
+real-Desktop smoke) is on the branch and awaits the main agent's independent
+disposition. What remains is verification breadth, the capacity decision and
+delivery: (1) the conditional admission switch, which may remove the 16-file,
+512 MiB, 1 GiB and 25M-cell limits only once the 400M-cell plane gate can run on
+a host with 8 GiB free — unavailable on this one; (2) macOS/Windows evidence,
+which this environment cannot produce and which must be recorded as release
+limitations, plus a decision on whether an automated Desktop smoke is worth
+building (the scripted smoke covered the workflow once, by hand); (3) the
+observations the smoke raised, if the courier wants them fixed: the stale open
+History view and canvas after an undo, the `Invalid` label wording, the history
+entry numbering, and the low-zoom chunk seams; (4) the two open data-hygiene
+items above (unreferenced-asset reclamation and the dense mosaic's own
+re-anchored union grid); (5) integration into `main` and release, which are not
+authorized here. Do not remove a limit, delete the preserved dense callers or
+integrate the branch before those land.
