@@ -15,6 +15,8 @@ pub mod engine;
 mod generation;
 pub mod grid;
 pub mod import;
+#[cfg(test)]
+mod measurement;
 pub mod paths;
 mod prepared_raster;
 pub mod presentation;

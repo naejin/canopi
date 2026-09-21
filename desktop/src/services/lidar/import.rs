@@ -5360,6 +5360,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
+        let sampler = crate::services::lidar::measurement::Sampler::start();
         let library = LidarLibrary::open(&root).expect("library opens");
         // The union spans ~45M cells, so this representative run raises the
         // interim admission envelope for its own thread: production keeps the
@@ -5496,6 +5497,11 @@ mod tests {
         assert_eq!((value, valid), (7.0, 1));
 
         drop(library);
+        let measurement = sampler.finish();
+        let _ = crate::services::lidar::measurement::gate_combined_budget(
+            "sparse gap run",
+            &measurement,
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
     /// The layer anchor is fixed: extending the layer left does not move the
@@ -5621,6 +5627,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
+        let sampler = crate::services::lidar::measurement::Sampler::start();
         let library = LidarLibrary::open(&root).expect("library opens");
         // Twenty-four files exceed the production file count and the union
         // exceeds the admission envelope, so this representative run raises
@@ -5704,6 +5711,11 @@ mod tests {
         );
 
         drop(library);
+        let measurement = sampler.finish();
+        let _ = crate::services::lidar::measurement::gate_combined_budget(
+            "24-tile batch",
+            &measurement,
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
     /// A snapshot-only legacy head (no member rows) is overlaid sparsely: the

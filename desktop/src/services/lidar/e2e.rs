@@ -486,6 +486,8 @@ fn e2e_sparse_generation_lifecycle() {
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
 
+    // Sample the combined working set from an idle baseline for the whole run.
+    let sampler = super::measurement::Sampler::start();
     // 1. Real import published as sparse resolved chunks.
     let library = LidarLibrary::open(&work).expect("library opens");
     let layer_id = library
@@ -766,49 +768,9 @@ fn e2e_sparse_generation_lifecycle() {
     assert_eq!(history_chunks.len(), 4, "history keeps its chunks");
 
     drop(reopened);
+    let measurement = sampler.finish();
+    let _ = super::measurement::gate_combined_budget("sparse MNT lifecycle", &measurement);
     let _ = std::fs::remove_dir_all(&work);
-}
-
-/// The kernel's own resident-set high-water mark for this process.
-///
-/// `VmHWM` is the exact peak the kernel recorded, not a sampling estimate.
-/// Short-lived child processes (GDAL) are not included, so their transient
-/// peaks are reported separately by the run that spawns them.
-fn process_peak_rss_bytes() -> u64 {
-    fn value(status: &str, key: &str) -> Option<u64> {
-        status
-            .lines()
-            .find(|line| line.starts_with(key))
-            .and_then(|line| line.split_whitespace().nth(1))
-            .and_then(|value| value.parse::<u64>().ok())
-    }
-    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
-    value(&status, "VmHWM:")
-        .map(|kilobytes| kilobytes * 1024)
-        .unwrap_or(0)
-}
-
-/// The largest peak any currently live child of this process reports.
-fn live_child_peak_rss_bytes() -> u64 {
-    let children = std::fs::read_to_string(format!(
-        "/proc/{}/task/{}/children",
-        std::process::id(),
-        std::process::id()
-    ))
-    .unwrap_or_default();
-    children
-        .split_whitespace()
-        .filter_map(|pid| std::fs::read_to_string(format!("/proc/{pid}/status")).ok())
-        .filter_map(|status| {
-            status
-                .lines()
-                .find(|line| line.starts_with("VmHWM:"))
-                .and_then(|line| line.split_whitespace().nth(1))
-                .and_then(|value| value.parse::<u64>().ok())
-        })
-        .map(|kilobytes| kilobytes * 1024)
-        .max()
-        .unwrap_or(0)
 }
 
 /// The 12 MNH tiles of one IGN batch, enumerated rather than assumed.
@@ -870,6 +832,9 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     // representative run raises it for its own thread only.
     let _admission = admission::limits_probe::raise(128 * 1024 * 1024, 16, 1024 * 1024 * 1024);
 
+    // The combined-memory sample starts from an idle baseline before any raster
+    // work and keeps sampling until the workload settles.
+    let sampler = super::measurement::Sampler::start();
     let library = LidarLibrary::open(&work).expect("library opens");
     let layer_id = library
         .create_layer(
@@ -1013,18 +978,13 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     ));
     println!("restart: {} cells", snapshot.layers[0].coverage_cells);
 
-    // The kernel's own high-water marks: exact for this process, plus the
-    // largest peak any still-live child reports.
-    let peak = process_peak_rss_bytes().max(live_child_peak_rss_bytes());
-    println!(
-        "peak resident set (VmHWM, this process plus live children): {} MiB",
-        peak / (1024 * 1024)
-    );
-    assert!(
-        peak <= 1024 * 1024 * 1024,
-        "the batch must stay inside the 1 GiB combined working-memory budget: {} MiB",
-        peak / (1024 * 1024)
-    );
+    // The combined working set is a sampled process-tree total: the root plus
+    // every observed live descendant, summed per tick. Resident sets are
+    // summed, so shared pages are double-counted (conservative), and sampling
+    // can miss peaks shorter than the interval (a lower bound, never an upper
+    // one). The run report states the baseline and incomplete ticks.
+    let measurement = sampler.finish();
+    let _ = super::measurement::gate_combined_budget("MNH batch", &measurement);
 
     drop(reopened);
     let _ = std::fs::remove_dir_all(&work);
