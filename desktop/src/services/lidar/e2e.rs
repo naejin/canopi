@@ -866,9 +866,9 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
     let guard = generation::chunked_publication::enable();
-    // The 48M-cell union is exactly what the dense ceiling refuses; this run is
-    // authorized to raise it for its own thread only.
-    let ceiling = import::dense_working_probe::raise_to(64 * 1024 * 1024);
+    // No admission ceiling is raised: twelve files are inside the production
+    // file count, and the 48M-cell union is handled block by block rather than
+    // by its envelope's area.
 
     let library = LidarLibrary::open(&work).expect("library opens");
     let layer_id = library
@@ -1027,7 +1027,6 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     );
 
     drop(reopened);
-    drop(ceiling);
     drop(guard);
     let _ = std::fs::remove_dir_all(&work);
 }

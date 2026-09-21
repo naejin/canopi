@@ -12,12 +12,13 @@ use super::LidarLibrary;
 use super::catalogue::{self, new_id, now_iso};
 use super::display::{self, ColorRamp};
 use super::engine::{GdalEngine, GdalProgram};
-use super::generation;
+use super::generation::{self, LatticeWindow};
 use super::grid::{
-    self, GeoTransform, RasterGrid, ValidMask, classify_coverage, remap_mask_checked, union_grid,
+    self, CoverageClassification, GeoTransform, RasterGrid, ValidMask, remap_mask_checked,
+    union_grid,
 };
 use super::paths::LidarPaths;
-use super::prepared_raster::PreparedRaster;
+use super::prepared_raster::{PreparedRaster, RasterWindow};
 use common_types::lidar::{
     LidarImportDecisionPreview, LidarImportProgressPhase, LidarImportReview, LidarImportSourceFacts,
 };
@@ -153,35 +154,19 @@ pub fn stage_import(
         ));
     }
 
-    // Union grid across the layer grid and every compatible source.
+    // Union grid across the layer grid and every compatible source. It is
+    // metadata: review work is bounded by blocks, never sized by its area.
     let mut union = layer_grid
         .clone()
         .unwrap_or_else(|| grid_for_source(compatible[0]));
-    validate_working_grid(&union, "import review")?;
     let mut layer_nodata = layer_nodata;
     if head_manifest.is_none() {
         layer_nodata = compatible[0].nodata.unwrap_or(FALLBACK_NODATA);
     }
     for source in &compatible {
         union = union_grid(&union, &grid_for_source(source))?;
-        validate_working_grid(&union, "import review union")?;
     }
-
-    // Existing accepted values and coverage on the union grid, read through
-    // whichever storage format the head generation actually owns.
-    let head_numeric = {
-        let connection = library.catalogue()?;
-        head_numeric_read(&connection, paths, head.as_ref(), head_manifest.as_ref())?
-    };
-    let (layer_values, layer_mask_on_union) = head_values_on_union(
-        engine,
-        head.as_ref(),
-        head_manifest.as_ref(),
-        &head_numeric,
-        &union,
-        layer_nodata,
-        cancel,
-    )?;
+    validate_lattice(&union, "import review")?;
 
     // R-tree candidate guard: when every accepted member has a footprint,
     // an incoming extent intersecting none of them must classify without
@@ -228,25 +213,36 @@ pub fn stage_import(
         Vec::new()
     };
 
-    // Classify the combined incoming validity against existing coverage, so
-    // cells claimed by two staged files are counted once.
-    let mut combined_incoming = ValidMask::empty(union.width, union.height);
-    for source in &compatible {
-        let source_mask =
-            ValidMask::read_from(&source.valid_mask_path, source.width, source.height)?;
-        let remapped = remap_mask_checked(&source_mask, &grid_for_source(source), &union, |_| {
-            check_cancel(cancel)
-        })?;
-        for y in 0..union.height {
-            check_cancel(cancel)?;
-            for x in 0..union.width {
-                if remapped.get(x, y) {
-                    combined_incoming.set(x, y, true);
-                }
-            }
-        }
-    }
-    let classification = classify_coverage(&combined_incoming, layer_mask_on_union.as_ref())?;
+    // Compose the review one bounded block at a time: each block unions the
+    // incoming sources' validity (so overlapping files count once), compares it
+    // once with the accepted head, and reduces the result into both previews.
+    // Nothing here is sized by the union's area.
+    check_cancel(cancel)?;
+    let (target_width, target_height) = review_preview_target(&union)?;
+    let coverage = {
+        let head_source = {
+            let connection = library.catalogue()?;
+            HeadBlockSource::open(
+                engine,
+                &connection,
+                paths,
+                head.as_ref(),
+                head_manifest.as_ref(),
+                cancel,
+            )?
+        };
+        review_coverage(
+            &head_source,
+            &compatible,
+            &union,
+            layer_nodata,
+            true,
+            false,
+            (target_width, target_height),
+            cancel,
+        )?
+    };
+    let classification = coverage.classification;
     if all_members_footprinted
         && footprint_candidates.is_empty()
         && classification.overlap_cells > 0
@@ -272,100 +268,74 @@ pub fn stage_import(
         });
     }
 
-    // Fixed-style Before/After previews share one value scale. The initial
-    // review reflects the UI's default decision: add uncovered coverage and
-    // preserve overlap.
+    // Fixed-style Before/After previews share one value scale, and both are
+    // rendered from the bounded target grids the review walk produced. The
+    // initial review reflects the UI's default decision: add uncovered
+    // coverage and preserve overlap.
     check_cancel(cancel)?;
-    let preview_composed = compose_values_cancellable(
-        layer_values.as_deref(),
-        layer_mask_on_union.as_ref(),
-        &compatible,
-        &union,
-        layer_nodata,
-        true,
-        false,
-        Some(cancel),
-    )?;
     let preview_min = head
         .as_ref()
         .and_then(|row| row.min_value)
-        .unwrap_or(preview_composed.min_value)
-        .min(preview_composed.min_value);
+        .unwrap_or(coverage.preview_min)
+        .min(coverage.preview_min);
     let preview_max = head
         .as_ref()
         .and_then(|row| row.max_value)
-        .unwrap_or(preview_composed.max_value)
-        .max(preview_composed.max_value)
+        .unwrap_or(coverage.preview_max)
+        .max(coverage.preview_max)
         .max(preview_min + 1.0);
     let preview_ramp = ColorRamp::elevation_range(preview_min, preview_max);
-    let before_preview_path = match (&head, &head_numeric) {
-        (Some(head), HeadNumeric::Dense) => {
-            check_cancel(cancel)?;
-            let Some(mosaic_path) = head.mosaic_path.as_deref() else {
-                return Err("accepted generation has no dense raster".to_string());
-            };
-            let target = job_dir.join("preview-before.png");
-            display::generate_preview(
-                engine,
-                cancel,
-                Path::new(mosaic_path),
-                Some(layer_nodata),
-                &preview_ramp,
-                &target,
-            )?;
-            Some(target)
-        }
-        (Some(_), HeadNumeric::Chunks(_)) => {
-            // A chunked generation owns no dense mosaic. Render the accepted
-            // state from the same bounded head read the review already made,
-            // rather than inventing a whole-union file on disk.
-            check_cancel(cancel)?;
-            let values = layer_values.clone().unwrap_or_default();
-            let preview_tif = preview_tif_from_values(
-                engine,
-                cancel,
-                &job_dir,
-                "before-head",
-                &union,
-                &layer_crs_wkt,
-                layer_nodata,
-                &values,
-            )?;
-            let target = job_dir.join("preview-before.png");
-            display::generate_preview(
-                engine,
-                cancel,
-                &preview_tif,
-                Some(layer_nodata),
-                &preview_ramp,
-                &target,
-            )?;
-            let _ = std::fs::remove_file(&preview_tif);
-            Some(target)
-        }
-        _ => None,
-    };
-    let after_preview_path = {
+    let preview_grid = preview_target_grid(&union, target_width, target_height);
+    let before_preview_path = if head.is_some() {
+        check_cancel(cancel)?;
         let preview_tif = preview_tif_from_values(
             engine,
             cancel,
             &job_dir,
-            "default",
-            &union,
+            "before-head",
+            &preview_grid,
             &layer_crs_wkt,
             layer_nodata,
-            &preview_composed.values,
+            &coverage.before_values,
         )?;
-        let target = job_dir.join("preview-after.png");
-        display::generate_preview(
+        let target = job_dir.join("preview-before.png");
+        let rendered = display::generate_preview(
             engine,
             cancel,
             &preview_tif,
             Some(layer_nodata),
             &preview_ramp,
             &target,
-        )?;
+        );
         let _ = std::fs::remove_file(&preview_tif);
+        rendered?;
+        Some(target)
+    } else {
+        None
+    };
+    let after_preview_path = {
+        check_cancel(cancel)?;
+        let preview_tif = preview_tif_from_values(
+            engine,
+            cancel,
+            &job_dir,
+            "default",
+            &preview_grid,
+            &layer_crs_wkt,
+            layer_nodata,
+            &coverage.preview_values,
+        )?;
+        let target = job_dir.join("preview-after.png");
+        let rendered = display::generate_preview(
+            engine,
+            cancel,
+            &preview_tif,
+            Some(layer_nodata),
+            &preview_ramp,
+            &target,
+        );
+        let _ = std::fs::remove_file(&preview_tif);
+        rendered?;
         Some(target)
     };
 
@@ -428,6 +398,8 @@ pub fn render_decision_preview(
         return Err("select at least one coverage change to preview".to_string());
     }
     check_cancel(cancel)?;
+    let engine = &library.inner.engine;
+    let paths = &library.inner.paths;
     let (head, head_manifest) = {
         let connection = library.catalogue()?;
         let head = catalogue::head_generation(&connection, &staging.layer_id)?;
@@ -448,107 +420,88 @@ pub fn render_decision_preview(
     if compatible.is_empty() {
         return Err("import has no compatible sources to preview".to_string());
     }
-    validate_working_grid(&staging.union_grid, "import decision preview")?;
-    let head_numeric = {
-        let connection = library.catalogue()?;
-        head_numeric_read(
-            &connection,
-            &library.inner.paths,
-            head.as_ref(),
-            head_manifest.as_ref(),
+    // The decision preview walks the same bounded blocks the review did, so a
+    // sparsely covered layer costs what its data occupies.
+    validate_lattice(&staging.union_grid, "import decision preview")?;
+    let (target_width, target_height) = review_preview_target(&staging.union_grid)?;
+    let coverage = {
+        let head_source = {
+            let connection = library.catalogue()?;
+            HeadBlockSource::open(
+                engine,
+                &connection,
+                paths,
+                head.as_ref(),
+                head_manifest.as_ref(),
+                cancel,
+            )?
+        };
+        review_coverage(
+            &head_source,
+            &compatible,
+            &staging.union_grid,
+            staging.layer_nodata,
+            add_uncovered,
+            replace_overlap,
+            (target_width, target_height),
+            cancel,
         )?
     };
-    let (layer_values, layer_mask) = head_values_on_union(
-        &library.inner.engine,
-        head.as_ref(),
-        head_manifest.as_ref(),
-        &head_numeric,
-        &staging.union_grid,
-        staging.layer_nodata,
-        cancel,
-    )?;
-    let composed = compose_values_cancellable(
-        layer_values.as_deref(),
-        layer_mask.as_ref(),
-        &compatible,
-        &staging.union_grid,
-        staging.layer_nodata,
-        add_uncovered,
-        replace_overlap,
-        Some(cancel),
-    )?;
     let preview_min = head
         .as_ref()
         .and_then(|row| row.min_value)
-        .unwrap_or(composed.min_value)
-        .min(composed.min_value);
+        .unwrap_or(coverage.preview_min)
+        .min(coverage.preview_min);
     let preview_max = head
         .as_ref()
         .and_then(|row| row.max_value)
-        .unwrap_or(composed.max_value)
-        .max(composed.max_value)
+        .unwrap_or(coverage.preview_max)
+        .max(coverage.preview_max)
         .max(preview_min + 1.0);
     let ramp = ColorRamp::elevation_range(preview_min, preview_max);
     let decision_key = format!("{}{}", u8::from(add_uncovered), u8::from(replace_overlap));
-    let job_dir = library.inner.paths.job_dir(&staging.job_id);
-    let before_preview_path = match (&head, &head_numeric) {
-        (Some(head), HeadNumeric::Dense) => {
-            let Some(mosaic_path) = head.mosaic_path.as_deref() else {
-                return Err("accepted generation has no dense raster".to_string());
-            };
-            let target = job_dir.join(format!("preview-before-{decision_key}.png"));
-            display::generate_preview(
-                &library.inner.engine,
-                cancel,
-                Path::new(mosaic_path),
-                Some(staging.layer_nodata),
-                &ramp,
-                &target,
-            )?;
-            Some(target.display().to_string())
-        }
-        (Some(_), HeadNumeric::Chunks(_)) => {
-            // Rendering the accepted state of a chunked generation reuses the
-            // bounded head read above instead of a dense file it does not own.
-            let values = layer_values.clone().unwrap_or_default();
-            let head_tif = preview_tif_from_values(
-                &library.inner.engine,
-                cancel,
-                &job_dir,
-                &format!("before-{decision_key}"),
-                &staging.union_grid,
-                &staging.layer_crs_wkt,
-                staging.layer_nodata,
-                &values,
-            )?;
-            let target = job_dir.join(format!("preview-before-{decision_key}.png"));
-            let rendered = display::generate_preview(
-                &library.inner.engine,
-                cancel,
-                &head_tif,
-                Some(staging.layer_nodata),
-                &ramp,
-                &target,
-            );
-            let _ = std::fs::remove_file(&head_tif);
-            rendered?;
-            Some(target.display().to_string())
-        }
-        _ => None,
+    let job_dir = paths.job_dir(&staging.job_id);
+    let preview_grid = preview_target_grid(&staging.union_grid, target_width, target_height);
+    let before_preview_path = if head.is_some() {
+        check_cancel(cancel)?;
+        let head_tif = preview_tif_from_values(
+            engine,
+            cancel,
+            &job_dir,
+            &format!("before-{decision_key}"),
+            &preview_grid,
+            &staging.layer_crs_wkt,
+            staging.layer_nodata,
+            &coverage.before_values,
+        )?;
+        let target = job_dir.join(format!("preview-before-{decision_key}.png"));
+        let rendered = display::generate_preview(
+            engine,
+            cancel,
+            &head_tif,
+            Some(staging.layer_nodata),
+            &ramp,
+            &target,
+        );
+        let _ = std::fs::remove_file(&head_tif);
+        rendered?;
+        Some(target.display().to_string())
+    } else {
+        None
     };
     let preview_tif = preview_tif_from_values(
-        &library.inner.engine,
+        engine,
         cancel,
         &job_dir,
         &format!("decision-{decision_key}"),
-        &staging.union_grid,
+        &preview_grid,
         &staging.layer_crs_wkt,
         staging.layer_nodata,
-        &composed.values,
+        &coverage.preview_values,
     )?;
     let after_target = job_dir.join(format!("preview-after-{decision_key}.png"));
     let rendered = display::generate_preview(
-        &library.inner.engine,
+        engine,
         cancel,
         &preview_tif,
         Some(staging.layer_nodata),
@@ -717,11 +670,6 @@ pub(crate) mod dense_working_probe {
 
     pub(crate) fn source_bytes_limit() -> Option<u64> {
         LIMITS.with(Cell::get).map(|limits| limits.source_bytes)
-    }
-
-    /// Raise the ceilings until the guard is dropped.
-    pub(crate) fn raise_to(limit: u64) -> Guard {
-        raise(limit, 4096, 64 * 1024 * 1024 * 1024)
     }
 
     /// Raise every ceiling a multi-file representative run needs.
@@ -1206,6 +1154,428 @@ impl PositionedWriter {
     }
 }
 
+/// Largest side of a review preview, matching the review surface's target.
+const REVIEW_PREVIEW_MAX_SIDE: u32 = 512;
+
+/// Check that a lattice is representable, without limiting its area.
+///
+/// A sparse or block-wise caller never allocates by lattice area, so the dense
+/// working ceiling does not apply to it; what must hold is that its geometry is
+/// finite and its arithmetic cannot overflow.
+fn validate_lattice(grid: &RasterGrid, operation: &str) -> Result<(), String> {
+    if grid.width == 0 || grid.height == 0 {
+        return Err(format!("{operation} has an empty extent"));
+    }
+    u64::from(grid.width)
+        .checked_mul(u64::from(grid.height))
+        .ok_or_else(|| format!("{operation} dimensions overflow"))?;
+    if !grid.geotransform.iter().all(|value| value.is_finite()) {
+        return Err(format!("{operation} geometry is not finite"));
+    }
+    if grid.geotransform[1] == 0.0 || grid.geotransform[5] == 0.0 {
+        return Err(format!("{operation} has a degenerate pixel size"));
+    }
+    Ok(())
+}
+
+/// Both preview target dimensions: at most 512 each, aspect preserved.
+fn review_preview_target(union: &RasterGrid) -> Result<(u32, u32), String> {
+    validate_lattice(union, "preview target")?;
+    let longest = union.width.max(union.height);
+    if longest <= REVIEW_PREVIEW_MAX_SIDE {
+        return Ok((union.width, union.height));
+    }
+    let scale = f64::from(REVIEW_PREVIEW_MAX_SIDE) / f64::from(longest);
+    Ok((
+        ((f64::from(union.width) * scale).round() as u32).clamp(1, REVIEW_PREVIEW_MAX_SIDE),
+        ((f64::from(union.height) * scale).round() as u32).clamp(1, REVIEW_PREVIEW_MAX_SIDE),
+    ))
+}
+
+/// The small grid a preview target raster is written on.
+fn preview_target_grid(union: &RasterGrid, width: u32, height: u32) -> RasterGrid {
+    RasterGrid {
+        width,
+        height,
+        geotransform: [
+            union.geotransform[0],
+            union.geotransform[1] * f64::from(union.width) / f64::from(width),
+            0.0,
+            union.geotransform[3],
+            0.0,
+            union.geotransform[5] * f64::from(union.height) / f64::from(height),
+        ],
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bounded review: block-wise composed coverage
+// ---------------------------------------------------------------------------
+
+/// The accepted head's numeric coverage, readable one bounded block at a time.
+enum HeadBlockSource {
+    /// No accepted generation yet.
+    None,
+    /// Preserved dense mosaic. A dense generation only exists inside the dense
+    /// working ceiling, so its whole numeric pair is bounded and is read once.
+    Dense {
+        values: Vec<f32>,
+        valid: ValidMask,
+        manifest_grid: RasterGrid,
+    },
+    /// Published resolved chunks, read through the resolver per block.
+    Chunks {
+        chunks: Vec<generation::PersistedChunk>,
+        lattice: RasterGrid,
+    },
+}
+
+impl HeadBlockSource {
+    fn open(
+        engine: &GdalEngine,
+        connection: &rusqlite::Connection,
+        paths: &LidarPaths,
+        head: Option<&catalogue::GenerationRow>,
+        manifest: Option<&GenerationManifest>,
+        cancel: &AtomicBool,
+    ) -> Result<Self, String> {
+        let (Some(head), Some(manifest)) = (head, manifest) else {
+            return Ok(Self::None);
+        };
+        match manifest.format {
+            GenerationStorageFormat::CogChunksV1 => Ok(Self::Chunks {
+                chunks: generation::persisted_chunks(
+                    connection,
+                    paths,
+                    &head.id,
+                    generation::RESULT_ROLE,
+                )?,
+                lattice: manifest.grid.clone(),
+            }),
+            GenerationStorageFormat::LegacyDenseV1 => {
+                let (Some(mosaic_path), Some(mask_path)) = (
+                    head.mosaic_path.as_deref(),
+                    head.coverage_mask_path.as_deref(),
+                ) else {
+                    return Err("accepted generation has no dense raster".to_string());
+                };
+                let raw = raw_f32_bytes(
+                    engine,
+                    Path::new(mosaic_path),
+                    manifest.grid.width,
+                    manifest.grid.height,
+                    cancel,
+                )?;
+                let values = f32_values(&raw);
+                let valid = ValidMask::read_from(
+                    Path::new(mask_path),
+                    manifest.grid.width,
+                    manifest.grid.height,
+                )?;
+                Ok(Self::Dense {
+                    values,
+                    valid,
+                    manifest_grid: manifest.grid.clone(),
+                })
+            }
+        }
+    }
+
+    /// Accepted values and validity for one union block.
+    ///
+    /// Cells the head does not cover stay invalid and carry `nodata`.
+    fn block(
+        &self,
+        union: &RasterGrid,
+        window: LatticeWindow,
+        nodata: f32,
+        cancel: &AtomicBool,
+    ) -> Result<(Vec<f32>, Vec<u8>), String> {
+        let cells = usize::try_from(u64::from(window.width) * u64::from(window.height))
+            .map_err(|_| "review block is too large for this platform".to_string())?;
+        let mut values = vec![nodata; cells];
+        let mut valid = vec![0u8; cells];
+        match self {
+            Self::None => {}
+            Self::Chunks { chunks, lattice } => {
+                let resolved = generation::read_persisted_window(chunks, lattice, window, cancel)?;
+                for index in 0..cells {
+                    if resolved.valid[index] == 0 {
+                        continue;
+                    }
+                    values[index] = resolved.samples[index];
+                    valid[index] = 1;
+                }
+            }
+            Self::Dense {
+                values: mosaic,
+                valid: mask,
+                manifest_grid,
+            } => {
+                let offset_x = ((manifest_grid.geotransform[0] - union.geotransform[0])
+                    / union.geotransform[1])
+                    .round() as i64;
+                let offset_y = ((union.geotransform[3] - manifest_grid.geotransform[3])
+                    / manifest_grid.geotransform[5].abs())
+                .round() as i64;
+                let width = window.width as usize;
+                for row in 0..window.height as i64 {
+                    let my = window.y + row - offset_y;
+                    if my < 0 || my >= i64::from(manifest_grid.height) {
+                        continue;
+                    }
+                    for column in 0..window.width as i64 {
+                        let mx = window.x + column - offset_x;
+                        if mx < 0 || mx >= i64::from(manifest_grid.width) {
+                            continue;
+                        }
+                        if !mask.get(mx as u32, my as u32) {
+                            continue;
+                        }
+                        let source = my as usize * manifest_grid.width as usize + mx as usize;
+                        let target = row as usize * width + column as usize;
+                        values[target] = mosaic[source];
+                        valid[target] = 1;
+                    }
+                }
+            }
+        }
+        Ok((values, valid))
+    }
+}
+
+/// One composed union block with the incoming validity that produced it.
+struct ComposedBlock {
+    values: Vec<f32>,
+    valid: Vec<u8>,
+    /// Union of the incoming sources' validity in this block, before the
+    /// accepted roles are applied: the review counts this once per cell.
+    incoming: Vec<u8>,
+}
+
+/// Compose one bounded union block from the accepted head and the incoming
+/// sources, applying the accepted roles.
+///
+/// The block is the unit of work: nothing here is sized by the union, so a
+/// review costs what its data occupies rather than what its envelope spans.
+#[allow(clippy::too_many_arguments)]
+fn compose_union_block(
+    head: &HeadBlockSource,
+    sources: &[&StagedSource],
+    union: &RasterGrid,
+    window: LatticeWindow,
+    nodata: f32,
+    add_uncovered: bool,
+    replace_overlap: bool,
+    cancel: &AtomicBool,
+) -> Result<ComposedBlock, String> {
+    let width = window.width as usize;
+    let (mut values, mut valid) = head.block(union, window, nodata, cancel)?;
+    let mut incoming = vec![0u8; values.len()];
+    for source in sources {
+        let window_in_source = source_window(source, union, window)?;
+        if window_in_source.width == 0 || window_in_source.height == 0 {
+            continue;
+        }
+        let (source_values, source_valid) = generation::read_legacy_window(
+            &source.raw_samples_path,
+            &source.valid_mask_path,
+            &grid_for_source(source),
+            window_in_source,
+            cancel,
+        )?;
+        let offset_x = ((source.geotransform[0] - union.geotransform[0]) / union.geotransform[1])
+            .round() as i64;
+        let offset_y = ((union.geotransform[3] - source.geotransform[3])
+            / union.geotransform[5].abs())
+        .round() as i64;
+        let dest_x = (i64::from(window_in_source.x) + offset_x - window.x) as usize;
+        let dest_y = (i64::from(window_in_source.y) + offset_y - window.y) as usize;
+        for row in 0..window_in_source.height as usize {
+            check_optional_cancel(Some(cancel), row as u32)?;
+            for column in 0..window_in_source.width as usize {
+                let index = row * window_in_source.width as usize + column;
+                if source_valid[index] == 0 {
+                    continue;
+                }
+                let target = (dest_y + row) * width + dest_x + column;
+                incoming[target] = 1;
+                let covered = valid[target] != 0;
+                if covered && !replace_overlap {
+                    continue;
+                }
+                if !covered && !add_uncovered {
+                    continue;
+                }
+                values[target] = source_values[index];
+                valid[target] = 1;
+            }
+        }
+    }
+    Ok(ComposedBlock {
+        values,
+        valid,
+        incoming,
+    })
+}
+
+/// A source's window that intersects one union block.
+fn source_window(
+    source: &StagedSource,
+    union: &RasterGrid,
+    window: LatticeWindow,
+) -> Result<RasterWindow, String> {
+    let offset_x =
+        ((source.geotransform[0] - union.geotransform[0]) / union.geotransform[1]).round() as i64;
+    let offset_y = ((union.geotransform[3] - source.geotransform[3]) / union.geotransform[5].abs())
+        .round() as i64;
+    let x0 = (window.x - offset_x).max(0);
+    let y0 = (window.y - offset_y).max(0);
+    let x1 = (window.x + i64::from(window.width) - offset_x).min(i64::from(source.width));
+    let y1 = (window.y + i64::from(window.height) - offset_y).min(i64::from(source.height));
+    Ok(RasterWindow {
+        x: x0 as u32,
+        y: y0 as u32,
+        width: (x1 - x0).max(0) as u32,
+        height: (y1 - y0).max(0) as u32,
+    })
+}
+
+/// Iterate the union's blocks, in row-major order.
+fn union_blocks(union: &RasterGrid) -> Vec<LatticeWindow> {
+    let side = generation::CHUNK_SIDE as u32;
+    let mut blocks = Vec::new();
+    let mut y = 0u32;
+    while y < union.height {
+        let height = side.min(union.height - y);
+        let mut x = 0u32;
+        while x < union.width {
+            let width = side.min(union.width - x);
+            blocks.push(LatticeWindow {
+                x: i64::from(x),
+                y: i64::from(y),
+                width,
+                height,
+            });
+            x += width;
+        }
+        y += height;
+    }
+    blocks
+}
+
+/// Counts and preview samples accumulated over the union's blocks.
+struct ReviewCoverage {
+    classification: CoverageClassification,
+    /// Target-sized composed values for the after preview; invalid cells keep
+    /// the layer NoData marker.
+    preview_values: Vec<f32>,
+    preview_min: f64,
+    preview_max: f64,
+    /// Target-sized accepted values for the before preview.
+    before_values: Vec<f32>,
+}
+
+/// Walk the union once, composing each block for the counts and both previews.
+#[allow(clippy::too_many_arguments)]
+fn review_coverage(
+    head: &HeadBlockSource,
+    sources: &[&StagedSource],
+    union: &RasterGrid,
+    nodata: f32,
+    add_uncovered: bool,
+    replace_overlap: bool,
+    target: (u32, u32),
+    cancel: &AtomicBool,
+) -> Result<ReviewCoverage, String> {
+    let cells = u64::from(union.width) * u64::from(union.height);
+    let (target_width, target_height) = target;
+    let target_cells = usize::try_from(u64::from(target_width) * u64::from(target_height))
+        .map_err(|_| "preview target is too large for this platform".to_string())?;
+    let mut preview_values = vec![nodata; target_cells];
+    let mut before_values = vec![nodata; target_cells];
+    let mut uncovered_cells = 0u64;
+    let mut overlap_cells = 0u64;
+    let mut incoming_cells = 0u64;
+    let (mut preview_min, mut preview_max) = (f64::INFINITY, f64::NEG_INFINITY);
+    for window in union_blocks(union) {
+        check_cancel(cancel)?;
+        let composed = compose_union_block(
+            head,
+            sources,
+            union,
+            window,
+            nodata,
+            add_uncovered,
+            replace_overlap,
+            cancel,
+        )?;
+        let accepted = head.block(union, window, nodata, cancel)?.1;
+        let width = window.width as usize;
+        for row in 0..window.height as usize {
+            for column in 0..width {
+                let index = row * width + column;
+                if composed.incoming[index] == 0 {
+                    continue;
+                }
+                incoming_cells += 1;
+                if accepted[index] == 0 {
+                    uncovered_cells += 1;
+                } else {
+                    overlap_cells += 1;
+                }
+            }
+        }
+        // Reduce this block into both preview targets.
+        for row in 0..window.height {
+            for column in 0..window.width {
+                let index = row as usize * width + column as usize;
+                let union_x = window.x + i64::from(column);
+                let union_y = window.y + i64::from(row);
+                let tx = (union_x as u64 * u64::from(target_width) / u64::from(union.width))
+                    .min(u64::from(target_width) - 1) as u32;
+                let ty = (union_y as u64 * u64::from(target_height) / u64::from(union.height))
+                    .min(u64::from(target_height) - 1) as u32;
+                let target_index = ty as usize * target_width as usize + tx as usize;
+                if composed.valid[index] != 0 {
+                    preview_values[target_index] = composed.values[index];
+                    if composed.values[index].is_finite() {
+                        preview_min = preview_min.min(f64::from(composed.values[index]));
+                        preview_max = preview_max.max(f64::from(composed.values[index]));
+                    }
+                }
+                if accepted[index] != 0 {
+                    before_values[target_index] = composed.values[index];
+                }
+            }
+        }
+    }
+    if !preview_min.is_finite() {
+        preview_min = 0.0;
+        preview_max = 0.0;
+    }
+    Ok(ReviewCoverage {
+        classification: CoverageClassification {
+            uncovered_cells,
+            overlap_cells,
+            // The checked envelope minus the unique incoming valid cells,
+            // computed arithmetically: the gap is never visited.
+            invalid_cells: cells.saturating_sub(incoming_cells),
+        },
+        preview_values,
+        preview_min,
+        preview_max,
+        before_values,
+    })
+}
+
+/// Decode little-endian Float32 bytes.
+fn f32_values(raw: &[u8]) -> Vec<f32> {
+    raw.chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Composition (exact, pure Rust over Float32 buffers)
 // ---------------------------------------------------------------------------
@@ -1625,14 +1995,14 @@ pub fn apply_import(
         .or_else(|| head_base.legacy_grid.clone())
         .or_else(|| staging.layer_grid.clone())
         .unwrap_or_else(|| grid_for_source(compatible[0]));
-    validate_working_grid(&union, "import publication")?;
+    validate_lattice(&union, "import publication")?;
     for member in &head_base.members {
         union = union_grid(&union, &member.grid)?;
-        validate_working_grid(&union, "import publication union")?;
+        validate_lattice(&union, "import publication union")?;
     }
     for source in &compatible {
         union = union_grid(&union, &grid_for_source(source))?;
-        validate_working_grid(&union, "import publication union")?;
+        validate_lattice(&union, "import publication union")?;
     }
     let _ = head_manifest;
     library.record_import_progress(
@@ -2211,10 +2581,10 @@ pub fn undo_import(
         .first()
         .map(|m| m.grid.clone())
         .unwrap_or_else(|| head_manifest.grid.clone());
-    validate_working_grid(&union, "import undo")?;
+    validate_lattice(&union, "import undo")?;
     for member in &remaining {
         union = union_grid(&union, &member.grid)?;
-        validate_working_grid(&union, "import undo union")?;
+        validate_lattice(&union, "import undo union")?;
     }
 
     // Sparse undo: republish the remaining occurrences as resolved chunks when
@@ -4597,9 +4967,8 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
         let _gate = generation::chunked_publication::enable();
-        // The union spans ~45M cells, which the dense working ceiling refuses
-        // on purpose: the sparse route must not need a union-sized buffer.
-        let _ceiling = dense_working_probe::raise_to(64 * 1024 * 1024);
+        // The union spans ~45M cells and needs no raised ceiling: the review
+        // and the sparse publication are block-sized, which is the point.
 
         let left =
             write_placed_fixture(&engine, &root, "left", -500.0, 1000.0, 40, 30, -9999.0, 3.0);
@@ -4859,10 +5228,12 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
         let _gate = generation::chunked_publication::enable();
-        // Twenty-four files exceed the production file ceiling, and the gaps
-        // push the union past the dense working ceiling: both are raised for
-        // this thread only, exactly as the batch's representative runs allow.
-        let _admission = dense_working_probe::raise(256 * 1024 * 1024, 64, 8 * 1024 * 1024 * 1024);
+        // Twenty-four files exceed the production file-count ceiling, which is
+        // raised for this thread only; the 60M-cell union needs no ceiling at
+        // all, because the review and the sparse publication work in blocks.
+        let _admission =
+            dense_working_probe::raise(MAX_DENSE_WORKING_CELLS, 64, MAX_SOURCE_FILE_BYTES);
+        assert_ne!(MAX_DENSE_WORKING_CELLS, 0);
 
         // Three columns eight rows apart, each column 100,000 cells from the
         // next, so the union is far larger than the data it holds.

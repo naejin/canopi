@@ -41,7 +41,8 @@ caller-level tests, not an inert module.
 | Reprojected lattice mapping fix, analysis tileset fix, sparse real-fixture lifecycle | `f7313624` |
 | Dense-ceiling test seam, bounded preview target, sparse-gap representative run | `834043e5` |
 | Schema v10 fixed per-layer lattice inherited by sparse generations | `fdb907b3` |
-| Extended admission test seam, 12-tile MNH and 24-tile representative runs | the commit that carries this receipt |
+| Extended admission test seam, 12-tile MNH and 24-tile representative runs | `4c86f6c6` |
+| Block-wise review classification and bounded previews | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -219,12 +220,12 @@ Catalogue tests:
   by `common_types::lidar::tests::tile_source_wire_shape_is_tagged_and_stable`,
   and the frontend covers both URL forms plus raster-URL parsing and rejection.
 - Authorized 12-tile MNH batch (`e2e_mnh_batch_import_apply_display_restart`, run
-  here against `~/Downloads/la magnerie`): all twelve 16,000,513-byte tiles
+  here against `~/Downloads/la magnerie`, with **no raised admission ceiling**): all twelve 16,000,513-byte tiles
   enumerated and hashed individually, staged as one batch, 48,000,000
   uncovered cells with no overlap, an 8000×6000 union, published as exactly
   **48** resolved chunks with range −1.70…39.28 m, four native tiles drawn at
   zooms 18/17/16/15 (41–72 KB each) from the batch centre, the head and its
-  tileset intact after a restart, and a **peak resident set of 315 MiB** — the
+  tileset intact after a restart, and a **peak resident set of 39 MiB** — the
   kernel's own `VmHWM` high-water mark for the test process, which is exact for
   that process rather than a sampling estimate, plus the largest peak any
   still-live child reported; short-lived GDAL children are excluded, which is
@@ -234,8 +235,9 @@ Catalogue tests:
 - Authorized 24-tile authored batch (`sparse_twenty_four_tile_batch_stays_chunk_sized`):
   twenty-four files — more than the production 16-file ceiling — arranged in
   three widely separated columns produce a 60,809,728-cell union and are stored
-  as **3 occupied chunks totalling 12.6 MB**, one per column, with the count and
-  dense-area ceilings raised for that thread only.
+  as **3 occupied chunks totalling 12.6 MB**, one per column; only the file
+  count is raised for that thread, because the 60.8M-cell union needs no
+  ceiling at all.
 - Fixed layer lattice (GDAL required):
   `sparse_lattice_anchor_never_moves_when_the_layer_extends_left` publishes a
   member, extends the layer 1200 cells to its left, and asserts the manifest's
@@ -332,9 +334,18 @@ concurrently running reader test could reset another test's evidence.
   layer that was dense first and sparse later records the anchor from that
   first dense publication; the sparse formats of one layer are consistent with
   each other from then on.
-- Review classification still assembles a dense union buffer, so a
-  million-column union is exercised through the raised test-only ceiling rather
-  than by a block-wise review.
+- Review classification is block-wise. `stage_import` and
+  `render_decision_preview` walk the union in 1024-cell blocks: each block unions
+  the incoming sources' validity (so overlapping files count once), compares it
+  once with the accepted head, and reduces the result into both previews on a
+  bounded target of at most 512 per side. The envelope's cell count is
+  arithmetic, so the gap is a number rather than a walk, and `invalid_cells`
+  keeps its meaning as envelope minus unique incoming valid cells. The
+  consequence is measured: the real 12-tile MNH batch (48M cells) now imports
+  under **production admission limits with no raised ceiling**, and its peak
+  resident set fell from 315 MiB to **39 MiB**; the 45M-cell sparse-gap run and
+  the 60.8M-cell 24-tile run likewise need no dense-area ceiling, and each runs
+  about half as long as before.
 - The retained source COG is still not written by staging, so sparse members are
   read from durable dense raw/mask assets; retained source COGs and their
   content-addressed admission remain open.
@@ -360,10 +371,9 @@ concurrently running reader test could reset another test's evidence.
 
 ## Next dependency
 
-Everything the migrated workflows need now exists and is exercised on real
-data, so the next session's order is: (1) block-wise review classification, so
-the union no longer has to be assembled densely and the review stops being the
-reason a 48M-cell import needs a test-only ceiling; (2) the legacy-base overlay
+Everything the migrated workflows need now exists, is block-bounded, and is
+exercised on real data inside production admission limits, so the next
+session's order is: (1) the legacy-base overlay
 (`base_generation_id`) for heads whose member history is not reconstructible,
 and retained source COGs, so no preserved legacy head keeps the dense route;
 (3) the conditional admission switch, which may remove the 16-file, 512 MiB,

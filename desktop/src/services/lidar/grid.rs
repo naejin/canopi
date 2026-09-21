@@ -367,6 +367,10 @@ pub struct CoverageClassification {
     pub invalid_cells: u64,
 }
 
+// The review no longer classifies a whole union buffer: `import::review_coverage`
+// counts the same quantities block by block. The buffer-sized helper is kept
+// because its regression tests pin those meanings.
+#[allow(dead_code)]
 pub fn classify_coverage(
     incoming: &ValidMask,
     layer: Option<&ValidMask>,
