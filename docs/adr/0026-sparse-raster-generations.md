@@ -1,6 +1,11 @@
+---
+status: superseded
+superseded_by: 0027-ordered-cog-data-layers.md
+---
+
 # Standard COG assets with sparse numeric generations
 
-Status: proposed — revised direction for the user-forwarded bounded-generation assignment; not implemented. Replaces this ADR's unimplemented raw-block choice at `24fd1a56`.
+Status: superseded for new source composition by [ADR 0027](0027-ordered-cog-data-layers.md). Delivered sparse assets remain readable; the following records the previous decision, not current execution authority.
 Current guidance: [bounded-generation design](../design/raster-rework/bounded-generation-design.md), [LiDAR guide](../agent/lidar.md).
 
 Canopi's immutable ordered member occurrences remain the authority for source composition and targeted undo. Retain each interpretation's prepared standard COG. New generations materialize resolved **occupied** 1024×1024 spatial chunks as standard COGs, indexed in the existing catalogue and shared by immutable asset identity. TIFF tiles inside those files remain 256×256. Legacy generations remain readable through bounded adapters; no authoritative full-union mosaic or union-sized sparse file is created.

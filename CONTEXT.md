@@ -270,6 +270,14 @@ _Avoid_: Locked plant name, Design Object Lock, annotation
 A fixed visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear; layers are not arbitrary user-created folders.
 _Avoid_: Category, folder, custom layer
 
+**Data Layer**:
+A reusable library collection of ordered geographic raster sources describing one measurement. Higher-priority valid source samples cover lower-priority samples for both display and analysis; hiding the Data Layer in a Design changes only its presentation.
+_Avoid_: Canvas Layer, merged file, source folder
+
+**Data Source**:
+One independently interpreted raster occurrence in a Data Layer. Moving it changes overlap priority; removing it changes the current composition without erasing retained history.
+_Avoid_: Canvas object, display layer
+
 **Scene Edit**:
 A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, plant species symbols, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
 _Avoid_: Canvas mutation, layer signal write, scene patch

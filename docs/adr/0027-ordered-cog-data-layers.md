@@ -1,0 +1,10 @@
+# Ordered COG collections instead of materialized source merges
+
+Status: accepted direction — selected by the user on 2026-09-21; implementation pending. Supersedes ADR 0026 for new source composition, not the validity of preserved historical assets or derived analysis storage.
+Current guidance: [ordered COG design](../design/raster-rework/ordered-cog-design.md), [LiDAR](../agent/lidar.md).
+
+A Data Layer owns an ordered collection of independent source COGs. Its numeric value is the highest-priority valid sample at each location; NoData reveals valid data below. Display and analysis share this rule. Changes publish member snapshots rather than materialized merged elevation chunks. Group visibility remains Design presentation; source priority changes library data and invalidates analyses.
+
+The user chose simpler source organization and source-level ordering over merge/replacement controls. This removes compulsory source-mosaic publication at the cost of resolving overlapping current members during reads and giving users explicit source priority. Bounded window reads, spatial candidate selection and scientific validity remain necessary. Existing COG preparation, native decoding, ownership and analysis outputs remain useful; fewer implementation or maintenance costs are expected, not yet measured.
+
+Preserve historical dense/sparse compositions through exact bounded readers and an indivisible previous-composition member; old masked replacement semantics cannot safely be reinterpreted as an arbitrary priority stack. No eager conversion, asset deletion, engine change or production capacity increase follows from this decision. The implementation design owns compatibility, lifecycle and verification details.

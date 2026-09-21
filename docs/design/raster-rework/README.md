@@ -1,21 +1,28 @@
 # Raster rework handoffs and debrief
 
 Status: active — supporting handoffs and review evidence, not a replacement implementation plan.
-Tracking: `canopi-j571`; current bounded-generation batch under `canopi-jv8a`; accepted predecessor `canopi-jv8a.1`; historical qualification `canopi-kqpp`.
+Tracking: `canopi-j571`; current ordered COG batch under `canopi-jv8a.4`; accepted predecessor `canopi-jv8a.1` at `a5fc7d7b`; historical qualification `canopi-kqpp`.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md), and [delivery workflow](../../workflow/delivery.md).
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The user selected useful GeoLibre components with **existing UI/features first**. G1–G5 is independently accepted at `a5fc7d7b`. Bounded generations on `feature/bounded-raster-generations` have real caller changes but remain [partially reviewed, not accepted as complete](bounded-generation-review.md); the [product-closure assignment](bounded-generation-completion-agent-prompt.md) has been executed on that bead/branch and awaits disposition, so do not restart the retired kickoff. The [design](bounded-generation-design.md) still requires retained standard source COGs, sparse resolved COGs and whole-workflow gates. The implementation receipt lives on that branch as `bounded-generation-receipt.md`; it is not duplicated into this planning checkout. Q remains frozen/unqualified. The [collaboration protocol](collaboration-protocol.md) preserves architecture/review, implementation and user courier authority.
+The current assignment is [ordered COG Data Layers](ordered-cog-agent-prompt.md), under the [fixed design](ordered-cog-design.md). The user selected independent COG sources with explicit priority instead of materialized source merges. Continue from `0696bd3d` on `feature/bounded-raster-generations`; preserve C1/C2 and accepted `a5fc7d7b`. The old product-closure assignment is retired. Neither product closure nor integration was accepted: Undo's stale presentation/analysis becomes required work in the replacement.
+
+The implementation agent owns all four internal phases, routine repairs and task-local tooling improvements through one consolidated delivery. The [protocol](collaboration-protocol.md) sets escalation and review boundaries. The [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief) records measured product progress, escaped defects, design omissions and tested workflow/tooling improvements. Historical records below are evidence, not alternate execution instructions. Q remains frozen/unqualified.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Product-closure completion assignment](bounded-generation-completion-agent-prompt.md) | Retired; C1, C2, the corrected evidence and the isolated real-Desktop smoke are delivered and await independent disposition |
+| [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Sole current assignment: source collection, source priority, display, slope, compatibility and real Desktop delivery |
+| [Ordered COG design](ordered-cog-design.md) | Fixed product, persistence, lifecycle, UI and acceptance decisions |
+| [Ordered COG ADR](../../adr/0027-ordered-cog-data-layers.md) | User-selected replacement for compulsory merged-source publication |
+| [Bounded-generation completion assignment](bounded-generation-completion-agent-prompt.md) | Retired: delivered through `0696bd3d`; C1/C2 accepted in scope, product closure partial |
+| [Bounded-generation delivery receipt](bounded-generation-receipt.md) | Branch-local implementer report and measured evidence for B1–B5, BG1–BG8 and C1/C2; lives on `feature/bounded-raster-generations` |
+| [GeoLibre integration receipt](geolibre-integration-receipt.md) | Branch-local implementer report for G1–G5 and D1/R1; lives on `feature/geolibre-native-raster-integration` |
 | [Delivered BG1–BG5 assignment](bounded-generation-correction-agent-prompt.md) | Retired; preserve the improvements delivered through `9ad85c18` |
 | [Bounded-generation independent review](bounded-generation-review.md) | `6a5130b3` disposition, source evidence and limits of independently repeated tests |
 | [Bounded-generation initial assignment](bounded-generation-agent-prompt.md) | Retired kickoff; continue the correction, not a new bead or baseline |
-| [Bounded-generation design](bounded-generation-design.md) | Main-agent decisions: storage, compatibility, lifecycle, scientific/display semantics, resource policy and gates |
-| [Sparse-generation ADR](../../adr/0026-sparse-raster-generations.md) | Standard COG persistence, sparse resolved chunks and ordered history; prior bespoke encoding withdrawn |
+| [Bounded-generation design](bounded-generation-design.md) | Historical source-merge design; superseded for new work by the ordered COG design |
+| [Sparse-generation ADR](../../adr/0026-sparse-raster-generations.md) | Historical decision; superseded for new source composition by ADR 0027, preserved assets remain readable |
 | [GeoLibre review-correction assignment](geolibre-integration-followup-agent-prompt.md) | Retired; D1/R1 accepted at `a5fc7d7b` |
 | [GeoLibre independent review](geolibre-integration-review.md) | Original findings and final bounded-scope acceptance, with independently rerun evidence |
 | [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Retired G1–G5 prompt; correction independently accepted at `a5fc7d7b` |
