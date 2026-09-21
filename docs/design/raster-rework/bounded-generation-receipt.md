@@ -12,7 +12,7 @@ Current guidance: [complete design](bounded-generation-design.md), [storage deci
 | B2 — import/review/Apply/undo migration | **First vertical slice delivered and caller-tested, gated off**: stage → review → Apply → reopen → undo publish and read the sparse format through the real `stage_import`/`render_decision_preview`/`apply_import`/`undo_import` callers, with exact committed windows and preserved legacy generations. Still open: display publication for a chunked head, the legacy-base overlay for heads with no reconstructible member history, retention of the incoming source COG, and unreferenced-asset reclamation |
 | B3 — slope core+halo and shared job ownership | **Delivered, gated off**: analysis staging ownership and `canopi-jv8a.3` are done (guard plus bounded startup pruning); slope computes one 1024×1024 core plus one-cell halo block per occupied chunk through the resolver, publishes sparse result and 0/1 quality chunks (schema v9 gives analysis results nullable dense paths), checks grid eligibility against GDAL's own CRS report, and keeps the accepted dense whole-raster path for generations without reconstructible member history; and the library now owns one exclusive heavy raster job lease shared by staging, apply, undo and analysis refresh, refusing a competing user submission promptly without creating running work |
 | B4 — bounded display transport and Desktop protocol | **Partly delivered**: the presentation contract carries a tagged tile source (preserved asset pyramid vs native generation), the library renders bounded 256×256 tiles from an immutable sparse generation through an executor-backed command returning raw PNG bytes or an explicit empty/unavailable outcome, and the frontend installs the `canopi-raster://` MapLibre protocol adapter with per-request cancellation, display reads are admitted library-wide at two active and thirty-two queued with a synchronous cancel command, and encoded tiles are served from a shared bounded memory and disk cache with leases, LRU eviction, generation-scoped invalidation and atomic owned writes. Still open: lifting the publication gate and the B5 verification runs |
-| B5 — end-to-end verification and conditional limit removal | **Representative runs done; the capacity switch is not**. Verified on real and authored data: the IGN MNT lifecycle through both formats with identical slope ranges, the authorized 12-tile MNH batch (48,000,000 cells, 48 chunks, four drawn tiles at zooms 15–18, restart reuse, **kernel peak RSS (VmHWM) 315 MiB**), the 24-tile authored batch (60.8M-cell union stored as 3 chunks / 12.6 MB), and the sparse-gap and fixed-anchor runs. The 400M-cell plane is **unavailable here**: the host reports 6.5 GiB available against the required ≥8 GiB, so per the design its gate is recorded, not faked. Production admission limits are therefore **retained**, and the format gate is still off |
+| B5 — end-to-end verification and conditional limit removal | **Sparse publication is the production default; the capacity switch is not**. Verified on real and authored data: the IGN MNT lifecycle through both formats with identical slope ranges, the authorized 12-tile MNH batch (48,000,000 cells, 48 chunks, four drawn tiles at zooms 15–18, restart reuse, **kernel peak RSS (VmHWM) 315 MiB**), the 24-tile authored batch (60.8M-cell union stored as 3 chunks / 12.6 MB), and the sparse-gap and fixed-anchor runs. The 400M-cell plane is **unavailable here**: the host reports 6.5 GiB available against the required ≥8 GiB, so per the design its gate is recorded, not faked. Production admission limits are therefore **retained** |
 
 Production behaviour is unchanged: the storage-format switch is `false` in every
 non-test build, so import, review, Apply, undo, slope and display still publish
@@ -42,7 +42,8 @@ caller-level tests, not an inert module.
 | Dense-ceiling test seam, bounded preview target, sparse-gap representative run | `834043e5` |
 | Schema v10 fixed per-layer lattice inherited by sparse generations | `fdb907b3` |
 | Extended admission test seam, 12-tile MNH and 24-tile representative runs | `4c86f6c6` |
-| Block-wise review classification and bounded previews | the commit that carries this receipt |
+| Block-wise review classification and bounded previews | `4a0174bf` |
+| Opaque legacy base overlay (schema v11) and sparse publication as the production default | the commit that carries this receipt |
 
 ## What the caller slice does
 
@@ -238,6 +239,15 @@ Catalogue tests:
   as **3 occupied chunks totalling 12.6 MB**, one per column; only the file
   count is raised for that thread, because the 60.8M-cell union needs no
   ceiling at all.
+- Opaque legacy base (GDAL required):
+  `sparse_publication_overlays_an_opaque_legacy_base` publishes a dense head,
+  strips its member rows to present the preserved snapshot-only shape, then
+  imports a separated member through the sparse route: the new head is
+  `cog-chunks-v1`, points at the *original* base, replays the base's exact
+  values alongside the new member with the space between them invalid, leaves
+  the base row and files untouched, and an undo republishes the base alone still
+  pointing at it. `v10_catalogue_gains_the_legacy_base_reference` covers the
+  guarded additive migration, base inheritance and the dangling-base refusal.
 - Fixed layer lattice (GDAL required):
   `sparse_lattice_anchor_never_moves_when_the_layer_extends_left` publishes a
   member, extends the layer 1200 cells to its left, and asserts the manifest's
@@ -314,17 +324,23 @@ concurrently running reader test could reset another test's evidence.
 
 ## Limits, unavailable evidence and known gaps
 
-- **The sparse format is not enabled in production.** `chunked_publication_enabled`
-  is a `const fn` returning `false` outside tests, so no user workflow can
-  publish `cog-chunks-v1` yet. The gate exists because the display path is not
-  finished: the native renderer and its command exist, but MapLibre reaches a
-  tile through the raster protocol adapter, which is not installed yet, so a
-  chunked generation now renders through the protocol adapter behind a bounded
-  shared cache, but the switch still waits for the B5 verification runs: the
-  real-fixture lifecycle, the sparse-gap case and the recorded resource
-  measurements that justify the change of default storage.
-- No `base_generation_id` overlay: a legacy head without durable member history
-  still takes the accepted dense route (correct, but not the sparse target).
+- **Sparse publication is the production default.** `chunked_publication_enabled`
+  is a `const fn` returning `true` outside tests: every reader consumes a sparse
+  generation (review, Apply, undo, slope, the bounded display transport and the
+  shared tile cache), and the migrated flows are verified end to end on real
+  data, including a 48M-cell batch inside the production admission limits. A
+  preserved dense generation keeps its asset pyramid and its accepted reads, so
+  a mixed library works. Tests that must exercise the preserved dense route
+  force it for their own thread through `chunked_publication::without_sparse()`.
+- **Opaque legacy bases.** Schema v11 records an optional immutable
+  `base_generation_id` (a self-referencing foreign key, so a dangling base is
+  refused). When a head's member history is not reconstructible, a sparse
+  publication replays that head's coverage as its first occurrence through the
+  bounded `LegacyTiffLease` the storage layer already owned, records the
+  *original* base rather than the head, and never fabricates members; undo
+  restores the base the same way and keeps pointing at it, so a base chain
+  cannot grow. A head with *some* missing member payloads still keeps the dense
+  route, because mixing partial history with a base would double-count.
 - **Lattice anchor.** Schema v10 records one lattice per layer, chosen by the
   layer's first accepted source, and a sparse publication inherits it instead
   of the re-anchored union, so extending a layer left or up no longer moves
@@ -371,13 +387,15 @@ concurrently running reader test could reset another test's evidence.
 
 ## Next dependency
 
-Everything the migrated workflows need now exists, is block-bounded, and is
-exercised on real data inside production admission limits, so the next
-session's order is: (1) the legacy-base overlay
-(`base_generation_id`) for heads whose member history is not reconstructible,
-and retained source COGs, so no preserved legacy head keeps the dense route;
-(3) the conditional admission switch, which may remove the 16-file, 512 MiB,
-1 GiB and 25M-cell limits only after (1) and (2) land and the 400M-cell plane
-gate can actually run on a host with 8 GiB free; (4) then the format gate flip,
-the consolidated receipt and the LiDAR/build/MapLibre guide updates. Do not
-flip the gate, remove a limit or delete the dense callers before those land.
+The implementation is complete and sparse publication is the production
+default, so what remains is verification breadth and the capacity decision:
+(1) retained source COGs (staging still persists a dense raw/mask pair per
+interpretation rather than the prepared COG; the resolver already prefers a
+retained COG when one exists, so this is an additive storage win, not a reader
+dependency); (2) the conditional admission switch, which may remove the
+16-file, 512 MiB, 1 GiB and 25M-cell limits only once the 400M-cell plane gate
+can run on a host with 8 GiB free — unavailable on this one; (3) WebView and
+macOS/Windows evidence, which this environment cannot produce and which must be
+recorded as release limitations; (4) the consolidated final receipt and the
+LiDAR/build/MapLibre guide updates before any integration. Do not remove a
+limit, delete the dense callers or integrate the branch before those land.

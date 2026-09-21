@@ -1,6 +1,6 @@
 # Bounded raster generations behind the existing UI
 
-Status: partial — B1 storage primitives and the first B2 caller vertical slice (stage → review → Apply → reopen → undo over persisted chunks) are delivered and caller-tested but **gated off in production**; display/slope consumption, the legacy-base overlay and B3–B5 remain. See the [receipt](bounded-generation-receipt.md). Replaces the unimplemented raw-block choice at `24fd1a56`.
+Status: completed — B1 storage, the B2 caller migration, B3 bounded slope and job ownership, B4 bounded display transport with its cache budgets, and the B5 representative runs are all in place, with sparse publication as the **production default**; the production admission limits are deliberately retained pending the 400M-cell capacity gate, which is unavailable on this host. Not integrated or released. See the [receipt](bounded-generation-receipt.md). Replaces the unimplemented raw-block choice at `24fd1a56`.
 Tracking: foundation `canopi-jv8a`, epic `canopi-j571`; the implementer creates one scoped child for this batch. Accepted predecessor: `canopi-jv8a.1` at `a5fc7d7b`.
 Current guidance: [delivery receipt](bounded-generation-receipt.md), [agent assignment](bounded-generation-agent-prompt.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [long-term product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 

@@ -21,6 +21,7 @@ use std::collections::BTreeSet;
 use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 /// Spatial chunk side shared by resolved generation and result storage.
 pub(super) const CHUNK_SIDE: i64 = 1024;
@@ -66,16 +67,22 @@ impl MemberRole {
 }
 
 /// Where one occurrence's samples come from.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(super) enum MemberSource {
     /// Retained standard COG for this interpretation.
     Cog(CogAsset),
     /// Preserved dense generation assets, read through the bounded adapter.
     LegacyDense { values: PathBuf, mask: PathBuf },
+    /// An opaque legacy head overlaid as one occurrence.
+    ///
+    /// The lease prepares one controlled derivative and removes it on drop, so
+    /// replaying this occurrence never re-prepares per window. Its authoritative
+    /// validity mask overrides the derivative's NoData tag.
+    LegacyHead(Arc<Mutex<Option<LegacyTiffLease>>>),
 }
 
 /// One ordered occurrence available for replay.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(super) struct ResolvedMember {
     pub ordinal: i64,
     pub role: MemberRole,
@@ -316,7 +323,39 @@ fn read_member_window(
         MemberSource::LegacyDense { values, mask } => {
             read_legacy_window(values, mask, &member.grid, window, cancel)
         }
+        MemberSource::LegacyHead(lease) => {
+            let mut guard = lease
+                .lock()
+                .map_err(|_| "legacy head lease is poisoned".to_string())?;
+            let lease = guard
+                .as_mut()
+                .ok_or_else(|| "legacy head lease was released before the read".to_string())?;
+            lease.read_window(window, cancel)
+        }
     }
+}
+
+/// Open the overlay occurrence of an opaque legacy head.
+///
+/// `scratch` owns the prepared derivative; the returned occurrence keeps the
+/// lease alive, and dropping the occurrence removes the derivative.
+pub(super) fn legacy_head_member(
+    engine: &super::engine::GdalEngine,
+    tiff: &Path,
+    grid: &RasterGrid,
+    nodata: Option<f32>,
+    mask: Option<PathBuf>,
+    scratch: &Path,
+    cancel: &AtomicBool,
+) -> Result<ResolvedMember, String> {
+    let lease = LegacyTiffLease::open(engine, tiff, grid, nodata, mask, scratch, cancel)?;
+    Ok(ResolvedMember {
+        ordinal: 0,
+        role: MemberRole::Add,
+        grid: grid.clone(),
+        nodata,
+        source: MemberSource::LegacyHead(Arc::new(Mutex::new(Some(lease)))),
+    })
 }
 
 /// One persisted resolved-chunk reference the reader can select, with the
@@ -789,44 +828,43 @@ fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether new publications may use sparse resolved chunks.
+/// Whether new publications use sparse resolved chunks.
 ///
-/// The chunked format is **not** enabled in production yet: the slope reader
-/// (B3) and the bounded display transport (B4) that must consume a chunked
-/// head are not migrated, so publishing one would leave a layer whose map
-/// display no accepted reader can render. Caller-level tests enable it for
-/// their own thread through [`chunked_publication`]; nothing in a production
-/// build can turn it on, and every caller must keep working when it is off.
+/// Enabled: every reader consumes a sparse generation — review, Apply, undo,
+/// slope and the bounded display transport — and the migrated flows are
+/// verified end to end on real data, including a 48M-cell batch inside the
+/// production admission limits. Tests that must exercise the preserved dense
+/// route force it for their own thread through [`chunked_publication`].
 #[cfg(not(test))]
 pub(super) const fn chunked_publication_enabled() -> bool {
-    false
+    true
 }
 
 #[cfg(test)]
 pub(super) fn chunked_publication_enabled() -> bool {
-    chunked_publication::enabled()
+    !chunked_publication::forced_dense()
 }
 
 /// Test-only seam for the storage format switch.
 ///
-/// Mirrors `paths::capacity_probe`: the decision stays production code and
-/// only the switch is overridden per thread, so a test exercises the same
+/// Mirrors `paths::capacity_probe`: the decision stays production code and only
+/// the switch is overridden per thread, so a test exercises the same
 /// publication path a production caller would take.
 #[cfg(test)]
 pub(super) mod chunked_publication {
     use std::cell::Cell;
 
     thread_local! {
-        static ENABLED: Cell<bool> = const { Cell::new(false) };
+        static FORCED_DENSE: Cell<bool> = const { Cell::new(false) };
     }
 
-    pub(super) fn enabled() -> bool {
-        ENABLED.with(Cell::get)
+    pub(super) fn forced_dense() -> bool {
+        FORCED_DENSE.with(Cell::get)
     }
 
-    /// Publish in the chunked format until the guard is dropped.
-    pub(crate) fn enable() -> Guard {
-        ENABLED.with(|slot| slot.set(true));
+    /// Publish in the preserved dense format until the guard is dropped.
+    pub(crate) fn without_sparse() -> Guard {
+        FORCED_DENSE.with(|slot| slot.set(true));
         Guard
     }
 
@@ -834,7 +872,7 @@ pub(super) mod chunked_publication {
 
     impl Drop for Guard {
         fn drop(&mut self) {
-            ENABLED.with(|slot| slot.set(false));
+            FORCED_DENSE.with(|slot| slot.set(false));
         }
     }
 }

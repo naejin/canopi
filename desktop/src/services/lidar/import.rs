@@ -518,6 +518,86 @@ pub fn render_decision_preview(
     })
 }
 
+/// One opaque legacy head a publication overlays.
+struct LegacyBase {
+    generation_id: String,
+    mosaic_path: PathBuf,
+    mask_path: Option<PathBuf>,
+    grid: RasterGrid,
+    nodata: Option<f32>,
+}
+
+/// The immutable legacy head a publication must overlay, if any.
+///
+/// A generation records the *original* opaque base it overlays, so a base chain
+/// never grows: an existing base is inherited rather than replaced by this
+/// head.
+fn legacy_base_of(
+    connection: &rusqlite::Connection,
+    head: &catalogue::GenerationRow,
+) -> Result<Option<LegacyBase>, String> {
+    let manifest = read_generation_manifest(&head.manifest_json)?;
+    let Some(base_id) = head
+        .base_generation_id
+        .clone()
+        .or_else(|| Some(head.id.clone()))
+    else {
+        return Ok(None);
+    };
+    // An inherited base points at the original row; otherwise this head is the
+    // base itself and must own dense files to be replayable.
+    let source_row = catalogue::generation_row(connection, &base_id)?
+        .ok_or_else(|| format!("base generation {base_id} is missing"))?;
+    let base_manifest = read_generation_manifest(&source_row.manifest_json)?;
+    let Some(mosaic_path) = source_row.mosaic_path.clone() else {
+        // A sparse head without a base and without member history cannot be
+        // replayed at all: refuse rather than publish a generation that
+        // silently drops the layer's coverage.
+        return Err(
+            "accepted generation has neither member history nor a replayable dense base"
+                .to_string(),
+        );
+    };
+    Ok(Some(LegacyBase {
+        generation_id: base_id,
+        mosaic_path: PathBuf::from(mosaic_path),
+        mask_path: source_row.coverage_mask_path.map(PathBuf::from),
+        grid: if source_row.id == head.id {
+            manifest.grid.clone()
+        } else {
+            base_manifest.grid.clone()
+        },
+        nodata: Some(base_manifest.nodata),
+    }))
+}
+
+/// Open the overlay occurrence for a legacy base.
+fn open_base_occurrence(
+    engine: &GdalEngine,
+    paths: &LidarPaths,
+    job_id: &str,
+    base: &LegacyBase,
+    cancel: &AtomicBool,
+) -> Result<generation::ResolvedMember, String> {
+    let scratch = paths
+        .job_dir(job_id)
+        .join(format!("base-{}", base.generation_id));
+    std::fs::create_dir_all(&scratch)
+        .map_err(|e| format!("Failed to create base scratch dir: {e}"))?;
+    let mut member = generation::legacy_head_member(
+        engine,
+        &base.mosaic_path,
+        &base.grid,
+        base.nodata,
+        base.mask_path.clone(),
+        &scratch,
+        cancel,
+    )?;
+    member.ordinal = 0;
+    member.role = generation::MemberRole::Add;
+    Ok(member)
+}
+
 /// The layer's fixed lattice, recorded from its first accepted source.
 ///
 /// The anchor never moves, so a later import that extends the layer left or up
@@ -2015,16 +2095,27 @@ pub fn apply_import(
     // head's ordered history is fully reconstructible, publish resolved chunks
     // instead of composing a union-sized mosaic.
     if generation::chunked_publication_enabled() {
-        let (head_occurrences, prior_members) = match &head {
+        let (head_occurrences, prior_members, base) = match &head {
             Some(head_row) => {
                 let connection = library.catalogue()?;
                 let occurrences = resolved_occurrences(&connection, paths, head_row)?;
                 let members = catalogue::generation_members(&connection, &head_row.id)?;
-                (occurrences, members)
+                let base = match &occurrences {
+                    // A head with no reconstructible member history is
+                    // overlaid, never rewritten: the new generation points at
+                    // the original opaque legacy head and replays it as its
+                    // first occurrence.
+                    None => legacy_base_of(&connection, head_row)?,
+                    Some(_) => None,
+                };
+                (occurrences, members, base)
             }
-            None => (Some(Vec::new()), Vec::new()),
+            None => (Some(Vec::new()), Vec::new(), None),
         };
-        if let Some(head_occurrences) = head_occurrences {
+        // Either the head's members replay, or an opaque base stands in for
+        // them: both make the sparse route possible.
+        if head_occurrences.is_some() || base.is_some() {
+            let mut head_occurrences = head_occurrences.unwrap_or_default();
             // Durable member assets first: the new generation's member rows
             // must stay replayable after a restart.
             library.record_import_progress(
@@ -2044,7 +2135,19 @@ pub fn apply_import(
                     percent.min(50),
                 );
             }
-            let mut occurrences = head_occurrences;
+            let mut occurrences = Vec::new();
+            // The base overlay comes first, in the order the legacy coverage
+            // was accepted; the incoming role then applies over it.
+            if let Some(base) = &base {
+                occurrences.push(open_base_occurrence(
+                    engine,
+                    paths,
+                    &staging.job_id,
+                    base,
+                    cancel,
+                )?);
+            }
+            occurrences.append(&mut head_occurrences);
             let prior_count = occurrences.len();
             occurrences.extend(incoming_occurrences(paths, &compatible, incoming_role)?);
             let crs_wkt = staging.layer_crs_wkt.clone().unwrap_or_else(|| {
@@ -2080,6 +2183,7 @@ pub fn apply_import(
                 previous_cells: head.as_ref().map(|h| h.coverage_cells).unwrap_or(0),
                 replace_overlap,
                 has_head: head.is_some(),
+                base_generation_id: base.as_ref().map(|base| base.generation_id.clone()),
             };
             tracing::info!(
                 layer_id,
@@ -2111,7 +2215,12 @@ pub fn apply_import(
                     ),
                 });
             }
-            debug_assert_eq!(prior_count, prior_members.len());
+            // An opaque base is one occurrence without a member row.
+            debug_assert_eq!(
+                prior_count.saturating_sub(usize::from(base.is_some())),
+                prior_members.len(),
+                "replayed occurrences and member rows must agree"
+            );
             if let Err(error) = publish_applied_chunks(
                 library,
                 staging,
@@ -2593,11 +2702,26 @@ pub fn undo_import(
     if generation::chunked_publication_enabled()
         && head_manifest.format == GenerationStorageFormat::CogChunksV1
     {
-        let occurrences = {
+        let (mut occurrences, base) = {
             let connection = library.catalogue()?;
-            occurrences_for_members(&connection, paths, &remaining_members)?
-                .ok_or("cannot undo: this import predates durable member history".to_string())?
+            let members = occurrences_for_members(&connection, paths, &remaining_members)?
+                .ok_or("cannot undo: this import predates durable member history".to_string())?;
+            // An overlaid legacy base is part of the head's coverage, so undo
+            // replays it first; it keeps pointing at the original opaque base.
+            // A sparse head without a base has none to restore.
+            let base = if head.base_generation_id.is_some() {
+                legacy_base_of(&connection, &head)?
+            } else {
+                None
+            };
+            (members, base)
         };
+        if let Some(base) = &base {
+            occurrences.insert(
+                0,
+                open_base_occurrence(engine, paths, job_id, base, cancel)?,
+            );
+        }
         // The head's lattice already contains every remaining member.
         let lattice = head_manifest.grid.clone();
         let crs_wkt = head_manifest.crs_wkt.clone();
@@ -2622,6 +2746,7 @@ pub fn undo_import(
             previous_cells: -1,
             replace_overlap: false,
             has_head: false,
+            base_generation_id: base.as_ref().map(|base| base.generation_id.clone()),
         };
         // A remaining sequence with no valid cell still publishes a generation
         // with no coverage chunks, matching the accepted dense undo.
@@ -3049,6 +3174,9 @@ struct ChunkedRequest<'a> {
     previous_cells: i64,
     replace_overlap: bool,
     has_head: bool,
+    /// Opaque legacy head this generation overlays, recorded for undo and for
+    /// the next publication so a base never chains to an intermediate.
+    base_generation_id: Option<String>,
 }
 
 /// A materialized, indexed generation whose index is not yet readable.
@@ -3059,6 +3187,8 @@ struct ChunkedMaterialization {
     max_value: f64,
     bounds_3857: [f64; 4],
     manifest_json: String,
+    /// Opaque legacy head this generation overlays, when it has one.
+    base_generation_id: Option<String>,
 }
 
 /// What materializing a chunked generation produced.
@@ -3189,6 +3319,7 @@ fn prepare_chunked_generation(
         max_value,
         bounds_3857,
         manifest_json,
+        base_generation_id: request.base_generation_id.clone(),
     }))
 }
 
@@ -3207,8 +3338,8 @@ fn insert_chunked_generation(
 ) -> Result<(), String> {
     connection
         .execute(
-            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857)
-             VALUES(?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, base_generation_id)
+             VALUES(?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 materialization.generation_id,
                 layer_id,
@@ -3218,6 +3349,7 @@ fn insert_chunked_generation(
                 materialization.min_value,
                 materialization.max_value,
                 serde_json::to_string(&materialization.bounds_3857).map_err(|e| e.to_string())?,
+                materialization.base_generation_id,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -4669,13 +4801,16 @@ mod tests {
     }
 
     #[test]
-    fn chunked_publication_is_gated_off_without_an_explicit_test_enablement() {
-        assert!(!generation::chunked_publication_enabled());
+    fn sparse_publication_is_the_production_default_and_can_be_forced_dense() {
+        assert!(
+            generation::chunked_publication_enabled(),
+            "every reader and the display transport consume the sparse format"
+        );
         {
-            let _guard = generation::chunked_publication::enable();
-            assert!(generation::chunked_publication_enabled());
+            let _dense = generation::chunked_publication::without_sparse();
+            assert!(!generation::chunked_publication_enabled());
         }
-        assert!(!generation::chunked_publication_enabled());
+        assert!(generation::chunked_publication_enabled());
     }
 
     /// The first production vertical slice on the sparse format: stage,
@@ -4688,7 +4823,6 @@ mod tests {
         let root = std::env::temp_dir().join(new_id("canopi-chunked-slice"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let _guard = generation::chunked_publication::enable();
 
         let first =
             write_placed_fixture(&engine, &root, "first", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
@@ -4838,10 +4972,14 @@ mod tests {
             )
             .unwrap();
 
-        // First import through the accepted dense route.
+        // First import through the accepted dense route, forced for this step
+        // only: the rest of the test exercises the sparse extension.
         let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
         library.prepare_apply(&job_one).expect("review accepted");
-        apply_import(&library, &staging_one, true, false, &cancel).expect("dense apply");
+        {
+            let _dense = generation::chunked_publication::without_sparse();
+            apply_import(&library, &staging_one, true, false, &cancel).expect("dense apply");
+        }
         let legacy = head_of(&library, &layer_id);
         let legacy_manifest = read_generation_manifest(&legacy.manifest_json).unwrap();
         assert_eq!(
@@ -4857,7 +4995,6 @@ mod tests {
         assert_eq!(published_chunk_count(&library, &legacy.id), 0);
 
         // Extend it with a separated source through the sparse route.
-        let _guard = generation::chunked_publication::enable();
         let (job_two, staging_two) = stage_review(&library, &layer_id, &[apart], &cancel);
         library.prepare_apply(&job_two).expect("review accepted");
         let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("apply");
@@ -4966,7 +5103,6 @@ mod tests {
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
-        let _gate = generation::chunked_publication::enable();
         // The union spans ~45M cells and needs no raised ceiling: the review
         // and the sparse publication are block-sized, which is the point.
 
@@ -5114,7 +5250,6 @@ mod tests {
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
-        let _gate = generation::chunked_publication::enable();
 
         let anchor =
             write_placed_fixture(&engine, &root, "anchor", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
@@ -5227,7 +5362,6 @@ mod tests {
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
-        let _gate = generation::chunked_publication::enable();
         // Twenty-four files exceed the production file-count ceiling, which is
         // raised for this thread only; the 60M-cell union needs no ceiling at
         // all, because the review and the sparse publication work in blocks.
@@ -5310,6 +5444,172 @@ mod tests {
             total_bytes < 3 * 8 * 1024 * 1024,
             "three chunks' worth of bytes, not the union's area: {total_bytes}"
         );
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    /// A snapshot-only legacy head (no member rows) is overlaid sparsely: the
+    /// new generation points at the original base, replays it, and an undo
+    /// restores that base without chaining to the intermediate generation.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn sparse_publication_overlays_an_opaque_legacy_base() {
+        let root = std::env::temp_dir().join(new_id("canopi-base"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+
+        let legacy =
+            write_placed_fixture(&engine, &root, "legacy", 0.0, 1000.0, 60, 45, -9999.0, 4.0);
+        let extension = write_placed_fixture(
+            &engine,
+            &root,
+            "extension",
+            500.0,
+            1000.0,
+            40,
+            30,
+            -9999.0,
+            6.0,
+        );
+
+        // First publish dense, then strip its member history: that is exactly
+        // the preserved legacy head this overlay exists for.
+        let layer_id = library
+            .create_layer(
+                "legacy base",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job, staging) = stage_review(&library, &layer_id, &[legacy], &cancel);
+        library.prepare_apply(&job).expect("review accepted");
+        {
+            // The legacy head this test overlays must have been published
+            // dense, so the preserved route is forced for this step only.
+            let _dense = generation::chunked_publication::without_sparse();
+            apply_import(&library, &staging, true, false, &cancel).expect("dense apply");
+        }
+        let base = head_of(&library, &layer_id);
+        let base_manifest = read_generation_manifest(&base.manifest_json).unwrap();
+        assert_eq!(
+            base_manifest.format,
+            GenerationStorageFormat::LegacyDenseV1,
+            "the first publication is the accepted dense route"
+        );
+        {
+            let connection = library.catalogue().unwrap();
+            connection
+                .execute(
+                    "DELETE FROM lidar_generation_members WHERE generation_id = ?1",
+                    [&base.id],
+                )
+                .unwrap();
+        }
+        {
+            let connection = library.catalogue().unwrap();
+            assert!(
+                resolved_occurrences(&connection, &library.inner.paths, &base)
+                    .unwrap()
+                    .is_none(),
+                "without member rows the head is not reconstructible"
+            );
+        }
+
+        // A sparse publication now overlays it instead of rewriting it.
+        let (job_two, staging_two) = stage_review(&library, &layer_id, &[extension], &cancel);
+        library.prepare_apply(&job_two).expect("review accepted");
+        let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("overlay");
+        assert!(applied.changed);
+        let head = head_of(&library, &layer_id);
+        assert_ne!(head.id, base.id);
+        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
+        assert_eq!(manifest.format, GenerationStorageFormat::CogChunksV1);
+        assert_eq!(
+            head.base_generation_id.as_deref(),
+            Some(base.id.as_str()),
+            "the overlay points at the original opaque base"
+        );
+        assert_eq!(head.coverage_cells, 60 * 45 + 40 * 30);
+        assert_eq!(head.min_value, Some(4.0));
+        assert_eq!(head.max_value, Some(6.0));
+        // The preserved base is untouched.
+        {
+            let connection = library.catalogue().unwrap();
+            let preserved = catalogue::generation_row(&connection, &base.id)
+                .unwrap()
+                .expect("base row survives");
+            assert_eq!(preserved.mosaic_path, base.mosaic_path);
+            assert!(preserved.base_generation_id.is_none());
+        }
+
+        // Both the base's coverage and the extension read back from the chunks.
+        let chunks = {
+            let connection = library.catalogue().unwrap();
+            generation::persisted_chunks(
+                &connection,
+                &library.inner.paths,
+                &head.id,
+                generation::RESULT_ROLE,
+            )
+            .unwrap()
+        };
+        let sample = |x: i64, y: i64| -> (f32, u8) {
+            let window = generation::read_persisted_window(
+                &chunks,
+                &manifest.grid,
+                generation::LatticeWindow {
+                    x,
+                    y,
+                    width: 1,
+                    height: 1,
+                },
+                &cancel,
+            )
+            .unwrap();
+            (window.samples[0], window.valid[0])
+        };
+        assert_eq!(sample(0, 0), (4.0, 1), "the base coverage is replayed");
+        assert_eq!(sample(59, 44), (4.0, 1));
+        assert_eq!(sample(500, 0), (6.0, 1), "the extension is painted over it");
+        assert_eq!(sample(400, 0).1, 0, "the space between them stays invalid");
+
+        // Undo republishes the base alone, still pointing at the original base.
+        let undone = undo_import(&library, &job_two, &cancel).expect("undo publishes");
+        assert!(undone.changed);
+        let after = head_of(&library, &layer_id);
+        assert_eq!(after.coverage_cells, 60 * 45);
+        assert_eq!(
+            after.base_generation_id.as_deref(),
+            Some(base.id.as_str()),
+            "a base never chains to an intermediate generation"
+        );
+        let after_manifest = read_generation_manifest(&after.manifest_json).unwrap();
+        let after_chunks = {
+            let connection = library.catalogue().unwrap();
+            generation::persisted_chunks(
+                &connection,
+                &library.inner.paths,
+                &after.id,
+                generation::RESULT_ROLE,
+            )
+            .unwrap()
+        };
+        let window = generation::read_persisted_window(
+            &after_chunks,
+            &after_manifest.grid,
+            generation::LatticeWindow {
+                x: 0,
+                y: 0,
+                width: 60,
+                height: 45,
+            },
+            &cancel,
+        )
+        .unwrap();
+        assert!(window.valid.iter().all(|byte| *byte == 1));
+        assert!(window.samples.iter().all(|value| *value == 4.0));
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);

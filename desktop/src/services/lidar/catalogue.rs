@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 10;
+pub const CATALOGUE_VERSION: i32 = 11;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -154,6 +154,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         8 => SCHEMA_V8,
         9 => SCHEMA_V9,
         10 => SCHEMA_V10,
+        11 => "",
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -174,6 +175,24 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
                 [],
             )
             .map_err(|e| format!("Failed to add LiDAR member job identity: {e}"))?;
+    }
+    // v11 is an additive column, guarded like the other column additions: a
+    // catalogue that already has it (or a fixture presenting a newer shape at
+    // an older version) still migrates cleanly.
+    if next == 11
+        && !table_has_column(
+            &transaction,
+            "lidar_layer_generations",
+            "base_generation_id",
+        )?
+    {
+        transaction
+            .execute(
+                "ALTER TABLE lidar_layer_generations ADD COLUMN base_generation_id TEXT
+                 REFERENCES lidar_layer_generations(id)",
+                [],
+            )
+            .map_err(|e| format!("Failed to add the legacy base reference: {e}"))?;
     }
     if next == 6 {
         if !table_has_column(&transaction, "lidar_import_jobs", "progress_phase")? {
@@ -332,6 +351,11 @@ CREATE TABLE IF NOT EXISTS lidar_interpretation_regions (
 );
 "#;
 
+/// v11: a generation may sit on an opaque legacy base.
+///
+/// A head whose member history was never recorded cannot be replayed; instead
+/// of fabricating members, a new generation records the immutable legacy head
+/// it overlays. Additive only: existing generations keep no base.
 /// v10: a layer records the one lattice every generation shares.
 ///
 /// The anchor is chosen by the layer's first accepted source and never moves,
@@ -597,6 +621,9 @@ pub struct GenerationRow {
     pub min_value: Option<f64>,
     pub max_value: Option<f64>,
     pub bounds_3857: String,
+    /// Immutable opaque legacy head this generation overlays, when its own
+    /// member history was never recorded.
+    pub base_generation_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -678,7 +705,8 @@ pub fn head_generation(
     connection
         .query_row(
             "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
-                    g.coverage_cells, g.min_value, g.max_value, g.bounds_3857
+                    g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
+                    g.base_generation_id
              FROM lidar_layer_heads h
              JOIN lidar_layer_generations g ON g.id = h.generation_id
              WHERE h.layer_id = ?1",
@@ -699,6 +727,7 @@ fn map_generation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRow
         min_value: row.get(6)?,
         max_value: row.get(7)?,
         bounds_3857: row.get(8)?,
+        base_generation_id: row.get(9)?,
     })
 }
 
@@ -1154,6 +1183,24 @@ pub fn interpretation_region_page(
         .map_err(|e| format!("Failed to read region page: {e}"))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to read region page: {e}"))
+}
+
+/// One generation row by identity.
+pub fn generation_row(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<Option<GenerationRow>, String> {
+    connection
+        .query_row(
+            "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
+                    g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
+                    g.base_generation_id
+             FROM lidar_layer_generations g WHERE g.id = ?1",
+            [generation_id],
+            map_generation_row,
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read generation {generation_id}: {e}"))
 }
 
 /// The manifest of one sparse generation, checked against its owner.
@@ -2201,6 +2248,72 @@ mod tests {
             .execute("DELETE FROM lidar_source_layers WHERE id = 'layer'", [])
             .unwrap();
         assert_eq!(layer_lattice(&connection, "layer").unwrap(), None);
+        drop(connection);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn v10_catalogue_gains_the_legacy_base_reference() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v11"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('legacy', 'layer', '0', '/library/legacy/mosaic.tif',
+                             '/library/legacy/coverage.bin', '{}', 1, 0, 1, '[0,0,1,1]');
+                     INSERT INTO lidar_layer_heads(layer_id, generation_id)
+                     VALUES ('layer', 'legacy');
+                     ALTER TABLE lidar_layer_generations DROP COLUMN base_generation_id;
+                     UPDATE lidar_catalogue_meta SET value = '10' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+
+        let connection = open(&path).expect("v10 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), CATALOGUE_VERSION);
+        let legacy = generation_row(&connection, "legacy")
+            .unwrap()
+            .expect("preserved generation survives");
+        assert_eq!(legacy.base_generation_id, None);
+        assert_eq!(
+            legacy.mosaic_path.as_deref(),
+            Some("/library/legacy/mosaic.tif")
+        );
+        // A generation may now reference the opaque base it overlays, and the
+        // reference is a foreign key: an unknown base is refused.
+        connection
+            .execute(
+                "INSERT INTO lidar_layer_generations
+                    (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                     coverage_cells, min_value, max_value, bounds_3857, base_generation_id)
+                 VALUES ('overlay', 'layer', '1', NULL, NULL, '{}', 1, 0, 1, '[0,0,1,1]', 'legacy')",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            generation_row(&connection, "overlay")
+                .unwrap()
+                .expect("overlay row")
+                .base_generation_id
+                .as_deref(),
+            Some("legacy")
+        );
+        let dangling = connection.execute(
+            "INSERT INTO lidar_layer_generations
+                (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                 coverage_cells, min_value, max_value, bounds_3857, base_generation_id)
+             VALUES ('dangling', 'layer', '2', NULL, NULL, '{}', 1, 0, 1, '[0,0,1,1]', 'missing')",
+            [],
+        );
+        assert!(dangling.is_err(), "an unknown base is refused");
         drop(connection);
         let _ = std::fs::remove_dir_all(root);
     }

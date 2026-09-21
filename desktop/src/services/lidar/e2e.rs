@@ -171,6 +171,8 @@ fn e2e_import_publish_slope_restart_reuse() {
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
     assert_known_slope(&engine, &work, &cancel);
+    // This lifecycle exercises the preserved dense route deliberately.
+    let _dense = generation::chunked_publication::without_sparse();
 
     // Open the library (slice 1: catalogue + assets under app data root).
     let library = LidarLibrary::open(&work).expect("library opens");
@@ -483,7 +485,6 @@ fn e2e_sparse_generation_lifecycle() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
-    let guard = generation::chunked_publication::enable();
 
     // 1. Real import published as sparse resolved chunks.
     let library = LidarLibrary::open(&work).expect("library opens");
@@ -765,7 +766,6 @@ fn e2e_sparse_generation_lifecycle() {
     assert_eq!(history_chunks.len(), 4, "history keeps its chunks");
 
     drop(reopened);
-    drop(guard);
     let _ = std::fs::remove_dir_all(&work);
 }
 
@@ -865,7 +865,6 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
-    let guard = generation::chunked_publication::enable();
     // No admission ceiling is raised: twelve files are inside the production
     // file count, and the 48M-cell union is handled block by block rather than
     // by its envelope's area.
@@ -1027,6 +1026,5 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     );
 
     drop(reopened);
-    drop(guard);
     let _ = std::fs::remove_dir_all(&work);
 }

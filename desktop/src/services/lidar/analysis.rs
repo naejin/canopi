@@ -1291,6 +1291,8 @@ mod tests {
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn slope_jobs_publish_streamed_statistics_and_quality_masks() {
+        // This test pins the preserved dense result route.
+        let _dense = generation::chunked_publication::without_sparse();
         let engine = super::super::engine::GdalEngine::new();
         let root = scratch_root("streamed");
         let library = LidarLibrary::open(&root).expect("library opens");
@@ -1479,6 +1481,8 @@ mod tests {
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn failed_slope_job_removes_its_staging_root_and_keeps_the_accepted_head() {
+        // The injected failure is a dense-route step (the quality-mask budget).
+        let _dense = generation::chunked_publication::without_sparse();
         let root = scratch_root("staging-failure");
         let library = LidarLibrary::open(&root).expect("library opens");
         let layer_id = plane_layer(&library, &root, 24, 18);
@@ -1641,7 +1645,8 @@ mod tests {
     }
 
     /// Import sources through the real caller path and publish them dense.
-    fn sparse_layer_without_gate(library: &LidarLibrary, sources: &[PathBuf]) -> String {
+    fn dense_layer(library: &LidarLibrary, sources: &[PathBuf]) -> String {
+        let _dense = generation::chunked_publication::without_sparse();
         import_layer(library, sources, "dense slope")
     }
 
@@ -1777,21 +1782,22 @@ mod tests {
         // The same data through both storage formats: a dense layer for the
         // accepted whole-raster oracle, and a sparse layer for the bounded
         // path. Both lattices share an origin, so cells are comparable.
-        let dense_layer = sparse_layer_without_gate(&library, &[left.clone(), right.clone()]);
-        let layer_id = {
-            let _guard = super::super::generation::chunked_publication::enable();
-            sparse_layer(&library, &[left, right])
-        };
+        let dense_layer = dense_layer(&library, &[left.clone(), right.clone()]);
+        let layer_id = { sparse_layer(&library, &[left, right]) };
 
         // Sparse result for the bounded path.
         let sparse = {
-            let _guard = super::super::generation::chunked_publication::enable();
             let (_job, definition) =
                 run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Degrees);
             definition
         };
-        // Dense result for the accepted path, on its own dense generation.
-        let dense = run_first_slope_job(&library, &dense_layer, LidarSlopeUnit::Degrees).1;
+        // Dense result for the accepted path, on its own dense generation; the
+        // preserved result route is forced for this run because the sparse
+        // route is the production default.
+        let dense = {
+            let _dense = generation::chunked_publication::without_sparse();
+            run_first_slope_job(&library, &dense_layer, LidarSlopeUnit::Degrees).1
+        };
         let dense_publication = published_slope(&library, &dense);
         assert!(
             dense_publication.result_path.exists(),
@@ -1872,10 +1878,7 @@ mod tests {
         assert_eq!(covered, 16 * 41, "the complete-neighborhood interior only");
 
         // Percent is the same plane reported in the other unit.
-        let percent = {
-            let _guard = super::super::generation::chunked_publication::enable();
-            run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Percent).1
-        };
+        let percent = { run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Percent).1 };
         let (percent_values, percent_valid, _) = sparse_result_window(&library, &percent, window);
         for row in 0..18usize {
             for column in 0..48usize {
@@ -1903,15 +1906,11 @@ mod tests {
         let root = scratch_root("sparse-cancel");
         let library = LidarLibrary::open(&root).expect("library opens");
         let source = plane_member(&root, "cancel", 0.0, 16, 12, &[]);
-        let layer_id = {
-            let _guard = super::super::generation::chunked_publication::enable();
-            sparse_layer(&library, &[source])
-        };
+        let layer_id = { sparse_layer(&library, &[source]) };
         let (job_id, definition_id, encoded) = queued_slope_job(&library, &layer_id);
         let (parameters, source_generation) = encoded.split_once('|').expect("encoded pair");
         let parameters = parse_parameters(parameters).expect("parameters parse");
         let error = {
-            let _guard = super::super::generation::chunked_publication::enable();
             run_slope_job(
                 &library,
                 &job_id,

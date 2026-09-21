@@ -885,7 +885,6 @@ mod tests {
         )
         .unwrap();
         let layer_id = {
-            let _guard = super::super::generation::chunked_publication::enable();
             let layer_id = library
                 .create_layer(
                     "tiles",
