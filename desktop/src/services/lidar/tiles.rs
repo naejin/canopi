@@ -16,7 +16,6 @@ use super::grid::RasterGrid;
 use super::import::{GenerationManifest, GenerationStorageFormat};
 use super::tile_cache::TileKey;
 use rusqlite::Connection;
-use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 
 pub(super) const TILE_PIXELS: u32 = 256;
@@ -24,18 +23,23 @@ pub(super) const TILE_PIXELS: u32 = 256;
 pub(super) const MAX_ZOOM: u32 = 22;
 /// Web Mercator world width in metres.
 const WEB_MERCATOR_WORLD: f64 = 40_075_016.685_578_49;
-/// Deepest reduction level: 2^10 cells per side is exactly the reader's window
-/// cap, so a mean cell is always readable in one bounded window.
-const MAX_LEVEL: u32 = 10;
+/// Reduction level whose cell is exactly one stored chunk, so its mean is a
+/// stored aggregate rather than a raster read.
+const PAGE_LEVEL: u32 = 10;
+/// Highest reduction level a tile may select.
+///
+/// The exponent is bounded before it is used so the footprint arithmetic stays
+/// representable; a request that needs more is reported as unavailable instead
+/// of silently shortening its footprint.
+const MAX_REDUCTION_LEVEL: u32 = 30;
 /// Points per coordinate-transform invocation.
 const TRANSFORM_BATCH: usize = 4096;
-/// Bound on reduction pages read while rendering one tile. The advertised
+/// Bound on reduction reads while rendering one tile: one per stored chunk a
+/// sub-chunk cell needs plus one per multi-chunk footprint. The advertised
 /// zoom range needs at most sixteen; a deeper request is refused by name
-/// rather than reading an unbounded region. Pages whose samples are whole
-/// chunks are answered from stored aggregates and are not reads.
-const MAX_PAGES_PER_TILE: usize = 64;
-/// Reduction level whose cell is exactly one stored chunk.
-const PAGE_LEVEL: u32 = MAX_LEVEL;
+/// rather than reading an unbounded region. Whole-chunk cells are answered
+/// from stored aggregates and cost one record lookup, not a raster read.
+const MAX_REDUCTION_READS_PER_TILE: usize = 64;
 /// Largest encoded tile accepted, as the transport contract states.
 const MAX_PNG_BYTES: usize = 1024 * 1024;
 
@@ -176,22 +180,96 @@ pub(super) fn tile_bounds_3857(z: u32, x: u32, y: u32) -> [f64; 4] {
 ///
 /// The rule is defined on global target coordinates, so a sample shared by two
 /// tiles selects the same level in both.
-pub(super) fn level_for_displacement(displacement_cells: f64) -> u32 {
+pub(super) fn level_for_displacement(displacement_cells: f64) -> Result<u32, String> {
     if !displacement_cells.is_finite() {
-        return MAX_LEVEL;
+        return Err("tile displacement is not finite".to_string());
     }
     let bounded = displacement_cells.max(1.0);
     let exponent = bounded.log2().floor();
     if exponent <= 0.0 {
-        return 0;
+        return Ok(0);
     }
-    exponent.min(f64::from(MAX_LEVEL)) as u32
+    if exponent > f64::from(MAX_REDUCTION_LEVEL) {
+        return Err(format!(
+            "tile displacement needs reduction level {exponent}, above the supported level {MAX_REDUCTION_LEVEL}"
+        ));
+    }
+    Ok(exponent as u32)
 }
 
-/// First lattice cell of the aligned reduction block containing `cell`.
-pub(super) fn block_origin(cell: i64, level: u32) -> i64 {
-    let side = 1i64 << level;
-    cell.div_euclid(side) * side
+/// Native-cell side of one reduction level.
+pub(super) fn reduced_side(level: u32) -> Result<i64, String> {
+    if level > MAX_REDUCTION_LEVEL {
+        return Err(format!(
+            "reduction level {level} is above the supported level {MAX_REDUCTION_LEVEL}"
+        ));
+    }
+    Ok(1i64 << level)
+}
+
+/// Reduced cell whose centre is nearest below a native cell position.
+///
+/// A reduced cell `k` covers native cells `[k * side, (k + 1) * side)` and its
+/// centre sits at `(k + 0.5) * side`, so the cell a sample belongs to is
+/// `floor(position / side - 0.5)`.
+pub(super) fn reduced_cell(position_cells: f64, side: i64) -> Result<i64, String> {
+    if !position_cells.is_finite() {
+        return Err("sample position is not finite".to_string());
+    }
+    let index = position_cells / side as f64 - 0.5;
+    if !index.is_finite() || index < i64::MIN as f64 || index > i64::MAX as f64 {
+        return Err("reduced cell index is not representable".to_string());
+    }
+    Ok(index.floor() as i64)
+}
+
+/// Value of one minified sample from its reduced cells.
+///
+/// Reduced cells are a coarse grid whose centres sit at `(k + 0.5) * side`, so
+/// a sample interpolates between the four cells around it, normalized over the
+/// valid contributors. Nothing here is tile-local: the cell indices come from
+/// the sample's own coordinates, so a sample shared by two tiles gets the same
+/// value in both.
+fn reduced_sample(
+    reduction: &ReductionCells<'_>,
+    level: u32,
+    centre: (f64, f64),
+) -> Result<Option<f64>, String> {
+    let side_cells = reduced_side(level)?;
+    let cell_x = reduced_cell(centre.0, side_cells)?;
+    let cell_y = reduced_cell(centre.1, side_cells)?;
+    let fx = centre.0 / side_cells as f64 - 0.5 - cell_x as f64;
+    let fy = centre.1 / side_cells as f64 - 0.5 - cell_y as f64;
+    Ok(bilinear_means(
+        [
+            reduction.mean(level, cell_x, cell_y),
+            reduction.mean(level, cell_x + 1, cell_y),
+            reduction.mean(level, cell_x, cell_y + 1),
+            reduction.mean(level, cell_x + 1, cell_y + 1),
+        ],
+        fx,
+        fy,
+    ))
+}
+
+/// Valid-normalized bilinear value of four reduced-cell means.
+pub(super) fn bilinear_means(means: [Option<f64>; 4], fx: f64, fy: f64) -> Option<f64> {
+    let weights = [
+        (1.0 - fx) * (1.0 - fy),
+        fx * (1.0 - fy),
+        (1.0 - fx) * fy,
+        fx * fy,
+    ];
+    let mut sum = 0.0f64;
+    let mut weight = 0.0f64;
+    for (mean, weight_at) in means.iter().zip(weights) {
+        let Some(value) = mean else {
+            continue;
+        };
+        sum += *value * weight_at;
+        weight += weight_at;
+    }
+    (weight > 0.0).then_some(sum / weight)
 }
 
 /// Lattice coordinates of a point, as fractional cell positions.
@@ -443,18 +521,16 @@ fn render_tile_uncached(
     cancel: &AtomicBool,
 ) -> Result<TileOutcome, String> {
     let engine = &library.inner.engine;
-    let paths = &library.inner.paths;
-    let (manifest, chunks) = {
+    let manifest = {
         let connection = library.catalogue()?;
-        let manifest = load_manifest(&connection, &request.style, request)?;
-        let chunks = generation::persisted_chunks(
-            &connection,
-            paths,
-            &request.generation_id,
-            generation::RESULT_ROLE,
-        )?;
-        (manifest, chunks)
+        load_manifest(&connection, &request.style, request)?
     };
+    // Bound to the immutable generation and role, never to a loaded record set:
+    // every reduction or window read fetches its own bounded page, so a tile
+    // costs what its footprint intersects rather than what the whole
+    // generation stores.
+    let owner =
+        generation::GenerationChunkReader::new(&request.generation_id, generation::RESULT_ROLE);
     let lattice = manifest.grid().clone();
     let ramp = match request.style.as_str() {
         "slope" => ColorRamp::slope_degrees(),
@@ -488,8 +564,9 @@ fn render_tile_uncached(
     }
     let cells = mapper.to_cells(engine, cancel, &points)?;
 
-    // Per-sample reduction level from the sample's own native displacement,
-    // so a sample shared by two tiles selects the same level in both.
+    // Per-sample reduction level from the sample's own native displacement, so
+    // a sample shared by two tiles selects the same level in both. The level
+    // bounds the footprint arithmetic before it is used.
     let samples = TILE_PIXELS as usize;
     let mut levels = vec![0u32; samples * samples];
     for row in 0..samples {
@@ -499,27 +576,15 @@ fn render_tile_uncached(
             let down = cells[(row + 1) * side + column];
             let displacement = hypot(right.0 - centre.0, right.1 - centre.1)
                 .max(hypot(down.0 - centre.0, down.1 - centre.1));
-            levels[row * samples + column] = level_for_displacement(displacement);
+            levels[row * samples + column] = level_for_displacement(displacement)?;
         }
     }
 
-    // Native-scale samples come from one window covering just those samples;
-    // minified samples are read one occupied reduction page at a time, so the
-    // work is bounded by the pages the tile actually touches and absent pages
-    // are never visited.
-    let dense_origins: Vec<(usize, usize)> = (0..samples)
-        .flat_map(|row| (0..samples).map(move |column| (row, column)))
-        .filter(|(row, column)| levels[row * samples + column] == 0)
-        .collect();
-    let dense = if dense_origins.is_empty() {
-        None
-    } else {
-        Some(read_dense_window(
-            &chunks, &lattice, &cells, side, &levels, cancel,
-        )?)
-    };
-
-    let mut pages: HashMap<(i64, i64), Vec<(usize, usize)>> = HashMap::new();
+    // Every reduced cell a sample interpolates between, resolved once per tile:
+    // whole-chunk cells come from stored aggregates, sub-chunk cells share one
+    // bounded page read per stored chunk, and a footprint crossing chunks adds
+    // stored sums and reads only its boundary chunks.
+    let mut reduction = ReductionCells::new(&owner, library, &lattice, cancel);
     for row in 0..samples {
         for column in 0..samples {
             let level = levels[row * samples + column];
@@ -527,17 +592,27 @@ fn render_tile_uncached(
                 continue;
             }
             let centre = cells[row * side + column];
-            let block_x = block_origin(centre.0.floor() as i64, level);
-            let block_y = block_origin(centre.1.floor() as i64, level);
-            pages
-                .entry((
-                    block_x.div_euclid(generation::CHUNK_SIDE),
-                    block_y.div_euclid(generation::CHUNK_SIDE),
-                ))
-                .or_default()
-                .push((row, column));
+            let side_cells = reduced_side(level)?;
+            let cell_x = reduced_cell(centre.0, side_cells)?;
+            let cell_y = reduced_cell(centre.1, side_cells)?;
+            reduction.require(level, cell_x, cell_y)?;
+            reduction.require(level, cell_x + 1, cell_y)?;
+            reduction.require(level, cell_x, cell_y + 1)?;
+            reduction.require(level, cell_x + 1, cell_y + 1)?;
         }
     }
+    reduction.load()?;
+
+    // Native-scale samples come from one window covering just those samples; a
+    // tile that is minified everywhere never allocates a native-scale window.
+    let dense = if levels.contains(&0) {
+        Some(read_dense_window(
+            &owner, library, &lattice, &cells, side, &levels, cancel,
+        )?)
+    } else {
+        None
+    };
+
     let mut rgba = vec![0u8; (TILE_PIXELS * TILE_PIXELS * 4) as usize];
     let mut painted = 0usize;
     let mut paint = |row: usize, column: usize, value: f64| {
@@ -553,85 +628,19 @@ fn render_tile_uncached(
     };
     for row in 0..samples {
         for column in 0..samples {
-            if levels[row * samples + column] != 0 {
-                continue;
-            }
             if column % 32 == 0 {
                 super::import::check_cancel(cancel)?;
             }
             let centre = cells[row * side + column];
-            if let Some(value) = dense
-                .as_ref()
-                .and_then(|window| window.sample(centre.0, centre.1))
-            {
-                paint(row, column, value);
-            }
-        }
-    }
-    let mut pages_read = 0usize;
-    for ((page_x, page_y), members) in pages {
-        super::import::check_cancel(cancel)?;
-        let Some(chunk) = chunks
-            .iter()
-            .find(|chunk| chunk.chunk_x == page_x && chunk.chunk_y == page_y)
-        else {
-            // An absent page is invalid coverage: never read, never visited.
-            continue;
-        };
-        let origin_x = page_x * generation::CHUNK_SIDE;
-        let origin_y = page_y * generation::CHUNK_SIDE;
-        // A sample whose block is the whole page contributes the chunk's
-        // stored f64 sum/count, so a deep zoom-out costs no raster I/O.
-        let mut partial = Vec::new();
-        for (row, column) in members {
             let level = levels[row * samples + column];
-            let centre = cells[row * side + column];
-            let block_x = block_origin(centre.0.floor() as i64, level);
-            let block_y = block_origin(centre.1.floor() as i64, level);
-            if level == PAGE_LEVEL && block_x == origin_x && block_y == origin_y {
-                if let Some(value) = chunk.mean() {
-                    paint(row, column, value);
-                }
+            let value = if level == 0 {
+                dense
+                    .as_ref()
+                    .and_then(|window| window.sample(centre.0, centre.1))
             } else {
-                partial.push((row, column));
-            }
-        }
-        if partial.is_empty() {
-            continue;
-        }
-        pages_read += 1;
-        if pages_read > MAX_PAGES_PER_TILE {
-            return Err(format!(
-                "tile needs more than {MAX_PAGES_PER_TILE} reduction page reads"
-            ));
-        }
-        let page = generation::read_persisted_window(
-            &chunks,
-            &lattice,
-            generation::LatticeWindow {
-                x: origin_x,
-                y: origin_y,
-                width: generation::CHUNK_SIDE as u32,
-                height: generation::CHUNK_SIDE as u32,
-            },
-            cancel,
-        )?;
-        let page_side = generation::CHUNK_SIDE as usize;
-        for (row, column) in partial {
-            let level = levels[row * samples + column];
-            let centre = cells[row * side + column];
-            let block_x = block_origin(centre.0.floor() as i64, level);
-            let block_y = block_origin(centre.1.floor() as i64, level);
-            if let Some(value) = block_mean(
-                &page.samples,
-                &page.valid,
-                origin_x,
-                origin_y,
-                block_x,
-                block_y,
-                1i64 << level,
-                page_side,
-            ) {
+                reduced_sample(&reduction, level, centre)?
+            };
+            if let Some(value) = value {
                 paint(row, column, value);
             }
         }
@@ -705,13 +714,179 @@ fn generation_range(
         .map_err(|e| format!("Failed to read generation range: {e}"))
 }
 
+/// Reduced cells grouped by the stored chunk that holds them, as
+/// `(level, cell_x, cell_y)` triples.
+type ChunkCells = std::collections::BTreeMap<(i64, i64), Vec<(u32, i64, i64)>>;
+
+/// Reduced cells one tile needs, with their valid-only means.
+///
+/// A cell whose footprint fits inside one stored chunk shares that chunk's
+/// single bounded page read; a whole-chunk cell uses the stored aggregate; a
+/// footprint crossing chunk boundaries adds stored sums for the chunks it
+/// encloses and reads only its boundary chunks. Nothing here grows with the
+/// generation: the plan is bounded by the tile's own samples.
+struct ReductionCells<'a> {
+    owner: &'a generation::GenerationChunkReader,
+    library: &'a super::LidarLibrary,
+    lattice: &'a RasterGrid,
+    cancel: &'a AtomicBool,
+    needed: std::collections::BTreeSet<(u32, i64, i64)>,
+    means: std::collections::HashMap<(u32, i64, i64), Option<f64>>,
+    reads: usize,
+}
+
+impl<'a> ReductionCells<'a> {
+    fn new(
+        owner: &'a generation::GenerationChunkReader,
+        library: &'a super::LidarLibrary,
+        lattice: &'a RasterGrid,
+        cancel: &'a AtomicBool,
+    ) -> Self {
+        Self {
+            owner,
+            library,
+            lattice,
+            cancel,
+            needed: std::collections::BTreeSet::new(),
+            means: std::collections::HashMap::new(),
+            reads: 0,
+        }
+    }
+
+    /// Record one reduced cell this tile interpolates between.
+    fn require(&mut self, level: u32, cell_x: i64, cell_y: i64) -> Result<(), String> {
+        // The cell index is bounded by the level before any rectangle is built.
+        let side = reduced_side(level)?;
+        cell_x
+            .checked_mul(side)
+            .and_then(|origin| origin.checked_add(side))
+            .ok_or_else(|| "reduced cell footprint overflows".to_string())?;
+        cell_y
+            .checked_mul(side)
+            .and_then(|origin| origin.checked_add(side))
+            .ok_or_else(|| "reduced cell footprint overflows".to_string())?;
+        self.needed.insert((level, cell_x, cell_y));
+        Ok(())
+    }
+
+    /// The valid-only mean of one required cell, when it holds any valid cell.
+    fn mean(&self, level: u32, cell_x: i64, cell_y: i64) -> Option<f64> {
+        self.means.get(&(level, cell_x, cell_y)).copied().flatten()
+    }
+
+    /// Resolve every required cell, reading each stored chunk at most once.
+    fn load(&mut self) -> Result<(), String> {
+        // Sub-chunk and whole-chunk cells, grouped by the chunk that holds them.
+        let mut by_chunk: ChunkCells = std::collections::BTreeMap::new();
+        for (level, cell_x, cell_y) in &self.needed {
+            let side = reduced_side(*level)?;
+            let origin_x = cell_x
+                .checked_mul(side)
+                .ok_or_else(|| "reduced cell footprint overflows".to_string())?;
+            let origin_y = cell_y
+                .checked_mul(side)
+                .ok_or_else(|| "reduced cell footprint overflows".to_string())?;
+            if *level > PAGE_LEVEL {
+                self.reads += 1;
+                if self.reads > MAX_REDUCTION_READS_PER_TILE {
+                    return Err(format!(
+                        "tile needs more than {MAX_REDUCTION_READS_PER_TILE} reduction reads"
+                    ));
+                }
+                let rect = generation::LatticeWindow {
+                    x: origin_x,
+                    y: origin_y,
+                    width: u32::try_from(side)
+                        .map_err(|_| "reduced cell is too wide".to_string())?,
+                    height: u32::try_from(side)
+                        .map_err(|_| "reduced cell is too tall".to_string())?,
+                };
+                let mean = self
+                    .owner
+                    .aggregate(self.library, rect, self.cancel)?
+                    .and_then(|aggregate| aggregate.mean());
+                self.means.insert((*level, *cell_x, *cell_y), mean);
+                continue;
+            }
+            by_chunk
+                .entry((
+                    origin_x.div_euclid(generation::CHUNK_SIDE),
+                    origin_y.div_euclid(generation::CHUNK_SIDE),
+                ))
+                .or_default()
+                .push((*level, *cell_x, *cell_y));
+        }
+
+        for ((chunk_x, chunk_y), cells) in by_chunk {
+            // A record lookup is one indexed point query; only opening a chunk
+            // page or aggregating a crossing footprint is a reduction read.
+            let record = self.owner.chunk_at(self.library, chunk_x, chunk_y)?;
+            let Some(record) = record else {
+                // An absent chunk is invalid coverage: it is never opened and
+                // every cell it would hold stays transparent.
+                for (level, cell_x, cell_y) in cells {
+                    self.means.insert((level, cell_x, cell_y), None);
+                }
+                continue;
+            };
+            let origin_x = chunk_x * generation::CHUNK_SIDE;
+            let origin_y = chunk_y * generation::CHUNK_SIDE;
+            let mut page: Option<generation::ResolvedWindow> = None;
+            for (level, cell_x, cell_y) in cells {
+                let side = reduced_side(level)?;
+                let block_x = cell_x * side;
+                let block_y = cell_y * side;
+                let mean = if level == PAGE_LEVEL && block_x == origin_x && block_y == origin_y {
+                    // The cell is exactly this stored chunk: its aggregate is
+                    // already the valid-only sum and count.
+                    record.mean()
+                } else {
+                    if page.is_none() {
+                        self.reads += 1;
+                        if self.reads > MAX_REDUCTION_READS_PER_TILE {
+                            return Err(format!(
+                                "tile needs more than {MAX_REDUCTION_READS_PER_TILE} reduction reads"
+                            ));
+                        }
+                        page = Some(self.owner.read_window(
+                            self.library,
+                            self.lattice,
+                            generation::LatticeWindow {
+                                x: origin_x,
+                                y: origin_y,
+                                width: generation::CHUNK_SIDE as u32,
+                                height: generation::CHUNK_SIDE as u32,
+                            },
+                            self.cancel,
+                        )?);
+                    }
+                    let page = page.as_ref().expect("the page was just read");
+                    block_mean(
+                        &page.samples,
+                        &page.valid,
+                        origin_x,
+                        origin_y,
+                        block_x,
+                        block_y,
+                        side,
+                        generation::CHUNK_SIDE as usize,
+                    )
+                };
+                self.means.insert((level, cell_x, cell_y), mean);
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Read the native cells the level-0 samples of this tile need.
 ///
 /// Only the level-0 samples are covered, so a tile that is minified
 /// everywhere never allocates a native-scale window at all.
 #[allow(clippy::too_many_arguments)]
 fn read_dense_window(
-    chunks: &[generation::PersistedChunk],
+    owner: &generation::GenerationChunkReader,
+    library: &super::LidarLibrary,
     lattice: &RasterGrid,
     cells: &[(f64, f64)],
     side: usize,
@@ -742,8 +917,8 @@ fn read_dense_window(
             "tile needs a {width}x{height} native window, above the reader cap"
         ));
     }
-    let resolved = generation::read_persisted_window(
-        chunks,
+    let resolved = owner.read_window(
+        library,
         lattice,
         generation::LatticeWindow {
             x: origin_x,
@@ -822,26 +997,64 @@ mod tests {
     }
 
     #[test]
-    fn reduction_level_follows_the_power_of_two_rule() {
-        assert_eq!(level_for_displacement(0.25), 0);
-        assert_eq!(level_for_displacement(1.0), 0);
-        assert_eq!(level_for_displacement(1.99), 0);
-        assert_eq!(level_for_displacement(2.0), 1);
-        assert_eq!(level_for_displacement(3.9), 1);
-        assert_eq!(level_for_displacement(4.0), 2);
-        assert_eq!(level_for_displacement(1e9), MAX_LEVEL);
-        assert_eq!(level_for_displacement(f64::NAN), MAX_LEVEL);
+    fn reduction_level_follows_the_power_of_two_rule_without_a_page_clamp() {
+        assert_eq!(level_for_displacement(0.25), Ok(0));
+        assert_eq!(level_for_displacement(1.0), Ok(0));
+        assert_eq!(level_for_displacement(1.99), Ok(0));
+        assert_eq!(level_for_displacement(2.0), Ok(1));
+        assert_eq!(level_for_displacement(3.9), Ok(1));
+        assert_eq!(level_for_displacement(4.0), Ok(2));
+        // The rule is complete: a footprint wider than one stored chunk keeps
+        // its own level instead of being shortened to the chunk level.
+        assert_eq!(level_for_displacement(1024.0), Ok(10));
+        assert_eq!(level_for_displacement(2048.0), Ok(11));
+        assert_eq!(level_for_displacement(4096.0), Ok(12));
+        assert_eq!(level_for_displacement(1e9), Ok(29));
+        assert_eq!(level_for_displacement(2e9), Ok(30));
+        // An unrepresentable or non-finite displacement is explicitly
+        // unavailable, never silently shortened.
+        assert!(level_for_displacement(4e9).is_err());
+        assert!(level_for_displacement(f64::NAN).is_err());
+        assert!(level_for_displacement(f64::INFINITY).is_err());
     }
 
     #[test]
-    fn reduction_blocks_align_to_the_layer_lattice() {
-        assert_eq!(block_origin(0, 3), 0);
-        assert_eq!(block_origin(7, 3), 0);
-        assert_eq!(block_origin(8, 3), 8);
-        // A lattice extends left/up, so negative cells align the same way.
-        assert_eq!(block_origin(-1, 3), -8);
-        assert_eq!(block_origin(-8, 3), -8);
-        assert_eq!(block_origin(-9, 3), -16);
+    fn reduced_cells_align_to_their_own_centres() {
+        // Level 3 cells are 8 native cells wide and centred at (k + 0.5) * 8,
+        // so the cell containing a native position is floor(position / 8 - 0.5).
+        assert_eq!(reduced_cell(0.0, 8), Ok(-1));
+        assert_eq!(reduced_cell(3.9, 8), Ok(-1));
+        assert_eq!(reduced_cell(4.0, 8), Ok(0));
+        assert_eq!(reduced_cell(11.9, 8), Ok(0));
+        assert_eq!(reduced_cell(12.0, 8), Ok(1));
+        // Negative positions follow the same centre convention.
+        assert_eq!(reduced_cell(-0.1, 8), Ok(-1));
+        assert_eq!(reduced_cell(-4.0, 8), Ok(-1));
+        assert_eq!(reduced_cell(-4.1, 8), Ok(-2));
+        assert!(reduced_cell(f64::NAN, 8).is_err());
+        assert!(reduced_side(PAGE_LEVEL + 1).is_ok());
+        assert!(reduced_side(MAX_REDUCTION_LEVEL + 1).is_err());
+    }
+
+    #[test]
+    fn reduced_cells_interpolate_with_valid_normalized_weights() {
+        // Midway between four valid cell centres: the plain mean.
+        assert_eq!(
+            bilinear_means([Some(0.0), Some(10.0), Some(20.0), Some(30.0)], 0.5, 0.5),
+            Some(15.0)
+        );
+        // An invalid contributor is dropped and the rest renormalized, so a
+        // single valid cell still answers exactly.
+        assert_eq!(
+            bilinear_means([Some(4.0), None, None, None], 0.5, 0.5),
+            Some(4.0)
+        );
+        assert_eq!(bilinear_means([None, None, None, None], 0.5, 0.5), None);
+        // A quarter of the way across: 0.75 * 0 + 0.25 * 10.
+        assert_eq!(
+            bilinear_means([Some(0.0), Some(10.0), None, None], 0.25, 0.0),
+            Some(2.5)
+        );
     }
 
     /// Decode a PNG tile into RGBA8 pixels.
@@ -1116,5 +1329,87 @@ mod tests {
             ..base
         };
         assert!(zoom.validate().is_err());
+    }
+
+    /// A minified sample reads its reduced cell's mean at a cell centre and
+    /// interpolates between cell centres, including across a chunk boundary and
+    /// at negative lattice coordinates. Missing coverage contributes nothing.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn reduced_sampling_uses_cell_centres_and_complete_footprints() {
+        let dir = std::env::temp_dir().join(catalogue::new_id("canopi-reduced-samples"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let library = crate::services::lidar::LidarLibrary::open(&dir).unwrap();
+        // Four 1024x1024 chunks, one per stored sum, covering a 2048-cell
+        // level-11 footprint with the constants 0, 10, 20 and 30.
+        let chunk_side = generation::CHUNK_SIDE as u32;
+        // The covered footprint sits at negative lattice cells, so the same
+        // arithmetic is exercised where the lattice extends left and up.
+        for (chunk_x, chunk_y, value) in [
+            (-2, -2, 0.0),
+            (-1, -2, 10.0),
+            (-2, -1, 20.0),
+            (-1, -1, 30.0),
+        ] {
+            let values = vec![value; (chunk_side * chunk_side) as usize];
+            generation::publish_test_chunk(
+                &library,
+                "generation-s",
+                chunk_x,
+                chunk_y,
+                chunk_side,
+                chunk_side,
+                &values,
+            );
+        }
+        let owner = generation::GenerationChunkReader::new("generation-s", generation::RESULT_ROLE);
+        let lattice = RasterGrid {
+            width: 1,
+            height: 1,
+            geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+        };
+        let cancel = AtomicBool::new(false);
+        let mut reduction = ReductionCells::new(&owner, &library, &lattice, &cancel);
+        let level = 11;
+        for cell_y in -2..1 {
+            for cell_x in -2..1 {
+                reduction.require(level, cell_x, cell_y).unwrap();
+            }
+        }
+        reduction.load().unwrap();
+
+        // The footprint centre is the exact mean of the four enclosed chunks:
+        // (0 + 10 + 20 + 30) / 4 = 15.
+        assert_eq!(
+            reduced_sample(&reduction, level, (-1024.0, -1024.0)),
+            Ok(Some(15.0)),
+            "a negative reduced cell resolves like any other"
+        );
+        // Between two covered cell centres the value stays interpolated, and a
+        // quarter of the way towards the next cell weights by distance.
+        assert_eq!(
+            reduced_sample(&reduction, level, (-2048.0, -1024.0)),
+            Ok(Some(15.0))
+        );
+        assert_eq!(
+            reduced_sample(&reduction, level, (-1536.0, -1024.0)),
+            Ok(Some(15.0))
+        );
+        // The valid cell keeps answering as a sample moves towards an
+        // unoccupied neighbour: an absent cell contributes no weight, so no
+        // coverage is invented and no value is dragged towards zero.
+        assert_eq!(
+            reduced_sample(&reduction, level, (-512.0, -1024.0)),
+            Ok(Some(15.0)),
+            "the neighbouring empty cell contributes nothing"
+        );
+        // A sample whose four surrounding cells are all unoccupied has no
+        // value at all: the pixel stays transparent.
+        assert_eq!(
+            reduced_sample(&reduction, level, (1024.0, -1024.0)),
+            Ok(None)
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

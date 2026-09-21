@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 11;
+pub const CATALOGUE_VERSION: i32 = 12;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -155,6 +155,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         9 => SCHEMA_V9,
         10 => SCHEMA_V10,
         11 => "",
+        12 => SCHEMA_V12,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -349,6 +350,17 @@ CREATE TABLE IF NOT EXISTS lidar_interpretation_regions (
     sum_value REAL,
     PRIMARY KEY (interpretation_id, block_x, block_y)
 );
+"#;
+
+/// v12: an index matching the paged chunk read order.
+///
+/// A generation-scoped reader walks published chunk records in stable
+/// `(chunk_y, chunk_x)` order with a keyset cursor and a spatial filter, so the
+/// index carries exactly that key order. Additive only: no data changes and
+/// existing catalogues keep every row.
+const SCHEMA_V12: &str = r#"
+CREATE INDEX IF NOT EXISTS lidar_generation_chunks_role_order_idx
+    ON lidar_generation_chunks(generation_id, role, chunk_y, chunk_x);
 "#;
 
 /// v11: a generation may sit on an opaque legacy base.
@@ -1398,37 +1410,179 @@ fn map_asset_row(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<Ras
     })
 }
 
+/// Half-open lattice-cell bounds a paged chunk read must intersect.
+///
+/// The bounds are exact signed integers; a caller computes them with checked
+/// arithmetic so an unrepresentable window is refused rather than truncated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChunkWindow {
+    pub min_x: i64,
+    pub max_x: i64,
+    pub min_y: i64,
+    pub max_y: i64,
+}
+
+impl ChunkWindow {
+    /// Inclusive chunk-coordinate bounds covering a half-open cell window.
+    ///
+    /// Chunk side is `chunk_side` cells, so a chunk `c` covers
+    /// `[c * side, c * side + side)`. It intersects `[start, end)` exactly when
+    /// `c * side < end` and `c * side + side > start`, which is the inclusive
+    /// range below. The conversion is exact for negative coordinates too.
+    pub fn for_cells(
+        start_x: i64,
+        end_x: i64,
+        start_y: i64,
+        end_y: i64,
+        chunk_side: i64,
+    ) -> Result<Self, String> {
+        if chunk_side <= 0 || end_x <= start_x || end_y <= start_y {
+            return Err("chunk window has an empty or negative extent".to_string());
+        }
+        let last = |end: i64| -> Result<i64, String> {
+            end.checked_sub(1)
+                .map(|value| value.div_euclid(chunk_side))
+                .ok_or_else(|| "chunk window bounds overflow".to_string())
+        };
+        Ok(Self {
+            min_x: start_x.div_euclid(chunk_side),
+            max_x: last(end_x)?,
+            min_y: start_y.div_euclid(chunk_side),
+            max_y: last(end_y)?,
+        })
+    }
+
+    fn contains_columns(self) -> (i64, i64) {
+        (self.min_x, self.max_x)
+    }
+
+    fn contains_rows(self) -> (i64, i64) {
+        (self.min_y, self.max_y)
+    }
+}
+
+/// Chunk-record projection shared by the paged, keyed and listed readers.
+const CHUNK_ASSET_COLUMNS: &str = "SELECT g.role, g.chunk_x, g.chunk_y,
+            a.sha256, a.rel_path, a.bytes, a.profile, a.width, a.height,
+            a.geotransform, a.crs_wkt, a.nodata, g.valid_cells, g.sum_value
+     FROM lidar_generation_chunks g
+     JOIN lidar_raster_assets a ON a.sha256 = g.asset_sha256";
+
+fn map_chunk_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChunkAssetRow> {
+    Ok(ChunkAssetRow {
+        role: row.get(0)?,
+        chunk_x: row.get(1)?,
+        chunk_y: row.get(2)?,
+        asset: map_asset_row(row, 3)?,
+        aggregate_valid_cells: row.get(12)?,
+        aggregate_sum_value: row.get(13)?,
+    })
+}
+
+/// One bounded page of published chunk references.
+///
+/// The page is ordered by `(chunk_y, chunk_x)` and starts strictly after
+/// `after`, so a caller pages with a keyset cursor instead of an offset and
+/// never re-reads or skips a row. When `window` is given, the spatial filter
+/// runs in SQL before any row is loaded, so no absent coordinate is visited.
+pub fn generation_chunk_page(
+    connection: &Connection,
+    generation_id: &str,
+    role: &str,
+    window: Option<ChunkWindow>,
+    after: Option<(i64, i64)>,
+    limit: usize,
+) -> Result<Vec<ChunkAssetRow>, String> {
+    let sql = format!(
+        "{CHUNK_ASSET_COLUMNS}
+     WHERE g.generation_id = ?1 AND g.role = ?2 AND g.state = 'published'
+       AND (?3 IS NULL OR (g.chunk_x BETWEEN ?3 AND ?4 AND g.chunk_y BETWEEN ?5 AND ?6))
+       AND (?7 IS NULL OR g.chunk_y > ?7 OR (g.chunk_y = ?7 AND g.chunk_x > ?8))
+     ORDER BY g.chunk_y, g.chunk_x
+     LIMIT ?9"
+    );
+    let (min_x, max_x, min_y, max_y) = match window {
+        Some(window) => {
+            let (min_x, max_x) = window.contains_columns();
+            let (min_y, max_y) = window.contains_rows();
+            (Some(min_x), Some(max_x), Some(min_y), Some(max_y))
+        }
+        None => (None, None, None, None),
+    };
+    let (after_y, after_x) = match after {
+        Some((chunk_y, chunk_x)) => (Some(chunk_y), Some(chunk_x)),
+        None => (None, None),
+    };
+    let mut statement = connection
+        .prepare(&sql)
+        .map_err(|e| format!("Failed to prepare chunk page query: {e}"))?;
+    let rows = statement
+        .query_map(
+            rusqlite::params![
+                generation_id,
+                role,
+                min_x,
+                max_x,
+                min_y,
+                max_y,
+                after_y,
+                after_x,
+                i64::try_from(limit).unwrap_or(i64::MAX),
+            ],
+            map_chunk_row,
+        )
+        .map_err(|e| format!("Failed to read chunk page: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read chunk page: {e}"))?;
+    Ok(rows)
+}
+
+/// One published chunk reference by exact coordinate, when it exists.
+pub fn generation_chunk_at(
+    connection: &Connection,
+    generation_id: &str,
+    role: &str,
+    chunk_x: i64,
+    chunk_y: i64,
+) -> Result<Option<ChunkAssetRow>, String> {
+    let sql = format!(
+        "{CHUNK_ASSET_COLUMNS}
+     WHERE g.generation_id = ?1 AND g.role = ?2 AND g.chunk_x = ?3 AND g.chunk_y = ?4
+       AND g.state = 'published'"
+    );
+    connection
+        .query_row(
+            &sql,
+            rusqlite::params![generation_id, role, chunk_x, chunk_y],
+            map_chunk_row,
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read chunk reference: {e}"))
+}
+
 /// Published chunk references of one generation and role, ordered by position.
 ///
 /// Only `published` rows are selected: an unpublished row belongs to a job
 /// that has not committed, so it must never be readable.
+///
+/// Test oracle only: production readers page through
+/// [`generation_chunk_page`] and never load a generation's whole record set.
+#[cfg(test)]
 pub fn generation_chunk_assets(
     connection: &Connection,
     generation_id: &str,
     role: &str,
 ) -> Result<Vec<ChunkAssetRow>, String> {
+    let sql = format!(
+        "{CHUNK_ASSET_COLUMNS}
+     WHERE g.generation_id = ?1 AND g.role = ?2 AND g.state = 'published'
+     ORDER BY g.chunk_y, g.chunk_x"
+    );
     let mut statement = connection
-        .prepare(
-            "SELECT g.role, g.chunk_x, g.chunk_y,
-                    a.sha256, a.rel_path, a.bytes, a.profile, a.width, a.height,
-                    a.geotransform, a.crs_wkt, a.nodata, g.valid_cells, g.sum_value
-             FROM lidar_generation_chunks g
-             JOIN lidar_raster_assets a ON a.sha256 = g.asset_sha256
-             WHERE g.generation_id = ?1 AND g.role = ?2 AND g.state = 'published'
-             ORDER BY g.chunk_y, g.chunk_x",
-        )
+        .prepare(&sql)
         .map_err(|e| format!("Failed to prepare chunk asset query: {e}"))?;
     statement
-        .query_map(rusqlite::params![generation_id, role], |row| {
-            Ok(ChunkAssetRow {
-                role: row.get(0)?,
-                chunk_x: row.get(1)?,
-                chunk_y: row.get(2)?,
-                asset: map_asset_row(row, 3)?,
-                aggregate_valid_cells: row.get(12)?,
-                aggregate_sum_value: row.get(13)?,
-            })
-        })
+        .query_map(rusqlite::params![generation_id, role], map_chunk_row)
         .map_err(|e| format!("Failed to read chunk assets: {e}"))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to read chunk assets: {e}"))
@@ -1521,47 +1675,6 @@ pub fn publish_generation_chunks(
             [generation_id],
         )
         .map_err(|e| format!("Failed to publish generation chunks: {e}"))
-}
-
-/// One ordered page of published chunk references.
-// Not yet reachable from a production caller: region/aggregate paging into the
-// migrated consumers lands with B3/B4 (`canopi-jv8a.4`).
-#[allow(dead_code)]
-pub fn generation_chunk_page(
-    connection: &Connection,
-    generation_id: &str,
-    role: &str,
-    offset: i64,
-    limit: i64,
-) -> Result<Vec<GenerationChunkRow>, String> {
-    let mut statement = connection
-        .prepare(
-            "SELECT role, chunk_x, chunk_y, asset_sha256, valid_cells, min_value, max_value, sum_value
-             FROM lidar_generation_chunks
-             WHERE generation_id = ?1 AND role = ?2 AND state = 'published'
-             ORDER BY chunk_y, chunk_x
-             LIMIT ?3 OFFSET ?4",
-        )
-        .map_err(|e| format!("Failed to prepare chunk page: {e}"))?;
-    statement
-        .query_map(
-            rusqlite::params![generation_id, role, limit, offset],
-            |row| {
-                Ok(GenerationChunkRow {
-                    role: row.get(0)?,
-                    chunk_x: row.get(1)?,
-                    chunk_y: row.get(2)?,
-                    asset_sha256: row.get(3)?,
-                    valid_cells: row.get(4)?,
-                    min_value: row.get(5)?,
-                    max_value: row.get(6)?,
-                    sum_value: row.get(7)?,
-                })
-            },
-        )
-        .map_err(|e| format!("Failed to read chunk page: {e}"))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to read chunk page: {e}"))
 }
 
 #[cfg(test)]
@@ -2391,7 +2504,7 @@ mod tests {
                 "INSERT INTO lidar_raster_assets(
                     sha256, rel_path, bytes, profile, width, height, geotransform, crs_wkt, nodata, created_at)
                  VALUES('sha-chunk', 'assets/sha-chunk/cog.tif', 8, 'cog-f32-t256-raw-v1',
-                    1024, 1024, '[0,1,0,0,0,-1]', 'EPSG:3857', 'nan', '2026-01-01T00:00:00Z')",
+                    1024, 1024, '[0,1,0,0,0,-1]', 'EPSG:3857', NULL, '2026-01-01T00:00:00Z')",
                 [],
             )
             .unwrap();
@@ -2407,22 +2520,156 @@ mod tests {
         }];
         insert_unpublished_chunks(&connection, "gen-1", &rows).unwrap();
         assert!(
-            generation_chunk_page(&connection, "gen-1", "resolved", 0, 10)
+            generation_chunk_page(&connection, "gen-1", "resolved", None, None, 10)
                 .unwrap()
                 .is_empty(),
             "an unpublished generation exposes no chunk rows"
         );
         let published = publish_generation_chunks(&connection, "gen-1").unwrap();
         assert_eq!(published, 1);
-        let page = generation_chunk_page(&connection, "gen-1", "resolved", 0, 10).unwrap();
+        let page = generation_chunk_page(&connection, "gen-1", "resolved", None, None, 10).unwrap();
         assert_eq!(page.len(), 1);
-        assert_eq!(page[0].asset_sha256, "sha-chunk");
-        assert_eq!(page[0].sum_value, 24.0);
+        assert_eq!(page[0].asset.sha256, "sha-chunk");
+        assert_eq!(page[0].aggregate_sum_value, 24.0);
         // A result role keeps its own rows.
         assert!(
-            generation_chunk_page(&connection, "gen-1", "quality", 0, 10)
+            generation_chunk_page(&connection, "gen-1", "quality", None, None, 10)
                 .unwrap()
                 .is_empty()
+        );
+        drop(connection);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn chunk_pages_order_by_position_and_filter_spatially_in_sql() {
+        let root = std::env::temp_dir().join(new_id("canopi-chunk-pages"));
+        std::fs::create_dir_all(&root).unwrap();
+        let connection = open(&root.join("catalogue.sqlite")).unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_raster_assets(
+                    sha256, rel_path, bytes, profile, width, height, geotransform, crs_wkt, nodata, created_at)
+                 VALUES('sha-page', 'assets/sha-page/cog.tif', 8, 'cog-f32-t256-raw-v1',
+                    1024, 1024, '[0,1,0,0,0,-1]', 'EPSG:3857', NULL, '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        // Four records: two rows of two columns, plus a distant record that no
+        // small window may return.
+        let rows: Vec<GenerationChunkRow> = [(0, 0), (1, 0), (0, 1), (1, 1), (7, 2)]
+            .into_iter()
+            .map(|(chunk_x, chunk_y)| GenerationChunkRow {
+                role: "resolved".to_string(),
+                chunk_x,
+                chunk_y,
+                asset_sha256: "sha-page".to_string(),
+                valid_cells: 1,
+                min_value: 1.0,
+                max_value: 1.0,
+                sum_value: 1.0,
+            })
+            .collect();
+        insert_unpublished_chunks(&connection, "gen-1", &rows).unwrap();
+        publish_generation_chunks(&connection, "gen-1").unwrap();
+
+        // Keyset pages of two: stable position order, no repeat and no gap.
+        let first = generation_chunk_page(&connection, "gen-1", "resolved", None, None, 2).unwrap();
+        let cursor = first
+            .last()
+            .map(|row| (row.chunk_y, row.chunk_x))
+            .expect("first page has rows");
+        assert_eq!(
+            first
+                .iter()
+                .map(|row| (row.chunk_y, row.chunk_x))
+                .collect::<Vec<_>>(),
+            vec![(0, 0), (0, 1)]
+        );
+        let second =
+            generation_chunk_page(&connection, "gen-1", "resolved", None, Some(cursor), 2).unwrap();
+        assert_eq!(
+            second
+                .iter()
+                .map(|row| (row.chunk_y, row.chunk_x))
+                .collect::<Vec<_>>(),
+            vec![(1, 0), (1, 1)]
+        );
+        let third = generation_chunk_page(
+            &connection,
+            "gen-1",
+            "resolved",
+            None,
+            second.last().map(|row| (row.chunk_y, row.chunk_x)),
+            2,
+        )
+        .unwrap();
+        assert_eq!(
+            third
+                .iter()
+                .map(|row| (row.chunk_y, row.chunk_x))
+                .collect::<Vec<_>>(),
+            vec![(2, 7)]
+        );
+
+        // A window filter runs before rows load: chunk 0 covers cells 0..1024.
+        let window = ChunkWindow::for_cells(0, 1024, 0, 2048, 1024).unwrap();
+        assert_eq!(
+            (window.min_x, window.max_x, window.min_y, window.max_y),
+            (0, 0, 0, 1)
+        );
+        let filtered =
+            generation_chunk_page(&connection, "gen-1", "resolved", Some(window), None, 10)
+                .unwrap();
+        assert_eq!(
+            filtered
+                .iter()
+                .map(|row| (row.chunk_y, row.chunk_x))
+                .collect::<Vec<_>>(),
+            vec![(0, 0), (1, 0)],
+            "only intersecting records load"
+        );
+        // Negative coordinates stay exact: cells -1..0 touch chunk -1 only.
+        let negative = ChunkWindow::for_cells(-1, 0, 0, 1, 1024).unwrap();
+        assert_eq!(
+            (
+                negative.min_x,
+                negative.max_x,
+                negative.min_y,
+                negative.max_y
+            ),
+            (-1, -1, 0, 0)
+        );
+        assert!(
+            generation_chunk_page(&connection, "gen-1", "resolved", Some(negative), None, 10)
+                .unwrap()
+                .is_empty()
+        );
+        // An exact coordinate lookup is bounded to one record.
+        let one = generation_chunk_at(&connection, "gen-1", "resolved", 1, 1)
+            .unwrap()
+            .expect("the record exists");
+        assert_eq!((one.chunk_x, one.chunk_y), (1, 1));
+        assert!(
+            generation_chunk_at(&connection, "gen-1", "resolved", 4, 4)
+                .unwrap()
+                .is_none()
+        );
+        // The index carries the read order, so paging needs no sort step.
+        let plan: String = connection
+            .query_row(
+                "EXPLAIN QUERY PLAN SELECT g.chunk_x, g.chunk_y
+                 FROM lidar_generation_chunks g
+                 WHERE g.generation_id = 'gen-1' AND g.role = 'resolved'
+                   AND g.state = 'published'
+                 ORDER BY g.chunk_y, g.chunk_x LIMIT 2",
+                [],
+                |row| row.get(3),
+            )
+            .unwrap();
+        assert!(
+            !plan.contains("TEMP B-TREE"),
+            "the paged read order must come from the index: {plan}"
         );
         drop(connection);
         let _ = std::fs::remove_dir_all(root);

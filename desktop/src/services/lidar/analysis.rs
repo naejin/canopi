@@ -83,10 +83,12 @@ fn sparse_input_raster(
     if let Some(mosaic) = head.mosaic_path.as_deref() {
         return Ok(PathBuf::from(mosaic));
     }
-    let connection = library.catalogue()?;
-    let rows = catalogue::generation_chunk_assets(&connection, &head.id, generation::RESULT_ROLE)?;
-    rows.first()
-        .map(|row| library.inner.paths.root().join(&row.asset.rel_path))
+    // Only the first published record is needed, and the paged reader loads one
+    // bounded page rather than the generation's whole record set.
+    let owner = generation::GenerationChunkReader::new(&head.id, generation::RESULT_ROLE);
+    owner
+        .first(library)?
+        .map(|chunk| chunk.asset.path)
         .ok_or_else(|| "generation has no stored raster to inspect".to_string())
 }
 

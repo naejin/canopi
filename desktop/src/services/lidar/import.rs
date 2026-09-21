@@ -257,20 +257,12 @@ pub fn stage_import(
     check_cancel(cancel)?;
     let (target_width, target_height) = review_preview_target(&union)?;
     let coverage = {
-        let head_source = {
-            let connection = library.catalogue()?;
-            HeadBlockSource::open(
-                engine,
-                &connection,
-                paths,
-                head.as_ref(),
-                head_manifest.as_ref(),
-                cancel,
-            )?
-        };
+        let head_source =
+            HeadBlockSource::open(engine, head.as_ref(), head_manifest.as_ref(), cancel)?;
         review_coverage(
             &head_source,
             &compatible,
+            library,
             paths,
             &union,
             layer_nodata,
@@ -463,20 +455,12 @@ pub fn render_decision_preview(
     validate_lattice(&staging.union_grid, "import decision preview")?;
     let (target_width, target_height) = review_preview_target(&staging.union_grid)?;
     let coverage = {
-        let head_source = {
-            let connection = library.catalogue()?;
-            HeadBlockSource::open(
-                engine,
-                &connection,
-                paths,
-                head.as_ref(),
-                head_manifest.as_ref(),
-                cancel,
-            )?
-        };
+        let head_source =
+            HeadBlockSource::open(engine, head.as_ref(), head_manifest.as_ref(), cancel)?;
         review_coverage(
             &head_source,
             &compatible,
+            library,
             paths,
             &staging.union_grid,
             staging.layer_nodata,
@@ -1196,9 +1180,9 @@ enum HeadBlockSource {
         valid: ValidMask,
         manifest_grid: RasterGrid,
     },
-    /// Published resolved chunks, read through the resolver per block.
+    /// Published resolved chunks, read through the paged resolver per block.
     Chunks {
-        chunks: Vec<generation::PersistedChunk>,
+        owner: generation::GenerationChunkReader,
         lattice: RasterGrid,
     },
 }
@@ -1206,8 +1190,6 @@ enum HeadBlockSource {
 impl HeadBlockSource {
     fn open(
         engine: &GdalEngine,
-        connection: &rusqlite::Connection,
-        paths: &LidarPaths,
         head: Option<&catalogue::GenerationRow>,
         manifest: Option<&GenerationManifest>,
         cancel: &AtomicBool,
@@ -1217,12 +1199,7 @@ impl HeadBlockSource {
         };
         match manifest.format {
             GenerationStorageFormat::CogChunksV1 => Ok(Self::Chunks {
-                chunks: generation::persisted_chunks(
-                    connection,
-                    paths,
-                    &head.id,
-                    generation::RESULT_ROLE,
-                )?,
+                owner: generation::GenerationChunkReader::new(&head.id, generation::RESULT_ROLE),
                 lattice: manifest.grid.clone(),
             }),
             GenerationStorageFormat::LegacyDenseV1 => {
@@ -1259,6 +1236,7 @@ impl HeadBlockSource {
     /// Cells the head does not cover stay invalid and carry `nodata`.
     fn block(
         &self,
+        library: &LidarLibrary,
         union: &RasterGrid,
         window: LatticeWindow,
         nodata: f32,
@@ -1270,8 +1248,8 @@ impl HeadBlockSource {
         let mut valid = vec![0u8; cells];
         match self {
             Self::None => {}
-            Self::Chunks { chunks, lattice } => {
-                let resolved = generation::read_persisted_window(chunks, lattice, window, cancel)?;
+            Self::Chunks { owner, lattice } => {
+                let resolved = owner.read_window(library, lattice, window, cancel)?;
                 for index in 0..cells {
                     if resolved.valid[index] == 0 {
                         continue;
@@ -1438,6 +1416,7 @@ fn compose_union_block(
     head: &HeadBlockSource,
     sources: &[&StagedSource],
     readers: &mut SourceReaders,
+    library: &LidarLibrary,
     paths: &LidarPaths,
     union: &RasterGrid,
     window: LatticeWindow,
@@ -1447,7 +1426,7 @@ fn compose_union_block(
     cancel: &AtomicBool,
 ) -> Result<ComposedBlock, String> {
     let width = window.width as usize;
-    let (mut values, mut valid) = head.block(union, window, nodata, cancel)?;
+    let (mut values, mut valid) = head.block(library, union, window, nodata, cancel)?;
     let mut incoming = vec![0u8; values.len()];
     for source in sources {
         let window_in_source = source_window(source, union, window)?;
@@ -1553,6 +1532,7 @@ struct ReviewCoverage {
 fn review_coverage(
     head: &HeadBlockSource,
     sources: &[&StagedSource],
+    library: &LidarLibrary,
     paths: &LidarPaths,
     union: &RasterGrid,
     nodata: f32,
@@ -1578,6 +1558,7 @@ fn review_coverage(
             head,
             sources,
             &mut readers,
+            library,
             paths,
             union,
             window,
@@ -1586,7 +1567,7 @@ fn review_coverage(
             replace_overlap,
             cancel,
         )?;
-        let accepted = head.block(union, window, nodata, cancel)?.1;
+        let accepted = head.block(library, union, window, nodata, cancel)?.1;
         let width = window.width as usize;
         for row in 0..window.height as usize {
             for column in 0..width {
@@ -2418,15 +2399,9 @@ pub fn apply_import(
                 .map(|h| read_generation_manifest(&h.manifest_json))
                 .transpose()?;
             let (layer_values, layer_mask) = {
-                let connection = library.catalogue()?;
-                let numeric = head_numeric_read(
-                    &connection,
-                    paths,
-                    head.as_ref(),
-                    head_manifest_for_seed.as_ref(),
-                )?;
+                let numeric = head_numeric_read(head.as_ref(), head_manifest_for_seed.as_ref())?;
                 head_values_on_union(
-                    engine,
+                    library,
                     head.as_ref(),
                     head_manifest_for_seed.as_ref(),
                     &numeric,
@@ -3767,8 +3742,8 @@ enum HeadNumeric {
     None,
     /// Dense mosaic plus coverage mask of a preserved legacy generation.
     Dense,
-    /// Published resolved chunks of a chunked generation.
-    Chunks(Vec<generation::PersistedChunk>),
+    /// Published resolved chunks of a chunked generation, read page by page.
+    Chunks(generation::GenerationChunkReader),
 }
 
 /// Select the read path of the accepted head from its manifest format.
@@ -3777,8 +3752,6 @@ enum HeadNumeric {
 /// dense file it does not own, and a legacy generation keeps its accepted
 /// dense read.
 fn head_numeric_read(
-    connection: &rusqlite::Connection,
-    paths: &LidarPaths,
     head: Option<&catalogue::GenerationRow>,
     manifest: Option<&GenerationManifest>,
 ) -> Result<HeadNumeric, String> {
@@ -3787,15 +3760,17 @@ fn head_numeric_read(
     };
     match manifest.format {
         GenerationStorageFormat::LegacyDenseV1 => Ok(HeadNumeric::Dense),
+        // The bound reader holds identity only: its pages are fetched as the
+        // read needs them, so no caller materializes the generation's records.
         GenerationStorageFormat::CogChunksV1 => Ok(HeadNumeric::Chunks(
-            generation::persisted_chunks(connection, paths, &head.id, generation::RESULT_ROLE)?,
+            generation::GenerationChunkReader::new(&head.id, generation::RESULT_ROLE),
         )),
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn head_values_on_union(
-    engine: &GdalEngine,
+    library: &LidarLibrary,
     head: Option<&catalogue::GenerationRow>,
     manifest: Option<&GenerationManifest>,
     numeric: &HeadNumeric,
@@ -3807,7 +3782,8 @@ fn head_values_on_union(
         return Ok((None, None));
     };
     validate_working_grid(union, "accepted layer union")?;
-    if let HeadNumeric::Chunks(chunks) = numeric {
+    let engine = &library.inner.engine;
+    if let HeadNumeric::Chunks(owner) = numeric {
         // A chunked head has no dense file: read the union one bounded window
         // at a time from the published chunk rows. The head's lattice is its
         // own fixed layer anchor, which may differ from this union's origin,
@@ -3832,8 +3808,8 @@ fn head_values_on_union(
             while x < union.width {
                 check_cancel(cancel)?;
                 let width = side.min(union.width - x);
-                let resolved = generation::read_persisted_window(
-                    chunks,
+                let resolved = owner.read_window(
+                    library,
                     &manifest.grid,
                     generation::LatticeWindow {
                         x: i64::from(x) - offset_x,
@@ -5027,16 +5003,7 @@ mod tests {
     ) -> (Vec<f32>, Vec<u8>) {
         let head = head_of(library, layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        let numeric = {
-            let connection = library.catalogue().unwrap();
-            head_numeric_read(
-                &connection,
-                &library.inner.paths,
-                Some(&head),
-                Some(&manifest),
-            )
-            .unwrap()
-        };
+        let numeric = head_numeric_read(Some(&head), Some(&manifest)).unwrap();
         // Read exactly the requested window: the layer lattice's origin is
         // fixed, so window coordinates are lattice coordinates and a synthetic
         // union equal to the window keeps the indexing trivial.
@@ -5053,7 +5020,7 @@ mod tests {
             ],
         };
         let (values, valid) = head_values_on_union(
-            &library.inner.engine,
+            library,
             Some(&head),
             Some(&manifest),
             &numeric,

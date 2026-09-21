@@ -380,6 +380,72 @@ impl PersistedChunk {
     }
 }
 
+/// Test support: publish one synthetic chunk record with its own committed COG
+/// plus the catalogue rows a reader resolves it from.
+///
+/// Shared by the generation and tile test modules so both exercise the same
+/// published shape.
+#[cfg(test)]
+pub(super) fn publish_test_chunk(
+    library: &super::LidarLibrary,
+    generation_id: &str,
+    chunk_x: i64,
+    chunk_y: i64,
+    width: u32,
+    height: u32,
+    values: &[f32],
+) -> CogAsset {
+    let engine = &library.inner.engine;
+    let paths = &library.inner.paths;
+    let dir = paths.root().to_path_buf();
+    let grid = RasterGrid {
+        width,
+        height,
+        geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+    };
+    let asset = crate::services::lidar::raster_assets::write_cog_asset(
+        engine,
+        &AtomicBool::new(false),
+        paths,
+        &dir,
+        &format!("chunk-{}-{}-{}", generation_id, chunk_x, chunk_y),
+        &grid,
+        "EPSG:3857",
+        Some(f32::NAN),
+        values,
+    )
+    .expect("test chunk COG is created");
+    let (valid_cells, sum_value) = values
+        .iter()
+        .filter(|value| value.is_finite())
+        .fold((0i64, 0.0f64), |(count, sum), value| {
+            (count + 1, sum + f64::from(*value))
+        });
+    let connection = library.catalogue().unwrap();
+    super::catalogue::insert_raster_asset(
+        &connection,
+        &asset_row(paths, &asset, "EPSG:3857").unwrap(),
+    )
+    .unwrap();
+    super::catalogue::insert_unpublished_chunks(
+        &connection,
+        generation_id,
+        &[super::catalogue::GenerationChunkRow {
+            role: RESULT_ROLE.to_string(),
+            chunk_x,
+            chunk_y,
+            asset_sha256: asset.sha256.clone(),
+            valid_cells,
+            min_value: 0.0,
+            max_value: 0.0,
+            sum_value,
+        }],
+    )
+    .unwrap();
+    super::catalogue::publish_generation_chunks(&connection, generation_id).unwrap();
+    asset
+}
+
 /// Read one window from persisted resolved chunks.
 ///
 /// This is the published-generation read path: it never replays member
@@ -393,64 +459,355 @@ pub(super) fn read_persisted_window(
     cancel: &AtomicBool,
 ) -> Result<ResolvedWindow, String> {
     let cells = validate_window(window)?;
-    let width = window.width as usize;
     let mut samples = vec![f32::NAN; cells];
     let mut valid = vec![0u8; cells];
-    let first_chunk_x = window.x.div_euclid(CHUNK_SIDE);
-    let last_chunk_x = (window.x + i64::from(window.width) - 1).div_euclid(CHUNK_SIDE);
-    let first_chunk_y = window.y.div_euclid(CHUNK_SIDE);
-    let last_chunk_y = (window.y + i64::from(window.height) - 1).div_euclid(CHUNK_SIDE);
-    for chunk_y in first_chunk_y..=last_chunk_y {
-        for chunk_x in first_chunk_x..=last_chunk_x {
-            let Some(chunk) = chunks
-                .iter()
-                .find(|chunk| chunk.chunk_x == chunk_x && chunk.chunk_y == chunk_y)
-            else {
-                continue;
-            };
-            check_cancel(cancel)?;
-            let chunk_origin_x = chunk_x * CHUNK_SIDE;
-            let chunk_origin_y = chunk_y * CHUNK_SIDE;
-            let member_x0 = window.x - chunk_origin_x;
-            let member_y0 = window.y - chunk_origin_y;
-            let clip_x0 = member_x0.max(0);
-            let clip_y0 = member_y0.max(0);
-            let clip_x1 =
-                (member_x0 + i64::from(window.width)).min(i64::from(chunk.asset.grid.width));
-            let clip_y1 =
-                (member_y0 + i64::from(window.height)).min(i64::from(chunk.asset.grid.height));
-            if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
-                continue;
-            }
-            let member_window = RasterWindow {
-                x: clip_x0 as u32,
-                y: clip_y0 as u32,
-                width: (clip_x1 - clip_x0) as u32,
-                height: (clip_y1 - clip_y0) as u32,
-            };
-            let mut reader =
-                PreparedRaster::open_committed(&chunk.asset.path, &chunk.asset.grid, chunk.nodata)?;
-            let read = reader.read_window(member_window, cancel)?;
-            let dest_x = (clip_x0 + chunk_origin_x - window.x) as usize;
-            let dest_y = (clip_y0 + chunk_origin_y - window.y) as usize;
-            for row in 0..member_window.height as usize {
-                for column in 0..member_window.width as usize {
-                    let index = row * member_window.width as usize + column;
-                    if read.valid()[index] == 0 {
-                        continue;
-                    }
-                    let target = (dest_y + row) * width + dest_x + column;
-                    samples[target] = read.samples()[index];
-                    valid[target] = 1;
-                }
-            }
-        }
-    }
-    check_cancel(cancel)?;
+    read_chunk_records(chunks, window, cancel, &mut samples, &mut valid)?;
     Ok(ResolvedWindow {
         grid: window_grid(lattice, window)?,
         samples,
         valid,
+    })
+}
+
+/// Read the intersecting portion of each given record into an existing buffer.
+///
+/// Records are addressed directly instead of scanning the window's chunk
+/// range, so the cost is what the caller actually supplied.
+fn read_chunk_records(
+    chunks: &[PersistedChunk],
+    window: LatticeWindow,
+    cancel: &AtomicBool,
+    samples: &mut [f32],
+    valid: &mut [u8],
+) -> Result<(), String> {
+    let width = window.width as usize;
+    let end_x = window
+        .x
+        .checked_add(i64::from(window.width))
+        .ok_or_else(|| "chunk read window overflows".to_string())?;
+    let end_y = window
+        .y
+        .checked_add(i64::from(window.height))
+        .ok_or_else(|| "chunk read window overflows".to_string())?;
+    for chunk in chunks {
+        check_cancel(cancel)?;
+        let chunk_origin_x = chunk
+            .chunk_x
+            .checked_mul(CHUNK_SIDE)
+            .ok_or_else(|| "chunk origin overflows".to_string())?;
+        let chunk_origin_y = chunk
+            .chunk_y
+            .checked_mul(CHUNK_SIDE)
+            .ok_or_else(|| "chunk origin overflows".to_string())?;
+        let chunk_end_x = chunk_origin_x
+            .checked_add(i64::from(chunk.asset.grid.width))
+            .ok_or_else(|| "chunk extent overflows".to_string())?;
+        let chunk_end_y = chunk_origin_y
+            .checked_add(i64::from(chunk.asset.grid.height))
+            .ok_or_else(|| "chunk extent overflows".to_string())?;
+        // Exact signed overlap: a record that does not intersect contributes
+        // nothing and is never opened.
+        if chunk_end_x <= window.x
+            || chunk_origin_x >= end_x
+            || chunk_end_y <= window.y
+            || chunk_origin_y >= end_y
+        {
+            continue;
+        }
+        let clip_x0 = (window.x - chunk_origin_x).max(0);
+        let clip_y0 = (window.y - chunk_origin_y).max(0);
+        let clip_x1 = (end_x - chunk_origin_x).min(i64::from(chunk.asset.grid.width));
+        let clip_y1 = (end_y - chunk_origin_y).min(i64::from(chunk.asset.grid.height));
+        if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
+            continue;
+        }
+        let member_window = RasterWindow {
+            x: clip_x0 as u32,
+            y: clip_y0 as u32,
+            width: (clip_x1 - clip_x0) as u32,
+            height: (clip_y1 - clip_y0) as u32,
+        };
+        let mut reader =
+            PreparedRaster::open_committed(&chunk.asset.path, &chunk.asset.grid, chunk.nodata)?;
+        let read = reader.read_window(member_window, cancel)?;
+        let dest_x = (clip_x0 + chunk_origin_x - window.x) as usize;
+        let dest_y = (clip_y0 + chunk_origin_y - window.y) as usize;
+        for row in 0..member_window.height as usize {
+            for column in 0..member_window.width as usize {
+                let index = row * member_window.width as usize + column;
+                if read.valid()[index] == 0 {
+                    continue;
+                }
+                let target = (dest_y + row) * width + dest_x + column;
+                samples[target] = read.samples()[index];
+                valid[target] = 1;
+            }
+        }
+    }
+    check_cancel(cancel)?;
+    Ok(())
+}
+
+/// Maximum chunk records one catalogue page returns.
+///
+/// The page is the unit of catalogue work: a reader never loads a whole
+/// generation's records to answer a window or a reduction.
+pub(super) const CHUNK_PAGE_MAX: usize = 256;
+
+/// Stored sum and valid count of one reduced footprint.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct BlockAggregate {
+    pub sum_value: f64,
+    pub valid_cells: u64,
+}
+
+impl BlockAggregate {
+    /// Valid-only mean of the footprint, or `None` when nothing there is valid.
+    pub(super) fn mean(self) -> Option<f64> {
+        if self.valid_cells == 0 {
+            None
+        } else {
+            Some(self.sum_value / self.valid_cells as f64)
+        }
+    }
+}
+
+/// One immutable generation and role, bound for paged reads.
+///
+/// The owner holds no catalogue lock and no record list: every page is fetched
+/// in its own short catalogue read, the lock is released, and only then is a
+/// committed asset opened. A read therefore costs what its window intersects
+/// rather than what the whole generation stores.
+#[derive(Debug, Clone)]
+pub(super) struct GenerationChunkReader {
+    generation_id: String,
+    role: String,
+}
+
+impl GenerationChunkReader {
+    pub(super) fn new(generation_id: &str, role: &str) -> Self {
+        Self {
+            generation_id: generation_id.to_string(),
+            role: role.to_string(),
+        }
+    }
+
+    /// One page of records intersecting `window`, or the whole generation when
+    /// no window is given. The catalogue lock is held only for this query.
+    fn page(
+        &self,
+        library: &super::LidarLibrary,
+        window: Option<LatticeWindow>,
+        after: Option<(i64, i64)>,
+    ) -> Result<Vec<PersistedChunk>, String> {
+        let filter = match window {
+            Some(window) => Some(chunk_window(window)?),
+            None => None,
+        };
+        let rows = {
+            let connection = library.catalogue()?;
+            super::catalogue::generation_chunk_page(
+                &connection,
+                &self.generation_id,
+                &self.role,
+                filter,
+                after,
+                CHUNK_PAGE_MAX,
+            )?
+        };
+        let mut chunks = Vec::with_capacity(rows.len());
+        for row in rows {
+            chunks.push(persisted_chunk(&library.inner.paths, row)?);
+        }
+        Ok(chunks)
+    }
+
+    /// The first published record, for a caller that only needs one
+    /// representative raster of the generation.
+    pub(super) fn first(
+        &self,
+        library: &super::LidarLibrary,
+    ) -> Result<Option<PersistedChunk>, String> {
+        Ok(self.page(library, None, None)?.into_iter().next())
+    }
+
+    /// One record by exact coordinate, when it is published.
+    pub(super) fn chunk_at(
+        &self,
+        library: &super::LidarLibrary,
+        chunk_x: i64,
+        chunk_y: i64,
+    ) -> Result<Option<PersistedChunk>, String> {
+        let row = {
+            let connection = library.catalogue()?;
+            super::catalogue::generation_chunk_at(
+                &connection,
+                &self.generation_id,
+                &self.role,
+                chunk_x,
+                chunk_y,
+            )?
+        };
+        row.map(|row| persisted_chunk(&library.inner.paths, row))
+            .transpose()
+    }
+
+    /// Read one window, page by page, opening only intersecting records.
+    pub(super) fn read_window(
+        &self,
+        library: &super::LidarLibrary,
+        lattice: &RasterGrid,
+        window: LatticeWindow,
+        cancel: &AtomicBool,
+    ) -> Result<ResolvedWindow, String> {
+        let cells = validate_window(window)?;
+        let mut samples = vec![f32::NAN; cells];
+        let mut valid = vec![0u8; cells];
+        let mut cursor = None;
+        loop {
+            check_cancel(cancel)?;
+            let page = self.page(library, Some(window), cursor)?;
+            if page.is_empty() {
+                break;
+            }
+            let returned = page.len();
+            cursor = page.last().map(|chunk| (chunk.chunk_y, chunk.chunk_x));
+            read_chunk_records(&page, window, cancel, &mut samples, &mut valid)?;
+            if returned < CHUNK_PAGE_MAX {
+                break;
+            }
+        }
+        check_cancel(cancel)?;
+        Ok(ResolvedWindow {
+            grid: window_grid(lattice, window)?,
+            samples,
+            valid,
+        })
+    }
+
+    /// Stored sum and valid count over one reduced footprint.
+    ///
+    /// A chunk wholly inside the footprint contributes its stored aggregate
+    /// without any raster I/O; a boundary chunk contributes only its
+    /// intersecting cells, read through the bounded reader. Invalid and absent
+    /// cells contribute neither sum nor count, and `None` means the footprint
+    /// holds no valid cell.
+    pub(super) fn aggregate(
+        &self,
+        library: &super::LidarLibrary,
+        rect: LatticeWindow,
+        cancel: &AtomicBool,
+    ) -> Result<Option<BlockAggregate>, String> {
+        let end_x = rect
+            .x
+            .checked_add(i64::from(rect.width))
+            .ok_or_else(|| "reduction footprint overflows".to_string())?;
+        let end_y = rect
+            .y
+            .checked_add(i64::from(rect.height))
+            .ok_or_else(|| "reduction footprint overflows".to_string())?;
+        let mut total = BlockAggregate {
+            sum_value: 0.0,
+            valid_cells: 0,
+        };
+        let mut cursor = None;
+        loop {
+            check_cancel(cancel)?;
+            let page = self.page(library, Some(rect), cursor)?;
+            if page.is_empty() {
+                break;
+            }
+            let returned = page.len();
+            cursor = page.last().map(|chunk| (chunk.chunk_y, chunk.chunk_x));
+            for chunk in &page {
+                let origin_x = chunk
+                    .chunk_x
+                    .checked_mul(CHUNK_SIDE)
+                    .ok_or_else(|| "chunk origin overflows".to_string())?;
+                let origin_y = chunk
+                    .chunk_y
+                    .checked_mul(CHUNK_SIDE)
+                    .ok_or_else(|| "chunk origin overflows".to_string())?;
+                let chunk_end_x = origin_x
+                    .checked_add(i64::from(chunk.asset.grid.width))
+                    .ok_or_else(|| "chunk extent overflows".to_string())?;
+                let chunk_end_y = origin_y
+                    .checked_add(i64::from(chunk.asset.grid.height))
+                    .ok_or_else(|| "chunk extent overflows".to_string())?;
+                if origin_x >= rect.x
+                    && origin_y >= rect.y
+                    && chunk_end_x <= end_x
+                    && chunk_end_y <= end_y
+                {
+                    total.sum_value += chunk.sum_value;
+                    total.valid_cells = total
+                        .valid_cells
+                        .saturating_add(u64::try_from(chunk.valid_cells).unwrap_or(0));
+                    continue;
+                }
+                let clip_x0 = rect.x.max(origin_x);
+                let clip_y0 = rect.y.max(origin_y);
+                let clip_x1 = end_x.min(chunk_end_x);
+                let clip_y1 = end_y.min(chunk_end_y);
+                if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
+                    continue;
+                }
+                let member_window = RasterWindow {
+                    x: (clip_x0 - origin_x) as u32,
+                    y: (clip_y0 - origin_y) as u32,
+                    width: (clip_x1 - clip_x0) as u32,
+                    height: (clip_y1 - clip_y0) as u32,
+                };
+                let mut reader = PreparedRaster::open_committed(
+                    &chunk.asset.path,
+                    &chunk.asset.grid,
+                    chunk.nodata,
+                )?;
+                let read = reader.read_window(member_window, cancel)?;
+                for (value, valid) in read.samples().iter().zip(read.valid()) {
+                    if *valid == 0 {
+                        continue;
+                    }
+                    total.valid_cells = total.valid_cells.saturating_add(1);
+                    if value.is_finite() {
+                        total.sum_value += f64::from(*value);
+                    }
+                }
+            }
+            if returned < CHUNK_PAGE_MAX {
+                break;
+            }
+        }
+        Ok((total.valid_cells > 0).then_some(total))
+    }
+}
+
+/// Chunk-coordinate bounds of one lattice-cell window, exactly and checked.
+fn chunk_window(window: LatticeWindow) -> Result<super::catalogue::ChunkWindow, String> {
+    let end_x = window
+        .x
+        .checked_add(i64::from(window.width))
+        .ok_or_else(|| "chunk read window overflows".to_string())?;
+    let end_y = window
+        .y
+        .checked_add(i64::from(window.height))
+        .ok_or_else(|| "chunk read window overflows".to_string())?;
+    super::catalogue::ChunkWindow::for_cells(window.x, end_x, window.y, end_y, CHUNK_SIDE)
+}
+
+/// Resolve one catalogue row into its readable record.
+fn persisted_chunk(
+    paths: &super::paths::LidarPaths,
+    row: super::catalogue::ChunkAssetRow,
+) -> Result<PersistedChunk, String> {
+    let asset = cog_from_row(paths, &row.asset)?;
+    Ok(PersistedChunk {
+        chunk_x: row.chunk_x,
+        chunk_y: row.chunk_y,
+        nodata: asset.nodata,
+        asset,
+        valid_cells: row.aggregate_valid_cells,
+        sum_value: row.aggregate_sum_value,
     })
 }
 
@@ -918,6 +1275,11 @@ pub(super) fn asset_row(
 
 /// Published resolved chunks of one generation and role, ready for the read
 /// path. Absent chunks stay invalid coverage.
+///
+/// Test oracle only: every production reader binds a `GenerationChunkReader`
+/// and fetches bounded pages, so no caller materializes a whole generation's
+/// records.
+#[cfg(test)]
 pub(super) fn persisted_chunks(
     connection: &Connection,
     paths: &LidarPaths,
@@ -1537,6 +1899,337 @@ mod tests {
         )
         .unwrap();
         assert_eq!(sparse.len(), 2, "only the two occupied chunks are written");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // -----------------------------------------------------------------------
+    // BG3/BG2: paged generation reads and complete reduction footprints
+    // -----------------------------------------------------------------------
+
+    fn constant_chunk(value: f32) -> Vec<f32> {
+        vec![value; 4 * 4]
+    }
+
+    /// A footprint wider than one stored chunk adds the stored sum and count of
+    /// every chunk it encloses: the mean is total sum over total valid count,
+    /// not the unweighted average of chunk means.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn crossing_footprints_aggregate_stored_sums_over_enclosed_chunks() {
+        let dir = scratch("footprint-aggregate");
+        let library = crate::services::lidar::LidarLibrary::open(&dir).unwrap();
+        for (chunk_x, chunk_y, value) in [(0, 0, 0.0), (1, 0, 10.0), (0, 1, 20.0), (1, 1, 30.0)] {
+            publish_test_chunk(
+                &library,
+                "generation-a",
+                chunk_x,
+                chunk_y,
+                4,
+                4,
+                &constant_chunk(value),
+            );
+        }
+        let owner = GenerationChunkReader::new("generation-a", RESULT_ROLE);
+        let aggregate = owner
+            .aggregate(&library, full_window(0, 0, 2048, 2048), &cancellation())
+            .unwrap()
+            .expect("the footprint holds coverage");
+        // Four fully valid 4x4 chunks: sum 960 over 64 cells.
+        assert_eq!(aggregate.valid_cells, 64);
+        assert_eq!(aggregate.mean(), Some(15.0));
+
+        // The counterexample the unweighted average would fail: three cells of
+        // 2 in one chunk and one cell of 10 in another. Chunk means are 2 and
+        // 10 (average 6), while the correct mean is 16 / 4 = 4.
+        let dir = scratch("footprint-weighted");
+        let library = crate::services::lidar::LidarLibrary::open(&dir).unwrap();
+        let mut sparse_low = vec![f32::NAN; 4 * 4];
+        sparse_low[0] = 2.0;
+        sparse_low[1] = 2.0;
+        sparse_low[2] = 2.0;
+        publish_test_chunk(&library, "generation-b", 0, 0, 4, 4, &sparse_low);
+        let mut sparse_high = vec![f32::NAN; 4 * 4];
+        sparse_high[0] = 10.0;
+        publish_test_chunk(&library, "generation-b", 1, 0, 4, 4, &sparse_high);
+        let owner = GenerationChunkReader::new("generation-b", RESULT_ROLE);
+        let aggregate = owner
+            .aggregate(&library, full_window(0, 0, 2048, 1024), &cancellation())
+            .unwrap()
+            .expect("both chunks contribute");
+        assert_eq!(aggregate.valid_cells, 4);
+        assert_eq!(aggregate.mean(), Some(4.0));
+
+        // Only the intersecting cells of a boundary chunk contribute: a
+        // one-cell footprint inside the second chunk reads that cell alone.
+        let aggregate = owner
+            .aggregate(&library, full_window(1024, 0, 1, 1), &cancellation())
+            .unwrap()
+            .expect("the boundary cell is valid");
+        assert_eq!(aggregate.valid_cells, 1);
+        assert_eq!(aggregate.mean(), Some(10.0));
+        // Coverage in a chunk that does not hold the footprint still counts:
+        // the same one-cell footprint one chunk over reads the low chunk only.
+        let aggregate = owner
+            .aggregate(&library, full_window(0, 0, 1, 1), &cancellation())
+            .unwrap()
+            .expect("the first chunk cell is valid");
+        assert_eq!(aggregate.mean(), Some(2.0));
+        // An empty footprint is invalid coverage, not a fabricated zero.
+        assert_eq!(
+            owner
+                .aggregate(&library, full_window(3000, 3000, 8, 8), &cancellation())
+                .unwrap(),
+            None
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A record whose committed file is gone stays an error, and a small window
+    /// never opens the records it does not intersect.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn unrelated_records_are_never_opened_for_a_small_window() {
+        let dir = scratch("paged-window");
+        let library = crate::services::lidar::LidarLibrary::open(&dir).unwrap();
+        publish_test_chunk(&library, "generation-c", 0, 0, 4, 4, &constant_chunk(7.0));
+        // A record far away whose file is removed: a reader that visited it
+        // would fail instead of returning the window it was asked for.
+        let unwanted =
+            publish_test_chunk(&library, "generation-c", 9, 9, 4, 4, &constant_chunk(3.0));
+        std::fs::remove_file(&unwanted.path).unwrap();
+        let owner = GenerationChunkReader::new("generation-c", RESULT_ROLE);
+        let resolved = owner
+            .read_window(
+                &library,
+                &lattice(),
+                full_window(0, 0, 4, 4),
+                &cancellation(),
+            )
+            .unwrap();
+        assert!(resolved.samples.iter().all(|value| *value == 7.0));
+        assert!(resolved.valid.iter().all(|valid| *valid == 1));
+        // The distant record is still a referenced asset: a read that must open
+        // it, or a footprint that only partly covers it, reports the missing
+        // file instead of empty coverage.
+        let distant = full_window(9 * CHUNK_SIDE, 9 * CHUNK_SIDE, 4, 4);
+        let error = owner
+            .read_window(&library, &lattice(), distant, &cancellation())
+            .expect_err("a missing committed file is an error");
+        assert!(!error.is_empty());
+        let error = owner
+            .aggregate(
+                &library,
+                full_window(9 * CHUNK_SIDE, 9 * CHUNK_SIDE, 2, 2),
+                &cancellation(),
+            )
+            .expect_err("a boundary chunk with no file is an error");
+        assert!(!error.is_empty());
+        // A footprint enclosing the same record is answered from its stored
+        // aggregate, which is exactly why stored sums exist: no raster I/O.
+        let enclosed = owner
+            .aggregate(&library, distant, &cancellation())
+            .unwrap()
+            .expect("the stored aggregate covers the footprint");
+        assert_eq!(enclosed.valid_cells, 16);
+        // Cancellation before the first page publishes nothing and a later
+        // healthy pass reads the same window exactly.
+        let cancelled = AtomicBool::new(true);
+        assert!(
+            owner
+                .read_window(&library, &lattice(), full_window(0, 0, 4, 4), &cancelled)
+                .is_err()
+        );
+        let resolved = owner
+            .read_window(
+                &library,
+                &lattice(),
+                full_window(0, 0, 4, 4),
+                &cancellation(),
+            )
+            .unwrap();
+        assert!(resolved.samples.iter().all(|value| *value == 7.0));
+        // The window page loads the one intersecting record and no other.
+        let page = {
+            let connection = library.catalogue().unwrap();
+            catalogue::generation_chunk_page(
+                &connection,
+                "generation-c",
+                RESULT_ROLE,
+                Some(catalogue::ChunkWindow::for_cells(0, 4, 0, 4, CHUNK_SIDE).unwrap()),
+                None,
+                CHUNK_PAGE_MAX,
+            )
+            .unwrap()
+        };
+        assert_eq!(page.len(), 1);
+        assert_eq!((page[0].chunk_x, page[0].chunk_y), (0, 0));
+        // Both records remain published: nothing was deleted by reading.
+        let all = {
+            let connection = library.catalogue().unwrap();
+            catalogue::generation_chunk_page(
+                &connection,
+                "generation-c",
+                RESULT_ROLE,
+                None,
+                None,
+                CHUNK_PAGE_MAX,
+            )
+            .unwrap()
+        };
+        assert_eq!(all.len(), 2);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Publish one record whose stored aggregate is the only thing a reader
+    /// needs: no file exists, so any read of it would fail loudly.
+    fn publish_stored_chunk(
+        library: &crate::services::lidar::LidarLibrary,
+        generation_id: &str,
+        chunk_x: i64,
+        chunk_y: i64,
+        valid_cells: i64,
+        sum_value: f64,
+    ) {
+        let paths = &library.inner.paths;
+        let sha256 = format!("stored-{generation_id}-{chunk_x}-{chunk_y}");
+        let asset = CogAsset {
+            sha256: sha256.clone(),
+            path: paths.asset_cog(&sha256),
+            bytes: 0,
+            grid: RasterGrid {
+                width: 4,
+                height: 4,
+                geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+            },
+            nodata: Some(f32::NAN),
+        };
+        let connection = library.catalogue().unwrap();
+        catalogue::insert_raster_asset(
+            &connection,
+            &asset_row(paths, &asset, "EPSG:3857").unwrap(),
+        )
+        .unwrap();
+        catalogue::insert_unpublished_chunks(
+            &connection,
+            generation_id,
+            &[catalogue::GenerationChunkRow {
+                role: RESULT_ROLE.to_string(),
+                chunk_x,
+                chunk_y,
+                asset_sha256: sha256,
+                valid_cells,
+                min_value: 0.0,
+                max_value: 0.0,
+                sum_value,
+            }],
+        )
+        .unwrap();
+        catalogue::publish_generation_chunks(&connection, generation_id).unwrap();
+    }
+
+    /// More than two pages of occupied records contribute exactly once, page at
+    /// most `CHUNK_PAGE_MAX` records, and distant records stay out of a small
+    /// window's path.
+    #[test]
+    fn paged_reads_cover_every_occupied_record_once_with_bounded_pages() {
+        let dir = scratch("paged-records");
+        let library = crate::services::lidar::LidarLibrary::open(&dir).unwrap();
+        // 600 occupied records in a 24x25 block, each holding four valid cells
+        // whose sum is `4 * index`, plus 50 distant records that must not
+        // contribute to this footprint.
+        let mut expected_sum = 0.0f64;
+        let mut index = 0i64;
+        for chunk_y in 0..25 {
+            for chunk_x in 0..24 {
+                let value = index as f64;
+                publish_stored_chunk(&library, "generation-p", chunk_x, chunk_y, 4, value * 4.0);
+                expected_sum += value * 4.0;
+                index += 1;
+            }
+        }
+        for distant in 0..50 {
+            publish_stored_chunk(
+                &library,
+                "generation-p",
+                9000 + distant,
+                9000,
+                4,
+                1_000_000.0,
+            );
+        }
+        let owner = GenerationChunkReader::new("generation-p", RESULT_ROLE);
+        let footprint = full_window(0, 0, 24 * CHUNK_SIDE as u32 + 4, 25 * CHUNK_SIDE as u32 + 4);
+        let aggregate = owner
+            .aggregate(&library, footprint, &cancellation())
+            .unwrap()
+            .expect("the footprint holds coverage");
+        assert_eq!(aggregate.valid_cells, 2400, "each record counts once");
+        assert_eq!(aggregate.mean(), Some(expected_sum / 2400.0));
+
+        // Pages are bounded and ordered, and the full walk sees every record
+        // exactly once.
+        let mut seen: Vec<(i64, i64)> = Vec::new();
+        let mut cursor = None;
+        let mut pages = 0usize;
+        loop {
+            let page = {
+                let connection = library.catalogue().unwrap();
+                catalogue::generation_chunk_page(
+                    &connection,
+                    "generation-p",
+                    RESULT_ROLE,
+                    None,
+                    cursor,
+                    CHUNK_PAGE_MAX,
+                )
+                .unwrap()
+            };
+            if page.is_empty() {
+                break;
+            }
+            pages += 1;
+            assert!(
+                page.len() <= CHUNK_PAGE_MAX,
+                "a page holds at most {CHUNK_PAGE_MAX} records"
+            );
+            assert!(
+                page.windows(2)
+                    .all(|pair| (pair[0].chunk_y, pair[0].chunk_x)
+                        < (pair[1].chunk_y, pair[1].chunk_x)),
+                "page order is stable"
+            );
+            cursor = page.last().map(|row| (row.chunk_y, row.chunk_x));
+            seen.extend(page.iter().map(|row| (row.chunk_x, row.chunk_y)));
+        }
+        assert!(pages >= 3, "more than two pages were exercised: {pages}");
+        assert_eq!(seen.len(), 650);
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), 650, "no record was returned twice");
+
+        // A small window loads only what it intersects, and its aggregate is
+        // the one record's stored sum.
+        let window = catalogue::ChunkWindow::for_cells(0, 8, 0, 8, CHUNK_SIDE).unwrap();
+        let filtered = {
+            let connection = library.catalogue().unwrap();
+            catalogue::generation_chunk_page(
+                &connection,
+                "generation-p",
+                RESULT_ROLE,
+                Some(window),
+                None,
+                CHUNK_PAGE_MAX,
+            )
+            .unwrap()
+        };
+        assert_eq!(filtered.len(), 1);
+        assert_eq!((filtered[0].chunk_x, filtered[0].chunk_y), (0, 0));
+        let aggregate = owner
+            .aggregate(&library, full_window(0, 0, 4, 4), &cancellation())
+            .unwrap()
+            .expect("the first record covers the window");
+        assert_eq!(aggregate.valid_cells, 4);
+        assert_eq!(aggregate.mean(), Some(0.0));
         let _ = std::fs::remove_dir_all(dir);
     }
 }
