@@ -1,10 +1,20 @@
 # Raster qualification reviews and methodology debrief
 
-Status: evidence — native G1–G5 accepted at `a5fc7d7b`; bounded-generation `eb64a853` independently reviewed as partial (BG6-A and BG7-A/B/C remain; BG8 requested cases verified). Historical Q/Desktop findings remain historical; final methodology conclusions pending.
-Tracking: `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
+Status: evidence — bounded-generation `6a5130b3` reviewed with two remaining code edges and evidence corrections; user-approved product-closure scope freeze. Historical records remain evidence, not active assignments.
+Tracking: current `canopi-jv8a.4`; historical Q `canopi-kqpp`, parent `canopi-j571`; bd remains the execution tracker.
 Current guidance: [bounded-generation review](bounded-generation-review.md), [completion assignment](bounded-generation-completion-agent-prompt.md), [implementation plan](../raster-data-analysis-rework.md), and [delivery workflow](../../workflow/delivery.md). Q records below are historical evidence, not current execution authority.
 
 ## Purpose and evidence discipline
+
+### Product-closure reset after `6a5130b3`
+
+The user and main agent judged the completion process disproportionate: repeated repair→review→new-prompt cycles, broad reruns, lengthy receipts and defensive detail displaced real Desktop verification. The COG/sparse/history architecture remains justified by the product requirements. The main agent owns its contribution: increasingly detailed recovery prescriptions, missed caller boundaries, and insufficient prioritization of product risk versus exhaustive contract closure. This is a process judgment, not a measured causal comparison of models, languages or skills.
+
+Observed review evidence: 152 native/GDAL tests independently passed in 482.58 seconds, but two cleanup edges remained and the receipt named lifecycle tests absent from the committed tree. The correct response is a bounded repair and factual evidence correction—not another verification framework. Preserve the genuine iterator and publication improvements.
+
+The [product-closure policy](collaboration-protocol.md#product-closure-policy) is the intervention: freeze architecture/scope; focused repair tests; required broad gates on the final candidate; real Desktop import→overlap→display→slope→restart→undo. The main agent's next review is diff/risk-focused. Unsupported UI access produces a runnable user smoke handoff, not a new harness.
+
+For the final debrief, compare actual workflows demonstrated, safety defects caught before versus after courier delivery, necessary decisions versus avoidable continuation messages, repeated runs on identical code, and effort/cost only where recorded. Name main-agent design/review omissions separately from implementation/test omissions and unsupported reporting. Record whether this narrower intervention actually improved delivery; do not declare success from shorter documents or higher test counts. Promote only demonstrated reusable lessons into tooling/skills under separate authority. One compact outcome in this record suffices.
 
 ### Caller-boundary review — `eb64a853`
 

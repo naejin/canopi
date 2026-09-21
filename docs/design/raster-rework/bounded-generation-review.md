@@ -4,7 +4,22 @@ Status: evidence — independent focused review: partial delivery, not accepted 
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`.
 Current guidance: [completion assignment](bounded-generation-completion-agent-prompt.md), [design](bounded-generation-design.md), [courier protocol](collaboration-protocol.md).
 
-## Current disposition — `eb64a853`
+## Current disposition — `6a5130b3`
+
+Preserve the globally ordered iterator and the corrected guard-before-promotion, startup root-preservation and irreversible publication-success structure. The independent focused run passed **152 native/GDAL tests**, 0 failures, in 482.58 seconds; docs and diff checks passed. It used the command below and excluded private `services::lidar::e2e`; private MNT/MNH, full workspace/frontend and platform checks were not independently repeated. No repository files changed during review.
+
+Two known code edges remain for the [product-closure assignment](bounded-generation-completion-agent-prompt.md):
+
+| ID | Evidence at `6a5130b3` | Required closure |
+| --- | --- | --- |
+| C1 — collision intent treated as ownership | `import.rs:2607–2620` journals a destination before linking, then leaves that intent in place on `AlreadyExists`; rollback/recovery uses journal entries as deletion candidates without proof the link was this job's. | Preserve another publisher's file through rollback/restart, including before a catalogue reference exists. Source-confirmed conditional failure path, not a new concurrent Desktop run. |
+| C2 — journal-clear failures discarded | `import.rs:2806` and `:2900` discard removal errors. An extraction of the real reconciliation function with stubbed journal/catalogue reads and actual filesystem permissions returned `Ok(0)` with deletion denied and the journal still present; the writable control removed it. | Make clearing fallible and preserve retry evidence through the existing caller. This probe is not an end-to-end library-open test. |
+
+The receipt also overstates verification: no delivered test enables `AfterPromotion` or calls `finish_apply`; the wide caller fixture makes the last 1024 cells NoData, so its absence from the count does not establish final-page visitation. The real iterator regression does establish the ordering counterexample. Correct these claims and the focused evidence without reopening the ordering architecture.
+
+The user approved freezing the architecture and moving to actual Desktop workflow verification after these repairs. Do not turn optional defensive completeness into another acceptance campaign. The [protocol](collaboration-protocol.md#product-closure-policy) now owns the risk filter and review boundary. Capacity limits remain unchanged; unavailable capacity/platform evidence is not relabelled as passing. Integration/release remains a separate decision.
+
+## Historical disposition — `eb64a853`
 
 Partial acceptance. Preserve job-local source COGs, Before/After value correction, the sparse traversal direction and earlier BG1–BG5 improvements. BG8's requested incomplete-baseline/sample and observed-over-budget cases are independently verified; it needs no further repair in this assignment. BG6 and BG7 remain incomplete for the four findings below, against their existing contracts.
 
@@ -72,4 +87,4 @@ This is a bounded review, not a guarantee that publication, cleanup, migration a
 
 ## Review closure
 
-The implementation response belongs in the existing branch's `bounded-generation-receipt.md`, now mapping BG6-A and BG7-A/B/C to code and decisive caller tests alongside retained delivery evidence. Reconcile stale current statements rather than appending contradictory updates. The main agent records the next independent disposition here after the user forwards the corrected revision. Until then the disposition remains partial, regardless of passing test counts.
+The implementation response belongs in the existing branch's `bounded-generation-receipt.md`: C1/C2, corrected evidence and the actual Desktop smoke or its runnable pending handoff. Reconcile stale current statements rather than appending contradictory updates. The main agent reviews the changed boundaries and smoke outcome under the product-closure policy; passing test counts alone do not establish acceptance or integration.

@@ -12,9 +12,19 @@ Forward the handoff path and commit, then return the delivery with commit/branch
 
 ## One bounded loop
 
-Use the project-wide handoff and consolidated-review rules. The [index](README.md) names the sole current assignment and bd owns execution status. G1–G5 is accepted; the [pagination/lifecycle completion](bounded-generation-completion-agent-prompt.md) continues the existing bounded-generation batch after partial review at `eb64a853`. Complete internal steps and routine repairs before one consolidated delivery. The user selected GeoLibre reuse; do not request the same decision again. Different engines, scientific contracts or material UI changes outside the design still require approval. Q remains frozen/unqualified, not an entry gate for production work.
+Use the project-wide handoff and consolidated-review rules. The [index](README.md) names the sole current assignment and bd owns execution status. G1–G5 is accepted; the [product-closure](bounded-generation-completion-agent-prompt.md) continues the existing bounded-generation batch after partial review at `6a5130b3`. Complete internal steps and routine repairs before one consolidated delivery. The user selected GeoLibre reuse; do not request the same decision again. Different engines, scientific contracts or material UI changes outside the design still require approval. Q remains frozen/unqualified, not an entry gate for production work.
 
 One authorization may span execution windows. A green checkpoint preserves progress; it is neither acceptance nor a reason to seek another architecture assignment. Resume from the last verified commit with a concise bead note: demonstrated caller behavior, tests, remaining boundary and next action. Preserve the original required outcomes across checkpoints; unfinished mandatory work cannot become “optional optimization” merely because other callers now run. Before final delivery, reconcile each original outcome with the current production caller and decisive evidence in the existing receipt. Replace stale current summaries; keep older observations only with their revision/scope. This is a handoff discipline, not a second tracker or reporting framework.
+
+## Product closure policy
+
+The user approved a scope freeze after reviewing `6a5130b3`: retain the core COG/sparse-generation architecture, repair the two known C1/C2 edges, correct unsupported evidence, then verify the existing workflow in the real Desktop app. This supersedes the earlier pattern of open-ended repair/review handoffs; it does not waive data integrity or established resource/scientific requirements.
+
+Both agents apply the same risk filter. Beyond the named closure work, block this candidate only for demonstrated data-loss risk, wrong scientific results, a broken normal workflow, a required resource-bound violation, or materially misleading acceptance evidence. Tie a blocker to its reachable case and user consequence. Cosmetic cleanup, speculative hardening and optional optimization become follow-up beads, not another architecture round. Do not silently weaken existing contracts; defer a non-blocking obligation explicitly with its scope and release effect.
+
+The implementer runs focused regressions while editing and required broad gates once on the final candidate, rerunning affected checks after code/rebase changes. The main agent reviews the changed risk boundaries and smoke evidence, not the whole foundation again without a concrete reason. Existing AGENTS gates remain authoritative. Identical code does not need another broad run because a receipt changed. No new framework, exhaustive matrix, mutation quota or skill rewrite.
+
+The next milestone is usable Desktop behavior, not a larger receipt. If the agent lacks real UI access, it supplies one runnable isolated-profile smoke handoff for the user; unavailable observation stays pending. One authorization spans execution windows and the user remains courier. Integration/release still requires explicit approval.
 
 ## Delivery evidence and continuous improvement
 
