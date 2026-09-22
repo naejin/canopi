@@ -1,6 +1,6 @@
 # Finish ordered COG display and asynchronous panel settlement
 
-Status: active — sole current raster implementation assignment; bounded correction after independent review of `524eef55`.
+Status: completed — executed on `feature/bounded-raster-generations` through `f5c12110` (docs merge `34bf6041`, R12–R14 `d53f4185`, mounted-map evidence `1bf4e6fe`); independent disposition pending. The remaining unobserved evidence is named in the [receipt](ordered-cog-receipt.md#unavailable-observations).
 Tracking: `canopi-jv8a.4`; related `canopi-kko3`; parent `canopi-jv8a`, epic `canopi-j571`.
 Current guidance: [current findings R12–R14](ordered-cog-review.md#current-disposition-at-524eef55), [fixed design](ordered-cog-design.md), [collaboration](collaboration-protocol.md), [LiDAR](../../agent/lidar.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief), [delivery](../../workflow/delivery.md).
 
