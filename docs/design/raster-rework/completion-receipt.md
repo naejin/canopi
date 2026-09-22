@@ -36,8 +36,8 @@ branch or worktree was deleted.
 
 | Phase | State | Decisive evidence | Remaining limitation |
 | --- | --- | --- | --- |
-| C0 | **Done** | Integration `f61f8494`; ancestry table above; `cargo fmt`, strict Clippy, `cargo check`, `tsc`, `check:types`, `check:ui`, both edition builds pass on the integrated tree | Full Vitest has 10 failures in 4 MapLibre/DuckDB files, all timing-based and observed under load average ~24; not yet re-run in isolation |
-| C1 | **Partial** | Policy implemented in `admission.rs`/`catalogue.rs`/`import.rs`; 6 admission tests pass; 110 Lidar tests pass; the 24-tile batch is admitted by the **real production policy** with no override | The 48M MNH batch and the 400M plane have not been run through the production callers; resource, cancellation, low-space and display-timing evidence is outstanding |
+| C0 | **Done** | Integration `f61f8494`; ancestry table above; `cargo fmt`, strict Clippy, `cargo check`, `tsc`, `check:types`, `check:ui`, both edition builds pass on the integrated tree | — |
+| C1 | **Partial** | Policy implemented and enabled; 6 admission unit tests and 3 repurposed ordered-boundary tests pass; the 24-tile sparse batch and the 48M MNH batch are both admitted and imported by the **real production policy** with no override | The 400M single-file plane has not been run through the production callers; cancellation, low-space/write-failure, restart-reuse and cold/three-warm display timings are outstanding; no whole-union-allocation claim is made |
 | C2 | Not started | — | Production Data/Analysis/Layers surfaces absent |
 | C3 | Not started | — | No `sample(entity, expected generation, WGS84 point)` operation |
 | C4 | Not started | — | No shared provider module, no `google_satellite`, no replacement ADR |
@@ -65,6 +65,34 @@ The union is **above** the retired 25M bound and is admitted because processing
 cells charge per occurrence, not the empty space between the sources. This is
 the sparse case the contract names, and it is a production-policy witness rather
 than an overridden probe.
+
+`e2e_mnh_batch_import_apply_display_restart` also runs with no admission
+override and covers the whole pipeline the contract names for this batch —
+import, reopen and display — rather than only admission:
+
+```
+MNH batch: 12 tiles
+staged: uncovered=48000000 overlap=0 invalid=0
+applied: 48000000 cells, 12 source occurrences, 12 retained source COGs, range Some(-1.7018585205078125)..Some(39.28395080566406)
+tile 18/130771/90786: 41465 bytes
+tile 17/65385/45393: 72481 bytes
+tile 16/32692/22696: 54315 bytes
+tile 15/16346/11348: 60384 bytes
+drawn tiles: 4 (228645 bytes)
+restart: 48000000 cells
+MNH batch: process tree sample every 50 ms: baseline 17 MiB, peak total 96 MiB,
+  incremental 78 MiB, largest observed subtotal 96 MiB over 2330 complete and 65 incomplete ticks
+```
+
+The batch is admitted at exactly 12 files and 48,000,000 processing cells, both
+inside the production policy. Every tile is its own source occurrence with its
+own retained COG, the composition materializes **no** resolved result chunks,
+the sparse display draws real tiles, and the head survives restart with the same
+coverage. Peak sampled working set is 96 MiB, far inside the 1 GiB gate.
+
+Correcting that test also removed a real staleness: it asserted the composed
+`CogChunksV1` publication format the ordered route replaced, so it had been
+describing a storage model production no longer uses.
 
 ## Capacity and scientific measurements
 

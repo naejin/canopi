@@ -827,10 +827,13 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
-    // Twelve files are inside the production file count, but the 48M-cell
-    // union is over the interim admission envelope: this authorized
-    // representative run raises it for its own thread only.
-    let _admission = admission::limits_probe::raise(128 * 1024 * 1024, 16, 1024 * 1024 * 1024);
+    // Twelve files and 48,000,000 processing cells are both inside the
+    // production policy, so this authorized run needs no admission override:
+    // it witnesses the real limits a user gets.
+    assert_eq!(
+        admission::limits(),
+        admission::AdmissionLimits::production()
+    );
 
     // The combined-memory sample starts from an idle baseline before any raster
     // work and keeps sampling until the workload settles.
@@ -886,22 +889,66 @@ fn e2e_mnh_batch_import_apply_display_restart() {
             .expect("head published")
     };
     let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
+    // The ordered route publishes the accepted sources as one ordered
+    // collection; it never materializes a resolved composition raster, so the
+    // batch costs source COGs plus member metadata rather than 48M composed
+    // cells.
     assert_eq!(
         manifest.format,
-        import::GenerationStorageFormat::CogChunksV1,
-        "the batch publishes sparse chunks"
+        import::GenerationStorageFormat::OrderedMembersV1,
+        "the batch publishes as an ordered collection of source occurrences"
     );
     assert_eq!(head.coverage_cells, 48_000_000);
-    let chunks = {
+    let members = {
+        let connection = library.catalogue().unwrap();
+        catalogue::collection_members(&connection, &head.id).unwrap()
+    };
+    assert_eq!(
+        members.len(),
+        files.len(),
+        "every selected tile is its own occurrence"
+    );
+    assert!(
+        members.iter().all(|member| member.kind == "source"),
+        "a first batch is all source occurrences: {members:?}"
+    );
+    // The composition itself stores no resolved result chunks: the occurrences
+    // are read from their own source COGs on demand.
+    let resolved_chunks = {
         let connection = library.catalogue().unwrap();
         catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
     };
-    // 8000x6000 over 1024-cell chunks: eight columns, six rows.
-    assert_eq!(chunks.len(), 48, "one chunk per occupied 1024-cell block");
+    assert!(
+        resolved_chunks.is_empty(),
+        "an ordered composition materializes nothing: {} resolved chunks",
+        resolved_chunks.len()
+    );
+    // Every source occurrence retains its own standard COG, which is what makes
+    // the batch readable without a composed raster.
+    let source_cogs = {
+        let connection = library.catalogue().unwrap();
+        members
+            .iter()
+            .filter(|member| {
+                member.interpretation_id.as_deref().is_some_and(|id| {
+                    catalogue::interpretation_cog(&connection, id)
+                        .ok()
+                        .flatten()
+                        .is_some()
+                })
+            })
+            .count()
+    };
+    assert_eq!(
+        source_cogs,
+        files.len(),
+        "every occurrence keeps a retained source COG"
+    );
     println!(
-        "applied: {} cells, {} chunks, range {:?}..{:?}",
+        "applied: {} cells, {} source occurrences, {} retained source COGs, range {:?}..{:?}",
         head.coverage_cells,
-        chunks.len(),
+        members.len(),
+        source_cogs,
         head.min_value,
         head.max_value
     );
