@@ -118,12 +118,21 @@ export async function cancelOpenImport(): Promise<void> {
 export async function analyseLayerAsSlope(
   layerId: string,
   slopeUnit: 'Degrees' | 'Percent' = 'Degrees',
+  resultName: string | null = null,
 ): Promise<void> {
   const identity = designSessionStore.sessionIdentity.value
   await withLidarError(async () => {
-    const receipt = await lidarCreateAnalysis(layerId, 'Slope', {
-      slope_unit: slopeUnit,
-    })
+    const receipt = await lidarCreateAnalysis(
+      layerId,
+      'Slope',
+      {
+        slope_unit: slopeUnit,
+        // The name travels with the request; a blank one stays null so an
+        // unnamed result is shown by kind rather than given an invented name.
+        name: resultName,
+      },
+      resultName,
+    )
     // Remember the job the user actually started, because that is the only
     // handle that can cancel *this* run. The library snapshot reports result
     // state but not job identity, so without this the Cancel action would have

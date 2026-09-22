@@ -281,7 +281,9 @@ fn e2e_import_publish_slope_restart_reuse() {
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
                 slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                name: None,
             },
+            None,
         )
         .expect("analysis created");
     // Run the enqueued job synchronously for the test.
@@ -641,7 +643,9 @@ fn e2e_sparse_generation_lifecycle() {
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
                 slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                name: None,
             },
+            None,
         )
         .expect("analysis created");
     let (parameters, source_generation) = {

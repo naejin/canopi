@@ -6996,7 +6996,9 @@ mod tests {
                 common_types::lidar::LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
                     slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                    name: None,
                 },
+                None,
             )
             .expect("analysis definition is created");
         let parameters = {
@@ -7614,7 +7616,9 @@ mod tests {
                 common_types::lidar::LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
                     slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                    name: None,
                 },
+                None,
             )
             .expect("analysis definition is created");
 
@@ -7713,7 +7717,9 @@ mod tests {
                 common_types::lidar::LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
                     slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                    name: None,
                 },
+                None,
             )
             .expect("analysis definition is created");
         let parameters = {
@@ -7786,7 +7792,9 @@ mod tests {
                 common_types::lidar::LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
                     slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                    name: None,
                 },
+                None,
             )
             .expect("analysis definition is created");
         let parameters = {

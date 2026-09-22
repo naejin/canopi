@@ -26,6 +26,21 @@ use std::sync::atomic::AtomicBool;
 pub struct AnalysisParameters {
     #[serde(default)]
     pub slope_unit: Option<LidarSlopeUnit>,
+    /// Published with the result; `#[serde(default)]` keeps a parameters blob
+    /// written before names existed readable.
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+impl AnalysisParameters {
+    /// The name to publish a result under, trimmed and emptied to `None`.
+    fn published_name(&self) -> Option<String> {
+        self.name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -561,8 +576,8 @@ fn publish_sparse_slope(
                 }
                 connection
                     .execute(
-                        "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at)
-                         VALUES(?1, ?2, ?3, ?4, 'ready', NULL, NULL, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name)
+                         VALUES(?1, ?2, ?3, ?4, 'ready', NULL, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                         rusqlite::params![
                             generation_id,
                             definition_id,
@@ -574,6 +589,7 @@ fn publish_sparse_slope(
                             max_value,
                             head.bounds_3857,
                             now_iso(),
+                            parameters.published_name(),
                         ],
                     )
                     .map_err(|e| e.to_string())?;
@@ -934,8 +950,8 @@ pub fn run_slope_job(
             }
             connection
                 .execute(
-                    "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at)
-                     VALUES(?1, ?2, ?3, ?4, 'ready', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                    "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name)
+                     VALUES(?1, ?2, ?3, ?4, 'ready', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                     rusqlite::params![
                         generation_id,
                         definition_id,
@@ -949,6 +965,7 @@ pub fn run_slope_job(
                         max_value,
                         head.bounds_3857,
                         now_iso(),
+                        parameters.published_name(),
                     ],
                 )
                 .map_err(|e| e.to_string())?;
@@ -1290,7 +1307,9 @@ mod tests {
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
                     slope_unit: Some(unit),
+                    name: None,
                 },
+                None,
             )
             .expect("analysis created");
         let (parameters, source_generation) = {
@@ -1470,7 +1489,9 @@ mod tests {
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
                     slope_unit: Some(LidarSlopeUnit::Degrees),
+                    name: None,
                 },
+                None,
             )
             .expect("stale analysis created");
         // An identical reimport publishes only when it replaces overlap; that
@@ -1547,7 +1568,9 @@ mod tests {
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
                     slope_unit: Some(LidarSlopeUnit::Degrees),
+                    name: None,
                 },
+                None,
             )
             .expect("analysis created");
         let (parameters, source_generation) = {

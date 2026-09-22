@@ -171,6 +171,12 @@ pub struct LidarAnalysisSummary {
     pub id: String,
     pub source_layer_id: String,
     pub kind: LidarAnalysisKind,
+    /// The name its author gave this result.
+    ///
+    /// `None` for a result published before names existed and for one whose
+    /// author left the field empty; the UI then shows its kind, so an unnamed
+    /// result is never presented with an invented name.
+    pub name: Option<String>,
     pub state: LidarResultState,
     pub detail: Option<String>,
     pub bounds: Option<[f64; 4]>,
@@ -379,6 +385,13 @@ pub struct LidarAnalysisJobStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarAnalysisParameters {
     pub slope_unit: Option<LidarSlopeUnit>,
+    /// The name to publish this result under.
+    ///
+    /// Optional and defaulted, so an existing caller that sends only a slope
+    /// unit keeps working and simply publishes an unnamed result. The name
+    /// travels with the definition's parameters, so a refresh publishes the
+    /// same name rather than silently renaming the user's result.
+    pub name: Option<String>,
 }
 
 // Numeric pixel inspection: one read-only lookup of the physical value at one

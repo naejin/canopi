@@ -46,6 +46,7 @@ let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
   id: 'lidar-slope',
   source_layer_id: 'lidar-ground',
   kind: 'Slope',
+  name: null,
   state: 'Ready',
   detail: null,
   bounds: lidarBounds,
@@ -219,10 +220,12 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
     case 'lidar_create_analysis': {
       const layerId = String(args.layerId)
       const definitionId = `lidar-analysis-${sequence++}`
+      const requestedName = typeof args.resultName === 'string' ? args.resultName.trim() : ''
       lidarAnalyses = [...lidarAnalyses, {
         id: definitionId,
         source_layer_id: layerId,
         kind: 'Slope',
+        name: requestedName.length > 0 ? requestedName : null,
         state: 'Ready',
         detail: null,
         bounds: lidarBounds,

@@ -88,8 +88,9 @@ export async function lidarCreateAnalysis(
   layerId: string,
   kind: LidarAnalysisKind,
   parameters: LidarAnalysisParameters,
+  resultName: string | null = null,
 ): Promise<LidarAnalysisReceipt> {
-  return invoke('lidar_create_analysis', { layerId, kind, parameters })
+  return invoke('lidar_create_analysis', { layerId, kind, parameters, resultName })
 }
 
 export async function lidarGetAnalysisJobStatus(

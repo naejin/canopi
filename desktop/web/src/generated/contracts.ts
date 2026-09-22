@@ -184,6 +184,15 @@ export type LidarAnalysisKind =
  */
 export type LidarAnalysisParameters = {
 	slope_unit: LidarSlopeUnit | null,
+	/**
+	 *  The name to publish this result under.
+	 *
+	 *  Optional and defaulted, so an existing caller that sends only a slope
+	 *  unit keeps working and simply publishes an unnamed result. The name
+	 *  travels with the definition's parameters, so a refresh publishes the
+	 *  same name rather than silently renaming the user's result.
+	 */
+	name: string | null,
 };
 
 /**
@@ -200,6 +209,14 @@ export type LidarAnalysisSummary = {
 	id: string,
 	source_layer_id: string,
 	kind: LidarAnalysisKind,
+	/**
+	 *  The name its author gave this result.
+	 *
+	 *  `None` for a result published before names existed and for one whose
+	 *  author left the field empty; the UI then shows its kind, so an unnamed
+	 *  result is never presented with an invented name.
+	 */
+	name: string | null,
 	state: LidarResultState,
 	detail: string | null,
 	bounds: [number, number, number, number] | null,

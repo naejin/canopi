@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 16;
+pub const CATALOGUE_VERSION: i32 = 17;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -160,6 +160,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         14 => SCHEMA_V14,
         15 => SCHEMA_V15,
         16 => SCHEMA_V16,
+        17 => SCHEMA_V17,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -198,6 +199,17 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
                 [],
             )
             .map_err(|e| format!("Failed to add the legacy base reference: {e}"))?;
+    }
+    // v17 is an additive column, guarded like the other column additions: a
+    // catalogue that already has it, or a fixture presenting the newer shape at
+    // an older version, still migrates cleanly.
+    if next == 17 && !table_has_column(&transaction, "lidar_analysis_generations", "name")? {
+        transaction
+            .execute(
+                "ALTER TABLE lidar_analysis_generations ADD COLUMN name TEXT",
+                [],
+            )
+            .map_err(|e| format!("Failed to add the analysis result name: {e}"))?;
     }
     if next == 16 {
         if !table_has_column(&transaction, "lidar_layer_generations", "operation")? {
@@ -497,6 +509,18 @@ const SCHEMA_V15: &str = "";
 /// its assets and its explicit Restore capability, and entries without a
 /// recorded operation display a neutral "Previous version" label.
 const SCHEMA_V16: &str = "";
+
+/// v17: an analysis result may carry the name its author gave it.
+///
+/// The name belongs to the *generation*, not the definition: a definition is one
+/// layer/kind pair that persists for the life of the library, while each run
+/// publishes a new generation that the user named. Nullable, so every existing
+/// generation keeps its row and reports no name rather than a fabricated one.
+///
+/// The column is added by the guarded step in `apply_migration` rather than by
+/// this script, because a fixture can present the newer shape at an older
+/// version and would otherwise fail on a duplicate column.
+const SCHEMA_V17: &str = "";
 
 /// v12: an index matching the paged chunk read order.
 ///
@@ -810,6 +834,8 @@ pub struct AnalysisGenerationRow {
     pub id: String,
     pub source_generation_id: String,
     pub state: String,
+    /// The name its author gave this result; `None` for pre-v17 generations.
+    pub name: Option<String>,
     pub min_value: Option<f64>,
     pub max_value: Option<f64>,
     pub bounds_3857: String,
@@ -984,7 +1010,7 @@ pub fn head_analysis_generation(
     connection
         .query_row(
             "SELECT g.id, g.source_generation_id, g.state, g.min_value, g.max_value,
-                    g.bounds_3857, g.manifest_json
+                    g.bounds_3857, g.manifest_json, g.name
              FROM lidar_analysis_heads h
              JOIN lidar_analysis_generations g ON g.id = h.generation_id
              WHERE h.definition_id = ?1",
@@ -998,6 +1024,7 @@ pub fn head_analysis_generation(
                     max_value: row.get(4)?,
                     bounds_3857: row.get(5)?,
                     manifest_json: row.get(6)?,
+                    name: row.get(7)?,
                 })
             },
         )

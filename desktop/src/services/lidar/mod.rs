@@ -1822,8 +1822,11 @@ impl LidarLibrary {
         let Ok(executor) = self.executor() else {
             return;
         };
-        let parameters = analysis::parse_parameters(&parameters_json)
-            .unwrap_or(analysis::AnalysisParameters { slope_unit: None });
+        let parameters =
+            analysis::parse_parameters(&parameters_json).unwrap_or(analysis::AnalysisParameters {
+                slope_unit: None,
+                name: None,
+            });
         let flag = self.register_cancel(&job_id);
         let library = self.clone();
         let job_id_for_run = job_id.clone();
@@ -1896,6 +1899,7 @@ impl LidarLibrary {
         layer_id: &str,
         kind: LidarAnalysisKind,
         parameters: LidarAnalysisParameters,
+        result_name: Option<String>,
     ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
         let connection = self.catalogue()?;
         let layer = catalogue::get_layer(&connection, layer_id)?
@@ -1904,6 +1908,13 @@ impl LidarLibrary {
         catalogue::head_generation(&connection, layer_id)?
             .ok_or_else(|| "Layer has no accepted coverage to analyse yet".to_string())?;
         let definition_id = new_id("adef");
+        // The name rides with the definition's parameters, so a refresh
+        // publishes the same name instead of silently renaming the user's
+        // result, and a caller that sends no name simply publishes unnamed.
+        let parameters = analysis::AnalysisParameters {
+            slope_unit: parameters.slope_unit,
+            name: result_name,
+        };
         let parameters_json = serde_json::to_string(&parameters).map_err(|e| e.to_string())?;
         connection
             .execute(

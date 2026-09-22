@@ -274,13 +274,17 @@ pub async fn lidar_create_analysis(
     layer_id: String,
     kind: LidarAnalysisKind,
     parameters: LidarAnalysisParameters,
+    // `result_name`: the name to publish the result under. Omitted or blank
+    // publishes an unnamed result, which the UI shows by kind rather than
+    // inventing a name.
+    result_name: Option<String>,
 ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar create analysis",
-            move || library.create_analysis(&layer_id, kind, parameters),
+            move || library.create_analysis(&layer_id, kind, parameters, result_name),
         )
         .await
 }

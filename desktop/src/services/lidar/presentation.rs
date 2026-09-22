@@ -141,6 +141,9 @@ pub fn library_snapshot(
             (_, Some(result)) => (parse_result_state(&result.state), None),
             (_, None) => (LidarResultState::Preparing, None),
         };
+        // The name belongs to the published result, so an unnamed or pre-v17
+        // generation reports none and the UI falls back to the kind.
+        let result_name = head_result.as_ref().and_then(|result| result.name.clone());
         let (bounds, value_range, tilesets) = match &head_result {
             Some(result) => {
                 let bounds = serde_json::from_str::<Vec<f64>>(&result.bounds_3857)
@@ -176,6 +179,7 @@ pub fn library_snapshot(
             id: definition.id.clone(),
             source_layer_id: definition.layer_id.clone(),
             kind: parse_analysis_kind(&definition.kind)?,
+            name: result_name,
             state,
             detail,
             bounds,

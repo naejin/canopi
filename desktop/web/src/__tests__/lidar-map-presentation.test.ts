@@ -54,11 +54,16 @@ function layerSummary(overrides: Partial<LidarLayerSummary> = {}): LidarLayerSum
   }
 }
 
-function analysisSummary(overrides: Partial<LidarAnalysisSummary> = {}): LidarAnalysisSummary {
+function analysisSummary(
+  // `Omit` keeps `name` out of the override surface: `Partial` would let a
+  // caller widen it to `undefined`, which the contract does not allow.
+  overrides: Partial<Omit<LidarAnalysisSummary, 'name'>> = {},
+): LidarAnalysisSummary {
   return {
     id: 'adef-1',
     source_layer_id: 'lyr-1',
     kind: 'Slope',
+    name: null,
     state: 'Ready',
     detail: null,
     bounds: [-0.43, 48.3, -0.41, 48.31],

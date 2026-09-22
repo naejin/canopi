@@ -128,9 +128,13 @@ describe('LiDAR action session isolation', () => {
     expect(runningAnalysisJobId('adef-1')).toBe('job-77')
     expect(runningAnalysisJobId('adef-unknown')).toBeNull()
     // The chosen unit is the recipe's own parameter, not a relabelled result.
-    expect(createAnalysisMock).toHaveBeenCalledWith('lyr-1', 'Slope', {
-      slope_unit: 'Percent',
-    })
+    expect(createAnalysisMock).toHaveBeenCalledWith(
+      'lyr-1',
+      'Slope',
+      // A run started without a name stays unnamed rather than being given one.
+      { slope_unit: 'Percent', name: null },
+      null,
+    )
   })
 
   it('cancels only a run this session started', async () => {
