@@ -74,7 +74,7 @@ vi.mock('../app/lidar/camera-request', () => ({
 }))
 
 import { locale } from '../app/settings/state'
-import { lidarStatusMessage } from '../app/lidar/library-store'
+import { lidarLibrary, lidarStatusMessage } from '../app/lidar/library-store'
 import { LidarLayersSection } from '../components/panels/lidar/LidarLayersSection'
 
 function deferred<T>() {
@@ -156,8 +156,7 @@ describe('ordered layer priority panel', () => {
   }
 
   /** The row's action menu is portalled to the document body. */
-  async function openHistory(): Promise<void> {
-    await mount()
+  async function openHistoryView(): Promise<void> {
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Layer actions"]')
     expect(trigger).not.toBeNull()
     await act(() => trigger?.click())
@@ -166,6 +165,26 @@ describe('ordered layer priority panel', () => {
     expect(item).toBeDefined()
     await act(() => item?.click())
     await flush()
+  }
+
+  async function openHistory(): Promise<void> {
+    await mount()
+    await openHistoryView()
+  }
+
+  /** Refresh the library signal without touching the IPC mocks. */
+  async function refreshLibrary(): Promise<void> {
+    await act(() => { lidarLibrary.value = { ...lidarLibrary.value! } })
+    await flush()
+  }
+
+  function button(label: string): HTMLButtonElement | undefined {
+    return Array.from(container.querySelectorAll('button'))
+      .find((candidate) => candidate.textContent === label)
+  }
+
+  function moveUps(): HTMLButtonElement[] {
+    return Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label="Move up"]'))
   }
 
   it('shows the stored source filename instead of a digest', async () => {
@@ -248,5 +267,144 @@ describe('ordered layer priority panel', () => {
       .find((button) => button.textContent === 'Undo last change')
     expect(undo?.disabled).toBe(true)
     expect(container.textContent).toContain('There is no earlier version to undo.')
+  })
+
+  it('settles a pending edit after the view moves on', async () => {
+    const edit = deferred<unknown>()
+    moveLayerSource.mockReturnValue(edit.promise)
+    await mount()
+    await act(() => moveUps()[1]?.click())
+    expect(moveUps()[1]?.disabled).toBe(true)
+
+    // Navigating to History must not orphan the pending state the edit owns.
+    await openHistoryView()
+    await act(async () => {
+      edit.resolve({ head_generation_id: 'gen-3', changed: true, message: null })
+      await edit.promise
+    })
+    await flush()
+
+    expect(button('Undo last change')?.disabled).toBe(false)
+  })
+
+  it('settles a rejected edit after the view moves on and keeps its message', async () => {
+    const edit = deferred<unknown>()
+    moveLayerSource.mockReturnValue(edit.promise)
+    await mount()
+    await act(() => moveUps()[1]?.click())
+    await openHistoryView()
+
+    await act(async () => {
+      edit.reject(new Error('the layer changed since this edit was prepared'))
+      await edit.promise.catch(() => undefined)
+    })
+    await flush()
+
+    // The named refusal stays visible and the controls the edit disabled are
+    // usable again, so the user can retry against the head that was re-read.
+    expect(container.textContent).toContain('the layer changed since this edit was prepared')
+    expect(button('Undo last change')?.disabled).toBe(false)
+    expect(fetchLayerCollection.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('keeps the refreshed head when an older same-layer read answers late', async () => {
+    const older = deferred<unknown>()
+    fetchLayerCollection.mockReturnValueOnce(older.promise)
+    await mount()
+
+    fetchLayerCollection.mockResolvedValue(
+      COLLECTION({ head_generation_id: 'gen-new', sources: [SOURCE('mem-new', 'new.tif')] }),
+    )
+    await refreshLibrary()
+    expect(container.textContent).toContain('new.tif')
+
+    await act(async () => {
+      older.resolve(
+        COLLECTION({ head_generation_id: 'gen-old', sources: [SOURCE('mem-old', 'old.tif')] }),
+      )
+      await older.promise
+    })
+    await flush()
+
+    expect(container.textContent).toContain('new.tif')
+    expect(container.textContent).not.toContain('old.tif')
+  })
+
+  it('keeps the refreshed history when an older same-layer read answers late', async () => {
+    const older = deferred<unknown>()
+    fetchLayerHistory.mockReturnValueOnce(older.promise)
+    await openHistory()
+
+    fetchLayerHistory.mockResolvedValue(HISTORY({
+      head_generation_id: 'gen-3',
+      versions: [
+        { id: 'gen-3', created_at: '3', coverage_cells: '3', sequence: 9, operation: 'remove', source_count: 1, is_head: true, restorable: false },
+      ],
+    }))
+    await refreshLibrary()
+    expect(container.textContent).toContain('#9')
+
+    await act(async () => {
+      older.resolve(HISTORY({
+        versions: [
+          { id: 'gen-old', created_at: '0', coverage_cells: '1', sequence: 7, operation: 'import', source_count: 1, is_head: true, restorable: false },
+        ],
+      }))
+      await older.promise
+    })
+    await flush()
+
+    expect(container.textContent).toContain('#9')
+    expect(container.textContent).not.toContain('#7')
+  })
+
+  it('does not append a page from a superseded traversal after a refresh', async () => {
+    fetchLayerCollection.mockResolvedValueOnce(COLLECTION({ next_member_cursor: 'gen-2:1' }))
+    await mount()
+
+    const page = deferred<unknown>()
+    fetchLayerCollection.mockReturnValueOnce(page.promise)
+    await act(() => button('Load more sources')?.click())
+    expect(button('Load more sources')?.disabled).toBe(true)
+
+    fetchLayerCollection.mockResolvedValue(
+      COLLECTION({ head_generation_id: 'gen-new', sources: [SOURCE('mem-new', 'new.tif')] }),
+    )
+    await refreshLibrary()
+    expect(container.textContent).toContain('new.tif')
+
+    await act(async () => {
+      page.resolve(COLLECTION({
+        head_generation_id: 'gen-2',
+        sources: [SOURCE('mem-older', 'older.tif')],
+      }))
+      await page.promise
+    })
+    await flush()
+
+    expect(container.textContent).not.toContain('older.tif')
+    // The refreshed head has no further page, and the old traversal's rows are
+    // gone rather than mixed into the new list.
+    expect(button('Load more sources')).toBeUndefined()
+    expect(container.textContent).not.toContain('mnt-north.tif')
+  })
+
+  it('keeps History actions disabled until their own read settles', async () => {
+    const historyPage = deferred<unknown>()
+    fetchLayerHistory.mockReturnValueOnce(historyPage.promise)
+    await openHistory()
+
+    // The summary is loaded and Undo is available, but the version page the
+    // view is built on has not answered yet.
+    expect(container.textContent).toContain('Loading history')
+    expect(button('Undo last change')?.disabled).toBe(true)
+
+    await act(async () => {
+      historyPage.resolve(HISTORY())
+      await historyPage.promise
+    })
+    await flush()
+
+    expect(button('Undo last change')?.disabled).toBe(false)
   })
 })

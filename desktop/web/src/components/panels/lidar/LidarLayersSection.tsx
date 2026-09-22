@@ -49,6 +49,23 @@ import styles from './lidar-layers-section.module.css'
 
 type DetailMode = 'settings' | 'history' | 'delete'
 
+/**
+ * One view traversal the panel currently owns.
+ *
+ * An initial read starts one, a page continues it, and a selection change or a
+ * library settlement replaces it with a new object. Only the object that is
+ * still current may write view state, so a slow answer can neither replace a
+ * newer selection's rows nor append a page from a composition the user has
+ * already left.
+ */
+type ViewTraversal = {
+  readonly layerId: string
+  /** Head the first page reported; null until it arrives. */
+  headId: string | null
+  /** Requests issued for this traversal that have not settled. */
+  inFlight: number
+}
+
 export function LidarLayersSection() {
   const library = lidarLibrary.value
   const trackedImport = openImportJob.value
@@ -68,19 +85,28 @@ export function LidarLayersSection() {
   const [deleteImpact, setDeleteImpact] = useState<LidarDeleteImpact | null>(null)
   const [analysisDeleteId, setAnalysisDeleteId] = useState<string | null>(null)
   const [showReturnToLocation, setShowReturnToLocation] = useState(false)
-  /** A member or history page is being fetched. */
-  const [loading, setLoading] = useState(false)
+  /** The collection read a source list needs is in flight. */
+  const [collectionLoading, setCollectionLoading] = useState(false)
+  /** The history read the open History view needs is in flight. */
+  const [historyLoading, setHistoryLoading] = useState(false)
   /** An edit the backend has not settled yet. */
   const [pending, setPending] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   /**
-   * Local request generation.
+   * The collection and History traversals the panel currently owns.
    *
-   * A view request captures the layer it belongs to and this counter; an answer
-   * whose layer or generation is no longer current is dropped, so a slow read
-   * can never overwrite a newer selection's metadata.
+   * Each read captures the layer it belongs to and the head identity it first
+   * reported; an answer whose traversal is no longer current is dropped, and a
+   * page appends only into the traversal that produced it.
    */
-  const requestGeneration = useRef(0)
+  const collectionTraversal = useRef<ViewTraversal | null>(null)
+  const historyTraversal = useRef<ViewTraversal | null>(null)
+  /** The selection and mode the visible view shows, for settled callbacks. */
+  const selectionRef = useRef<string | null>(null)
+  const modeRef = useRef<DetailMode>('settings')
+  /** One awaited edit owns the panel until it settles; unmount only detaches. */
+  const editInFlight = useRef(false)
+  const mounted = useRef(true)
 
   const selected = items.find((item) => item.id === selectedId) ?? sources[0] ?? null
   const selectedLayer = selected?.kind === 'Source'
@@ -91,9 +117,32 @@ export function LidarLayersSection() {
     : null
   const engineUnavailable = library !== null && !library.engine.available
   const selectedSourceId = selected?.kind === 'Source' ? selected.id : null
+  /**
+   * The summary and the open History must describe the same head. A
+   * disagreement means one of them predates a publication, so numeric actions
+   * stay unavailable until both have been re-read for the current head.
+   */
+  const headsConsistent = collection === null || history === null
+    || collection.head_generation_id === history.head_generation_id
+
+  // Completion callbacks run after the render that changed the view, so they
+  // read the current selection from here rather than from a captured render.
+  useEffect(() => {
+    selectionRef.current = selectedSourceId
+    modeRef.current = mode
+  }, [selectedSourceId, mode])
+
+  useEffect(() => () => {
+    mounted.current = false
+  }, [])
 
   const select = (id: string): void => {
-    requestGeneration.current += 1
+    // A new selection supersedes every read the previous view still owns, so
+    // its answers cannot land in the view that replaced it.
+    collectionTraversal.current = null
+    historyTraversal.current = null
+    setCollectionLoading(false)
+    setHistoryLoading(false)
     setSelectedId(id)
     setMode('settings')
     setHistory(null)
@@ -104,47 +153,85 @@ export function LidarLayersSection() {
     setEditError(null)
   }
 
-  /** Read the head the layer actually has, once its layer is still selected. */
+  /**
+   * Read the head the layer actually has.
+   *
+   * An initial read starts a new traversal and supersedes the previous
+   * selection or head; a cursor continues the traversal it was requested from.
+   * Each traversal settles its own loading state, so a completed read cannot
+   * enable controls while the other required read is still in flight.
+   */
   const loadCollection = (layerId: string, cursor: string | null = null): void => {
-    const generation = requestGeneration.current
-    setLoading(true)
+    const active = collectionTraversal.current
+    let traversal: ViewTraversal
+    if (cursor === null) {
+      traversal = { layerId, headId: null, inFlight: 0 }
+      collectionTraversal.current = traversal
+    } else {
+      // A page belongs to a settled traversal of this layer; without one there
+      // is nothing to append to and the click is a no-op.
+      if (active === null || active.layerId !== layerId || active.headId === null) return
+      traversal = active
+    }
+    traversal.inFlight += 1
+    setCollectionLoading(true)
     void fetchLayerCollection(layerId, cursor)
       .then((page) => {
-        if (requestGeneration.current !== generation || selectedSourceId !== layerId) return
+        if (!mounted.current || collectionTraversal.current !== traversal) return
+        // A page from another head would mix two compositions in one list.
+        if (cursor !== null && page.head_generation_id !== traversal.headId) return
+        traversal.headId = page.head_generation_id
         setCollection((current) =>
-          cursor !== null && current !== null
+          cursor !== null && current !== null && current.head_generation_id === page.head_generation_id
             ? { ...page, sources: [...current.sources, ...page.sources] }
             : page,
         )
       })
       .catch((error) => {
-        if (requestGeneration.current !== generation) return
+        if (!mounted.current || collectionTraversal.current !== traversal) return
         lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
       })
       .finally(() => {
-        if (requestGeneration.current === generation) setLoading(false)
+        traversal.inFlight -= 1
+        if (mounted.current && collectionTraversal.current === traversal && traversal.inFlight === 0) {
+          setCollectionLoading(false)
+        }
       })
   }
 
-  /** Read one history page, keeping the traversal's captured upper bound. */
+  /** Read one history page, keeping the traversal's captured head. */
   const loadHistory = (layerId: string, cursor: string | null = null): void => {
-    const generation = requestGeneration.current
-    setLoading(true)
+    const active = historyTraversal.current
+    let traversal: ViewTraversal
+    if (cursor === null) {
+      traversal = { layerId, headId: null, inFlight: 0 }
+      historyTraversal.current = traversal
+    } else {
+      if (active === null || active.layerId !== layerId || active.headId === null) return
+      traversal = active
+    }
+    traversal.inFlight += 1
+    setHistoryLoading(true)
     void fetchLayerHistory(layerId, cursor)
       .then((page) => {
-        if (requestGeneration.current !== generation || selectedSourceId !== layerId) return
+        if (!mounted.current || historyTraversal.current !== traversal) return
+        if (cursor !== null && page.head_generation_id !== traversal.headId) return
+        traversal.headId = page.head_generation_id
         setHistory((current) =>
-          cursor !== null && current !== null
+          cursor !== null && current !== null && current.head_generation_id === page.head_generation_id
             ? { ...page, versions: [...current.versions, ...page.versions] }
             : page,
         )
       })
       .catch((error) => {
-        if (requestGeneration.current !== generation) return
+        if (!mounted.current || historyTraversal.current !== traversal) return
         lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
       })
       .finally(() => {
-        if (requestGeneration.current === generation) setLoading(false)
+        traversal.inFlight -= 1
+        if (mounted.current && historyTraversal.current === traversal && traversal.inFlight === 0) {
+          setHistoryLoading(false)
+        }
       })
   }
 
@@ -160,34 +247,55 @@ export function LidarLayersSection() {
     // `library` is the settlement signal, not a value this effect reads.
   }, [mode, selectedSourceId, library])
 
+  // Two settled pages that disagree describe different heads: re-read both once
+  // for the pair, and leave numeric actions unavailable until they agree.
+  const reloadedMismatch = useRef<string | null>(null)
+  useEffect(() => {
+    if (mode !== 'history' || collection === null || history === null) return
+    if (collection.head_generation_id === history.head_generation_id) return
+    if (collectionLoading || historyLoading || selectedSourceId === null) return
+    const key = `${collection.head_generation_id}|${history.head_generation_id}`
+    if (reloadedMismatch.current === key) return
+    reloadedMismatch.current = key
+    loadCollection(selectedSourceId)
+    loadHistory(selectedSourceId)
+  }, [mode, collection, history, collectionLoading, historyLoading])
+
   /**
    * Run one awaited edit.
    *
    * The backend resolves only after the edit has settled, so a failure leaves
    * its message on screen and a success re-reads the head the panel now has.
-   * Controls stay disabled for the whole round trip, so a second edit can never
-   * be sent without the snapshot the user actually saw.
+   * The edit owns the panel's pending state until it settles even when the view
+   * moves on, while its view updates stay fenced to the selection that asked
+   * for them. Controls stay disabled for the whole round trip, so a second edit
+   * can never be sent without the snapshot the user actually saw.
    */
   const runEdit = (layerId: string, work: () => Promise<unknown>): void => {
-    const generation = requestGeneration.current
+    if (editInFlight.current) return
+    editInFlight.current = true
     setPending(true)
     setEditError(null)
+    const refreshVisible = (): void => {
+      if (selectionRef.current !== layerId) return
+      loadCollection(layerId)
+      if (modeRef.current === 'history') loadHistory(layerId)
+    }
     void work()
-      .then(() => {
-        if (requestGeneration.current !== generation) return
-        loadCollection(layerId)
-        if (mode === 'history') loadHistory(layerId)
-      })
+      .then(refreshVisible)
       .catch((error) => {
         const message = error instanceof Error ? error.message : String(error)
-        if (requestGeneration.current === generation) setEditError(message)
+        // The named failure is always reported; its inline copy belongs to the
+        // view that submitted the edit.
         lidarStatusMessage.value = message
+        if (selectionRef.current === layerId && mounted.current) setEditError(message)
         // A refusal means the head moved: re-read it so the next attempt sends
         // the snapshot the user is actually looking at.
-        if (requestGeneration.current === generation) loadCollection(layerId)
+        refreshVisible()
       })
       .finally(() => {
-        if (requestGeneration.current === generation) setPending(false)
+        editInFlight.current = false
+        if (mounted.current) setPending(false)
       })
   }
 
@@ -372,7 +480,9 @@ export function LidarLayersSection() {
               history={history}
               collection={collection}
               pending={pending}
-              loading={loading}
+              collectionLoading={collectionLoading}
+              historyLoading={historyLoading}
+              metadataConsistent={headsConsistent}
               error={editError}
               onBack={() => setMode('settings')}
               onLoadMore={() => {
@@ -422,7 +532,7 @@ export function LidarLayersSection() {
                   collection={collection}
                   confirmRemove={confirmRemove}
                   pending={pending}
-                  loading={loading}
+                  loading={collectionLoading}
                   error={editError}
                   onConfirmRemove={setConfirmRemove}
                   onLoadMore={() => {
@@ -765,18 +875,24 @@ function SourcePriorityList({ collection, confirmRemove, pending, loading, error
  * catalogue is named neutrally instead of being guessed. Restoring publishes a
  * new head and deletes nothing.
  */
-function HistoryDetail({ history, collection, pending, loading, error, onBack, onLoadMore, onUndo, onRestore }: {
+function HistoryDetail({ history, collection, pending, collectionLoading, historyLoading, metadataConsistent, error, onBack, onLoadMore, onUndo, onRestore }: {
   readonly history: LidarLayerHistoryPage | null
   readonly collection: LidarLayerCollection | null
   readonly pending: boolean
-  readonly loading: boolean
+  readonly collectionLoading: boolean
+  readonly historyLoading: boolean
+  /** The summary and History describe the same head. */
+  readonly metadataConsistent: boolean
   readonly error: string | null
   onBack(): void
   onLoadMore(): void
   onUndo(): void
   onRestore(versionId: string): void
 }) {
-  const busy = pending || loading
+  // Undo's availability and target come from the summary, Restore's from the
+  // version page, and both send the head the user saw: an action waits until
+  // every page it reads has settled for the same head.
+  const busy = pending || collectionLoading || historyLoading || !metadataConsistent
   const versions = history?.versions ?? null
   return (
     <div className={styles.details}>

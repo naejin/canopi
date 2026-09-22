@@ -11443,4 +11443,168 @@ mod tests {
         drop(reopened);
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    /// A tile whose samples read reduced cells keeps every source that reaches
+    /// those footprints, including one that lies outside the sample centres.
+    ///
+    /// Tile 14/8192/8191 starts at the layer anchor with a 1 m lattice, so its
+    /// samples are ~9.55 native cells apart and the first one is minified to
+    /// level 3. That sample reads reduced cells (0, 0) and (1, 0) plus their
+    /// vertical neighbours, whose footprints cover native cells `[0, 16)` while
+    /// the mapped sample centres start at cell 4. A candidate prefilter built
+    /// from the sample centres alone therefore drops a source holding only
+    /// cells 0..2 and draws nothing, even though those cells are exactly what
+    /// the first reduction cell averages.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_tile_near_its_edge_keeps_the_sources_inside_its_reduction_footprint() {
+        use super::super::display::ColorRamp;
+        use super::super::tiles;
+
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("ordered-tile-edge"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        // The layer anchor is the north-west corner of the tile, so both
+        // sources sit on lattice cells [0, 2) — the footprint of the first
+        // reduced cell, reached by no sample centre.
+        let bounds = tiles::tile_bounds_3857(14, 8192, 8191);
+        let bottom = write_placed_fixture(
+            &engine,
+            &root,
+            "edge-bottom",
+            bounds[0],
+            bounds[3],
+            2,
+            2,
+            -9999.0,
+            7.0,
+        );
+        // Imported second, so it is the topmost occurrence and wins where the
+        // two overlap: the composed cells are 7 above 9 below the seam.
+        let top = write_placed_fixture(
+            &engine,
+            &root,
+            "edge-top",
+            bounds[0],
+            bounds[3] - 1.0,
+            2,
+            2,
+            -9999.0,
+            9.0,
+        );
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "tile edge",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (first_job, first_staging) = stage_review(&library, &layer_id, &[bottom], &cancel);
+        library.prepare_apply(&first_job).expect("first review");
+        apply_import(&library, &first_staging, true, false, &cancel).expect("first applies");
+        let (second_job, second_staging) = stage_review(&library, &layer_id, &[top], &cancel);
+        library.prepare_apply(&second_job).expect("second review");
+        let stacked =
+            apply_import(&library, &second_staging, true, false, &cancel).expect("second applies");
+
+        // The published composition overlaps by two cells, so its exact values
+        // are 7 and 9 rather than either source's constant.
+        let head = head_of(&library, &layer_id);
+        assert_eq!(head.id, stacked.generation_id);
+        assert_eq!(head.coverage_cells, 6);
+        assert_eq!(head.min_value, Some(7.0));
+        assert_eq!(head.max_value, Some(9.0));
+
+        let request = |z: u32, x: u32, y: u32| tiles::TileRequest {
+            entity_kind: "source".to_string(),
+            entity_id: layer_id.clone(),
+            generation_id: stacked.generation_id.clone(),
+            style: "elevation".to_string(),
+            z,
+            x,
+            y,
+        };
+
+        // The minified tile resolves its first reduced cell from both sources:
+        // the composed cell mean is (2 * 7 + 4 * 9) / 6, and only that cell
+        // holds coverage, so exactly the corner sample is painted. Its index is
+        // the one the fixture was placed against: the floor of the derived index
+        // sits on a tile boundary where the floating-point value rounds down.
+        let png = match tiles::render_tile(&library, &request(14, 8192, 8191), &cancel).unwrap() {
+            tiles::TileOutcome::Png(bytes) => bytes,
+            tiles::TileOutcome::Empty => panic!(
+                "the two edge sources contribute to the first level-3 reduction cell"
+            ),
+        };
+        let (width, height, rgba) = decode_tile(&png);
+        assert_eq!(
+            (width, height),
+            (tiles::TILE_PIXELS, tiles::TILE_PIXELS)
+        );
+        let ramp = ColorRamp::elevation_range(7.0, 9.0);
+        let composed = (2.0 * 7.0 + 4.0 * 9.0) / 6.0;
+        let expected = ramp.colour_for(composed).expect("8.33 is inside the ramp");
+        let painted: Vec<[u8; 4]> = rgba
+            .chunks_exact(4)
+            .filter(|pixel| pixel[3] == 255)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]])
+            .collect();
+        assert_eq!(
+            painted.len(),
+            1,
+            "only the corner sample interpolates the one occupied reduced cell"
+        );
+        assert_eq!(
+            (painted[0][0], painted[0][1], painted[0][2]),
+            expected,
+            "the painted sample is the composed overlap mean"
+        );
+
+        // Native scale reads the same composition through its own two-cell
+        // window: the source is still found and the tile is mostly transparent.
+        // The tile is the one holding the source's own centre, away from the
+        // boundary that makes a derived index ambiguous.
+        let world = {
+            let world = tiles::tile_bounds_3857(0, 0, 0);
+            world[2] - world[0]
+        };
+        let span = world / f64::from(1u32 << 17);
+        let half = world / 2.0;
+        let png = match tiles::render_tile(
+            &library,
+            &request(
+                17,
+                ((bounds[0] + 1.0 + half) / span).floor() as u32,
+                ((half - bounds[3] + 1.0) / span).floor() as u32,
+            ),
+            &cancel,
+        )
+        .unwrap()
+        {
+            tiles::TileOutcome::Png(bytes) => bytes,
+            tiles::TileOutcome::Empty => panic!("the source is present at native scale"),
+        };
+        let (_, _, rgba) = decode_tile(&png);
+        let painted = rgba.chunks_exact(4).filter(|pixel| pixel[3] == 255).count();
+        assert!(painted > 0, "the source draws at native scale");
+        assert!(
+            painted < (tiles::TILE_PIXELS * tiles::TILE_PIXELS) as usize,
+            "a 2x2 m source does not fill a 305 m tile"
+        );
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Decode a rendered tile into RGBA8 pixels.
+    fn decode_tile(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
+        let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
+            .expect("tile is a PNG")
+            .to_rgba8();
+        (image.width(), image.height(), image.into_raw())
+    }
 }

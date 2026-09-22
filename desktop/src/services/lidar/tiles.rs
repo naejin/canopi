@@ -558,38 +558,72 @@ fn render_owner(
     }
 }
 
-/// Half-open lattice cells a tile's own samples can read.
+/// Half-open lattice cells a tile's samples can read.
 ///
-/// The footprint is the mapped sample grid with one cell of slack on every
-/// side, which covers the windows this renderer actually reads. It is only
-/// meaningful for an ordered composition; every other format ignores it.
+/// The footprint is derived from the same geometry the renderer reads through:
+/// a native-scale sample reads the two cells around each axis, and a minified
+/// sample reads the two level-dependent reduced cells around its own cell,
+/// whose footprints reach `2 * side` native cells beyond it. One cell of slack
+/// around the sample centres is therefore not enough — a source inside a
+/// reduced footprint can contribute without reaching any sample centre.
+///
+/// It is only meaningful for an ordered composition; every other format
+/// ignores it.
 fn tile_read_bounds(
     manifest: &DisplayManifest,
     cells: &[(f64, f64)],
+    levels: &[u32],
 ) -> Result<Option<super::collection::ReadBounds>, String> {
     if !matches!(manifest, DisplayManifest::Collection(_)) {
         return Ok(None);
     }
-    let (mut min_x, mut min_y) = (f64::INFINITY, f64::INFINITY);
-    let (mut max_x, mut max_y) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
-    for (x, y) in cells {
-        if !x.is_finite() || !y.is_finite() {
-            continue;
+    let samples = TILE_PIXELS as usize;
+    let row_side = samples + 1;
+    let mut bounds: Option<super::collection::ReadBounds> = None;
+    for row in 0..samples {
+        for column in 0..samples {
+            let level = levels[row * samples + column];
+            let (x, y) = cells[row * row_side + column];
+            if !x.is_finite() || !y.is_finite() {
+                continue;
+            }
+            // A reduced sample interpolates between two cells per axis, each of
+            // them `cell_side` native cells wide; a native-scale sample reads
+            // the same two cells at a side of one.
+            let cell_side = reduced_side(level)?;
+            let (x0, y0) = if level == 0 {
+                (x.floor() as i64, y.floor() as i64)
+            } else {
+                (
+                    reduced_cell(x, cell_side)?
+                        .checked_mul(cell_side)
+                        .ok_or_else(|| "reduced cell footprint overflows".to_string())?,
+                    reduced_cell(y, cell_side)?
+                        .checked_mul(cell_side)
+                        .ok_or_else(|| "reduced cell footprint overflows".to_string())?,
+                )
+            };
+            let reach = cell_side
+                .checked_mul(2)
+                .ok_or_else(|| "reduced cell footprint overflows".to_string())?;
+            let x1 = x0
+                .checked_add(reach)
+                .ok_or_else(|| "reduced cell footprint overflows".to_string())?;
+            let y1 = y0
+                .checked_add(reach)
+                .ok_or_else(|| "reduced cell footprint overflows".to_string())?;
+            bounds = Some(match bounds {
+                Some(current) => super::collection::ReadBounds {
+                    x0: current.x0.min(x0),
+                    y0: current.y0.min(y0),
+                    x1: current.x1.max(x1),
+                    y1: current.y1.max(y1),
+                },
+                None => super::collection::ReadBounds { x0, y0, x1, y1 },
+            });
         }
-        min_x = min_x.min(*x);
-        min_y = min_y.min(*y);
-        max_x = max_x.max(*x);
-        max_y = max_y.max(*y);
     }
-    if !min_x.is_finite() || !min_y.is_finite() {
-        return Ok(None);
-    }
-    Ok(Some(super::collection::ReadBounds {
-        x0: min_x.floor() as i64 - 1,
-        y0: min_y.floor() as i64 - 1,
-        x1: max_x.ceil() as i64 + 2,
-        y1: max_y.ceil() as i64 + 2,
-    }))
+    Ok(bounds)
 }
 
 /// Render one tile from an immutable generation.
@@ -653,10 +687,10 @@ fn render_tile_uncached(
     }
 
     // Bound to the immutable generation, and for an ordered composition to the
-    // occurrences that can reach this tile: a source outside the footprint is
-    // never opened, while the composed value stays identical to reading the
-    // whole composition.
-    let read_bounds = tile_read_bounds(&manifest, &cells)?;
+    // occurrences that can reach the windows this tile reads: a source outside
+    // the native and reduced footprints is never opened, while the composed
+    // value stays identical to reading the whole composition.
+    let read_bounds = tile_read_bounds(&manifest, &cells, &levels)?;
     let owner = render_owner(library, request, &manifest, read_bounds, cancel)?;
 
     // Every reduced cell a sample interpolates between, resolved once per tile:
@@ -1142,6 +1176,44 @@ mod tests {
             bilinear_means([Some(0.0), Some(10.0), None, None], 0.25, 0.0),
             Some(2.5)
         );
+    }
+
+    /// The candidate footprint must enclose every native window the samples
+    /// read, including the level-dependent reduced footprints.
+    #[test]
+    fn tile_candidate_bounds_enclose_the_reduced_windows_they_read() {
+        let manifest = DisplayManifest::Collection(
+            super::super::import::read_generation_manifest(
+                r#"{"grid":{"width":1024,"height":1024,"geotransform":[0.0,1.0,0.0,1024.0,0.0,-1.0]},
+                    "nodata":-9999.0,"crs_wkt":"EPSG:3857","members":[],"engine_version":"3.8",
+                    "created_at":"0","format":"ordered-members-v1"}"#,
+            )
+            .unwrap(),
+        );
+        let samples = TILE_PIXELS as usize;
+        let row_side = samples + 1;
+        // Every sample sits in the tile's first level-3 cell except one
+        // native-scale sample at lattice cell 300.
+        let mut cells = vec![(4.5, 4.5); row_side * row_side];
+        let mut levels = vec![3u32; samples * samples];
+        cells[row_side + 1] = (300.0, 300.0);
+        levels[samples + 1] = 0;
+        let bounds = tile_read_bounds(&manifest, &cells, &levels)
+            .unwrap()
+            .expect("an ordered composition is bounded");
+        // The level-3 cell covers native cells [0, 8) and its neighbour reaches
+        // to 16, so a source holding only cell 0 is a contributor.
+        assert_eq!(bounds.x0, 0, "the reduced footprint reaches native cell 0");
+        assert_eq!(bounds.y0, 0);
+        // The native-scale sample reads its own two cells around cell 300.
+        assert_eq!((bounds.x1, bounds.y1), (302, 302));
+
+        // A native-scale-only tile reads exactly the two cells around each
+        // sample and never widens to a reduced cell.
+        let native = tile_read_bounds(&manifest, &cells, &vec![0u32; samples * samples])
+            .unwrap()
+            .expect("an ordered composition is bounded");
+        assert_eq!((native.x0, native.y0, native.x1, native.y1), (4, 4, 302, 302));
     }
 
     /// Decode a PNG tile into RGBA8 pixels.
