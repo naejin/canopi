@@ -548,7 +548,34 @@
       "loadMoreVersions": "Charger les versions précédentes",
       "undoExhausted": "Aucune version antérieure à annuler.",
       "historySources": "sources",
-      "versionCue": "n° {{number}}"
+      "versionCue": "n° {{number}}",
+      "data": {
+        "title": "Données",
+        "intro": "Jeux de données raster réutilisables appartenant à la bibliothèque, pas à ce projet.",
+        "empty": "Aucun jeu de données raster dans la bibliothèque.",
+        "addToDesign": "Ajouter au projet",
+        "rename": "Renommer le jeu de données",
+        "renameConfirm": "Renommer",
+        "delete": "Supprimer de la bibliothèque",
+        "deleteImpact": "La suppression retire {analyses} résultat(s) d'analyse et leurs ressources publiées.",
+        "measurement": "Mesure",
+        "state": "État",
+        "analyses": "Analyses"
+      },
+      "analysis": {
+        "title": "Analyse",
+        "intro": "Résultats dérivés conservés à côté de leurs entrées, avec leur propre provenance.",
+        "operation": "Opération",
+        "input": "Jeu de données d'entrée",
+        "units": "Unités",
+        "degrees": "Degrés",
+        "percent": "Pourcentage",
+        "noInputs": "Aucun jeu de données dans la bibliothèque.",
+        "noEligible": "Aucun jeu de données n'est actuellement éligible comme altitude du sol.",
+        "notGround": "Pas une altitude du sol",
+        "notReady": "Pas prêt"
+      },
+      "webUnavailable": "Les jeux de données raster et les résultats de ce projet sont conservés ici, mais ne sont ni affichés ni traités dans l’édition Web. Ouvrez le projet dans l’application de bureau pour les importer, les analyser ou les afficher."
     }
   },
   "worldMap": {

@@ -548,7 +548,34 @@
       "loadMoreVersions": "Ältere Versionen laden",
       "undoExhausted": "Es gibt keine frühere Version zum Rückgängigmachen.",
       "historySources": "Quellen",
-      "versionCue": "Nr. {{number}}"
+      "versionCue": "Nr. {{number}}",
+      "data": {
+        "title": "Daten",
+        "intro": "Wiederverwendbare Rasterdatensätze der Bibliothek, nicht dieses Entwurfs.",
+        "empty": "Noch keine Rasterdatensätze in der Bibliothek.",
+        "addToDesign": "Zum Entwurf hinzufügen",
+        "rename": "Datensatz umbenennen",
+        "renameConfirm": "Umbenennen",
+        "delete": "Aus Bibliothek löschen",
+        "deleteImpact": "Beim Löschen werden {analyses} Analyseergebnis(se) und deren veröffentlichte Assets entfernt.",
+        "measurement": "Messgröße",
+        "state": "Status",
+        "analyses": "Analysen"
+      },
+      "analysis": {
+        "title": "Analyse",
+        "intro": "Abgeleitete Ergebnisse neben ihren Eingaben, mit eigener Herkunft.",
+        "operation": "Vorgang",
+        "input": "Eingabedatensatz",
+        "units": "Einheit",
+        "degrees": "Grad",
+        "percent": "Prozent",
+        "noInputs": "Noch keine Datensätze in der Bibliothek.",
+        "noEligible": "Derzeit ist kein Datensatz als Geländehöhe geeignet.",
+        "notGround": "Keine Geländehöhe",
+        "notReady": "Nicht bereit"
+      },
+      "webUnavailable": "Die Rasterdatensätze und Ergebnisse dieses Entwurfs bleiben hier erhalten, werden in der Web-Edition aber weder dargestellt noch verarbeitet. Öffnen Sie den Entwurf in der Desktop-App zum Importieren, Analysieren oder Anzeigen."
     }
   },
   "worldMap": {

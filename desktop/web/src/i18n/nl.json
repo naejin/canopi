@@ -548,7 +548,34 @@
       "loadMoreVersions": "Oudere versies laden",
       "undoExhausted": "Er is geen eerdere versie om ongedaan te maken.",
       "historySources": "bronnen",
-      "versionCue": "nr. {{number}}"
+      "versionCue": "nr. {{number}}",
+      "data": {
+        "title": "Gegevens",
+        "intro": "Herbruikbare rasterdatasets van de bibliotheek, niet van dit ontwerp.",
+        "empty": "Nog geen rasterdatasets in de bibliotheek.",
+        "addToDesign": "Aan ontwerp toevoegen",
+        "rename": "Dataset hernoemen",
+        "renameConfirm": "Hernoemen",
+        "delete": "Uit bibliotheek verwijderen",
+        "deleteImpact": "Verwijderen haalt {analyses} analyseresultaat/-resultaten en de gepubliceerde assets weg.",
+        "measurement": "Meting",
+        "state": "Status",
+        "analyses": "Analyses"
+      },
+      "analysis": {
+        "title": "Analyse",
+        "intro": "Afgeleide resultaten naast hun invoer, met hun eigen herkomst.",
+        "operation": "Bewerking",
+        "input": "Invoerdataset",
+        "units": "Eenheden",
+        "degrees": "Graden",
+        "percent": "Procent",
+        "noInputs": "Nog geen datasets in de bibliotheek.",
+        "noEligible": "Geen dataset is momenteel geschikt als maaiveldhoogte.",
+        "notGround": "Geen maaiveldhoogte",
+        "notReady": "Niet gereed"
+      },
+      "webUnavailable": "De rasterdatasets en resultaten van dit ontwerp blijven hier bewaard, maar worden in de Web-editie niet weergegeven of verwerkt. Open het ontwerp in de desktopapp om ze te importeren, analyseren of tonen."
     }
   },
   "worldMap": {

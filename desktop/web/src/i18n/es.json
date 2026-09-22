@@ -548,7 +548,34 @@
       "loadMoreVersions": "Cargar versiones anteriores",
       "undoExhausted": "No hay una versión anterior que deshacer.",
       "historySources": "fuentes",
-      "versionCue": "n.º {{number}}"
+      "versionCue": "n.º {{number}}",
+      "data": {
+        "title": "Datos",
+        "intro": "Conjuntos de datos ráster reutilizables de la biblioteca, no de este diseño.",
+        "empty": "Aún no hay conjuntos de datos ráster en la biblioteca.",
+        "addToDesign": "Añadir al diseño",
+        "rename": "Renombrar conjunto",
+        "renameConfirm": "Renombrar",
+        "delete": "Eliminar de la biblioteca",
+        "deleteImpact": "Eliminar quita {analyses} resultado(s) de análisis y sus recursos publicados.",
+        "measurement": "Medición",
+        "state": "Estado",
+        "analyses": "Análisis"
+      },
+      "analysis": {
+        "title": "Análisis",
+        "intro": "Resultados derivados junto a sus entradas, con su propia procedencia.",
+        "operation": "Operación",
+        "input": "Conjunto de entrada",
+        "units": "Unidades",
+        "degrees": "Grados",
+        "percent": "Porcentaje",
+        "noInputs": "Aún no hay conjuntos en la biblioteca.",
+        "noEligible": "Ningún conjunto es apto como elevación del terreno.",
+        "notGround": "No es elevación del terreno",
+        "notReady": "No está listo"
+      },
+      "webUnavailable": "Los conjuntos de datos ráster y resultados de este diseño se conservan aquí, pero no se representan ni procesan en la edición web. Abra el diseño en la aplicación de escritorio para importarlos, analizarlos o mostrarlos."
     }
   },
   "worldMap": {

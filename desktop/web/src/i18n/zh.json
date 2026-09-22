@@ -548,7 +548,34 @@
       "loadMoreVersions": "加载更早版本",
       "undoExhausted": "没有可撤销的更早版本。",
       "historySources": "个数据源",
-      "versionCue": "第 {{number}} 版"
+      "versionCue": "第 {{number}} 版",
+      "data": {
+        "title": "数据",
+        "intro": "由库而非本设计拥有的可复用栅格数据集。",
+        "empty": "库中还没有栅格数据集。",
+        "addToDesign": "添加到设计",
+        "rename": "重命名数据集",
+        "renameConfirm": "重命名",
+        "delete": "从库中删除",
+        "deleteImpact": "删除将移除 {analyses} 个分析结果及其已发布资源。",
+        "measurement": "测量类型",
+        "state": "状态",
+        "analyses": "分析"
+      },
+      "analysis": {
+        "title": "分析",
+        "intro": "派生结果与其输入并列保存，并带有各自的来源信息。",
+        "operation": "操作",
+        "input": "输入数据集",
+        "units": "单位",
+        "degrees": "度",
+        "percent": "百分比",
+        "noInputs": "库中还没有数据集。",
+        "noEligible": "当前没有可用作地面高程的数据集。",
+        "notGround": "不是地面高程",
+        "notReady": "未就绪"
+      },
+      "webUnavailable": "本设计的栅格数据集和结果在此保留，但网页版不会渲染或处理它们。请在桌面应用中打开本设计以导入、分析或显示。"
     }
   },
   "worldMap": {

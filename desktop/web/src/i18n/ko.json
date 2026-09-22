@@ -548,7 +548,34 @@
       "loadMoreVersions": "이전 버전 불러오기",
       "undoExhausted": "되돌릴 이전 버전이 없습니다.",
       "historySources": "소스",
-      "versionCue": "#{{number}}"
+      "versionCue": "#{{number}}",
+      "data": {
+        "title": "데이터",
+        "intro": "이 설계가 아니라 라이브러리가 소유하는 재사용 가능한 래스터 데이터셋입니다.",
+        "empty": "라이브러리에 래스터 데이터셋이 아직 없습니다.",
+        "addToDesign": "설계에 추가",
+        "rename": "데이터셋 이름 변경",
+        "renameConfirm": "이름 변경",
+        "delete": "라이브러리에서 삭제",
+        "deleteImpact": "삭제하면 분석 결과 {analyses}개와 게시된 자산이 제거됩니다.",
+        "measurement": "측정 종류",
+        "state": "상태",
+        "analyses": "분석"
+      },
+      "analysis": {
+        "title": "분석",
+        "intro": "입력 옆에 자체 출처와 함께 보관되는 파생 결과입니다.",
+        "operation": "작업",
+        "input": "입력 데이터셋",
+        "units": "단위",
+        "degrees": "도",
+        "percent": "퍼센트",
+        "noInputs": "라이브러리에 데이터셋이 아직 없습니다.",
+        "noEligible": "지표 고도로 사용할 수 있는 데이터셋이 없습니다.",
+        "notGround": "지표 고도가 아님",
+        "notReady": "준비되지 않음"
+      },
+      "webUnavailable": "이 설계의 래스터 데이터셋과 결과는 여기에 보존되지만 웹 에디션에서는 렌더링되거나 처리되지 않습니다. 가져오기, 분석 또는 표시하려면 데스크톱 앱에서 설계를 여십시오."
     }
   },
   "worldMap": {

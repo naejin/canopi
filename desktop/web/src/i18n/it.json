@@ -548,7 +548,34 @@
       "loadMoreVersions": "Carica versioni precedenti",
       "undoExhausted": "Non c’è una versione precedente da annullare.",
       "historySources": "sorgenti",
-      "versionCue": "n. {{number}}"
+      "versionCue": "n. {{number}}",
+      "data": {
+        "title": "Dati",
+        "intro": "Dataset raster riutilizzabili della libreria, non di questo progetto.",
+        "empty": "Nessun dataset raster nella libreria.",
+        "addToDesign": "Aggiungi al progetto",
+        "rename": "Rinomina dataset",
+        "renameConfirm": "Rinomina",
+        "delete": "Elimina dalla libreria",
+        "deleteImpact": "L'eliminazione rimuove {analyses} risultato/i di analisi e le relative risorse pubblicate.",
+        "measurement": "Misura",
+        "state": "Stato",
+        "analyses": "Analisi"
+      },
+      "analysis": {
+        "title": "Analisi",
+        "intro": "Risultati derivati accanto ai loro input, con la propria provenienza.",
+        "operation": "Operazione",
+        "input": "Dataset di input",
+        "units": "Unità",
+        "degrees": "Gradi",
+        "percent": "Percentuale",
+        "noInputs": "Nessun dataset nella libreria.",
+        "noEligible": "Nessun dataset è attualmente idoneo come quota del suolo.",
+        "notGround": "Non è quota del suolo",
+        "notReady": "Non pronto"
+      },
+      "webUnavailable": "I dataset raster e i risultati di questo progetto sono conservati qui, ma non vengono visualizzati né elaborati nell’edizione Web. Apri il progetto nell’app desktop per importarli, analizzarli o visualizzarli."
     }
   },
   "worldMap": {

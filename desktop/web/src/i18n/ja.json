@@ -548,7 +548,34 @@
       "loadMoreVersions": "古いバージョンを読み込む",
       "undoExhausted": "元に戻せる以前のバージョンはありません。",
       "historySources": "ソース",
-      "versionCue": "第{{number}}版"
+      "versionCue": "第{{number}}版",
+      "data": {
+        "title": "データ",
+        "intro": "ライブラリが所有する再利用可能なラスターデータセットです（この設計ではありません）。",
+        "empty": "ライブラリにラスターデータセットがまだありません。",
+        "addToDesign": "設計に追加",
+        "rename": "データセット名を変更",
+        "renameConfirm": "名前を変更",
+        "delete": "ライブラリから削除",
+        "deleteImpact": "削除すると {analyses} 件の解析結果と公開済みアセットが削除されます。",
+        "measurement": "測定種別",
+        "state": "状態",
+        "analyses": "解析"
+      },
+      "analysis": {
+        "title": "解析",
+        "intro": "入力の隣に独自の来歴とともに保持される派生結果です。",
+        "operation": "操作",
+        "input": "入力データセット",
+        "units": "単位",
+        "degrees": "度",
+        "percent": "パーセント",
+        "noInputs": "ライブラリにデータセットがまだありません。",
+        "noEligible": "地表面標高として利用できるデータセットがありません。",
+        "notGround": "地表面標高ではありません",
+        "notReady": "準備未完了"
+      },
+      "webUnavailable": "この設計のラスターデータセットと結果はここに保持されますが、Web 版では描画も処理もされません。インポート・解析・表示にはデスクトップアプリで設計を開いてください。"
     }
   },
   "worldMap": {

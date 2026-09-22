@@ -548,7 +548,34 @@
       "loadMoreVersions": "Load older versions",
       "undoExhausted": "There is no earlier version to undo.",
       "historySources": "sources",
-      "versionCue": "#{{number}}"
+      "versionCue": "#{{number}}",
+      "data": {
+        "title": "Data",
+        "intro": "Reusable raster datasets owned by the library, not by this Design.",
+        "empty": "No raster datasets in the library yet.",
+        "addToDesign": "Add to Design",
+        "rename": "Rename dataset",
+        "renameConfirm": "Rename",
+        "delete": "Delete from library",
+        "deleteImpact": "Deleting removes {analyses} analysis result(s) and their published assets.",
+        "measurement": "Measurement",
+        "state": "State",
+        "analyses": "Analyses"
+      },
+      "analysis": {
+        "title": "Analysis",
+        "intro": "Derived results kept beside their inputs, with their own provenance.",
+        "operation": "Operation",
+        "input": "Input dataset",
+        "units": "Units",
+        "degrees": "Degrees",
+        "percent": "Percent",
+        "noInputs": "No datasets in the library yet.",
+        "noEligible": "No dataset is currently eligible as ground elevation.",
+        "notGround": "Not ground elevation",
+        "notReady": "Not ready"
+      },
+      "webUnavailable": "This Design’s raster datasets and results are preserved here but are not rendered or processed in the Web Edition. Open the Design in the Desktop app to import, analyse or display them."
     }
   },
   "worldMap": {

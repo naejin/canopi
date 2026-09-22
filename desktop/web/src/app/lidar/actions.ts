@@ -103,11 +103,20 @@ export async function cancelOpenImport(): Promise<void> {
   })
 }
 
-export async function analyseLayerAsSlope(layerId: string): Promise<void> {
+/**
+ * Create a slope analysis for one ground-elevation layer.
+ *
+ * The unit is the recipe's own parameter, so a degrees and a percent result are
+ * distinct definitions with distinct provenance rather than one result relabelled.
+ */
+export async function analyseLayerAsSlope(
+  layerId: string,
+  slopeUnit: 'Degrees' | 'Percent' = 'Degrees',
+): Promise<void> {
   const identity = designSessionStore.sessionIdentity.value
   await withLidarError(async () => {
     const receipt = await lidarCreateAnalysis(layerId, 'Slope', {
-      slope_unit: 'Degrees',
+      slope_unit: slopeUnit,
     })
     await refreshLidarLibrary()
     if (designSessionStore.sessionIdentity.value === identity) {

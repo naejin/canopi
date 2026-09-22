@@ -78,6 +78,8 @@ type DesktopShellCapabilityId =
   | 'navigateLocation'
   | 'navigatePlantDatabase'
   | 'navigateSpeciesKey'
+  | 'navigateData'
+  | 'navigateAnalysis'
   | 'navigateLayers'
   | 'navigateCalendar'
   | 'navigateBudget'
@@ -276,6 +278,14 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   navigateSpeciesKey: {
     execute: () => navigateTo('species-key'),
     isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'species-key',
+  },
+  navigateData: {
+    execute: () => navigateTo('data'),
+    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'data',
+  },
+  navigateAnalysis: {
+    execute: () => navigateTo('analysis'),
+    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'analysis',
   },
   navigateLayers: {
     execute: () => navigateTo('layers'),
