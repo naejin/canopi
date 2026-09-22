@@ -6,6 +6,16 @@ export const locale = signal<Locale>(DEFAULT_SETTINGS.locale)
 export const theme = signal<Theme>(DEFAULT_SETTINGS.theme)
 export const basemapStyle = signal<BasemapStyle>(DEFAULT_SETTINGS.map_style)
 
+/**
+ * Device-local Google Maps API key, or null for the keyless tile path.
+ *
+ * This is a browser credential: it lives in device settings only and must
+ * never reach a Design, export, diagnostic bundle, log or error text.
+ */
+export const googleMapsApiKey = signal<string | null>(
+  DEFAULT_SETTINGS.google_maps_api_key ?? null,
+)
+
 /** Autosave interval in milliseconds — hydrated from platform settings on startup. */
 export const autoSaveIntervalMs = signal<number>(DEFAULT_SETTINGS.auto_save_interval_s * 1000)
 

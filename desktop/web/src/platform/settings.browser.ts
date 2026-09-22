@@ -51,6 +51,12 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
       SETTINGS_BASEMAP_STYLES,
       DEFAULT_SETTINGS.map_style,
     ),
+    // Absent, null or a non-string all mean "no key", which selects Google's
+    // keyless tile path rather than an error.
+    google_maps_api_key: readNullableString(
+      value.google_maps_api_key,
+      DEFAULT_SETTINGS.google_maps_api_key ?? null,
+    ),
     map_opacity: readFiniteNumber(value.map_opacity, DEFAULT_SETTINGS.map_opacity),
     contour_visible: readBoolean(value.contour_visible, DEFAULT_SETTINGS.contour_visible),
     contour_opacity: readFiniteNumber(value.contour_opacity, DEFAULT_SETTINGS.contour_opacity),
@@ -83,6 +89,10 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readU32(value: unknown, fallback: number): number {
   return isU32(value) ? value : fallback
+}
+
+function readNullableString(value: unknown, fallback: string | null): string | null {
+  return value === null || typeof value === 'string' ? value : fallback
 }
 
 function readNullableU32(value: unknown, fallback: number | null): number | null {

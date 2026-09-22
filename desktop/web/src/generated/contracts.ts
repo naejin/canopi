@@ -16,7 +16,23 @@ export type AutosaveEntry = {
 	saved_at: string,
 };
 
-export type BasemapStyle = "street" | "satellite";
+export type BasemapStyle =
+// OpenStreetMap street tiles.
+"street" |
+/**
+ *  MapTiler satellite-v4, the historical `satellite` identity.
+ *
+ *  Kept as its own style so a saved MapTiler choice is never rewritten
+ *  to another provider because the build-time key is absent: a missing
+ *  key makes this *unavailable*, not something else.
+ */
+"satellite" |
+/**
+ *  Google satellite, loaded through the official Map Tiles API when a
+ *  device-local key is configured and through Google's keyless tile
+ *  endpoint otherwise.
+ */
+"google_satellite";
 
 export type BudgetItem = {
 	target: PanelTarget,
@@ -601,6 +617,15 @@ export type Settings = {
 	saved_stamps_frame_height: number | null,
 	map_layer_visible: boolean,
 	map_style: BasemapStyle,
+	/**
+	 *  Optional Google Maps API key for the official Map Tiles API.
+	 *
+	 *  Device-local browser credential: it is stored with the rest of the
+	 *  device settings, never in a Design, export, diagnostic bundle, error
+	 *  text or log. A null key selects Google's keyless tile endpoint instead
+	 *  of the official session API.
+	 */
+	google_maps_api_key?: string | null,
 	map_opacity: number,
 	contour_visible: boolean,
 	contour_opacity: number,

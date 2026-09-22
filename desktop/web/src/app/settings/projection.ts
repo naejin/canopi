@@ -18,6 +18,7 @@ import {
   MIN_FAVORITES_FRAME_HEIGHT,
   autoSaveIntervalMs,
   basemapStyle,
+  googleMapsApiKey,
   locale,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
@@ -31,6 +32,7 @@ export interface SettingsProjectionDraft {
   locale: Locale
   theme: Theme
   basemapStyle: BasemapStyle
+  googleMapsApiKey: string | null
   snapToGrid: boolean
   snapToGuides: boolean
   autoSaveIntervalMs: number
@@ -131,6 +133,7 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     locale: locale.value,
     theme: theme.value,
     basemapStyle: basemapStyle.value,
+    googleMapsApiKey: googleMapsApiKey.value,
     snapToGrid: snapToGridEnabled.value,
     snapToGuides: snapToGuidesEnabled.value,
     autoSaveIntervalMs: autoSaveIntervalMs.value,
@@ -153,11 +156,25 @@ function createDraftFromProjection(): SettingsProjectionDraft {
   }
 }
 
+/**
+ * The key as persisted: trimmed, and empty means absent.
+ *
+ * Trimming happens on the explicit save path only, so an in-progress edit
+ * is never rewritten while the user is still typing it.
+ */
+function trimmedKey(value: string | null): string | null {
+  const key = value?.trim()
+  return key ? key : null
+}
+
 function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft {
   return {
     locale: draft.locale,
     theme: normalizeTheme(draft.theme),
     basemapStyle: normalizeBasemapStyle(draft.basemapStyle),
+    // The key is stored exactly as typed; the explicit save action is what
+    // trims it, so partial editing never silently rewrites the credential.
+    googleMapsApiKey: draft.googleMapsApiKey,
     snapToGrid: draft.snapToGrid,
     snapToGuides: draft.snapToGuides,
     autoSaveIntervalMs: Math.max(0, Math.round(draft.autoSaveIntervalMs)),
@@ -188,6 +205,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     locale.value = draft.locale
     theme.value = draft.theme
     basemapStyle.value = draft.basemapStyle
+    googleMapsApiKey.value = draft.googleMapsApiKey
     snapToGridEnabled.value = draft.snapToGrid
     snapToGuidesEnabled.value = draft.snapToGuides
     autoSaveIntervalMs.value = draft.autoSaveIntervalMs
@@ -222,6 +240,7 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     saved_stamps_frame_height: draft.savedStamps.frameHeight,
     map_layer_visible: draft.mapLayers.baseVisible,
     map_style: draft.basemapStyle,
+    google_maps_api_key: trimmedKey(draft.googleMapsApiKey),
     map_opacity: draft.mapLayers.baseOpacity,
     contour_visible: draft.mapLayers.contoursVisible,
     contour_opacity: draft.mapLayers.contoursOpacity,
@@ -249,6 +268,7 @@ function projectSettingsToSignals(settings: Settings): Settings {
     locale: settings.locale,
     theme: settings.theme,
     basemapStyle: normalizeBasemapStyle(settings.map_style),
+    googleMapsApiKey: settings.google_maps_api_key ?? null,
     snapToGrid: settings.snap_to_grid,
     snapToGuides: settings.snap_to_guides,
     autoSaveIntervalMs: settings.auto_save_interval_s * 1000,

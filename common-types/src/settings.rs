@@ -38,6 +38,14 @@ pub struct Settings {
     pub map_layer_visible: bool,
     #[serde(deserialize_with = "deserialize_basemap_style")]
     pub map_style: BasemapStyle,
+    /// Optional Google Maps API key for the official Map Tiles API.
+    ///
+    /// Device-local browser credential: it is stored with the rest of the
+    /// device settings, never in a Design, export, diagnostic bundle, error
+    /// text or log. A null key selects Google's keyless tile endpoint instead
+    /// of the official session API.
+    #[serde(default)]
+    pub google_maps_api_key: Option<String>,
     pub map_opacity: f32,
     pub contour_visible: bool,
     pub contour_opacity: f32,
@@ -60,6 +68,7 @@ impl Default for Settings {
             saved_stamps_frame_height: None,
             map_layer_visible: true,
             map_style: BasemapStyle::Street,
+            google_maps_api_key: None,
             map_opacity: 1.0,
             contour_visible: false,
             contour_opacity: 1.0,
@@ -79,9 +88,20 @@ settings_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
     #[serde(rename_all = "lowercase")]
     pub enum BasemapStyle {
+        /// OpenStreetMap street tiles.
         #[default]
         Street,
+        /// MapTiler satellite-v4, the historical `satellite` identity.
+        ///
+        /// Kept as its own style so a saved MapTiler choice is never rewritten
+        /// to another provider because the build-time key is absent: a missing
+        /// key makes this *unavailable*, not something else.
         Satellite,
+        /// Google satellite, loaded through the official Map Tiles API when a
+        /// device-local key is configured and through Google's keyless tile
+        /// endpoint otherwise.
+        #[serde(rename = "google_satellite")]
+        GoogleSatellite,
     }
 }
 

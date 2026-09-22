@@ -23,6 +23,7 @@ import {
   plantSpacingIntervalM,
   savedStampsFrameHeight,
   theme,
+  googleMapsApiKey,
 } from '../app/settings/state'
 import {
   flushSettingsProjection,
@@ -194,8 +195,43 @@ describe('settings projection', () => {
       hillshade_visible: true,
       hillshade_opacity: 0.25,
       plant_spacing_interval_m: 0.25,
+      google_maps_api_key: null,
     })
     expect(saveSettings).not.toHaveBeenCalled()
+  })
+
+  it('persists the device-local Google key trimmed, and only on an explicit save', () => {
+    hydrateSettingsProjection(baseSettings({ google_maps_api_key: '  stored-key  ' }))
+    // Hydration keeps the stored value reachable rather than dropping it.
+    expect(snapshotSettingsProjection().google_maps_api_key).toBe('stored-key')
+
+    mutateSettingsProjection((draft) => {
+      draft.googleMapsApiKey = '  edited-key  '
+    }, { persist: 'none' })
+    // The in-progress edit is not rewritten while the user is still typing it,
+    // but the value that would be persisted is trimmed and empty means absent.
+    expect(googleMapsApiKey.value).toBe('  edited-key  ')
+    expect(snapshotSettingsProjection().google_maps_api_key).toBe('edited-key')
+
+    mutateSettingsProjection((draft) => {
+      draft.googleMapsApiKey = '   '
+    }, { persist: 'none' })
+    expect(snapshotSettingsProjection().google_maps_api_key).toBeNull()
+
+    mutateSettingsProjection((draft) => {
+      draft.googleMapsApiKey = null
+    }, { persist: 'none' })
+    expect(snapshotSettingsProjection().google_maps_api_key).toBeNull()
+  })
+
+  it('keeps the Google key out of the design-facing settings it does not belong to', () => {
+    hydrateSettingsProjection(baseSettings({ google_maps_api_key: 'device-key' }))
+    // The key is device-local configuration. It travels with Settings, which is
+    // never written into a Design, and no basemap identity depends on it: the
+    // provider module chooses the official or keyless path from the key alone.
+    const snapshot = snapshotSettingsProjection()
+    expect(Object.keys(snapshot)).toContain('google_maps_api_key')
+    expect(snapshot.map_style).toBe('street')
   })
 
   it('normalizes theme, map style, opacities, and contour interval at the seam', () => {

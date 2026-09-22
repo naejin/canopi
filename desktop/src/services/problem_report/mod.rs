@@ -189,6 +189,9 @@ mod tests {
                 target: "test-os/test-arch".to_owned(),
                 settings: Some(Settings {
                     plant_spacing_interval_m: 0.75,
+                    // A recognizable fake credential: the diagnostic allowlist
+                    // must never carry it, so the assertions below stay honest.
+                    google_maps_api_key: Some("FAKE-GOOGLE-MAPS-KEY-DO-NOT-EXPORT".to_owned()),
                     ..Settings::default()
                 }),
                 settings_error: None,
@@ -216,6 +219,8 @@ mod tests {
         assert!(summary.contains("Canvas froze after placing a species"));
         assert!(summary.contains("Canopi 0.5.0"));
         assert!(!summary.contains("/home/alice"));
+        // The device-local Google key is a credential, not diagnostic content.
+        assert!(!summary.contains("FAKE-GOOGLE-MAPS-KEY-DO-NOT-EXPORT"));
 
         let bundle = std::fs::read(folder.join("Diagnostic Bundle.zip")).unwrap();
         assert!(bundle.starts_with(b"PK\x03\x04"));
@@ -230,6 +235,11 @@ mod tests {
         assert!(!bundle_text.contains("current-design.canopi"));
         assert!(!bundle_text.contains("/home/alice"));
         assert!(!bundle_text.contains("Garden Site.canopi"));
+        // `settings_summary` is an explicit allowlist rather than a settings
+        // dump, which is what keeps the credential out; the key must not appear
+        // by name, by value, or in the manifest's own settings object.
+        assert!(!bundle_text.contains("FAKE-GOOGLE-MAPS-KEY-DO-NOT-EXPORT"));
+        assert!(!bundle_text.contains("google_maps_api_key"));
     }
 
     #[test]

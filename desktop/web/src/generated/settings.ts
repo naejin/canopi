@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS = {
   "saved_stamps_frame_height": null,
   "map_layer_visible": true,
   "map_style": "street",
+  "google_maps_api_key": null,
   "map_opacity": 1.0,
   "contour_visible": false,
   "contour_opacity": 1.0,
@@ -42,5 +43,6 @@ export const SETTINGS_THEMES = [
 
 export const SETTINGS_BASEMAP_STYLES = [
   "street",
-  "satellite"
+  "satellite",
+  "google_satellite"
 ] as const satisfies readonly BasemapStyle[]
