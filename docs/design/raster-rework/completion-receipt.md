@@ -1,6 +1,6 @@
 # Raster rework completion receipt
 
-Status: evidence — C0 integrated and C1's admission policy implemented and partly measured; C1 capacity, C2–C5 pending. Partial delivery, not a verified candidate.
+Status: evidence — C0 integrated; C1's policy enabled with its capacity, byte and cancellation envelope measured and its low-space path recorded as unverified; C2–C4 implemented and gated but not live-verified; C5's combined gates and document set complete, with the platform builds and packaged artifacts unrun. **Partial delivery, not a verified release candidate.**
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
@@ -11,7 +11,7 @@ Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-de
 | Accepted foundation | `34e4ded4` on `feature/bounded-raster-generations` |
 | Whole-rework handoff docs | `a96dcfd9` on `feature/raster-html-references` |
 | Integrated `main` (C0) | `f61f8494` |
-| Candidate `feature/raster-rework-completion` | `4e75bd32` (C1) |
+| Candidate `feature/raster-rework-completion` | `ff56eaf3` (latest at this consolidation; earlier sections name the revision they measured) |
 
 C0 merged the accepted foundation with the handoff. The bounded stack re-parented
 `af8aed87` under `34bf6041`, so `main` could not fast-forward and a deliberate
@@ -37,11 +37,11 @@ branch or worktree was deleted.
 | Phase | State | Decisive evidence | Remaining limitation |
 | --- | --- | --- | --- |
 | C0 | **Done** | Integration `f61f8494`; ancestry table above; `cargo fmt`, strict Clippy, `cargo check`, `tsc`, `check:types`, `check:ui`, both edition builds pass on the integrated tree | — |
-| C1 | **Partial** | Policy implemented and enabled; 6 admission unit tests and 3 repurposed ordered-boundary tests pass; the 24-tile sparse batch and the 48M MNH batch are both admitted and imported by the **real production policy** with no override | The 400M single-file plane has not been run through the production callers; cancellation, low-space/write-failure, restart-reuse and cold/three-warm display timings are outstanding; no whole-union-allocation claim is made |
-| C2 | Not started | — | Production Data/Analysis/Layers surfaces absent |
-| C3 | Not started | — | No `sample(entity, expected generation, WGS84 point)` operation |
-| C4 | Not started | — | No shared provider module, no `google_satellite`, no replacement ADR |
-| C5 | Not started | — | Final gates, platform builds and diff review not performed |
+| C1 | **Partial — measured** | Policy enabled at 24 files / 2 GiB per file / 2 GiB total / 400,000,000 processing cells, up from the retired 25M bound; the 24-tile sparse batch, the 48M MNH batch and the **400M-cell plane all run through the production callers with no override**. Envelope measured: peak 73 MiB / 96 MiB / 199 MiB, durable 4,951,029,490 bytes in 11 files, temporary 0, cancellation settling in 101 ms against a 5 s bound. See [C1 measured envelope](#c1-measured-envelope) | Queue and cache peaks are not separated as distinct quantities; cold vs three-warm display timings are unmeasured; the low-space/write-failure path is unverified with probe evidence and named environment limits; no whole-union-allocation claim is made |
+| C2 | **Implemented, not live-verified** | Data, Analysis and Layers ship as production panels beside Layers through existing shell composition; slope in degrees or percent with an author-named result (catalogue v17); an other-continuous dataset must declare a unit label or an explicit unknown; Layers is a flat geographic presentation list with independent eyes | The end-to-end import chain is unobserved, so the surfaces are verified by unit and native tests rather than a driven Desktop pass |
+| C3 | **Implemented, not live-verified** | `inspection.rs` implements `sample(entity, expected generation, WGS84 point)`: `gdaltransform` to the raster CRS, north-up half-open containing pixel, `apply_scene_offset` inverting the canvas conversion, and four tests including an independent oracle across bearings 0/30/90/180/271.5/359 | No value has been read off a live session against an independently known source or slope value; hole/edge NoData and late-answer fencing are covered by tests, not by observation |
+| C4 | **Implemented, not live-verified** | Shared provider module with `google_satellite`, ADR 0028 replacing the Web-v1 restrictions in ADRs 0013/0016; both map surfaces take their basemap from `basemap-bind.ts` rather than recreating the map on a provider/key/session change | No live provider session: attribution and error states are unobserved, isolated Web placement is unrun, and the official Google path needs a real restricted key that does not exist here |
+| C5 | **Documents and gates done; platform unrun** | Combined gates pass on the candidate ([table](#c5-final-gate-run-on-the-delivered-candidate-round-31)); the [debrief synthesis](review-and-debrief.md#final-synthesis) is written; the tracker is reconciled with `canopi-jv8a.2`, `canopi-jv8a.4`, `canopi-j571.2` and `canopi-kko3` closed | Windows and macOS compilation, a packaged-window smoke and the packaged Web artifact are unrun and need a host this environment does not have |
 
 ### C1 detail
 
@@ -212,6 +212,43 @@ Run once across the whole workspace at `36b576c2`, with `CARGO_HOME` and
 The 76 ignored Rust tests are the GDAL- and fixture-backed lanes; individual ones
 have been run and are recorded above, but the full ignored lane has not been run
 as one command on this revision and is not claimed.
+
+### C1 measured envelope
+
+One place for what C1 has actually measured, separated from what it has not, so
+the two cannot be confused. Each row names the revision and the lane that
+produced it; the detailed sections below this one carry the raw output.
+
+**Measured**
+
+| Quantity | Value | Where measured |
+| --- | --- | --- |
+| Production admission | 24 files, 2 GiB per file, 2 GiB total, 400,000,000 processing cells | `admission.rs`; 6 unit tests plus 3 ordered-boundary tests |
+| 24-tile sparse batch | union 60,809,728 cells, 18,432 processing cells, peak **73 MiB** | `sparse_twenty_four_tile_batch_stays_chunk_sized`, no override |
+| 48M MNH batch (12 tiles) | 12 occurrences, 12 retained COGs, 4 tiles drawn, restart reuse, peak **96 MiB**, 137.78 s | `e2e_mnh_batch_import_apply_display_restart` |
+| 400M-cell plane | `uncovered=396979300 overlap=0 invalid=3020700`; range 3469900.25..3477399.75; restart 396979300 cells; tile 14/8331/5798 at 28,980 B; 16 seam samples match the analytic plane; 4 holes NoData; hole edge valid; peak **199 MiB** (183 MiB incremental) | `e2e_capacity_plane_import_display_and_bounded_reads` |
+| Durable bytes (plane lane) | **4,951,029,490** in 11 files — 2.95× the 1,677,760,928-byte source, dominated by derived chunk output | same lane, `report_library_bytes` |
+| Temporary bytes (plane lane) | **0**, no job scratch left; now an assertion rather than an observation | same lane |
+| Cancellation settlement | **101 ms** against a 5 s bound, on the real kill-and-reap path | `a_cancelled_engine_conversion_settles_within_the_contract_bound` |
+
+**Not measured, and not implied by the above**
+
+- **Queue and cache peaks as distinct quantities.** The reported figures are
+  whole-process-tree RSS samples at 50 ms, which the lanes themselves describe as
+  a lower bound rather than an exhaustive maximum. How much of a peak is the GDAL
+  block cache versus in-flight job work is not separated.
+- **Cold versus three-warm display timings.** No display timing was taken at all.
+- **The low-space and write-failure path.** Unverified, with the probe evidence and
+  the environment limits that block a real test recorded in its own section below.
+- **Whole-union allocation.** No claim is made that any lane never materialises a
+  union-sized buffer; the admission policy bounds *processing* cells and the dense
+  envelope guard bounds dense allocation, and those are the only allocation
+  claims this delivery makes.
+
+**One caveat on the plane lane's shape.** Its source is synthetic and single-file,
+so it exercises the one-file-at-the-cell-ceiling path rather than a many-file
+batch at the same total. The 24-tile and 12-tile lanes cover the many-file shape;
+no lane exercises both extremes at once.
 
 ### C1 durable and temporary bytes, measured (round 33)
 
@@ -484,12 +521,6 @@ anomaly should be checked against the declaring code before it is reported as a
 defect. It stays unverified either way, so it is recorded as neither a defect nor
 a pass until a clean session shows it.
 
-**Incidental observation, not diagnosed.** In `p-258.png` the LiDAR section's
-empty message renders as a narrow vertical column of single words inside a
-clipped box, rather than as a normal paragraph. The window is healthy elsewhere,
-so this may be an under-composited-session artifact rather than a layout defect;
-it is recorded as an observation to check in a normal run, not as a finding.
-
 | Case | Classification | Detector | Repair |
 | --- | --- | --- | --- |
 | A round-5 bulk deletion of dead CSS selectors removed a selector line **together with the body of the shared rule it belonged to**, leaving three rules merged into their successors in `lidar-layers-section.module.css`. The `:focus-visible` outline rule stopped applying, so **keyboard focus indicators silently stopped rendering on nine interactive controls**. That round was reported as complete. | Implementation deviation, plus a genuine test-oracle gap: the CSS is valid, the build is clean, `tsc` is clean, and `css-module-policies` passed because it checks token *values*, not rule *structure*. Found only by looking at real rendered output. | Rendered the flat list in the isolated Desktop session and saw names fragmenting; reading the CSS then exposed the merged rules. | Restored all three rules (dropping only the `.disclosure` variants whose element no longer exists) and added a structural guard to `css-module-policies`: a blank line inside a rule's prelude means two rules were merged. Verified against the shipped-broken revision — it reports all three and none in the fixed tree, so this is a recorded fail-before/pass-after. |
@@ -510,27 +541,41 @@ Untested proposals (no evidence of benefit yet, not installed): none recorded.
 
 ## Final disposition and delivery
 
-Implementer outcome: **C0 complete; C1 partial; C2–C5 not started.** This is a
-partial delivery and is not a verified release candidate.
-
-- Integrated accepted stack: `main` = `f61f8494`.
-- New candidate: `feature/raster-rework-completion` = `4e75bd32`, pushed and
-  verified present at that exact revision on **both** configured destinations
-  (`origin` pushes to `git@github.com:naejin/canopi.git` and
-  `git@codeberg.org:naejin/canopi.git`).
+- Integrated accepted stack: `main` = `f61f8494`, which contains the independently
+  accepted foundation `34e4ded4`.
+- Candidate: `feature/raster-rework-completion`, pushed and verified present at
+  that exact revision on **both** configured destinations (`origin` pushes to
+  `git@github.com:naejin/canopi.git` and `git@codeberg.org:naejin/canopi.git`).
+  Earlier sections name the revision each one measured; the [capability
+  table](#capability-and-acceptance-evidence) carries the current state.
 - Actual production admission: 24 files / 2 GiB per file / 2 GiB total /
-  400,000,000 processing cells, measured only for the sparse 24-source case.
-- Remaining external prerequisites: none blocking. The C1 fixtures, GDAL and the
-  Xephyr GUI recipe are all available; live Google official-key qualification
-  still needs a user-supplied restricted key at C4.
-- Agent docs updated: none yet in this candidate. `docs/agent/lidar.md`,
-  `CONTEXT.md`, the dock contract and the MapLibre/build guides still need
-  updating as C2–C4 land, and the C1 admission change already makes the current
-  "existing production limits remain unchanged" wording in `docs/agent/lidar.md`
-  stale for the ordered path.
-- bd: `canopi-j571.1` carries the C0/C1 checkpoints and the next executable
-  action. `canopi-jv8a.4` and `canopi-kko3` still await their C0-reconciliation
-  step.
+  400,000,000 processing cells, exercised by the sparse 24-source lane, the 12-tile
+  48M MNH lane **and** the 400M-cell single-file plane, all through the production
+  callers with no override. The measured envelope and its gaps are consolidated
+  under [C1 measured envelope](#c1-measured-envelope).
+- Remaining external prerequisites: a **Windows or macOS host** for the platform
+  builds and a packaged-window smoke, and a **real restricted Google Maps key**
+  for live official-provider qualification. Neither is blocking the deliverables
+  that can be produced here, and neither was fabricated.
+- Agent docs updated in this candidate: `docs/agent/lidar.md` (admission policy and
+  the retired bound), `docs/agent/maplibre.md` (the provider-binding rule),
+  `docs/agent/frontend-workbenches.md` (the Data/Analysis/Location surfaces and the
+  library-versus-presentation distinction), `docs/agent/edition-development.md` (the
+  window-manager requirement and the DOM feedback loop), and ADRs 0013/0016 status
+  links plus the new ADR 0028.
+- bd: `canopi-j571.1` carries the per-round checkpoints. Reconciled and closed during
+  this rework: `canopi-jv8a.2`, `canopi-jv8a.4`, `canopi-j571.2`, `canopi-kko3`.
+  Still open and correctly so: `canopi-jv8a` (foundation parent), `canopi-kqpp`
+  (engine qualification); `canopi-5neg` is deferred. The epic description records the
+  overlap-replacement checkbox, compulsory merged-source publication and Q as a
+  prerequisite as **retired rather than passed**.
 
-The main agent's independent review still owns acceptance of this candidate;
-nothing here is integrated beyond the C0 foundation or released.
+**What would move this from partial to complete**, in order of value: drive the
+Desktop import chain past the native chooser; read inspection values off a live
+session against an independent oracle; run the two platform builds and one packaged
+smoke; observe a live provider session. Each is a specific missing observation, not
+missing capability.
+
+The main agent's independent review still owns acceptance of this candidate.
+Nothing here is integrated beyond the C0 foundation, and no public release is
+claimed.
