@@ -188,6 +188,36 @@ claim is made.
 
 ## Gates, application and platform evidence
 
+### C5 combined gates on the candidate (round 21)
+
+Run once across the whole workspace at `36b576c2`, with `CARGO_HOME` and
+`CARGO_TARGET_DIR` pointed at the inspected isolated cache:
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | pass |
+| `cargo check --workspace` | pass |
+| `cargo test --workspace` | pass — 362 passed / 76 ignored in the desktop crate, plus 41, 7, 2 in the others |
+| `cargo test -p canopi-desktop --lib native_command_policy::tests` | pass — 13 |
+| `npx tsc --noEmit` | pass |
+| `npm run check:types` | pass (no generated drift) |
+| `npm run check:ui` | pass |
+| `npx vitest run` | pass — 280 files / 2731 tests |
+| `npm run build` | pass |
+| `npm run build:web` | pass |
+| `node scripts/check-web-build-boundaries.mjs` | pass (exit 0) |
+| `python3 scripts/check_docs.py` | pass (0 errors) |
+
+The 76 ignored Rust tests are the GDAL- and fixture-backed lanes; individual ones
+have been run and are recorded above, but the full ignored lane has not been run
+as one command on this revision and is not claimed.
+
+**Not run, and therefore not claimed:** Windows and macOS compilation, any
+packaged (non-dev) window, and the packaged Web artifact. Those remain the
+platform gaps the contract names as release blockers rather than passes.
+
+
 C0 gates on the integrated tree `f61f8494`
 (`/home/daylon/projects/canopi/.rq-scratch/wt-integration`):
 
@@ -311,11 +341,20 @@ submitting a **correct** filename — the next technique is the guide's
 **breadcrumb and row** route, clicking the file row rather than typing a path
 that autocompletion can truncate.
 
-**A correction to the earlier layout note.** The "narrow vertical column" empty
-message reported below was seen again in `l0-panel.png` and `addlayer-panel.png`
-and is a *real* layout defect, not a compositing artifact: the LiDAR section's
-empty text renders in a clipped column about 24 px wide. It is recorded as a
-defect to fix, not as an observation.
+**A correction to a correction.** I first called the "narrow vertical column"
+empty message a compositing artifact, then reclassified it as a real layout
+defect after seeing it again in `l0-panel.png` and `addlayer-panel.png`. Reading
+the stylesheet settles it the other way: `.emptyHint` declares only padding, a
+bottom border and a colour, `.layerList` and `.section` declare only
+`min-width: 0`, and no media query touches either. Nothing in the CSS can produce
+a ~24 px column, so the appearance is a rendering artifact of the
+under-composited session after all — my second classification was the wrong one,
+made from a screenshot instead of from the code.
+
+The lesson is the one this receipt keeps relearning: an unexplained rendering
+anomaly should be checked against the declaring code before it is reported as a
+defect. It stays unverified either way, so it is recorded as neither a defect nor
+a pass until a clean session shows it.
 
 **Incidental observation, not diagnosed.** In `p-258.png` the LiDAR section's
 empty message renders as a narrow vertical column of single words inside a
