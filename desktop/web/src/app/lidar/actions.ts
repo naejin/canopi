@@ -45,10 +45,13 @@ import { designSessionStore } from '../document-session/store'
 export async function createLidarLayer(
   name: string,
   kind: 'GroundElevation' | 'SurfaceElevation' | 'AboveGroundHeight' | 'OtherContinuous',
+  // An "other continuous" dataset has no inherent unit, so its author declares
+  // one here; elevation and height leave this unset and are always metres.
+  unit: { label: string | null; unknown: boolean } = { label: null, unknown: false },
 ): Promise<void> {
   const identity = designSessionStore.sessionIdentity.value
   await withLidarError(async () => {
-    const layerId = await lidarCreateLayer(name, kind)
+    const layerId = await lidarCreateLayer(name, kind, unit)
     await refreshLidarLibrary()
     if (designSessionStore.sessionIdentity.value === identity) presentEntity('Source', layerId)
   })

@@ -1247,6 +1247,8 @@ mod tests {
             .create_layer(
                 "slope plane",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .expect("layer created");
         publish_source(library, &layer_id, &source, false);
@@ -1785,6 +1787,8 @@ mod tests {
             .create_layer(
                 name,
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .expect("layer created");
         let job_id = library.record_import_job(&layer_id).expect("job recorded");

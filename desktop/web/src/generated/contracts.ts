@@ -409,7 +409,6 @@ export type LidarLayerSource = {
 	value_range: [number, number],
 };
 
-// Library-side summary of a source layer.
 export type LidarLayerSummary = {
 	id: string,
 	name: string,

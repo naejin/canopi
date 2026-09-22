@@ -91,8 +91,41 @@ describe('Data panel import affordance', () => {
     act(() => {
       const radios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
       expect(radios).toHaveLength(4)
-      radios[0]?.dispatchEvent(new MouseEvent('change', { bubbles: true }))
+      radios[0]?.click()
     })
+    expect(buttonByText(container, 'Create dataset')?.disabled).toBe(false)
+    expect(createLayer).not.toHaveBeenCalled()
+  })
+
+  it('refuses to create an other continuous dataset before its unit is declared', async () => {
+    act(() => {
+      render(<DataPanel />, container)
+    })
+    act(() => {
+      buttonByText(container, 'Import sources')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      )
+    })
+    const nameField = container.querySelector<HTMLInputElement>('input[type="text"]')!
+    act(() => {
+      nameField.value = 'Soil chemistry'
+      nameField.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      // Other continuous, the only interpretation with no inherent unit. A real
+      // click is required: a dispatched `input` event does not move the control.
+      const radios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+      radios[3]?.click()
+    })
+
+    // The unit controls appear, and Create stays refused until one is used.
+    expect(buttonByText(container, 'Create dataset')?.disabled).toBe(true)
+    expect(container.querySelector('input[type="checkbox"]')).not.toBeNull()
+
+    act(() => {
+      container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click()
+    })
+    // Stating the unit is unknown is a declaration, so it admits the dataset.
     expect(buttonByText(container, 'Create dataset')?.disabled).toBe(false)
     expect(createLayer).not.toHaveBeenCalled()
   })
@@ -115,7 +148,7 @@ describe('Data panel import affordance', () => {
       const radios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
       // Above-ground height, so the test proves the choice is forwarded rather
       // than a hard-coded ground elevation.
-      radios[2]?.dispatchEvent(new MouseEvent('change', { bubbles: true }))
+      radios[2]?.click()
     })
 
     await act(async () => {
@@ -124,6 +157,10 @@ describe('Data panel import affordance', () => {
       )
     })
 
-    expect(createLayer).toHaveBeenCalledWith('Height survey', 'AboveGroundHeight')
+    // Elevation and height have an inherent unit, so no declaration is sent.
+    expect(createLayer).toHaveBeenCalledWith('Height survey', 'AboveGroundHeight', {
+      label: null,
+      unknown: false,
+    })
   })
 })

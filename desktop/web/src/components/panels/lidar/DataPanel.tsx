@@ -36,6 +36,8 @@ export function DataPanel() {
   const [creating, setCreating] = useState(false)
   const [newDatasetName, setNewDatasetName] = useState('')
   const [draftKind, setDraftKind] = useState<MeasurementKind | null>(null)
+  const [unitLabel, setUnitLabel] = useState('')
+  const [unitUnknown, setUnitUnknown] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [impact, setImpact] = useState<LidarDeleteImpact | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -74,11 +76,22 @@ export function DataPanel() {
               const name = newDatasetName.trim()
               // Interpretation stays unselected until the user chooses one.
               if (name.length === 0 || draftKind === null) return
+              // A continuous dataset that is neither elevation nor height has no
+              // inherent unit, so its author declares one or states it is unknown
+              // rather than letting the app assume a label.
+              if (draftKind === 'OtherContinuous' && unitLabel.trim().length === 0 && !unitUnknown) {
+                return
+              }
               void run(async () => {
-                await createLidarLayer(name, draftKind)
+                await createLidarLayer(name, draftKind, {
+                  label: unitLabel.trim() || null,
+                  unknown: unitUnknown,
+                })
                 setCreating(false)
                 setNewDatasetName('')
                 setDraftKind(null)
+                setUnitLabel('')
+                setUnitUnknown(false)
               })
             }}
           >
@@ -104,8 +117,38 @@ export function DataPanel() {
                 </label>
               ))}
             </fieldset>
+            {draftKind === 'OtherContinuous' ? (
+              <>
+                <label className={styles.field}>
+                  <span>{t('canvas.lidar.data.unitLabel')}</span>
+                  <input
+                    type="text"
+                    value={unitLabel}
+                    disabled={unitUnknown}
+                    onInput={(event) => setUnitLabel(event.currentTarget.value)}
+                  />
+                </label>
+                <label className={styles.choice}>
+                  <input
+                    type="checkbox"
+                    checked={unitUnknown}
+                    onChange={(event) => setUnitUnknown(event.currentTarget.checked)}
+                  />
+                  <span>{t('canvas.lidar.data.unitUnknown')}</span>
+                </label>
+              </>
+            ) : null}
             <div className={styles.formActions}>
-              <button type="submit" className={styles.primary} disabled={draftKind === null}>
+              <button
+                type="submit"
+                className={styles.primary}
+                disabled={
+                  draftKind === null
+                  || (draftKind === 'OtherContinuous'
+                    && unitLabel.trim().length === 0
+                    && !unitUnknown)
+                }
+              >
                 {t('canvas.lidar.data.createDataset')}
               </button>
               <button

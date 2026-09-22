@@ -570,7 +570,9 @@
         "importSources": "Importar fuentes…",
         "datasetName": "Nombre del conjunto",
         "interpretation": "Interpretación",
-        "createDataset": "Crear conjunto"
+        "createDataset": "Crear conjunto",
+        "unitLabel": "Unidad",
+        "unitUnknown": "Unidad desconocida"
       },
       "analysis": {
         "title": "Análisis",

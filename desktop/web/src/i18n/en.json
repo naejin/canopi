@@ -570,7 +570,9 @@
         "importSources": "Import sources…",
         "datasetName": "Dataset name",
         "interpretation": "Interpretation",
-        "createDataset": "Create dataset"
+        "createDataset": "Create dataset",
+        "unitLabel": "Unit",
+        "unitUnknown": "Unit unknown"
       },
       "analysis": {
         "title": "Analysis",

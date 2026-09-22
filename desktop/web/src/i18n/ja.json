@@ -570,7 +570,9 @@
         "importSources": "ソースをインポート…",
         "datasetName": "データセット名",
         "interpretation": "解釈",
-        "createDataset": "データセットを作成"
+        "createDataset": "データセットを作成",
+        "unitLabel": "単位",
+        "unitUnknown": "単位不明"
       },
       "analysis": {
         "title": "解析",

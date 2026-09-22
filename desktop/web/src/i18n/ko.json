@@ -570,7 +570,9 @@
         "importSources": "소스 가져오기…",
         "datasetName": "데이터셋 이름",
         "interpretation": "해석",
-        "createDataset": "데이터셋 만들기"
+        "createDataset": "데이터셋 만들기",
+        "unitLabel": "단위",
+        "unitUnknown": "단위 알 수 없음"
       },
       "analysis": {
         "title": "분석",

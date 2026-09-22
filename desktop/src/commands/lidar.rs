@@ -48,13 +48,24 @@ pub async fn lidar_create_layer(
     executor: State<'_, NativeOperationExecutor>,
     name: String,
     measurement_kind: common_types::lidar::LidarMeasurementKind,
+    // `unit_label` and `unit_unknown` declare the unit of an "other continuous"
+    // dataset. Elevation and height are always metres and refuse both.
+    unit_label: Option<String>,
+    unit_unknown: Option<bool>,
 ) -> Result<String, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar create layer",
-            move || library.create_layer(&name, measurement_kind),
+            move || {
+                library.create_layer(
+                    &name,
+                    measurement_kind,
+                    unit_label.as_deref(),
+                    unit_unknown.unwrap_or(false),
+                )
+            },
         )
         .await
 }

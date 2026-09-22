@@ -570,7 +570,9 @@
         "importSources": "Importer des sources…",
         "datasetName": "Nom du jeu de données",
         "interpretation": "Interprétation",
-        "createDataset": "Créer le jeu de données"
+        "createDataset": "Créer le jeu de données",
+        "unitLabel": "Unité",
+        "unitUnknown": "Unité inconnue"
       },
       "analysis": {
         "title": "Analyse",

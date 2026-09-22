@@ -570,7 +570,9 @@
         "importSources": "Импортировать источники…",
         "datasetName": "Имя набора данных",
         "interpretation": "Интерпретация",
-        "createDataset": "Создать набор"
+        "createDataset": "Создать набор",
+        "unitLabel": "Единица",
+        "unitUnknown": "Единица неизвестна"
       },
       "analysis": {
         "title": "Анализ",

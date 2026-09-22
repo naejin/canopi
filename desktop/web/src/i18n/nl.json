@@ -570,7 +570,9 @@
         "importSources": "Bronnen importeren…",
         "datasetName": "Datasetnaam",
         "interpretation": "Interpretatie",
-        "createDataset": "Dataset aanmaken"
+        "createDataset": "Dataset aanmaken",
+        "unitLabel": "Eenheid",
+        "unitUnknown": "Eenheid onbekend"
       },
       "analysis": {
         "title": "Analyse",

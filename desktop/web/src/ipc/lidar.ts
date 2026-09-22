@@ -48,8 +48,14 @@ export async function lidarListLibrary(): Promise<LidarLibrarySnapshot> {
 export async function lidarCreateLayer(
   name: string,
   measurementKind: LidarMeasurementKind,
+  unit: { label: string | null; unknown: boolean } = { label: null, unknown: false },
 ): Promise<string> {
-  return invoke('lidar_create_layer', { name, measurementKind })
+  return invoke('lidar_create_layer', {
+    name,
+    measurementKind,
+    unitLabel: unit.label,
+    unitUnknown: unit.unknown,
+  })
 }
 
 export async function lidarRenameLayer(layerId: string, name: string): Promise<void> {

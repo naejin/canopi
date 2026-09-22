@@ -182,6 +182,8 @@ fn e2e_import_publish_slope_restart_reuse() {
         .create_layer(
             "IGN ground POC",
             common_types::lidar::LidarMeasurementKind::GroundElevation,
+            None,
+            false,
         )
         .expect("layer created");
 
@@ -496,6 +498,8 @@ fn e2e_sparse_generation_lifecycle() {
         .create_layer(
             "IGN ground sparse",
             common_types::lidar::LidarMeasurementKind::GroundElevation,
+            None,
+            false,
         )
         .expect("layer created");
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
@@ -847,6 +851,8 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         .create_layer(
             "MNH batch",
             common_types::lidar::LidarMeasurementKind::AboveGroundHeight,
+            None,
+            false,
         )
         .expect("layer created");
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
@@ -1125,6 +1131,8 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
         .create_layer(
             "capacity plane",
             common_types::lidar::LidarMeasurementKind::GroundElevation,
+            None,
+            false,
         )
         .expect("layer created");
     let job_id = library.record_import_job(&layer_id).expect("job recorded");

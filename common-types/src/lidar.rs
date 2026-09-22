@@ -147,6 +147,30 @@ pub struct LidarTileset {
 }
 
 /// Library-side summary of a source layer.
+/// How an "other continuous" dataset's values are labelled.
+///
+/// A continuous dataset that is neither an elevation nor a height has no
+/// inherent unit, so the unit is a decision only its author can make. This makes
+/// three states distinguishable rather than two:
+///
+/// - a real label, such as `mg/kg`;
+/// - an explicit unknown, stored as the sentinel below, for an author who does
+///   not know the unit yet but wants the data usable;
+/// - undeclared, which is a *different* thing and is refused at creation.
+///
+/// Folding the middle case into a label like `unitless` would claim the values
+/// are dimensionless, which is a measurement claim nobody made.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarUnitDeclaration {
+    /// The author supplied a unit label.
+    Known,
+    /// The author stated the unit is not known.
+    Unknown,
+}
+
+pub const LIDAR_UNITS_UNKNOWN: &str = "unknown";
+
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarLayerSummary {

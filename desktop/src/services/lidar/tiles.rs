@@ -1264,6 +1264,8 @@ mod tests {
                 .create_layer(
                     "tiles",
                     common_types::lidar::LidarMeasurementKind::GroundElevation,
+                    None,
+                    false,
                 )
                 .unwrap();
             let job_id = library.record_import_job(&layer_id).unwrap();
@@ -1594,6 +1596,8 @@ mod tests {
             .create_layer(
                 "tile reduction",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .expect("layer created");
         let generation_id = "generation-reduction";

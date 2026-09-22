@@ -5851,6 +5851,8 @@ mod tests {
             .create_layer(
                 "staging oracle",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .expect("layer created");
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
@@ -6750,6 +6752,8 @@ mod tests {
             .create_layer(
                 "ordered slice",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -6981,6 +6985,8 @@ mod tests {
             .create_layer(
                 "undo refresh",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_one, staging_one) = stage_review(&library, &layer_id, &[bottom], &cancel);
@@ -7150,6 +7156,8 @@ mod tests {
             .create_layer(
                 "first batch crs",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
@@ -7235,6 +7243,8 @@ mod tests {
             .create_layer(
                 "zero valid",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
@@ -7285,6 +7295,8 @@ mod tests {
             .create_layer(
                 "cumulative envelope",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -7394,6 +7406,8 @@ mod tests {
             .create_layer(
                 "published statistics",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_one, staging_one) = stage_review(&library, &layer_id, &[five], &cancel);
@@ -7453,6 +7467,8 @@ mod tests {
             .create_layer(
                 "sparse extent",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         // The anchor lattice is a 4x4 rectangle; the published chunks reach a
@@ -7522,6 +7538,8 @@ mod tests {
             .create_layer(
                 "wrap head",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         // The accepted head is a historical overlay: a sparse generation that
@@ -7599,6 +7617,8 @@ mod tests {
             .create_layer(
                 "legacy slope",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let lattice = RasterGrid {
@@ -7704,6 +7724,8 @@ mod tests {
             .create_layer(
                 "superseded slope",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
@@ -7781,6 +7803,8 @@ mod tests {
             .create_layer(
                 "stale ready",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
@@ -7894,6 +7918,8 @@ mod tests {
             .create_layer(
                 "undo boundary",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job, staging) = stage_review(&library, &layer_id, &[first], &cancel);
@@ -8011,6 +8037,8 @@ mod tests {
             .create_layer(
                 "region facts",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
@@ -8053,6 +8081,8 @@ mod tests {
             .create_layer(
                 "bounded members",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job, staging) = stage_review(&library, &layer_id, &[near, far], &cancel);
@@ -8122,6 +8152,8 @@ mod tests {
             .create_layer(
                 "compat cancel",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
@@ -8190,6 +8222,8 @@ mod tests {
             .create_layer(
                 "legacy base",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -8362,6 +8396,8 @@ mod tests {
             .create_layer(
                 "sparse gap",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         // The lattice anchors on the first selected source, so selecting the
@@ -8488,6 +8524,8 @@ mod tests {
             .create_layer(
                 "anchor",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_one, staging_one) = stage_review(&library, &layer_id, &[anchor], &cancel);
@@ -8604,6 +8642,8 @@ mod tests {
             .create_layer(
                 "24 tiles",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_id, staging) = stage_review(&library, &layer_id, &sources, &cancel);
@@ -8720,6 +8760,8 @@ mod tests {
             .create_layer(
                 "legacy base",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job, staging) = stage_review(&library, &layer_id, &[legacy], &cancel);
@@ -8866,6 +8908,8 @@ mod tests {
             .create_layer(
                 "envelope exact",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_id, staging) =
@@ -8915,6 +8959,8 @@ mod tests {
             .create_layer(
                 "envelope over",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         // No override: this must run under the real production policy.
@@ -8972,6 +9018,8 @@ mod tests {
             .create_layer(
                 "budget over",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         // Only the processing budget is lowered, below the pair's own 32 cells,
@@ -9036,6 +9084,8 @@ mod tests {
             .create_layer(
                 "grandfathered",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -9146,6 +9196,8 @@ mod tests {
             .create_layer(
                 "copy policy",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -9324,6 +9376,8 @@ mod tests {
             .create_layer(
                 "retained payload",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_one, staging_one) =
@@ -9505,6 +9559,8 @@ mod tests {
             .create_layer(
                 "mixed history",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -9690,6 +9746,8 @@ mod tests {
             .create_layer(
                 "reused asset",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -9839,6 +9897,8 @@ mod tests {
             .create_layer(
                 "lazy review",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -9874,6 +9934,8 @@ mod tests {
             .create_layer(
                 "lazy review adjacent",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         review_probe::reset();
@@ -9892,6 +9954,8 @@ mod tests {
             .create_layer(
                 "lazy review duplicate",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         review_probe::reset();
@@ -9918,6 +9982,8 @@ mod tests {
             .create_layer(
                 "lazy review far",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let farther = write_cell_fixture(&engine, &root, "farther", 10_000_000.0, 1.0, 5.0);
@@ -9959,6 +10025,8 @@ mod tests {
             .create_layer(
                 "preview before",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -10049,6 +10117,8 @@ mod tests {
             .create_layer(
                 "review invalid",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -10195,6 +10265,8 @@ mod tests {
             .create_layer(
                 "review pages",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -10320,6 +10392,8 @@ mod tests {
             .create_layer(
                 "promotion rollback",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -10511,6 +10585,8 @@ mod tests {
             .create_layer(
                 "promotion recovery",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = &library.inner.paths;
@@ -10609,6 +10685,8 @@ mod tests {
             .create_layer(
                 "promotion recovery two",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (job_a, staging_a) =
@@ -10655,6 +10733,8 @@ mod tests {
             .create_layer(
                 "await review",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -10783,6 +10863,8 @@ mod tests {
             .create_layer(
                 "stage ownership",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = library.inner.paths.clone();
@@ -11046,6 +11128,8 @@ mod tests {
             .create_layer(
                 "wide review",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -11187,6 +11271,8 @@ mod tests {
             .create_layer(
                 "later source",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -11285,6 +11371,8 @@ mod tests {
             .create_layer(
                 "collision",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -11414,6 +11502,8 @@ mod tests {
             .create_layer(
                 "unresolved recovery",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -11502,6 +11592,8 @@ mod tests {
             .create_layer(
                 "commit success",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -11630,6 +11722,8 @@ mod tests {
             .create_layer(
                 "journal clear",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -11723,6 +11817,8 @@ mod tests {
             .create_layer(
                 "unproven",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let paths = LidarPaths::open(&root).expect("library paths");
@@ -11886,6 +11982,8 @@ mod tests {
             .create_layer(
                 "tile edge",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let (first_job, first_staging) = stage_review(&library, &layer_id, &[bottom], &cancel);

@@ -570,13 +570,15 @@ impl LidarLibrary {
         &self,
         name: &str,
         measurement_kind: common_types::lidar::LidarMeasurementKind,
+        unit_label: Option<&str>,
+        unit_unknown: bool,
     ) -> Result<String, String> {
         let name = name.trim();
         if name.is_empty() {
             return Err("Layer name must not be empty".to_string());
         }
         let id = new_id("lyr");
-        let units = default_units(measurement_kind);
+        let units = resolve_units(measurement_kind, unit_label, unit_unknown)?;
         let connection = self.catalogue()?;
         connection
             .execute(
@@ -2107,6 +2109,71 @@ mod tests {
             .unwrap();
     }
 
+    /// An "other continuous" dataset must declare its unit.
+    ///
+    /// Elevation and height are measured in metres, so their label is fixed and
+    /// a caller cannot contradict it. A continuous dataset that is neither has
+    /// no inherent unit, and the three states must stay distinguishable: a real
+    /// label, an explicit unknown, and undeclared. Undeclared is refused rather
+    /// than stored, because a label like `unitless` would assert the values are
+    /// dimensionless — a measurement claim nobody made.
+    #[test]
+    fn an_other_continuous_layer_must_declare_its_unit() {
+        use common_types::lidar::LidarMeasurementKind;
+
+        // A real label is stored as given, trimmed.
+        assert_eq!(
+            resolve_units(
+                LidarMeasurementKind::OtherContinuous,
+                Some("  mg/kg "),
+                false
+            )
+            .unwrap(),
+            "mg/kg"
+        );
+        // An explicit unknown is stored as the sentinel, not as a label the
+        // author never chose.
+        assert_eq!(
+            resolve_units(LidarMeasurementKind::OtherContinuous, None, true).unwrap(),
+            common_types::lidar::LIDAR_UNITS_UNKNOWN
+        );
+        // Undeclared is refused.
+        assert!(
+            resolve_units(LidarMeasurementKind::OtherContinuous, None, false).is_err(),
+            "an undeclared unit must not be stored"
+        );
+        // Whitespace is not a label.
+        assert!(
+            resolve_units(LidarMeasurementKind::OtherContinuous, Some("   "), false).is_err(),
+            "a blank label is undeclared, not a unit"
+        );
+        // Claiming both is contradictory.
+        assert!(
+            resolve_units(LidarMeasurementKind::OtherContinuous, Some("mg/kg"), true).is_err(),
+            "a label and an explicit unknown cannot both hold"
+        );
+
+        // Elevation and height are always metres and refuse both declarations,
+        // so a caller cannot relabel a measurement that has an inherent unit.
+        for kind in [
+            LidarMeasurementKind::GroundElevation,
+            LidarMeasurementKind::SurfaceElevation,
+            LidarMeasurementKind::AboveGroundHeight,
+        ] {
+            assert_eq!(resolve_units(kind, None, false).unwrap(), "m");
+            assert!(
+                resolve_units(kind, Some("ft"), false).is_err(),
+                "{} must not accept a substitute unit",
+                kind.as_str()
+            );
+            assert!(
+                resolve_units(kind, None, true).is_err(),
+                "{} is not of unknown unit",
+                kind.as_str()
+            );
+        }
+    }
+
     #[test]
     fn delete_analysis_removes_its_complete_row_graph() {
         let root = std::env::temp_dir().join(new_id("lidar-delete-analysis-test"));
@@ -2115,6 +2182,8 @@ mod tests {
             .create_layer(
                 "Delete analysis fixture",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         {
@@ -2156,6 +2225,8 @@ mod tests {
             .create_layer(
                 "Empty",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
 
@@ -2212,6 +2283,8 @@ mod tests {
             .create_layer(
                 "Delete layer fixture",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         {
@@ -2341,6 +2414,8 @@ mod tests {
             .create_layer(
                 "Lease fixture",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let holding = library.record_import_job(&layer_id).unwrap();
@@ -2443,6 +2518,8 @@ mod tests {
             .create_layer(
                 "Pruning fixture",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
             )
             .unwrap();
         let live_generation = new_id("gen");
@@ -2602,6 +2679,52 @@ fn default_units(kind: common_types::lidar::LidarMeasurementKind) -> String {
         common_types::lidar::LidarMeasurementKind::GroundElevation
         | common_types::lidar::LidarMeasurementKind::SurfaceElevation
         | common_types::lidar::LidarMeasurementKind::AboveGroundHeight => "m".to_string(),
-        common_types::lidar::LidarMeasurementKind::OtherContinuous => "unitless".to_string(),
+        // Only reachable through `resolve_units`, which refuses an undeclared
+        // unit, so this arm is never the answer for a stored layer.
+        common_types::lidar::LidarMeasurementKind::OtherContinuous => {
+            common_types::lidar::LIDAR_UNITS_UNKNOWN.to_string()
+        }
+    }
+}
+
+/// The unit label for a new layer, or a refusal when none was declared.
+///
+/// Elevation and height have an inherent unit, so their label is fixed and a
+/// caller cannot contradict it. An "other continuous" dataset has no inherent
+/// unit, so its author must either supply one or state that it is unknown:
+/// silently storing a label such as `unitless` would assert the values are
+/// dimensionless, which is a measurement claim nobody made.
+fn resolve_units(
+    kind: common_types::lidar::LidarMeasurementKind,
+    unit_label: Option<&str>,
+    unit_unknown: bool,
+) -> Result<String, String> {
+    use common_types::lidar::LidarMeasurementKind;
+    match kind {
+        LidarMeasurementKind::GroundElevation
+        | LidarMeasurementKind::SurfaceElevation
+        | LidarMeasurementKind::AboveGroundHeight => {
+            if unit_label.is_some() || unit_unknown {
+                return Err(format!(
+                    "A {} dataset is measured in metres; its unit is not selectable",
+                    kind.as_str()
+                ));
+            }
+            Ok(default_units(kind))
+        }
+        LidarMeasurementKind::OtherContinuous => {
+            let label = unit_label.map(str::trim).filter(|value| !value.is_empty());
+            match (label, unit_unknown) {
+                (Some(_), true) => Err(
+                    "Declare either a unit label or that the unit is unknown, not both".to_string(),
+                ),
+                (Some(label), false) => Ok(label.to_string()),
+                (None, true) => Ok(common_types::lidar::LIDAR_UNITS_UNKNOWN.to_string()),
+                (None, false) => Err(
+                    "An other continuous dataset must declare a unit label or that its unit is unknown"
+                        .to_string(),
+                ),
+            }
+        }
     }
 }

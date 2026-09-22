@@ -570,7 +570,9 @@
         "importSources": "导入源…",
         "datasetName": "数据集名称",
         "interpretation": "解释",
-        "createDataset": "创建数据集"
+        "createDataset": "创建数据集",
+        "unitLabel": "单位",
+        "unitUnknown": "单位未知"
       },
       "analysis": {
         "title": "分析",
