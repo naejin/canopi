@@ -1363,7 +1363,16 @@ fn stage_source_samples(
     ))
 }
 
-/// Value range of one retained source, scanned in bounded windows.
+/// Range and valid-cell count of one retained source, in bounded windows.
+///
+/// The range spans the samples that are **data**: the reader's validity flag is
+/// the single rule, so a declared NoData sentinel is excluded however finite it
+/// is, while legitimate zero and negative samples are kept. A sentinel like
+/// -9999 would otherwise dominate the range and describe the dataset wrongly.
+///
+/// A source with no valid sample has no range to report. It returns
+/// `[0.0, 0.0]` with a zero count, which callers must read as "no range" rather
+/// than as a measured zero: the count is what distinguishes the two.
 fn scan_source_facts(
     reader: &mut PreparedRaster,
     cancel: &AtomicBool,
@@ -1372,20 +1381,21 @@ fn scan_source_facts(
     let mut valid_cells = 0u64;
     reader.scan(cancel, |_window, samples, valid| {
         for (value, valid) in samples.iter().zip(valid.iter()) {
-            // The accepted source-range behaviour spans every finite sample,
-            // declared finite NoData sentinels included; the valid-only
-            // discrepancy stays tracked in `canopi-jv8a.2`.
-            if value.is_finite() {
-                min = min.min(f64::from(*value));
-                max = max.max(f64::from(*value));
+            if *valid == 0 {
+                continue;
             }
-            if *valid != 0 {
-                valid_cells = valid_cells.saturating_add(1);
+            valid_cells = valid_cells.saturating_add(1);
+            let value = f64::from(*value);
+            // The flag already requires finiteness; this keeps the range finite
+            // even if a future reader relaxes that.
+            if value.is_finite() {
+                min = min.min(value);
+                max = max.max(value);
             }
         }
         Ok(())
     })?;
-    if min.is_finite() {
+    if valid_cells > 0 && min.is_finite() {
         Ok(([min, max], valid_cells))
     } else {
         Ok(([0.0, 0.0], valid_cells))
@@ -6243,6 +6253,75 @@ mod tests {
         let _ = std::fs::remove_file(&raw);
         let _ = std::fs::remove_file(raw.with_extension("hdr"));
         tif
+    }
+
+    /// Declared NoData is not data, so it must not enter the source range.
+    ///
+    /// The range is the physical span a user sees, and a sentinel like -9999
+    /// would otherwise dominate it and misreport the dataset. The rule is the
+    /// validity mask's own: a sample counts only when it is finite and differs
+    /// from the source's declared NoData, which keeps valid zero and negative
+    /// samples and excludes the sentinel.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn source_range_excludes_declared_nodata_and_keeps_zero_and_negative() {
+        let root = std::env::temp_dir().join(new_id("canopi-range-nodata"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+
+        let nodata = -9999.0f32;
+        let raw = root.join("nodata-mix.raw");
+        // A finite sentinel beside a valid negative, a valid zero and a valid
+        // positive value, which is the case the bug reports.
+        write_f32_raw(&raw, &[nodata, -1.5, 0.0, 2.5]).unwrap();
+        let tif = root.join("nodata-mix.tif");
+        let grid = RasterGrid {
+            width: 2,
+            height: 2,
+            geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+        };
+        raw_to_tif(&engine, &cancel, &raw, &tif, &grid, "EPSG:3857", nodata)
+            .expect("fixture converts");
+
+        // The retained source COG is the controlled profile the reader accepts,
+        // so the test converts through the same writer the production path uses
+        // rather than inventing a second profile.
+        let cog = crate::services::lidar::raster_assets::write_job_source_cog(
+            &engine,
+            &cancel,
+            &root,
+            "controlled",
+            &tif,
+            &grid,
+            "EPSG:3857",
+            Some(nodata),
+        )
+        .expect("fixture converts to the controlled profile");
+
+        let mut reader = PreparedRaster::open_committed(&cog.path, &grid, Some(nodata))
+            .expect("reader opens the fixture");
+        let (range, valid_cells) = scan_source_facts(&mut reader, &cancel).expect("scan");
+
+        assert_eq!(
+            range,
+            [-1.5, 2.5],
+            "the declared NoData sentinel must not extend the range"
+        );
+        assert_eq!(valid_cells, 3, "the sentinel is not a valid sample");
+        drop(reader);
+
+        // With no declared NoData the same samples are all data, so the rule
+        // follows the source's own declaration rather than the value's shape:
+        // a legitimate -9999 sample is still data when nothing declares it.
+        let mut reader = PreparedRaster::open_committed(&cog.path, &grid, None)
+            .expect("reader opens the fixture without a nodata rule");
+        let (range, valid_cells) = scan_source_facts(&mut reader, &cancel).expect("scan");
+        assert_eq!(range, [-9999.0, 2.5]);
+        assert_eq!(valid_cells, 4);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// The CRS this engine reports for a raster, as a source probe would.
