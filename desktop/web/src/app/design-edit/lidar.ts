@@ -146,3 +146,47 @@ function mergeEntry(
 function nextOrder(entries: LidarPresentationEntry[]): number {
   return entries.reduce((max, entry) => Math.max(max, entry.order), -1) + 1
 }
+
+/**
+ * Move one presentation entry one position earlier or later in saved order.
+ *
+ * Order is the document's own presentation order, so this is a Design Edit: it
+ * dirties the current Design and travels through document history, which is
+ * what makes the move undoable. Reordering presentation changes no numeric data
+ * and starts no computation — it is display order only.
+ *
+ * A move that would leave the order unchanged returns the Design untouched, so
+ * nudging the first entry up does not create a history entry for nothing.
+ */
+export function moveLidarEntry(id: string, direction: 'up' | 'down'): void {
+  editCurrentDesign((design) => {
+    const section = design.lidar
+    if (!section) {
+      return design
+    }
+    const ordered = [...section.entries].sort((left, right) => left.order - right.order)
+    const index = ordered.findIndex((entry) => entry.id === id)
+    if (index < 0) {
+      return design
+    }
+    const target = direction === 'up' ? index - 1 : index + 1
+    if (target < 0 || target >= ordered.length) {
+      return design
+    }
+    const moved = ordered[index]!
+    const displaced = ordered[target]!
+    ordered[index] = displaced
+    ordered[target] = moved
+    // Renumber densely from zero so saved order stays stable and comparable
+    // rather than accumulating gaps across repeated moves.
+    const positions = new Map(ordered.map((entry, position) => [entry.id, position]))
+    const nextEntries = section.entries.map((entry) => {
+      const order = positions.get(entry.id)
+      return order === undefined || order === entry.order ? entry : { ...entry, order }
+    })
+    if (nextEntries.every((entry, position) => entry === section.entries[position])) {
+      return design
+    }
+    return { ...design, lidar: { ...section, entries: nextEntries } }
+  })
+}

@@ -20,7 +20,12 @@ import {
   type LidarLayerEditOutcome,
   type LidarLayerHistoryPage,
 } from '../../ipc/lidar'
-import { patchLidarEntryById, removeLidarEntries, upsertLidarEntry } from '../design-edit/lidar'
+import {
+  moveLidarEntry,
+  patchLidarEntryById,
+  removeLidarEntries,
+  upsertLidarEntry,
+} from '../design-edit/lidar'
 import {
   ensureLidarPolling,
   lidarStatusMessage,
@@ -232,6 +237,16 @@ export function setLidarEntryVisibility(id: string, visible: boolean): void {
 
 export function setLidarEntryOpacity(id: string, opacity: number): void {
   patchLidarEntryById(id, { opacity })
+}
+
+/**
+ * Move one presentation entry earlier or later in the Design's own display
+ * order. Order is display-only: it reorders references and never reorders the
+ * sources inside a Data Layer, which is numeric priority and lives in the
+ * library instead.
+ */
+export function movePresentationEntry(id: string, direction: 'up' | 'down'): void {
+  moveLidarEntry(id, direction)
 }
 
 function removePresentedEntities(ids: string[]): void {

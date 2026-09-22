@@ -4,6 +4,7 @@ import {
   patchLidarEntryById,
   removeLidarEntries,
   readLidarEntries,
+  moveLidarEntry,
 } from '../app/design-edit/lidar'
 import {
   replaceCurrentDesignState,
@@ -35,6 +36,11 @@ function design(name: string): CanopiFile {
     updated_at: '',
     extra: {},
   }
+}
+
+/** Entries in the order the panel displays them, lowest order first. */
+function displayOrder(file: CanopiFile) {
+  return [...readLidarEntries(file)].sort((left, right) => left.order - right.order)
 }
 
 describe('LiDAR presentation entries through the Design Edit seam', () => {
@@ -95,6 +101,47 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
     // A library snapshot without the referenced entity does not mutate the
     // document; the presentation join flags it as unavailable instead.
     expect(readLidarEntries(currentDesign.value as CanopiFile)).toHaveLength(1)
+    expect(currentDesign.value).toBe(before)
+  })
+
+  it('reorders presentation entries and renumbers them densely', () => {
+    replaceCurrentDesignState(design('Order'), null, 'Order')
+    upsertLidarEntry('Source', 'lyr-a')
+    upsertLidarEntry('Analysis', 'adef-b')
+    upsertLidarEntry('Source', 'lyr-c')
+    expect(displayOrder(currentDesign.value as CanopiFile).map((e) => e.id))
+      .toEqual(['lyr-a', 'adef-b', 'lyr-c'])
+
+    // Moving the topmost entry up is a no-op: no history entry for nothing.
+    const beforeTopMove = currentDesign.value
+    moveLidarEntry('lyr-a', 'up')
+    expect(currentDesign.value).toBe(beforeTopMove)
+
+    const beforeBottomMove = currentDesign.value
+    moveLidarEntry('lyr-c', 'down')
+    expect(currentDesign.value).toBe(beforeBottomMove)
+
+    // A real move swaps neighbours and keeps order values contiguous. The
+    // stored array keeps its own insertion order; `order` is what the panel
+    // sorts by, so the assertion reads display order rather than array order.
+    moveLidarEntry('lyr-c', 'up')
+    const reordered = displayOrder(currentDesign.value as CanopiFile)
+    expect(reordered.map((entry) => entry.id)).toEqual(['lyr-a', 'lyr-c', 'adef-b'])
+    expect(reordered.map((entry) => entry.order)).toEqual([0, 1, 2])
+
+    // Display settings travel with the entry rather than being reset.
+    patchLidarEntryById('lyr-a', { opacity: 0.4 })
+    moveLidarEntry('lyr-a', 'down')
+    const afterSwap = displayOrder(currentDesign.value as CanopiFile)
+    expect(afterSwap.map((entry) => entry.id)).toEqual(['lyr-c', 'lyr-a', 'adef-b'])
+    expect(afterSwap.find((entry) => entry.id === 'lyr-a')?.opacity).toBe(0.4)
+  })
+
+  it('ignores a reorder for an entry that is not presented', () => {
+    replaceCurrentDesignState(design('Unknown'), null, 'Unknown')
+    upsertLidarEntry('Source', 'lyr-known')
+    const before = currentDesign.value
+    moveLidarEntry('lyr-absent', 'down')
     expect(currentDesign.value).toBe(before)
   })
 })
