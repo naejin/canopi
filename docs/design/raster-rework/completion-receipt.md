@@ -289,6 +289,28 @@ instead of value-by-value at 2 GiB, with the measurement still 50× inside the
 bound. It stays an ignored GDAL-backed test, consistent with the other engine
 lanes.
 
+### C5 final gate run on the delivered candidate (round 31)
+
+Re-run once across the whole workspace at `b47c000b`, the candidate head:
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | pass |
+| `cargo check --workspace` | pass |
+| `cargo test --workspace` | pass — 363 desktop / 78 ignored, plus 41, 7, 2 |
+| `native_command_policy::tests` | pass — 13 |
+| `npx tsc --noEmit` | pass |
+| `npm run check:types` | pass (no generated drift) |
+| `npm run check:ui` | pass |
+| `npx vitest run` | pass — 282 files / 2739 tests |
+| `npm run build` / `npm run build:web` | pass |
+| `scripts/check-web-build-boundaries.mjs` | pass |
+| `scripts/check_docs.py` | pass |
+
+The final synthesis of what this delivery achieved, what it cost and what remains
+is in the [debrief](review-and-debrief.md#final-synthesis).
+
 **Not run, and therefore not claimed:** Windows and macOS compilation, any
 packaged (non-dev) window, and the packaged Web artifact. Those remain the
 platform gaps the contract names as release blockers rather than passes.

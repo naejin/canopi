@@ -29,6 +29,116 @@ Test each proposed intervention on a real next use. Keep/revise/drop is supporte
 
 ### Final synthesis
 
+**Delivered 2026-09-22; candidate `b47c000b` (50 commits) on
+`feature/raster-rework-completion`, containing `main` at `f61f8494`, which
+contains the accepted foundation `34e4ded4`. Evidence and limits live in the
+[completion receipt](completion-receipt.md); this section is the synthesis that
+contract asked for.**
+
+#### What works, and the exact limits
+
+Capability, capacity and command evidence are the receipt's to own. In summary:
+Desktop Data/Analysis/Layers ship with reusable datasets, ordered source import,
+priority, history and confirmed library deletion; Analysis runs slope in degrees
+or percent under an author-chosen result name; Layers is a flat geographic
+presentation list with independent result eyes; numeric inspection returns the
+physical value at a point; Web Location places coordinates and shares basemap
+providers. Production admits **24 files, 2 GiB per file, 2 GiB total and
+400,000,000 processing cells**, raised from a retired 25,000,000-cell bound that
+survives only as the legacy dense allocation guard. Measured on the real IGN
+fixtures: a 12-tile 48M-cell batch and a synthetic 400M-cell plane, the latter in
+798 s at 197 MiB peak.
+
+The limits that remain are **not** capacity but reach: the end-to-end Desktop
+import chain is unobserved because the native file chooser's autocompletion
+truncates a typed path, so everything behind Apply rests on unit and native
+tests rather than a driven run. Windows and macOS compilation, packaged-window
+smoke and the packaged Web artifact were never run. The official Google basemap
+path needs a real restricted key that does not exist here. Inspection values were
+never read off a live session. The receipt names each one; none is reported as a
+pass.
+
+#### Complexity that earned its place, and machinery that did not
+
+Reused rather than replaced: the ordered COG model, the SQLite catalogue with
+immutable generations, the surface-adapter seam and the shell-command
+composition. The additions that pay for themselves are the ones that deleted a
+falsehood — `resolve_units` refuses a unit nobody declared instead of storing
+`unitless`; `scan_source_facts` spans only valid samples so a NoData sentinel
+cannot dominate a range; `LIDAR_UNITS_UNKNOWN` distinguishes "not stated" from
+"dimensionless". `basemap-bind.ts` is ~70 lines that removed two map-recreation
+paths.
+
+Machinery removed: the overlap-replacement checkbox, compulsory merged-source
+publication and Q-as-prerequisite are retired rather than passed, and the epic
+description now says so.
+
+#### Material escapes, by invariant family
+
+Three families recurred, and each points at a missing detector rather than a
+missing test.
+
+**Interaction tests that could not fail.** The CSS structural guard's first
+version returned zero on the shipped-broken input; a low-space test passed with
+the production cleanup deleted; `lidar-data-panel`'s interpretation case
+dispatched a `change` event that never moved the radio, so it asserted a state it
+had not created. In each case the test looked healthy. The detector that would
+have caught all three is cheap and now applied: **probe that the subject actually
+changed before trusting the assertion**, by mutating the production code or
+reading the control's state.
+
+**Regression tests that encoded the defect.** Two tests actively required map
+recreation on a basemap change — the exact behaviour C4 forbids. Both were
+inverted rather than deleted, because the old assertion is the clearest
+description of what a reader must not reintroduce.
+
+**Whole-rule deletions.** A bulk selector cleanup removed a selector line
+together with its rule's body, silently disabling the focus-outline rule shared
+by nine controls, and that round was reported complete. The `css-module-policies`
+guard passed throughout because it checked token *values*, not rule *structure*.
+A blank line inside a prelude is now the detector, verified against the
+shipped-broken revision.
+
+Classification: the first family is a test-oracle gap; the second an
+implementation deviation the tests had blessed; the third an implementation
+deviation with a genuine guard gap. None was a design omission — the contracts
+were explicit in every case, and the failures were mine.
+
+#### Handoff decisions that were missing or overprescribed
+
+The completion contract was unusually complete. Two places cost real time.
+`completion-design.md` prescribed no window manager for the isolated session, so
+the GTK file chooser was unmapped and unreachable for several rounds; a window
+manager fixed it at the first attempt, and the guide now requires one. The
+low-space path was required to be verified but is not reachable by an
+unprivileged test here — no tmpfs mount, and `RLIMIT_FSIZE` is process-wide — so
+it is recorded as unverified with the probe evidence rather than papered over.
+Those are environment/handoff limitations, not implementer failures, and both
+were safely settled locally.
+
+#### Effort and exchanges
+
+Unknown in cost terms and deliberately not reconstructed. What is observable:
+one whole-rework authorization produced the sequence without routine resumption,
+which is the outcome the arrangement was testing. Rounds 20 and 25 were spent
+entirely on harness mechanics with no product evidence, and rounds 26–30 each
+landed product code, which is the honest shape of the return.
+
+#### Highest-value next interventions
+
+1. **Drive the import chain by breadcrumb and row** rather than typing a path
+   autocompletion can truncate, with the DOM feedback loop installed first. Trial:
+   a correct filename reaches GDAL and the review route appears. Owner: whoever
+   takes the next pass.
+2. **Run the two platform builds and one packaged smoke.** Trial: the packaged
+   window opens and lists the library. Owner: needs a Windows or macOS host.
+3. **Verify inspection against independently derived values in a live session.**
+   Trial: a clicked and a centre-keyed sample both match an independent oracle
+   across a bearing. Owner: next pass.
+
+Everything else on the list is capability that already exists and is waiting on
+one of those three.
+
 At consolidated delivery, replace provisional conclusions with a short revision-linked synthesis covering:
 
 - User capabilities that now work, exact supported capacity and remaining platform/service limitations; link the receipt rather than repeating test logs.
