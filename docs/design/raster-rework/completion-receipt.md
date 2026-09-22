@@ -276,6 +276,35 @@ numeric inspection were not exercised. The end-to-end
 Data → import → Analysis → Layers → Inspect workflow therefore remains
 unobserved, as do save/reopen and a confirmed Design Location.
 
+**Progress and a new wall (rounds 17–18).** The Data panel's missing primary
+action was found *by this session* and closed: the empty library now offers
+**Import sources…**, and the new-dataset form was driven through the real
+application — the name field accepted "Ground survey", the **Ground**
+interpretation was selected, and the dataset was created, appearing as a row with
+its measurement, coverage, state and an **Add TIFFs** action while the Data count
+went 0 → 1. Dataset creation, dataset naming and the interpretation choice are
+therefore verified through the real UI, not only unit tests.
+
+**The native file chooser is the current wall.** Clicking **Add TIFFs** opens the
+real GTK dialog ("Add TIFF sources", 1096×822) — that much works. But typing the
+fixture path into its location entry, exactly the step the edition guide warns
+about, **unmapped the dialog**: it still exists as a window yet reports
+`IsUnMapped` and can no longer be captured or driven. This independently
+reproduces the guide's warning that a path containing a hidden segment can wedge
+the chooser, so the import itself — and the whole
+review → Apply → Analysis → Layers → Inspect chain behind it — remains
+unexercised.
+
+The guide's recommended alternative is the **breadcrumb and row** route rather
+than the location entry; that is the next technique to try. This is a drive
+problem, not evidence that the product path is broken.
+
+**A correction to the earlier layout note.** The "narrow vertical column" empty
+message reported below was seen again in `l0-panel.png` and `addlayer-panel.png`
+and is a *real* layout defect, not a compositing artifact: the LiDAR section's
+empty text renders in a clipped column about 24 px wide. It is recorded as a
+defect to fix, not as an observation.
+
 **Incidental observation, not diagnosed.** In `p-258.png` the LiDAR section's
 empty message renders as a narrow vertical column of single words inside a
 clipped box, rather than as a normal paragraph. The window is healthy elsewhere,
