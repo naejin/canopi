@@ -95,6 +95,15 @@ export interface CanvasRuntimeAppAdapter {
   readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly document: CanvasRuntimeDocumentAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
+  /**
+   * Numeric inspection hook, when a surface has inspection active.
+   *
+   * Injected rather than imported so the generic canvas runtime stays
+   * independent of the LiDAR feature, and consulted per gesture so a
+   * session can be installed and released without rebuilding the runtime.
+   * `undefined` means nothing is inspecting and the click is ordinary.
+   */
+  readonly tryInspectAt?: (point: { readonly x: number; readonly y: number }) => boolean
   readonly presentationData?: CanvasRuntimePresentationDataAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
   readonly translate: CanvasRuntimeTranslator

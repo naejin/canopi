@@ -596,6 +596,16 @@
       "keySaved": "このデバイスにキーを保存しました。",
       "keyLocalOnly": "このデバイスの設定にのみ保存されます。設計・エクスポート・ログ・レポートには書き込まれません。",
       "googleKeyPrompt": "公式の Google タイルを読み込むには Google Maps API キーを入力してください。"
+    },
+    "rasterSample": {
+      "title": "地点の値",
+      "stop": "値の読み取りを終了",
+      "aimHint": "地図をクリックして値を読み取ります",
+      "loading": "読み取り中…",
+      "noData": "この地点にデータがありません",
+      "stale": "レイヤーが変更されました。もう一度クリックしてください",
+      "unavailable": "値を取得できません",
+      "escapeHint": "Esc で終了"
     }
   },
   "worldMap": {

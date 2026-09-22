@@ -596,6 +596,16 @@
       "keySaved": "이 기기에 키를 저장했습니다.",
       "keyLocalOnly": "이 기기 설정에만 저장됩니다. 설계, 내보내기, 로그, 보고서에는 기록되지 않습니다.",
       "googleKeyPrompt": "공식 Google 타일을 불러오려면 Google Maps API 키를 입력하세요."
+    },
+    "rasterSample": {
+      "title": "지점 값",
+      "stop": "값 읽기 중지",
+      "aimHint": "지도를 클릭하여 값을 읽으세요",
+      "loading": "읽는 중…",
+      "noData": "이 지점에 데이터가 없습니다",
+      "stale": "레이어가 변경되었습니다. 다시 클릭하세요",
+      "unavailable": "값을 사용할 수 없음",
+      "escapeHint": "Esc로 중지"
     }
   },
   "worldMap": {

@@ -124,6 +124,16 @@ export interface SceneInteractionSessionDeps {
   sceneEdits: SceneEditCoordinator
   commandAdmission: SceneCommandAdmission
   settledReader: SettledSceneReader
+  /**
+   * Numeric inspection hook, absent unless a surface is inspecting.
+   *
+   * Returning `true` claims the left click, which is what suspends drawing and
+   * selection for the duration of inspection. It is consulted *after* shared
+   * pan and the UI overlays, so pan/zoom and every control keep working while
+   * inspecting — the contract requires navigation to survive inspection, and
+   * the alternative (a second gesture owner) is what it forbids.
+   */
+  tryInspectAt?: (world: ScenePoint) => boolean
   getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
   selectionCommands: Pick<
     CanvasSceneEditCommandSurface,
@@ -552,6 +562,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       tool: this._tool,
       spaceHeld: this._spaceHeld,
     })) return
+
+    // Inspection owns the plain left click while it is active, so drawing and
+    // selection stay suspended without a second gesture owner.
+    if (event.button === 0 && this._deps.tryInspectAt?.(world)) {
+      this._clearPointerGesture()
+      return
+    }
 
     if (this._activeToolAdapter()?.pointerDown?.({
       event,

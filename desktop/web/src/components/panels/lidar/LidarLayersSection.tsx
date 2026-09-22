@@ -36,6 +36,7 @@ import {
   viewLidarCoverage,
 } from '../../../app/lidar/camera-request'
 import { t } from '../../../i18n'
+import { beginInspection } from '../../../app/lidar/inspection'
 import type {
   LidarDeleteImpact,
   LidarLayerCollection,
@@ -410,11 +411,19 @@ export function LidarLayersSection() {
               <MoveControls item={item} position={index} total={items.length} />
               {item.kind === 'Source' && item.state !== 'unavailable' ? (
                 <ActionMenu label={t('canvas.lidar.actions')} items={[
+                  {
+                    label: t('canvas.rasterSample.title'),
+                    run: () => beginInspection({ kind: 'Source', id: item.id, name: item.name }),
+                  },
                   { label: t('canvas.lidar.history'), run: () => openHistory(item) },
                   { label: t('canvas.lidar.deleteFromLibrary'), danger: true, run: () => openLayerDelete(item) },
                 ]} />
               ) : item.kind === 'Analysis' && item.state !== 'unavailable' ? (
                 <ActionMenu label={t('canvas.lidar.actions')} items={[
+                  {
+                    label: t('canvas.rasterSample.title'),
+                    run: () => beginInspection({ kind: 'Analysis', id: item.id, name: item.name }),
+                  },
                   {
                     label: t('canvas.lidar.deleteAnalysis'),
                     danger: true,

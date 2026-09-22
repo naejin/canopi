@@ -26,6 +26,14 @@ const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
 export interface CanvasRuntimeAppCapabilities {
   readonly presentationData: CanvasRuntimePresentationDataAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
+  /**
+   * Numeric inspection hook, supplied by the edition that has the capability.
+   *
+   * It is a capability rather than an import because importing it here would
+   * pull the raster IPC and library store into the browser workspace graph,
+   * which the architecture guard forbids: Web has no raster capability.
+   */
+  readonly tryInspectAt?: (point: { readonly x: number; readonly y: number }) => boolean
 }
 
 export function createAppCanvasRuntimeAppAdapter(
@@ -36,6 +44,9 @@ export function createAppCanvasRuntimeAppAdapter(
     cleanState: { setCanvasClean },
     coordinatedHistory,
     document: { composeDocumentForSave },
+    // Read per gesture, so an inspection session needs no runtime rebuild, and
+    // absent in an edition that has no raster capability.
+    ...(capabilities.tryInspectAt ? { tryInspectAt: capabilities.tryInspectAt } : {}),
     ...(capabilities.savedObjectStamps
       ? { savedObjectStamps: capabilities.savedObjectStamps }
       : {}),

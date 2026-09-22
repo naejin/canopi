@@ -596,6 +596,16 @@
       "keySaved": "密钥已保存在此设备上。",
       "keyLocalOnly": "仅保存在此设备的设置中。绝不会写入设计、导出、日志或报告。",
       "googleKeyPrompt": "输入 Google Maps API 密钥以加载官方 Google 瓦片。"
+    },
+    "rasterSample": {
+      "title": "点值",
+      "stop": "停止读取数值",
+      "aimHint": "点击地图以读取数值",
+      "loading": "正在读取…",
+      "noData": "此处无数据",
+      "stale": "图层已更改—请再次点击",
+      "unavailable": "数值不可用",
+      "escapeHint": "按 Esc 停止"
     }
   },
   "worldMap": {

@@ -3,6 +3,7 @@ import type { LidarSampleOutcome } from '../../generated/contracts'
 import { lidarSamplePixel } from '../../ipc/lidar'
 import { currentDesign } from '../document-session/store'
 import { readLidarPresentation, lidarLibrary } from './library-store'
+import { inspectionAimForScenePoint } from './camera-request'
 
 /**
  * What one inspection lookup is currently showing.
@@ -65,6 +66,9 @@ export function beginInspection(target: InspectionTarget): void {
   inspectionTarget.value = target
   inspectionLocation.value = null
   inspectionSample.value = { kind: 'idle' }
+  // Arm the canvas gesture here so entering inspection cannot leave the mode
+  // active but unable to receive a click.
+  installInspectionPointerHandler()
   reconcileInspectionWithPresentation()
 }
 
@@ -74,6 +78,9 @@ export function endInspection(): void {
   inspectionTarget.value = null
   inspectionLocation.value = null
   inspectionSample.value = { kind: 'idle' }
+  // Release the gesture in the same step, so a later ordinary click is drawing
+  // again and no handler outlives the session.
+  setInspectionPointerHandler(null)
 }
 
 /**
@@ -187,4 +194,58 @@ function readCurrentGenerationId(target: InspectionTarget): string | null {
     (candidate) => candidate.source.kind === 'native-generation',
   )
   return tileset && 'generation_id' in tileset.source ? tileset.source.generation_id : null
+}
+
+/**
+ * The live pointer handler, when a surface is inspecting.
+ *
+ * The canvas interaction session is built once, long before any inspection
+ * session exists, so it cannot receive the handler as a dependency value.
+ * Instead it calls `tryInspectAt`, which consults this registry per gesture.
+ * That keeps the interaction owner single: inspection borrows the existing
+ * gesture rather than installing a competing listener.
+ */
+let pointerHandler: ((point: { x: number; y: number }) => boolean) | null = null
+
+/** Publish or withdraw the handler the canvas gesture consults. */
+export function setInspectionPointerHandler(
+  handler: ((point: { x: number; y: number }) => boolean) | null,
+): void {
+  pointerHandler = handler
+}
+
+/**
+ * Offer one scene point to the inspection session.
+ *
+ * Returns whether inspection claimed the gesture. It declines when no surface is
+ * inspecting, so the canvas keeps its normal drawing and selection behaviour.
+ */
+export function tryInspectAt(point: { x: number; y: number }): boolean {
+  return pointerHandler ? pointerHandler(point) : false
+}
+
+/**
+ * Install the pointer handler that samples the clicked scene point.
+ *
+ * Returns its disposer. A surface must call it on unmount: a leaked handler
+ * would keep claiming clicks for a session that no longer exists.
+ */
+export function installInspectionPointerHandler(): () => void {
+  setInspectionPointerHandler((point) => {
+    if (!inspectionTarget.value) return false
+    const aim = inspectionAimForScenePoint(point, currentDesign.value?.spatial_frame ?? null)
+    if (!aim) return false
+    void sampleInspectionPoint(aim)
+    return true
+  })
+  return () => setInspectionPointerHandler(null)
+}
+
+/** Sample the current viewport centre, so mouse use is never required. */
+export function sampleInspectionCentre(centre: { x: number; y: number }): boolean {
+  if (!inspectionTarget.value) return false
+  const aim = inspectionAimForScenePoint(centre, currentDesign.value?.spatial_frame ?? null)
+  if (!aim) return false
+  void sampleInspectionPoint(aim)
+  return true
 }

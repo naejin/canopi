@@ -596,6 +596,16 @@
       "keySaved": "Key saved on this device.",
       "keyLocalOnly": "Stored in this device's settings only. It is never written to a Design, export, log or report.",
       "googleKeyPrompt": "Enter a Google Maps API key to load the official Google tiles."
+    },
+    "rasterSample": {
+      "title": "Value at point",
+      "stop": "Stop reading values",
+      "aimHint": "Click the map to read a value",
+      "loading": "Reading…",
+      "noData": "No data at this point",
+      "stale": "The layer changed — click again",
+      "unavailable": "Value unavailable",
+      "escapeHint": "Esc to stop"
     }
   },
   "worldMap": {

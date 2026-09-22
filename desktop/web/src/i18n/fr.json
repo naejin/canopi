@@ -596,6 +596,16 @@
       "keySaved": "Clé enregistrée sur cet appareil.",
       "keyLocalOnly": "Stockée uniquement dans les réglages de cet appareil. Elle n'est jamais écrite dans un projet, un export, un journal ou un rapport.",
       "googleKeyPrompt": "Saisissez une clé API Google Maps pour charger les tuiles Google officielles."
+    },
+    "rasterSample": {
+      "title": "Valeur au point",
+      "stop": "Arrêter la lecture",
+      "aimHint": "Cliquez sur la carte pour lire une valeur",
+      "loading": "Lecture…",
+      "noData": "Aucune donnée à ce point",
+      "stale": "La couche a changé — cliquez à nouveau",
+      "unavailable": "Valeur indisponible",
+      "escapeHint": "Échap pour arrêter"
     }
   },
   "worldMap": {

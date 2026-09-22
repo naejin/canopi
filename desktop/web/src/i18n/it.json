@@ -596,6 +596,16 @@
       "keySaved": "Chiave salvata su questo dispositivo.",
       "keyLocalOnly": "Memorizzata solo nelle impostazioni di questo dispositivo. Non viene mai scritta in un progetto, esportazione, registro o report.",
       "googleKeyPrompt": "Inserisci una chiave API Google Maps per caricare le tile Google ufficiali."
+    },
+    "rasterSample": {
+      "title": "Valore nel punto",
+      "stop": "Interrompi lettura",
+      "aimHint": "Fai clic sulla mappa per leggere un valore",
+      "loading": "Lettura…",
+      "noData": "Nessun dato in questo punto",
+      "stale": "Il layer è cambiato: fai di nuovo clic",
+      "unavailable": "Valore non disponibile",
+      "escapeHint": "Esc per interrompere"
     }
   },
   "worldMap": {

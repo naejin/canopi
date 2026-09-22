@@ -181,6 +181,7 @@ export class SceneCanvasRuntime {
         sceneEdits: this._sceneCommands,
         commandAdmission: this._sceneCommands,
         settledReader: this._settledReader,
+        tryInspectAt: this._appAdapter.tryInspectAt,
         getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
         selectionCommands: this._commandSurface.sceneEdits,
         contextualCommands: this._appAdapter.savedObjectStamps

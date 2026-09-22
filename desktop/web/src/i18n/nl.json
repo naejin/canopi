@@ -596,6 +596,16 @@
       "keySaved": "Sleutel op dit apparaat opgeslagen.",
       "keyLocalOnly": "Alleen in de instellingen van dit apparaat. Wordt nooit in een ontwerp, export, logboek of rapport geschreven.",
       "googleKeyPrompt": "Voer een Google Maps API-sleutel in om de officiële Google-tegels te laden."
+    },
+    "rasterSample": {
+      "title": "Waarde op punt",
+      "stop": "Waarden lezen stoppen",
+      "aimHint": "Klik op de kaart om een waarde te lezen",
+      "loading": "Lezen…",
+      "noData": "Geen gegevens op dit punt",
+      "stale": "De laag is gewijzigd — klik opnieuw",
+      "unavailable": "Waarde niet beschikbaar",
+      "escapeHint": "Esc om te stoppen"
     }
   },
   "worldMap": {

@@ -596,6 +596,16 @@
       "keySaved": "Schlüssel auf diesem Gerät gespeichert.",
       "keyLocalOnly": "Nur in den Einstellungen dieses Geräts gespeichert. Er wird nie in einen Entwurf, Export, ein Protokoll oder einen Bericht geschrieben.",
       "googleKeyPrompt": "Geben Sie einen Google Maps API-Schlüssel ein, um die offiziellen Google-Kacheln zu laden."
+    },
+    "rasterSample": {
+      "title": "Wert am Punkt",
+      "stop": "Wertlesen beenden",
+      "aimHint": "Auf die Karte klicken, um einen Wert zu lesen",
+      "loading": "Wird gelesen…",
+      "noData": "Keine Daten an diesem Punkt",
+      "stale": "Ebene geändert – erneut klicken",
+      "unavailable": "Wert nicht verfügbar",
+      "escapeHint": "Esc zum Beenden"
     }
   },
   "worldMap": {

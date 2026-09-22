@@ -596,6 +596,16 @@
       "keySaved": "Chave guardada neste dispositivo.",
       "keyLocalOnly": "Guardada apenas nas definições deste dispositivo. Nunca é escrita num projeto, exportação, registo ou relatório.",
       "googleKeyPrompt": "Introduza uma chave de API do Google Maps para carregar os mosaicos oficiais da Google."
+    },
+    "rasterSample": {
+      "title": "Valor no ponto",
+      "stop": "Parar de ler valores",
+      "aimHint": "Clique no mapa para ler um valor",
+      "loading": "A ler…",
+      "noData": "Sem dados neste ponto",
+      "stale": "A camada mudou — clique novamente",
+      "unavailable": "Valor indisponível",
+      "escapeHint": "Esc para parar"
     }
   },
   "worldMap": {
