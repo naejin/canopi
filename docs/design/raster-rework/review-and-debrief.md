@@ -83,14 +83,22 @@ truthful multi-name source display (the stored original filename is used now, bu
 the same bytes still shares one name), a measurement pass for the ordered route's memory and disk
 behaviour, and general reclamation of unreferenced published assets.
 
-**Evidence limits worth naming.** The isolated real-Desktop workflow still did not run, and this time
-the reason is concrete rather than a missing convenience tool: this session's shell runs in a private
-PID namespace with no `Xvfb` on the host, so a second instance cannot be isolated from the user's own
-running Canopy instance on the shared `:0` display, and a process started from here cannot be
-observed or stopped afterwards. The exact runnable steps and the remaining acceptance risk are in the
-receipt. One earlier observation in this session was wrong because of that sandbox: `pgrep` reported
-no Canopi process, which the window list then contradicted. Host-process checks are not evidence in
-this environment.
+**Evidence limits worth naming.** The isolated real-Desktop workflow ran on this revision. The earlier
+session's conclusion that it could not was wrong for a reason worth keeping: the shell has no
+`Xvfb`, but it does have `Xephyr`, and the nested server only segfaulted because it was started without
+`-extension GLX` (the crash is in the host's NVIDIA EGL/GBM path). With GLX disabled, software GL and
+a `0700` `XDG_RUNTIME_DIR` under `dbus-run-session`, a second instance gets its own display and its own
+profile while the user's instance on `:0` is untouched; the receipt holds the recipe, the exact command
+line and the two environment traps (the GTK location entry wedges the app's main loop on a
+hidden-directory path segment, and a stale region under a dialog needs a resize to repaint). The pass
+covered add, reorder, remove, repeated Undo to exhaustion, two restores including an equal-summary
+pair, slope, a selection change during a read, a restart, and a refused foreign-CRS batch, and it read
+the catalogue back as ground truth after each phase. What it did not cover is the map itself: the
+isolated Design kept its provisional site, so composed values were read from the priority list and the
+catalogue rather than from rendered pixels, and legacy-only states remain caller-test territory. The
+sandbox lesson still stands and is narrower than it looked: processes started here cannot be observed
+afterwards, so ownership of a foreign-looking window must be established through the profile it writes
+into, never through `pgrep`.
 
 ### Final synthesis and adoption
 

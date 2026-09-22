@@ -94,6 +94,55 @@ and verifies the restoration; `git status` shows no probe residue afterwards. Lo
 - `lidar-layer-collection.test.ts` covers the ordered actions and their cursors: a member page is bound to the snapshot it was requested from, a history page keeps its captured upper bound, a move sends the expected head, a no-op message stays visible, and a rejection re-reads the library.
 - `lidar-import-progress.test.tsx` covers the import route: the **Add sources** confirmation exists, the retired overlap decision and Before/After tabs are gone, the ordered-insertion rule is stated, and an incompatible selection keeps the confirmation disabled with its reason.
 
+### Live Desktop workflow in an isolated profile
+
+The real Desktop workflow ran on the revision that carries this receipt: the app built from this
+worktree, a nested X server of its own, a disposable app profile, real pointer and keyboard input, and
+a screenshot of the app window at every step. The user's own instance, profile and ports were never
+touched. Evidence directory, local and ignored: `.rq-scratch/smoke-repair-K7Qm/` (numbered PNGs,
+`driver.py` with its hit-test, the profile and its `lidar-library.sqlite`).
+
+| Step | What the live window showed | Screenshots |
+| --- | --- | --- |
+| Add | **Add TIFFs** → native dialog → two selected COGs → the review lists both and states they are added above the layer's existing sources in the listed order → **Add sources** → "Import complete … ready" | `29-review-panel`, `30-after-add` |
+| Ordered members | Sources 2 — rank 1 `smoke-ground-a.tif` 4 000 000 cells, rank 2 `smoke-ground-b.tif` 1 000 000 cells; layer 1 km² | `35-list` |
+| Reorder | ↓ on rank 1 republished the order: rank 1 `smoke-ground-b.tif`, rank 2 `smoke-ground-a.tif`, with the edge arrows disabled at both ends | `36-list` |
+| Remove | **Remove** → inline confirmation naming the retained history → layer coverage fell to 250 000 m², Sources 1 | `37-wide`, `38-list` |
+| Repeated Undo | History named the operation behind every head — `Import#1`, `Reorder#2`, `Remove#3`, then `Undo#4`, `Undo#5`, `Undo#6` (0 sources · 0 cells · current) — after which **Undo last change** disabled itself as "There is no earlier version to undo." | `41-entries`–`44-entries` |
+| Restore | `Restore#7` published; restoring `Undo#4` while the head was the equal-summary `Undo#5` (both "2 sources · 4 000 000 cells") published `Restore#8` and changed the live order to `smoke-ground-b.tif` first | `45-entries`, `47-panel`, `48-list` |
+| Slope | **Create slope** produced `Ground A · Slope / Slope (degrees) · ready` | `49-list` |
+| Selection during a read | History read started, selection moved to the analysis in the same interaction: the detail stayed the analysis, with no stale layer list, unchanged three seconds later | `55-view`, `56-view` |
+| Restart | Design saved, app restarted, Design reopened from Recent: layer `ready`, Sources 2 in the same order and counts, History identical through `Restore#8 … Import#1` with Undo still available, slope `ready` | `71-sources`, `75-entries`, `76-top` |
+| Foreign CRS | An EPSG:4326 source was refused in review — "no source could join layer 'Ground A': horizontal CRS differs from the layer; transforming foreign grids arrives in a later slice; grid incompatible with layer: pixel size differs …" — and the composition afterwards was untouched | `82-wide`, `84-final` |
+| Dependent settlement | A live **Undo last change** published `Undo#9`, and the catalogue then carried a new analysis job and generation for that head with the analysis head repointed: the dependent slope was recomputed, not left stale | `91-view` |
+
+The catalogue was read back after each phase as ground truth, and it agrees with the window: the
+layer head's `members` list, `coverage_cells`, `min_value`/`max_value`, `operation` and
+`undo_available` match the panel exactly, and the two equal-summary versions are distinguishable there
+alone: `max_value` is 1 183.27 where the authored `+1000 m` overlay is topmost and 191.81 where the
+base raster is.
+
+Recipe, including what cost time here:
+
+1. `Xephyr :99 -screen 1280x900x24 -ac -noreset -listen tcp -extension GLX` with
+   `LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvmpipe`. Without
+   `-extension GLX` the nested server segfaults inside the NVIDIA EGL/GBM stack on this host, which is
+   the difference between "no isolation available" and this section.
+2. Vite on 1430, then
+   `cargo tauri dev --config '{"build":{"devUrl":"http://localhost:1430","beforeDevCommand":null}}'`,
+   both as managed background jobs so they can be stopped again, with `DISPLAY=:99`, `GDK_BACKEND=x11`,
+   `LIBGL_ALWAYS_SOFTWARE=1`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`, fresh `XDG_CONFIG_HOME`,
+   `XDG_DATA_HOME`, `XDG_CACHE_HOME` and a `0700` `XDG_RUNTIME_DIR` inside `dbus-run-session`. A
+   freshly created `$XDG_DATA_HOME/com.canopi.app` is the proof that the window is this instance's,
+   because host PIDs are invisible from this sandbox.
+3. The GTK file chooser wedges the app's main loop (repeating `Gtk-CRITICAL
+   gtk_tree_model_get_iter_first`) when a path typed into its location entry contains a hidden-directory
+   segment: `/…/canopi/.rq-scratch/…` arrived as `canopimopi/.rq-scratch/…` and every later click was
+   swallowed until the app was restarted. Navigate the chooser by clicking its breadcrumb and rows, and
+   keep fixture paths free of `/.` segments.
+4. There is no compositor, so pixels under a native dialog are stale once it closes: resize the window
+   by a few pixels to force a repaint before reading a screenshot.
+
 ### Repository gates on the final candidate
 
 | Gate | Result |
@@ -130,7 +179,9 @@ analysis head ends pointing at that generation, and no current result still desc
 the user undid. Restoring the version that is already current publishes nothing and enqueues nothing.
 Independently of the refresh, `an_old_result_is_not_ready_after_the_head_changes` shows that a result
 whose captured source is no longer the head is never presented as Ready, including after a restart.
-Independent acceptance of the fix is the main agent's call, not claimed here.
+The live profile carries the same boundary: a real **Undo last change** published the next head and the
+catalogue then held a fresh analysis job and generation for that head with the analysis head repointed
+at it. Independent acceptance of the fix is the main agent's call, not claimed here.
 
 ## Migration and compatibility limits
 
@@ -140,43 +191,26 @@ Independent acceptance of the fix is the main agent's call, not claimed here.
 - **Display bounds are the occupied-block envelope.** Matching the superseded sparse route keeps a layer's map footprint stable across the transition, so a composition with distant members still reports the envelope between them rather than the exact coverage extent.
 - **Production admission limits are unchanged.** 16 files, 512 MiB per source, 1 GiB per selection and 25 000 000 union-envelope cells for new imports. Reorder, remove, Undo and restore are not new import admission and are not bounded by them. No capacity evidence is claimed here.
 - **Undo of a layer's first change publishes the empty composition.** The layer stays valid, accepts sources again, and the import it replaced remains restorable from History.
-- **`LidarLayerSource.filename` is a short digest.** The catalogue does not retain an original file name for a committed source, so the list shows a stable 12-character identity cue instead of inventing one; a truthful name would need a new catalogue column and is a follow-up.
+- **A source's displayed name is its original file name, and identical bytes share it.** `lidar_sources` is keyed by content hash and stores `original_filename`, so the list shows the name the file arrived with; importing the same bytes twice therefore shows one name for both occurrences. A per-occurrence name would need a new column and is a follow-up, not a claim here.
 
 ## Unavailable observations
 
-- **The isolated real-Desktop workflow did not run, and the missing prerequisite is now exact.** This
-  session's shell runs inside a private PID namespace (`bwrap --unshare-pid`), the host has no
-  `Xvfb`/`xvfb-run`, and `DISPLAY=:0` is the user's live session with their own Canopi instance and
-  file dialogs open. So a second instance cannot be given its own display, and a process started from
-  here cannot afterwards be observed or stopped: `pgrep`/`ps` see only this sandbox, which is exactly
-  how an earlier check in this session wrongly concluded that no Canopi instance was running. A
-  window-list contradiction (`xwininfo`) corrected it. That sandbox limit is itself the finding: no
-  host-process observation from this environment is evidence.
-- **Runnables for the revision that carries this receipt.** (1) From the implementation worktree,
-  `cd desktop/web && npm run dev -- --port 1430 --strictPort`; launch the app with
-  `cargo tauri dev --config '{"build":{"devUrl":"http://localhost:1430","beforeDevCommand":null}}'`,
-  started as a managed background job so it can be stopped again. (2) Use a fresh disposable profile:
-  one newly created temp root holding `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME` and a
-  `0700` `XDG_RUNTIME_DIR`, inside `dbus-run-session`, preserving the user's own instance, data and
-  ports 1420/1422. Confirm the window's own geometry with `xwininfo` and hit-test the pointer before
-  every synthetic event. (3) Fixtures: an identified real MNT plus a small aligned authored overlay,
-  a second authored overlay for the reorder case, and one that re-declares the layer CRS with
-  different WKT for the refusal step. (4) Observe in the real window: **Add TIFFs** → staged sources
-  → **Add sources** → the raster appears and the source list shows the new source topmost with a
-  disabled ▲; move it down and watch the composed values change where the sources overlap; hide/show
-  the group eye and confirm the composition and the analysis job count do not change; **Create
-  slope**; **Remove** a source and confirm the confirmation names the retained history; **Undo last
-  change** repeatedly until the action disables itself, and confirm the map and the open History
-  update without reopening and that the slope refreshes; **Restore this version** on an older entry
-  and confirm an equal composition republishes nothing; change the selected layer while a read is in
-  flight and confirm the late answer does not replace the new selection's list; save, close, relaunch
-  and reopen the same Design and confirm layer, sources, versions, filenames and visibility survived;
-  finally import the foreign-CRS raster and confirm it is refused by name with no generation
-  published. (5) Capture the window, the app log and the analysis job rows as evidence. A helper
-  test, the gallery or a SQLite inspection is not a substitute for a claimed live map action.
-- **Automated/component evidence is not a live-window pass.** The panel behaviour is covered by
-  component tests with deferred answers, and the backend settlement by caller tests; neither shows
-  what the real WebView does with a MapLibre source replacement.
+- **The live pass did not read the map.** The isolated Design kept its provisional site, so the panel
+  reported "Set a Design Location to mount the map and view this coverage" and the ordered composition
+  was never mounted on the canvas: order effects were read from the priority list and the catalogue,
+  not from pixels, and a MapLibre source replacement after an edit is still unobserved. That needs a
+  confirmed Design Location in the isolated profile.
+- **The legacy-only state is not reachable from the UI.** No import route produces a pre-transition
+  chunked head in a fresh profile, so the `Previous composition` member, the compatibility lease and
+  legacy-only slope eligibility were exercised by caller tests (`publish_legacy_chunked_head`, the
+  preserved-generation fixtures) and not in the window.
+- **The window has no accessibility tree in this isolation.** AT-SPI reported no application objects,
+  so element locations came from screenshots; every click was still hit-tested against the owning
+  window before it was sent, and no synthetic event ever reached a display this session did not own.
+- **No host-process observation from this environment is evidence.** The shell runs in a private PID
+  namespace (`bwrap --unshare-pid`), so `pgrep`/`ps` see only the sandbox: an earlier check in this
+  session wrongly concluded that no Canopi instance was running until a window-list query contradicted
+  it. Ownership has to be established by the profile the window writes into.
 - **Windows and macOS are not compiled here**, so platform free-space, rename durability and
   asset-URL behaviour remain as recorded in the predecessor receipt.
 - **No capacity, disk-budget or large-fixture campaign was run** for the ordered route. The
@@ -189,4 +223,4 @@ Independent acceptance of the fix is the main agent's call, not claimed here.
 
 ## Next dependency
 
-Independent disposition by the main agent, then the user's integration decision. The follow-ups this delivery deliberately leaves open are: the real-Desktop workflow observation; truthful source display names; a capacity/measurement pass for the ordered route if the courier wants the admission limits revisited; and the deferred general reclamation of unreferenced published assets. Nothing here changes production admission limits, integrates the branch into `main` or releases anything.
+Independent disposition by the main agent, then the user's integration decision. The follow-ups this delivery deliberately leaves open are: a live read of the composed values and the MapLibre source swap at a confirmed Design Location; truthful source display names; a capacity/measurement pass for the ordered route if the courier wants the admission limits revisited; and the deferred general reclamation of unreferenced published assets. Nothing here changes production admission limits, integrates the branch into `main` or releases anything.
