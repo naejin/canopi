@@ -437,6 +437,46 @@ export type LidarPresentationSection = {
  */
 export type LidarResultState = "Preparing" | "Ready" | "Refreshing" | "Incomplete" | "Failed";
 
+export type LidarSampleEntityKind =
+// A source Data Layer.
+"Source" |
+// An analysis result.
+"Analysis";
+
+/**
+ *  The outcome of one numeric inspection lookup.
+ *
+ *  `Value` carries the generation that was actually read, so a caller can prove
+ *  the answer belongs to the head it asked about. The containing pixel is read
+ *  at native resolution; no display interpolation is involved.
+ */
+export type LidarSampleOutcome = { Value: { generation_id: string; value: number; units: string } } |
+// Inside the generation, but the containing pixel declares no data.
+{ NoData: { generation_id: string } } | { Unavailable: { reason: LidarSampleUnavailableReason } };
+
+export type LidarSampleRequest = {
+	kind: LidarSampleEntityKind,
+	// Layer id or analysis definition id, matching `kind`.
+	entity_id: string,
+	// The immutable generation the caller believes is current.
+	expected_generation_id: string,
+	// WGS84 longitude in degrees.
+	longitude: number,
+	// WGS84 latitude in degrees.
+	latitude: number,
+};
+
+// Why a sample could not produce a physical value.
+export type LidarSampleUnavailableReason =
+// The entity or generation no longer exists.
+"MissingGeneration" |
+// The head moved after the request was aimed; re-aim and try again.
+"StaleGeneration" |
+// The point does not transform into the generation's grid.
+"TransformFailed" |
+// The generation's interpretation cannot be sampled numerically.
+"UnsupportedInput";
+
 export type LidarSlopeUnit = "Degrees" | "Percent";
 
 /**
