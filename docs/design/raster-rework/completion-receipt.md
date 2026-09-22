@@ -407,6 +407,39 @@ instead of value-by-value at 2 GiB, with the measurement still 50× inside the
 bound. It stays an ignored GDAL-backed test, consistent with the other engine
 lanes.
 
+### C5 verification of the final candidate (round 38)
+
+Re-run once across the whole workspace at **`e21f0d45`**, the candidate head at the
+time of this verification, with ancestry and both destinations checked in the same
+pass:
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | pass |
+| `cargo check --workspace` | pass |
+| `cargo test --workspace` | pass — 363 desktop / 78 ignored, plus 41, 7, 2 |
+| `native_command_policy::tests` | pass — 13 |
+| `npx tsc --noEmit` | pass |
+| `npm run check:types` | pass (no generated drift) |
+| `npm run check:ui` | pass |
+| `npx vitest run` | pass — 283 files / **2743 tests** |
+| `npm run build` / `npm run build:web` | pass |
+| `scripts/check-web-build-boundaries.mjs` | pass |
+| `scripts/check_docs.py` | pass |
+
+| Identity | Check |
+| --- | --- |
+| Candidate head | `e21f0d45`, 62 commits since `main` |
+| `main` is an ancestor of the candidate | yes, at `f61f8494` |
+| Accepted foundation `34e4ded4` is an ancestor | yes |
+| Both destinations at that revision | verified by `git ls-remote` against `github.com` and `codeberg.org` |
+
+**Still unrun, and therefore not claimed at this revision:** Windows and macOS
+compilation, any packaged (non-dev) window, the packaged Web artifact, a live
+Google provider session, and any observation that depends on driving the native
+file chooser. These are named rather than implied to pass.
+
 ### C5 final gate run on the delivered candidate (round 31)
 
 Re-run once across the whole workspace at `b47c000b`, the candidate head:
