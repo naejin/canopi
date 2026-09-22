@@ -236,20 +236,51 @@ profile, which is the first genuine product-process evidence in this receipt:
 - Teardown was clean and scoped: `:99` released, port 1430 released, and the
   user's own ports 1420/1422 never bound by this work.
 
-**What it does not establish.** I could not drive the workflow. XTEST delivered
-pointer motion (verified: the pointer landed at the intended root coordinates
-with window `0x200002` as the child under it) and button events, and the window
-held input focus, but **no click changed the UI** — four attempts at the New
-Design button with progressively longer holds, after first focusing the window
-body. So this evidence covers launch, rendering, profile isolation and teardown,
-and **not** the Data → import → Analysis → Layers → Inspect workflow, which
-remains unobserved.
+**Input driving: solved.** The earlier "no click changes the UI" symptom was a
+drive technique problem, not an input-delivery failure, and the diagnosis is
+worth keeping. Keyboard was never broken: `Ctrl+N` created a Design on the first
+attempt, which proved XTEST reached the DOM. Pointer *motion* also worked —
+hovering a tool produced its tooltip — so only button events appeared dead.
+Without a window manager the app does not service queued button input until the
+pointer moves again or a redraw happens, so a click must be sent as
+*motion → press → release → motion* with settle time after each step. With that
+sequence every click lands. `xdotool` was not needed and could not be installed
+(privilege escalation is blocked here), and `XSendEvent` is correctly ignored by
+GTK for synthetic events.
 
-Classification: environment/tooling limitation for the input half. The recipe in
-the edition guide was written from a run that did drive input, so the difference
-is not yet explained; it is worth recording that the guide's claim is now
-reproduced only partially on this host. Screenshots and the profile are in
-`.rq-scratch/smoke-r14/`.
+A second technique note: the same round originally mis-read control positions
+from a downscaled screenshot preview, clicking 12 px off the button. Control
+positions must come from the captured pixels at their real size, not from a
+preview.
+
+**Isolated UI evidence now collected** (`.rq-scratch/smoke-r15/evidence/`):
+
+| Observation | Evidence |
+| --- | --- |
+| Design workspace renders: canvas grid with metric scale, tool strip, panel rail, zoom controls, "Untitled Design" | `after-key.png` |
+| Pointer interaction works: hovering a rail button shows its "Design Canvas" tooltip | `post-btn.png` |
+| Location placement renders with the real map: OSM tiles, crosshair, Search/Confirm, provisional-site status, OpenStreetMap attribution | `after-rail2.png` |
+| **Data panel** — title, count, the library-not-Design intro copy, and the empty state | `p-186.png` |
+| **Analysis panel** — Operation/Slope, Input dataset with its empty state, Units offering **Degrees and Percent**, and a correctly **disabled** Create slope | `p-222.png` |
+| Layers panel — scene stack, site references, and the LiDAR section | `p-258.png` |
+
+This is the first evidence in this receipt of the **C2 surfaces rendering in the
+real Desktop application**, and of the shared map actually drawing live provider
+tiles in an isolated session. It confirms reachability, layout, copy and the
+disabled/empty states.
+
+**Still not established.** The panels were observed **empty**: no dataset was
+imported, so the Data row actions, the import staging/confirmation route, the
+Analysis run and previous-result list, the flat Layers presentation list and
+numeric inspection were not exercised. The end-to-end
+Data → import → Analysis → Layers → Inspect workflow therefore remains
+unobserved, as do save/reopen and a confirmed Design Location.
+
+**Incidental observation, not diagnosed.** In `p-258.png` the LiDAR section's
+empty message renders as a narrow vertical column of single words inside a
+clipped box, rather than as a normal paragraph. The window is healthy elsewhere,
+so this may be an under-composited-session artifact rather than a layout defect;
+it is recorded as an observation to check in a normal run, not as a finding.
 
 | Case | Classification | Detector | Repair |
 | --- | --- | --- | --- |
