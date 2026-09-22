@@ -407,4 +407,25 @@ describe('ordered layer priority panel', () => {
 
     expect(button('Undo last change')?.disabled).toBe(false)
   })
+
+  it('detaches on unmount without cancelling an edit already submitted', async () => {
+    const edit = deferred<unknown>()
+    moveLayerSource.mockReturnValue(edit.promise)
+    await mount()
+    await act(() => moveUps()[1]?.click())
+    const readsWhenEditStarted = fetchLayerCollection.mock.calls.length
+
+    await act(() => render(null, container))
+    await act(async () => {
+      edit.resolve({ head_generation_id: 'gen-3', changed: true, message: null })
+      await edit.promise
+    })
+    await flush()
+
+    // The edit resolved, but a torn-down view starts no further read and
+    // reports no local state.
+    expect(moveLayerSource).toHaveBeenCalledTimes(1)
+    expect(fetchLayerCollection.mock.calls.length).toBe(readsWhenEditStarted)
+    expect(lidarStatusMessage.value).toBe(null)
+  })
 })

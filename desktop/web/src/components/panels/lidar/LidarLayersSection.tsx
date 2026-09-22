@@ -277,7 +277,8 @@ export function LidarLayersSection() {
     setPending(true)
     setEditError(null)
     const refreshVisible = (): void => {
-      if (selectionRef.current !== layerId) return
+      // The edit keeps its own course after teardown; only view work stops.
+      if (!mounted.current || selectionRef.current !== layerId) return
       loadCollection(layerId)
       if (modeRef.current === 'history') loadHistory(layerId)
     }

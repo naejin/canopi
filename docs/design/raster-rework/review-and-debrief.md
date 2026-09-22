@@ -62,6 +62,28 @@ The small interventions being tested are the three concrete caller regressions, 
 
 At final independent disposition, consolidate these observations with the earlier outcomes into one short synthesis: useful capability delivered, necessary remaining complexity, avoidable rework and which interventions actually helped on their next use. A repeated escaped family means examining the missing boundary/decision, not adding another test quota or rebuilding the architecture. Historical records remain evidence; bd owns progress.
 
+#### Ordered COG correction outcome at `d53f4185`
+
+Delivered in one run on `feature/bounded-raster-generations` from `524eef55` (docs merge `34bf6041`, code `d53f4185`). The three reproduced failures are repaired with an ordinary regression each, and the mounted-map observation the earlier pass left open is established in a second isolated profile.
+
+**R12–R14.** `tile_read_bounds` now derives the candidate footprint from the windows the renderer reads — a native-scale sample's two cells per axis and a minified sample's two level-dependent reduced cells — instead of one cell of slack around the sample centres, with member filtering, checked arithmetic and the read limits retained. `LidarLayersSection.tsx` separates mutation lifetime from view lifetime: the awaited edit owns `pending` until its own settlement and only its view refresh is fenced to the submitting selection, while collection and History each own a traversal object and their own loading state, so a superseded response or page is dropped and History actions wait until both pages describe one head. Each regression was also shown to fail with the superseded behaviour restored — the old tile prefilter, the pre-fix component, and the unmount guard removed on its own. The exact cases are in the [receipt](ordered-cog-receipt.md#correction-at-d53f4185--r12r14-and-the-mounted-map).
+
+**Mounted map.** In a fresh isolated profile the Location tab was confirmed through the UI (`Confirmed site 48.4312, 0.0911`), the imported coverage was mounted and navigated to, and the rendered composition changed in place on reorder → Undo → Restore, on the whole-layer eye and at a zoomed-out edge. Slope was created, and then a live move published a new head for which the catalogue carried exactly one new completed job and generation re-pointed to it — four edits in a row did the same. Navigating away mid-edit (unmounting the panel) still settled the edit, and the next edit from the remounted panel published, so controls were not orphaned. After Save As and an app restart the Design reopened with the layer, History and slope ready and the same composed surface. Screenshots and catalogue identities: `.rq-scratch/smoke-map-K9t/`; the final render correlates with head `gen-…0018`, topmost `mem-…0007` (`smoke-ground-b.tif`), range 150.84…1183.27.
+
+**Machinery.** No new cache, scheduler, request framework, counter, abstraction or migration: the two traversal objects and the head-consistency check are the design's own completion/read-identity rules, and `ViewTraversal` carries no field without a caller. This correction removed no production code and changed no shared contract.
+
+**Interventions (observed failure → smallest change → evidence → keep/revise/drop).**
+
+- *The Xephyr/software-GL recipe existed only inside a design receipt.* Moved in reusable form to [edition development](../../agent/edition-development.md#isolated-desktop-verification-on-a-nested-x-server), with the receipt keeping its revision-labelled account. Its second use succeeded and it now records the traps that use found: Xephyr must nest in the host display, the inspector notice re-flows the panel so a control must be measured immediately before clicking it, and the Save dialog's **Name** field accepts an absolute path. **Keep.**
+- *The review's diagnostic probes were scratch-only.* Recreated as ordinary repository regressions and shown red on the superseded behaviour, green on the fix. **Keep.**
+- *Panel scroll drift caused several mis-clicks before it was understood.* No product change; the local driver now measures a control in the same step as the click. **Keep as a driver technique.**
+
+**Self-review discoveries.** The teardown path started one further collection read until its guard was added (found while writing the unmount regression, not by the review), and the first `ViewTraversal` carried an unused token field that was removed before commit. **Escapes only the independent review caught** are R12–R14 themselves: the earlier panel regressions resolved their mocks immediately, and no tile regression rendered a minified tile whose member lies inside the reduction footprint.
+
+**Limits and effort.** Both fixtures are synthetic MNT-derived crops, labelled as such in the receipt; the legacy-only UI state, Windows/macOS compilation and the external IGN lifecycle fixture remain unobserved exactly as recorded there. Elapsed work and cost: unknown, not measured.
+
+**Decision exchanges.** None were needed. The forwarded brief and design §8 settled ownership and behaviour, so the run continued through its internal phases without a continuation prompt.
+
 ### Record during implementation
 
 Use bd checkpoints for execution state and one `ordered-cog-receipt.md` for delivery evidence. Record only observations that affect correctness, repeatability or delivery cost: source revision, triggering behavior/command, classification, repair or unresolved decision, decisive test, and whether discovered before or after courier delivery. Keep fixture identities and useful command outputs without private rasters, absolute user paths or giant transcripts. No new metrics collector, reporting service or Markdown task tracker.

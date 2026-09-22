@@ -11536,15 +11536,12 @@ mod tests {
         // sits on a tile boundary where the floating-point value rounds down.
         let png = match tiles::render_tile(&library, &request(14, 8192, 8191), &cancel).unwrap() {
             tiles::TileOutcome::Png(bytes) => bytes,
-            tiles::TileOutcome::Empty => panic!(
-                "the two edge sources contribute to the first level-3 reduction cell"
-            ),
+            tiles::TileOutcome::Empty => {
+                panic!("the two edge sources contribute to the first level-3 reduction cell")
+            }
         };
         let (width, height, rgba) = decode_tile(&png);
-        assert_eq!(
-            (width, height),
-            (tiles::TILE_PIXELS, tiles::TILE_PIXELS)
-        );
+        assert_eq!((width, height), (tiles::TILE_PIXELS, tiles::TILE_PIXELS));
         let ramp = ColorRamp::elevation_range(7.0, 9.0);
         let composed = (2.0 * 7.0 + 4.0 * 9.0) / 6.0;
         let expected = ramp.colour_for(composed).expect("8.33 is inside the ramp");

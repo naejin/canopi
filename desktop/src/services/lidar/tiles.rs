@@ -1213,7 +1213,10 @@ mod tests {
         let native = tile_read_bounds(&manifest, &cells, &vec![0u32; samples * samples])
             .unwrap()
             .expect("an ordered composition is bounded");
-        assert_eq!((native.x0, native.y0, native.x1, native.y1), (4, 4, 302, 302));
+        assert_eq!(
+            (native.x0, native.y0, native.x1, native.y1),
+            (4, 4, 302, 302)
+        );
     }
 
     /// Decode a PNG tile into RGBA8 pixels.

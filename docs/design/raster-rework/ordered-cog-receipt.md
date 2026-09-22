@@ -1,6 +1,6 @@
 # Ordered COG Data Layers — delivery receipt
 
-Status: evidence — the [ordered COG design](ordered-cog-design.md) is implemented on `feature/bounded-raster-generations`: a Data Layer is now an ordered collection of independent source COGs whose value is the highest-priority valid sample at each location, shared by display, review and slope, and no new edit materializes a merged elevation raster. Undo, History, the source list, the dependent-analysis refresh and the compatibility transition are wired through the real callers. Independently reviewed: no — this delivery awaits the main agent's disposition. Integrated or released: no.
+Status: evidence — the [ordered COG design](ordered-cog-design.md) is implemented on `feature/bounded-raster-generations`: a Data Layer is now an ordered collection of independent source COGs whose value is the highest-priority valid sample at each location, shared by display, review and slope, and no new edit materializes a merged elevation raster. Undo, History, the source list, the dependent-analysis refresh and the compatibility transition are wired through the real callers. The eleven review findings at `783e31e3` were repaired at `64050896`; the three failures the review of `524eef55` reproduced (R12–R14) are repaired at `d53f4185`, and the mounted-map pass the earlier live run left open is recorded below. Independently reviewed: no — the correction awaits the main agent's disposition. Integrated or released: no.
 Tracking: `canopi-jv8a.4` (kept open for independent disposition); `canopi-kko3` is resolved by the delivered recompute-after-Undo decision; parent `canopi-jv8a`, epic `canopi-j571`.
 Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agent-prompt.md), [ADR 0027](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
@@ -19,9 +19,12 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 | --- | --- |
 | Baseline | `0696bd3d` on `feature/bounded-raster-generations` (accepted predecessor `a5fc7d7b`) |
 | Forwarded documentation commit incorporated | merge of `06c1498c` |
-| Ordered collection storage, snapshot edits and the retired merge machinery | the commit that carries this receipt |
-| Frontend source list, version actions, translations and tests | the commit that carries this receipt |
-| Documentation reconciliation and this receipt | the commit that carries this receipt |
+| Ordered collection storage, snapshot edits and the retired merge machinery | `64050896` |
+| Frontend source list, version actions, translations and tests | `64050896` |
+| Documentation reconciliation and this receipt | `524eef55` |
+| Forwarded correction brief incorporated (current prompt/design/review) | `34bf6041` |
+| R12 tile candidate bounds, R13 edit lifetime, R14 view-request identity | `d53f4185` |
+| Mounted-map evidence, receipt/debrief/guide reconciliation | the commit that carries this section |
 
 ## What changed, precisely
 
@@ -34,6 +37,76 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 - **The compatibility base is library-owned.** A dense mosaic is not in the controlled COG profile, so `LidarLibrary::compat_lease` prepares one GDAL derivative per preserved generation, reuses it for every later read, and releases it when the layer is deleted. `delete_layer` also clears the collection rows and the self-referencing lineage before removing generations.
 - **One deliberate retention.** The backend `lidar_preview_import_decision` command and its `render_decision_preview` caller remain, because the review's Before/After renderers are still the detector for "the accepted head's own composed values" (the preview regression reads them) and the design's later interaction slice owns retiring the old preview entry points. The frontend no longer exposes any path to them, so no user can reach a merge decision.
 - **Retired new-write machinery.** The merge-model publication paths and their helpers are gone; `lidar_generation_members`, `GenerationChunkReader`, `persisted_chunks` and the dense read remain, because preserved generations, persisted slope results and the compatibility tests still read through them.
+
+## Correction at `d53f4185` — R12–R14 and the mounted map
+
+The [review of `524eef55`](ordered-cog-review.md#current-disposition-at-524eef55) reproduced three
+failures and recorded that the earlier live pass never mounted the map. All three are repaired with an
+ordinary regression each, and the mounted-map observation is now established in an isolated profile.
+
+| # | Reproduced failure | Repair | Regression (boundary) |
+| --- | --- | --- | --- |
+| R12 | `tile_read_bounds` bounded sample centres with one native cell of padding, so a source inside a level-dependent reduced footprint was filtered out and the tile rendered `Empty` | the candidate footprint is derived from the read geometry itself: a native-scale sample reads its two cells per axis, a minified sample reads the two reduced cells around its own cell, whose footprints reach `2 * side` native cells (checked arithmetic, existing read limits and member filtering retained) | `a_tile_near_its_edge_keeps_the_sources_inside_its_reduction_footprint` (caller: two overlapping 2×2 fixtures at tile 14/8192/8191 — the composed level-3 cell mean renders, the level-0 tile still draws) and `tile_candidate_bounds_enclose_the_reduced_windows_they_read` (geometry) |
+| R13 | `runEdit` cleared `pending` only when the request generation still matched, so navigating during an edit left every edit control disabled forever | the awaited edit owns the panel's pending state until its own settlement; only its view refresh is fenced to the selection that submitted it; unmount detaches view work without cancelling the submitted edit | `settles a pending edit after the view moves on`, `settles a rejected edit after the view moves on and keeps its message`, `detaches on unmount without cancelling an edit already submitted` (panel, deferred commands) |
+| R14 | collection and History reads shared one request generation and one loading flag, so a late same-layer answer replaced the refreshed head, mixed-head pages appended, and one settled read enabled controls while the other was still in flight | collection and History each own their traversal identity and loading state; a page appends only into the traversal that produced it; a head/selection change supersedes the traversal; History actions wait until both pages describe one head, and a settled disagreement is re-read once | `keeps the refreshed head when an older same-layer read answers late`, `keeps the refreshed history when an older same-layer read answers late`, `does not append a page from a superseded traversal after a refresh`, `keeps History actions disabled until their own read settles` (panel, deferred responses) |
+
+Red/green was demonstrated by restoring the superseded behaviour, not asserted: with the old
+`tile_read_bounds` body both R12 tests failed (the caller test panicked on `Empty`) and returned to
+green when the fix was restored; with the pre-fix `LidarLayersSection.tsx` all six new panel tests
+failed and passed again with the fix. The pre-fix component addition was also probed on its own —
+removing only the unmount guard fails `detaches on unmount…`. Each restoration was byte-verified.
+
+Adjacent behaviour found while reviewing the diff and kept: no new helper was needed beyond the two
+traversals and the `headsConsistent` check the design already required; `ViewTraversal` carries no
+unused field, and a torn-down panel starts no further view work.
+
+### Mounted-map evidence in an isolated profile
+
+Second use of the recipe below, on the revision that carries the section: the app built from this
+worktree, its own nested X server, a disposable profile, real pointer and keyboard input, and a
+screenshot at every step. Evidence directory, local and ignored: `.rq-scratch/smoke-map-K9t/` (PNGs,
+`act.py` with hit-tested input and text-targeted clicking, the profile and its `lidar-library.sqlite`).
+The user's app, profile, display and ports were never used; `:99` and 1430 were checked free first.
+
+| Step | What the live window showed | Screenshots |
+| --- | --- | --- |
+| Design Location | Location tab mounted the real basemap; a geocoder result previewed "Selected location 48.4312, 0.0911"; **Confirm location** published "Confirmed site 48.4312, 0.0911" — the state the earlier pass left provisional | `03-location`, `06-preview`, `07-confirmed` |
+| Import and mount | Layer **Ground A** created, two fixtures added through the native chooser and the review panel; **View coverage** flew the canvas onto the coverage and the ordered COG rendered over the basemap at 3 % zoom | `18-staging`, `19-applied`, `22-map-a-top` |
+| Rendered order | rank 1 `smoke-ground-a.tif` → the whole 1 km² square carries A's own gradient; **↓** republished the order (rank 1 `smoke-ground-b.tif`) and the same canvas redrew in place as A's low frame plus B's dark high square, without reopening the panel or restarting | `22-map-a-top`, `23b-map-b-top` |
+| Undo → Restore | **Undo last change** returned the canvas to A's gradient (`Undo#3`); **Restore this version** of `Reorder#2` published `Restore#4` and the frame-plus-square render returned | `27-map-after-undo`, `30-hist`, `38b-map-after-restore` |
+| Whole-layer visibility | the eye removed the whole raster and left the basemap, and restored it with the same composition | `39-map`, `40-map`, `41-visible`, `42-map` |
+| Zoomed-out edge | six wheel steps out showed the coverage as an island with all four edges and the basemap labels around it | `43-map` |
+| Slope currency | **Create slope** produced `Ground A · Slope / Slope (degrees) · ready`; a live move then published a new head and the catalogue carried one new job and generation for it, completed and re-pointed — and a later edit did the same again | `48-panel`, `49-row`, `65-after-move`, `66-rows` |
+| Navigation during a pending edit | a **↓** move was followed immediately by leaving the Layers panel for another dock panel (unmounting it mid-edit): the edit still settled and published `gen-18d79dc7cb5799f10015`, and the next edit from the remounted panel published another head — controls were live, not orphaned | `67-left-panel`, `68-returned`, `74-live-edit` |
+| Save and reopen | File → **Save As** wrote `smoke-map.canopi`; after an app restart the Design reopened with `LiDAR 1`, `Ground A` ready, `Ground A · Slope` ready and History intact, and **View coverage** re-rendered the same composed surface — the mounted map survives the round trip | `76-savedialog`, `81-saved`, `83-reopened`, `84-panel`, `85-coverage-after-reopen` |
+
+The catalogue was read back as ground truth; the rendered states correlate with the head identities:
+
+| Visible state | Head | Topmost member | Range |
+| --- | --- | --- | --- |
+| A's gradient only | `gen-…0008` (import) and `gen-…000c` (undo), `gen-…000e`, `gen-…0015` | `mem-…0006` (`smoke-ground-a.tif`) | 150.84 … 191.81 |
+| A's frame + B's dark square | `gen-…000b`, `gen-…000d`, `gen-…0012`, and the reopened `gen-…0018` | `mem-…0007` (`smoke-ground-b.tif`) | 150.84 … 1183.27 |
+
+Every numeric edit in the pass produced exactly one dependent analysis job and generation (four in
+total), each completed, and the analysis head always pointed at the generation computed from the
+current layer head; schema stayed at v16, so no migration was involved.
+
+### Gates on the correction candidate
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | clean |
+| `CARGO_SKIP… cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `cargo check --workspace` | clean |
+| `cargo test -p canopi-desktop --lib native_command_policy` | 13 passed / 0 failed |
+| `services::lidar --include-ignored --skip services::lidar::e2e --test-threads=1` | **176 passed / 0 failed** in 575.64 s (two more than the earlier lane: the new tile regressions) |
+| `cd desktop/web && npx tsc --noEmit` | clean |
+| focused Vitest (`lidar-layer-priority`, `lidar-layer-collection`, `lidar-actions`, `lidar-library-store`) | 27 passed / 0 failed |
+| `git diff --check` | clean |
+
+The unchanged migration, admission, compatibility and slope evidence above keeps its original revision;
+the suite counts in this table are this revision's runs and replace nothing silently. Windows/macOS
+compilation and the external IGN fixture remain unavailable exactly as recorded below.
 
 ## Finding-to-regression map
 
@@ -96,11 +169,13 @@ and verifies the restoration; `git status` shows no probe residue afterwards. Lo
 
 ### Live Desktop workflow in an isolated profile
 
-The real Desktop workflow ran on the revision that carries this receipt: the app built from this
-worktree, a nested X server of its own, a disposable app profile, real pointer and keyboard input, and
-a screenshot of the app window at every step. The user's own instance, profile and ports were never
-touched. Evidence directory, local and ignored: `.rq-scratch/smoke-repair-K7Qm/` (numbered PNGs,
-`driver.py` with its hit-test, the profile and its `lidar-library.sqlite`).
+At revision `524eef55`. The real Desktop workflow ran on the revision that carries this receipt: the
+app built from this worktree, a nested X server of its own, a disposable app profile, real pointer and
+keyboard input, and a screenshot of the app window at every step. The user's own instance, profile and
+ports were never touched. Evidence directory, local and ignored: `.rq-scratch/smoke-repair-K7Qm/`
+(numbered PNGs, `driver.py` with its hit-test, the profile and its `lidar-library.sqlite`). This pass
+never mounted the map; the [correction pass](#mounted-map-evidence-in-an-isolated-profile) reused its
+recipe and closed that gap.
 
 | Step | What the live window showed | Screenshots |
 | --- | --- | --- |
@@ -122,12 +197,14 @@ layer head's `members` list, `coverage_cells`, `min_value`/`max_value`, `operati
 alone: `max_value` is 1 183.27 where the authored `+1000 m` overlay is topmost and 191.81 where the
 base raster is.
 
-Recipe, including what cost time here:
+Recipe, including what cost time here. The reusable form now lives in the
+[edition guide](../../agent/edition-development.md#isolated-desktop-verification-on-a-nested-x-server);
+the revision-specific findings were:
 
-1. `Xephyr :99 -screen 1280x900x24 -ac -noreset -listen tcp -extension GLX` with
-   `LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvmpipe`. Without
-   `-extension GLX` the nested server segfaults inside the NVIDIA EGL/GBM stack on this host, which is
-   the difference between "no isolation available" and this section.
+1. `Xephyr :99 -screen 1280x900x24 -ac -noreset -listen tcp -extension GLX` started from the host
+   display, with `LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvmpipe`.
+   Without `-extension GLX` the nested server segfaults inside the NVIDIA EGL/GBM stack on this host,
+   which is the difference between "no isolation available" and this section.
 2. Vite on 1430, then
    `cargo tauri dev --config '{"build":{"devUrl":"http://localhost:1430","beforeDevCommand":null}}'`,
    both as managed background jobs so they can be stopped again, with `DISPLAY=:99`, `GDK_BACKEND=x11`,
@@ -142,6 +219,11 @@ Recipe, including what cost time here:
    keep fixture paths free of `/.` segments.
 4. There is no compositor, so pixels under a native dialog are stale once it closes: resize the window
    by a few pixels to force a repaint before reading a screenshot.
+5. The correction pass added one trap of its own: the inspector's "Coverage is outside this view"
+   notice appears and disappears with the map view, which re-flows the panel mid-interaction, so a
+   control's position has to be measured immediately before each click instead of reused. The Save
+   dialog's **Name** field accepts an absolute path, which is the reliable way to save into an ignored
+   directory.
 
 ### Repository gates on the final candidate
 
@@ -195,18 +277,25 @@ at it. Independent acceptance of the fix is the main agent's call, not claimed h
 
 ## Unavailable observations
 
-- **The live pass did not read the map.** The isolated Design kept its provisional site, so the panel
-  reported "Set a Design Location to mount the map and view this coverage" and the ordered composition
-  was never mounted on the canvas: order effects were read from the priority list and the catalogue,
-  not from pixels, and a MapLibre source replacement after an edit is still unobserved. That needs a
-  confirmed Design Location in the isolated profile.
+- **The earlier live pass at `524eef55` did not read the map.** That revision's isolated Design kept its
+  provisional site, so order effects were read from the priority list and the catalogue, not from
+  pixels. The [correction pass](#mounted-map-evidence-in-an-isolated-profile) confirmed a Design
+  Location through the same UI and observed the rendered composition, so that gap is closed; what
+  remains unobserved from the window is named below.
 - **The legacy-only state is not reachable from the UI.** No import route produces a pre-transition
   chunked head in a fresh profile, so the `Previous composition` member, the compatibility lease and
   legacy-only slope eligibility were exercised by caller tests (`publish_legacy_chunked_head`, the
   preserved-generation fixtures) and not in the window.
+- **The mounted-map pass used two synthetic MNT-derived crops** (`smoke-ground-a.tif` 2000×2000 and
+  `smoke-ground-b.tif` 1000×1000, both 0.5 m EPSG:2154, the second the same crop authored +1000 m and
+  offset 250 m south-east). They are labelled as synthetic here; the external IGN lifecycle fixture was
+  not available, so no IGN dataset claim is made.
 - **The window has no accessibility tree in this isolation.** AT-SPI reported no application objects,
   so element locations came from screenshots; every click was still hit-tested against the owning
   window before it was sent, and no synthetic event ever reached a display this session did not own.
+  The correction pass additionally had to re-measure a control's position immediately before some
+  clicks: the inspector's "Coverage is outside this view" notice appears and disappears with the map
+  view, which re-flows the panel. That is a driving observation, not a product defect.
 - **No host-process observation from this environment is evidence.** The shell runs in a private PID
   namespace (`bwrap --unshare-pid`), so `pgrep`/`ps` see only the sandbox: an earlier check in this
   session wrongly concluded that no Canopi instance was running until a window-list query contradicted
@@ -223,4 +312,10 @@ at it. Independent acceptance of the fix is the main agent's call, not claimed h
 
 ## Next dependency
 
-Independent disposition by the main agent, then the user's integration decision. The follow-ups this delivery deliberately leaves open are: a live read of the composed values and the MapLibre source swap at a confirmed Design Location; truthful source display names; a capacity/measurement pass for the ordered route if the courier wants the admission limits revisited; and the deferred general reclamation of unreferenced published assets. Nothing here changes production admission limits, integrates the branch into `main` or releases anything.
+Independent disposition by the main agent, then the user's integration decision. The follow-ups this
+delivery deliberately leaves open are: truthful source display names for repeated imports of the same
+bytes; a capacity/measurement pass for the ordered route if the courier wants the admission limits
+revisited; the deferred general reclamation of unreferenced published assets; and the per-occurrence
+name column the [design](ordered-cog-design.md#incremental-consumers-and-small-ui-corrections) keeps
+out of this correction. Nothing here changes production admission limits, integrates the branch into
+`main` or releases anything.

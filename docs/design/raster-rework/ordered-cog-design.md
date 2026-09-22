@@ -1,6 +1,6 @@
 # Ordered COG Data Layers
 
-Status: active — user-selected replacement for materialized source merging; repair delivery reviewed at `524eef55`; three local defects and mounted-map evidence remain. Not accepted, integrated or released. The [receipt](ordered-cog-receipt.md#finding-to-regression-map) owns the disposition map and evidence.
+Status: active — user-selected replacement for materialized source merging; the repair delivery reviewed at `524eef55` has its three local defects repaired at `d53f4185` and its mounted-map pass recorded. Not accepted, integrated or released. The [receipt](ordered-cog-receipt.md#correction-at-d53f4185--r12r14-and-the-mounted-map) owns the disposition map and evidence.
 Tracking: re-scope `canopi-jv8a.4` under `canopi-jv8a` / `canopi-j571`; reconcile `canopi-kko3` in the same implementation. bd owns progress.
 Current guidance: [repair prompt](ordered-cog-agent-prompt.md), [independent review](ordered-cog-review.md), [delivery receipt](ordered-cog-receipt.md), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR guide](../../agent/lidar.md), [collaboration](collaboration-protocol.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief).
 
@@ -17,7 +17,7 @@ Keep GDAL, the pinned native reader, Float32 conversion semantics, current admis
 
 ## 2. Baseline, reuse and ownership
 
-Current repair baseline: `524eef55` on `feature/bounded-raster-generations`, catalogue v16. Preserve the complete delivery stack, including `64050896`. The [current review](ordered-cog-review.md#current-disposition-at-524eef55) narrows remaining work to R12–R14 and the mounted-map check; §8 remains the fixed contract, not a fresh eleven-group assignment.
+Current repair baseline: `524eef55` on `feature/bounded-raster-generations`, catalogue v16, with the correction at `d53f4185`. Preserve the complete delivery stack, including `64050896`. The [current review](ordered-cog-review.md#current-disposition-at-524eef55) reproduced R12–R14 and left the mounted-map observation; both are now recorded in the [receipt](ordered-cog-receipt.md#correction-at-d53f4185--r12r14-and-the-mounted-map), and §8 remains the fixed contract, not a fresh eleven-group assignment.
 
 Historical pre-implementation inspection: `0696bd3d` on `feature/bounded-raster-generations`, including C1/C2 from `bcc7f5dd` and test changes from `0696bd3d`; inspected design checkout: `94fd0a8d`. Preserve the accepted predecessor `a5fc7d7b`. The main checkout's dirty `desktop/src/native_operation.rs` and `.beads.gate.lock` remain user-owned. The implementation worktree was clean at inspection.
 
@@ -142,7 +142,7 @@ At delivery, update the existing `ordered-cog-receipt.md` here with lifecycle he
 
 ## 8. Repair contract after review of `783e31e3`
 
-The eleven findings at `783e31e3` motivated these fixed decisions; their delivered repairs are retained. Current execution is the [three remaining findings at `524eef55`](ordered-cog-review.md#current-disposition-at-524eef55) and mounted-map verification. Retain immutable snapshots, stable occurrence IDs, shared readers, heavy lease and scheduler. The decisions below close handoff ambiguities; private names and factoring remain delegated. No new job service, event bus, spatial engine, cache framework, generic pagination layer or benchmark project is required.
+The eleven findings at `783e31e3` motivated these fixed decisions; their delivered repairs are retained. The three findings the review of `524eef55` reproduced (R12–R14) and the mounted-map verification it required are delivered at `d53f4185`. Retain immutable snapshots, stable occurrence IDs, shared readers, heavy lease and scheduler. The decisions below close handoff ambiguities; private names and factoring remain delegated. No new job service, event bus, spatial engine, cache framework, generic pagination layer or benchmark project is required.
 
 ### Completion, reads and UI identity
 
