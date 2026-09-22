@@ -6,6 +6,7 @@ import {
 import { useLocationMapEditingHost } from '../../app/location/map-editing'
 import { navigateTo } from '../../app/shell/state'
 import styles from './LocationTab.module.css'
+import { BasemapSettings } from './BasemapSettings'
 
 export function LocationTab() {
   const workbench = useLocationWorkbench()
@@ -125,6 +126,12 @@ export function LocationTab() {
           }}
         />
       )}
+
+      {/*
+        Provider settings stay reachable when the map cannot load, because
+        choosing a different provider is one of the ways out of a map failure.
+      */}
+      <BasemapSettings />
     </div>
   )
 }

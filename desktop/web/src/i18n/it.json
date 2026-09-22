@@ -576,6 +576,20 @@
         "notReady": "Non pronto"
       },
       "webUnavailable": "I dataset raster e i risultati di questo progetto sono conservati qui, ma non vengono visualizzati né elaborati nell’edizione Web. Apri il progetto nell’app desktop per importarli, analizzarli o visualizzarli."
+    },
+    "basemap": {
+      "title": "Mappa di base",
+      "provider": "Fornitore",
+      "street": "Strada (OpenStreetMap)",
+      "satellite": "Satellite (MapTiler)",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "non disponibile in questa build",
+      "googleKey": "Chiave API Google Maps (facoltativa)",
+      "saveKey": "Salva chiave",
+      "clearKey": "Cancella chiave",
+      "keySaved": "Chiave salvata su questo dispositivo.",
+      "keyLocalOnly": "Memorizzata solo nelle impostazioni di questo dispositivo. Non viene mai scritta in un progetto, esportazione, registro o report.",
+      "googleKeyPrompt": "Inserisci una chiave API Google Maps per caricare le tile Google ufficiali."
     }
   },
   "worldMap": {

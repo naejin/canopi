@@ -576,6 +576,20 @@
         "notReady": "Nicht bereit"
       },
       "webUnavailable": "Die Rasterdatensätze und Ergebnisse dieses Entwurfs bleiben hier erhalten, werden in der Web-Edition aber weder dargestellt noch verarbeitet. Öffnen Sie den Entwurf in der Desktop-App zum Importieren, Analysieren oder Anzeigen."
+    },
+    "basemap": {
+      "title": "Basiskarte",
+      "provider": "Anbieter",
+      "street": "Straße (OpenStreetMap)",
+      "satellite": "Satellit (MapTiler)",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "in diesem Build nicht verfügbar",
+      "googleKey": "Google Maps API-Schlüssel (optional)",
+      "saveKey": "Schlüssel speichern",
+      "clearKey": "Schlüssel löschen",
+      "keySaved": "Schlüssel auf diesem Gerät gespeichert.",
+      "keyLocalOnly": "Nur in den Einstellungen dieses Geräts gespeichert. Er wird nie in einen Entwurf, Export, ein Protokoll oder einen Bericht geschrieben.",
+      "googleKeyPrompt": "Geben Sie einen Google Maps API-Schlüssel ein, um die offiziellen Google-Kacheln zu laden."
     }
   },
   "worldMap": {

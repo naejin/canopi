@@ -576,6 +576,20 @@
         "notReady": "준비되지 않음"
       },
       "webUnavailable": "이 설계의 래스터 데이터셋과 결과는 여기에 보존되지만 웹 에디션에서는 렌더링되거나 처리되지 않습니다. 가져오기, 분석 또는 표시하려면 데스크톱 앱에서 설계를 여십시오."
+    },
+    "basemap": {
+      "title": "배경 지도",
+      "provider": "공급자",
+      "street": "거리(OpenStreetMap)",
+      "satellite": "위성(MapTiler)",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "이 빌드에서는 사용할 수 없음",
+      "googleKey": "Google Maps API 키(선택)",
+      "saveKey": "키 저장",
+      "clearKey": "키 지우기",
+      "keySaved": "이 기기에 키를 저장했습니다.",
+      "keyLocalOnly": "이 기기 설정에만 저장됩니다. 설계, 내보내기, 로그, 보고서에는 기록되지 않습니다.",
+      "googleKeyPrompt": "공식 Google 타일을 불러오려면 Google Maps API 키를 입력하세요."
     }
   },
   "worldMap": {

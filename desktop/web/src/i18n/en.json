@@ -576,6 +576,20 @@
         "notReady": "Not ready"
       },
       "webUnavailable": "This Design’s raster datasets and results are preserved here but are not rendered or processed in the Web Edition. Open the Design in the Desktop app to import, analyse or display them."
+    },
+    "basemap": {
+      "title": "Basemap",
+      "provider": "Provider",
+      "street": "Street (OpenStreetMap)",
+      "satellite": "Satellite (MapTiler)",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "unavailable in this build",
+      "googleKey": "Google Maps API key (optional)",
+      "saveKey": "Save key",
+      "clearKey": "Clear key",
+      "keySaved": "Key saved on this device.",
+      "keyLocalOnly": "Stored in this device's settings only. It is never written to a Design, export, log or report.",
+      "googleKeyPrompt": "Enter a Google Maps API key to load the official Google tiles."
     }
   },
   "worldMap": {

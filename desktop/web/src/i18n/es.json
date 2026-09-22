@@ -576,6 +576,20 @@
         "notReady": "No está listo"
       },
       "webUnavailable": "Los conjuntos de datos ráster y resultados de este diseño se conservan aquí, pero no se representan ni procesan en la edición web. Abra el diseño en la aplicación de escritorio para importarlos, analizarlos o mostrarlos."
+    },
+    "basemap": {
+      "title": "Mapa base",
+      "provider": "Proveedor",
+      "street": "Calle (OpenStreetMap)",
+      "satellite": "Satélite (MapTiler)",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "no disponible en esta compilación",
+      "googleKey": "Clave de API de Google Maps (opcional)",
+      "saveKey": "Guardar clave",
+      "clearKey": "Borrar clave",
+      "keySaved": "Clave guardada en este dispositivo.",
+      "keyLocalOnly": "Se guarda solo en los ajustes de este dispositivo. Nunca se escribe en un diseño, exportación, registro o informe.",
+      "googleKeyPrompt": "Introduce una clave de API de Google Maps para cargar los mosaicos oficiales de Google."
     }
   },
   "worldMap": {

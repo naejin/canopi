@@ -576,6 +576,20 @@
         "notReady": "準備未完了"
       },
       "webUnavailable": "この設計のラスターデータセットと結果はここに保持されますが、Web 版では描画も処理もされません。インポート・解析・表示にはデスクトップアプリで設計を開いてください。"
+    },
+    "basemap": {
+      "title": "ベースマップ",
+      "provider": "プロバイダー",
+      "street": "ストリート（OpenStreetMap）",
+      "satellite": "衛星（MapTiler）",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "このビルドでは利用できません",
+      "googleKey": "Google Maps API キー（任意）",
+      "saveKey": "キーを保存",
+      "clearKey": "キーを消去",
+      "keySaved": "このデバイスにキーを保存しました。",
+      "keyLocalOnly": "このデバイスの設定にのみ保存されます。設計・エクスポート・ログ・レポートには書き込まれません。",
+      "googleKeyPrompt": "公式の Google タイルを読み込むには Google Maps API キーを入力してください。"
     }
   },
   "worldMap": {

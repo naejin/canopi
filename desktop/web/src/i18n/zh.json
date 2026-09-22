@@ -576,6 +576,20 @@
         "notReady": "未就绪"
       },
       "webUnavailable": "本设计的栅格数据集和结果在此保留，但网页版不会渲染或处理它们。请在桌面应用中打开本设计以导入、分析或显示。"
+    },
+    "basemap": {
+      "title": "底图",
+      "provider": "提供商",
+      "street": "街道（OpenStreetMap）",
+      "satellite": "卫星（MapTiler）",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "此版本中不可用",
+      "googleKey": "Google Maps API 密钥（可选）",
+      "saveKey": "保存密钥",
+      "clearKey": "清除密钥",
+      "keySaved": "密钥已保存在此设备上。",
+      "keyLocalOnly": "仅保存在此设备的设置中。绝不会写入设计、导出、日志或报告。",
+      "googleKeyPrompt": "输入 Google Maps API 密钥以加载官方 Google 瓦片。"
     }
   },
   "worldMap": {

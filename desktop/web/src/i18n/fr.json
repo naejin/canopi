@@ -576,6 +576,20 @@
         "notReady": "Pas prêt"
       },
       "webUnavailable": "Les jeux de données raster et les résultats de ce projet sont conservés ici, mais ne sont ni affichés ni traités dans l’édition Web. Ouvrez le projet dans l’application de bureau pour les importer, les analyser ou les afficher."
+    },
+    "basemap": {
+      "title": "Fond de carte",
+      "provider": "Fournisseur",
+      "street": "Rue (OpenStreetMap)",
+      "satellite": "Satellite (MapTiler)",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "indisponible dans cette version",
+      "googleKey": "Clé API Google Maps (facultative)",
+      "saveKey": "Enregistrer la clé",
+      "clearKey": "Effacer la clé",
+      "keySaved": "Clé enregistrée sur cet appareil.",
+      "keyLocalOnly": "Stockée uniquement dans les réglages de cet appareil. Elle n'est jamais écrite dans un projet, un export, un journal ou un rapport.",
+      "googleKeyPrompt": "Saisissez une clé API Google Maps pour charger les tuiles Google officielles."
     }
   },
   "worldMap": {

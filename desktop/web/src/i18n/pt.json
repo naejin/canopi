@@ -576,6 +576,20 @@
         "notReady": "Não está pronto"
       },
       "webUnavailable": "Os conjuntos de dados raster e resultados deste projeto são preservados aqui, mas não são renderizados nem processados na edição Web. Abra o projeto no aplicativo de desktop para importar, analisar ou exibir."
+    },
+    "basemap": {
+      "title": "Mapa base",
+      "provider": "Fornecedor",
+      "street": "Rua (OpenStreetMap)",
+      "satellite": "Satélite (MapTiler)",
+      "googleSatellite": "Google Satellite",
+      "unavailable": "indisponível nesta compilação",
+      "googleKey": "Chave de API do Google Maps (opcional)",
+      "saveKey": "Guardar chave",
+      "clearKey": "Limpar chave",
+      "keySaved": "Chave guardada neste dispositivo.",
+      "keyLocalOnly": "Guardada apenas nas definições deste dispositivo. Nunca é escrita num projeto, exportação, registo ou relatório.",
+      "googleKeyPrompt": "Introduza uma chave de API do Google Maps para carregar os mosaicos oficiais da Google."
     }
   },
   "worldMap": {
