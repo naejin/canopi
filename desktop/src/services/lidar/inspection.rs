@@ -122,6 +122,40 @@ fn transform_point(
     Ok(Some((x, y)))
 }
 
+/// Apply a scene metre offset to an already-projected anchor.
+///
+/// The offset is expressed in the scene's own frame — east and north before the
+/// Design's bearing — so it is rotated by the bearing first and then added to
+/// the projected anchor. A non-finite offset or bearing is returned unchanged
+/// from the anchor, which the caller reports as no coverage rather than as a
+/// value at a guessed position.
+fn apply_scene_offset(
+    anchor_x: f64,
+    anchor_y: f64,
+    offset: common_types::lidar::LidarSceneOffset,
+) -> (f64, f64) {
+    if !offset.east_metres.is_finite()
+        || !offset.north_metres.is_finite()
+        || !offset.north_bearing_deg.is_finite()
+    {
+        return (anchor_x, anchor_y);
+    }
+    // Scene coordinates are metres east/north of the anchor, and the bearing
+    // rotates that frame: at zero bearing local positive X is east and local
+    // positive Y is south, and a positive bearing turns geographic north
+    // clockwise from local negative Y (ADR 0025).
+    //
+    // The projected y axis grows north, so the north component is subtracted.
+    // This is the exact inverse of the frontend's authoritative
+    // `canvasWorldToEastNorthMeters`, which is what keeps the sampled cell the
+    // same one the canvas drew.
+    let bearing = offset.north_bearing_deg.to_radians();
+    let (sin, cos) = bearing.sin_cos();
+    let scene_x = offset.east_metres * cos + offset.north_metres * sin;
+    let scene_y = offset.east_metres * sin - offset.north_metres * cos;
+    (anchor_x + scene_x, anchor_y - scene_y)
+}
+
 /// The containing native pixel of one projected point.
 ///
 /// The grid is north-up and half-open: a point exactly on the right or bottom
@@ -194,10 +228,19 @@ pub(super) fn sample(
         request.longitude,
         request.latitude,
     )?;
-    let Some((x, y)) = projected else {
+    let Some((anchor_x, anchor_y)) = projected else {
         return Ok(LidarSampleOutcome::Unavailable {
             reason: LidarSampleUnavailableReason::TransformFailed,
         });
+    };
+    // A canvas pointer arrives as an offset from the anchor in scene metres.
+    // Applying it *after* the anchor has been projected keeps every coordinate
+    // operation in the engine's own projected space, so the selected cell is as
+    // accurate as a native read rather than as accurate as a frontend
+    // metres-to-degrees approximation.
+    let (x, y) = match request.scene_offset_metres {
+        Some(offset) => apply_scene_offset(anchor_x, anchor_y, offset),
+        None => (anchor_x, anchor_y),
     };
     // Out of coverage is NoData, not an error: the point simply holds nothing.
     let Some((pixel_x, pixel_y)) = containing_pixel(&target.grid, x, y) else {
@@ -276,6 +319,70 @@ mod tests {
         // Outside entirely.
         assert_eq!(containing_pixel(&grid, -0.001, 5.0), None);
         assert_eq!(containing_pixel(&grid, 5.0, 10.001), None);
+    }
+
+    /// The scene-to-projected-component conversion, mirroring the frontend's
+    /// authoritative `canvasWorldToEastNorthMeters` and the projected flip the
+    /// raster reader applies. Kept here as an independent oracle so the test
+    /// does not merely restate the implementation.
+    fn project_offset(east: f64, north: f64, bearing_deg: f64) -> (f64, f64) {
+        let bearing = bearing_deg.to_radians();
+        let (sin, cos) = bearing.sin_cos();
+        let scene_x = east * cos + north * sin;
+        let scene_y = east * sin - north * cos;
+        (scene_x, -scene_y)
+    }
+
+    #[test]
+    fn a_scene_offset_is_applied_in_projected_space() {
+        let offset = |east: f64, north: f64, bearing: f64| common_types::lidar::LidarSceneOffset {
+            east_metres: east,
+            north_metres: north,
+            north_bearing_deg: bearing,
+        };
+        // At zero bearing the offset is a straight east/north displacement, and
+        // north must increase the projected y rather than decrease it.
+        let (x, y) = apply_scene_offset(1000.0, 2000.0, offset(100.0, 50.0, 0.0));
+        assert!((x - 1100.0).abs() < 1e-9, "{x}");
+        assert!((y - 2050.0).abs() < 1e-9, "{y}");
+
+        // A pure bearing change must not move the anchor.
+        let (x, y) = apply_scene_offset(7.0, -3.0, offset(0.0, 0.0, 137.0));
+        assert!((x - 7.0).abs() < 1e-9, "{x}");
+        assert!((y + 3.0).abs() < 1e-9, "{y}");
+
+        // Every bearing agrees with the frontend conversion.
+        for bearing in [0.0, 30.0, 90.0, 180.0, 271.5, 359.0] {
+            let (east, north) = (123.5, -67.25);
+            let (expected_x, expected_y) = project_offset(east, north, bearing);
+            let (x, y) = apply_scene_offset(0.0, 0.0, offset(east, north, bearing));
+            assert!(
+                (x - expected_x).abs() < 1e-9,
+                "bearing {bearing}: {x} vs {expected_x}"
+            );
+            assert!(
+                (y - expected_y).abs() < 1e-9,
+                "bearing {bearing}: {y} vs {expected_y}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_non_finite_offset_falls_back_to_the_anchor() {
+        let broken = common_types::lidar::LidarSceneOffset {
+            east_metres: f64::NAN,
+            north_metres: 1.0,
+            north_bearing_deg: 0.0,
+        };
+        // A broken offset reports the anchor, which reads as no coverage there
+        // rather than as a value at a guessed position.
+        assert_eq!(apply_scene_offset(5.0, 6.0, broken), (5.0, 6.0));
+        let broken = common_types::lidar::LidarSceneOffset {
+            east_metres: 1.0,
+            north_metres: 1.0,
+            north_bearing_deg: f64::INFINITY,
+        };
+        assert_eq!(apply_scene_offset(5.0, 6.0, broken), (5.0, 6.0));
     }
 
     #[test]
