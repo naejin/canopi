@@ -6,17 +6,16 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The [repair assignment](ordered-cog-agent-prompt.md) has been executed on `feature/bounded-raster-generations` from `783e31e3`, preserving accepted predecessors and C1/C2. All eleven [review](ordered-cog-review.md) groups are repaired with a regression each (see the [receipt](ordered-cog-receipt.md#finding-to-regression-map)); product acceptance, integration and the real Desktop workflow remain pending. The ordered-source architecture and the existing dock are retained.
+The current assignment is [finishing ordered COG display and panel settlement](ordered-cog-agent-prompt.md), under the [fixed design](ordered-cog-design.md). Continue `524eef55` on `feature/bounded-raster-generations`, preserving accepted predecessors, C1/C2 and the eleven-group repair at `64050896`. The [current independent review](ordered-cog-review.md#current-disposition-at-524eef55) leaves three local fixes (R12–R14) and a mounted-map observation; the [delivery receipt](ordered-cog-receipt.md) owns the earlier revisions, evidence and limits. The source-list/History/Undo and dependent-slope live pass is recorded; it did not mount the map. Product acceptance and integration remain pending. Keep the ordered-source architecture and existing dock.
 
-The implementation agent delivered the diagnosis, repairs, regressions, verification and task-local improvements in one consolidated delivery. The [protocol](collaboration-protocol.md) sets escalation boundaries. The [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief) records the outcome, the evidence limits and the environment facts that left the live-window workflow pending. Historical records below are evidence, not alternate assignments. Q remains frozen/unqualified.
+The implementation agent delivered the diagnosis, repairs, regressions, verification and task-local improvements in one consolidated delivery. The [protocol](collaboration-protocol.md) sets escalation boundaries. The [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief) records the outcome, the evidence limits and the mounted-map observation that remained open. Historical records below are evidence, not alternate assignments. Q remains frozen/unqualified.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Sole current assignment: source collection, source priority, display, slope, compatibility and real Desktop delivery |
-| [Ordered COG independent review](ordered-cog-review.md) | Eleven required repair groups at `783e31e3`, counterexamples and evidence limits |
+| [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Sole current assignment: finish the three local ordered-COG corrections and the mounted-map pass |
+| [Ordered COG independent review](ordered-cog-review.md) | Current R12–R14 at `524eef55`; earlier findings, controls and evidence limits retained by revision |
 | [Ordered COG delivery receipt](ordered-cog-receipt.md) | Implementer revisions, capabilities, gate lane, finding-to-regression map, migration limits and unavailable observations for `783e31e3` and its repairs |
 | [Ordered COG design](ordered-cog-design.md) | Fixed product, persistence, lifecycle, UI and acceptance decisions, including the repair contract |
-
 | [Ordered COG ADR](../../adr/0027-ordered-cog-data-layers.md) | User-selected replacement for compulsory merged-source publication |
 | [Bounded-generation completion assignment](bounded-generation-completion-agent-prompt.md) | Retired: delivered through `0696bd3d`; C1/C2 accepted in scope, product closure partial |
 | [Bounded-generation delivery receipt](bounded-generation-receipt.md) | Branch-local implementer report and measured evidence for B1–B5, BG1–BG8 and C1/C2; lives on `feature/bounded-raster-generations` |

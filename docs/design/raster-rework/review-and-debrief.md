@@ -42,6 +42,26 @@ During diagnosis, one source-range assertion accidentally tested separately defe
 
 These are hypotheses and acceptance detectors, not a claim that the process has already improved. At delivery give each adopted intervention a keep/revise/drop recommendation, observed result and next-use check; merge overlapping entries rather than accumulating more tables.
 
+### Current correction after `524eef55`
+
+The eleven-group repair at `64050896` and live evidence through `524eef55` are retained. Independent review reran 14 existing native regressions (51.07 s) and 15 existing frontend tests successfully, validated docs, and inspected saved screenshots and the smoke catalogue read-only. The catalogue corroborates repeated Undo to empty, explicit Restore and a completed slope result matching the current head. The reviewer did not drive the window or repeat the full suites. The implementer’s reported totals remain attached to their original revision.
+
+Three added diagnostic probes reproduce [R12–R14](ordered-cog-review.md#current-disposition-at-524eef55): the new tile prefilter excludes contributors inside reduction footprints; navigation during an edit orphans pending state; same-layer refreshes admit late old responses. Disabling only the tile prefilter made that probe pass; the diagnostic source was then restored byte-for-byte. This is a root-cause control, not a production fix or a new capacity result. The live panel pass never mounted the map because the Design Location remained provisional; treating it as the last completed workflow overstates that observation.
+
+The earlier request for “real callers” helped expose and repair numeric/history defects but was too broad to ensure these specific lifecycle and display boundaries. Main-agent responsibility: make footprint-versus-sample geometry and edit-versus-view lifetime concrete, and distinguish mounted-map evidence in the handoff. Implementation/test gap: deferred tests left selection unchanged and tile tests did not expose the new ordered-member filtering boundary. Reporting gap: live-window interaction was counted without the map being mounted. These are specific failures, not evidence of a general model limitation.
+
+For the next consolidated outcome, record only:
+
+- R12–R14’s actual failing/passing regressions and any adjacent defect caught before delivery; name the boundary each check observes.
+- The mounted-map result, source/result identities and a few decisive screenshots; keep panel, renderer-test and live-pixel evidence distinct. Pending observations stay explicit.
+- Machinery reused/removed and whether any new helper was necessary for a present caller; no abstraction or line-count quota.
+- For each actual workflow/tool intervention: observed failure → smallest change → failing/healthy or next-use evidence → keep/revise/drop → owner or follow-up. Distinguish already applied fixes from proposals awaiting a real use.
+- Necessary decision exchanges versus avoidable continuation, and measured effort if available; otherwise unknown. Do not reconstruct cost from suite counts or assume the user's delegation preference establishes savings.
+
+The small interventions being tested are the three concrete caller regressions, explicit completion/read ownership, and a smoke prerequisite that confirms a mounted map before counting map behavior. Reuse the successful Xephyr/software-GL/private-profile recipe recorded in `ordered-cog-receipt.md` on the delivery branch. Correct its operating-guide location if next use demonstrates it is reusable; do not create another driver, metrics collector, shared workflow or installed skill. Keep existing instructions that work and replace stale ones instead of adding exceptions.
+
+At final independent disposition, consolidate these observations with the earlier outcomes into one short synthesis: useful capability delivered, necessary remaining complexity, avoidable rework and which interventions actually helped on their next use. A repeated escaped family means examining the missing boundary/decision, not adding another test quota or rebuilding the architecture. Historical records remain evidence; bd owns progress.
+
 ### Record during implementation
 
 Use bd checkpoints for execution state and one `ordered-cog-receipt.md` for delivery evidence. Record only observations that affect correctness, repeatability or delivery cost: source revision, triggering behavior/command, classification, repair or unresolved decision, decisive test, and whether discovered before or after courier delivery. Keep fixture identities and useful command outputs without private rasters, absolute user paths or giant transcripts. No new metrics collector, reporting service or Markdown task tracker.
@@ -50,7 +70,7 @@ Record elapsed work or cost only if directly available, with what the measure in
 
 ### Consolidated delivery and independent disposition
 
-The implementer adds one compact revision-labelled repair outcome here after completing the prompt (do not overwrite the earlier delivery outcome): demonstrated user workflows; legacy cases preserved; merge machinery removed/retained with reason; self-review discoveries; unresolved limitations; actual tooling/guide changes with their detector; observed effort/courier data or unknown. Include the eleven finding IDs mapped to final regressions in the receipt, the migration Undo boundary, exact pending live/platform evidence, and applied versus merely proposed improvements. The main agent then adds one disposition with the reviewed revision, independently observed evidence, escaped defects and ownership. Do not claim independent acceptance from self-review.
+The implementer adds one compact revision-labelled repair outcome here after completing the prompt (do not overwrite the earlier delivery outcome): demonstrated user workflows; legacy cases preserved; merge machinery removed/retained with reason; self-review discoveries; unresolved limitations; actual tooling/guide changes with their detector; observed effort/courier data or unknown. Preserve the earlier finding-to-regression map and migration Undo boundary; append R12–R14 and the mounted-map observation, exact pending evidence, and applied versus merely proposed improvements. The main agent then adds one disposition with the reviewed revision, independently observed evidence, escaped defects and ownership. Do not claim independent acceptance from self-review.
 
 #### Ordered COG repair outcome at the review baseline
 
