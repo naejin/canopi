@@ -29,7 +29,7 @@ Test each proposed intervention on a real next use. Keep/revise/drop is supporte
 
 ### Final synthesis
 
-**Delivered 2026-09-22; candidate `b47c000b` (50 commits) on
+**Delivered 2026-09-22; candidate `e026a347` (64 commits) on
 `feature/raster-rework-completion`, containing `main` at `f61f8494`, which
 contains the accepted foundation `34e4ded4`. Evidence and limits live in the
 [completion receipt](completion-receipt.md); this section is the synthesis that
@@ -134,7 +134,11 @@ landed product code, which is the honest shape of the return.
    window opens and lists the library. Owner: needs a Windows or macOS host.
 3. **Verify inspection against independently derived values in a live session.**
    Trial: a clicked and a centre-keyed sample both match an independent oracle
-   across a bearing. Owner: next pass.
+   across a bearing. Owner: next pass. The transform and pixel selection beneath
+   it are already checked against a hand-derived Web Mercator oracle by
+   `the_real_transform_lands_in_the_expected_cell`, mutation-verified by swapping
+   the coordinate pair, so what a live pass adds is the *session* — the click and
+   the centre key — rather than the geometry.
 
 Everything else on the list is capability that already exists and is waiting on
 one of those three.

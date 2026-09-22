@@ -304,6 +304,85 @@ mod tests {
         }
     }
 
+    /// Web Mercator, derived independently of the engine.
+    ///
+    /// Written here rather than read from GDAL so the oracle cannot agree with a
+    /// broken transform by sharing its source. The formula is the published one:
+    /// `x = R * lambda`, `y = R * ln(tan(pi/4 + phi/2))` with the ellipsoid
+    /// replaced by the sphere Web Mercator actually uses.
+    fn web_mercator(longitude: f64, latitude: f64) -> (f64, f64) {
+        const R: f64 = 6_378_137.0;
+        let lambda = longitude.to_radians();
+        let phi = latitude.to_radians();
+        (
+            R * lambda,
+            R * (std::f64::consts::FRAC_PI_4 + phi / 2.0).tan().ln(),
+        )
+    }
+
+    /// The real transform and the real pixel selection, against an independent
+    /// oracle.
+    ///
+    /// The other tests in this module exercise the offset and the half-open
+    /// convention in isolation. This one runs the actual `gdaltransform` call and
+    /// then selects the containing pixel from the projected point, so a wrong
+    /// `-t_srs` axis order, a swapped coordinate pair or an off-by-one in the row
+    /// inversion would all surface here rather than passing as a plausible
+    /// number.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn the_real_transform_lands_in_the_expected_cell() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        // A one-degree grid whose north-west corner is (0, 0), 0.001 degrees per
+        // cell: small enough that a cell index is a sharp assertion.
+        let grid = RasterGrid {
+            width: 1000,
+            height: 1000,
+            geotransform: [0.0, 0.001, 0.0, 0.0, 0.0, -0.001],
+        };
+
+        // The grid is in Web Mercator, so the same point known in WGS84 must
+        // come back as the projected coordinate the oracle predicts.
+        for (lon, lat) in [(0.0, 0.0), (2.0, 48.0), (-1.25, 48.75)] {
+            let (expected_x, expected_y) = web_mercator(lon, lat);
+            let projected = transform_point(&engine, &cancel, "EPSG:3857", lon, lat)
+                .expect("the transform runs")
+                .expect("a finite WGS84 point projects");
+            // A metre is far below the assertions that follow, and the two
+            // implementations differ only by floating-point rounding.
+            assert!(
+                (projected.0 - expected_x).abs() < 1.0,
+                "x for ({lon}, {lat}): {} vs oracle {expected_x}",
+                projected.0
+            );
+            assert!(
+                (projected.1 - expected_y).abs() < 1.0,
+                "y for ({lon}, {lat}): {} vs oracle {expected_y}",
+                projected.1
+            );
+
+            // The projected point selects the cell the north-up half-open rule
+            // names, computed here from the oracle rather than from the engine.
+            let column = (expected_x / 0.001).floor();
+            let row = ((-expected_y) / 0.001).floor();
+            if (0.0..1000.0).contains(&column) && (0.0..1000.0).contains(&row) {
+                let selected = containing_pixel(&grid, projected.0, projected.1)
+                    .expect("a point inside the grid has a containing pixel");
+                assert_eq!(
+                    selected,
+                    (column as i64, row as i64),
+                    "cell for ({lon}, {lat})"
+                );
+            }
+        }
+
+        // A point outside the grid has no containing pixel rather than a clamped
+        // one, which is what makes out-of-coverage report as NoData.
+        let outside = web_mercator(30.0, 48.0);
+        assert_eq!(containing_pixel(&grid, outside.0, outside.1), None);
+    }
+
     #[test]
     fn the_containing_pixel_is_half_open_at_the_far_edges() {
         let grid = grid();
