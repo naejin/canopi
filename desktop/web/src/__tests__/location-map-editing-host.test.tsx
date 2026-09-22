@@ -1,6 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeBasemapContribution } from './support/fake-basemap-contribution'
 import {
   useLocationWorkbench,
   type LocationWorkbench,
@@ -52,6 +53,16 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
 }
 
 class FakeLocationMap {
+  // The app reconciles the basemap provider into whichever map is live, so the
+  // fake offers that surface; without it the binding legitimately throws.
+  readonly contribution = createFakeBasemapContribution()
+  readonly addSource = this.contribution.addSource.bind(this.contribution)
+  readonly getSource = this.contribution.getSource.bind(this.contribution)
+  readonly removeSource = this.contribution.removeSource.bind(this.contribution)
+  readonly addLayer = this.contribution.addLayer.bind(this.contribution)
+  readonly getLayer = this.contribution.getLayer.bind(this.contribution)
+  readonly removeLayer = this.contribution.removeLayer.bind(this.contribution)
+  readonly setLayoutProperty = this.contribution.setLayoutProperty.bind(this.contribution)
   readonly addControl = vi.fn()
   readonly remove = vi.fn()
   readonly resize = vi.fn()
@@ -265,21 +276,27 @@ describe('Location map editing host', () => {
     expect(nonCanvasRevision.value).toBe(3)
   })
 
-  it('preserves the current map view when the basemap style rebuilds', async () => {
+  it('changes the basemap on the live map without rebuilding it', async () => {
     renderProbe()
     await vi.waitFor(() => expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1))
+    const map = currentMap()
+    map.center = { lng: 13.405, lat: 52.52 }
+    map.zoom = 8
 
-    currentMap().center = { lng: 13.405, lat: 52.52 }
-    currentMap().zoom = 8
     act(() => {
       basemapStyle.value = 'satellite'
     })
 
-    await vi.waitFor(() => expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(2))
-    expect(maplibreMock.mapConstructor.mock.calls[1]?.[0]).toMatchObject({
-      center: [13.405, 52.52],
-      zoom: 8,
-    })
+    // The provider reconciles into the live map, so a basemap change must not
+    // recreate the map or disturb the camera. This test used to require the
+    // rebuild, which is precisely what the product contract forbids: recreating
+    // the map on a provider, key or session change is what loses the camera, the
+    // placement crosshair and an edit in progress.
+    await vi.waitFor(() => expect(map.contribution.sources.size).toBe(0))
+    expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1)
+    expect(map.remove).not.toHaveBeenCalled()
+    expect(map.center).toEqual({ lng: 13.405, lat: 52.52 })
+    expect(map.zoom).toBe(8)
   })
 
   it('uses the latest saved Location when lazy map creation completes', async () => {

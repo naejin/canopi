@@ -12,6 +12,11 @@ import {
   readLocationMapViewState,
   type LocationMapLibreMap,
 } from '../../maplibre/location-map'
+import { bindBasemapProvider, createBasemapProvider } from '../../maplibre/basemap-bind'
+import type {
+  BasemapProvider,
+  BasemapViewport,
+} from '../../maplibre/basemap-provider-session'
 import {
   computeSavedPinState,
   type PinOverlayState,
@@ -19,6 +24,27 @@ import {
 } from './model'
 
 const DEFAULT_CENTER: [number, number] = [0, 20]
+
+/**
+ * The provider viewport for a live location map.
+ *
+ * A map that is not ready yet reports the whole world at overview zoom, which
+ * describes what it is actually showing rather than inventing an extent.
+ */
+function readLocationMapViewport(map: LocationMapLibreMap | null): BasemapViewport {
+  const bounds = map?.getBounds?.()
+  const zoom = map?.getZoom?.()
+  if (!bounds || typeof zoom !== 'number') {
+    return { west: -180, south: -85, east: 180, north: 85, zoom: 0 }
+  }
+  return {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+    zoom,
+  }
+}
 
 interface LocationMapEditingWorkbench {
   readonly saved: SavedLocationPresentation
@@ -69,6 +95,7 @@ export function useLocationMapEditingHost(
   savedLocationRef.current = workbench.saved.location
   workbenchRef.current = workbench
   if (!surfaceRef.current) surfaceRef.current = createMapLibreSurfaceAdapter()
+  const basemapProviderRef = useRef<BasemapProvider | null>(null)
 
   const mapInitFailed = useSignal(false)
   const pinState = useSignal<PinOverlayState>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
@@ -88,8 +115,15 @@ export function useLocationMapEditingHost(
     const onMove = () => updateCurrentMapState()
     const onClick = (event?: unknown) => previewClickedLocation(event)
 
+    const provider = createBasemapProvider()
+    basemapProviderRef.current = provider
     surface.requestMap({
-      key: preferredBasemapStyle,
+      // Deliberately independent of the provider. A basemap change is
+      // reconciled into this map by the binding below, so switching provider
+      // cannot reset the camera, the placement crosshair or an edit in
+      // progress — which is what the product contract requires and what
+      // recreating the map used to break.
+      key: 'location-map',
       createMap: (maplibre, target, preservedView) => {
         const savedLoc = savedLocationRef.current
         return createLocationMapLibreMap(
@@ -125,6 +159,12 @@ export function useLocationMapEditingHost(
           console.error('[LocationMapEditing] MapLibre map failed before it became ready', event)
         }
 
+        // The provider's session and viewport work belongs to this map's
+        // lifetime, so both are torn down together.
+        context.lifetime.addCleanup(bindBasemapProvider({ provider, map: context.map }))
+        context.lifetime.addCleanup(() => {
+          basemapProviderRef.current = null
+        })
         context.lifetime.on('error', onMapRuntimeError)
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
@@ -143,6 +183,17 @@ export function useLocationMapEditingHost(
     return () => {
       surface.destroy()
     }
+    // Only the surface's own structural key belongs here; the basemap style is
+    // applied through the provider below.
+  }, [])
+
+  // A style change updates the provider rather than rebuilding the map, so the
+  // camera and any placement in progress survive a provider switch.
+  useEffect(() => {
+    basemapProviderRef.current?.update(
+      { style: preferredBasemapStyle },
+      readLocationMapViewport(surfaceRef.current?.map ?? null),
+    )
   }, [preferredBasemapStyle])
 
   useEffect(() => {

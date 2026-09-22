@@ -1,6 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeBasemapContribution } from './support/fake-basemap-contribution'
 import { locale } from '../app/settings/state'
 import { LocationTab } from '../components/canvas/LocationTab'
 import {
@@ -45,6 +46,16 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
 }
 
 class FakeLocationTabMap {
+  // See FakeLocationMap: the basemap provider binding needs the map's source and
+  // layer operations.
+  readonly contribution = createFakeBasemapContribution()
+  readonly addSource = this.contribution.addSource.bind(this.contribution)
+  readonly getSource = this.contribution.getSource.bind(this.contribution)
+  readonly removeSource = this.contribution.removeSource.bind(this.contribution)
+  readonly addLayer = this.contribution.addLayer.bind(this.contribution)
+  readonly getLayer = this.contribution.getLayer.bind(this.contribution)
+  readonly removeLayer = this.contribution.removeLayer.bind(this.contribution)
+  readonly setLayoutProperty = this.contribution.setLayoutProperty.bind(this.contribution)
   readonly addControl = vi.fn()
   readonly remove = vi.fn()
   readonly resize = vi.fn()
