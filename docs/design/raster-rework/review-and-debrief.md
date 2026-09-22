@@ -1,66 +1,65 @@
-# Raster qualification reviews and methodology debrief
+# Raster delivery reviews and methodology debrief
 
-Status: evidence — historical raster delivery/review record and current ordered COG improvement/debrief contract. The source-merge architecture freeze is retired.
-Tracking: current `canopi-jv8a.4`, related `canopi-kko3`, parent `canopi-j571`; historical Q `canopi-kqpp`; bd remains the execution tracker.
-Current guidance: [ordered COG prompt](ordered-cog-agent-prompt.md), [design](ordered-cog-design.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md). Historical instructions below are evidence only.
+Status: evidence — completed foundation findings and whole-rework improvement/debrief contract; no completion measurements are claimed yet.
+Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
+Current guidance: [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
+
+## Whole-rework delivery and improvement
+
+The user authorized the full remaining sequence on 2026-09-22, with the implementation agent continuing through internal milestones and returning only for material blockers. The purpose is more useful delivery per necessary main-agent intervention while preserving architectural coherence and trustworthy review. Actual savings have not been measured. This section owns the final synthesis; bd owns resumable progress and the completion receipt owns detailed measurements.
+
+### Record during the work
+
+At each material failure or decision, update the existing receipt/bead with the revision, concrete trigger, accepted invariant, discovery boundary, smallest response and decisive evidence. Distinguish self-review discovery from independent escape. Record a tool's failure status as well as its output when the two disagree. Keep only events that can inform correctness, repeatability or cost; no exhaustive transcript or second tracker.
+
+Classify design omission, implementation deviation, test/oracle gap, reviewer oversight and environment/tool limitation separately, allowing overlap. Check whether existing instructions covered the behavior before blaming the handoff or proposing another rule. Main-agent design omissions and unnecessary prescribed complexity are first-class findings, not automatically implementer failures.
+
+Test each proposed intervention on a real next use. Keep/revise/drop is supported by a failing case plus healthy control or an observed recurrence prevented. A promising idea without such use remains untested. Apply small reversible task-local test/script/guide corrections, then return to product work. Broader skills/automation/dependency changes need a separate scoped proposal; do not install a workflow framework in the name of the debrief.
+
+### Interventions carried into this assignment
+
+| Observed failure / existing evidence | Smallest intervention already selected | What completion should evaluate |
+| --- | --- | --- |
+| Broad caller guidance missed edit navigation, out-of-order refresh and reduction-footprint contributors at `524eef55` | Preserve R12–R14's ordinary caller regressions when splitting the old panel and extending readers | Do they catch actual regressions before delivery? Add a new detector only for a demonstrated missing boundary. |
+| A live panel/catalogue pass was mistaken for a mounted-map pass | Confirm Location, observe pixels and correlate immutable head/result IDs; retain the actual evidence boundary | Does full Desktop/Web verification establish the claimed workflow and avoid partial-render screenshots being called complete? |
+| Isolated Desktop was initially declared unavailable; Xephyr recipe then worked twice | Reuse the tested edition-guide recipe, with profile/process ownership and fresh control positions | Record actual next-use result, failures and smallest correction; no replacement GUI framework. |
+| Retired Q/source-merge briefs and open-but-delivered beads contradict current scope | One completion prompt/contract, current routing and C0 tracker reconciliation | Does the executor start the correct work without rediscovering architecture or redoing accepted fixes? |
+| Routine continuation consumes courier/reviewer attention | One whole-rework authorization, concrete phase exits and resumable bd checkpoints | Classify actual exchanges: material decision, external prerequisite, acceptance or avoidable resumption. Do not infer counts from commits. |
+| Initial independent Rust command used an unwritable Cargo home | Reuse the inspected worktree toolchain and existing isolated cache | Did the next real command run without a cache/pin workaround? This is local setup evidence, not a new global rule. |
+
+### Final synthesis
+
+At consolidated delivery, replace provisional conclusions with a short revision-linked synthesis covering:
+
+- User capabilities that now work, exact supported capacity and remaining platform/service limitations; link the receipt rather than repeating test logs.
+- Necessary implementation complexity versus machinery removed or reused, with a concrete reason and any maintenance consequence.
+- Material escapes and pre-delivery discoveries, grouped by invariant family and classified by ownership. Repeated families call for a missing decision/detector, not a test quota.
+- Handoff decisions that were missing, contradictory or overprescribed; whether the implementer could safely settle them; smallest correction and outcome.
+- Tool/workflow interventions: observed failure → change → actual next-use evidence → keep/revise/drop → owner/follow-up. Clearly separate applied changes from untested proposals.
+- Observed effort and courier exchanges, with included implementation/test/review/waiting scope. If unavailable, say unknown; do not reconstruct token prices, model causes or savings from test/code volume.
+- The few highest-value next interventions with a falsifiable trial and decision owner. Do not turn a final debrief into an unbounded tooling backlog.
+
+The main agent appends one independent disposition for the actual candidate and records reviewer oversights/escapes. When accepted or explicitly stopped, consolidate duplicate interim conclusions and retire launch instructions. Promote demonstrated reusable lessons into ordinary regressions, an existing tool or the narrowest operating guide; link the maintained authority here. Do not update installed skills or shared automation without separate authority. Integration and release remain distinct observed events.
 
 ## Ordered COG delivery and final debrief
 
-The user selected independent ordered COG sources on 2026-09-21 rather than continuing materialized source merges, and asked for sustained implementation-agent execution and useful continuous improvement. The [design](ordered-cog-design.md) fixes the product and engineering decisions; this record evaluates delivery and process without reopening the choice. The main agent owns the complexity it previously prescribed. Retained preparation/reader/ownership work is useful; requiring merged-source publication is now withdrawn. The cost of that rework and any savings from the replacement are not measured yet.
+### Accepted correction outcome at `34e4ded4`
 
-### Baseline disposition and lessons to test
+The [independent review](ordered-cog-review.md#accepted-correction-at-34e4ded4) accepts the R12–R14 correction in its named scope. The prior ordered-source, native integration and C1/C2 work is retained; unlimited capacity, future workbenches, platform readiness and integration/release are not implied.
 
-At `0696bd3d`, C1/C2 were independently accepted in their assigned safety scope, while product closure remained partial. The collision, interrupted-intent and journal-clear regressions independently passed (three tests), as did docs validation. Full-suite reported totals were corroborated in `.rq-scratch/final-gates2.log`, not independently rerun; the Desktop smoke was inspected through its receipt, selected screenshot and read-only profile database, not repeated. No integration or release occurred.
+R12 derives spatial candidates from the native/reduced windows actually read, preserving the source that lies inside a reduction footprint but outside sample centres. R13 separates edit settlement from view lifetime and detaches view work on teardown. R14 owns collection and History traversals/loading independently and rejects superseded/mixed-head pages. The two tile regressions and seven added panel cases cover the concrete reproductions; the receipt records observed sensitivity checks and ordinary tests.
 
-The smoke database showed an undone layer head with a current analysis still pointing at the replaced generation; `begin_undo` omitted dependent refresh. Stale open History/map was observed; the canvas cause was not established. The current design settles recomputation and live settlement refresh rather than returning this choice to the implementer. The old freeze was not authority to defer a broken required workflow. This is an orchestration/test gap plus a main-agent obligation to make the new mutation contract explicit.
+Independent checks at `34e4ded4`: two native tile regressions passed; focused frontend 27 passed; workspace Rust 406 passed/74 ignored; TypeScript and docs passed. Mounted reorder/Undo/Restore and zoomed-out screenshots were inspected, and the saved catalogue's current analysis source matched current head `gen-18d79dd5efb2aa2f0018`. The reviewer did not drive the GUI, repeat the full ignored-GDAL lane or repeat all frontend tests. Some screenshots show partial rendering; complete settled reopen rendering remains part of whole-rework verification. See the receipt/review for command and fixture boundaries.
 
-Evidence corrections remain instructive: the stale-intent test uses a text destination and COG witness despite claiming equal content. It detects unconditional identity approval, but does not establish that claimed fixture. The old receipt also retained contradictory current storage/gating statements. Correct retained fixtures/claims in the replacement; no separate reporting campaign. The sensitivity log printed `RESTORE FAILED` because its restoration check compared with HEAD; the saved backup was independently byte-identical to the final source. Future local probes should compare with their saved starting bytes and fail clearly on a real restoration mismatch. Do not misreport the old log as proof of source corruption or verified clean restoration after each probe.
+### What the correction taught
 
-| Observed problem | Small intervention in the ordered COG assignment | Evidence that could justify keeping it |
-| --- | --- | --- |
-| Architecture/detail expanded before the desired simple source workflow was settled | One authoritative ordered-source model; old merge prompts retired; implementer removes obsolete new-write machinery | Real add/reorder/Undo/display/slope workflow delivered, compatibility retained, no replacement merge subsystem disguised as a cache |
-| Green helpers omitted job settlement and UI refresh | Decisive examples end at real library callers and live map/History/slope settlement | In-scope stale-result failures caught and fixed before handoff; independent review checks current snapshot identity |
-| Claims exceeded fixture or command evidence | Audit only material receipt claims against actual bytes, assertions and revision-specific logs | False fixture/RED/platform claims corrected before delivery; named controls establish the claimed boundary |
-| Routine continuation required expensive courier/reviewer attention | One authorization through internal phases, resumable bead checkpoints and one consolidated delivery | Exchanges classified by actual decision versus avoidable resumption, with no hidden unimplemented phases |
-| Tool friction could repeat or become an unrelated project | Small tested fixes to existing task-local tooling; broader proposals deferred with evidence | Failed command/false-pass case now detected, healthy use preserved, product work resumes; no unmeasured benefit claim |
+The eleven-group repair at `64050896` fixed meaningful public-caller, numeric/publication, admission, legacy, Undo and dependent-result failures. Earlier independent review missed several of those boundaries. The main agent also left completion/Undo migration insufficiently concrete and overprescribed source merging before the user selected ordered COGs. These are design and reviewer contributions to rework, not solely implementation failures.
 
-### Independent disposition of ordered delivery `783e31e3`
+The `524eef55` review then exposed the three additional geometry/lifecycle failures despite green controls. Existing tests left selection unchanged during an edit and did not challenge the new ordered-member prefilter. The reported live pass observed panel/catalogue state with provisional Location. The repair converted those scratch counterexamples into ordinary regressions and performed a confirmed, mounted-map pass. This is demonstrated detector improvement at those boundaries, not proof of lower overall cost.
 
-The delivered architecture remains appropriate, but acceptance is partial. The [second review](ordered-cog-review.md) records eleven repair groups: a public-read deadlock, asynchronous edit/UI settlement, wrong published statistics, incomplete admission, altered legacy values, stale/unsupported slope paths, Undo/history boundaries, wrong source-region facts, unbounded incremental reads, UI labels/counters and compatibility cancellation. Thirteen diagnostic probes fail against this revision while the existing ordered workflow and Undo recomputation controls pass. UI lifecycle/paging/cancellation findings also rely on caller inspection; no live-window proof is claimed. Earlier full gate totals are implementer-reported, not independently repeated in this review.
+Applied and observed: R12–R14 regressions; teardown guard discovered while writing the unmount regression; reuse of the Xephyr/software-GL/private-profile recipe on its second run, promoted into `docs/agent/edition-development.md`; receipt/guide reconciliation. Historical restoration checks must compare saved starting bytes rather than HEAD. General skill/automation changes were not installed. Per-occurrence names, general asset reclamation and larger-capacity measurements were follow-ups, not accomplished tooling improvements.
 
-The first independent pass missed numeric, legacy and analysis failures found in the second. This is reviewer oversight as well as implementation/test gaps. The main agent also owns insufficiently concrete counterexamples and unsettled completion/Undo-migration details in its original design. The repair handoff now settles these details; it does not justify another architecture. The reported filename limitation was incorrect: `lidar_sources.original_filename` already exists. Correct current guidance while retaining this historical reporting error as evidence.
-
-During diagnosis, one source-range assertion accidentally tested separately deferred behavior; the reviewer corrected that control before establishing the region-coordinate failure. A scratch checkout without the pinned Rust toolchain also triggered an unnecessary rebuild. These are reviewer/tool-use errors, not product defects. The small response is to preserve the checkout toolchain and validate the fixture's claim before broad runs; no new harness is warranted.
-
-| Intervention to evaluate in the repair | Expected useful evidence | Owner / next-use check |
-| --- | --- | --- |
-| Public-read timeout and deferred edit/selection tests at real caller boundaries | Deadlock and stale completion fail before repair, healthy reads/settlement pass after; subsequent independent review checks the same boundaries | Implementer adds ordinary regressions; reviewer checks reachability and oracle |
-| Tiny multi-CRS, NoData, far sparse, legacy overlay and reopened-statistics fixtures | Existing green controls coexist with targeted failures, then repaired callers preserve exact values and admission | Implementer; reuse fixtures when touching these readers again |
-| Explicit Undo migration and committed/no-change command contract | Fresh and migrated libraries have documented Undo limits; UI observes settlement without a new job subsystem | Main agent owns decision; implementer verifies; reviewer checks migration |
-| One continuous assignment with bd checkpoints | Routine phases complete without another permission prompt; material decisions still reach user with evidence | Both agents classify actual courier exchanges at delivery |
-| Correct task-local toolchain/fixture use | The observed failure is avoided on its next actual use; report untested if it has not recurred | Agent using the tool; promote only a demonstrated reusable lesson |
-
-These are hypotheses and acceptance detectors, not a claim that the process has already improved. At delivery give each adopted intervention a keep/revise/drop recommendation, observed result and next-use check; merge overlapping entries rather than accumulating more tables.
-
-### Current correction after `524eef55`
-
-The eleven-group repair at `64050896` and live evidence through `524eef55` are retained. Independent review reran 14 existing native regressions (51.07 s) and 15 existing frontend tests successfully, validated docs, and inspected saved screenshots and the smoke catalogue read-only. The catalogue corroborates repeated Undo to empty, explicit Restore and a completed slope result matching the current head. The reviewer did not drive the window or repeat the full suites. The implementer’s reported totals remain attached to their original revision.
-
-Three added diagnostic probes reproduce [R12–R14](ordered-cog-review.md#current-disposition-at-524eef55): the new tile prefilter excludes contributors inside reduction footprints; navigation during an edit orphans pending state; same-layer refreshes admit late old responses. Disabling only the tile prefilter made that probe pass; the diagnostic source was then restored byte-for-byte. This is a root-cause control, not a production fix or a new capacity result. The live panel pass never mounted the map because the Design Location remained provisional; treating it as the last completed workflow overstates that observation.
-
-The earlier request for “real callers” helped expose and repair numeric/history defects but was too broad to ensure these specific lifecycle and display boundaries. Main-agent responsibility: make footprint-versus-sample geometry and edit-versus-view lifetime concrete, and distinguish mounted-map evidence in the handoff. Implementation/test gap: deferred tests left selection unchanged and tile tests did not expose the new ordered-member filtering boundary. Reporting gap: live-window interaction was counted without the map being mounted. These are specific failures, not evidence of a general model limitation.
-
-For the next consolidated outcome, record only:
-
-- R12–R14’s actual failing/passing regressions and any adjacent defect caught before delivery; name the boundary each check observes.
-- The mounted-map result, source/result identities and a few decisive screenshots; keep panel, renderer-test and live-pixel evidence distinct. Pending observations stay explicit.
-- Machinery reused/removed and whether any new helper was necessary for a present caller; no abstraction or line-count quota.
-- For each actual workflow/tool intervention: observed failure → smallest change → failing/healthy or next-use evidence → keep/revise/drop → owner or follow-up. Distinguish already applied fixes from proposals awaiting a real use.
-- Necessary decision exchanges versus avoidable continuation, and measured effort if available; otherwise unknown. Do not reconstruct cost from suite counts or assume the user's delegation preference establishes savings.
-
-The small interventions being tested are the three concrete caller regressions, explicit completion/read ownership, and a smoke prerequisite that confirms a mounted map before counting map behavior. Reuse the successful Xephyr/software-GL/private-profile recipe recorded in `ordered-cog-receipt.md` on the delivery branch. Correct its operating-guide location if next use demonstrates it is reusable; do not create another driver, metrics collector, shared workflow or installed skill. Keep existing instructions that work and replace stale ones instead of adding exceptions.
-
-At final independent disposition, consolidate these observations with the earlier outcomes into one short synthesis: useful capability delivered, necessary remaining complexity, avoidable rework and which interventions actually helped on their next use. A repeated escaped family means examining the missing boundary/decision, not adding another test quota or rebuilding the architecture. Historical records remain evidence; bd owns progress.
+The final correction review found no blocking R12–R14 findings. Its default Cargo cache invocation failed read-only; retry using the existing isolated cache passed without dependency changes. Effort, total cost and avoided exchanges are unknown. The completion assignment tests the next-use value of these concrete controls instead of adding another methodology framework.
 
 #### Ordered COG correction outcome at `d53f4185`
 
@@ -142,13 +141,6 @@ sandbox lesson still stands and is narrower than it looked: processes started he
 afterwards, so ownership of a foreign-looking window must be established through the profile it writes
 into, never through `pgrep`.
 
-### Final synthesis and adoption
-
-At acceptance or an explicit stop, replace interim summaries in this section with a concise synthesis linking the decisive revisions; preserve historical measurements below. Answer: what now works for the user, what was simplified, what necessary complexity remains, what caused avoidable rework, what the handoff omitted/overprescribed, what tests or tools gave false confidence, and which interventions actually helped.
-
-For each recommended improvement, record **observed failure → smallest change → evidence → keep/revise/drop → owner/follow-up**. Check whether the old instruction already required the behavior before proposing another rule. Classify design omission, implementation deviation, test/oracle gap, reviewer oversight and environment/tool limitation separately, allowing overlap. No general claim about a model/language follows from this one project.
-
-Apply verified task-local test/script/guide fixes within the assignment. Broader skill or shared workflow/tooling changes require their own scoped authority and evidence; list them for the user with the expected benefit and a falsifiable next-use check. Remove stale guidance rather than appending exceptions. The final handoff names improvements already applied versus proposals still untested. This is the continuous-improvement loop, not a second project that must finish before the Data Layer works.
 
 ## Historical purpose and evidence discipline
 

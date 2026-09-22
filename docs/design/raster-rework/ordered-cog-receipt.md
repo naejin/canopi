@@ -1,7 +1,7 @@
 # Ordered COG Data Layers — delivery receipt
 
-Status: evidence — the [ordered COG design](ordered-cog-design.md) is implemented on `feature/bounded-raster-generations`: a Data Layer is now an ordered collection of independent source COGs whose value is the highest-priority valid sample at each location, shared by display, review and slope, and no new edit materializes a merged elevation raster. Undo, History, the source list, the dependent-analysis refresh and the compatibility transition are wired through the real callers. The eleven review findings at `783e31e3` were repaired at `64050896`; the three failures the review of `524eef55` reproduced (R12–R14) are repaired at `d53f4185`, and the mounted-map pass the earlier live run left open is recorded below. Independently reviewed: no — the correction awaits the main agent's disposition. Integrated or released: no.
-Tracking: `canopi-jv8a.4` (kept open for independent disposition); `canopi-kko3` is resolved by the delivered recompute-after-Undo decision; parent `canopi-jv8a`, epic `canopi-j571`.
+Status: evidence — ordered COG correction delivered through `34e4ded4` and independently accepted in the named R12–R14 scope; see the [disposition](ordered-cog-review.md#accepted-correction-at-34e4ded4). Integration/release and broader completion remain separate.
+Tracking: `canopi-jv8a.4` (status reconciliation delegated to the completion assignment); `canopi-kko3` is resolved by the delivered recompute-after-Undo decision; parent `canopi-jv8a`, epic `canopi-j571`.
 Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agent-prompt.md), [ADR 0027](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 ## What is delivered
@@ -313,7 +313,7 @@ at it. Independent acceptance of the fix is the main agent's call, not claimed h
 
 ## Next dependency
 
-Independent disposition by the main agent, then the user's integration decision. The follow-ups this
+Independent correction disposition is recorded at `34e4ded4`. The [completion assignment](completion-agent-prompt.md) now owns accepted-foundation integration and the broader rework. The follow-ups this
 delivery deliberately leaves open are: truthful source display names for repeated imports of the same
 bytes; a capacity/measurement pass for the ordered route if the courier wants the admission limits
 revisited; the deferred general reclamation of unreferenced published assets; and the per-occurrence

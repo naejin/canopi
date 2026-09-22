@@ -1,25 +1,26 @@
 # Raster rework handoffs and debrief
 
-Status: active — supporting handoffs and review evidence, not a replacement implementation plan.
-Tracking: `canopi-j571`; current ordered COG batch under `canopi-jv8a.4`; accepted predecessor `canopi-jv8a.1` at `a5fc7d7b`; historical qualification `canopi-kqpp`.
-Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md), and [delivery workflow](../../workflow/delivery.md).
+Status: active — the completion handoff owns remaining implementation; older assignments are evidence.
+Tracking: `canopi-j571`; executor claims one completion bead; bd owns task status and follow-ups.
+Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
+Start with the completion prompt and contract. On 2026-09-22 the user authorized the **whole remaining rework through a verified candidate**, returning only for material blockers: integrate the accepted foundation, qualify larger capacity, build production Data/Analysis/Layers and inspection, add Web Location/shared basemaps, then verify the combined candidate. No routine phase requires another prompt. New work still requires independent review before mainline integration/release.
 
-The current assignment — [finishing ordered COG display and panel settlement](ordered-cog-agent-prompt.md) under the [fixed design](ordered-cog-design.md) — is delivered on `feature/bounded-raster-generations` from `524eef55`, preserving accepted predecessors, C1/C2 and the eleven-group repair at `64050896`. The [current independent review](ordered-cog-review.md#current-disposition-at-524eef55) reproduced three defects (R12–R14), all repaired at `d53f4185` with a regression each; the mounted-map observation that review left open is recorded in the [receipt](ordered-cog-receipt.md#mounted-map-evidence-in-an-isolated-profile). Product acceptance and integration remain pending. Keep the ordered-source architecture and existing dock.
+The ordered correction at `34e4ded4` is [accepted in its named scope](ordered-cog-review.md#accepted-correction-at-34e4ded4). Preserve native integration `a5fc7d7b`, C1/C2, the eleven-group repair and R12–R14 regressions. Existing production admission remains unchanged until the new measured gate passes. Q is frozen/unqualified; do not restart its tooling.
 
-The implementation agent delivered the diagnosis, repairs, regressions, verification and task-local improvements in one consolidated delivery. The [protocol](collaboration-protocol.md) sets escalation boundaries. The [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief) records the outcome, the evidence limits and the mounted-map observation that remained open. Historical records below are evidence, not alternate assignments. Q remains frozen/unqualified.
+The [protocol](collaboration-protocol.md) owns raster-specific execution/evidence practice. Maintain one [completion receipt](completion-receipt.md), bd checkpoints and the [existing debrief](review-and-debrief.md#whole-rework-delivery-and-improvement). The main agent owns missing design decisions and independent review; the implementer owns routine choices, repair and tested task-local improvements. Historical records below are not alternate assignments.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Current assignment: the three local ordered-COG corrections and the mounted-map pass, delivered at `d53f4185` |
-| [Ordered COG independent review](ordered-cog-review.md) | Current R12–R14 at `524eef55`; earlier findings, controls and evidence limits retained by revision |
+| [Whole-rework execution prompt](completion-agent-prompt.md) | Sole current assignment; sustained implementation through one verified candidate |
+| [Completion contract](completion-design.md) | Integration, conditional capacity policy, workbenches, inspection, Web/provider and final gates |
+| [Completion receipt](completion-receipt.md) | Actual revisions, measurements, gates, limitations and improvements; initialized, not an execution claim |
+| [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Retired correction; accepted at `34e4ded4` |
+| [Ordered COG independent review](ordered-cog-review.md) | Acceptance at `34e4ded4`; earlier findings and evidence limits retained by revision |
 | [Ordered COG delivery receipt](ordered-cog-receipt.md) | Implementer revisions, capabilities, gate lane, finding-to-regression map, mounted-map evidence, migration limits and unavailable observations |
 | [Ordered COG design](ordered-cog-design.md) | Fixed product, persistence, lifecycle, UI and acceptance decisions, including the repair contract |
 | [Ordered COG ADR](../../adr/0027-ordered-cog-data-layers.md) | User-selected replacement for compulsory merged-source publication |
 | [Bounded-generation completion assignment](bounded-generation-completion-agent-prompt.md) | Retired: delivered through `0696bd3d`; C1/C2 accepted in scope, product closure partial |
-| [Bounded-generation delivery receipt](bounded-generation-receipt.md) | Branch-local implementer report and measured evidence for B1–B5, BG1–BG8 and C1/C2; lives on `feature/bounded-raster-generations` |
-| [GeoLibre integration receipt](geolibre-integration-receipt.md) | Branch-local implementer report for G1–G5 and D1/R1; lives on `feature/geolibre-native-raster-integration` |
 | [Delivered BG1–BG5 assignment](bounded-generation-correction-agent-prompt.md) | Retired; preserve the improvements delivered through `9ad85c18` |
 | [Bounded-generation independent review](bounded-generation-review.md) | `6a5130b3` disposition, source evidence and limits of independently repeated tests |
 | [Bounded-generation initial assignment](bounded-generation-agent-prompt.md) | Retired kickoff; continue the correction, not a new bead or baseline |
