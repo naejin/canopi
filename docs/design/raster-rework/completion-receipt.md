@@ -442,8 +442,14 @@ only ever a statement about the tree it ran on:
   landed, because that added a test to `inspection.rs` and a gate result does not
   carry forward across a source change.
 
-Both runs are identical in outcome. The second, on the delivered head, is the one
-that counts:
+Both runs are identical in outcome, and the second is the one that counts. **The
+result applies to every later revision whose difference from `2b39ee2a` is
+documentation or bead metadata only** — which is the case for the current head, so
+the code under test is the code that shipped. Verifying a documentation commit on
+its own would otherwise be an infinite regress: each correction to this table would
+itself become an unverified revision. The rule this states is the useful one: **a
+gate result transfers across a commit that changes no source, and not across one
+that does.**
 
 | Gate | Result |
 | --- | --- |
