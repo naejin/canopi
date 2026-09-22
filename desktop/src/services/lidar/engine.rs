@@ -19,7 +19,8 @@ const MAX_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
 ///
 /// Matches the resource policy's 128 MiB reserve for decoded raster data, so a
 /// conversion cannot take memory the pipeline has not budgeted.
-const GDAL_CACHE_BYTES: u64 = 128 * 1024 * 1024;
+/// The GDAL block-cache ceiling every managed child is launched with.
+pub(super) const GDAL_CACHE_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_OUTPUT_FILE_BYTES: u64 = (MAX_OUTPUT_BYTES as u64) * 2;
 const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 

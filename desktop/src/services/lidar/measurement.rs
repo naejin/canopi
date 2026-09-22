@@ -54,6 +54,23 @@ pub(super) enum TreeMeasurement {
         incomplete_ticks: u64,
         /// Milliseconds between samples.
         interval_ms: u64,
+        /// Largest resident set observed for any *single* member of the tree,
+        /// over every readable tick, the root included.
+        ///
+        /// This is what separates one large process from concurrency: a peak whose
+        /// largest member is near the whole peak is one conversion's working set,
+        /// while a peak much larger than any member is several processes resident
+        /// at once. It is a lower bound for the same reason the totals are.
+        peak_member_bytes: u64,
+        /// Largest number of readable members seen in any one tick, the root
+        /// included. This is the observed concurrency, not a configured limit.
+        peak_member_count: u64,
+        /// Resident bytes of one managed GDAL conversion's block cache ceiling.
+        ///
+        /// The engine sets `GDAL_CACHEMAX` for every child it launches, so this
+        /// many bytes per concurrent conversion is attributable to the cache
+        /// rather than to job logic.
+        child_cache_ceiling_bytes: u64,
     },
     /// This platform cannot measure the process tree.
     Unsupported(String),
@@ -83,6 +100,9 @@ impl TreeMeasurement {
                 complete_ticks,
                 incomplete_ticks,
                 interval_ms,
+                peak_member_bytes,
+                peak_member_count,
+                child_cache_ceiling_bytes,
             } => {
                 let incremental = match peak_incremental_bytes {
                     Some(bytes) => format!("{} MiB", bytes / (1024 * 1024)),
@@ -101,6 +121,15 @@ impl TreeMeasurement {
                     },
                     peak_total_bytes / (1024 * 1024),
                     peak_subtotal_bytes / (1024 * 1024),
+                ) + &format!(
+                    "; composition: largest single member {} MiB over {} member(s) at most, \
+                     and each managed conversion may hold up to {} MiB of block cache \
+                     (GDAL_CACHEMAX), so {} concurrent conversion(s) could account for the \
+                     cache share",
+                    peak_member_bytes / (1024 * 1024),
+                    peak_member_count,
+                    child_cache_ceiling_bytes / (1024 * 1024),
+                    peak_member_count.saturating_sub(1),
                 )
             }
             Self::Unsupported(reason) => format!("process tree measurement unavailable: {reason}"),
@@ -263,6 +292,10 @@ pub(super) struct ProcessTreeSampler {
     subtotal: Arc<AtomicU64>,
     complete: Arc<AtomicU64>,
     incomplete: Arc<AtomicU64>,
+    /// Largest single member over every readable tick.
+    member_peak: Arc<AtomicU64>,
+    /// Largest member count over any one tick.
+    member_count_peak: Arc<AtomicU64>,
     baseline_bytes: u64,
     baseline_complete: bool,
     handle: Option<std::thread::JoinHandle<()>>,
@@ -299,12 +332,16 @@ impl ProcessTreeSampler {
         let subtotal = Arc::new(AtomicU64::new(baseline_bytes));
         let complete = Arc::new(AtomicU64::new(0));
         let incomplete = Arc::new(AtomicU64::new(0));
+        let member_peak = Arc::new(AtomicU64::new(0));
+        let member_count_peak = Arc::new(AtomicU64::new(0));
         let worker = spawn_sampling_loop(
             stop.clone(),
             peak.clone(),
             subtotal.clone(),
             complete.clone(),
             incomplete.clone(),
+            member_peak.clone(),
+            member_count_peak.clone(),
         );
         Ok(Self {
             stop,
@@ -312,6 +349,8 @@ impl ProcessTreeSampler {
             subtotal,
             complete,
             incomplete,
+            member_peak,
+            member_count_peak,
             baseline_bytes,
             baseline_complete,
             handle: Some(worker),
@@ -339,6 +378,9 @@ impl ProcessTreeSampler {
             complete_ticks,
             incomplete_ticks: self.incomplete.load(Ordering::Relaxed),
             interval_ms: u64::try_from(SAMPLE_INTERVAL.as_millis()).unwrap_or(100),
+            peak_member_bytes: self.member_peak.load(Ordering::Relaxed),
+            peak_member_count: self.member_count_peak.load(Ordering::Relaxed),
+            child_cache_ceiling_bytes: crate::services::lidar::engine::GDAL_CACHE_BYTES,
         }
     }
 }
@@ -356,6 +398,8 @@ fn spawn_sampling_loop(
     subtotal: Arc<AtomicU64>,
     complete: Arc<AtomicU64>,
     incomplete: Arc<AtomicU64>,
+    member_peak: Arc<AtomicU64>,
+    member_count_peak: Arc<AtomicU64>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) {
@@ -365,7 +409,14 @@ fn spawn_sampling_loop(
             if stop.load(Ordering::Relaxed) {
                 break;
             }
-            sample_once(&peak, &subtotal, &complete, &incomplete);
+            sample_once(
+                &peak,
+                &subtotal,
+                &complete,
+                &incomplete,
+                &member_peak,
+                &member_count_peak,
+            );
         }
     })
 }
@@ -383,12 +434,21 @@ fn sample_once(
     subtotal: &AtomicU64,
     complete: &AtomicU64,
     incomplete: &AtomicU64,
+    member_peak: &AtomicU64,
+    member_count_peak: &AtomicU64,
 ) -> Option<u64> {
     let processes = read_processes();
-    let Some((total, complete_tree)) = tree_total(&processes, std::process::id()) else {
+    let Some((total, complete_tree, largest_member, member_count)) =
+        tree_total(&processes, std::process::id())
+    else {
         incomplete.fetch_add(1, Ordering::Relaxed);
         return None;
     };
+    // The decomposition is recorded for every readable tick, complete or not,
+    // because it answers a different question than the budget verdict: what the
+    // peak is made of, not whether the peak is admissible.
+    member_peak.fetch_max(largest_member, Ordering::Relaxed);
+    member_count_peak.fetch_max(member_count, Ordering::Relaxed);
     // Every tick's readable subtotal is a lower bound; only a fully readable
     // tick may become the sampled peak.
     subtotal.fetch_max(total, Ordering::Relaxed);
@@ -405,7 +465,9 @@ fn sample_once(
 ///
 /// `None` means the root itself could not be read, which is not a measurement.
 fn snapshot_tree() -> Option<(u64, bool)> {
-    tree_total(&read_processes(), std::process::id())
+    let (total, complete, _largest_member, _member_count) =
+        tree_total(&read_processes(), std::process::id())?;
+    Some((total, complete))
 }
 
 /// Sum the root and every observed live descendant, each counted once, and
@@ -415,9 +477,11 @@ fn snapshot_tree() -> Option<(u64, bool)> {
 /// A tree member that exited between discovery and read makes `complete`
 /// false: its resident size is unknown, so the sum undercounts and that tick
 /// must not stand as evidence.
-fn tree_total(processes: &BTreeMap<u32, ProcessFact>, root: u32) -> Option<(u64, bool)> {
+fn tree_total(processes: &BTreeMap<u32, ProcessFact>, root: u32) -> Option<(u64, bool, u64, u64)> {
     let root_fact = processes.get(&root)?;
     let mut total = root_fact.resident_bytes?;
+    let mut largest_member = total;
+    let mut member_count = 1u64;
     let mut complete = true;
     // Children may be discovered in any order and may themselves be parents of
     // processes launched from worker threads, so the tree is walked, not
@@ -432,13 +496,17 @@ fn tree_total(processes: &BTreeMap<u32, ProcessFact>, root: u32) -> Option<(u64,
             }
             seen.insert(*child);
             match fact.resident_bytes {
-                Some(bytes) => total = total.saturating_add(bytes),
+                Some(bytes) => {
+                    total = total.saturating_add(bytes);
+                    largest_member = largest_member.max(bytes);
+                    member_count = member_count.saturating_add(1);
+                }
                 None => complete = false,
             }
             queue.push(*child);
         }
     }
-    Some((total, complete))
+    Some((total, complete, largest_member, member_count))
 }
 
 /// Read one fact per live process, including identity and resident bytes.
@@ -533,11 +601,17 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        assert_eq!(tree_total(&processes, 10), Some((80, true)));
+        // Root 10 + children 20 and 30 + grandchild 20 = 80 over four members,
+        // and the largest single member is the 30-byte child. The unrelated
+        // 1000-byte process is not a descendant and contributes nothing.
+        assert_eq!(tree_total(&processes, 10), Some((80, true, 30, 4)));
         // A cycle or repeated row cannot double-count a member.
         let mut twice = processes.clone();
         twice.insert(60, fact(60, 40, Some(5)));
-        assert_eq!(tree_total(&twice, 10), Some((85, true)));
+        // The extra 5-byte child of the 20-byte grandchild is summed once, so
+        // the total rises to 85 over five members while the largest member stays
+        // the 30-byte child.
+        assert_eq!(tree_total(&twice, 10), Some((85, true, 30, 5)));
     }
 
     /// The authored summation the gate depends on: root 10 plus two children of
@@ -551,7 +625,7 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        assert_eq!(tree_total(&processes, 1), Some((60, true)));
+        assert_eq!(tree_total(&processes, 1), Some((60, true, 30, 3)));
     }
 
     /// A child's lifetime is per tick: once it exits it is no longer summed, and
@@ -562,11 +636,11 @@ mod tests {
             [(1, fact(1, 0, Some(10))), (2, fact(2, 1, Some(50)))]
                 .into_iter()
                 .collect();
-        assert_eq!(tree_total(&early, 1), Some((60, true)));
+        assert_eq!(tree_total(&early, 1), Some((60, true, 50, 2)));
         // The child exited: only the root remains, and nothing negative or
         // stale is carried over.
         let late: BTreeMap<u32, ProcessFact> = [(1, fact(1, 0, Some(12)))].into_iter().collect();
-        assert_eq!(tree_total(&late, 1), Some((12, true)));
+        assert_eq!(tree_total(&late, 1), Some((12, true, 12, 1)));
         // The same pid now belongs to an unrelated process with a new start
         // time, which is not a descendant and must not be summed.
         let recycled: BTreeMap<u32, ProcessFact> = [
@@ -585,7 +659,7 @@ mod tests {
         .collect();
         // It is a live descendant of the root, so it is summed once: identity
         // matters for reporting, not for inventing or dropping members.
-        assert_eq!(tree_total(&recycled, 1), Some((412, true)));
+        assert_eq!(tree_total(&recycled, 1), Some((412, true, 400, 2)));
     }
 
     /// A real child process appears in the live tree while it runs.
@@ -631,7 +705,7 @@ mod tests {
             [(1, fact(1, 0, Some(10))), (2, fact(2, 1, None))]
                 .into_iter()
                 .collect();
-        assert_eq!(tree_total(&exiting, 1), Some((10, false)));
+        assert_eq!(tree_total(&exiting, 1), Some((10, false, 10, 1)));
         // An unreadable process outside the tree does not spoil a complete
         // tree: only members of the measured tree are evidence.
         let unrelated: BTreeMap<u32, ProcessFact> = [
@@ -641,7 +715,7 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        assert_eq!(tree_total(&unrelated, 1), Some((30, true)));
+        assert_eq!(tree_total(&unrelated, 1), Some((30, true, 20, 2)));
     }
 
     #[test]
@@ -675,6 +749,9 @@ mod tests {
             complete_ticks,
             incomplete_ticks,
             interval_ms: 50,
+            peak_member_bytes: peak_total.unwrap_or(0),
+            peak_member_count: 1,
+            child_cache_ceiling_bytes: crate::services::lidar::engine::GDAL_CACHE_BYTES,
         }
     }
 

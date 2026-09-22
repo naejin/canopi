@@ -231,12 +231,33 @@ produced it; the detailed sections below this one carry the raw output.
 | Temporary bytes (plane lane) | **0**, no job scratch left; now an assertion rather than an observation | same lane |
 | Cancellation settlement | **101 ms** against a 5 s bound, on the real kill-and-reap path | `a_cancelled_engine_conversion_settles_within_the_contract_bound` |
 
+**Composition of the peak (round 36).** The totals above cannot distinguish one
+large conversion from several resident at once, so the sampler now also reports the
+largest single member, the highest member count in any tick, and the block-cache
+ceiling each managed child is launched with. Measured on the plane lane:
+
+```
+peak total 197 MiB, largest single member 177 MiB over 2 member(s) at most,
+each managed conversion may hold up to 128 MiB of block cache (GDAL_CACHEMAX)
+```
+
+That answers the queue-versus-working-set question the totals could not. The peak
+is **one dominant process**, not concurrency: 177 of 197 MiB sits in a single
+member, and at most two members were ever resident, so there is no queue
+accumulation in this lane. Of that 177 MiB, at most 128 MiB is the child's GDAL
+block cache, leaving roughly **49 MiB of process and GDAL working set** — which is
+the part a capacity decision can actually influence, since the cache ceiling is a
+constant the engine sets.
+
+This is a decomposition, not a new upper bound: the member figures come from the
+same 50 ms samples and inherit the same lower-bound caveat.
+
 **Not measured, and not implied by the above**
 
-- **Queue and cache peaks as distinct quantities.** The reported figures are
-  whole-process-tree RSS samples at 50 ms, which the lanes themselves describe as
-  a lower bound rather than an exhaustive maximum. How much of a peak is the GDAL
-  block cache versus in-flight job work is not separated.
+- **A queue-depth bound.** The composition above shows the observed member count,
+  which is evidence that this lane does not accumulate a queue — but it is a
+  sampled observation from one lane, not a bound the scheduler enforces. No lane
+  drives enough concurrency to state a queue ceiling.
 - **Cold versus three-warm display timings.** No display timing was taken at all.
 - **The low-space and write-failure path.** Unverified, with the probe evidence and
   the environment limits that block a real test recorded in its own section below.
