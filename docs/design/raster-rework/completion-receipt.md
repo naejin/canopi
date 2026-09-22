@@ -213,6 +213,36 @@ The 76 ignored Rust tests are the GDAL- and fixture-backed lanes; individual one
 have been run and are recorded above, but the full ignored lane has not been run
 as one command on this revision and is not claimed.
 
+### C1 durable and temporary bytes, measured (round 33)
+
+The resource contract separates **durable** bytes — what a published generation
+owns and a restart must reproduce — from **temporary** bytes, which a settled job
+must not leave behind. Neither was reported, so both are now measured by walking
+the library tree rather than trusting a job's own accounting, and the lane asserts
+the two properties that matter.
+
+| Measurement (400M-cell plane, 1,677,760,928-byte source) | Value |
+| --- | --- |
+| Durable bytes after import and analysis | **4,951,029,490** in 11 files |
+| Temporary bytes | **0** in 0 files |
+| Job scratch directories | **none left** |
+| Peak process-tree RSS | 199 MiB (183 MiB incremental) |
+
+Two facts worth stating plainly. The durable footprint is **2.95× the source
+bytes** for a plane whose sparse slope result is published as chunks, so the
+durable cost of this lane is dominated by derived output rather than by the
+retained source. And a settled job leaves **nothing** in `jobs`: the scratch
+directory is empty, which is the cleanup guarantee that
+`report_library_bytes` now enforces as an assertion rather than an observation.
+
+The first attempt put this measurement in the wrong test — it landed in
+`e2e_sparse_generation_lifecycle` and then in `e2e_mnh_batch_import_apply_display_restart`,
+because two functions share the comment it anchored on, and the lane passed
+three times without printing it. The lesson is the same one this receipt keeps
+relearning: a measurement that does not appear in the log has not been taken, and
+grepping for a line you expect is not evidence that the code producing it ran.
+Both lanes now measure, each with its own label.
+
 ### C1 low-space and write-failure: not verified, and here is why
 
 I could not write an honest test for the low-space and write-failure path, so it

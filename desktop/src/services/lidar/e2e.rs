@@ -9,6 +9,67 @@ use super::*;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
+/// Total bytes under a directory tree, and how many files they are.
+///
+/// The resource contract separates **durable** bytes, which a published
+/// generation owns and a restart must keep, from **temporary** bytes, which a
+/// completed job must not leave behind. Both are measured by walking the tree
+/// rather than trusting a job's own accounting.
+fn tree_bytes(root: &std::path::Path) -> (u64, u64) {
+    let mut total = 0u64;
+    let mut files = 0u64;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            match entry.file_type() {
+                Ok(kind) if kind.is_dir() => stack.push(path),
+                Ok(_) => {
+                    if let Ok(meta) = entry.metadata() {
+                        total = total.saturating_add(meta.len());
+                        files = files.saturating_add(1);
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+    }
+    (total, files)
+}
+
+/// Report the durable and temporary footprint of a library root.
+///
+/// Staging and job scratch are the only places a completed job may leave
+/// nothing, so the temporary figure is what proves the cleanup, while the
+/// durable figure is what a restart must reproduce.
+fn report_library_bytes(label: &str, root: &std::path::Path) -> (u64, u64, u64, u64) {
+    let (durable, durable_files) = tree_bytes(root);
+    // `jobs` holds per-job scratch, which a settled job must empty. The other
+    // roots are durable: `sources` and `prepared` are retained inputs.
+    let (temporary, temporary_files) = tree_bytes(&root.join("jobs"));
+    let job_dirs: Vec<String> = std::fs::read_dir(root.join("jobs"))
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| {
+                    let (bytes, files) = tree_bytes(&entry.path());
+                    format!("{}({bytes}B/{files}f)", entry.file_name().to_string_lossy())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    println!(
+        "{label}: durable {durable} bytes in {durable_files} files, \
+         temporary {temporary} bytes in {temporary_files} files, \
+         job scratch [{}]",
+        job_dirs.join(", ")
+    );
+    (durable, durable_files, temporary, temporary_files)
+}
+
 fn assert_png_has_visible_pixels(engine: &engine::GdalEngine, path: &std::path::Path) {
     assert!(path.is_file(), "PNG is missing: {}", path.display());
     let output = engine
@@ -1024,6 +1085,19 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     assert!(drawn > 0, "a tile over the batch centre must draw");
     println!("drawn tiles: {drawn} ({drawn_bytes} bytes)");
 
+    // The resource contract separates durable bytes, which a restart must
+    // reproduce, from temporary bytes, which a settled job must not leave behind.
+    let (durable, _durable_files, temporary, temporary_files) =
+        report_library_bytes("MNH batch after import and analysis", &work);
+    assert_eq!(
+        temporary, 0,
+        "a settled job left {temporary} temporary bytes in {temporary_files} files"
+    );
+    assert!(
+        durable > 0,
+        "a settled job must have published durable bytes"
+    );
+
     // Restart reuse: the head, its chunks and its tiles survive.
     drop(library);
     let reopened = LidarLibrary::open(&work).expect("library reopens");
@@ -1221,6 +1295,19 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
     assert!(
         (observed_max - expected_max).abs() < 1.0,
         "composed max {observed_max} vs analytic {expected_max}"
+    );
+
+    // The resource contract separates durable bytes, which a restart must
+    // reproduce, from temporary bytes, which a settled job must not leave behind.
+    let (durable, _durable_files, temporary, temporary_files) =
+        report_library_bytes("capacity plane after import and analysis", &work);
+    assert_eq!(
+        temporary, 0,
+        "a settled job left {temporary} temporary bytes in {temporary_files} files"
+    );
+    assert!(
+        durable > 0,
+        "a settled job must have published durable bytes"
     );
 
     // Reopen: a fresh library handle sees the same head without recomputation.
