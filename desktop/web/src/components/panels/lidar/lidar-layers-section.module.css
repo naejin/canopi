@@ -57,11 +57,6 @@
 .headerBack:hover,
 .textButton:hover,
 .eyeButton:hover,
-.disclosure:hover,
-.layerIdentity:hover,
-.previewTabs button:hover {
-  background: var(--color-control-hover);
-}
 
 .primaryButton {
   border-color: var(--color-primary);
@@ -99,15 +94,6 @@
 .headerBack:focus-visible,
 .textButton:focus-visible,
 .eyeButton:focus-visible,
-.disclosure:focus-visible,
-.layerIdentity:focus-visible,
-.pendingReview:focus-visible,
-.nameInput:focus-visible,
-.previewTabs button:focus-visible,
-.decision input:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
 
 .engineWarning,
 .errorMessage,
@@ -115,12 +101,6 @@
 .emptyState,
 .notice,
 .detailSummary,
-.collapsedSummary,
-.previewEmpty {
-  margin: 0;
-  font-size: var(--text-xs);
-  line-height: 1.45;
-}
 
 .engineWarning,
 .notice {
@@ -193,13 +173,15 @@
 }
 
 .layerList,
-.sourceGroup {
-  min-width: 0;
-}
 
 .layerRow {
   display: grid;
-  grid-template-columns: var(--control-size-sm) var(--control-size-sm) minmax(0, 1fr) var(--control-size-sm);
+  grid-template-columns:
+    var(--control-size-sm)
+    var(--control-size-sm)
+    minmax(0, 1fr)
+    auto
+    var(--control-size-sm);
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
@@ -221,34 +203,54 @@
   color: var(--color-text-muted);
 }
 
-.analysisRow {
-  padding-left: var(--space-6);
-}
-
-.disclosure,
-.eyeButton,
-.disclosureSlot,
-.actionSlot {
-  width: var(--control-size-sm);
-  height: var(--control-size-sm);
-}
-
-.disclosure,
-.eyeButton {
-  position: relative;
-  display: inline-flex;
+/* A source/result badge, so the two kinds stay distinguishable in one flat list. */
+.kindBadge {
+  display: flex;
   align-items: center;
   justify-content: center;
+  width: var(--control-size-sm);
+  height: var(--control-size-sm);
+  color: var(--color-text-muted);
+}
+
+.kindBadge[data-kind='Analysis'] {
+  color: var(--color-primary);
+}
+
+.moveControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.moveButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: var(--control-size-sm);
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 
-.disclosure {
-  font-size: var(--text-md);
+.moveButton:hover:not(:disabled) {
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.moveButton:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.moveButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .layerIdentity {
@@ -297,12 +299,6 @@
   font-weight: 400;
   line-height: 1.25;
   overflow-wrap: anywhere;
-}
-
-.collapsedSummary {
-  padding: var(--space-1) var(--space-3) var(--space-2) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-muted);
 }
 
 .emptyHint {

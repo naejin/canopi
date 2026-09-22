@@ -27,6 +27,7 @@ import {
   undoLayerChange,
   setLidarEntryOpacity,
   setLidarEntryVisibility,
+  movePresentationEntry,
   startImportForLayer,
 } from '../../../app/lidar/actions'
 import {
@@ -70,14 +71,9 @@ export function LidarLayersSection() {
   const library = lidarLibrary.value
   const trackedImport = openImportJob.value
   const items = readLidarPresentation(currentDesign.value, library)
-  const sources = items.filter((item) => item.kind === 'Source')
-  const analysesById = new Map(
-    items.filter((item) => item.kind === 'Analysis').map((item) => [item.id, item]),
-  )
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [mode, setMode] = useState<DetailMode>('settings')
   const [history, setHistory] = useState<LidarLayerHistoryPage | null>(null)
   const [collection, setCollection] = useState<LidarLayerCollection | null>(null)
@@ -108,7 +104,7 @@ export function LidarLayersSection() {
   const editInFlight = useRef(false)
   const mounted = useRef(true)
 
-  const selected = items.find((item) => item.id === selectedId) ?? sources[0] ?? null
+  const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null
   const selectedLayer = selected?.kind === 'Source'
     ? library?.layers.find((layer) => layer.id === selected.id)
     : null
@@ -330,7 +326,7 @@ export function LidarLayersSection() {
   return (
     <section className={styles.section} aria-label={t('canvas.lidar.section')}>
       <div className={styles.groupHeading}>
-        <h3>{t('canvas.lidar.section')} <span>{sources.length}</span></h3>
+        <h3>{t('canvas.lidar.section')} <span>{items.length}</span></h3>
         <button
           type="button"
           className={styles.addButton}
@@ -377,97 +373,65 @@ export function LidarLayersSection() {
           <span>{t('canvas.lidar.openImport')}</span>
         </button>
       )}
+      {/*
+        One flat geographic presentation list in the Design\'s own saved order.
+        A source and its results are peers here, not parent and child: an eye
+        controls its own entry\'s visibility, so hiding a source never hides an
+        independently displayed result, and a result never sits behind a nested
+        disclosure that a source collapse could take away.
+      */}
       <div className={styles.layerList} role="list">
-        {sources.map((item) => {
-          const results = (library?.analyses ?? [])
-            .filter((analysis) => analysis.source_layer_id === item.id)
-            .flatMap((analysis) => {
-              const presented = analysesById.get(analysis.id)
-              return presented ? [presented] : []
-            })
-          const isCollapsed = collapsed.has(item.id)
-          const layer = library?.layers.find((candidate) => candidate.id === item.id)
+        {items.map((item, index) => {
+          const layer = item.kind === 'Source'
+            ? library?.layers.find((candidate) => candidate.id === item.id)
+            : undefined
+          const metadata = item.kind === 'Source'
+            ? `${t(`canvas.lidar.kind.${layer?.measurement_kind ?? item.detail}`)} · ${sourceState(item)}`
+            : `${t('canvas.lidar.slopeDegrees')} · ${stateLabel(item.state)}`
           return (
-            <div key={item.id} className={styles.sourceGroup}>
-              <div
-                className={styles.layerRow}
-                data-selected={selected?.id === item.id}
-                data-hidden={!item.visible}
-                role="listitem"
-              >
-                <button
-                  type="button"
-                  className={styles.disclosure}
-                  aria-label={isCollapsed ? t('canvas.lidar.expand') : t('canvas.lidar.collapse')}
-                  aria-expanded={!isCollapsed}
-                  onClick={() => setCollapsed((current) => {
-                    const next = new Set(current)
-                    if (next.has(item.id)) next.delete(item.id)
-                    else next.add(item.id)
-                    return next
-                  })}
-                >
-                  <span aria-hidden="true">{isCollapsed ? '›' : '⌄'}</span>
-                </button>
-                <VisibilityButton item={item} />
-                <button type="button" className={styles.layerIdentity} onClick={() => select(item.id)}>
-                  <TerrainIcon />
-                  <span className={styles.identityText}>
-                    <span className={styles.name}>{item.name}</span>
-                    <span className={styles.metadata}>
-                      {t(`canvas.lidar.kind.${layer?.measurement_kind ?? item.detail}`)} · {sourceState(item)}
-                    </span>
-                  </span>
-                </button>
-                {item.state === 'unavailable' ? <span className={styles.actionSlot} /> : (
-                  <ActionMenu label={t('canvas.lidar.actions')} items={[
-                    { label: t('canvas.lidar.history'), run: () => openHistory(item) },
-                    { label: t('canvas.lidar.deleteFromLibrary'), danger: true, run: () => openLayerDelete(item) },
-                  ]} />
-                )}
-              </div>
-              {!isCollapsed && results.map((result) => (
-                <div
-                  key={result.id}
-                  className={`${styles.layerRow} ${styles.analysisRow}`}
-                  data-selected={selected?.id === result.id}
-                  data-hidden={!result.visible}
-                  role="listitem"
-                >
-                  <span className={styles.disclosureSlot} />
-                  <VisibilityButton item={result} />
-                  <button type="button" className={styles.layerIdentity} onClick={() => select(result.id)}>
-                    <AnalysisIcon />
-                    <span className={styles.identityText}>
-                      <span className={styles.name}>{result.name}</span>
-                      <span className={styles.metadata}>{t('canvas.lidar.slopeDegrees')} · {stateLabel(result.state)}</span>
-                    </span>
-                  </button>
-                  <ActionMenu label={t('canvas.lidar.actions')} items={[
-                    {
-                      label: t('canvas.lidar.deleteAnalysis'),
-                      danger: true,
-                      run: () => {
-                        select(result.id)
-                        setAnalysisDeleteId(result.id)
-                        setMode('delete')
-                      },
+            <div
+              key={item.id}
+              className={styles.layerRow}
+              data-selected={selected?.id === item.id}
+              data-hidden={!item.visible}
+              data-kind={item.kind}
+              role="listitem"
+            >
+              <span className={styles.kindBadge} data-kind={item.kind}>
+                {item.kind === 'Source' ? <TerrainIcon /> : <AnalysisIcon />}
+              </span>
+              <VisibilityButton item={item} />
+              <button type="button" className={styles.layerIdentity} onClick={() => select(item.id)}>
+                <span className={styles.identityText}>
+                  <span className={styles.name}>{item.name}</span>
+                  <span className={styles.metadata}>{metadata}</span>
+                </span>
+              </button>
+              <MoveControls item={item} position={index} total={items.length} />
+              {item.kind === 'Source' && item.state !== 'unavailable' ? (
+                <ActionMenu label={t('canvas.lidar.actions')} items={[
+                  { label: t('canvas.lidar.history'), run: () => openHistory(item) },
+                  { label: t('canvas.lidar.deleteFromLibrary'), danger: true, run: () => openLayerDelete(item) },
+                ]} />
+              ) : item.kind === 'Analysis' && item.state !== 'unavailable' ? (
+                <ActionMenu label={t('canvas.lidar.actions')} items={[
+                  {
+                    label: t('canvas.lidar.deleteAnalysis'),
+                    danger: true,
+                    run: () => {
+                      select(item.id)
+                      setAnalysisDeleteId(item.id)
+                      setMode('delete')
                     },
-                  ]} />
-                </div>
-              ))}
-              {isCollapsed && results.length > 0 && (
-                <p className={styles.collapsedSummary}>
-                  {t('canvas.lidar.collapsedResults', {
-                    count: results.length,
-                    visible: results.filter((result) => result.visible).length,
-                  })}
-                </p>
+                  },
+                ]} />
+              ) : (
+                <span className={styles.actionSlot} />
               )}
             </div>
           )
         })}
-        {sources.length === 0 && <p className={styles.emptyHint}>{t('canvas.lidar.empty')}</p>}
+        {items.length === 0 && <p className={styles.emptyHint}>{t('canvas.lidar.empty')}</p>}
       </div>
       {selected && (
         <div className={styles.inspector} aria-label={selected.name}>
@@ -692,6 +656,47 @@ export function LidarImportPanel() {
         )}
       </div>
     </aside>
+  )
+}
+
+/**
+ * Keyboard-accessible reorder controls for one presentation entry.
+ *
+ * Order is the Design's own display order, so this is a Design Edit and travels
+ * through document history. It is display order only: reordering presentation
+ * never reorders the sources inside a Data Layer, which is the library's own
+ * numeric priority.
+ */
+function MoveControls({
+  item,
+  position,
+  total,
+}: {
+  readonly item: LidarPresentationItem
+  readonly position: number
+  readonly total: number
+}) {
+  return (
+    <span className={styles.moveControls}>
+      <button
+        type="button"
+        className={styles.moveButton}
+        aria-label={`${t('canvas.lidar.moveUp')}: ${item.name}`}
+        disabled={position === 0}
+        onClick={() => movePresentationEntry(item.id, 'up')}
+      >
+        <span aria-hidden="true">↑</span>
+      </button>
+      <button
+        type="button"
+        className={styles.moveButton}
+        aria-label={`${t('canvas.lidar.moveDown')}: ${item.name}`}
+        disabled={position === total - 1}
+        onClick={() => movePresentationEntry(item.id, 'down')}
+      >
+        <span aria-hidden="true">↓</span>
+      </button>
+    </span>
   )
 }
 
