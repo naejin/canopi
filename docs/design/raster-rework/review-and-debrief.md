@@ -29,7 +29,7 @@ Test each proposed intervention on a real next use. Keep/revise/drop is supporte
 
 ### Final synthesis
 
-**Delivered 2026-09-22; verified at candidate `e026a347` on
+**Delivered 2026-09-22; verified at candidate `2b39ee2a` on
 `feature/raster-rework-completion`, containing `main` at `f61f8494`, which
 contains the accepted foundation `34e4ded4`. Evidence and limits live in the
 [completion receipt](completion-receipt.md); this section is the synthesis that

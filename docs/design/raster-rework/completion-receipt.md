@@ -432,11 +432,18 @@ remainder rather than cache saturation. That contrasts with the plane lane, wher
 The timings above are test durations, not display timings: they include fixture
 staging and hashing, so they are not a latency claim and are not offered as one.
 
-### C5 verification of the final candidate (round 38)
+### C5 verification of the final candidate
 
-Re-run once across the whole workspace at **`e21f0d45`**, the candidate head at the
-time of this verification, with ancestry and both destinations checked in the same
-pass:
+Run twice, at two revisions, because code changed between them and a gate result is
+only ever a statement about the tree it ran on:
+
+- **`e21f0d45`** first, when it was the head.
+- **`2b39ee2a`** again after the inspection oracle and the documentation corrections
+  landed, because that added a test to `inspection.rs` and a gate result does not
+  carry forward across a source change.
+
+Both runs are identical in outcome. The second, on the delivered head, is the one
+that counts:
 
 | Gate | Result |
 | --- | --- |
@@ -455,7 +462,7 @@ pass:
 
 | Identity | Check |
 | --- | --- |
-| Candidate head | `e21f0d45`, 62 commits since `main` |
+| Candidate head | `2b39ee2a`, verified in both destinations |
 | `main` is an ancestor of the candidate | yes, at `f61f8494` |
 | Accepted foundation `34e4ded4` is an ancestor | yes |
 | Both destinations at that revision | verified by `git ls-remote` against `github.com` and `codeberg.org` |
