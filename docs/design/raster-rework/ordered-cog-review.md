@@ -1,14 +1,42 @@
-# Independent second review of ordered COG delivery
+# Ordered COG independent review
 
-Status: evidence — independent review of `783e31e3`; required repairs, not implementation acceptance.
+Status: evidence — current disposition of `524eef55` is partial; three reproduced defects and mounted-map evidence remain. Earlier findings are retained below by revision.
 Tracking: `canopi-jv8a.4`, `canopi-kko3`.
-Current guidance: [repair prompt](ordered-cog-agent-prompt.md), [fixed design](ordered-cog-design.md#8-repair-contract-after-review-of-783e31e3), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief).
+Current guidance: [current prompt](ordered-cog-agent-prompt.md), [fixed design](ordered-cog-design.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief).
+
+## Current disposition at `524eef55`
+
+Preserve `64050896` and the live-evidence delivery through `524eef55`. The earlier eleven-group repair produced substantial caller-level progress; do not restart that assignment. Independent review reproduced the three remaining failures below in an isolated archive. Keep the architecture and unchanged limits. No production sources were edited during review; integration and release remain unauthorized.
+
+1. **R12 · P1 — Tile candidate bounds omit the reduction footprint.** desktop/src/services/lidar/tiles.rs:566-592 bounds sample centres with one native cell of padding, but lines 674-680 request the surrounding level-dependent reduced cells. A source can contribute valid values to those cells while its extent lies outside this prefilter. Reproduction: import a 2x2, 1m EPSG:3857 source of valid sevens at the NW corner of XYZ tile 14/8192/8191, then render that tile through tiles::render_tile. Its four valid cells contribute to the first level-3 reduction cell, but the result is Empty. Diagnostic review_tile_keeps_source_inside_first_reduction_footprint fails. Control: disable only this candidate prefilter (pass None instead of tile_read_bounds); the same renderer/test passes. Restore was byte-verified afterwards. Fix by deriving candidate bounds from the actual native/reduced windows the renderer will read, retaining bounded filtering; do not remove filtering as the production fix. Add an ordinary tile regression including coverage near the tile edge.
+
+2. **R13 · P2 — Changing view during an edit leaves pending set forever.** LidarLayersSection.tsx:95 increments requestGeneration on selection/openHistory, but runEdit's finally at 189-190 clears pending only if the old generation still matches. Reproduction: begin a deferred Move, open History before it settles, resolve Move successfully. Undo and other edit controls stay disabled despite loading completing and Undo being available. Diagnostic 'leaving an editing view does not leave all controls permanently pending' fails. Settle edit lifetime independently from view-response identity (with appropriate operation ownership), so navigation cannot orphan pending state. No new async subsystem.
+
+3. **R14 · P2 — Same-layer responses are not fenced against refresh/head changes.** LidarLayersSection.tsx:108-147 captures a generation that increments only in select(); the library-refresh effect at 156-161 launches new reads with that same value. Reproduction: hold a collection read for gen-old, refresh the library, resolve the new read displaying new.tif, then resolve the old read. The panel replaces new.tif with old.tif. The same pattern applies to History and page appends; a shared loading boolean also finishes when only one of concurrent reads completes. Diagnostic 'a late same-layer read cannot replace the new head after refresh' fails. Give collection/history traversals their own current request/head identity and settle their own loading state; reject superseded results and mixed-head pages. Keep this within the existing component/store owner.
+
+Remaining required evidence: the live workflow did not mount the map. Receipt lines 198-202 and screenshot 84-final-state show the provisional Design Location and explicit 'Set a Design Location to mount the map' prompt. Confirm Location in the isolated profile and observe rendered overlap changing after reorder/Undo/Restore, including generation replacement and a zoomed-out edge. The panel/catalogue pass is accepted as evidence at its actual boundary, not as the complete display pass. No requirement to run a new capacity campaign or migrate legacy libraries through a new UI route.
+
+Independently checked:
+
+- 14 existing native regressions pass (51.07s): public lock, v15 migration, first-batch CRS, all-NoData, reopened statistics, sparse extent, actual legacy head, superseded analysis, stale readiness, Undo/recompute, Undo exhaustion/equal-composition restore, region facts, intersecting member payloads and compatibility cancellation.
+- 15 existing frontend tests pass across lidar-layer-priority and lidar-layer-collection; the two added deferred-response probes fail.
+- New native tile probe fails on delivered production code and passes when only its candidate prefilter is disabled in the diagnostic copy. Delivered checkout untouched.
+- check_docs.py: 0 errors. Full suites were not repeated; earlier totals remain delivery evidence.
+- Read-only smoke database matches Import/Reorder/Remove/Undo to empty/Restore/Undo sequence; final result source identity equals current head and its job is complete. Inspected saved screenshots for exhausted Undo and final source list/provisional map state. Did not independently rerun the GUI.
+
+The ignored `.rq-scratch/review-524eef55` archive contains diagnostic additions and `ui-review.log`, `tile-review.log`, `tile-control.log`, `native-controls.log`. These are optional local conveniences, not prerequisites. The cases above are sufficient to recreate ordinary repository regressions. R12's temporary prefilter bypass is a diagnosis control, not an authorized production fix. R13/R14 use the existing panel test setup with deferred promises; they assert user-visible controls and filenames.
+
+The existing native regressions support their tested boundaries, not exhaustive acceptance of every path. The saved GUI/profile evidence was inspected, not independently driven. Retain that distinction in the receipt. Capacity measurements, per-occurrence filenames and a new legacy UI route are outside this correction.
+
+## Historical review at `783e31e3`
+
+The findings below describe the earlier revision. Their repairs must be preserved, but this historical list is not a fresh eleven-task assignment. R12–R14 and the mounted-map check above determine the remaining correction.
 
 Revision: `783e31e3`, `feature/bounded-raster-generations`.
 Disposition: partial; canopi-jv8a.4 remains open. Recompute after Undo is the accepted decision, but the complete dependent-refresh behavior is not accepted yet.
 Scope: publication, admission, historical data, numeric reads, slope, commands, UI settlement and history. No implementation or integration was performed.
 
-## Required repairs
+### Findings at `783e31e3`
 
 1. **P1 — Collection reads deadlock.** mod.rs:749 holds CatalogueGuard until function return; :819 calls layer_history, which acquires the same mutex at :721. A real layer_collection call on an empty layer timed out. Read history under the existing connection, retaining a consistent snapshot, and exercise this public read surface.
 
@@ -32,7 +60,7 @@ Scope: publication, admission, historical data, numeric reads, slope, commands, 
 
 11. **P2 — Propagate cancellation through the compatibility read.** collection.rs:237 calls compat_lease with AtomicBool::new(false), so a cold legacy conversion ignores the real import/tile/analysis cancellation token. Carry the caller's token through the existing load/adapter chain and check cancellation at the publication boundary. This needs no new cancellation service.
 
-## Evidence and limits
+### Evidence and limits at `783e31e3`
 
 An archived copy of 783e31e3 in .rq-scratch/review-ordered-783e contains only diagnostic test additions; delivered production sources were not edited. Thirteen targeted probes reproduce the deadlock, wrong composition range, first-batch CRS acceptance, all-NoData admission, partial backend batch publication, cumulative envelope bypass, sparse clipping, historical overlay loss, legacy-only slope failure, superseded-job outcome, stale Ready after restart, Undo/restore boundaries, and source-region facts. Each probe asserts the accepted behavior and fails on this revision; these are expected diagnostic failures, not failing repository gates introduced into the branch.
 
