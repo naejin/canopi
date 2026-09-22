@@ -1,6 +1,6 @@
 # Raster foundation, Data and Analysis workbenches
 
-Status: partial — broader future product record. The user-selected [ordered COG design](raster-rework/ordered-cog-design.md) owns current implementation; source-merge requirements below are superseded. Native integration is accepted at `a5fc7d7b`; bounded-generation delivery `0696bd3d` has partial product acceptance. No integration/release; Q remains frozen.
+Status: partial — broader future product record. The user-selected [ordered COG design](raster-rework/ordered-cog-design.md) owns current implementation; source-merge requirements below are superseded. Native integration is accepted at `a5fc7d7b`; ordered delivery `783e31e3` requires the repairs in the [independent review](raster-rework/ordered-cog-review.md). No integration/release; Q remains frozen.
 Tracking: `canopi-j571`; current implementation `canopi-jv8a.4`, accepted predecessor `canopi-jv8a.1`, foundation `canopi-jv8a`, workbenches `canopi-j8mp`, historical qualification `canopi-kqpp`, deferred `canopi-5neg`.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 
@@ -20,7 +20,7 @@ This artifact retains the long-term product contract. The 2026-09-20 GeoLibre de
 
 ### Start and continuation contract
 
-Use the [ordered COG prompt](raster-rework/ordered-cog-agent-prompt.md), continue `canopi-jv8a.4` from `0696bd3d`, and preserve accepted predecessors/C1/C2. The user has authorized the complete new workflow through internal gates and one consolidated handoff. The current design owns the source/analysis compatibility and UI decisions. bd owns execution state; no new workbench/Web slices are implied by this assignment.
+Use the [ordered COG prompt](raster-rework/ordered-cog-agent-prompt.md), continue `canopi-jv8a.4` from `783e31e3`, and preserve accepted predecessors/C1/C2. The user has authorized the complete new workflow through internal gates and one consolidated handoff. The current design owns the source/analysis compatibility and UI decisions. bd owns execution state; no new workbench/Web slices are implied by this assignment.
 
 ## Evidence and existing work
 
@@ -38,7 +38,7 @@ Inspected baseline: `868ba7d65b3fc809a2cebbcd28158106ca8b5c29` (2026-09-18). The
 | Location | `desktop/web/src/app/location/coordinate-workbench.ts`, `map-editing.ts`, `model.ts`; `components/canvas/LocationTab.tsx`: placement transaction is reusable, current view composes native address search |
 | Edition shell | Frontend-relative `components/workspace/DesktopWorkspace.tsx`, `web/WebWorkspace.tsx`, `components/workspace/WorkspaceComposition.tsx`, `components/panels/PanelBar.tsx`, `app/shell-commands/`: capabilities and registered dock surfaces |
 
-At accepted baseline `a5fc7d7b`, import still checks 512 MiB per file, 1 GiB and 16 files per batch, and 25 million cells per dense working grid. Source extraction and slope postprocessing are now bounded, but composition still allocates a full union grid/mask and import review builds union coverage and preview imagery. This describes that historical baseline; current implementation is inspected at `0696bd3d`, and the ordered COG assignment retains limits while replacing the source-composition model.
+At accepted baseline `a5fc7d7b`, import still checks 512 MiB per file, 1 GiB and 16 files per batch, and 25 million cells per dense working grid. Source extraction and slope postprocessing are now bounded, but composition still allocates a full union grid/mask and import review builds union coverage and preview imagery. This describes that historical baseline; current repair baseline is `783e31e3`, and the ordered COG assignment retains limits while replacing the source-composition model.
 
 Existing operating contracts to preserve: SceneStore owns local geometry; Design Edit owns non-canvas document edits; the library owns source bytes and scientific results. Preserve native executor admission, controller dependency rules, independent source/result visibility, coordinated document history, scoped asset access, and exact shared-map teardown. See [ADR 0025](../adr/0025-always-anchored-spatial-workspace.md).
 
@@ -159,7 +159,7 @@ Errors crossing IPC carry a stable category (`busy`, `unsupported`, `invalidInpu
 
 The [ordered COG compatibility contract](raster-rework/ordered-cog-design.md#4-persistence-publication-and-compatibility) owns this transition. Preserve library IDs, original hashes, analysis definitions, exact historical values/masks and Design references. New snapshots reference source COGs and, when necessary, an indivisible preserved historical composition. Do not convert masked legacy history into reorderable sources or eagerly rewrite old rasters.
 
-The inspected implementation catalogue is v13 at `0696bd3d`; allocate the next available migration after checking the actual implementation baseline. Preserve WAL-consistent backups, transactional schema updates, foreign-key checks, future-schema refusal and non-deleting readers. Existing awaiting-review jobs retain staged payloads and require explicit confirmation under the new semantics. The document presentation section remains compatible; new library members are not serialized into every Design.
+The repair baseline catalogue is v15 at `783e31e3`; allocate the next available migration after checking the actual implementation baseline. Preserve WAL-consistent backups, transactional schema updates, foreign-key checks, future-schema refusal and non-deleting readers. Existing awaiting-review jobs retain staged payloads and require explicit confirmation under the new semantics. The document presentation section remains compatible; new library members are not serialized into every Design.
 
 ## Web Location and basemaps
 
