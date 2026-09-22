@@ -285,19 +285,31 @@ its measurement, coverage, state and an **Add TIFFs** action while the Data coun
 went 0 → 1. Dataset creation, dataset naming and the interpretation choice are
 therefore verified through the real UI, not only unit tests.
 
-**The native file chooser is the current wall.** Clicking **Add TIFFs** opens the
-real GTK dialog ("Add TIFF sources", 1096×822) — that much works. But typing the
-fixture path into its location entry, exactly the step the edition guide warns
-about, **unmapped the dialog**: it still exists as a window yet reports
-`IsUnMapped` and can no longer be captured or driven. This independently
-reproduces the guide's warning that a path containing a hidden segment can wedge
-the chooser, so the import itself — and the whole
-review → Apply → Analysis → Layers → Inspect chain behind it — remains
-unexercised.
+**The native file chooser works, and reaching it is now understood.** Clicking
+**Add TIFFs** opens the real GTK dialog, which **renders correctly** under a window
+manager: sidebar, breadcrumb, file list with sizes and types, and Cancel/Open.
+Adding `metacity` to the isolated session is what made the dialog drivable and
+capturable at all; without a window manager it was unmapped and unreachable. That
+is a real improvement to the recipe — the guide's steps 2–5 omit a window manager
+and describe only the XTEST sequence.
 
-The guide's recommended alternative is the **breadcrumb and row** route rather
-than the location entry; that is the next technique to try. This is a drive
-problem, not evidence that the product path is broken.
+**The remaining obstacle is autocompletion, not the dialog.** Typing the fixture
+path into the location entry makes GTK autocomplete a *truncated* name:
+`/home/daylon/Downloads/la magnerie/LHD_FXX_044…`, cut off at 44 characters. The
+visible path has no hidden segment, so this is a different failure from the one
+the guide warns about. Pressing Enter submits that truncated path, and the
+application **handles it exactly as it should** — the import job failed with
+`Failed to inspect /home/daylon/Downloads/la magnerie/LHD_FXX_044: No such file
+or directory (os error 2)`, recorded as a `failed` job, with **no generation, no
+head and no chunks published**. A bad path published nothing and kept the layer
+usable.
+
+So the chooser path itself is now proven end to end: the button opens the dialog,
+the dialog navigates, a selection is submitted, the application validates it, and
+a failure leaves clean state with a named error. What is *not* yet done is
+submitting a **correct** filename — the next technique is the guide's
+**breadcrumb and row** route, clicking the file row rather than typing a path
+that autocompletion can truncate.
 
 **A correction to the earlier layout note.** The "narrow vertical column" empty
 message reported below was seen again in `l0-panel.png` and `addlayer-panel.png`
