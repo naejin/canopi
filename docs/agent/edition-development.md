@@ -57,6 +57,7 @@ When the user's own display, servers and ports must stay untouched, run the whol
 
 1. Check the names are free (`xdpyinfo -display :99`, `ss -ltn | grep <port>`) and stop only processes this work started.
 2. `Xephyr :99 -screen 1280x900x24 -ac -noreset -listen tcp -extension GLX` started **from the host display** (`DISPLAY=:0`): Xephyr nests, so it needs a parent, while everything driven below uses `:99`. Without `-extension GLX` it crashes in the NVIDIA EGL/GBM path; software GL (`LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvmpipe`) is then sufficient for WebKit.
+   - **Run a window manager on the nested display** (`DISPLAY=:99 metacity --sm-disable --replace`, verified 2026-09-22). Without one, a native dialog such as the GTK file chooser can end up unmapped and unreachable, and window geometry is reported inconsistently. With a window manager the same dialog renders, focuses and can be captured normally. Window IDs also change between runs, so discover them (`wmctrl -l`, `xwininfo -root -children`) rather than reusing an earlier id.
 3. Frontend on a strict port from `desktop/web`: `npm run dev -- --port 1430 --strictPort`.
 4. App with a disposable profile and a private bus:
    `dbus-run-session -- bash -c 'DISPLAY=:99 GDK_BACKEND=x11 WEBKIT_DISABLE_COMPOSITING_MODE=1 XDG_CONFIG_HOME=… XDG_DATA_HOME=… XDG_CACHE_HOME=… XDG_RUNTIME_DIR=…(0700) cargo tauri dev --config "{\"build\":{\"devUrl\":\"http://localhost:1430\",\"beforeDevCommand\":null}}"'`.
