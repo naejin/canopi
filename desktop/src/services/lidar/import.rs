@@ -236,6 +236,14 @@ pub struct StagedImport {
     pub uncovered_cells: u64,
     pub overlap_cells: u64,
     pub invalid_cells: u64,
+    /// Processing cells this proposal was admitted for.
+    ///
+    /// Recorded so the review carries the number the admission policy actually
+    /// charged, and so Apply can be read against the same figure the user saw.
+    /// Defaulted for staged payloads written before the ordered path replaced
+    /// the union-envelope bound.
+    #[serde(default)]
+    pub processing_cells: u64,
     pub before_preview_path: Option<PathBuf>,
     pub after_preview_path: Option<PathBuf>,
     pub engine_version: String,
@@ -385,6 +393,8 @@ pub fn stage_import(
         read_generation_manifest(&row.manifest_json)
             .is_ok_and(|manifest| manifest.format == GenerationStorageFormat::LegacyDenseV1)
     });
+    // Zero on the legacy dense branch, which is governed by the envelope guard.
+    let mut admitted_processing_cells: u64 = 0;
     if dense_route {
         let composition_extent = composition_extent_grid(library, head.as_ref())?;
         admission::check_dense_envelope(
@@ -408,7 +418,7 @@ pub fn stage_import(
             let connection = library.catalogue()?;
             ordered_processing_cost(&connection, head.as_ref(), &compatible)?
         };
-        admission::check_processing_budget(proposed, "import review")?;
+        admitted_processing_cells = admission::check_processing_budget(proposed, "import review")?;
     }
 
     // R-tree candidate guard: when every accepted member has a footprint,
@@ -598,6 +608,7 @@ pub fn stage_import(
         uncovered_cells: classification.uncovered_cells,
         overlap_cells: classification.overlap_cells,
         invalid_cells: classification.invalid_cells,
+        processing_cells: admitted_processing_cells,
         before_preview_path,
         after_preview_path,
         engine_version: engine_version(engine),
@@ -8709,12 +8720,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// The same two small sources, one lattice column further apart: the
-    /// envelope is over the limit, so staging refuses it before any review work
-    /// that depends on the union and nothing is published.
+    /// The same two small sources, one lattice column further apart. Their
+    /// union envelope is now *over* the retired 25M bound, and the ordered path
+    /// admits them anyway: the governing bound is the processing cells the
+    /// collection proposes, and two 4x4 sources propose 32.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn admission_refuses_a_separated_pair_whose_union_exceeds_the_limit() {
+    fn admission_admits_a_separated_pair_whose_union_exceeds_the_retired_envelope() {
         let root = std::env::temp_dir().join(new_id("canopi-admit-over"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
@@ -8730,6 +8742,72 @@ mod tests {
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
             )
             .unwrap();
+        // No override: this must run under the real production policy.
+        assert_eq!(
+            admission::limits(),
+            admission::AdmissionLimits::production()
+        );
+        let (job_id, staging) =
+            stage_review(&library, &layer_id, &[south_west, north_east], &cancel);
+        let envelope =
+            admission::union_envelope_cells(staging.union_grid.width, staging.union_grid.height)
+                .unwrap();
+        assert!(
+            envelope > admission::MAX_DENSE_ENVELOPE_CELLS,
+            "the arrangement must exceed the retired envelope bound, got {envelope}"
+        );
+        assert!(
+            admission::check_dense_envelope(envelope, "separated pair").is_err(),
+            "the retained dense guard would refuse this geometry"
+        );
+        assert_eq!(staging.processing_cells, 32);
+        library.prepare_apply(&job_id).expect("review accepted");
+        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
+        assert!(
+            applied.changed,
+            "the processing budget admits the pair, charging the sources and not the gap"
+        );
+        let head = head_of(&library, &layer_id);
+        assert_eq!(head.coverage_cells, 32);
+        assert_eq!(
+            head_member_count(&library, &layer_id),
+            2,
+            "both separated occurrences are retained"
+        );
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A lowered processing budget refuses an ordinary pair before any work
+    /// depends on it, and nothing is published: the ordered path consults the
+    /// policy rather than a hard-coded ceiling of its own.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn admission_refuses_a_pair_over_the_processing_budget() {
+        let root = std::env::temp_dir().join(new_id("canopi-admit-budget"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
+        let north_east =
+            write_placed_fixture(&engine, &root, "ne", 4997.0, 5000.0, 4, 4, -9999.0, 7.0);
+        let layer_id = library
+            .create_layer(
+                "budget over",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        // Only the processing budget is lowered, below the pair's own 32 cells,
+        // so a refusal can only come from the processing-budget check.
+        let _lowered = admission::limits_probe::set(admission::AdmissionLimits {
+            files: 24,
+            source_bytes: 2 * 1024 * 1024 * 1024,
+            import_bytes: 2 * 1024 * 1024 * 1024,
+            processing_cells: 16,
+            dense_envelope_cells: admission::MAX_DENSE_ENVELOPE_CELLS,
+        });
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
         let error = stage_import(
             &library,
@@ -8738,8 +8816,9 @@ mod tests {
             &[south_west, north_east],
             &cancel,
         )
-        .expect_err("an envelope over the limit must be refused");
-        assert!(error.contains("import envelope limit"), "{error}");
+        .expect_err("a pair over the processing budget must be refused");
+        assert!(error.contains("processing cells"), "{error}");
+        assert!(error.contains("32"), "{error}");
         // Nothing was published and no head was created.
         let connection = library.catalogue().unwrap();
         for table in [
@@ -8760,13 +8839,6 @@ mod tests {
             );
         }
         drop(connection);
-
-        // A production submission never inherits a test override: this thread
-        // has none, and the refusal above proves the path rejects without one.
-        assert_eq!(
-            admission::limits(),
-            admission::AdmissionLimits::production()
-        );
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }
