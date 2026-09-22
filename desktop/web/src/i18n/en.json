@@ -228,7 +228,13 @@
       "provisionalTitle": "Provisional site",
       "provisionalBody": "Local editing is available. Confirm a site before site-specific evaluation.",
       "confirmedTitle": "Confirmed site",
-      "selectedTitle": "Selected location"
+      "selectedTitle": "Selected location",
+      "coordinates": "Coordinates",
+      "latitude": "Latitude",
+      "longitude": "Longitude",
+      "preview": "Preview",
+      "cancel": "Cancel",
+      "invalidCoordinates": "Enter a latitude between -85.051129 and 85.051129 and a longitude between -180 and 180."
     },
     "file": {
       "new": "New Design",

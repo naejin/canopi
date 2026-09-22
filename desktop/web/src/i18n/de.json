@@ -228,7 +228,13 @@
       "provisionalTitle": "Provisorischer Standort",
       "provisionalBody": "Lokale Bearbeitung ist verfügbar. Bestätigen Sie vor standortbezogenen Auswertungen einen Standort.",
       "confirmedTitle": "Bestätigter Standort",
-      "selectedTitle": "Ausgewählter Standort"
+      "selectedTitle": "Ausgewählter Standort",
+      "coordinates": "Koordinaten",
+      "latitude": "Breitengrad",
+      "longitude": "Längengrad",
+      "preview": "Vorschau",
+      "cancel": "Abbrechen",
+      "invalidCoordinates": "Geben Sie einen Breitengrad zwischen -85.051129 und 85.051129 und einen Längengrad zwischen -180 und 180 ein."
     },
     "file": {
       "new": "Neuer Entwurf",

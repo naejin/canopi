@@ -228,7 +228,13 @@
       "provisionalTitle": "Voorlopige locatie",
       "provisionalBody": "Lokaal bewerken is beschikbaar. Bevestig een locatie vóór locatiespecifieke evaluatie.",
       "confirmedTitle": "Bevestigde locatie",
-      "selectedTitle": "Geselecteerde locatie"
+      "selectedTitle": "Geselecteerde locatie",
+      "coordinates": "Coördinaten",
+      "latitude": "Breedtegraad",
+      "longitude": "Lengtegraad",
+      "preview": "Voorbeeld",
+      "cancel": "Annuleren",
+      "invalidCoordinates": "Voer een breedtegraad tussen -85,051129 en 85,051129 en een lengtegraad tussen -180 en 180 in."
     },
     "file": {
       "new": "Nieuw ontwerp",

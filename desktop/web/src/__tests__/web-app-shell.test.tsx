@@ -154,6 +154,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(commandIds(container)).not.toContain('settings.theme')
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
+      'nav.location',
       'nav.speciesKey',
       'nav.data',
       'nav.analysis',
@@ -258,6 +259,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-testid="web-panel-bar"]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
+      'nav.location',
       'nav.templates',
       'nav.speciesKey',
       'nav.data',
@@ -271,6 +273,7 @@ describe('Web Edition Browser App Shell', () => {
     ])
     expect(panelBarLabels(container)).toEqual([
       'Design Canvas',
+      'Design Location',
       'World Map',
       'Species key',
       'Data',
@@ -402,15 +405,21 @@ describe('Web Edition Browser App Shell', () => {
     expect(workspaceCanvasLifecycle.mounted).toHaveBeenCalledTimes(2)
   })
 
-  it('omits the Web Location feature from browser chrome', async () => {
+  it('exposes Web Location placement while keeping address search out of browser chrome', async () => {
     await act(async () => {
       render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
     })
 
-    expect(commandIds(container)).not.toContain('nav.location')
-    expect(panelBarCommandIds(container)).not.toContain('nav.location')
-    expect(container.textContent).not.toContain('Design Location')
-    expect(container.querySelector('[data-testid="web-location-workspace"]')).toBeNull()
+    // ADR 0028 replaced the old "Web omits Location entirely" restriction, so the
+    // entry point is expected now. What must stay absent is geocoding: the
+    // browser bundle has no address search, and the panel composes the
+    // coordinate workbench directly instead.
+    expect(panelBarCommandIds(container)).toContain('nav.location')
+    expect(container.textContent).toContain('Design Location')
+    expect(container.textContent).not.toContain('Search for a location')
+    const emitted = container.innerHTML
+    expect(emitted).not.toContain('ipc/geocoding')
+    expect(emitted).not.toContain('@tauri-apps')
   })
 
   it('runs caller-ready shell command projections without local dispatch policy', async () => {

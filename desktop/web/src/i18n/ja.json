@@ -228,7 +228,13 @@
       "provisionalTitle": "仮サイト",
       "provisionalBody": "ローカル編集は利用できます。場所に固有の評価を行う前にサイトを確定してください。",
       "confirmedTitle": "確定済みサイト",
-      "selectedTitle": "選択した場所"
+      "selectedTitle": "選択した場所",
+      "coordinates": "座標",
+      "latitude": "緯度",
+      "longitude": "経度",
+      "preview": "プレビュー",
+      "cancel": "キャンセル",
+      "invalidCoordinates": "緯度は -85.051129 ～ 85.051129、経度は -180 ～ 180 の範囲で入力してください。"
     },
     "file": {
       "new": "新規デザイン",

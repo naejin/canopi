@@ -228,7 +228,13 @@
       "provisionalTitle": "Sito provvisorio",
       "provisionalBody": "La modifica locale è disponibile. Conferma un sito prima delle valutazioni specifiche del luogo.",
       "confirmedTitle": "Sito confermato",
-      "selectedTitle": "Posizione selezionata"
+      "selectedTitle": "Posizione selezionata",
+      "coordinates": "Coordinate",
+      "latitude": "Latitudine",
+      "longitude": "Longitudine",
+      "preview": "Anteprima",
+      "cancel": "Annulla",
+      "invalidCoordinates": "Inserisci una latitudine tra -85,051129 e 85,051129 e una longitudine tra -180 e 180."
     },
     "file": {
       "new": "Nuovo design",
