@@ -137,6 +137,22 @@ describe('LiDAR action session isolation', () => {
     )
   })
 
+  it('forwards the result name the author gave the run', async () => {
+    createAnalysisMock.mockClear()
+    createAnalysisMock.mockResolvedValue({ definition_id: 'adef-3', job_id: 'job-99' })
+
+    await analyseLayerAsSlope('lyr-1', 'Degrees', 'Bank slope')
+
+    // The name reaches both the definition's parameters and the command, so a
+    // refresh republishes the same name instead of renaming the user's result.
+    expect(createAnalysisMock).toHaveBeenCalledWith(
+      'lyr-1',
+      'Slope',
+      { slope_unit: 'Degrees', name: 'Bank slope' },
+      'Bank slope',
+    )
+  })
+
   it('cancels only a run this session started', async () => {
     // Nothing started for this definition, so there is nothing to cancel and no
     // guessed job id is sent.

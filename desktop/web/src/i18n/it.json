@@ -587,7 +587,8 @@
         "running": "Analisi in corso…",
         "retry": "Ripeti analisi",
         "previous": "Risultati precedenti",
-        "noResults": "Nessun risultato per questo input."
+        "noResults": "Nessun risultato per questo input.",
+        "resultName": "Nome del risultato"
       },
       "webUnavailable": "I dataset raster e i risultati di questo progetto sono conservati qui, ma non vengono visualizzati né elaborati nell’edizione Web. Apri il progetto nell’app desktop per importarli, analizzarli o visualizzarli."
     },

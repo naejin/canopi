@@ -182,3 +182,25 @@
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* The optional result name, matched to the Data panel's field so the two
+   workbenches read as one form language. */
+.field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.field input {
+  min-width: 0;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}

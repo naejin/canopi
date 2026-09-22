@@ -587,7 +587,8 @@
         "running": "Analyse en cours…",
         "retry": "Relancer l’analyse",
         "previous": "Résultats précédents",
-        "noResults": "Aucun résultat pour cette entrée."
+        "noResults": "Aucun résultat pour cette entrée.",
+        "resultName": "Nom du résultat"
       },
       "webUnavailable": "Les jeux de données raster et les résultats de ce projet sont conservés ici, mais ne sont ni affichés ni traités dans l’édition Web. Ouvrez le projet dans l’application de bureau pour les importer, les analyser ou les afficher."
     },

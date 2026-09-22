@@ -587,7 +587,8 @@
         "running": "Analyse loopt…",
         "retry": "Analyse opnieuw",
         "previous": "Eerdere resultaten",
-        "noResults": "Nog geen resultaten voor deze invoer."
+        "noResults": "Nog geen resultaten voor deze invoer.",
+        "resultName": "Resultaatnaam"
       },
       "webUnavailable": "De rasterdatasets en resultaten van dit ontwerp blijven hier bewaard, maar worden in de Web-editie niet weergegeven of verwerkt. Open het ontwerp in de desktopapp om ze te importeren, analyseren of tonen."
     },

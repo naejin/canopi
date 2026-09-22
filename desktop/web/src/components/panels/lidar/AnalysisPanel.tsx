@@ -48,6 +48,7 @@ export function AnalysisPanel() {
   const library = lidarLibrary.value
   const [selected, setSelected] = useState<string | null>(null)
   const [unit, setUnit] = useState<'Degrees' | 'Percent'>('Degrees')
+  const [resultName, setResultName] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const layers = library?.layers ?? []
@@ -116,6 +117,17 @@ export function AnalysisPanel() {
           )}
         </fieldset>
 
+        <label className={styles.field}>
+          <span>{t('canvas.lidar.analysis.resultName')}</span>
+          <input
+            type="text"
+            value={resultName}
+            // Optional by design: an empty field publishes an unnamed
+            // result that the panel shows by kind, rather than inventing a name.
+            onInput={(event) => setResultName(event.currentTarget.value)}
+          />
+        </label>
+
         <fieldset className={styles.fieldset}>
           <legend>{t('canvas.lidar.analysis.units')}</legend>
           <label className={styles.choice}>
@@ -165,7 +177,8 @@ export function AnalysisPanel() {
             setError(null)
             // A fresh job against the current head; the previous definition keeps
             // its own result until this one publishes.
-            analyseLayerAsSlope(chosen.id, unit)
+            // A blank field stays unnamed rather than becoming the empty string.
+            analyseLayerAsSlope(chosen.id, unit, resultName.trim() || null)
               .then(() => ensureLidarPolling())
               .catch((cause: unknown) =>
                 setError(cause instanceof Error ? cause.message : String(cause)),
