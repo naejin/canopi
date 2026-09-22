@@ -541,8 +541,14 @@
         "reorder": "Переупорядочить",
         "remove": "Удалить",
         "undo": "Отменить",
-        "restore": "Восстановить"
-      }
+        "restore": "Восстановить",
+        "previousVersion": "Предыдущая версия"
+      },
+      "loadMoreSources": "Загрузить ещё источники",
+      "loadMoreVersions": "Загрузить более старые версии",
+      "undoExhausted": "Нет более ранней версии для отмены.",
+      "historySources": "источников",
+      "versionCue": "№{{number}}"
     }
   },
   "worldMap": {

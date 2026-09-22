@@ -82,10 +82,13 @@ fn head_occurrences(
     library: &LidarLibrary,
     head: &catalogue::GenerationRow,
     manifest: &GenerationManifest,
+    cancel: &AtomicBool,
 ) -> Result<Option<Vec<generation::ResolvedMember>>, String> {
     if manifest.format.is_ordered_collection() {
-        return Ok(super::collection::load_reader(library, &head.id, manifest)?
-            .map(|reader| reader.resolved().to_vec()));
+        return Ok(
+            super::collection::load_reader(library, &head.id, manifest, cancel)?
+                .map(|reader| reader.resolved().to_vec()),
+        );
     }
     let connection = library.catalogue()?;
     super::import::resolved_occurrences(&connection, &library.inner.paths, head)
@@ -100,28 +103,72 @@ fn sparse_input_raster(
     library: &LidarLibrary,
     head: &catalogue::GenerationRow,
     manifest: &GenerationManifest,
+    cancel: &AtomicBool,
 ) -> Result<PathBuf, String> {
     if let Some(mosaic) = head.mosaic_path.as_deref() {
         return Ok(PathBuf::from(mosaic));
     }
-    if manifest.format.is_ordered_collection() {
-        let members = super::collection::snapshot_members(library, &head.id)?
-            .ok_or_else(|| "generation has no stored raster to inspect".to_string())?;
-        return members
-            .iter()
-            .find_map(|member| match &member.resolved.source {
-                generation::MemberSource::Cog(cog) => Some(cog.path.clone()),
-                _ => None,
-            })
-            .ok_or_else(|| "generation has no stored raster to inspect".to_string());
+    let representative = |generation_id: &str| -> Result<PathBuf, String> {
+        // Only the first published record is needed, and the paged reader loads
+        // one bounded page rather than the generation's whole record set.
+        generation::GenerationChunkReader::new(generation_id, generation::RESULT_ROLE)
+            .first(library)?
+            .map(|chunk| chunk.asset.path)
+            .ok_or_else(|| "generation has no stored raster to inspect".to_string())
+    };
+    if !manifest.format.is_ordered_collection() {
+        return representative(&head.id);
     }
-    // Only the first published record is needed, and the paged reader loads one
-    // bounded page rather than the generation's whole record set.
-    let owner = generation::GenerationChunkReader::new(&head.id, generation::RESULT_ROLE);
-    owner
-        .first(library)?
-        .map(|chunk| chunk.asset.path)
-        .ok_or_else(|| "generation has no stored raster to inspect".to_string())
+    // An ordered composition answers eligibility from its own members, so a
+    // layer whose only member is a preserved composition is still a valid slope
+    // input: the source COG when there is one, otherwise the preserved
+    // generation's own representative raster.
+    let members = super::collection::snapshot_members(library, &head.id, cancel)?
+        .ok_or_else(|| "the accepted composition is missing a source payload".to_string())?;
+    let mut preserved: Option<String> = None;
+    for member in &members {
+        match &member.resolved.source {
+            generation::MemberSource::Cog(cog) => return Ok(cog.path.clone()),
+            generation::MemberSource::Preserved(_) => {
+                let base = member
+                    .base_generation_id
+                    .as_deref()
+                    .ok_or_else(|| "a preserved composition has no generation".to_string())?;
+                preserved.get_or_insert_with(|| base.to_string());
+            }
+            generation::MemberSource::LegacyHead(_) => {
+                // A preserved dense composition is inspected through its own
+                // mosaic, which is the raster the compatibility lease converts.
+                let mosaic = member
+                    .base_generation_id
+                    .as_deref()
+                    .and_then(|base| {
+                        library
+                            .catalogue()
+                            .ok()
+                            .and_then(|connection| {
+                                catalogue::generation_row(&connection, base).ok()
+                            })
+                            .flatten()
+                    })
+                    .and_then(|row| row.mosaic_path);
+                if let Some(mosaic) = mosaic {
+                    return Ok(PathBuf::from(mosaic));
+                }
+            }
+            generation::MemberSource::LegacyDense { .. } => {
+                return Err(
+                    "this composition stores raw member samples that no projection authority \
+                     can inspect"
+                        .to_string(),
+                );
+            }
+        }
+    }
+    match preserved {
+        Some(base) => representative(&base),
+        None => Err("the accepted composition has no stored raster to inspect".to_string()),
+    }
 }
 
 /// Why a layer's grid cannot carry a Horn slope result.
@@ -380,7 +427,7 @@ fn publish_sparse_slope(
 ) -> Result<AnalysisOutcome, String> {
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
-    let Some(occurrences) = head_occurrences(library, head, manifest)? else {
+    let Some(occurrences) = head_occurrences(library, head, manifest, cancel)? else {
         return Err(
             "slope requires reconstructible member history; this generation predates it"
                 .to_string(),
@@ -556,12 +603,36 @@ fn publish_sparse_slope(
                 }
             }
         })();
-        if let Err(error) = published {
-            if let Ok(connection) = library.catalogue() {
-                let _ =
-                    catalogue::discard_unpublished_generation_chunks(&connection, &generation_id);
+        match published {
+            Ok(()) => {}
+            // A superseded job is the scheduler's ordinary coalescing outcome,
+            // not a failure: settlement rechecks the head and schedules the
+            // latest one. Reporting it as a plain error would end the refresh
+            // chain and leave the newest composition without a current result.
+            Err(error) if error == "source layer changed during analysis publication" => {
+                if let Ok(connection) = library.catalogue() {
+                    let _ = catalogue::discard_unpublished_generation_chunks(
+                        &connection,
+                        &generation_id,
+                    );
+                }
+                return Ok(AnalysisOutcome {
+                    published: false,
+                    stale: true,
+                    message: Some(
+                        "source layer changed during analysis; result discarded".to_string(),
+                    ),
+                });
             }
-            return Err(error);
+            Err(error) => {
+                if let Ok(connection) = library.catalogue() {
+                    let _ = catalogue::discard_unpublished_generation_chunks(
+                        &connection,
+                        &generation_id,
+                    );
+                }
+                return Err(error);
+            }
         }
         Ok(AnalysisOutcome {
             published: true,
@@ -645,8 +716,8 @@ pub fn run_slope_job(
     // instead of handing a whole dense raster to GDAL. The path needs a
     // reconstructible member sequence and an eligible grid.
     let sparse_input = if super::generation::chunked_publication_enabled() {
-        match head_occurrences(library, &head, &manifest)? {
-            Some(_) => Some(sparse_input_raster(library, &head, &manifest)?),
+        match head_occurrences(library, &head, &manifest, cancel)? {
+            Some(_) => Some(sparse_input_raster(library, &head, &manifest, cancel)?),
             None => None,
         }
     } else {

@@ -541,8 +541,14 @@
         "reorder": "Reorder",
         "remove": "Remove",
         "undo": "Undo",
-        "restore": "Restore"
-      }
+        "restore": "Restore",
+        "previousVersion": "Previous version"
+      },
+      "loadMoreSources": "Load more sources",
+      "loadMoreVersions": "Load older versions",
+      "undoExhausted": "There is no earlier version to undo.",
+      "historySources": "sources",
+      "versionCue": "#{{number}}"
     }
   },
   "worldMap": {

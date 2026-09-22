@@ -74,12 +74,168 @@ pub(super) struct SnapshotMeasurement {
 /// durable payload here. `Ok(None)` means at least one occurrence's samples are
 /// gone, so the snapshot cannot be replayed without inventing coverage; callers
 /// report that by name instead of publishing or displaying a shorter layer.
+/// Lattice-cell rectangle a bounded read needs.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ReadBounds {
+    pub x0: i64,
+    pub y0: i64,
+    pub x1: i64,
+    pub y1: i64,
+}
+
+impl ReadBounds {
+    fn intersects(&self, other: &Self) -> bool {
+        self.x0 < other.x1 && other.x0 < self.x1 && self.y0 < other.y1 && other.y0 < self.y1
+    }
+}
+
+/// Bind one snapshot's members for a read, optionally limited to a footprint.
+///
+/// Only occurrences whose own extent intersects the footprint are resolved: a
+/// tile or a bounded window never opens a source that cannot contribute to it.
+/// Membership is still read in bounded catalogue pages, and priority order is
+/// preserved, so the composed value is identical to reading the whole
+/// composition.
+pub(super) fn load_reader_within(
+    library: &LidarLibrary,
+    generation_id: &str,
+    manifest: &GenerationManifest,
+    bounds: Option<ReadBounds>,
+    cancel: &AtomicBool,
+) -> Result<Option<CollectionReader>, String> {
+    let Some(members) = reader_members(library, generation_id, manifest, bounds, cancel)? else {
+        return Ok(None);
+    };
+    let readable: Vec<(String, ResolvedMember)> = members
+        .into_iter()
+        .map(|member| (member.member_id, member.resolved))
+        .collect();
+    Ok(Some(CollectionReader::new(
+        readable,
+        manifest.grid.clone(),
+    )?))
+}
+
+/// The occurrences of one snapshot that can contribute to a read.
+///
+/// Membership is read in bounded catalogue pages and filtered by each
+/// occurrence's own extent; only the survivors have their payload resolved. A
+/// tile therefore never opens a source that cannot reach it, while the composed
+/// value stays identical to reading the whole composition.
+fn reader_members(
+    library: &LidarLibrary,
+    generation_id: &str,
+    manifest: &GenerationManifest,
+    bounds: Option<ReadBounds>,
+    cancel: &AtomicBool,
+) -> Result<Option<Vec<SnapshotMember>>, String> {
+    let mut kept: Vec<CollectionMemberRow> = Vec::new();
+    let mut cursor: Option<i64> = None;
+    loop {
+        import::check_cancel(cancel)?;
+        // One short catalogue lock per page: the raster work below happens
+        // without it. The cursor advances on the unfiltered page, so a page
+        // whose occurrences were all filtered out cannot stall the traversal.
+        let (page, returned, next) = {
+            let connection = library.catalogue()?;
+            let page = catalogue::collection_members_page(
+                &connection,
+                generation_id,
+                cursor,
+                catalogue::MEMBER_PAGE_MAX,
+            )?;
+            let returned = page.len() as i64;
+            let next = page.last().map(|row| row.position);
+            let mut keep = Vec::new();
+            for row in page {
+                match bounds.as_ref() {
+                    Some(bounds) => {
+                        if let Some(extent) = member_extent(&connection, &row, &manifest.grid)?
+                            && bounds.intersects(&extent)
+                        {
+                            keep.push(row);
+                        }
+                    }
+                    None => keep.push(row),
+                }
+            }
+            (keep, returned, next)
+        };
+        kept.extend(page);
+        match next {
+            Some(position) => cursor = Some(position),
+            None => break,
+        }
+        if returned < catalogue::MEMBER_PAGE_MAX {
+            break;
+        }
+    }
+    let mut members = Vec::with_capacity(kept.len());
+    for row in &kept {
+        let Some(member) = resolve_row(library, row, cancel)? else {
+            return Ok(None);
+        };
+        members.push(member);
+    }
+    Ok(Some(members))
+}
+
+/// The lattice extent one stored member occupies, without opening its payload.
+fn member_extent(
+    connection: &rusqlite::Connection,
+    row: &CollectionMemberRow,
+    lattice: &RasterGrid,
+) -> Result<Option<ReadBounds>, String> {
+    let grid = match row.kind.as_str() {
+        SOURCE_KIND => {
+            let Some(interpretation_id) = row.interpretation_id.as_deref() else {
+                return Ok(None);
+            };
+            let Some(interpretation) =
+                catalogue::get_interpretation(connection, interpretation_id)?
+            else {
+                return Ok(None);
+            };
+            RasterGrid {
+                width: u32::try_from(interpretation.width.max(0)).unwrap_or(u32::MAX),
+                height: u32::try_from(interpretation.height.max(0)).unwrap_or(u32::MAX),
+                geotransform: import::parse_geotransform(&interpretation.geotransform)?,
+            }
+        }
+        PREVIOUS_COMPOSITION_KIND => {
+            let Some(base_id) = row.base_generation_id.as_deref() else {
+                return Ok(None);
+            };
+            let Some(base) = catalogue::generation_row(connection, base_id)? else {
+                return Ok(None);
+            };
+            let manifest = import::read_generation_manifest(&base.manifest_json)?;
+            match catalogue::generation_chunk_extent(connection, base_id, generation::RESULT_ROLE)?
+            {
+                Some((first_x, first_y, last_x, last_y)) => {
+                    chunk_extent_grid(&manifest.grid, first_x, first_y, last_x, last_y)?
+                }
+                None => manifest.grid,
+            }
+        }
+        _ => return Ok(None),
+    };
+    let offset = generation::lattice_offset(lattice, &grid)?;
+    Ok(Some(ReadBounds {
+        x0: offset.0,
+        y0: offset.1,
+        x1: offset.0.saturating_add(i64::from(grid.width)),
+        y1: offset.1.saturating_add(i64::from(grid.height)),
+    }))
+}
+
 pub(super) fn load_reader(
     library: &LidarLibrary,
     generation_id: &str,
     manifest: &GenerationManifest,
+    cancel: &AtomicBool,
 ) -> Result<Option<CollectionReader>, String> {
-    let Some(members) = snapshot_members(library, generation_id)? else {
+    let Some(members) = snapshot_members(library, generation_id, cancel)? else {
         return Ok(None);
     };
     let readable: Vec<(String, ResolvedMember)> = members
@@ -99,6 +255,7 @@ pub(super) fn load_reader(
 pub(super) fn snapshot_members(
     library: &LidarLibrary,
     generation_id: &str,
+    cancel: &AtomicBool,
 ) -> Result<Option<Vec<SnapshotMember>>, String> {
     let rows = {
         let connection = library.catalogue()?;
@@ -106,7 +263,7 @@ pub(super) fn snapshot_members(
     };
     let mut members = Vec::with_capacity(rows.len());
     for row in rows {
-        let Some(member) = resolve_row(library, &row)? else {
+        let Some(member) = resolve_row(library, &row, cancel)? else {
             return Ok(None);
         };
         members.push(member);
@@ -118,6 +275,7 @@ pub(super) fn snapshot_members(
 fn resolve_row(
     library: &LidarLibrary,
     row: &CollectionMemberRow,
+    cancel: &AtomicBool,
 ) -> Result<Option<SnapshotMember>, String> {
     match row.kind.as_str() {
         SOURCE_KIND => {
@@ -166,7 +324,7 @@ fn resolve_row(
                 interpretation_id: None,
                 base_generation_id: Some(base_id.to_string()),
                 job_id: row.job_id.clone(),
-                resolved: preserved_member(library, base_id)?,
+                resolved: preserved_member(library, base_id, cancel)?,
             }))
         }
         other => Err(format!("unknown collection member kind {other}")),
@@ -177,6 +335,7 @@ fn resolve_row(
 pub(super) fn previous_composition_member(
     library: &LidarLibrary,
     base_id: &str,
+    cancel: &AtomicBool,
 ) -> Result<SnapshotMember, String> {
     Ok(SnapshotMember {
         member_id: format!("prev-{base_id}"),
@@ -184,7 +343,7 @@ pub(super) fn previous_composition_member(
         interpretation_id: None,
         base_generation_id: Some(base_id.to_string()),
         job_id: None,
-        resolved: preserved_member(library, base_id)?,
+        resolved: preserved_member(library, base_id, cancel)?,
     })
 }
 
@@ -197,28 +356,45 @@ pub(super) fn previous_composition_member(
 pub(super) fn preserved_member(
     library: &LidarLibrary,
     base_id: &str,
+    cancel: &AtomicBool,
 ) -> Result<ResolvedMember, String> {
-    let row = {
+    let (row, extent) = {
         let connection = library.catalogue()?;
-        catalogue::generation_row(&connection, base_id)?
-    }
-    .ok_or_else(|| format!("preserved generation {base_id} is missing"))?;
+        let row = catalogue::generation_row(&connection, base_id)?
+            .ok_or_else(|| format!("preserved generation {base_id} is missing"))?;
+        let extent =
+            catalogue::generation_chunk_extent(&connection, base_id, generation::RESULT_ROLE)?;
+        (row, extent)
+    };
     let manifest = import::read_generation_manifest(&row.manifest_json)?;
     match manifest.format {
-        GenerationStorageFormat::CogChunksV1 => Ok(ResolvedMember {
-            ordinal: 0,
-            role: MemberRole::Replace,
-            grid: manifest.grid.clone(),
-            nodata: Some(manifest.nodata),
-            source: MemberSource::Preserved(std::sync::Arc::new(
-                generation::PreservedGeneration::chunks(
-                    library,
-                    base_id,
-                    generation::RESULT_ROLE,
-                    manifest.grid.clone(),
-                ),
-            )),
-        }),
+        GenerationStorageFormat::CogChunksV1 => {
+            // The manifest rectangle is the lattice the chunks are addressed
+            // in, not how far they reach. The member's own grid is the signed
+            // block extent actually published, so coverage beyond the original
+            // rectangle stays readable instead of being clipped away.
+            let member_grid = match extent {
+                Some((first_x, first_y, last_x, last_y)) => {
+                    chunk_extent_grid(&manifest.grid, first_x, first_y, last_x, last_y)?
+                }
+                None => manifest.grid.clone(),
+            };
+            Ok(ResolvedMember {
+                ordinal: 0,
+                role: MemberRole::Replace,
+                grid: member_grid.clone(),
+                nodata: Some(manifest.nodata),
+                source: MemberSource::Preserved(std::sync::Arc::new(
+                    generation::PreservedGeneration::chunks(
+                        library,
+                        base_id,
+                        generation::RESULT_ROLE,
+                        manifest.grid.clone(),
+                        &member_grid,
+                    )?,
+                )),
+            })
+        }
         GenerationStorageFormat::LegacyDenseV1 => {
             let mosaic = row
                 .mosaic_path
@@ -227,14 +403,18 @@ pub(super) fn preserved_member(
             // A dense mosaic is not in the controlled COG profile, so the
             // library prepares one compatibility derivative and owns it. The
             // preserved generation's own coverage mask stays authoritative.
+            // The caller's own token reaches the cold conversion: a cancelled
+            // import, tile or analysis must not keep preparing a legacy
+            // derivative, and the check below refuses to publish on cancel.
             let lease = library.compat_lease(
                 base_id,
                 std::path::Path::new(&mosaic),
                 &manifest.grid,
                 Some(manifest.nodata),
                 row.coverage_mask_path.map(PathBuf::from),
-                &AtomicBool::new(false),
+                cancel,
             )?;
+            import::check_cancel(cancel)?;
             Ok(ResolvedMember {
                 ordinal: 0,
                 role: MemberRole::Replace,
@@ -248,6 +428,45 @@ pub(super) fn preserved_member(
              member references rather than wrapping another collection"
         )),
     }
+}
+
+/// The signed lattice grid a sparse generation's published records occupy.
+///
+/// A generation with no published record at all keeps its manifest rectangle,
+/// which is the lattice origin it was anchored to; one with records reaches
+/// across exactly the blocks they occupy, negative coordinates included.
+pub(super) fn chunk_extent_grid(
+    lattice: &RasterGrid,
+    first_x: i64,
+    first_y: i64,
+    last_x: i64,
+    last_y: i64,
+) -> Result<RasterGrid, String> {
+    let side = generation::CHUNK_SIDE;
+    let width = last_x
+        .checked_sub(first_x)
+        .and_then(|span| span.checked_add(1))
+        .and_then(|blocks| blocks.checked_mul(side))
+        .and_then(|cells| u32::try_from(cells).ok())
+        .ok_or_else(|| "preserved composition extent is too large".to_string())?;
+    let height = last_y
+        .checked_sub(first_y)
+        .and_then(|span| span.checked_add(1))
+        .and_then(|blocks| blocks.checked_mul(side))
+        .and_then(|cells| u32::try_from(cells).ok())
+        .ok_or_else(|| "preserved composition extent is too large".to_string())?;
+    Ok(RasterGrid {
+        width,
+        height,
+        geotransform: [
+            lattice.geotransform[0] + first_x as f64 * side as f64 * lattice.geotransform[1],
+            lattice.geotransform[1],
+            0.0,
+            lattice.geotransform[3] + first_y as f64 * side as f64 * lattice.geotransform[5],
+            0.0,
+            lattice.geotransform[5],
+        ],
+    })
 }
 
 /// Measure a planned composition: valid cells, value range and display bounds.
@@ -355,6 +574,16 @@ pub(super) fn manifest_for(
     Ok((json, manifest))
 }
 
+/// The lineage a newly published snapshot records.
+///
+/// `previous_generation_id` is Undo's target and `undo_available` says whether
+/// Undo is offered at all; `operation` is the user action that published it.
+pub(super) struct SnapshotLineage<'a> {
+    pub previous_generation_id: Option<&'a str>,
+    pub undo_available: bool,
+    pub operation: &'a str,
+}
+
 /// Record one snapshot's generation row and ordered members.
 ///
 /// Called inside the caller's publication transaction: the generation row, the
@@ -367,12 +596,12 @@ pub(super) fn insert_snapshot(
     plan: &SnapshotPlan,
     measurement: &SnapshotMeasurement,
     manifest_json: &str,
-    previous_generation_id: Option<&str>,
+    lineage: &SnapshotLineage<'_>,
 ) -> Result<(), String> {
     connection
         .execute(
-            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, base_generation_id, previous_generation_id)
-             VALUES(?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6, ?7, ?8, NULL, ?9)",
+            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, base_generation_id, previous_generation_id, undo_available, operation)
+             VALUES(?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, ?11)",
             rusqlite::params![
                 generation_id,
                 layer_id,
@@ -382,7 +611,9 @@ pub(super) fn insert_snapshot(
                 measurement.min_value,
                 measurement.max_value,
                 serde_json::to_string(&measurement.bounds_3857).map_err(|e| e.to_string())?,
-                previous_generation_id,
+                lineage.previous_generation_id,
+                i64::from(lineage.undo_available),
+                lineage.operation,
             ],
         )
         .map_err(|e| format!("Failed to record the collection generation: {e}"))?;
@@ -395,120 +626,169 @@ pub(super) fn insert_snapshot(
     catalogue::replace_collection_members(connection, generation_id, &rows)
 }
 
-/// Member names, kinds and originating jobs of one snapshot.
-type SnapshotNames = (Vec<String>, Vec<String>, Vec<String>);
-
 /// One published version in a layer's history.
 pub(super) struct HistoryEntry {
     pub generation_id: String,
     pub created_at: String,
     pub coverage_cells: i64,
-    pub members: Vec<String>,
-    pub roles: Vec<String>,
-    pub job_ids: Vec<String>,
-    /// User operation this version recorded, told apart from the membership
-    /// delta against the version it replaced.
-    pub operation: String,
+    /// Occurrences in this version's composition.
+    pub member_count: i64,
+    /// User operation this version recorded. Migrated rows recorded none and
+    /// read as a neutral previous version rather than a guessed import.
+    pub operation: Option<String>,
+    /// Position of this version in the layer's publication order, counting
+    /// from the oldest. Unique within the layer, so two publications in the
+    /// same second still have distinct identity.
+    pub sequence: i64,
     pub is_current: bool,
-    /// Whether an earlier version exists for Undo to restore.
+    /// Whether this version can be restored as a new head.
     pub restorable: bool,
 }
 
-/// A layer's publication history, newest first.
+/// Encode a member cursor: the snapshot the page belongs to and the last
+/// position the caller saw.
 ///
-/// Order is `(created_at, rowid)`, so two publications in the same second keep
-/// their real sequence and every version has a unique identity cue rather than
-/// per-generation numbering that makes consecutive imports read alike.
-pub(super) fn history(
+/// Binding the cursor to the snapshot is what makes a late page of a superseded
+/// head a refused request instead of a silently mixed list.
+pub(super) fn encode_member_cursor(generation_id: &str, after_position: i64) -> String {
+    format!("{generation_id}:{after_position}")
+}
+
+/// Decode a member cursor, rejecting anything this caller did not produce.
+pub(super) fn decode_member_cursor(cursor: &str) -> Result<(String, i64), String> {
+    let (generation_id, position) = cursor
+        .rsplit_once(':')
+        .ok_or_else(|| "invalid source-list cursor".to_string())?;
+    if generation_id.is_empty() {
+        return Err("invalid source-list cursor".to_string());
+    }
+    let position = position
+        .parse::<i64>()
+        .map_err(|_| "invalid source-list cursor".to_string())?;
+    Ok((generation_id.to_string(), position))
+}
+
+/// One bounded page of a layer's published versions, newest first.
+pub(super) struct VersionPage {
+    pub versions: Vec<HistoryEntry>,
+    pub next_cursor: Option<String>,
+}
+
+/// Encode a history cursor: the captured upper bound and the last rowid read.
+pub(super) fn encode_version_cursor(upper_rowid: i64, after_rowid: i64) -> String {
+    format!("{upper_rowid}:{after_rowid}")
+}
+
+/// Decode a history cursor, rejecting anything this caller did not produce.
+pub(super) fn decode_version_cursor(cursor: &str) -> Result<(i64, i64), String> {
+    let (upper, after) = cursor
+        .split_once(':')
+        .ok_or_else(|| "invalid history cursor".to_string())?;
+    let upper = upper
+        .parse::<i64>()
+        .map_err(|_| "invalid history cursor".to_string())?;
+    let after = after
+        .parse::<i64>()
+        .map_err(|_| "invalid history cursor".to_string())?;
+    Ok((upper, after))
+}
+
+/// One bounded page of a layer's publication history, newest first.
+///
+/// Order is `rowid DESC`: rowids increase with publication, so the sequence is
+/// the real one and a page boundary is exact. `upper_rowid` is captured on the
+/// first request and carried in the cursor, so versions published while the
+/// user pages through History cannot shift the window under them.
+pub(super) fn history_page(
     connection: &rusqlite::Connection,
     layer_id: &str,
-) -> Result<Vec<HistoryEntry>, String> {
+    upper_rowid: Option<i64>,
+    after_rowid: Option<i64>,
+    limit: i64,
+) -> Result<VersionPage, String> {
+    let limit = limit.clamp(1, catalogue::VERSION_PAGE_MAX);
+    let upper_rowid = match upper_rowid {
+        Some(upper) => upper,
+        None => connection
+            .query_row(
+                "SELECT COALESCE(MAX(rowid), 0) FROM lidar_layer_generations WHERE layer_id = ?1",
+                [layer_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|e| format!("Failed to bound the layer history: {e}"))?,
+    };
     let current = catalogue::head_generation(connection, layer_id)?
         .map(|row| row.id)
         .unwrap_or_default();
-    let snapshot = |generation_id: &str| -> Result<SnapshotNames, String> {
-        let rows = catalogue::collection_members(connection, generation_id)?;
-        if !rows.is_empty() {
-            return Ok((
-                rows.iter()
-                    .map(|row| {
-                        row.interpretation_id
-                            .clone()
-                            .or_else(|| row.base_generation_id.clone())
-                            .unwrap_or_else(|| row.member_id.clone())
-                    })
-                    .collect(),
-                rows.iter().map(|row| row.kind.clone()).collect(),
-                rows.iter().filter_map(|row| row.job_id.clone()).collect(),
-            ));
-        }
-        let members = catalogue::generation_members(connection, generation_id)?;
-        Ok((
-            members
-                .iter()
-                .map(|(interpretation_id, _, _)| interpretation_id.clone())
-                .collect(),
-            members.iter().map(|(_, role, _)| role.clone()).collect(),
-            members
-                .iter()
-                .filter_map(|(_, _, job_id)| job_id.clone())
-                .collect(),
-        ))
-    };
     let mut statement = connection
         .prepare(
-            "SELECT g.id, g.created_at, g.coverage_cells, g.previous_generation_id
+            "SELECT g.id, g.created_at, g.coverage_cells, g.operation, g.rowid,
+                    (SELECT COUNT(*) FROM lidar_collection_members m
+                     WHERE m.generation_id = g.id)
              FROM lidar_layer_generations g
-             WHERE g.layer_id = ?1
-             ORDER BY g.created_at DESC, g.rowid DESC",
+             WHERE g.layer_id = ?1 AND g.rowid <= ?2 AND g.rowid < ?3
+             ORDER BY g.rowid DESC LIMIT ?4",
         )
         .map_err(|e| e.to_string())?;
     let rows = statement
-        .query_map([layer_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, Option<String>>(3)?,
-            ))
-        })
+        .query_map(
+            rusqlite::params![
+                layer_id,
+                upper_rowid,
+                after_rowid.unwrap_or(i64::MAX),
+                limit + 1
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                ))
+            },
+        )
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     drop(statement);
 
-    let mut entries = Vec::with_capacity(rows.len());
-    for (generation_id, created_at, coverage_cells, previous) in rows {
-        let (members, roles, job_ids) = snapshot(&generation_id)?;
-        let operation = match previous.as_deref() {
-            None => "import",
-            Some(previous) => {
-                let (before, _, _) = snapshot(previous)?;
-                if before == members {
-                    "restore"
-                } else if before.len() == members.len()
-                    && before.iter().all(|member| members.contains(member))
-                {
-                    "reorder"
-                } else if members.iter().all(|member| before.contains(member)) {
-                    "remove"
-                } else {
-                    "import"
-                }
-            }
-        };
-        let restorable = previous.is_some();
-        entries.push(HistoryEntry {
+    let has_more = rows.len() as i64 > limit;
+    let mut versions = Vec::with_capacity(rows.len().min(limit as usize));
+    let mut last_rowid = None;
+    for (generation_id, created_at, coverage_cells, operation, rowid, member_count) in
+        rows.into_iter().take(limit as usize)
+    {
+        // The publication order within the layer is the version's identity
+        // cue; it is stable because a generation's rowid never changes.
+        let sequence: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_layer_generations
+                 WHERE layer_id = ?1 AND rowid <= ?2",
+                rusqlite::params![layer_id, rowid],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Failed to read the version sequence: {e}"))?;
+        versions.push(HistoryEntry {
             is_current: generation_id == current,
+            restorable: generation_id != current,
             generation_id,
             created_at,
             coverage_cells,
-            members,
-            roles,
-            job_ids,
-            operation: operation.to_string(),
-            restorable,
+            member_count,
+            operation,
+            sequence,
         });
+        last_rowid = Some(rowid);
     }
-    Ok(entries)
+    let next_cursor = if has_more {
+        last_rowid.map(|rowid| encode_version_cursor(upper_rowid, rowid))
+    } else {
+        None
+    };
+    Ok(VersionPage {
+        versions,
+        next_cursor,
+    })
 }

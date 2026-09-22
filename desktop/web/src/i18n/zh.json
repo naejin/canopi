@@ -541,8 +541,14 @@
         "reorder": "重新排序",
         "remove": "移除",
         "undo": "撤销",
-        "restore": "恢复"
-      }
+        "restore": "恢复",
+        "previousVersion": "上一版本"
+      },
+      "loadMoreSources": "加载更多数据源",
+      "loadMoreVersions": "加载更早版本",
+      "undoExhausted": "没有可撤销的更早版本。",
+      "historySources": "个数据源",
+      "versionCue": "第 {{number}} 版"
     }
   },
   "worldMap": {

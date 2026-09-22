@@ -541,8 +541,14 @@
         "reorder": "Umsortieren",
         "remove": "Entfernen",
         "undo": "Rückgängig",
-        "restore": "Wiederherstellen"
-      }
+        "restore": "Wiederherstellen",
+        "previousVersion": "Vorherige Version"
+      },
+      "loadMoreSources": "Weitere Quellen laden",
+      "loadMoreVersions": "Ältere Versionen laden",
+      "undoExhausted": "Es gibt keine frühere Version zum Rückgängigmachen.",
+      "historySources": "Quellen",
+      "versionCue": "Nr. {{number}}"
     }
   },
   "worldMap": {

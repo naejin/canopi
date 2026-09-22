@@ -77,16 +77,67 @@ pub fn library_snapshot(
     for definition in definitions {
         let head_result = catalogue::head_analysis_generation(connection, &definition.id)?;
         let latest_job = catalogue::latest_analysis_job_state(connection, &definition.id)?;
+        // Readiness is a fact about identity, not about a job having once
+        // succeeded: a result is current only while the source generation it
+        // captured is still the layer's head, and only while that composition
+        // holds something to analyse. Deriving it here is what keeps a
+        // restart, a failed refresh or a cancelled refresh from presenting an
+        // old result as the current one.
+        let layer_head = catalogue::head_generation(connection, &definition.layer_id)?;
+        let composition_ready = match layer_head.as_ref() {
+            None => false,
+            Some(head) => {
+                let manifest = super::import::read_generation_manifest(&head.manifest_json)?;
+                if manifest.format.is_ordered_collection() {
+                    catalogue::collection_member_count(connection, &head.id)? > 0
+                } else {
+                    head.coverage_cells > 0
+                }
+            }
+        };
+        let current_source = layer_head.as_ref().map(|head| head.id.as_str());
+        let result_is_current = head_result
+            .as_ref()
+            .is_some_and(|result| Some(result.source_generation_id.as_str()) == current_source);
         let (state, detail) = match (latest_job.as_deref(), &head_result) {
             (Some("preparing"), _) => (LidarResultState::Preparing, None),
             (Some("refreshing"), _) => (LidarResultState::Refreshing, None),
-            (Some("failed"), Some(_result)) => (
+            (Some("failed"), Some(_result)) if result_is_current => (
                 LidarResultState::Ready,
                 Some("last refresh failed; showing the previous complete result".to_string()),
             ),
+            (Some("failed"), Some(_result)) => (
+                LidarResultState::Incomplete,
+                Some(
+                    "this result describes an earlier composition; the current one has no \
+                     published slope yet"
+                        .to_string(),
+                ),
+            ),
             (Some("failed"), None) => (LidarResultState::Failed, Some(String::new())),
-            (Some("cancelled"), Some(_result)) => (LidarResultState::Ready, None),
+            (Some("cancelled"), Some(_result)) if result_is_current => {
+                (LidarResultState::Ready, None)
+            }
+            (Some("cancelled"), Some(_result)) => (
+                LidarResultState::Incomplete,
+                Some(
+                    "this result describes an earlier composition; the current one has no \
+                     published slope yet"
+                        .to_string(),
+                ),
+            ),
             (Some("cancelled"), None) => (LidarResultState::Failed, Some("cancelled".to_string())),
+            (_, Some(result)) if !composition_ready => (
+                LidarResultState::Incomplete,
+                Some("the layer's current composition is empty".to_string()),
+            ),
+            (_, Some(result)) if !result_is_current => (
+                LidarResultState::Incomplete,
+                Some(
+                    "this result describes an earlier composition; a refresh is pending"
+                        .to_string(),
+                ),
+            ),
             (_, Some(result)) => (parse_result_state(&result.state), None),
             (_, None) => (LidarResultState::Preparing, None),
         };

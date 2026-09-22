@@ -241,16 +241,17 @@ pub struct LidarGenerationHistoryEntry {
     pub id: String,
     pub created_at: String,
     pub coverage_cells: u64,
-    pub members: Vec<String>,
-    pub roles: Vec<String>,
-    /// Import jobs whose acceptance produced this generation.
-    pub job_ids: Vec<String>,
-    pub is_head: bool,
-    /// User operation this version recorded, when it can be told apart
-    /// (`import`, `reorder`, `remove`, `undo`, `restore`).
-    pub operation: String,
-    /// Sources in this version's ordered composition.
+    /// Position of this version in the layer's publication order, counting from
+    /// the oldest. Unique within the layer, so it is the identity cue History
+    /// shows instead of numbering that makes consecutive imports read alike.
+    pub sequence: u32,
+    /// User operation this version recorded (`import`, `reorder`, `remove`,
+    /// `undo`, `restore`). Absent for a version migrated from a catalogue that
+    /// did not record one; the UI names those neutrally rather than guessing.
+    pub operation: Option<String>,
+    /// Occurrences in this version's ordered composition.
     pub source_count: u32,
+    pub is_head: bool,
     /// Whether this version can be restored as the new head.
     pub restorable: bool,
 }
@@ -289,11 +290,49 @@ pub struct LidarLayerSource {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarLayerCollection {
     pub layer_id: String,
+    /// Immutable snapshot this page describes. Every edit echoes it back, so a
+    /// request prepared against a superseded head fails by name.
     pub head_generation_id: Option<String>,
-    /// Whether the head can be walked back to an earlier version.
-    pub can_undo: bool,
+    /// Occurrences in the whole current composition, not only this page.
+    pub member_count: u32,
+    /// Whether Undo is offered from this head at all. An available Undo with no
+    /// target restores the empty composition; an unavailable one is exhausted.
+    pub undo_available: bool,
+    /// Snapshot Undo restores; absent means the empty composition.
+    pub undo_target: Option<String>,
+    /// One bounded page of the top-first priority list.
     pub sources: Vec<LidarLayerSource>,
+    /// Cursor for the next member page, when the composition has more.
+    pub next_member_cursor: Option<String>,
+}
+
+/// Largest source-list page a caller may request.
+pub const LAYER_MEMBER_PAGE: i64 = 200;
+/// Largest history page a caller may request.
+pub const LAYER_HISTORY_PAGE: i64 = 100;
+
+/// What one awaited ordered-layer edit did.
+///
+/// `changed` distinguishes a published snapshot from a request that was
+/// legitimately a no-op, and `head_generation_id` is the authoritative head
+/// after settlement, so the caller never has to infer whether its edit landed.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct LidarLayerEditOutcome {
+    pub head_generation_id: Option<String>,
+    pub changed: bool,
+    pub message: Option<String>,
+}
+
+/// One bounded page of a Data Layer's publication history, newest first.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct LidarLayerHistoryPage {
+    pub layer_id: String,
+    pub head_generation_id: Option<String>,
     pub versions: Vec<LidarGenerationHistoryEntry>,
+    /// Cursor for the next page, when older versions exist.
+    pub next_cursor: Option<String>,
 }
 
 /// Impact summary shown before a layer deletion is confirmed.

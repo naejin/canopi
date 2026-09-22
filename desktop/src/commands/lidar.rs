@@ -178,15 +178,13 @@ pub async fn lidar_preview_import_decision(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
     job_id: String,
-    add_uncovered: bool,
-    replace_overlap: bool,
 ) -> Result<common_types::lidar::LidarImportDecisionPreview, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::Local,
             "lidar import decision preview",
-            move || library.preview_import_decision(&job_id, add_uncovered, replace_overlap),
+            move || library.preview_import_decision(&job_id),
         )
         .await
 }
@@ -287,34 +285,38 @@ pub async fn lidar_create_analysis(
         .await
 }
 
+/// One bounded page of a layer's publication history.
 #[tauri::command]
 pub async fn lidar_layer_history(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
     layer_id: String,
-) -> Result<Vec<common_types::lidar::LidarGenerationHistoryEntry>, String> {
+    cursor: Option<String>,
+) -> Result<common_types::lidar::LidarLayerHistoryPage, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar layer history",
-            move || library.layer_history(&layer_id),
+            move || library.layer_history_page(&layer_id, cursor.as_deref()),
         )
         .await
 }
 
+/// One bounded page of a layer's ordered source composition.
 #[tauri::command]
 pub async fn lidar_layer_collection(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
     layer_id: String,
+    cursor: Option<String>,
 ) -> Result<common_types::lidar::LidarLayerCollection, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar layer collection",
-            move || library.layer_collection(&layer_id),
+            move || library.layer_collection(&layer_id, cursor.as_deref()),
         )
         .await
 }
@@ -352,7 +354,7 @@ pub async fn lidar_move_layer_source(
     member_id: String,
     towards_top: bool,
     expected_head: Option<String>,
-) -> Result<(), String> {
+) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
     admit_layer_edit(
         library.inner(),
         executor.inner(),
@@ -363,7 +365,8 @@ pub async fn lidar_move_layer_source(
     .await?;
     library
         .inner()
-        .begin_move_member(&layer_id, &member_id, towards_top, expected_head)
+        .apply_move(&layer_id, &member_id, towards_top, expected_head)
+        .await
 }
 
 /// Detach one source from the layer's current composition.
@@ -374,7 +377,7 @@ pub async fn lidar_remove_layer_source(
     layer_id: String,
     member_id: String,
     expected_head: Option<String>,
-) -> Result<(), String> {
+) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
     admit_layer_edit(
         library.inner(),
         executor.inner(),
@@ -385,7 +388,8 @@ pub async fn lidar_remove_layer_source(
     .await?;
     library
         .inner()
-        .begin_remove_member(&layer_id, &member_id, expected_head)
+        .apply_remove(&layer_id, &member_id, expected_head)
+        .await
 }
 
 /// Undo the layer's last change by publishing the preceding snapshot.
@@ -395,7 +399,7 @@ pub async fn lidar_undo_layer_change(
     executor: State<'_, NativeOperationExecutor>,
     layer_id: String,
     expected_head: Option<String>,
-) -> Result<(), String> {
+) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
     admit_layer_edit(
         library.inner(),
         executor.inner(),
@@ -404,7 +408,7 @@ pub async fn lidar_undo_layer_change(
         expected_head.clone(),
     )
     .await?;
-    library.inner().begin_undo_layer(&layer_id, expected_head)
+    library.inner().apply_undo(&layer_id, expected_head).await
 }
 
 /// Publish one older version as the layer's new head.
@@ -415,7 +419,7 @@ pub async fn lidar_restore_layer_version(
     layer_id: String,
     version_id: String,
     expected_head: Option<String>,
-) -> Result<(), String> {
+) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
     let library_for_check = library.inner().clone();
     let layer_for_check = layer_id.clone();
     let version_for_check = version_id.clone();
@@ -436,7 +440,8 @@ pub async fn lidar_restore_layer_version(
         .await?;
     library
         .inner()
-        .begin_restore_version(&layer_id, &version_id, expected_head)
+        .apply_restore(&layer_id, &version_id, expected_head)
+        .await
 }
 
 #[tauri::command]

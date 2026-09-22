@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { currentDesign } from '../../../app/document-session/store'
 import {
   importPanelOpen,
@@ -37,8 +37,8 @@ import {
 import { t } from '../../../i18n'
 import type {
   LidarDeleteImpact,
-  LidarGenerationHistoryEntry,
   LidarLayerCollection,
+  LidarLayerHistoryPage,
 } from '../../../ipc/lidar'
 import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import layerStyles from '../../canvas/LayerPanel.module.css'
@@ -62,12 +62,25 @@ export function LidarLayersSection() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [mode, setMode] = useState<DetailMode>('settings')
-  const [history, setHistory] = useState<LidarGenerationHistoryEntry[] | null>(null)
+  const [history, setHistory] = useState<LidarLayerHistoryPage | null>(null)
   const [collection, setCollection] = useState<LidarLayerCollection | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [deleteImpact, setDeleteImpact] = useState<LidarDeleteImpact | null>(null)
   const [analysisDeleteId, setAnalysisDeleteId] = useState<string | null>(null)
   const [showReturnToLocation, setShowReturnToLocation] = useState(false)
+  /** A member or history page is being fetched. */
+  const [loading, setLoading] = useState(false)
+  /** An edit the backend has not settled yet. */
+  const [pending, setPending] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  /**
+   * Local request generation.
+   *
+   * A view request captures the layer it belongs to and this counter; an answer
+   * whose layer or generation is no longer current is dropped, so a slow read
+   * can never overwrite a newer selection's metadata.
+   */
+  const requestGeneration = useRef(0)
 
   const selected = items.find((item) => item.id === selectedId) ?? sources[0] ?? null
   const selectedLayer = selected?.kind === 'Source'
@@ -77,8 +90,10 @@ export function LidarLayersSection() {
     ? library?.analyses.find((analysis) => analysis.id === selected.id)
     : null
   const engineUnavailable = library !== null && !library.engine.available
+  const selectedSourceId = selected?.kind === 'Source' ? selected.id : null
 
   const select = (id: string): void => {
+    requestGeneration.current += 1
     setSelectedId(id)
     setMode('settings')
     setHistory(null)
@@ -86,33 +101,93 @@ export function LidarLayersSection() {
     setConfirmRemove(null)
     setDeleteImpact(null)
     setAnalysisDeleteId(null)
+    setEditError(null)
   }
 
-  /** Re-read the ordered composition the head the backend settled on. */
-  const loadCollection = (layerId: string): void => {
-    setCollection(null)
-    void fetchLayerCollection(layerId)
-      .then(setCollection)
+  /** Read the head the layer actually has, once its layer is still selected. */
+  const loadCollection = (layerId: string, cursor: string | null = null): void => {
+    const generation = requestGeneration.current
+    setLoading(true)
+    void fetchLayerCollection(layerId, cursor)
+      .then((page) => {
+        if (requestGeneration.current !== generation || selectedSourceId !== layerId) return
+        setCollection((current) =>
+          cursor !== null && current !== null
+            ? { ...page, sources: [...current.sources, ...page.sources] }
+            : page,
+        )
+      })
       .catch((error) => {
+        if (requestGeneration.current !== generation) return
         lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+      })
+      .finally(() => {
+        if (requestGeneration.current === generation) setLoading(false)
       })
   }
 
-  // The priority list is library data, so it is re-read whenever the library
-  // snapshot settles: a reorder, remove, Undo or a completed import all publish
-  // a new head, and the list must show that head rather than the one the panel
-  // happened to load first.
-  useEffect(() => {
-    if (mode !== 'settings' || selected?.kind !== 'Source') return
-    loadCollection(selected.id)
-  }, [mode, selected?.id, library])
-
-  const runEdit = (layerId: string, work: Promise<void>): void => {
-    void work
-      .then(() => loadCollection(layerId))
+  /** Read one history page, keeping the traversal's captured upper bound. */
+  const loadHistory = (layerId: string, cursor: string | null = null): void => {
+    const generation = requestGeneration.current
+    setLoading(true)
+    void fetchLayerHistory(layerId, cursor)
+      .then((page) => {
+        if (requestGeneration.current !== generation || selectedSourceId !== layerId) return
+        setHistory((current) =>
+          cursor !== null && current !== null
+            ? { ...page, versions: [...current.versions, ...page.versions] }
+            : page,
+        )
+      })
       .catch((error) => {
+        if (requestGeneration.current !== generation) return
         lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+      })
+      .finally(() => {
+        if (requestGeneration.current === generation) setLoading(false)
+      })
+  }
+
+  // The priority list and the open history are library data, so both are
+  // re-read whenever the library snapshot settles: a reorder, remove, Undo, a
+  // restore or a completed import all publish a new head, and the panel must
+  // show that head rather than the one it happened to load first. History also
+  // needs the summary, because Undo's availability and its target live there.
+  useEffect(() => {
+    if (selectedSourceId === null) return
+    loadCollection(selectedSourceId)
+    if (mode === 'history') loadHistory(selectedSourceId)
+    // `library` is the settlement signal, not a value this effect reads.
+  }, [mode, selectedSourceId, library])
+
+  /**
+   * Run one awaited edit.
+   *
+   * The backend resolves only after the edit has settled, so a failure leaves
+   * its message on screen and a success re-reads the head the panel now has.
+   * Controls stay disabled for the whole round trip, so a second edit can never
+   * be sent without the snapshot the user actually saw.
+   */
+  const runEdit = (layerId: string, work: () => Promise<unknown>): void => {
+    const generation = requestGeneration.current
+    setPending(true)
+    setEditError(null)
+    void work()
+      .then(() => {
+        if (requestGeneration.current !== generation) return
         loadCollection(layerId)
+        if (mode === 'history') loadHistory(layerId)
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        if (requestGeneration.current === generation) setEditError(message)
+        lidarStatusMessage.value = message
+        // A refusal means the head moved: re-read it so the next attempt sends
+        // the snapshot the user is actually looking at.
+        if (requestGeneration.current === generation) loadCollection(layerId)
+      })
+      .finally(() => {
+        if (requestGeneration.current === generation) setPending(false)
       })
   }
 
@@ -127,16 +202,8 @@ export function LidarLayersSection() {
   const openHistory = (item: LidarPresentationItem): void => {
     select(item.id)
     setMode('history')
-    setHistory(null)
-    setCollection(null)
-    void fetchLayerHistory(item.id)
-      .then(setHistory)
-      .catch((error) => {
-        lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
-      })
-    void fetchLayerCollection(item.id)
-      .then(setCollection)
-      .catch(() => setCollection(null))
+    // The effect above reads both pages for the new selection, so the view is
+    // primed from the head the library reports rather than from a stale one.
   }
 
   const openLayerDelete = (item: LidarPresentationItem): void => {
@@ -304,14 +371,29 @@ export function LidarLayersSection() {
             <HistoryDetail
               history={history}
               collection={collection}
+              pending={pending}
+              loading={loading}
+              error={editError}
               onBack={() => setMode('settings')}
+              onLoadMore={() => {
+                const cursor = history?.next_cursor ?? null
+                if (cursor !== null) loadHistory(selected.id, cursor)
+              }}
               onUndo={() =>
-                runEdit(selected.id, undoLayerChange(selected.id, collection?.head_generation_id ?? null))
+                runEdit(selected.id, () =>
+                  undoLayerChange(
+                    selected.id,
+                    collection?.head_generation_id ?? history?.head_generation_id ?? null,
+                  ),
+                )
               }
               onRestore={(versionId) =>
-                runEdit(
-                  selected.id,
-                  restoreLayerVersion(selected.id, versionId, collection?.head_generation_id ?? null),
+                runEdit(selected.id, () =>
+                  restoreLayerVersion(
+                    selected.id,
+                    versionId,
+                    collection?.head_generation_id ?? history?.head_generation_id ?? null,
+                  ),
                 )
               }
             />
@@ -339,18 +421,32 @@ export function LidarLayersSection() {
                 <SourcePriorityList
                   collection={collection}
                   confirmRemove={confirmRemove}
+                  pending={pending}
+                  loading={loading}
+                  error={editError}
                   onConfirmRemove={setConfirmRemove}
+                  onLoadMore={() => {
+                    const cursor = collection?.next_member_cursor ?? null
+                    if (cursor !== null) loadCollection(selected.id, cursor)
+                  }}
                   onMove={(memberId, towardsTop) =>
-                    runEdit(
-                      selected.id,
-                      moveLayerSource(selected.id, memberId, towardsTop, collection?.head_generation_id ?? null),
+                    runEdit(selected.id, () =>
+                      moveLayerSource(
+                        selected.id,
+                        memberId,
+                        towardsTop,
+                        collection?.head_generation_id ?? null,
+                      ),
                     )
                   }
                   onRemove={(memberId) => {
                     setConfirmRemove(null)
-                    runEdit(
-                      selected.id,
-                      removeLayerSource(selected.id, memberId, collection?.head_generation_id ?? null),
+                    runEdit(selected.id, () =>
+                      removeLayerSource(
+                        selected.id,
+                        memberId,
+                        collection?.head_generation_id ?? null,
+                      ),
                     )
                   }}
                 />
@@ -446,14 +542,9 @@ export function LidarImportPanel() {
               ))}
             </section>
             <section className={styles.reviewSection}>
-              <h3>{t('canvas.lidar.review.coverageChanges')}</h3>
-              <dl className={styles.reviewCounts}>
-                <div><dt>{t('canvas.lidar.review.uncovered')}</dt><dd>{formatReviewArea(review.uncovered_cells, review.sources[0]?.pixel_size_m)}</dd></div>
-                <div><dt>{t('canvas.lidar.review.overlap')}</dt><dd>{formatReviewArea(review.overlap_cells, review.sources[0]?.pixel_size_m)}</dd></div>
-                <div><dt>{t('canvas.lidar.review.invalid')}</dt><dd>{Number(review.invalid_cells).toLocaleString()}</dd></div>
-              </dl>
-            </section>
-            <section className={styles.reviewSection}>
+              {/* The retired overlap counters described a merge decision the
+                  ordered model no longer makes; the confirmation states the
+                  one rule that still applies. */}
               <p className={styles.detailSummary}>{t('canvas.lidar.review.addSourcesHint')}</p>
             </section>
           </>
@@ -578,18 +669,28 @@ function SourceActions({ item, coverageCells, bounds, engineUnavailable, showRet
  * every design that references the layer, so the panel says so once and never
  * writes a mirrored order into the Design.
  */
-function SourcePriorityList({ collection, confirmRemove, onConfirmRemove, onMove, onRemove }: {
+function SourcePriorityList({ collection, confirmRemove, pending, loading, error, onConfirmRemove, onLoadMore, onMove, onRemove }: {
   readonly collection: LidarLayerCollection | null
   readonly confirmRemove: string | null
+  readonly pending: boolean
+  readonly loading: boolean
+  readonly error: string | null
   onConfirmRemove(memberId: string | null): void
+  onLoadMore(): void
   onMove(memberId: string, towardsTop: boolean): void
   onRemove(memberId: string): void
 }) {
-  if (collection === null) return <p className={styles.detailSummary}>{t('canvas.lidar.loadingSources')}</p>
+  if (collection === null) {
+    return <p className={styles.detailSummary}>{t('canvas.lidar.loadingSources')}</p>
+  }
+  // Controls stay disabled while a read is in flight or an edit is pending, so
+  // every request carries the head the user actually saw.
+  const busy = pending || loading
   return (
     <div className={styles.sourceList}>
-      <h4>{t('canvas.lidar.sources')} <span>{collection.sources.length}</span></h4>
+      <h4>{t('canvas.lidar.sources')} <span>{collection.member_count}</span></h4>
       <p className={styles.detailSummary}>{t('canvas.lidar.sourceOrderHint')}</p>
+      {error !== null && <p className={styles.errorMessage} role="alert">{error}</p>}
       {collection.sources.length === 0 ? (
         <p className={styles.emptyHint}>{t('canvas.lidar.empty')}</p>
       ) : (
@@ -611,19 +712,19 @@ function SourcePriorityList({ collection, confirmRemove, onConfirmRemove, onMove
                 type="button"
                 className={styles.iconButton}
                 aria-label={t('canvas.lidar.moveUp')}
-                disabled={index === 0}
+                disabled={busy || index === 0}
                 onClick={() => onMove(source.member_id, true)}
               >↑</button>
               <button
                 type="button"
                 className={styles.iconButton}
                 aria-label={t('canvas.lidar.moveDown')}
-                disabled={index === collection.sources.length - 1}
+                disabled={busy || (index === collection.sources.length - 1 && collection.next_member_cursor === null)}
                 onClick={() => onMove(source.member_id, false)}
               >↓</button>
               {confirmRemove === source.member_id ? (
                 <span className={styles.confirmRow}>
-                  <button type="button" className={styles.dangerButton} onClick={() => onRemove(source.member_id)}>
+                  <button type="button" className={styles.dangerButton} disabled={busy} onClick={() => onRemove(source.member_id)}>
                     {t('canvas.lidar.removeSourceConfirmAction')}
                   </button>
                   <button type="button" className={styles.secondaryButton} onClick={() => onConfirmRemove(null)}>
@@ -634,6 +735,7 @@ function SourcePriorityList({ collection, confirmRemove, onConfirmRemove, onMove
                 <button
                   type="button"
                   className={styles.secondaryButton}
+                  disabled={busy}
                   onClick={() => onConfirmRemove(source.member_id)}
                 >{t('canvas.lidar.removeSource')}</button>
               )}
@@ -644,66 +746,84 @@ function SourcePriorityList({ collection, confirmRemove, onConfirmRemove, onMove
           ))}
         </ol>
       )}
-      <button
-        type="button"
-        className={styles.secondaryButton}
-        disabled={!collection.can_undo}
-        onClick={undoLayerChangeFromHistory(collection)}
-      >{t('canvas.lidar.undoLastChange')}</button>
+      {collection.next_member_cursor !== null && (
+        <button type="button" className={styles.secondaryButton} disabled={busy} onClick={onLoadMore}>
+          {t('canvas.lidar.loadMoreSources')}
+        </button>
+      )}
       <p className={styles.detailSummary}>{t('canvas.lidar.libraryOrderNote')}</p>
     </div>
   )
 }
 
-/** Undo is exposed on the version list; this keeps the settings list honest. */
-function undoLayerChangeFromHistory(collection: LidarLayerCollection): () => void {
-  return () => {
-    void undoLayerChange(collection.layer_id, collection.head_generation_id)
-  }
-}
-
 /**
  * Published versions of the layer, newest first.
  *
- * Each entry carries the user operation and its publication time with the
- * generation's own identity, so two consecutive imports never read alike.
- * Restoring publishes a new head and deletes nothing.
+ * Each entry carries what actually happened, when it was published, its own
+ * position in the layer's publication order and its occurrence count, so two
+ * consecutive imports never read alike and a version migrated from an older
+ * catalogue is named neutrally instead of being guessed. Restoring publishes a
+ * new head and deletes nothing.
  */
-function HistoryDetail({ history, collection, onBack, onUndo, onRestore }: {
-  readonly history: LidarGenerationHistoryEntry[] | null
+function HistoryDetail({ history, collection, pending, loading, error, onBack, onLoadMore, onUndo, onRestore }: {
+  readonly history: LidarLayerHistoryPage | null
   readonly collection: LidarLayerCollection | null
+  readonly pending: boolean
+  readonly loading: boolean
+  readonly error: string | null
   onBack(): void
+  onLoadMore(): void
   onUndo(): void
   onRestore(versionId: string): void
 }) {
-  const head = history?.find((entry) => entry.is_head) ?? null
+  const busy = pending || loading
+  const versions = history?.versions ?? null
   return (
     <div className={styles.details}>
       <button type="button" className={styles.textButton} onClick={onBack}>‹ {t('canvas.lidar.backToSettings')}</button>
       <h4>{t('canvas.lidar.history')}</h4>
-      <button type="button" className={styles.secondaryButton} disabled={!(collection?.can_undo ?? false)} onClick={onUndo}>
+      {error !== null && <p className={styles.errorMessage} role="alert">{error}</p>}
+      <button
+        type="button"
+        className={styles.secondaryButton}
+        disabled={busy || !(collection?.undo_available ?? false)}
+        onClick={onUndo}
+      >
         {t('canvas.lidar.undoLastChange')}
       </button>
-      {history === null ? <p className={styles.detailSummary}>{t('canvas.lidar.loadingHistory')}</p> : (
+      {!collection?.undo_available && collection?.head_generation_id != null && (
+        <p className={styles.detailSummary}>{t('canvas.lidar.undoExhausted')}</p>
+      )}
+      {versions === null ? <p className={styles.detailSummary}>{t('canvas.lidar.loadingHistory')}</p> : (
         <ol className={styles.historyList}>
-          {history.map((entry) => (
+          {versions.map((entry) => (
             <li key={entry.id} className={styles.historyEntry}>
-              <span>{t(`canvas.lidar.operation.${entry.operation}`)}</span>
+              <span>
+                {entry.operation === null
+                  ? t('canvas.lidar.operation.previousVersion')
+                  : t(`canvas.lidar.operation.${entry.operation}`)}
+                <span className={styles.versionCue}>{t('canvas.lidar.versionCue', { number: entry.sequence })}</span>
+              </span>
               <small>
-                {entry.created_at} · {Number(entry.coverage_cells).toLocaleString()} {t('canvas.lidar.historyCells')}
+                {entry.created_at} · {entry.source_count} {t('canvas.lidar.historySources')} ·{' '}
+                {Number(entry.coverage_cells).toLocaleString()} {t('canvas.lidar.historyCells')}
                 {entry.is_head ? ` · ${t('canvas.lidar.historyHead')}` : ''}
               </small>
               <button
                 type="button"
                 className={styles.secondaryButton}
-                disabled={entry.is_head}
+                disabled={busy || !entry.restorable}
                 onClick={() => onRestore(entry.id)}
               >{t('canvas.lidar.restoreVersion')}</button>
             </li>
           ))}
         </ol>
       )}
-      {head === null && <p className={styles.detailSummary}>{t('canvas.lidar.empty')}</p>}
+      {history?.next_cursor != null && (
+        <button type="button" className={styles.secondaryButton} disabled={busy} onClick={onLoadMore}>
+          {t('canvas.lidar.loadMoreVersions')}
+        </button>
+      )}
     </div>
   )
 }
@@ -758,10 +878,6 @@ function sourceFacts(resolution: number | null, cells: string, units: string): s
   return parts.join(' · ')
 }
 
-function formatReviewArea(cells: string, resolution?: number): string {
-  if (!resolution || !Number.isFinite(resolution)) return Number(cells).toLocaleString()
-  return formatArea(Number(cells) * resolution * resolution)
-}
 
 function formatArea(squareMetres: number): string {
   return squareMetres >= 1_000_000

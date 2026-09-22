@@ -541,8 +541,14 @@
         "reorder": "Herordenen",
         "remove": "Verwijderen",
         "undo": "Ongedaan maken",
-        "restore": "Herstellen"
-      }
+        "restore": "Herstellen",
+        "previousVersion": "Vorige versie"
+      },
+      "loadMoreSources": "Meer bronnen laden",
+      "loadMoreVersions": "Oudere versies laden",
+      "undoExhausted": "Er is geen eerdere versie om ongedaan te maken.",
+      "historySources": "bronnen",
+      "versionCue": "nr. {{number}}"
     }
   },
   "worldMap": {

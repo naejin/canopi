@@ -52,6 +52,46 @@ Record elapsed work or cost only if directly available, with what the measure in
 
 The implementer adds one compact revision-labelled repair outcome here after completing the prompt (do not overwrite the earlier delivery outcome): demonstrated user workflows; legacy cases preserved; merge machinery removed/retained with reason; self-review discoveries; unresolved limitations; actual tooling/guide changes with their detector; observed effort/courier data or unknown. Include the eleven finding IDs mapped to final regressions in the receipt, the migration Undo boundary, exact pending live/platform evidence, and applied versus merely proposed improvements. The main agent then adds one disposition with the reviewed revision, independently observed evidence, escaped defects and ownership. Do not claim independent acceptance from self-review.
 
+#### Ordered COG repair outcome at the review baseline
+
+The eleven finding groups are repaired and each has a regression at the boundary the review named;
+the finding-to-regression map in the [receipt](ordered-cog-receipt.md#finding-to-regression-map)
+carries the disposition, and the probe round above records which regressions detect their own guard
+being removed.
+
+**What the repair actually changed.** The public collection read no longer re-acquires the catalogue
+lock it already holds, and the read surfaces were split into bounded summary/member/history pages
+with snapshot-bound cursors. Every ordered occurrence now has one composition rule — topmost valid —
+at publication, measurement, review and reopen, so published statistics and reopened samples are the
+same numbers. Admission validates one common CRS/grid anchor for a first batch, refuses a zero-valid
+source by name, refuses a partially rejected batch at the publication boundary rather than only in
+the panel, and measures the envelope from the current composition's extent instead of the fixed
+lattice anchor. A pre-transition head is wrapped as itself rather than through its base ancestor, and
+a sparse preserved composition keeps its signed chunk extent. Slope eligibility resolves through the
+composition, superseded jobs settle as the scheduler's stale outcome on both routes, and readiness is
+derived from result/source identity so a restart cannot resurrect a Ready result. Undo records its
+target and whether it is available at all, restore compares ordered occurrence identities, and
+v1.5-era catalogues migrate to a neutral baseline instead of a fabricated action chain. Edits await
+their own settlement and return a typed outcome, which is what lets the panel keep controls disabled,
+fence late answers and keep a refusal on screen.
+
+**Improvements applied versus untested proposals.** Applied and verified here: the bounded
+summary/member/history split, the shared composition rule, the whole-batch admission boundary, the
+explicit Undo state, readiness from identity, and the legacy-shaped fixture helper the pre-repair
+compatibility tests needed. Still untested proposals, left as follow-ups rather than smuggled in: a
+truthful multi-name source display (the stored original filename is used now, but a second import of
+the same bytes still shares one name), a measurement pass for the ordered route's memory and disk
+behaviour, and general reclamation of unreferenced published assets.
+
+**Evidence limits worth naming.** The isolated real-Desktop workflow still did not run, and this time
+the reason is concrete rather than a missing convenience tool: this session's shell runs in a private
+PID namespace with no `Xvfb` on the host, so a second instance cannot be isolated from the user's own
+running Canopy instance on the shared `:0` display, and a process started from here cannot be
+observed or stopped afterwards. The exact runnable steps and the remaining acceptance risk are in the
+receipt. One earlier observation in this session was wrong because of that sandbox: `pgrep` reported
+no Canopi process, which the window list then contradicted. Host-process checks are not evidence in
+this environment.
+
 ### Final synthesis and adoption
 
 At acceptance or an explicit stop, replace interim summaries in this section with a concise synthesis linking the decisive revisions; preserve historical measurements below. Answer: what now works for the user, what was simplified, what necessary complexity remains, what caused avoidable rework, what the handoff omitted/overprescribed, what tests or tools gave false confidence, and which interventions actually helped.

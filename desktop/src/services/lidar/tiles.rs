@@ -531,16 +531,23 @@ fn render_owner(
     library: &super::LidarLibrary,
     request: &TileRequest,
     manifest: &DisplayManifest,
+    bounds: Option<super::collection::ReadBounds>,
+    cancel: &AtomicBool,
 ) -> Result<generation::GenerationReader, String> {
     match manifest {
         DisplayManifest::Collection(manifest) => {
-            let collection =
-                super::collection::load_reader(library, &request.generation_id, manifest)?
-                    .ok_or_else(|| {
-                        "accepted collection is missing a source payload; the layer cannot be \
+            let collection = super::collection::load_reader_within(
+                library,
+                &request.generation_id,
+                manifest,
+                bounds,
+                cancel,
+            )?
+            .ok_or_else(|| {
+                "accepted collection is missing a source payload; the layer cannot be \
                          displayed without inventing coverage"
-                            .to_string()
-                    })?;
+                    .to_string()
+            })?;
             Ok(generation::GenerationReader::Collection(Box::new(
                 collection,
             )))
@@ -549,6 +556,40 @@ fn render_owner(
             generation::GenerationChunkReader::new(&request.generation_id, generation::RESULT_ROLE),
         )),
     }
+}
+
+/// Half-open lattice cells a tile's own samples can read.
+///
+/// The footprint is the mapped sample grid with one cell of slack on every
+/// side, which covers the windows this renderer actually reads. It is only
+/// meaningful for an ordered composition; every other format ignores it.
+fn tile_read_bounds(
+    manifest: &DisplayManifest,
+    cells: &[(f64, f64)],
+) -> Result<Option<super::collection::ReadBounds>, String> {
+    if !matches!(manifest, DisplayManifest::Collection(_)) {
+        return Ok(None);
+    }
+    let (mut min_x, mut min_y) = (f64::INFINITY, f64::INFINITY);
+    let (mut max_x, mut max_y) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for (x, y) in cells {
+        if !x.is_finite() || !y.is_finite() {
+            continue;
+        }
+        min_x = min_x.min(*x);
+        min_y = min_y.min(*y);
+        max_x = max_x.max(*x);
+        max_y = max_y.max(*y);
+    }
+    if !min_x.is_finite() || !min_y.is_finite() {
+        return Ok(None);
+    }
+    Ok(Some(super::collection::ReadBounds {
+        x0: min_x.floor() as i64 - 1,
+        y0: min_y.floor() as i64 - 1,
+        x1: max_x.ceil() as i64 + 2,
+        y1: max_y.ceil() as i64 + 2,
+    }))
 }
 
 /// Render one tile from an immutable generation.
@@ -562,11 +603,6 @@ fn render_tile_uncached(
         let connection = library.catalogue()?;
         load_manifest(&connection, &request.style, request)?
     };
-    // Bound to the immutable generation and role, never to a loaded record set:
-    // every reduction or window read fetches its own bounded page, so a tile
-    // costs what its footprint intersects rather than what the whole
-    // generation stores.
-    let owner = render_owner(library, request, &manifest)?;
     let lattice = manifest.grid().clone();
     let ramp = match request.style.as_str() {
         "slope" => ColorRamp::slope_degrees(),
@@ -615,6 +651,13 @@ fn render_tile_uncached(
             levels[row * samples + column] = level_for_displacement(displacement)?;
         }
     }
+
+    // Bound to the immutable generation, and for an ordered composition to the
+    // occurrences that can reach this tile: a source outside the footprint is
+    // never opened, while the composed value stays identical to reading the
+    // whole composition.
+    let read_bounds = tile_read_bounds(&manifest, &cells)?;
+    let owner = render_owner(library, request, &manifest, read_bounds, cancel)?;
 
     // Every reduced cell a sample interpolates between, resolved once per tile:
     // whole-chunk cells come from stored aggregates, sub-chunk cells share one

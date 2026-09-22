@@ -541,8 +541,14 @@
         "reorder": "並べ替え",
         "remove": "削除",
         "undo": "元に戻す",
-        "restore": "復元"
-      }
+        "restore": "復元",
+        "previousVersion": "以前のバージョン"
+      },
+      "loadMoreSources": "さらにソースを読み込む",
+      "loadMoreVersions": "古いバージョンを読み込む",
+      "undoExhausted": "元に戻せる以前のバージョンはありません。",
+      "historySources": "ソース",
+      "versionCue": "第{{number}}版"
     }
   },
   "worldMap": {

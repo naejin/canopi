@@ -1,6 +1,6 @@
 # Ordered COG Data Layers
 
-Status: active — user-selected replacement for materialized source merging; partial implementation delivered at `783e31e3`; independent review requires repairs. Not accepted, integrated or released.
+Status: partial — the eleven repair groups from the [independent review](ordered-cog-review.md) are delivered on `feature/bounded-raster-generations`; not accepted, integrated or released. The [receipt](ordered-cog-receipt.md#finding-to-regression-map) owns the disposition map and evidence.
 Tracking: re-scope `canopi-jv8a.4` under `canopi-jv8a` / `canopi-j571`; reconcile `canopi-kko3` in the same implementation. bd owns progress.
 Current guidance: [repair prompt](ordered-cog-agent-prompt.md), [independent review](ordered-cog-review.md), [delivery receipt](ordered-cog-receipt.md), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR guide](../../agent/lidar.md), [collaboration](collaboration-protocol.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief).
 

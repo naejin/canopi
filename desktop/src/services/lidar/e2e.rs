@@ -404,7 +404,7 @@ fn e2e_import_publish_slope_restart_reuse() {
     )
     .unwrap();
     let decision = reopened
-        .preview_import_decision(&replacement_job, false, true)
+        .preview_import_decision(&replacement_job)
         .expect("overlap-only decision preview renders");
     assert!(!decision.add_uncovered);
     assert!(decision.replace_overlap);

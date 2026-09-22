@@ -64,6 +64,14 @@ pub struct StagedSource {
     pub valid_mask_path: PathBuf,
     #[serde(default)]
     pub raw_samples_path: PathBuf,
+    /// Valid cells the prepared source actually holds.
+    ///
+    /// Preparation already counts them; keeping the count is what lets the
+    /// batch refuse an all-NoData member by name instead of publishing an
+    /// occurrence that contributes no coverage. Absent in staging written
+    /// before this field existed, which reads as unknown rather than zero.
+    #[serde(default)]
+    pub valid_cells: Option<u64>,
     pub compatible: bool,
     pub issues: Vec<String>,
 }
@@ -211,6 +219,49 @@ pub fn stage_import(
         )?);
     }
 
+    // One common interpretation for the whole batch.
+    //
+    // When the layer already has an accepted head, `stage_source` compared each
+    // source against that head's CRS and grid. A layer's first batch has no head
+    // to compare against, so the first compatible selection becomes the anchor
+    // every other selected source must match: without this, an EPSG:3857 and an
+    // EPSG:4326 raster with equal coordinates were both admitted, and neither
+    // the lattice nor a later read could reconcile them.
+    {
+        let anchor_grid = layer_grid.clone().or_else(|| {
+            staged
+                .iter()
+                .find(|source| source.compatible)
+                .map(grid_for_source)
+        });
+        let anchor_crs = layer_crs_wkt.clone().or_else(|| {
+            staged
+                .iter()
+                .find(|source| source.compatible)
+                .map(|source| source.crs_wkt.clone())
+        });
+        for source in staged.iter_mut().filter(|source| source.compatible) {
+            if let Some(expected) = anchor_crs.as_deref()
+                && source.crs_wkt.trim() != expected.trim()
+            {
+                source.compatible = false;
+                source.issues.push(
+                    "horizontal CRS differs from the other selected sources; transforming foreign \
+                     grids arrives in a later slice"
+                        .to_string(),
+                );
+            }
+            if let Some(expected) = anchor_grid.as_ref()
+                && let Err(error) = grid_for_source(source).compatible(expected)
+            {
+                source.compatible = false;
+                source.issues.push(format!(
+                    "grid incompatible with the other selected sources: {error}"
+                ));
+            }
+        }
+    }
+
     let compatible: Vec<&StagedSource> = staged.iter().filter(|s| s.compatible).collect();
     if compatible.is_empty() {
         let issues = staged
@@ -238,11 +289,25 @@ pub fn stage_import(
     }
     validate_lattice(&union, "import review")?;
     // Admission is one policy for both storage branches and is decided before
-    // any review work depends on the union's envelope.
+    // any review work depends on the union's envelope. The envelope is the
+    // current composition's own extent plus the incoming sources, never the
+    // fixed lattice anchor: the anchor records where coordinates start, not how
+    // far the accepted coverage reaches.
+    let composition_extent = composition_extent_grid(library, head.as_ref())?;
     admission::check_union_envelope(
         admission::union_envelope_cells(union.width, union.height)?,
         "import review",
     )?;
+    if let Some(mut admitted) = composition_extent {
+        for source in &compatible {
+            admitted = union_grid(&admitted, &grid_for_source(source))?;
+        }
+        validate_lattice(&admitted, "import review envelope")?;
+        admission::check_union_envelope(
+            admission::union_envelope_cells(admitted.width, admitted.height)?,
+            "import review envelope",
+        )?;
+    }
 
     // R-tree candidate guard: when every accepted member has a footprint,
     // an incoming extent intersecting none of them must classify without
@@ -313,8 +378,6 @@ pub fn stage_import(
             &lattice,
             &union,
             layer_nodata,
-            true,
-            false,
             (target_width, target_height),
             cancel,
         )?
@@ -464,16 +527,17 @@ pub fn stage_import(
     Ok(StagingOutput { review })
 }
 
-pub fn render_decision_preview(
+/// Render the composition an Apply of this staging would publish.
+///
+/// The ordered model has no coverage decisions to preview: the selection is
+/// always inserted above the accepted sources. The preview is therefore the
+/// composed result itself, which is also what makes it the caller-level
+/// detector for "the accepted head's own values" in the review regressions.
+pub fn render_composition_preview(
     library: &LidarLibrary,
     staging: &StagedImport,
-    add_uncovered: bool,
-    replace_overlap: bool,
     cancel: &AtomicBool,
 ) -> Result<LidarImportDecisionPreview, String> {
-    if !add_uncovered && !replace_overlap {
-        return Err("select at least one coverage change to preview".to_string());
-    }
     check_cancel(cancel)?;
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
@@ -516,8 +580,6 @@ pub fn render_decision_preview(
             &lattice,
             &staging.union_grid,
             staging.layer_nodata,
-            add_uncovered,
-            replace_overlap,
             (target_width, target_height),
             cancel,
         )?
@@ -534,7 +596,7 @@ pub fn render_decision_preview(
         .max(coverage.preview_max)
         .max(preview_min + 1.0);
     let ramp = ColorRamp::elevation_range(preview_min, preview_max);
-    let decision_key = format!("{}{}", u8::from(add_uncovered), u8::from(replace_overlap));
+    let decision_key = "composition".to_string();
     let job_dir = paths.job_dir(&staging.job_id);
     let preview_grid = preview_target_grid(&staging.union_grid, target_width, target_height);
     let before_preview_path = if head.is_some() {
@@ -585,12 +647,122 @@ pub fn render_decision_preview(
     );
     let _ = std::fs::remove_file(&preview_tif);
     rendered?;
+    // The ordered model records no coverage decision, so the preview reports
+    // the composition it renders rather than echoing decisions that no longer
+    // exist. Both flags stay in the wire contract at their historical values so
+    // an older reader cannot mistake the payload for a changed decision.
     Ok(LidarImportDecisionPreview {
-        add_uncovered,
-        replace_overlap,
+        add_uncovered: true,
+        replace_overlap: false,
         before_preview_path,
         after_preview_path: after_target.display().to_string(),
     })
+}
+
+/// Refuse a batch that contains any rejected source.
+///
+/// A selected batch is atomic: publishing the compatible subset would silently
+/// accept a selection the user never approved. The UI already refuses to
+/// confirm such a batch, and this is the same rule enforced where the
+/// publication actually happens.
+pub(super) fn ensure_whole_batch_compatible(staging: &StagedImport) -> Result<(), String> {
+    let rejected: Vec<String> = staging
+        .sources
+        .iter()
+        .filter(|source| !source.compatible)
+        .map(|source| format!("{}: {}", source.filename, source.issues.join("; ")))
+        .collect();
+    if rejected.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the selected batch contains sources that cannot be published, so none was: {}",
+        rejected.join(" | ")
+    ))
+}
+
+/// The lattice grid the current composition's coverage actually reaches.
+///
+/// The layer's manifest grid is its fixed coordinate anchor; its width and
+/// height describe where coordinates start, not how far the accepted coverage
+/// reaches. Admission is about the latter, so it is measured from the current
+/// membership: each source's own interpretation grid, and each preserved
+/// composition's signed extent. `Ok(None)` means the layer is still empty.
+fn composition_extent_grid(
+    library: &LidarLibrary,
+    head: Option<&catalogue::GenerationRow>,
+) -> Result<Option<RasterGrid>, String> {
+    let Some(head) = head else {
+        return Ok(None);
+    };
+    let connection = library.catalogue()?;
+    let manifest = read_generation_manifest(&head.manifest_json)?;
+    let mut extent: Option<RasterGrid> = None;
+    if manifest.format.is_ordered_collection() {
+        for member in catalogue::collection_members(&connection, &head.id)? {
+            match member.kind.as_str() {
+                collection::SOURCE_KIND => {
+                    let Some(id) = member.interpretation_id.as_deref() else {
+                        continue;
+                    };
+                    let Some(row) = catalogue::get_interpretation(&connection, id)? else {
+                        continue;
+                    };
+                    let grid = RasterGrid {
+                        width: u32::try_from(row.width.max(0)).unwrap_or(u32::MAX),
+                        height: u32::try_from(row.height.max(0)).unwrap_or(u32::MAX),
+                        geotransform: parse_geotransform(&row.geotransform)?,
+                    };
+                    extent = Some(match extent.take() {
+                        Some(current) => union_grid(&current, &grid)?,
+                        None => grid,
+                    });
+                }
+                _ => {
+                    let Some(base) = member.base_generation_id.as_deref() else {
+                        continue;
+                    };
+                    if let Some(grid) = preserved_extent(&connection, base)? {
+                        extent = Some(match extent.take() {
+                            Some(current) => union_grid(&current, &grid)?,
+                            None => grid,
+                        });
+                    }
+                }
+            }
+        }
+    } else if let Some(grid) = preserved_extent(&connection, &head.id)? {
+        extent = Some(grid);
+    }
+    Ok(extent)
+}
+
+/// The grid a preserved generation's coverage reaches.
+///
+/// A sparse generation with published records reaches across exactly the signed
+/// blocks they occupy; one without records, and every dense generation, is its
+/// own manifest rectangle.
+fn preserved_extent(
+    connection: &rusqlite::Connection,
+    generation_id: &str,
+) -> Result<Option<RasterGrid>, String> {
+    let Some(row) = catalogue::generation_row(connection, generation_id)? else {
+        return Ok(None);
+    };
+    let manifest = read_generation_manifest(&row.manifest_json)?;
+    if manifest.format == GenerationStorageFormat::CogChunksV1
+        && let Some((first_x, first_y, last_x, last_y)) =
+            catalogue::generation_chunk_extent(connection, generation_id, generation::RESULT_ROLE)?
+    {
+        return Ok(Some(collection::chunk_extent_grid(
+            &manifest.grid,
+            first_x,
+            first_y,
+            last_x,
+            last_y,
+        )?));
+    }
+    Ok(Some(manifest.grid))
 }
 
 /// The layer's fixed lattice, recorded from its first accepted source.
@@ -896,7 +1068,7 @@ fn stage_source(
         geotransform: probe.geotransform,
     };
     validate_working_grid(&source_grid, "source raster")?;
-    let (source_cog, regions) = stage_source_samples(
+    let (source_cog, regions, valid_cells) = stage_source_samples(
         engine,
         cancel,
         &managed_original,
@@ -907,6 +1079,13 @@ fn stage_source(
         &sha256,
     )?;
     let value_range = source_cog.value_range;
+    if valid_cells == 0 {
+        // An all-NoData selection is refused by name here rather than published
+        // as an occurrence that can never contribute a sample.
+        issues.push(
+            "source holds no valid samples; every cell is NoData under its own rule".to_string(),
+        );
+    }
 
     if let Some(expected) = layer_grid
         && let Err(error) = source_grid.compatible(expected)
@@ -999,6 +1178,7 @@ fn stage_source(
         source_cog: Some(source_cog),
         valid_mask_path: PathBuf::new(),
         raw_samples_path: PathBuf::new(),
+        valid_cells: Some(valid_cells),
         compatible: issues.is_empty(),
         issues,
     })
@@ -1028,7 +1208,7 @@ fn stage_source_samples(
     nodata: Option<f32>,
     job_dir: &Path,
     sha256: &str,
-) -> Result<(RetainedSourceCog, Vec<generation::RegionAggregate>), String> {
+) -> Result<(RetainedSourceCog, Vec<generation::RegionAggregate>, u64), String> {
     let stem = format!("source-cog-{}", &sha256[..sha256.len().min(16)]);
     // The conversion streams through GDAL and the admitted COG is the durable
     // output, so no additional numeric output is charged beside it. The
@@ -1045,7 +1225,7 @@ fn stage_source_samples(
     // Facts and occupied regions are derived from the retained COG itself, in
     // bounded windows: no second durable payload is created to describe it.
     let mut reader = PreparedRaster::open_committed(&asset.path, grid, nodata)?;
-    let (value_range, _valid_cells) = scan_source_facts(&mut reader, cancel)?;
+    let (value_range, valid_cells) = scan_source_facts(&mut reader, cancel)?;
     let regions = generation::member_regions(&mut reader, grid, grid, cancel)?;
     drop(reader);
     Ok((
@@ -1057,6 +1237,7 @@ fn stage_source_samples(
             relative_path: Some(relative_path),
         },
         regions,
+        valid_cells,
     ))
 }
 
@@ -1185,7 +1366,9 @@ impl HeadBlockSource {
                 ),
             }),
             GenerationStorageFormat::OrderedMembersV1 => {
-                let Some(collection) = collection::load_reader(library, &head.id, manifest)? else {
+                let Some(collection) =
+                    collection::load_reader(library, &head.id, manifest, cancel)?
+                else {
                     return Err(
                         "accepted collection is missing a source payload; the layer cannot be \
                          read without inventing coverage"
@@ -1431,8 +1614,6 @@ fn compose_union_block(
     lattice: &RasterGrid,
     window: LatticeWindow,
     nodata: f32,
-    add_uncovered: bool,
-    replace_overlap: bool,
     cancel: &AtomicBool,
 ) -> Result<ComposedBlock, String> {
     let width = window.width as usize;
@@ -1462,13 +1643,12 @@ fn compose_union_block(
                 }
                 let target = (dest_y + row) * width + dest_x + column;
                 incoming[target] = 1;
-                let covered = valid[target] != 0;
-                if covered && !replace_overlap {
-                    continue;
-                }
-                if !covered && !add_uncovered {
-                    continue;
-                }
+                // The ordered model has exactly one composition rule: the
+                // selection is inserted above the accepted sources, so a valid
+                // incoming sample wins and an invalid one reveals what is
+                // below. `incoming` still records every valid incoming cell so
+                // the caller can classify it against the accepted head, but the
+                // classification never changes the composed value.
                 values[target] = source_values[index];
                 valid[target] = 1;
             }
@@ -2005,8 +2185,6 @@ fn review_coverage(
     lattice: &RasterGrid,
     union: &RasterGrid,
     nodata: f32,
-    add_uncovered: bool,
-    replace_overlap: bool,
     target: (u32, u32),
     cancel: &AtomicBool,
 ) -> Result<ReviewCoverage, String> {
@@ -2042,8 +2220,6 @@ fn review_coverage(
             lattice,
             window,
             nodata,
-            add_uncovered,
-            replace_overlap,
             cancel,
         )?;
         let (accepted_values, accepted) = head.block(library, lattice, window, nodata, cancel)?;
@@ -3324,20 +3500,26 @@ pub fn apply_import(
     let head_manifest = head_base.manifest.clone();
     library.record_import_progress(&staging.job_id, LidarImportProgressPhase::ComposingLayer, 6);
 
+    ensure_whole_batch_compatible(staging)?;
     // Union grid: layer member grids plus every compatible staged source.
     let compatible: Vec<&StagedSource> = staging.sources.iter().filter(|s| s.compatible).collect();
     if compatible.is_empty() {
         return Err("import has no compatible sources to publish".to_string());
     }
+    // The ordered route has exactly one decision — add the selection above the
+    // accepted sources — so its incoming occurrences always carry topmost-valid
+    // semantics. The legacy flags are read only by the preserved dense route
+    // below, which is a test-forced path, never production publication.
+    let ordered_publication = generation::chunked_publication_enabled();
     let incoming_role = match (add_uncovered, replace_overlap) {
         (true, true) => "replace",
         (true, false) => "add",
         (false, true) => "replace-overlap",
-        // An ordered collection adds the selection as a new contiguous group on
-        // top of the accepted members. That is a membership change even when
-        // every incoming sample happens to agree with the composed value, so
-        // the superseded pixel-only no-change rule must not discard it.
-        (false, false) if generation::chunked_publication_enabled() => "add",
+        // The ordered route adds the selection as a new contiguous group on top
+        // of the accepted members, which is a membership change even when every
+        // incoming sample agrees with the composed value; the superseded
+        // pixel-only no-change rule must not discard it.
+        (false, false) if ordered_publication => "add",
         (false, false) => {
             return Ok(ApplyOutcome {
                 generation_id: head.as_ref().map(|row| row.id.clone()).unwrap_or_default(),
@@ -3368,11 +3550,24 @@ pub fn apply_import(
     }
     // Recheck at Apply against the selected sources and the expected head:
     // admission is decided again immediately before anything is materialized
-    // or published, on whichever branch will run.
+    // or published, on whichever branch will run. The envelope is the current
+    // composition's own extent plus the selection, not the fixed lattice
+    // anchor, so a layer that has grown across many imports cannot slip past
+    // the limit on the anchor's original dimensions.
     admission::check_union_envelope(
         admission::union_envelope_cells(union.width, union.height)?,
         "import publication",
     )?;
+    if let Some(mut admitted) = composition_extent_grid(library, head.as_ref())? {
+        for source in &compatible {
+            admitted = union_grid(&admitted, &grid_for_source(source))?;
+        }
+        validate_lattice(&admitted, "import publication envelope")?;
+        admission::check_union_envelope(
+            admission::union_envelope_cells(admitted.width, admitted.height)?,
+            "import publication envelope",
+        )?;
+    }
     let _ = head_manifest;
     library.record_import_progress(
         &staging.job_id,
@@ -3433,7 +3628,7 @@ pub fn apply_import(
         let mut members: Vec<collection::SnapshotMember> =
             Vec::with_capacity(compatible.len() + head_base.members.len() + 1);
         let mut manifest_members = Vec::with_capacity(compatible.len());
-        let incoming = incoming_occurrences(paths, &compatible, incoming_role, 0)?;
+        let incoming = incoming_occurrences(paths, &compatible, "add", 0)?;
         for (source, resolved) in compatible.iter().zip(incoming) {
             manifest_members.push(source.interp_hash.clone());
             members.push(collection::SnapshotMember {
@@ -3454,8 +3649,8 @@ pub fn apply_import(
                 if head_manifest_row.format.is_ordered_collection() {
                     // A snapshot copies its predecessor's member references; it
                     // never wraps the previous head in another collection.
-                    let prior =
-                        collection::snapshot_members(library, &head_row.id)?.ok_or_else(|| {
+                    let prior = collection::snapshot_members(library, &head_row.id, cancel)?
+                        .ok_or_else(|| {
                             "accepted collection is missing a source payload; the layer cannot \
                              be extended without inventing coverage"
                                 .to_string()
@@ -3472,14 +3667,17 @@ pub fn apply_import(
                     // member labelled "Previous composition": its masked
                     // replacement history cannot be reinterpreted as an
                     // arbitrary priority stack, so it is never split into
-                    // reorderable historical sources. It references the
-                    // original preserved generation, so a compatibility
-                    // wrapper can never nest.
-                    let base = head_row
-                        .base_generation_id
-                        .clone()
-                        .unwrap_or_else(|| head_row.id.clone());
-                    members.push(collection::previous_composition_member(library, &base)?);
+                    // reorderable historical sources.
+                    //
+                    // The member wraps the **actual accepted head**, not the
+                    // base ancestor that head may overlay: replaying the
+                    // ancestor would silently replace the values the user
+                    // accepted with an older composition.
+                    members.push(collection::previous_composition_member(
+                        library,
+                        &head_row.id,
+                        cancel,
+                    )?);
                 }
             }
         }
@@ -3521,7 +3719,7 @@ pub fn apply_import(
             &manifest_json,
             planned_head,
             compatible.as_slice(),
-            incoming_role,
+            "add",
             promotions.promoted(),
         )?;
         // The head transaction is the commit point: from here the publication
@@ -3548,8 +3746,12 @@ pub fn apply_import(
                 .map(|h| read_generation_manifest(&h.manifest_json))
                 .transpose()?;
             let (layer_values, layer_mask) = {
-                let numeric =
-                    head_numeric_read(library, head.as_ref(), head_manifest_for_seed.as_ref())?;
+                let numeric = head_numeric_read(
+                    library,
+                    head.as_ref(),
+                    head_manifest_for_seed.as_ref(),
+                    cancel,
+                )?;
                 head_values_on_union(
                     library,
                     head.as_ref(),
@@ -3883,9 +4085,35 @@ pub fn apply_import(
 struct SnapshotBase {
     manifest: GenerationManifest,
     generation_id: String,
+    /// Whether Undo is offered from this head at all.
+    undo_available: bool,
+    /// Composition Undo restores; absent means the empty composition.
+    undo_target: Option<String>,
 }
 
-/// Read the accepted head's manifest and identity.
+/// The Undo state a newly published snapshot records.
+///
+/// Availability and target are independent on purpose: an available Undo with
+/// no target restores the empty initial composition, while an unavailable one
+/// means the walk is exhausted. Conflating them would make Undo either loop on
+/// the empty composition or stop one step early.
+struct UndoState {
+    target: Option<String>,
+    available: bool,
+}
+
+impl UndoState {
+    /// The state an ordinary user change records: it points at the head it
+    /// replaced, which is always reachable.
+    fn after_change(head: Option<&str>) -> Self {
+        Self {
+            target: head.map(str::to_string),
+            available: true,
+        }
+    }
+}
+
+/// Read the accepted head's manifest, identity and Undo state.
 fn snapshot_base(library: &LidarLibrary, layer_id: &str) -> Result<SnapshotBase, String> {
     let connection = library.catalogue()?;
     let head = catalogue::head_generation(&connection, layer_id)?
@@ -3894,6 +4122,8 @@ fn snapshot_base(library: &LidarLibrary, layer_id: &str) -> Result<SnapshotBase,
     Ok(SnapshotBase {
         manifest,
         generation_id: head.id,
+        undo_available: head.undo_available,
+        undo_target: head.previous_generation_id,
     })
 }
 
@@ -3906,29 +4136,53 @@ fn snapshot_manifest_members(members: &[collection::SnapshotMember]) -> Vec<Stri
         .collect()
 }
 
+/// The ordered occurrence identities of one member list.
+///
+/// Restore compares these rather than generation IDs: an identical ordered
+/// composition is a no-op even when it was published as a different snapshot,
+/// and two occurrences of the same bytes stay distinct because their member
+/// identities are distinct.
+fn occurrence_identities(
+    members: &[collection::SnapshotMember],
+) -> Vec<(String, String, Option<String>, Option<String>)> {
+    members
+        .iter()
+        .map(|member| {
+            (
+                member.member_id.clone(),
+                member.kind.to_string(),
+                member.interpretation_id.clone(),
+                member.base_generation_id.clone(),
+            )
+        })
+        .collect()
+}
+
 /// Publish one member list as a new immutable snapshot and advance the head.
 ///
 /// Every ordered edit funnels through here, so reorder, remove, undo and
 /// restore share one publication path: measure the composition, write the
-/// generation and its member rows and advance the head in one short
-/// transaction, or leave the previous head authoritative.
+/// generation with its member rows, its recorded operation and its Undo state,
+/// and advance the head in one short transaction — or leave the previous head
+/// authoritative.
+#[allow(clippy::too_many_arguments)]
 fn publish_snapshot_members(
     library: &LidarLibrary,
     layer_id: &str,
     members: Vec<collection::SnapshotMember>,
     base: &SnapshotBase,
     expected_head: &str,
-    predecessor: Option<&str>,
+    undo: UndoState,
+    operation: &str,
     cancel: &AtomicBool,
 ) -> Result<ApplyOutcome, String> {
-    let plan = collection::SnapshotPlan {
+    let mut plan = collection::SnapshotPlan {
         members,
         lattice: base.manifest.grid.clone(),
         crs_wkt: base.manifest.crs_wkt.clone(),
         nodata: base.manifest.nodata,
         manifest_members: Vec::new(),
     };
-    let mut plan = plan;
     plan.manifest_members = snapshot_manifest_members(&plan.members);
     let measurement = collection::measure(library, &plan, cancel)?;
     let (manifest_json, _) = collection::manifest_for(library, &plan)?;
@@ -3951,7 +4205,11 @@ fn publish_snapshot_members(
             &plan,
             &measurement,
             &manifest_json,
-            predecessor,
+            &collection::SnapshotLineage {
+                previous_generation_id: undo.target.as_deref(),
+                undo_available: undo.available,
+                operation,
+            },
         )?;
         advance_layer_head(&connection, layer_id, &generation_id)?;
         Ok(())
@@ -3977,9 +4235,10 @@ fn publish_snapshot_members(
 fn accepted_members(
     library: &LidarLibrary,
     base: &SnapshotBase,
+    cancel: &AtomicBool,
 ) -> Result<Vec<collection::SnapshotMember>, String> {
     if base.manifest.format.is_ordered_collection() {
-        collection::snapshot_members(library, &base.generation_id)?.ok_or_else(|| {
+        collection::snapshot_members(library, &base.generation_id, cancel)?.ok_or_else(|| {
             "accepted collection is missing a source payload; the layer cannot be read \
              without inventing coverage"
                 .to_string()
@@ -3988,24 +4247,32 @@ fn accepted_members(
         Ok(vec![collection::previous_composition_member(
             library,
             &base.generation_id,
+            cancel,
         )?])
     }
 }
 
-/// Undo the last user change: publish the preceding snapshot as a new head.
-///
-/// The predecessor recorded on the current head is the snapshot that was
-/// authoritative before the change being undone, so repeated Undo walks
-/// backwards through prior user changes instead of toggling between a
-/// restoration and the snapshot it replaced. Restoring publishes a new
-/// generation; no accepted history is deleted.
-pub fn undo_last_change(
+/// The member list one recorded version replays.
+fn version_members(
     library: &LidarLibrary,
-    layer_id: &str,
-    expected_head: Option<&str>,
+    version_id: &str,
+    manifest: &GenerationManifest,
     cancel: &AtomicBool,
-) -> Result<ApplyOutcome, String> {
-    let base = snapshot_base(library, layer_id)?;
+) -> Result<Vec<collection::SnapshotMember>, String> {
+    if manifest.format.is_ordered_collection() {
+        collection::snapshot_members(library, version_id, cancel)?.ok_or_else(|| {
+            "that version is missing a source payload; restoring it would invent coverage"
+                .to_string()
+        })
+    } else {
+        Ok(vec![collection::previous_composition_member(
+            library, version_id, cancel,
+        )?])
+    }
+}
+
+/// Check the caller's expected head against the accepted one.
+fn ensure_expected_head(base: &SnapshotBase, expected_head: Option<&str>) -> Result<(), String> {
     if let Some(expected) = expected_head
         && expected != base.generation_id
     {
@@ -4013,44 +4280,60 @@ pub fn undo_last_change(
             "the layer changed since this edit was prepared; refresh and try again".to_string(),
         );
     }
-    let predecessor = {
-        let connection = library.catalogue()?;
-        catalogue::generation_row(&connection, &base.generation_id)?
-            .and_then(|row| row.previous_generation_id)
-    };
-    // Before the layer's first change it held no sources at all, so undoing
-    // that change publishes the empty composition. The layer stays valid and
-    // accepts sources again, and the import it replaced remains restorable.
-    let Some(predecessor) = predecessor else {
-        return publish_snapshot_members(
-            library,
-            layer_id,
+    Ok(())
+}
+
+/// Undo the last user change: publish the composition that preceded it.
+///
+/// The head records both its target and whether Undo is available, so a walk
+/// backwards stops exactly where the user's history begins: the first change
+/// undoes to the empty initial composition, and the Undo after that is refused
+/// rather than republishing the same state. The new snapshot inherits the
+/// target's own next-Undo state, which is what makes repeated Undo continue
+/// backwards instead of toggling. Restoring publishes a new generation; no
+/// accepted history is deleted.
+pub fn undo_last_change(
+    library: &LidarLibrary,
+    layer_id: &str,
+    expected_head: Option<&str>,
+    cancel: &AtomicBool,
+) -> Result<ApplyOutcome, String> {
+    let base = snapshot_base(library, layer_id)?;
+    ensure_expected_head(&base, expected_head)?;
+    if !base.undo_available {
+        return Ok(ApplyOutcome {
+            generation_id: base.generation_id.clone(),
+            published_cells: 0,
+            changed: false,
+            message: Some("there is no earlier version to undo".to_string()),
+        });
+    }
+    let (members, undo) = match base.undo_target.as_deref() {
+        // The target is the empty initial composition, which has nothing before
+        // it, so the new snapshot is where the walk stops.
+        None => (
             Vec::new(),
-            &base,
-            &base.generation_id,
-            Some(&base.generation_id),
-            cancel,
-        );
-    };
-    // The restored snapshot's own predecessor keeps the walk moving backwards.
-    let restored = {
-        let connection = library.catalogue()?;
-        catalogue::generation_row(&connection, &predecessor)?
-            .ok_or_else(|| format!("previous version {predecessor} is missing"))?
-    };
-    let restored_manifest = read_generation_manifest(&restored.manifest_json)?;
-    let next_predecessor = restored.previous_generation_id.clone();
-    let members = if restored_manifest.format.is_ordered_collection() {
-        collection::snapshot_members(library, &predecessor)?.ok_or_else(|| {
-            "the previous version is missing a source payload; restoring it would invent \
-             coverage"
-                .to_string()
-        })?
-    } else {
-        vec![collection::previous_composition_member(
-            library,
-            &predecessor,
-        )?]
+            UndoState {
+                target: None,
+                available: false,
+            },
+        ),
+        Some(target) => {
+            let restored = {
+                let connection = library.catalogue()?;
+                catalogue::generation_row(&connection, target)?
+                    .ok_or_else(|| format!("previous version {target} is missing"))?
+            };
+            let manifest = read_generation_manifest(&restored.manifest_json)?;
+            let members = version_members(library, target, &manifest, cancel)?;
+            (
+                members,
+                UndoState {
+                    target: restored.previous_generation_id.clone(),
+                    available: restored.undo_available,
+                },
+            )
+        }
     };
     publish_snapshot_members(
         library,
@@ -4058,13 +4341,19 @@ pub fn undo_last_change(
         members,
         &base,
         &base.generation_id,
-        next_predecessor.as_deref(),
+        undo,
+        "undo",
         cancel,
     )
 }
 
 /// Publish one older version as the new head without deleting the versions in
 /// between.
+///
+/// An explicit restore is an ordinary new change, so it records the head it
+/// replaced and can itself be undone. Restoring a version whose ordered
+/// occurrence identities already match the current composition publishes
+/// nothing.
 pub fn restore_version(
     library: &LidarLibrary,
     layer_id: &str,
@@ -4073,49 +4362,31 @@ pub fn restore_version(
     cancel: &AtomicBool,
 ) -> Result<ApplyOutcome, String> {
     let base = snapshot_base(library, layer_id)?;
-    if let Some(expected) = expected_head
-        && expected != base.generation_id
-    {
-        return Err(
-            "the layer changed since this edit was prepared; refresh and try again".to_string(),
-        );
-    }
-    if version_id == base.generation_id {
-        return Ok(ApplyOutcome {
-            generation_id: base.generation_id.clone(),
-            published_cells: 0,
-            changed: false,
-            message: Some("that version is already current".to_string()),
-        });
-    }
+    ensure_expected_head(&base, expected_head)?;
     let version = {
         let connection = library.catalogue()?;
         catalogue::generation_row(&connection, version_id)?
             .ok_or_else(|| format!("version {version_id} is missing"))?
     };
-    if version.id.is_empty() {
-        return Err(format!("version {version_id} is missing"));
-    }
     let manifest = read_generation_manifest(&version.manifest_json)?;
-    let members = if manifest.format.is_ordered_collection() {
-        collection::snapshot_members(library, version_id)?.ok_or_else(|| {
-            "that version is missing a source payload; restoring it would invent coverage"
-                .to_string()
-        })?
-    } else {
-        vec![collection::previous_composition_member(
-            library, version_id,
-        )?]
-    };
-    // An explicit restore is a new user change, so the snapshot it replaces is
-    // recorded as its predecessor and can itself be undone.
+    let members = version_members(library, version_id, &manifest, cancel)?;
+    let current = accepted_members(library, &base, cancel)?;
+    if occurrence_identities(&members) == occurrence_identities(&current) {
+        return Ok(ApplyOutcome {
+            generation_id: base.generation_id.clone(),
+            published_cells: 0,
+            changed: false,
+            message: Some("that version is already the current composition".to_string()),
+        });
+    }
     publish_snapshot_members(
         library,
         layer_id,
         members,
         &base,
         &base.generation_id,
-        Some(&base.generation_id),
+        UndoState::after_change(Some(&base.generation_id)),
+        "restore",
         cancel,
     )
 }
@@ -4133,14 +4404,8 @@ pub fn move_member(
     cancel: &AtomicBool,
 ) -> Result<ApplyOutcome, String> {
     let base = snapshot_base(library, layer_id)?;
-    if let Some(expected) = expected_head
-        && expected != base.generation_id
-    {
-        return Err(
-            "the layer changed since this edit was prepared; refresh and try again".to_string(),
-        );
-    }
-    let mut members = accepted_members(library, &base)?;
+    ensure_expected_head(&base, expected_head)?;
+    let mut members = accepted_members(library, &base, cancel)?;
     let Some(index) = members
         .iter()
         .position(|member| member.member_id == member_id)
@@ -4169,7 +4434,8 @@ pub fn move_member(
         members,
         &base,
         &base.generation_id,
-        Some(&base.generation_id),
+        UndoState::after_change(Some(&base.generation_id)),
+        "reorder",
         cancel,
     )
 }
@@ -4186,14 +4452,8 @@ pub fn remove_member(
     cancel: &AtomicBool,
 ) -> Result<ApplyOutcome, String> {
     let base = snapshot_base(library, layer_id)?;
-    if let Some(expected) = expected_head
-        && expected != base.generation_id
-    {
-        return Err(
-            "the layer changed since this edit was prepared; refresh and try again".to_string(),
-        );
-    }
-    let mut members = accepted_members(library, &base)?;
+    ensure_expected_head(&base, expected_head)?;
+    let mut members = accepted_members(library, &base, cancel)?;
     let before = members.len();
     members.retain(|member| member.member_id != member_id);
     if members.len() == before {
@@ -4205,7 +4465,8 @@ pub fn remove_member(
         members,
         &base,
         &base.generation_id,
-        Some(&base.generation_id),
+        UndoState::after_change(Some(&base.generation_id)),
+        "remove",
         cancel,
     )
 }
@@ -4571,7 +4832,11 @@ fn publish_applied_snapshot(
             plan,
             measurement,
             manifest_json,
-            planned_head,
+            &collection::SnapshotLineage {
+                previous_generation_id: planned_head,
+                undo_available: true,
+                operation: "import",
+            },
         )?;
         for source in incoming {
             let interpretation_id = format!("interp-{}", source.interp_hash);
@@ -4646,6 +4911,7 @@ fn head_numeric_read(
     library: &LidarLibrary,
     head: Option<&catalogue::GenerationRow>,
     manifest: Option<&GenerationManifest>,
+    cancel: &AtomicBool,
 ) -> Result<HeadNumeric, String> {
     let (Some(head), Some(manifest)) = (head, manifest) else {
         return Ok(HeadNumeric::None);
@@ -4660,8 +4926,8 @@ fn head_numeric_read(
             )))
         }
         GenerationStorageFormat::OrderedMembersV1 => {
-            let collection =
-                collection::load_reader(library, &head.id, manifest)?.ok_or_else(|| {
+            let collection = collection::load_reader(library, &head.id, manifest, cancel)?
+                .ok_or_else(|| {
                     "accepted collection is missing a source payload; the layer cannot be read \
                      without inventing coverage"
                         .to_string()
@@ -5749,7 +6015,7 @@ mod tests {
         .unwrap();
         {
             let _guard = capacity_probe::override_available(required);
-            let (cog, regions) = stage_source_samples(
+            let (cog, regions, valid_cells) = stage_source_samples(
                 &engine,
                 &cancel,
                 &source,
@@ -5762,6 +6028,19 @@ mod tests {
             .expect("the exact combined requirement admits the work");
             assert!(cog.value_range[0].is_finite() && cog.value_range[1].is_finite());
             assert!(cog.bytes > 0);
+            // An independent oracle for the same grid: a cell is valid when it
+            // is finite and differs from the declared sentinel.
+            let expected_valid = (0..height)
+                .flat_map(|y| (0..width).map(move |x| (x, y)))
+                .filter(|(x, y)| {
+                    let value = staged_value(*x, *y);
+                    value.is_finite() && value != -9999.0
+                })
+                .count() as u64;
+            assert_eq!(
+                valid_cells, expected_valid,
+                "the prepared source reports the valid cells it actually holds"
+            );
             let staged_path = cog.resolve(&paths, Some("boundary-job")).unwrap();
             assert!(
                 staged_path.exists(),
@@ -5834,6 +6113,173 @@ mod tests {
         tif
     }
 
+    /// The CRS this engine reports for a raster, as a source probe would.
+    fn declared_wkt(engine: &GdalEngine, raster: &Path) -> String {
+        let info = super::super::display::gdalinfo_json(engine, &AtomicBool::new(false), raster)
+            .expect("gdalinfo reads the fixture");
+        info.get("coordinateSystem")
+            .and_then(|system| system.get("wkt"))
+            .and_then(|wkt| wkt.as_str())
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// Publish a generation in the shape the superseded route wrote.
+    ///
+    /// A pre-repair library owns `cog-chunks-v1` generations whose manifest grid
+    /// is only the lattice anchor while their published chunks may reach well
+    /// beyond it. The delivery has to keep reading that shape exactly, so the
+    /// tests build it directly instead of reviving the retired publication path.
+    fn publish_legacy_chunked_head(
+        library: &LidarLibrary,
+        layer_id: &str,
+        lattice: &RasterGrid,
+        clusters: &[(i64, i64, f32)],
+        base_generation_id: Option<&str>,
+    ) -> String {
+        let engine = &library.inner.engine;
+        let paths = &library.inner.paths;
+        let cancel = AtomicBool::new(false);
+        let scratch = paths.prepared_dir().join("legacy-fixture");
+        std::fs::create_dir_all(&scratch).unwrap();
+        let generation_id = new_id("gen");
+        let mut rows = Vec::new();
+        // The manifest must declare exactly the CRS this engine reports for the
+        // written raster, or a later source would be refused as foreign.
+        let mut crs_wkt = String::new();
+        for (chunk_x, chunk_y, value) in clusters {
+            let grid = generation::chunk_grid(lattice, *chunk_x, *chunk_y);
+            let values = vec![*value; (grid.width * grid.height) as usize];
+            let asset = super::super::raster_assets::write_cog_asset(
+                engine,
+                &cancel,
+                paths,
+                &scratch,
+                &format!("legacy-{chunk_x}-{chunk_y}"),
+                &grid,
+                "EPSG:3857",
+                Some(-9999.0),
+                &values,
+            )
+            .expect("legacy chunk asset writes");
+            if crs_wkt.is_empty() {
+                crs_wkt = declared_wkt(engine, &asset.path);
+            }
+            let connection = library.catalogue().unwrap();
+            catalogue::insert_raster_asset(
+                &connection,
+                &generation::asset_row(paths, &asset, &crs_wkt).unwrap(),
+            )
+            .unwrap();
+            rows.push(catalogue::GenerationChunkRow {
+                role: generation::RESULT_ROLE.to_string(),
+                chunk_x: *chunk_x,
+                chunk_y: *chunk_y,
+                asset_sha256: asset.sha256.clone(),
+                valid_cells: i64::from(grid.width) * i64::from(grid.height),
+                min_value: f64::from(*value),
+                max_value: f64::from(*value),
+                sum_value: f64::from(*value) * f64::from(grid.width) * f64::from(grid.height),
+            });
+        }
+        let mut min_value = f64::INFINITY;
+        let mut max_value = f64::NEG_INFINITY;
+        let mut coverage = 0i64;
+        for row in &rows {
+            coverage += row.valid_cells;
+            min_value = min_value.min(row.min_value);
+            max_value = max_value.max(row.max_value);
+        }
+        if !min_value.is_finite() {
+            min_value = 0.0;
+            max_value = 0.0;
+        }
+        let manifest = serde_json::json!({
+            "grid": {
+                "width": lattice.width,
+                "height": lattice.height,
+                "geotransform": lattice.geotransform,
+            },
+            "nodata": -9999.0,
+            "crs_wkt": crs_wkt.clone(),
+            "members": [],
+            "engine_version": "fixture",
+            "created_at": "0",
+            "format": "cog-chunks-v1",
+        })
+        .to_string();
+        let bounds = raster_bounds_3857(engine, &cancel, lattice, &crs_wkt).unwrap();
+        {
+            let connection = library.catalogue().unwrap();
+            catalogue::insert_unpublished_chunks(&connection, &generation_id, &rows).unwrap();
+            catalogue::publish_generation_chunks(&connection, &generation_id).unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations(
+                         id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857, base_generation_id,
+                         undo_available, operation)
+                     VALUES(?1, ?2, '0', NULL, NULL, ?3, ?4, ?5, ?6, ?7, ?8, 0, NULL)",
+                    rusqlite::params![
+                        generation_id,
+                        layer_id,
+                        manifest,
+                        coverage,
+                        min_value,
+                        max_value,
+                        serde_json::to_string(&bounds).unwrap(),
+                        base_generation_id,
+                    ],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES(?1, ?2)
+                     ON CONFLICT(layer_id) DO UPDATE SET generation_id = excluded.generation_id",
+                    rusqlite::params![layer_id, generation_id],
+                )
+                .unwrap();
+        }
+        let _ = std::fs::remove_dir_all(&scratch);
+        generation_id
+    }
+
+    /// The same fixture placed with an explicit CRS declaration.
+    #[allow(clippy::too_many_arguments)]
+    fn write_crs_fixture(
+        engine: &GdalEngine,
+        dir: &Path,
+        name: &str,
+        crs: &str,
+        origin_x: f64,
+        origin_y: f64,
+        width: u32,
+        height: u32,
+        value: f32,
+    ) -> PathBuf {
+        let values = vec![value; (width * height) as usize];
+        let raw = dir.join(format!("{name}.raw"));
+        write_f32_raw(&raw, &values).expect("fixture raw writes");
+        let tif = dir.join(format!("{name}.tif"));
+        raw_to_tif(
+            engine,
+            &AtomicBool::new(false),
+            &raw,
+            &tif,
+            &RasterGrid {
+                width,
+                height,
+                geotransform: [origin_x, 1.0, 0.0, origin_y, 0.0, -1.0],
+            },
+            crs,
+            -9999.0,
+        )
+        .expect("fixture converts");
+        let _ = std::fs::remove_file(&raw);
+        let _ = std::fs::remove_file(raw.with_extension("hdr"));
+        tif
+    }
+
     /// Drive the real caller flow up to a staged review.
     fn stage_review(
         library: &LidarLibrary,
@@ -5889,9 +6335,14 @@ mod tests {
     fn head_occupied_chunks(library: &LidarLibrary, layer_id: &str) -> Vec<(i64, i64)> {
         let head = head_of(library, layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        let reader = super::super::collection::load_reader(library, &head.id, &manifest)
-            .unwrap()
-            .expect("every member still resolves");
+        let reader = super::super::collection::load_reader(
+            library,
+            &head.id,
+            &manifest,
+            &AtomicBool::new(false),
+        )
+        .unwrap()
+        .expect("every member still resolves");
         reader.occupied_chunks().unwrap()
     }
 
@@ -5912,7 +6363,13 @@ mod tests {
     ) -> (Vec<f32>, Vec<u8>) {
         let head = head_of(library, layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        let numeric = head_numeric_read(library, Some(&head), Some(&manifest)).unwrap();
+        let numeric = head_numeric_read(
+            library,
+            Some(&head),
+            Some(&manifest),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         // Read exactly the requested window: the layer lattice's origin is
         // fixed, so window coordinates are lattice coordinates and a synthetic
         // union equal to the window keeps the indexing trivial.
@@ -6154,33 +6611,42 @@ mod tests {
             }
         }
         // Every earlier version is still listed and still restorable.
-        let history = reopened.layer_history(&layer_id).unwrap();
+        let history = reopened.layer_history_page(&layer_id, None).unwrap();
         assert!(
-            history.len() >= 6,
+            history.versions.len() >= 6,
             "every publication stays in history: {}",
-            history.len()
+            history.versions.len()
         );
         assert_eq!(
-            history.iter().filter(|entry| entry.is_head).count(),
+            history
+                .versions
+                .iter()
+                .filter(|entry| entry.is_head)
+                .count(),
             1,
             "exactly one head is marked current"
         );
         assert!(
-            history.iter().any(|entry| entry.id == stacked_head.id),
+            history
+                .versions
+                .iter()
+                .any(|entry| entry.id == stacked_head.id),
             "the removed source's version is retained"
         );
         assert!(
             history
+                .versions
                 .iter()
-                .filter(|entry| entry.is_head)
-                .all(|entry| entry.restorable),
-            "the head can be walked back"
+                .all(|entry| entry.operation.is_some() && entry.source_count <= 2),
+            "each version names its recorded operation and its source count"
         );
         assert!(
             history
+                .versions
                 .iter()
-                .all(|entry| !entry.operation.is_empty() && entry.source_count <= 2),
-            "each version names its operation and its source count"
+                .filter(|entry| entry.is_head)
+                .all(|entry| !entry.restorable),
+            "the current version is not offered as a restore of itself"
         );
         // A stale edit is refused by name instead of applying to a newer order.
         let stale = move_member(
@@ -6318,7 +6784,10 @@ mod tests {
         // The undo must refresh too: it goes through the same settlement path.
         let undone = undo_last_change(&library, &layer_id, None, &cancel).expect("undo publishes");
         assert!(undone.changed);
-        library.settle_layer_edit(&layer_id, "undo-refresh-test", Ok(undone.clone()));
+        let settled = library
+            .settle_layer_edit(&layer_id, "undo-refresh-test", Ok(undone.clone()))
+            .expect("a committed undo settles");
+        assert!(settled.changed, "the undo reported its publication");
         let (undo_job, undo_source) = latest_job();
         assert_ne!(undo_job, apply_job, "the undo enqueues its own refresh");
         assert_eq!(
@@ -6347,7 +6816,13 @@ mod tests {
             !no_change.changed,
             "restoring the current version changes nothing"
         );
-        library.settle_layer_edit(&layer_id, "undo-refresh-noop", Ok(no_change));
+        let settled_noop = library
+            .settle_layer_edit(&layer_id, "undo-refresh-noop", Ok(no_change))
+            .expect("a no-op settles");
+        assert!(
+            !settled_noop.changed,
+            "a no-op edit reports that it published nothing"
+        );
         let (after_noop, _) = latest_job();
         assert_eq!(
             after_noop, undo_job,
@@ -6357,7 +6832,1046 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A preserved legacy generation keeps its dense files and can be extended    /// A preserved legacy generation keeps its dense files and can be extended
+    /// P1-4: one common interpretation for a layer's first batch.
+    ///
+    /// Without an accepted head there is nothing to compare a source against,
+    /// so the first compatible selection becomes the anchor. Equal-coordinate
+    /// rasters that declare different horizontal CRSs must not be admitted
+    /// together: the lattice could not reconcile them and a later read could
+    /// not reconcile them either.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_first_batch_refuses_sources_that_disagree_on_the_horizontal_crs() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-first-batch-crs"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let web_mercator =
+            write_crs_fixture(&engine, &root, "web", "EPSG:3857", 0.0, 4.0, 4, 4, 5.0);
+        let lambert =
+            write_crs_fixture(&engine, &root, "lambert", "EPSG:2154", 0.0, 4.0, 4, 4, 7.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "first batch crs",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let output = stage_import(
+            &library,
+            &job_id,
+            &layer_id,
+            &[web_mercator, lambert],
+            &cancel,
+        )
+        .expect("staging completes");
+        assert!(
+            !output.review.compatible,
+            "a mixed-CRS batch is not compatible"
+        );
+        assert!(
+            output
+                .review
+                .issues
+                .iter()
+                .any(|issue| issue.contains("horizontal CRS differs")),
+            "the refusal names the CRS disagreement: {:?}",
+            output.review.issues
+        );
+        assert_eq!(
+            output
+                .review
+                .sources
+                .iter()
+                .filter(|source| source.compatible)
+                .count(),
+            1,
+            "the anchor source stays admissible; the disagreeing one does not"
+        );
+        // The same batch is refused by the publication boundary, not only by
+        // the panel that disables its confirmation.
+        library.finish_staging(
+            &job_id,
+            Ok(StagingOutput {
+                review: output.review.clone(),
+            }),
+        );
+        let staging: StagedImport = serde_json::from_str(
+            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        let refused = library
+            .prepare_apply(&job_id)
+            .expect_err("a mixed batch never enters applying");
+        assert!(refused.contains("cannot be published"), "{refused}");
+        assert!(
+            apply_import(&library, &staging, true, false, &cancel)
+                .expect_err("the backend refuses the whole batch")
+                .contains("cannot be published"),
+            "the whole selected batch is atomic"
+        );
+        assert_eq!(
+            generation_count(&library, &layer_id),
+            0,
+            "nothing was published"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-4: an all-NoData source is refused by name before review.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn an_all_nodata_source_is_refused_by_name() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-zero-valid"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        // Every cell equals the declared NoData sentinel, so the source has no
+        // valid sample under its own rule.
+        let empty = write_placed_fixture(&engine, &root, "empty", 0.0, 4.0, 4, 4, -9999.0, -9999.0);
+        let real = write_placed_fixture(&engine, &root, "real", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "zero valid",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let output = stage_import(&library, &job_id, &layer_id, &[empty, real], &cancel)
+            .expect("staging completes");
+        let empty_facts = output
+            .review
+            .sources
+            .iter()
+            .find(|source| source.filename.contains("empty"))
+            .expect("the empty source is listed");
+        assert!(
+            !empty_facts.compatible,
+            "an all-NoData source is not admissible"
+        );
+        assert!(
+            empty_facts
+                .issues
+                .iter()
+                .any(|issue| issue.contains("no valid samples")),
+            "the refusal names the reason: {:?}",
+            empty_facts.issues
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-4: the admission envelope follows the current composition.
+    ///
+    /// Three small sources are admitted one at a time. Each import's own union
+    /// with the fixed lattice anchor stays far below the limit, while the
+    /// composition's real extent crosses it — which is how an oversized
+    /// collection was admitted before.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn the_admission_envelope_follows_the_current_composition() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-cumulative-envelope"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let anchor = write_placed_fixture(&engine, &root, "anchor", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let east = write_placed_fixture(&engine, &root, "east", 6000.0, 4.0, 4, 4, -9999.0, 6.0);
+        let south = write_placed_fixture(&engine, &root, "south", 0.0, 4204.0, 4, 4, -9999.0, 7.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "cumulative envelope",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+
+        let (job_one, staging_one) = stage_review(&library, &layer_id, &[anchor], &cancel);
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("anchor publishes");
+
+        // The east source extends the composition to 6004 x 4 cells: admitted.
+        let (job_two, staging_two) = stage_review(&library, &layer_id, &[east], &cancel);
+        assert!(
+            admission::union_envelope_cells(
+                staging_two.union_grid.width,
+                staging_two.union_grid.height
+            )
+            .unwrap()
+                < admission::MAX_IMPORT_UNION_CELLS,
+            "the second import's own envelope is small"
+        );
+        library.prepare_apply(&job_two).expect("review accepted");
+        apply_import(&library, &staging_two, true, false, &cancel).expect("east publishes");
+        let composed = head_of(&library, &layer_id);
+        assert_eq!(
+            composed.coverage_cells,
+            2 * 16,
+            "both accepted sources are one composition"
+        );
+
+        // The south source leaves the anchor-relative envelope small, but the
+        // composition now spans 6004 x 4204 cells, above the unchanged limit.
+        let staging_three_error = stage_import(
+            &library,
+            &library.record_import_job(&layer_id).expect("job recorded"),
+            &layer_id,
+            &[south],
+            &cancel,
+        )
+        .err();
+        let anchor_relative = {
+            let mut admitted = RasterGrid {
+                width: 4,
+                height: 4,
+                geotransform: [0.0, 1.0, 0.0, 4204.0, 0.0, -1.0],
+            };
+            admitted = union_grid(
+                &admitted,
+                &RasterGrid {
+                    width: 4,
+                    height: 4,
+                    geotransform: [0.0, 1.0, 0.0, 4204.0, 0.0, -1.0],
+                },
+            )
+            .unwrap();
+            admission::union_envelope_cells(admitted.width, admitted.height).unwrap()
+        };
+        assert!(
+            anchor_relative < admission::MAX_IMPORT_UNION_CELLS,
+            "the anchor-relative envelope is what the superseded check measured: {anchor_relative}"
+        );
+        let south_grid = RasterGrid {
+            width: 4,
+            height: 4,
+            geotransform: [0.0, 1.0, 0.0, 4204.0, 0.0, -1.0],
+        };
+        let mut with_incoming = composition_extent_grid(&library, Some(&composed))
+            .unwrap()
+            .expect("the composition has an extent");
+        with_incoming = union_grid(&with_incoming, &south_grid).unwrap();
+        assert!(
+            admission::union_envelope_cells(with_incoming.width, with_incoming.height).unwrap()
+                > admission::MAX_IMPORT_UNION_CELLS,
+            "the composition's real extent exceeds the limit"
+        );
+        let refused = staging_three_error.expect("staging refuses the oversized composition");
+        assert!(
+            refused.contains("exceeds") || refused.contains("25000000"),
+            "the refusal names the envelope: {refused}"
+        );
+        assert_eq!(
+            head_of(&library, &layer_id).id,
+            composed.id,
+            "the accepted head is untouched"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-3: published statistics and the reopened samples are the same
+    /// composition.
+    ///
+    /// A full-cover import of 9 above 5 reads back as 9, so its published range
+    /// must be 9..9 as well. Building the incoming occurrence with the
+    /// superseded Add/ReplaceOverlap roles measured a different composition
+    /// than the one the snapshot actually replays.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn published_statistics_match_the_reopened_composition() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-published-statistics"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let five = write_placed_fixture(&engine, &root, "five", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let nine = write_placed_fixture(&engine, &root, "nine", 0.0, 4.0, 4, 4, -9999.0, 9.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "published statistics",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job_one, staging_one) = stage_review(&library, &layer_id, &[five], &cancel);
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("first applies");
+
+        let (job_two, staging_two) = stage_review(&library, &layer_id, &[nine], &cancel);
+        library.prepare_apply(&job_two).expect("review accepted");
+        let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("second");
+        let head = head_of(&library, &layer_id);
+        assert_eq!(head.id, applied.generation_id);
+        assert_eq!(head.coverage_cells, 16);
+        assert_eq!(
+            head.min_value,
+            Some(9.0),
+            "the published range is the composed one"
+        );
+        assert_eq!(head.max_value, Some(9.0));
+
+        drop(library);
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        let (values, valid) = head_window(
+            &reopened,
+            &layer_id,
+            generation::LatticeWindow {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 4,
+            },
+        );
+        assert!(valid.iter().all(|byte| *byte == 1));
+        assert!(
+            values.iter().all(|value| *value == 9.0),
+            "the reopened composition is the one the statistics describe: {values:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-5: a sparse preserved composition keeps its signed extent.
+    ///
+    /// Its manifest rectangle describes the lattice its chunks are addressed
+    /// in, not how far they reach. A published chunk beyond that rectangle must
+    /// stay readable through the transition, or accepted coverage silently
+    /// disappears.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_sparse_previous_composition_keeps_its_signed_extent() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-sparse-extent"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "sparse extent",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        // The anchor lattice is a 4x4 rectangle; the published chunks reach a
+        // third block far to the east, exactly as a pre-repair library does.
+        let lattice = RasterGrid {
+            width: 4,
+            height: 4,
+            geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
+        };
+        publish_legacy_chunked_head(
+            &library,
+            &layer_id,
+            &lattice,
+            &[(0, 0, 5.0), (2, 0, 7.0)],
+            None,
+        );
+        let manifest =
+            read_generation_manifest(&head_of(&library, &layer_id).manifest_json).unwrap();
+        assert_eq!(
+            manifest.grid.width, 4,
+            "the anchor rectangle is only the coordinate frame"
+        );
+
+        // A new source above it wraps the accepted head as one member.
+        let top = write_placed_fixture(&engine, &root, "top", 0.0, 4.0, 4, 4, -9999.0, 6.0);
+        let (job_two, staging_two) = stage_review(&library, &layer_id, &[top], &cancel);
+        library.prepare_apply(&job_two).expect("review accepted");
+        apply_import(&library, &staging_two, true, false, &cancel).expect("wraps");
+
+        let sample = |x: i64, y: i64| -> (f32, u8) {
+            let (samples, valid) = head_window(
+                &library,
+                &layer_id,
+                generation::LatticeWindow {
+                    x,
+                    y,
+                    width: 1,
+                    height: 1,
+                },
+            );
+            (samples[0], valid[0])
+        };
+        assert_eq!(sample(2048, 0).1, 1, "the far chunk is still valid");
+        assert_eq!(sample(2048, 0).0, 7.0, "with its own value");
+        assert_eq!(sample(0, 0), (6.0, 1), "the new source is on top");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-5: the previous composition wraps the accepted head, not the base
+    /// ancestor it may overlay.
+    ///
+    /// Following `base_generation_id` silently replaced accepted values with an
+    /// older composition: a historical overlay valued 7 became the base's 5.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn the_previous_composition_wraps_the_actual_accepted_head() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-wrap-head"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let top = write_placed_fixture(&engine, &root, "top", 20.0, 4.0, 4, 4, -9999.0, 3.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "wrap head",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        // The accepted head is a historical overlay: a sparse generation that
+        // records the dense base it replaced, valued 7 over the base's 5.
+        let lattice = RasterGrid {
+            width: 4,
+            height: 4,
+            geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
+        };
+        let base = publish_legacy_chunked_head(&library, &layer_id, &lattice, &[(0, 0, 5.0)], None);
+        let accepted =
+            publish_legacy_chunked_head(&library, &layer_id, &lattice, &[(0, 0, 7.0)], Some(&base));
+        let accepted_row = head_of(&library, &layer_id);
+        assert_eq!(accepted_row.id, accepted);
+        assert_eq!(accepted_row.min_value, Some(7.0));
+        assert_eq!(
+            accepted_row.base_generation_id.as_deref(),
+            Some(base.as_str()),
+            "the accepted head records the base it overlays"
+        );
+
+        // A third source wraps whatever the layer accepted, so the overlay
+        // stays visible underneath it.
+        let (job_three, staging_three) = stage_review(&library, &layer_id, &[top], &cancel);
+        library.prepare_apply(&job_three).expect("review accepted");
+        apply_import(&library, &staging_three, true, false, &cancel).expect("wraps");
+        let head = head_of(&library, &layer_id);
+        let members = {
+            let connection = library.catalogue().unwrap();
+            catalogue::collection_members(&connection, &head.id).unwrap()
+        };
+        assert_eq!(members.len(), 2);
+        assert_eq!(
+            members[1].base_generation_id.as_deref(),
+            Some(accepted.as_str()),
+            "the wrapped member is the accepted head itself, not its base ancestor"
+        );
+        let (samples, valid) = head_window(
+            &library,
+            &layer_id,
+            generation::LatticeWindow {
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 2,
+            },
+        );
+        assert!(valid.iter().all(|byte| *byte == 1));
+        assert!(
+            samples.iter().all(|value| *value == 7.0),
+            "the accepted overlay value survives the transition: {samples:?}"
+        );
+        assert_eq!(head.max_value, Some(7.0), "and the statistics agree");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-6: a Previous-composition-only layer is a valid slope input.
+    ///
+    /// After an Undo the layer's composition can be one preserved member with
+    /// no source COG of its own. Eligibility has to come from the shared
+    /// generation reader, not from a source path that no longer exists.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn slope_accepts_a_previous_composition_only_layer() {
+        use super::super::analysis;
+
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-legacy-slope"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "legacy slope",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let lattice = RasterGrid {
+            width: 4,
+            height: 4,
+            geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
+        };
+        publish_legacy_chunked_head(&library, &layer_id, &lattice, &[(0, 0, 5.0)], None);
+
+        // The layer is a valid analysis input while it is still a preserved
+        // generation.
+        let receipt = library
+            .create_analysis(
+                &layer_id,
+                common_types::lidar::LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                },
+            )
+            .expect("analysis definition is created");
+
+        // A new source above it, then Undo: the head is now one ordered
+        // snapshot whose only member is the preserved composition.
+        let top = write_placed_fixture(&engine, &root, "top", 0.0, 4.0, 4, 4, -9999.0, 6.0);
+        let (job, staging) = stage_review(&library, &layer_id, &[top], &cancel);
+        library.prepare_apply(&job).expect("review accepted");
+        apply_import(&library, &staging, true, false, &cancel).expect("top publishes");
+        let undone = undo_last_change(&library, &layer_id, None, &cancel).expect("undo publishes");
+        assert!(undone.changed);
+        let head = head_of(&library, &layer_id);
+        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
+        assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
+        let members = {
+            let connection = library.catalogue().unwrap();
+            catalogue::collection_members(&connection, &head.id).unwrap()
+        };
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0].kind, "previous-composition");
+        assert!(
+            head.mosaic_path.is_none(),
+            "the composition owns no source raster of its own"
+        );
+
+        // Slope must still run: eligibility comes from the composition.
+        let parameters = {
+            let connection = library.catalogue().unwrap();
+            let json: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            analysis::parse_parameters(&json).unwrap()
+        };
+        let outcome = analysis::run_slope_job(
+            &library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &parameters,
+            &head.id,
+            &cancel,
+        )
+        .expect("a preserved composition is a valid slope input");
+        assert!(
+            outcome.published && !outcome.stale,
+            "the slope result is published: {}",
+            outcome.summary()
+        );
+        let result = library
+            .library_snapshot()
+            .unwrap()
+            .analyses
+            .into_iter()
+            .find(|analysis| analysis.id == receipt.definition_id)
+            .expect("the analysis is listed");
+        assert_eq!(result.state, common_types::lidar::LidarResultState::Ready);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-6: a superseded job settles as the scheduler's stale outcome.
+    ///
+    /// Reporting it as a plain failure ended the refresh chain, so the newest
+    /// composition could be left without a current result.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_superseded_sparse_slope_job_settles_as_stale() {
+        use super::super::analysis;
+
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-superseded-slope"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let second = write_placed_fixture(&engine, &root, "second", 20.0, 4.0, 4, 4, -9999.0, 9.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "superseded slope",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
+        let superseded = head_of(&library, &layer_id).id;
+
+        let receipt = library
+            .create_analysis(
+                &layer_id,
+                common_types::lidar::LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                },
+            )
+            .expect("analysis definition is created");
+        let parameters = {
+            let connection = library.catalogue().unwrap();
+            let json: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            analysis::parse_parameters(&json).unwrap()
+        };
+
+        // The layer moves on while the captured job is still queued.
+        let (job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
+        library.prepare_apply(&job_two).expect("review accepted");
+        apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
+        assert_ne!(head_of(&library, &layer_id).id, superseded);
+
+        let outcome = analysis::run_slope_job(
+            &library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &parameters,
+            &superseded,
+            &cancel,
+        )
+        .expect("a superseded job coalesces instead of failing");
+        assert!(
+            outcome.stale && !outcome.published,
+            "the superseded job is stale, not failed: {}",
+            outcome.summary()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-6: readiness is a fact about identity, not about a job having once
+    /// succeeded.
+    ///
+    /// A result whose captured source is no longer the head must not present
+    /// itself as current — including after a restart, where no callback runs.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn an_old_result_is_not_ready_after_the_head_changes() {
+        use super::super::analysis;
+
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-stale-ready"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let second = write_placed_fixture(&engine, &root, "second", 20.0, 4.0, 4, 4, -9999.0, 9.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "stale ready",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
+        library.prepare_apply(&job_one).expect("review accepted");
+        apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
+        let receipt = library
+            .create_analysis(
+                &layer_id,
+                common_types::lidar::LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                },
+            )
+            .expect("analysis definition is created");
+        let parameters = {
+            let connection = library.catalogue().unwrap();
+            let json: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            analysis::parse_parameters(&json).unwrap()
+        };
+        let head = head_of(&library, &layer_id).id;
+        let outcome = analysis::run_slope_job(
+            &library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &parameters,
+            &head,
+            &cancel,
+        )
+        .expect("the slope job runs");
+        assert!(outcome.published);
+        let state_of = |library: &LidarLibrary| {
+            library
+                .library_snapshot()
+                .unwrap()
+                .analyses
+                .into_iter()
+                .find(|analysis| analysis.id == receipt.definition_id)
+                .expect("the analysis is listed")
+        };
+        assert_eq!(
+            state_of(&library).state,
+            common_types::lidar::LidarResultState::Ready
+        );
+
+        // The head changes without a refresh having run.
+        let (job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
+        library.prepare_apply(&job_two).expect("review accepted");
+        apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
+        // Cancel the enqueued refresh so the state is derived, not settled.
+        let queued = {
+            let connection = library.catalogue().unwrap();
+            connection
+                .execute(
+                    "UPDATE lidar_analysis_jobs SET state = 'cancelled'
+                     WHERE definition_id = ?1 AND state IN ('preparing', 'refreshing')",
+                    [&receipt.definition_id],
+                )
+                .unwrap()
+        };
+        let _ = queued;
+        let stale = state_of(&library);
+        assert_ne!(
+            stale.state,
+            common_types::lidar::LidarResultState::Ready,
+            "an old result is not current for a new head: {stale:?}"
+        );
+        assert_eq!(
+            stale.state,
+            common_types::lidar::LidarResultState::Incomplete
+        );
+        assert!(
+            stale.detail.is_some(),
+            "the stale state explains itself: {stale:?}"
+        );
+
+        // A restart derives the same state, because nothing depends on a
+        // callback having fired.
+        drop(library);
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        let after_restart = state_of(&reopened);
+        assert_eq!(
+            after_restart.state,
+            common_types::lidar::LidarResultState::Incomplete,
+            "a restart does not resurrect a Ready result: {after_restart:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P1-7: Undo reaches the empty composition once, then stops; restoring an
+    /// equal composition publishes nothing.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn undo_stops_at_empty_and_restoring_an_equal_composition_is_a_no_op() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-undo-boundary"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "undo boundary",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job, staging) = stage_review(&library, &layer_id, &[first], &cancel);
+        library.prepare_apply(&job).expect("review accepted");
+        apply_import(&library, &staging, true, false, &cancel).expect("publishes");
+        let imported = head_of(&library, &layer_id).id;
+
+        // The first change can be undone to the empty composition.
+        let summary = library.layer_collection(&layer_id, None).unwrap();
+        assert!(summary.undo_available, "the import can be undone");
+        assert_eq!(
+            summary.undo_target, None,
+            "its target is the empty composition"
+        );
+        assert_eq!(summary.sources.len(), 1);
+
+        let undone = undo_last_change(&library, &layer_id, Some(&imported), &cancel)
+            .expect("undo publishes");
+        assert!(undone.changed);
+        let empty = library.layer_collection(&layer_id, None).unwrap();
+        assert_eq!(empty.member_count, 0, "the layer is empty");
+        assert!(!empty.undo_available, "the walk is exhausted");
+        assert_eq!(empty.undo_target, None);
+
+        // Another Undo is refused without publishing anything.
+        let exhausted = undo_last_change(&library, &layer_id, None, &cancel).expect("undo runs");
+        assert!(!exhausted.changed, "an exhausted Undo publishes nothing");
+        assert_eq!(
+            exhausted.generation_id, undone.generation_id,
+            "and it keeps the head it already had"
+        );
+        assert!(exhausted.message.is_some(), "and it explains itself");
+
+        // Restoring the import is an ordinary change and is itself undoable.
+        let restored =
+            restore_version(&library, &layer_id, &imported, None, &cancel).expect("restores");
+        assert!(restored.changed);
+        assert_eq!(
+            library
+                .layer_collection(&layer_id, None)
+                .unwrap()
+                .member_count,
+            1
+        );
+        let restored_summary = library.layer_collection(&layer_id, None).unwrap();
+        assert!(restored_summary.undo_available);
+        assert_eq!(
+            restored_summary.undo_target.as_deref(),
+            Some(undone.generation_id.as_str()),
+            "restoring records the head it replaced"
+        );
+
+        // Restoring the same composition again is a no-op: the ordered
+        // occurrence identities already match.
+        let equal =
+            restore_version(&library, &layer_id, &imported, None, &cancel).expect("restore runs");
+        assert!(
+            !equal.changed,
+            "an equal composition is not republished: {:?}",
+            equal.message
+        );
+
+        // History records what happened rather than inferring it.
+        let history = library.layer_history_page(&layer_id, None).unwrap();
+        let operations: Vec<Option<String>> = history
+            .versions
+            .iter()
+            .map(|entry| entry.operation.clone())
+            .collect();
+        assert_eq!(
+            operations,
+            vec![
+                Some("restore".to_string()),
+                Some("undo".to_string()),
+                Some("import".to_string())
+            ],
+            "each version names its own operation"
+        );
+        assert_eq!(
+            history
+                .versions
+                .iter()
+                .map(|entry| entry.sequence)
+                .collect::<Vec<_>>(),
+            vec![3, 2, 1],
+            "and a unique cue"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P2-8: source-region facts translate to absolute pixels.
+    ///
+    /// A 2048x1 source whose valid cells begin in the second block reported no
+    /// coverage and a 0..0 range, because every block was read as if it started
+    /// at the member's first pixel.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn source_region_facts_cover_later_blocks() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-region-facts"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        // Cells 0..1024 are NoData; 1024..2048 are seven.
+        let mut values = vec![-9999.0f32; 2048];
+        for value in values.iter_mut().skip(1024) {
+            *value = 7.0;
+        }
+        let source =
+            write_oracle_fixture(&engine, &root, "half", 0.0, 1.0, 2048, 1, -9999.0, &values);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "region facts",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
+        assert_eq!(
+            staging.uncovered_cells, 1024,
+            "the exact review coverage is the valid half"
+        );
+        library.prepare_apply(&job).expect("review accepted");
+        apply_import(&library, &staging, true, false, &cancel).expect("publishes");
+
+        let summary = library.layer_collection(&layer_id, None).unwrap();
+        let listed = &summary.sources[0];
+        assert_eq!(
+            listed.coverage_cells, 1024,
+            "the source list reports the valid half, not the first block"
+        );
+        assert_eq!(
+            listed.value_range,
+            [7.0, 7.0],
+            "and the range of the samples it actually holds"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P2-9: a bounded read resolves only the occurrences that can reach it.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_window_resolves_only_the_occurrences_that_can_reach_it() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-bounded-members"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let near = write_placed_fixture(&engine, &root, "near", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let far = write_placed_fixture(&engine, &root, "far", 1_000_000.0, 4.0, 4, 4, -9999.0, 9.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "bounded members",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job, staging) = stage_review(&library, &layer_id, &[near, far], &cancel);
+        library.prepare_apply(&job).expect("review accepted");
+        apply_import(&library, &staging, true, false, &cancel).expect("publishes");
+        let head = head_of(&library, &layer_id);
+        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
+
+        let whole = super::super::collection::load_reader(&library, &head.id, &manifest, &cancel)
+            .unwrap()
+            .expect("the composition resolves");
+        assert_eq!(whole.resolved().len(), 2, "both occurrences are members");
+
+        let windowed = super::super::collection::load_reader_within(
+            &library,
+            &head.id,
+            &manifest,
+            Some(super::super::collection::ReadBounds {
+                x0: -2,
+                y0: -2,
+                x1: 6,
+                y1: 6,
+            }),
+            &cancel,
+        )
+        .unwrap()
+        .expect("the bounded composition resolves");
+        assert_eq!(
+            windowed.resolved().len(),
+            1,
+            "a window near the first source never opens the distant one"
+        );
+        assert_eq!(
+            windowed.occupied_chunks().unwrap(),
+            vec![(0, 0)],
+            "and its occupied blocks follow the selection"
+        );
+        let resolved = windowed
+            .read_window(
+                generation::LatticeWindow {
+                    x: 0,
+                    y: 0,
+                    width: 4,
+                    height: 4,
+                },
+                &cancel,
+            )
+            .unwrap();
+        assert!(resolved.valid.iter().all(|byte| *byte == 1));
+        assert!(resolved.samples.iter().all(|value| *value == 5.0));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P2-11: the caller's cancellation reaches a cold compatibility lease.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_cancelled_read_does_not_prepare_a_compatibility_lease() {
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-compat-cancel"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let source = write_placed_fixture(&engine, &root, "legacy", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "compat cancel",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+            )
+            .unwrap();
+        let (job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
+        library.prepare_apply(&job).expect("review accepted");
+        {
+            let _dense = generation::chunked_publication::without_sparse();
+            apply_import(&library, &staging, true, false, &cancel).expect("dense publishes");
+        }
+        let head = head_of(&library, &layer_id);
+        assert_eq!(
+            read_generation_manifest(&head.manifest_json)
+                .unwrap()
+                .format,
+            GenerationStorageFormat::LegacyDenseV1,
+            "the preserved generation needs the compatibility lease"
+        );
+
+        let cancelled = AtomicBool::new(false);
+        cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+        let refused =
+            super::super::collection::previous_composition_member(&library, &head.id, &cancelled)
+                .err()
+                .expect("a cancelled read does not prepare a legacy derivative");
+        assert_eq!(refused, "cancelled", "{refused}");
+
+        // Healthy control: the same read with a live token prepares the lease
+        // and resolves.
+        let member =
+            super::super::collection::previous_composition_member(&library, &head.id, &cancel)
+                .expect("a live read prepares the lease");
+        let resolved = generation::resolve_window(
+            std::slice::from_ref(&member.resolved),
+            &read_generation_manifest(&head.manifest_json).unwrap().grid,
+            generation::LatticeWindow {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 4,
+            },
+            &cancel,
+        )
+        .unwrap();
+        assert!(resolved.valid.iter().all(|byte| *byte == 1));
+        assert!(resolved.samples.iter().all(|value| *value == 5.0));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A preserved legacy generation keeps its dense files and can be extended
     /// by a sparse publication without rewriting its history.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
@@ -8085,7 +9599,7 @@ mod tests {
         );
         review_probe::reset();
         let preview = library
-            .preview_import_decision(&job_two, false, true)
+            .preview_import_decision(&job_two)
             .expect("decision preview");
         assert!(
             review_probe::blocks() >= 1,
@@ -8209,7 +9723,7 @@ mod tests {
             &cancel,
         );
         let preview = library
-            .preview_import_decision(&job_two, false, true)
+            .preview_import_decision(&job_two)
             .expect("decision preview");
         let before = decode_preview(Path::new(
             preview
@@ -8336,7 +9850,7 @@ mod tests {
             }
         }
         review_probe::reset();
-        let preview = render_decision_preview(&library, &staging_two, true, false, &cancel)
+        let preview = render_composition_preview(&library, &staging_two, &cancel)
             .expect("decision preview over many occupied regions");
         let pages = review_probe::pages();
         assert!(
@@ -8356,11 +9870,11 @@ mod tests {
         // Cancellation stops the walk cleanly, and the next healthy call works.
         cancel.store(true, Ordering::Relaxed);
         assert!(
-            render_decision_preview(&library, &staging_two, true, false, &cancel).is_err(),
+            render_composition_preview(&library, &staging_two, &cancel).is_err(),
             "a cancelled review stops between pages"
         );
         cancel.store(false, Ordering::Relaxed);
-        let preview = render_decision_preview(&library, &staging_two, true, false, &cancel)
+        let preview = render_composition_preview(&library, &staging_two, &cancel)
             .expect("the same review succeeds after cancellation");
         assert!(!decode_preview(Path::new(&preview.after_preview_path)).is_empty());
 
@@ -8789,7 +10303,7 @@ mod tests {
             digest,
             "no re-preparation happened"
         );
-        let preview = render_decision_preview(&reopened, &restaged, true, false, &cancel)
+        let preview = render_composition_preview(&reopened, &restaged, &cancel)
             .expect("the review still previews without re-preparing");
         assert!(preview.after_preview_path.ends_with(".png"));
 
@@ -8975,6 +10489,7 @@ mod tests {
             crs_wkt: "EPSG:3857".to_string(),
             nodata: Some(-9999.0),
             value_range: [0.0, 0.0],
+            valid_cells: Some(1024 * 1024),
             size_bytes: 0,
             job_id: None,
             source_cog: None,
@@ -9204,7 +10719,7 @@ mod tests {
         // derivative that GDAL renders transparent, so the preview is asserted
         // to exist rather than to carry colour.
         let preview = library
-            .preview_import_decision(&job, true, false)
+            .preview_import_decision(&job)
             .expect("decision preview");
         let before_path = preview
             .before_preview_path
@@ -9571,7 +11086,7 @@ mod tests {
         let staged_json = std::fs::read_to_string(paths.job_dir(&job_wait).join("staging.json"))
             .expect("the awaiting-review job survives");
         let restaged: StagedImport = serde_json::from_str(&staged_json).unwrap();
-        let preview = render_decision_preview(&reopened, &restaged, true, false, &cancel)
+        let preview = render_composition_preview(&reopened, &restaged, &cancel)
             .expect("the intact job still previews");
         assert!(preview.after_preview_path.ends_with(".png"));
         reopened.prepare_apply(&job_wait).expect("review accepted");

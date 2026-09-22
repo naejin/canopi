@@ -16,8 +16,9 @@ import {
   lidarRestoreLayerVersion,
   lidarUndoLayerChange,
   lidarStageImport,
-  type LidarGenerationHistoryEntry,
   type LidarLayerCollection,
+  type LidarLayerEditOutcome,
+  type LidarLayerHistoryPage,
 } from '../../ipc/lidar'
 import { patchLidarEntryById, removeLidarEntries, upsertLidarEntry } from '../design-edit/lidar'
 import {
@@ -142,29 +143,46 @@ export async function deleteLidarAnalysis(definitionId: string): Promise<void> {
   })
 }
 
+/** One bounded page of a layer's publication history. */
 export async function fetchLayerHistory(
   layerId: string,
-): Promise<LidarGenerationHistoryEntry[]> {
-  return lidarLayerHistory(layerId)
+  cursor: string | null = null,
+): Promise<LidarLayerHistoryPage> {
+  return lidarLayerHistory(layerId, cursor)
 }
 
-/** The ordered sources and published versions of one Data Layer. */
-export async function fetchLayerCollection(layerId: string): Promise<LidarLayerCollection> {
-  return lidarLayerCollection(layerId)
+/** One bounded page of a Data Layer's ordered source composition. */
+export async function fetchLayerCollection(
+  layerId: string,
+  cursor: string | null = null,
+): Promise<LidarLayerCollection> {
+  return lidarLayerCollection(layerId, cursor)
 }
 
 /**
+ * Run one awaited ordered-layer edit.
+ *
  * A source-priority edit is library data, so the Design is never dirtied by it.
- * The refresh follows the settlement the backend reports rather than the
- * acknowledgement of the request, and the open collection view is re-read from
- * the same head so a late answer cannot replace a newer list.
+ * The backend resolves this call only after the edit has settled, so the
+ * library refresh that follows reflects the publication rather than the
+ * request; a refusal is surfaced as a message and re-thrown so the caller can
+ * re-read the head it actually has.
  */
-async function runCollectionEdit(work: () => Promise<void>): Promise<void> {
-  await withLidarError(async () => {
-    await work()
-    ensureLidarPolling()
+async function runCollectionEdit(
+  work: () => Promise<LidarLayerEditOutcome>,
+): Promise<LidarLayerEditOutcome> {
+  lidarStatusMessage.value = null
+  try {
+    const outcome = await work()
     await refreshLidarLibrary()
-  })
+    ensureLidarPolling()
+    if (outcome.message) lidarStatusMessage.value = outcome.message
+    return outcome
+  } catch (error) {
+    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+    await refreshLidarLibrary()
+    throw error
+  }
 }
 
 export async function moveLayerSource(
@@ -172,31 +190,31 @@ export async function moveLayerSource(
   memberId: string,
   towardsTop: boolean,
   expectedHead: string | null,
-): Promise<void> {
-  await runCollectionEdit(() => lidarMoveLayerSource(layerId, memberId, towardsTop, expectedHead))
+): Promise<LidarLayerEditOutcome> {
+  return runCollectionEdit(() => lidarMoveLayerSource(layerId, memberId, towardsTop, expectedHead))
 }
 
 export async function removeLayerSource(
   layerId: string,
   memberId: string,
   expectedHead: string | null,
-): Promise<void> {
-  await runCollectionEdit(() => lidarRemoveLayerSource(layerId, memberId, expectedHead))
+): Promise<LidarLayerEditOutcome> {
+  return runCollectionEdit(() => lidarRemoveLayerSource(layerId, memberId, expectedHead))
 }
 
 export async function undoLayerChange(
   layerId: string,
   expectedHead: string | null,
-): Promise<void> {
-  await runCollectionEdit(() => lidarUndoLayerChange(layerId, expectedHead))
+): Promise<LidarLayerEditOutcome> {
+  return runCollectionEdit(() => lidarUndoLayerChange(layerId, expectedHead))
 }
 
 export async function restoreLayerVersion(
   layerId: string,
   versionId: string,
   expectedHead: string | null,
-): Promise<void> {
-  await runCollectionEdit(() => lidarRestoreLayerVersion(layerId, versionId, expectedHead))
+): Promise<LidarLayerEditOutcome> {
+  return runCollectionEdit(() => lidarRestoreLayerVersion(layerId, versionId, expectedHead))
 }
 
 export function setLidarEntryVisibility(id: string, visible: boolean): void {

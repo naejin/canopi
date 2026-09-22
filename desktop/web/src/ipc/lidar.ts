@@ -1,7 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
   LidarDeleteImpact,
-  LidarGenerationHistoryEntry,
   LidarEngineStatus,
   LidarImportJob,
   LidarAnalysisJobStatus,
@@ -9,6 +8,8 @@ import type {
   LidarAnalysisKind,
   LidarAnalysisParameters,
   LidarLayerCollection,
+  LidarLayerEditOutcome,
+  LidarLayerHistoryPage,
   LidarLibrarySnapshot,
   LidarMeasurementKind,
 } from '../generated/contracts'
@@ -17,6 +18,8 @@ export type {
   LidarTileset,
   LidarGenerationHistoryEntry,
   LidarLayerCollection,
+  LidarLayerEditOutcome,
+  LidarLayerHistoryPage,
   LidarLayerSource,
   LidarAnalysisSummary,
   LidarLayerSummary,
@@ -101,29 +104,40 @@ export async function lidarDeleteAnalysis(definitionId: string): Promise<void> {
   return invoke('lidar_delete_analysis', { definitionId })
 }
 
-export async function lidarLayerHistory(
+/**
+ * One bounded page of a Data Layer's ordered source composition.
+ *
+ * `cursor` binds the page to the snapshot it was requested from; a late page of
+ * a superseded head is refused rather than mixed into a newer list.
+ */
+export async function lidarLayerCollection(
   layerId: string,
-): Promise<LidarGenerationHistoryEntry[]> {
-  return invoke('lidar_layer_history', { layerId })
+  cursor: string | null = null,
+): Promise<LidarLayerCollection> {
+  return invoke('lidar_layer_collection', { layerId, cursor })
 }
 
-/** The ordered sources and published versions of one Data Layer. */
-export async function lidarLayerCollection(layerId: string): Promise<LidarLayerCollection> {
-  return invoke('lidar_layer_collection', { layerId })
+/** One bounded page of a Data Layer's publication history, newest first. */
+export async function lidarLayerHistory(
+  layerId: string,
+  cursor: string | null = null,
+): Promise<LidarLayerHistoryPage> {
+  return invoke('lidar_layer_history', { layerId, cursor })
 }
 
 /**
  * Move one source one position in the layer's priority list.
  *
  * `expectedHead` is the snapshot the caller saw: a stale edit fails by name
- * instead of being applied to a newer order.
+ * instead of being applied to a newer order. The call resolves after the edit
+ * has actually settled.
  */
 export async function lidarMoveLayerSource(
   layerId: string,
   memberId: string,
   towardsTop: boolean,
   expectedHead: string | null,
-): Promise<void> {
+): Promise<LidarLayerEditOutcome> {
   return invoke('lidar_move_layer_source', { layerId, memberId, towardsTop, expectedHead })
 }
 
@@ -132,7 +146,7 @@ export async function lidarRemoveLayerSource(
   layerId: string,
   memberId: string,
   expectedHead: string | null,
-): Promise<void> {
+): Promise<LidarLayerEditOutcome> {
   return invoke('lidar_remove_layer_source', { layerId, memberId, expectedHead })
 }
 
@@ -140,7 +154,7 @@ export async function lidarRemoveLayerSource(
 export async function lidarUndoLayerChange(
   layerId: string,
   expectedHead: string | null,
-): Promise<void> {
+): Promise<LidarLayerEditOutcome> {
   return invoke('lidar_undo_layer_change', { layerId, expectedHead })
 }
 
@@ -149,6 +163,6 @@ export async function lidarRestoreLayerVersion(
   layerId: string,
   versionId: string,
   expectedHead: string | null,
-): Promise<void> {
+): Promise<LidarLayerEditOutcome> {
   return invoke('lidar_restore_layer_version', { layerId, versionId, expectedHead })
 }

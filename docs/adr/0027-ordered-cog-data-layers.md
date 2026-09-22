@@ -1,6 +1,6 @@
 # Ordered COG collections instead of materialized source merges
 
-Status: accepted direction — selected by the user on 2026-09-21; partial implementation delivered at `783e31e3`; [independent review](../design/raster-rework/ordered-cog-review.md) requires repairs before acceptance. Supersedes ADR 0026 for new source composition, not the validity of preserved historical assets or derived analysis storage.
+Status: accepted direction — selected by the user on 2026-09-21; the [independent review](../design/raster-rework/ordered-cog-review.md) of `783e31e3` required eleven repairs, which are delivered and await disposition. Supersedes ADR 0026 for new source composition, not the validity of preserved historical assets or derived analysis storage.
 Current guidance: [ordered COG receipt](../design/raster-rework/ordered-cog-receipt.md), [design](../design/raster-rework/ordered-cog-design.md), [independent review](../design/raster-rework/ordered-cog-review.md), [LiDAR](../agent/lidar.md).
 
 

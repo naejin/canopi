@@ -39,6 +39,8 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::lidar::LidarImportDecisionPreview>()
         .register::<common_types::lidar::LidarImportReview>()
         .register::<common_types::lidar::LidarLayerCollection>()
+        .register::<common_types::lidar::LidarLayerEditOutcome>()
+        .register::<common_types::lidar::LidarLayerHistoryPage>()
         .register::<common_types::lidar::LidarLayerSource>()
         .register::<common_types::lidar::LidarLibrarySnapshot>()
         .register::<common_types::lidar::LidarMeasurementKind>()

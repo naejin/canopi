@@ -89,10 +89,17 @@ pub(super) enum MemberSource {
 }
 
 /// A preserved generation read as one member of an ordered collection.
+///
+/// `owner` addresses the generation's published records in the lattice its
+/// manifest names; `offset` translates a member-local cell back into that
+/// lattice. The two differ whenever the member's own extent is not the manifest
+/// rectangle, which is exactly the sparse case: a published chunk at x = 2048
+/// lies outside a 60-cell anchor box and must still be readable.
 pub(super) struct PreservedGeneration {
     library: super::LidarLibrary,
     owner: GenerationChunkReader,
     grid: RasterGrid,
+    offset: (i64, i64),
 }
 
 impl PreservedGeneration {
@@ -102,12 +109,15 @@ impl PreservedGeneration {
         generation_id: &str,
         role: &str,
         grid: RasterGrid,
-    ) -> Self {
-        Self {
+        member_grid: &RasterGrid,
+    ) -> Result<Self, String> {
+        let offset = lattice_offset(&grid, member_grid)?;
+        Ok(Self {
             library: library.clone(),
             owner: GenerationChunkReader::new(generation_id, role),
             grid,
-        }
+            offset,
+        })
     }
 
     fn read(
@@ -119,8 +129,8 @@ impl PreservedGeneration {
             &self.library,
             &self.grid,
             LatticeWindow {
-                x: i64::from(window.x),
-                y: i64::from(window.y),
+                x: i64::from(window.x) + self.offset.0,
+                y: i64::from(window.y) + self.offset.1,
                 width: window.width,
                 height: window.height,
             },
@@ -309,9 +319,14 @@ impl CollectionReader {
         let mut ordered = Vec::with_capacity(members.len());
         // Reverse into resolver iteration order and renumber the ordinals, so
         // the ascending-ordinal precondition holds without a second ordering
-        // concept.
+        // concept. Every occurrence is normalized to the ordered model's one
+        // rule — paint the valid samples, highest priority last — so a
+        // composition that was built while the superseded Add/ReplaceOverlap
+        // roles still existed cannot change its meaning on the way to
+        // publication, measurement or reopen.
         for (index, (_member_id, mut member)) in members.into_iter().rev().enumerate() {
             member.ordinal = i64::try_from(index).unwrap_or(i64::MAX);
+            member.role = MemberRole::Replace;
             ordered.push(member);
         }
         let occupied = occupied_chunks(&ordered, &lattice)?;
@@ -1213,8 +1228,7 @@ pub(super) fn member_regions(
     };
     let mut regions = Vec::new();
     for (chunk_x, chunk_y) in occupied_chunks(std::slice::from_ref(&member), lattice)? {
-        let chunk = chunk_grid(lattice, chunk_x, chunk_y);
-        // Clip the chunk to the member's own extent.
+        // Clip the chunk to the member's own extent, in chunk-local cells...
         let clip_x0 = (offset_x - chunk_x * CHUNK_SIDE).max(0);
         let clip_y0 = (offset_y - chunk_y * CHUNK_SIDE).max(0);
         let clip_x1 =
@@ -1224,13 +1238,19 @@ pub(super) fn member_regions(
         if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
             continue;
         }
+        // ...and translate back to the member's own pixel coordinates, which
+        // is the frame its reader addresses. Without the chunk origin every
+        // block was read as if it started at the member's first pixel, so only
+        // the first block's facts were ever recorded and a source whose valid
+        // cells begin in a later block reported no coverage at all.
+        let origin_x = chunk_x * CHUNK_SIDE - offset_x;
+        let origin_y = chunk_y * CHUNK_SIDE - offset_y;
         let window = RasterWindow {
-            x: clip_x0 as u32,
-            y: clip_y0 as u32,
+            x: (origin_x + clip_x0) as u32,
+            y: (origin_y + clip_y0) as u32,
             width: (clip_x1 - clip_x0) as u32,
             height: (clip_y1 - clip_y0) as u32,
         };
-        let _ = chunk;
         let read = reader.read_window(window, cancel)?;
         let mut aggregate = RegionAggregate {
             block_x: chunk_x,
@@ -1259,7 +1279,10 @@ pub(super) fn member_regions(
 }
 
 /// Lattice cells from the layer anchor to a member grid's first cell.
-fn lattice_offset(lattice: &RasterGrid, grid: &RasterGrid) -> Result<(i64, i64), String> {
+pub(super) fn lattice_offset(
+    lattice: &RasterGrid,
+    grid: &RasterGrid,
+) -> Result<(i64, i64), String> {
     lattice.compatible(grid)?;
     let pixel_x = lattice.geotransform[1];
     let pixel_y = lattice.geotransform[5].abs();

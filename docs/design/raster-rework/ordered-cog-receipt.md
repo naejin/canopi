@@ -35,26 +35,64 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 - **One deliberate retention.** The backend `lidar_preview_import_decision` command and its `render_decision_preview` caller remain, because the review's Before/After renderers are still the detector for "the accepted head's own composed values" (the preview regression reads them) and the design's later interaction slice owns retiring the old preview entry points. The frontend no longer exposes any path to them, so no user can reach a merge decision.
 - **Retired new-write machinery.** The merge-model publication paths and their helpers are gone; `lidar_generation_members`, `GenerationChunkReader`, `persisted_chunks` and the dense read remain, because preserved generations, persisted slope results and the compatibility tests still read through them.
 
+## Finding-to-regression map
+
+Every finding from the [independent review](ordered-cog-review.md) is answered at the boundary the
+review named, with the counterexample it gave as the input. The disposition column states what the
+repair changed; "caller" means the regression drives the real public surface, not a helper.
+
+| # | Finding | Repair | Regression (boundary) |
+| --- | --- | --- | --- |
+| 1 | Collection reads deadlock on their own catalogue lock | the read holds one connection and never calls a public method that re-acquires it | `a_public_collection_read_does_not_re_acquire_the_catalogue_lock` (public read on an empty layer, own thread with a deadline so a regression fails instead of hanging) |
+| 2 | Edit completion and the visible selection are not connected | the four edit commands await the real edit and its settlement and return a typed outcome (`LidarLayerEditOutcome`); the panel keeps controls disabled while a read or edit is in flight, fences answers by layer + request generation, re-reads the head after a refusal, and keeps the failure message on screen; History and sources are re-read on every settlement | `undo_stops_at_empty_and_restoring_an_equal_composition_is_a_no_op` (caller), `lidar-layer-priority.test.tsx` (pending disables controls, a late answer cannot replace a newer selection, a refusal stays visible and re-reads), `lidar-layer-collection.test.ts` (typed outcomes, deferred responses) |
+| 3 | Published statistics use the superseded composition roles | one composition rule everywhere: `compose_union_block` paints valid incoming, `CollectionReader::new` normalizes every ordered occurrence to topmost-valid, and publication builds incoming occurrences with that rule | `published_statistics_match_the_reopened_composition` (caller: full-cover 9 over 5 publishes 9..9 and reopens as 9) |
+| 4 | Import admission is incomplete | one common CRS/grid anchor for a first batch; preparation's valid count is persisted and a zero-valid source is refused by name; `prepare_apply` and `apply_import` refuse a partially rejected batch; the envelope is the current composition's extent plus the selection, separate from the lattice anchor | `a_first_batch_refuses_sources_that_disagree_on_the_horizontal_crs`, `an_all_nodata_source_is_refused_by_name`, `the_admission_envelope_follows_the_current_composition` (all caller; the envelope case admits two small imports whose third composition crosses 25M while the anchor-relative check stays far below it) |
+| 5 | The transition can alter accepted historical data | a pre-transition head is wrapped as itself, never through `base_generation_id`; a sparse preserved composition keeps its signed chunk extent and is read through the member-to-lattice offset | `the_previous_composition_wraps_the_actual_accepted_head`, `a_sparse_previous_composition_keeps_its_signed_extent` (caller; both build the pre-repair shape directly) |
+| 6 | Slope has three correctness holes | eligibility resolves through the composition's own members (source COG, preserved mosaic or preserved record); a superseded job settles as the scheduler's stale outcome on the sparse route too; readiness is derived from result/source identity and composition emptiness at presentation, and startup re-schedules stale definitions once the executor attaches | `slope_accepts_a_previous_composition_only_layer`, `a_superseded_sparse_slope_job_settles_as_stale`, `an_old_result_is_not_ready_after_the_head_changes` (caller, including a restart) |
+| 7 | Undo/history boundaries and restore equality are inconsistent | Undo availability and its target are recorded explicitly (schema v16); Undo publishes the target and inherits the target's next-Undo state; a no-op publishes nothing; restore compares ordered occurrence identities; the real operation is recorded instead of inferred | `undo_stops_at_empty_and_restoring_an_equal_composition_is_a_no_op` (caller: first change undoes to empty, the next Undo is refused, restore is undoable and an equal composition is a no-op, operations and cues are exact), `v15_catalogue_migrates_to_an_explicit_undo_baseline` (catalogue) |
+| 8 | Source-region facts reread the first block | the chunk-local clip is translated back to the member's own pixel coordinates; zero-valid blocks are excluded from stored extrema | `source_region_facts_cover_later_blocks` (caller + public source list: a 2048×1 half-NoData source reports 1024 covered cells and a 7..7 range) |
+| 9 | Incremental read surfaces are unbounded | collection summary, member pages and history pages are separate bounded responses with snapshot-bound / upper-bound cursors; a numeric window resolves only the occurrences whose own extent intersects it | `a_window_resolves_only_the_occurrences_that_can_reach_it` (caller), `lidar-layer-priority.test.tsx` (paging appends, a page bound to another snapshot is refused), `lidar-layer-collection.test.ts` (cursors) |
+| 10 | The UI contract is unfinished | the stored original filename is joined through the interpretation's own source relation; History shows each version's recorded operation and its publication-order cue; the retired overlap counters are gone from the import confirmation | `lidar-layer-priority.test.tsx` (filename, neutral label for a migrated version, unique cue, no counters), `lidar-import-progress.test.tsx` |
+| 11 | Cancellation does not reach the compatibility read | the caller's token is threaded through the snapshot load and checked before the lease is published | `a_cancelled_read_does_not_prepare_a_compatibility_lease` (caller: a cancelled read refuses by name and leaves the lease cache cold; a live token is the healthy control) |
+
+A helper assertion is never the whole claim: rows 3, 5, 9 and 11 additionally read the published
+value back through the public head window or the public list, and rows 2, 9 and 10 drive the real
+panel with deferred answers rather than immediately-resolved mocks.
+
 ## Evidence
 
-### Decisive caller-level tests (GDAL required)
+### Regression strength on the repaired boundaries
 
-- `ordered_stage_review_apply_reorder_remove_undo_and_restore_keep_exact_values` runs the whole product workflow through the real callers: stage and review a bottom source (`uncovered 60×45`, no overlap), Apply, reopen the library and read the exact values back, add a second source above it (`overlap 40×45`, `uncovered 20×45`), read the composed `[…5, 9]` boundary, move the top source below the bottom one and read the changed composition, Undo the move, Undo again (walking further back rather than toggling), restore the moved version explicitly, remove one occurrence, and confirm that every earlier version is still listed with exactly one current head and that a stale edit is refused by name. It also asserts the format is `ordered-members-v1` and that the generated library tree contains no composed raster at all.
-- `an_undo_refreshes_the_dependent_analysis_it_restored` drives `canopi-kko3` end to end: a slope definition is created and its first job run, the **Apply** path is the control (it enqueues a refresh whose `source_generation_id` is the new head and whose published result becomes current), then an Undo is settled through `settle_layer_edit` and a new refresh is enqueued for the *restored* generation; the analysis head ends pointing at the restored generation and no current result still describes the composition the user undid. Restoring the version that is already current publishes nothing and enqueues nothing.
-- `ordered_collection_resolves_topmost_valid_without_materializing_anything` (hermetic, generation) proves the numeric rule directly on the design's decisive example: bottom A = `[10,20,30]`, top B = `[100,NoData,0]` gives `[100,20,0]` with every cell valid, moving B below A gives `[10,20,30]`, restoring B gives `[100,20,0]` again, a valid negative and a valid zero both survive, the library tree holds no `gen-*`/`chunk` artifact, and a member a million cells away occupies exactly one block.
-- `preserved_composition_reads_exact_values_with_the_authoritative_mask` proves the compatibility rule: a preserved dense mosaic replayed through the compatibility lease returns the authored values exactly where the generation's own coverage mask admits them, returns no sample where it does not, answers a sub-window with the same values without re-preparing, and keeps its lease owned for the next read.
-- `chunked_publication_extends_a_legacy_generation_without_rewriting_it` proves the transition: a generation published through the preserved dense route keeps its row, its mosaic path and its files, and the extension publishes an ordered composition whose bottom member is `previous-composition` referencing that original generation. Both members read back with their own values and the 440-column gap between them stays exactly invalid.
-- `sparse_publication_overlays_an_opaque_legacy_base` proves the indivisible case: a head whose member rows were stripped is overlaid as one member, its coverage is replayed from the lease rather than fabricated into reorderable sources, the extension paints over it, the gap stays invalid, and undo restores the preserved composition still pointing at the original base.
-- `legacy_and_retained_members_replay_together_and_undo_exactly` proves the semantic change explicitly: a top source's valid sample now covers a lower invalid cell (the superseded `replace-overlap` rule could not create coverage), the preserved columns keep their own values and validity, and undo restores the legacy payload byte-identical.
-- `a_retained_source_cog_is_the_only_durable_member_payload`, `grandfathered_large_generations_stay_readable_after_the_override_expires`, `sparse_gap_import_stores_only_occupied_chunks`, `sparse_lattice_anchor_never_moves_when_the_layer_extends_left`, `admission_admits_a_union_exactly_at_the_envelope_limit` and `sparse_twenty_four_tile_batch_stays_chunk_sized` keep their coverage, ownership, admission, lattice and bounded-work detectors and now assert the ordered rule: member metadata only, no resolved source raster, arithmetic occupied blocks, and reads that follow the composition.
-- **Map and History follow the snapshot.** A presentation tileset's URL embeds the head generation id (`lidarTileUrlTemplate`), and the map sync classifies a changed template as remove + add, so a committed edit replaces the rendered source instead of leaving the previous composition drawn; `lidar-map-presentation.test.ts` asserts exactly that classification, and the layer's History is re-read from the new head on every settlement. This is the delivered half of the smoke's stale-canvas observation; a live-window confirmation is still the pending item below.
-- `native_tiles_render_a_sparse_generation_and_report_empty_areas` keeps the display detector: an ordered layer presents a native tileset, renders opaque and partially painted tiles through the real protocol path, answers a deep zoom-out from reduced cells, returns an explicit empty tile beyond the coverage and refuses a generation belonging to another entity.
+The regressions were written with their repairs, so no RED-before-GREEN is claimed for them. What is
+recorded instead is a guard-removal probe round on the delivered revision: each probe restores one
+piece of the superseded behaviour, runs the named regression, and the file is restored and verified
+afterwards.
+
+| Probe (superseded behaviour restored) | Regression | Result |
+| --- | --- | --- |
+| `layer_collection` reads history through the public method again | `a_public_collection_read_does_not_re_acquire_the_catalogue_lock` | **FAILED** as required (the read deadlocked and the deadline fired) |
+| ordered occurrences are no longer normalized to topmost-valid | `published_statistics_match_the_reopened_composition` | **FAILED** as required (published 5..5 while the snapshot reads 9) |
+| the previous composition wraps `base_generation_id` again | `the_previous_composition_wraps_the_actual_accepted_head` | **FAILED** as required (the accepted 7 became the base's 5) |
+| the preserved sparse member keeps only the manifest rectangle | `a_sparse_previous_composition_keeps_its_signed_extent` | **FAILED** as required (the far chunk read as invalid) |
+| source-region facts use chunk-local coordinates again | `source_region_facts_cover_later_blocks` | **FAILED** as required (1024 covered cells became 0) |
+| incoming occurrences carry the review's roles again, normalization intact | `published_statistics_match_the_reopened_composition` | **PASSED** — and that is the intended result: the one-rule normalization in `CollectionReader::new` prevents the wrong composition independently of how the occurrence was built. The probe above shows the composition rule itself is detected; this one shows the second layer of defence is real rather than decorative. |
+
+The probe harness patches one guard, runs the named test, then restores the file from a byte copy
+and verifies the restoration; `git status` shows no probe residue afterwards. Log:
+`.rq-scratch/sensitivity-probes.log` (transient, not committed).
+
+### Focused caller-level tests (GDAL required)
+
+- `ordered_stage_review_apply_reorder_remove_undo_and_restore_keep_exact_values` runs the whole product workflow through the real callers: stage and review a bottom source, Apply, reopen the library and read the values back, add a second source above it, move it below, Undo twice walking further back, restore a version explicitly, remove an occurrence, and confirm every earlier version is still listed with exactly one current head and that a stale edit is refused by name.
+- `an_undo_refreshes_the_dependent_analysis_it_restored` drives `canopi-kko3` end to end with the Apply path as its control, including the no-op case.
+- `ordered_collection_resolves_topmost_valid_without_materializing_anything` and `preserved_composition_reads_exact_values_with_the_authoritative_mask` prove the numeric and compatibility rules at the resolver.
+- The finding-to-regression map above lists every repair's decisive test.
 
 ### Frontend
 
-- `lidar-layer-collection.test.ts` covers the ordered actions: reading the collection, sending the expected head with a move so a stale edit fails by name, remove, snapshot Undo, per-version restore, and surfacing a rejected edit without refreshing the library.
-- `lidar-import-progress.test.tsx` covers the import route: the review creates the **Add sources** confirmation, asserts the retired "Replace overlap" decision and the Before/After tabs are gone, states the ordered-insertion rule, and refuses the confirmation while any selected source is incompatible (naming the reason).
-- `npm test` passes in full (272 files, 2 648 tests) and `npx tsc --noEmit` is clean.
+- `lidar-layer-priority.test.tsx` drives the real panel: the stored filename and the neutral label for a migrated version, a unique version cue per entry, controls disabled for the whole round trip of a pending edit, a refusal that stays visible and re-reads the head, paging that appends the next page, and Undo disabled with an explanation when the walk is exhausted.
+- `lidar-layer-collection.test.ts` covers the ordered actions and their cursors: a member page is bound to the snapshot it was requested from, a history page keeps its captured upper bound, a move sends the expected head, a no-op message stays visible, and a rejection re-reads the library.
+- `lidar-import-progress.test.tsx` covers the import route: the **Add sources** confirmation exists, the retired overlap decision and Before/After tabs are gone, the ordered-insertion rule is stated, and an incompatible selection keeps the confirmation disabled with its reason.
 
 ### Repository gates on the final candidate
 
@@ -63,22 +101,36 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 | `cargo fmt --all -- --check` | clean |
 | `cargo clippy --workspace --all-targets -- -D warnings` | clean |
 | `cargo check --workspace` | clean |
-| `cargo test -p canopi-desktop native_command_policy::tests` | 13 passed / 0 failed |
-| `services::lidar --include-ignored --skip services::lidar::e2e --test-threads=1` | **159 passed / 0 failed** in 474.34 s (log `.rq-scratch/final-lidar.log`, transient) |
-| `cargo test --workspace` | 41 + 352 + 1 + 7 + 2 passed / 0 failed |
+| `cargo test -p canopi-desktop --lib native_command_policy` | 13 passed / 0 failed |
+| `services::lidar --include-ignored --skip services::lidar::e2e --test-threads=1` | **174 passed / 0 failed** in 570.57 s (log `.rq-scratch/repair-lidar.log`, transient) |
+| `cargo test --workspace` | 405 passed / 0 failed across 14 targets (log `.rq-scratch/workspace-tests.log`, transient) |
 | `cd desktop/web && npx tsc --noEmit` | clean |
-| `cd desktop/web && npm test` | **2 648 passed / 0 failed** (272 files) |
-| `cd desktop/web && npm run check:types` | generated bindings match (`bindings-gen --check`) |
+| `cd desktop/web && npm test` | 2 657 passed / 0 failed (273 files) |
+| `cd desktop/web && npm run check:types` | generated bindings match |
 | `python3 scripts/check_docs.py` | 0 errors |
 | `git diff --check` | clean |
 
 ### Final gate lane
 
-Every gate above ran on one committed candidate after the last code change (logs `.rq-scratch/final-lidar.log`, `.rq-scratch/workspace-tests.log`; transient, not committed). The private `e2e` fixture module is excluded from the focused lane by name, as the design's route specifies, and its external IGN MNT fixture was not available here: that exclusion is the recorded reason the count is 159 rather than the wider suite's total.
+Every gate above ran on one committed candidate after the last code change, in this order: Rust
+formatting, strict workspace Clippy and check, the native command policy guard, the focused
+`services::lidar` lane with `--include-ignored`, the workspace suite, then the frontend typecheck,
+generated-binding check and the full Vitest suite, and finally the documentation and diff checks. The
+private `e2e` fixture module is excluded from the focused lane by name, as the design's route
+specifies, and its external IGN MNT fixture was not available here.
 
 ### `canopi-kko3` resolution evidence
 
-The design settled this as "recompute after Undo as after Apply", not an open product choice. `settle_layer_edit` runs the dependent-refresh path once on the real settlement of every committed numeric edit, and `an_undo_refreshes_the_dependent_analysis_it_restored` proves it at the caller level: the Apply path is the control (its refresh enqueues a job for the new head and the published result becomes current), the Undo enqueues its own refresh for **the restored generation**, the analysis head ends pointing at that generation, and no current result still describes the composition the user undid. Restoring the version that is already current publishes nothing and enqueues nothing. Independent acceptance of the fix is the main agent's call, not claimed here.
+The design settled this as "recompute after Undo as after Apply", not an open product choice.
+`settle_layer_edit` runs the dependent-refresh path exactly once on the real settlement of every
+committed numeric edit, and `an_undo_refreshes_the_dependent_analysis_it_restored` proves it at the
+caller level: the Apply path is the control (its refresh enqueues a job for the new head and the
+published result becomes current), the Undo enqueues its own refresh for the restored generation, the
+analysis head ends pointing at that generation, and no current result still describes the composition
+the user undid. Restoring the version that is already current publishes nothing and enqueues nothing.
+Independently of the refresh, `an_old_result_is_not_ready_after_the_head_changes` shows that a result
+whose captured source is no longer the head is never presented as Ready, including after a restart.
+Independent acceptance of the fix is the main agent's call, not claimed here.
 
 ## Migration and compatibility limits
 
@@ -92,17 +144,48 @@ The design settled this as "recompute after Undo as after Apply", not an open pr
 
 ## Unavailable observations
 
-- **No automated WebView smoke test.** The suite has none and none was added. The workflow was exercised through caller-level tests only; the exact isolated-profile steps for a real Desktop run are in the handoff.
-- **The isolated real-Desktop workflow was not driven, and this is the one acceptance item still pending.** Import, reorder, remove, Undo, restore, group hide/show, slope refresh and restart were not observed in a live window. The blockers are exact: this session has a live X display (`:0`) and XTEST input is reachable through `python3 -m Xlib`, but `xdotool` is absent and the app would have to be launched onto the user's *active* session, so driving it risked interfering with their running instance and dev servers. The prompt's own rule applies — pending evidence with a runnable handoff, not invented success.
-
-  Runnables for the revision that carries this receipt (`53c26eb3`):
-  1. From the implementation worktree, start the frontend on a free port and point the app at it: `cd desktop/web && npm run dev -- --port 1430`, then set `build.devUrl` to `http://localhost:1430` in `desktop/tauri.conf.json` (revert that edit afterwards).
-  2. Launch with a private profile so nothing of the user's is touched: fresh `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_RUNTIME_DIR` under one newly created temp root, a private D-Bus session, and `cargo tauri dev` from the worktree. Confirm the window's own geometry with `xwininfo` and hit-test the pointer before every synthetic event.
-  3. Use `CANOPI_LIDAR_E2E_FIXTURE` (IGN MNT `0445_6806`) plus one small aligned authored overlay, and an authored raster that re-declares the layer CRS with different WKT for the refusal step.
-  4. Observe, in the real window: **Add TIFFs** → staged sources → **Add sources** → the raster appears; the layer's **Sources** list shows the new source topmost with a disabled ▲; move it down and watch the composed values change where the sources overlap; hide/show the group eye and confirm the composition and the analysis job count do not change; **Create slope** and confirm it renders; **Remove** a source and confirm the confirmation names the retained history; **Undo last change** and confirm the map and the open History update *without* reopening or restarting and that the slope refreshes; **Restore this version** on an older entry; save, close, relaunch and reopen the same Design and confirm layer, sources, versions and visibility survived; finally import the foreign-CRS raster and confirm it is refused by name with no generation published.
-  5. Capture the window, the app log and the analysis job rows as evidence; a helper test, the gallery or a SQLite inspection is not a substitute for a claimed live map action.
-- **Windows and macOS are not compiled here**, so platform free-space, rename durability and asset-URL behaviour remain as recorded in the predecessor receipt.
-- **No capacity, disk-budget or large-fixture campaign was run** for the ordered route. The representative 24-tile and sparse-gap runs still execute their authored coverage assertions, but their memory figures belong to the superseded route and are not restated as this route's measurements.
+- **The isolated real-Desktop workflow did not run, and the missing prerequisite is now exact.** This
+  session's shell runs inside a private PID namespace (`bwrap --unshare-pid`), the host has no
+  `Xvfb`/`xvfb-run`, and `DISPLAY=:0` is the user's live session with their own Canopi instance and
+  file dialogs open. So a second instance cannot be given its own display, and a process started from
+  here cannot afterwards be observed or stopped: `pgrep`/`ps` see only this sandbox, which is exactly
+  how an earlier check in this session wrongly concluded that no Canopi instance was running. A
+  window-list contradiction (`xwininfo`) corrected it. That sandbox limit is itself the finding: no
+  host-process observation from this environment is evidence.
+- **Runnables for the revision that carries this receipt.** (1) From the implementation worktree,
+  `cd desktop/web && npm run dev -- --port 1430 --strictPort`; launch the app with
+  `cargo tauri dev --config '{"build":{"devUrl":"http://localhost:1430","beforeDevCommand":null}}'`,
+  started as a managed background job so it can be stopped again. (2) Use a fresh disposable profile:
+  one newly created temp root holding `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME` and a
+  `0700` `XDG_RUNTIME_DIR`, inside `dbus-run-session`, preserving the user's own instance, data and
+  ports 1420/1422. Confirm the window's own geometry with `xwininfo` and hit-test the pointer before
+  every synthetic event. (3) Fixtures: an identified real MNT plus a small aligned authored overlay,
+  a second authored overlay for the reorder case, and one that re-declares the layer CRS with
+  different WKT for the refusal step. (4) Observe in the real window: **Add TIFFs** → staged sources
+  → **Add sources** → the raster appears and the source list shows the new source topmost with a
+  disabled ▲; move it down and watch the composed values change where the sources overlap; hide/show
+  the group eye and confirm the composition and the analysis job count do not change; **Create
+  slope**; **Remove** a source and confirm the confirmation names the retained history; **Undo last
+  change** repeatedly until the action disables itself, and confirm the map and the open History
+  update without reopening and that the slope refreshes; **Restore this version** on an older entry
+  and confirm an equal composition republishes nothing; change the selected layer while a read is in
+  flight and confirm the late answer does not replace the new selection's list; save, close, relaunch
+  and reopen the same Design and confirm layer, sources, versions, filenames and visibility survived;
+  finally import the foreign-CRS raster and confirm it is refused by name with no generation
+  published. (5) Capture the window, the app log and the analysis job rows as evidence. A helper
+  test, the gallery or a SQLite inspection is not a substitute for a claimed live map action.
+- **Automated/component evidence is not a live-window pass.** The panel behaviour is covered by
+  component tests with deferred answers, and the backend settlement by caller tests; neither shows
+  what the real WebView does with a MapLibre source replacement.
+- **Windows and macOS are not compiled here**, so platform free-space, rename durability and
+  asset-URL behaviour remain as recorded in the predecessor receipt.
+- **No capacity, disk-budget or large-fixture campaign was run** for the ordered route. The
+  representative 24-tile and sparse-gap runs still execute their authored coverage assertions, but
+  their memory figures belong to the superseded route and are not restated as this route's
+  measurements.
+- **One retained complexity with no current caller benefit.** `MemberSource::LegacyDense` (a raw
+  values/mask member payload) is still read because pre-retention libraries contain it, but an ordered
+  composition can no longer produce it; it is kept for history, not for new work.
 
 ## Next dependency
 

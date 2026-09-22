@@ -541,8 +541,14 @@
         "reorder": "순서 변경",
         "remove": "제거",
         "undo": "실행 취소",
-        "restore": "복원"
-      }
+        "restore": "복원",
+        "previousVersion": "이전 버전"
+      },
+      "loadMoreSources": "소스 더 불러오기",
+      "loadMoreVersions": "이전 버전 불러오기",
+      "undoExhausted": "되돌릴 이전 버전이 없습니다.",
+      "historySources": "소스",
+      "versionCue": "#{{number}}"
     }
   },
   "worldMap": {

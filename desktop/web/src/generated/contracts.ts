@@ -210,18 +210,21 @@ export type LidarGenerationHistoryEntry = {
 	id: string,
 	created_at: string,
 	coverage_cells: string,
-	members: string[],
-	roles: string[],
-	// Import jobs whose acceptance produced this generation.
-	job_ids: string[],
-	is_head: boolean,
 	/**
-	 *  User operation this version recorded, when it can be told apart
-	 *  (`import`, `reorder`, `remove`, `undo`, `restore`).
+	 *  Position of this version in the layer's publication order, counting from
+	 *  the oldest. Unique within the layer, so it is the identity cue History
+	 *  shows instead of numbering that makes consecutive imports read alike.
 	 */
-	operation: string,
-	// Sources in this version's ordered composition.
+	sequence: number,
+	/**
+	 *  User operation this version recorded (`import`, `reorder`, `remove`,
+	 *  `undo`, `restore`). Absent for a version migrated from a catalogue that
+	 *  did not record one; the UI names those neutrally rather than guessing.
+	 */
+	operation: string | null,
+	// Occurrences in this version's ordered composition.
 	source_count: number,
+	is_head: boolean,
 	// Whether this version can be restored as the new head.
 	restorable: boolean,
 };
@@ -308,11 +311,46 @@ export type LidarImportSourceFacts = {
  */
 export type LidarLayerCollection = {
 	layer_id: string,
+	/**
+	 *  Immutable snapshot this page describes. Every edit echoes it back, so a
+	 *  request prepared against a superseded head fails by name.
+	 */
 	head_generation_id: string | null,
-	// Whether the head can be walked back to an earlier version.
-	can_undo: boolean,
+	// Occurrences in the whole current composition, not only this page.
+	member_count: number,
+	/**
+	 *  Whether Undo is offered from this head at all. An available Undo with no
+	 *  target restores the empty composition; an unavailable one is exhausted.
+	 */
+	undo_available: boolean,
+	// Snapshot Undo restores; absent means the empty composition.
+	undo_target: string | null,
+	// One bounded page of the top-first priority list.
 	sources: LidarLayerSource[],
+	// Cursor for the next member page, when the composition has more.
+	next_member_cursor: string | null,
+};
+
+/**
+ *  What one awaited ordered-layer edit did.
+ *
+ *  `changed` distinguishes a published snapshot from a request that was
+ *  legitimately a no-op, and `head_generation_id` is the authoritative head
+ *  after settlement, so the caller never has to infer whether its edit landed.
+ */
+export type LidarLayerEditOutcome = {
+	head_generation_id: string | null,
+	changed: boolean,
+	message: string | null,
+};
+
+// One bounded page of a Data Layer's publication history, newest first.
+export type LidarLayerHistoryPage = {
+	layer_id: string,
+	head_generation_id: string | null,
 	versions: LidarGenerationHistoryEntry[],
+	// Cursor for the next page, when older versions exist.
+	next_cursor: string | null,
 };
 
 /**

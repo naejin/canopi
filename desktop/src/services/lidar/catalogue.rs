@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 15;
+pub const CATALOGUE_VERSION: i32 = 16;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -159,6 +159,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         13 => SCHEMA_V13,
         14 => SCHEMA_V14,
         15 => SCHEMA_V15,
+        16 => SCHEMA_V16,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -197,6 +198,34 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
                 [],
             )
             .map_err(|e| format!("Failed to add the legacy base reference: {e}"))?;
+    }
+    if next == 16 {
+        if !table_has_column(&transaction, "lidar_layer_generations", "operation")? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_layer_generations ADD COLUMN operation TEXT",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add the snapshot operation: {e}"))?;
+        }
+        if !table_has_column(&transaction, "lidar_layer_generations", "undo_available")? {
+            transaction
+                .execute(
+                    "ALTER TABLE lidar_layer_generations
+                     ADD COLUMN undo_available INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )
+                .map_err(|e| format!("Failed to add the snapshot undo state: {e}"))?;
+        }
+        // The v15 lineage cannot distinguish a prior Undo from an ordinary
+        // change, so it is cleared instead of being presented as a chain of
+        // user actions. The current head becomes the new Undo baseline.
+        transaction
+            .execute(
+                "UPDATE lidar_layer_generations SET previous_generation_id = NULL",
+                [],
+            )
+            .map_err(|e| format!("Failed to reset the ambiguous snapshot lineage: {e}"))?;
     }
     // v15 is additive too, and guarded for the same reason: a catalogue that
     // already carries the column (or a fixture presenting a newer shape at an
@@ -446,6 +475,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS lidar_collection_members_position_idx
 /// Additive only: existing generations keep no predecessor and a layer with no
 /// recorded lineage simply has nothing to undo.
 const SCHEMA_V15: &str = "";
+
+/// v16: the operation each snapshot recorded and explicit Undo availability.
+///
+/// v15 could say which snapshot a change replaced, but not whether that
+/// snapshot itself had anything left to undo, and it inferred the operation
+/// from member identities. Both are recorded here instead:
+///
+/// * `operation` is the user action that published the snapshot (`import`,
+///   `reorder`, `remove`, `undo`, `restore`), so History reports what happened
+///   rather than guessing from interpretation lists;
+/// * `undo_available` says whether Undo is offered from this head at all, and
+///   `previous_generation_id` remains its target. The two are independent: an
+///   available Undo with no target means "restore the empty initial
+///   composition", while an unavailable one means the walk is exhausted.
+///
+/// Migration is metadata-only and never rewrites a composition. v15 could not
+/// distinguish a prior Undo from an ordinary change, so the ambiguous lineage
+/// is cleared rather than fabricated into a chain of user actions: the current
+/// head becomes the new Undo baseline, every existing version keeps its values,
+/// its assets and its explicit Restore capability, and entries without a
+/// recorded operation display a neutral "Previous version" label.
+const SCHEMA_V16: &str = "";
 
 /// v12: an index matching the paged chunk read order.
 ///
@@ -730,11 +781,20 @@ pub struct GenerationRow {
     pub bounds_3857: String,
     /// Immutable opaque legacy head this generation overlays, when its own
     /// member history was never recorded.
+    ///
+    /// Retained so a preserved generation's recorded compatibility ancestor
+    /// stays readable to migration and diagnostic callers. Publication no
+    /// longer writes or follows it: a new ordered snapshot wraps the actual
+    /// accepted head, so replaying an older ancestor can never replace the
+    /// values a user accepted.
+    #[allow(dead_code)]
     pub base_generation_id: Option<String>,
-    /// Snapshot that was the head when this one was published. Undo restores
-    /// the predecessor of the change it is undoing, so the lineage records the
-    /// user-change sequence rather than the publication sequence.
+    /// Snapshot Undo restores from this head. Absent with `undo_available`
+    /// means Undo restores the empty initial composition.
     pub previous_generation_id: Option<String>,
+    /// Whether Undo is offered from this head at all. An unavailable Undo is
+    /// exhausted rather than pointed at the empty composition.
+    pub undo_available: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -817,7 +877,7 @@ pub fn head_generation(
         .query_row(
             "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
                     g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
-                    g.base_generation_id, g.previous_generation_id
+                    g.base_generation_id, g.previous_generation_id, g.undo_available
              FROM lidar_layer_heads h
              JOIN lidar_layer_generations g ON g.id = h.generation_id
              WHERE h.layer_id = ?1",
@@ -840,10 +900,37 @@ fn map_generation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRow
         bounds_3857: row.get(8)?,
         base_generation_id: row.get(9)?,
         previous_generation_id: row.get(10)?,
+        undo_available: row.get::<_, i64>(11)? != 0,
     })
 }
 
 pub fn list_definitions(connection: &Connection) -> Result<Vec<AnalysisDefinitionRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, layer_id, kind, parameters_json
+             FROM lidar_analysis_definitions ORDER BY created_at, id",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(AnalysisDefinitionRow {
+                id: row.get(0)?,
+                layer_id: row.get(1)?,
+                kind: row.get(2)?,
+                parameters_json: row.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+/// Every analysis definition in the library, oldest first.
+///
+/// Used at library open to reconcile dependent results against their source
+/// heads without needing to know which layers exist first.
+pub fn list_all_definitions(connection: &Connection) -> Result<Vec<AnalysisDefinitionRow>, String> {
     let mut statement = connection
         .prepare(
             "SELECT id, layer_id, kind, parameters_json
@@ -1059,14 +1146,19 @@ pub struct CollectionMemberRow {
 /// Measured coverage of one interpretation: valid cells and value range.
 ///
 /// The occupied-region index already stores exact per-block sums and extrema, so
-/// a source list costs one aggregate query rather than a raster read.
+/// a source list costs one aggregate query rather than a raster read. A block
+/// that holds no valid cell contributes neither coverage nor an extremum: a
+/// stored sentinel in such a block is not one of the source's values, so it must
+/// not widen the reported range.
 pub fn interpretation_coverage(
     connection: &Connection,
     interpretation_id: &str,
 ) -> Result<(i64, Option<f64>, Option<f64>), String> {
     connection
         .query_row(
-            "SELECT COALESCE(SUM(valid_cells), 0), MIN(min_value), MAX(max_value)
+            "SELECT COALESCE(SUM(valid_cells), 0),
+                    MIN(CASE WHEN valid_cells > 0 THEN min_value END),
+                    MAX(CASE WHEN valid_cells > 0 THEN max_value END)
              FROM lidar_interpretation_regions WHERE interpretation_id = ?1",
             [interpretation_id],
             |row| {
@@ -1078,6 +1170,122 @@ pub fn interpretation_coverage(
             },
         )
         .map_err(|e| format!("Failed to read interpretation coverage: {e}"))
+}
+
+/// Origin filename of the source an interpretation was derived from.
+///
+/// The identity is the interpretation's own source relation, never a name
+/// match, so the same bytes imported twice report the same original name.
+pub fn interpretation_filename(
+    connection: &Connection,
+    interpretation_id: &str,
+) -> Result<Option<String>, String> {
+    connection
+        .query_row(
+            "SELECT s.original_filename
+             FROM lidar_interpretations i
+             JOIN lidar_sources s ON s.sha256 = i.source_sha256
+             WHERE i.id = ?1",
+            [interpretation_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read the source filename: {e}"))
+}
+
+/// Largest member page a caller may request.
+///
+/// Bounded like the other catalogue pages so a source refresh can never expand
+/// a layer's whole lifetime membership into one response.
+pub const MEMBER_PAGE_MAX: i64 = 200;
+/// Largest history page a caller may request.
+pub const VERSION_PAGE_MAX: i64 = 100;
+
+/// One bounded page of a snapshot's ordered members, top-first.
+///
+/// The cursor is the last `position` the caller saw; positions are unique within
+/// a snapshot, so the page boundary is exact and stable. The caller passes the
+/// snapshot it is paging, which is what makes a late page of a superseded head
+/// a rejected request rather than a silently mixed list.
+pub fn collection_members_page(
+    connection: &Connection,
+    generation_id: &str,
+    after_position: Option<i64>,
+    limit: i64,
+) -> Result<Vec<CollectionMemberRow>, String> {
+    let limit = limit.clamp(1, MEMBER_PAGE_MAX);
+    let mut statement = connection
+        .prepare(
+            "SELECT member_id, position, kind, interpretation_id, base_generation_id, job_id
+             FROM lidar_collection_members
+             WHERE generation_id = ?1 AND position > ?2
+             ORDER BY position LIMIT ?3",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map(
+            rusqlite::params![generation_id, after_position.unwrap_or(-1), limit],
+            |row| {
+                Ok(CollectionMemberRow {
+                    member_id: row.get(0)?,
+                    position: row.get(1)?,
+                    kind: row.get(2)?,
+                    interpretation_id: row.get(3)?,
+                    base_generation_id: row.get(4)?,
+                    job_id: row.get(5)?,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+/// How many occurrences one snapshot's composition holds.
+pub fn collection_member_count(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<i64, String> {
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM lidar_collection_members WHERE generation_id = ?1",
+            [generation_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("Failed to count collection members: {e}"))
+}
+
+/// Signed chunk extent of a generation's published records of one role.
+///
+/// A sparse generation's `manifest_json` grid describes the lattice its chunks
+/// are addressed in, not how far the published records actually reach, so a
+/// compatibility read that trusted the rectangle would drop real coverage.
+pub fn generation_chunk_extent(
+    connection: &Connection,
+    generation_id: &str,
+    role: &str,
+) -> Result<Option<(i64, i64, i64, i64)>, String> {
+    connection
+        .query_row(
+            "SELECT MIN(chunk_x), MIN(chunk_y), MAX(chunk_x), MAX(chunk_y)
+             FROM lidar_generation_chunks
+             WHERE generation_id = ?1 AND role = ?2 AND state = 'published'",
+            rusqlite::params![generation_id, role],
+            |row| {
+                Ok((
+                    row.get::<_, Option<i64>>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, Option<i64>>(3)?,
+                ))
+            },
+        )
+        .map(|extent| match extent {
+            (Some(x0), Some(y0), Some(x1), Some(y1)) => Some((x0, y0, x1, y1)),
+            _ => None,
+        })
+        .map_err(|e| format!("Failed to read the generation extent: {e}"))
 }
 
 /// Ordered members of a collection snapshot, topmost first.
@@ -1425,7 +1633,7 @@ pub fn generation_row(
         .query_row(
             "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
                     g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
-                    g.base_generation_id, g.previous_generation_id
+                    g.base_generation_id, g.previous_generation_id, g.undo_available
              FROM lidar_layer_generations g WHERE g.id = ?1",
             [generation_id],
             map_generation_row,
@@ -1899,6 +2107,7 @@ pub fn publish_generation_chunks(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::lidar::collection;
 
     #[test]
     fn import_progress_is_monotonic_and_stops_with_the_job() {
@@ -2582,6 +2791,124 @@ mod tests {
         assert_eq!(layer_lattice(&connection, "layer").unwrap(), None);
         drop(connection);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// v16: Undo state and the recorded operation, and the migration boundary.
+    ///
+    /// v15 recorded which snapshot a change replaced but not whether that
+    /// snapshot had anything left to undo, and it inferred the operation from
+    /// member identities. A migrated library therefore keeps every version and
+    /// its explicit Restore, gets a neutral operation label, and takes its
+    /// current head as the new Undo baseline instead of a fabricated chain.
+    #[test]
+    fn v15_catalogue_migrates_to_an_explicit_undo_baseline() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v16"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('older', 'layer', '0', '/library/older/mosaic.tif',
+                             '/library/older/coverage.bin', '{}', 1, 0, 1, '[0,0,1,1]');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857, previous_generation_id)
+                     VALUES ('newer', 'layer', '1', '/library/newer/mosaic.tif',
+                             '/library/newer/coverage.bin', '{}', 1, 0, 1, '[0,0,1,1]', 'older');
+                     INSERT INTO lidar_layer_heads(layer_id, generation_id)
+                     VALUES ('layer', 'newer');
+                     ALTER TABLE lidar_layer_generations DROP COLUMN operation;
+                     ALTER TABLE lidar_layer_generations DROP COLUMN undo_available;
+                     UPDATE lidar_catalogue_meta SET value = '15' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+
+        let connection = open(&path).expect("v15 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), CATALOGUE_VERSION);
+        // Every version survives with its values and its Restore capability.
+        let older = generation_row(&connection, "older")
+            .unwrap()
+            .expect("the older version survives");
+        let newer = generation_row(&connection, "newer")
+            .unwrap()
+            .expect("the newer version survives");
+        assert_eq!(
+            older.mosaic_path.as_deref(),
+            Some("/library/older/mosaic.tif")
+        );
+        assert_eq!(
+            newer.mosaic_path.as_deref(),
+            Some("/library/newer/mosaic.tif")
+        );
+        assert_eq!(
+            head_generation(&connection, "layer")
+                .unwrap()
+                .expect("the head survives")
+                .id,
+            "newer"
+        );
+        // The ambiguous lineage is cleared rather than presented as a chain of
+        // user actions, and Undo starts exhausted so the existing head is the
+        // new baseline.
+        assert_eq!(newer.previous_generation_id, None);
+        assert!(!newer.undo_available);
+        assert!(!older.undo_available);
+        // Entries without a recorded operation read neutrally rather than as a
+        // guessed import.
+        let page = collection::history_page(&connection, "layer", None, None, 10).unwrap();
+        assert_eq!(page.versions.len(), 2);
+        assert!(
+            page.versions.iter().all(|entry| entry.operation.is_none()),
+            "a migrated version has no recorded operation: {:?}",
+            page.versions
+                .iter()
+                .map(|entry| &entry.operation)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            page.versions
+                .iter()
+                .map(|entry| entry.sequence)
+                .collect::<Vec<_>>(),
+            vec![2, 1],
+            "and still has a unique identity cue"
+        );
+
+        // A new change on the migrated head records the head as its target, so
+        // Undo works from there exactly as on a fresh library.
+        connection
+            .execute(
+                "INSERT INTO lidar_layer_generations
+                    (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                     coverage_cells, min_value, max_value, bounds_3857,
+                     previous_generation_id, undo_available, operation)
+                 VALUES ('after', 'layer', '2', '/library/after/mosaic.tif',
+                         '/library/after/coverage.bin', '{}', 1, 0, 1, '[0,0,1,1]',
+                         'newer', 1, 'import')",
+                [],
+            )
+            .unwrap();
+        let after = generation_row(&connection, "after")
+            .unwrap()
+            .expect("the new change is recorded");
+        assert!(after.undo_available);
+        assert_eq!(after.previous_generation_id.as_deref(), Some("newer"));
+        let page = collection::history_page(&connection, "layer", None, None, 10).unwrap();
+        assert_eq!(
+            page.versions
+                .first()
+                .and_then(|entry| entry.operation.as_deref()),
+            Some("import")
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
