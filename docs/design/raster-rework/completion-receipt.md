@@ -148,10 +148,33 @@ relies on the disk-space estimate that `write_job_source_cog` already performs;
 `validate_working_grid` still guards the steps that really do allocate a whole
 area — raw extraction, dense composition, legacy replay and slope.
 
-Not measured: aggregate incremental RSS for the 400M run, temporary/durable
-bytes, queue and cache peaks, cancellation settlement timing, low-space and
-write-failure behaviour, restart reuse, and cold/three-warm display timings.
-Values not measured remain unknown; no whole-union-allocation claim is made.
+**Second defect, and a resource failure the gate caught.** The same run's
+combined-memory gate failed: `capacity plane must stay inside the 1024 MiB
+combined working-memory budget: an observed subtotal already reached 1660 MiB
+over baseline`. All numeric results in that run were correct — coverage, holes,
+seam samples, hole edges and display all passed — so this was purely residency.
+
+Localised to GDAL's block cache, which defaults to a share of *system* RAM rather
+than to anything this pipeline budgets. Measured directly on the plane's own
+conversion:
+
+| Conversion | Peak RSS | Wall |
+| --- | --- | --- |
+| `gdal_translate`, default cache | 1,735,712 KB | 19.95 s |
+| `gdal_translate`, `GDAL_CACHEMAX=134217728` | 214,888 KB | 13.45 s |
+| `gdalwarp -wm 268435456` | 1,908,068 KB | 25.96 s |
+
+One engine process grew to the size of the whole raster. The resource policy
+already reserves 128 MiB for decoded raster data, so every engine process now
+receives exactly that through `GDAL_CACHEMAX`; the engine can no longer take
+memory the pipeline never budgeted, and the bounded run is also faster because
+the cache was thrashing rather than helping. This is a defect the capacity gate
+existed to catch, not a reason to raise the gate.
+
+Not measured: temporary/durable bytes, queue and cache peaks, cancellation
+settlement timing, low-space and write-failure behaviour, and cold/three-warm
+display timings. Values not measured remain unknown; no whole-union-allocation
+claim is made.
 
 ## Gates, application and platform evidence
 
