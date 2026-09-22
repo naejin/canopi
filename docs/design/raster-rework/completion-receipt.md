@@ -37,7 +37,7 @@ branch or worktree was deleted.
 | Phase | State | Decisive evidence | Remaining limitation |
 | --- | --- | --- | --- |
 | C0 | **Done** | Integration `f61f8494`; ancestry table above; `cargo fmt`, strict Clippy, `cargo check`, `tsc`, `check:types`, `check:ui`, both edition builds pass on the integrated tree | — |
-| C1 | **Partial — measured** | Policy enabled at 24 files / 2 GiB per file / 2 GiB total / 400,000,000 processing cells, up from the retired 25M bound; the 24-tile sparse batch, the 48M MNH batch and the **400M-cell plane all run through the production callers with no override**. Envelope measured: peak 73 MiB / 96 MiB / 199 MiB, durable 4,951,029,490 bytes in 11 files, temporary 0, cancellation settling in 101 ms against a 5 s bound. See [C1 measured envelope](#c1-measured-envelope) | Queue and cache peaks are not separated as distinct quantities; cold vs three-warm display timings are unmeasured; the low-space/write-failure path is unverified with probe evidence and named environment limits; no whole-union-allocation claim is made |
+| C1 | **Partial — measured** | Policy enabled at 24 files / 2 GiB per file / 2 GiB total / 400,000,000 processing cells, up from the retired 25M bound; the 24-tile sparse batch, the 48M MNH batch and the **400M-cell plane all run through the production callers with no override**. Envelope measured: peak **73 MiB / 92 MiB / 197 MiB** for the sparse, MNH and plane lanes, each with its composition (largest single member 65 MiB of 92 MiB for MNH, 177 MiB of 197 MiB for the plane — so the peaks are **one dominant process, not concurrency**); durable 596,548,756 bytes in 59 files for MNH and 4,951,029,490 bytes in 11 files for the plane, temporary **0** in both; cancellation settling in 101 ms against a 5 s bound. See [C1 measured envelope](#c1-measured-envelope) | Cold vs three-warm display timings are unmeasured; there is no **queue-depth bound**, only a sampled observation that these lanes do not accumulate a queue; the low-space/write-failure path is unverified with probe evidence and named environment limits; no whole-union-allocation claim is made |
 | C2 | **Implemented, not live-verified** | Data, Analysis and Layers ship as production panels beside Layers through existing shell composition; slope in degrees or percent with an author-named result (catalogue v17); an other-continuous dataset must declare a unit label or an explicit unknown; Layers is a flat geographic presentation list with independent eyes | The end-to-end import chain is unobserved, so the surfaces are verified by unit and native tests rather than a driven Desktop pass |
 | C3 | **Implemented, not live-verified** | `inspection.rs` implements `sample(entity, expected generation, WGS84 point)`: `gdaltransform` to the raster CRS, north-up half-open containing pixel, `apply_scene_offset` inverting the canvas conversion, and four tests including an independent oracle across bearings 0/30/90/180/271.5/359 | No value has been read off a live session against an independently known source or slope value; hole/edge NoData and late-answer fencing are covered by tests, not by observation |
 | C4 | **Implemented; provider path driven end to end against a scripted tier** | Shared provider module with `google_satellite`, ADR 0028 replacing the Web-v1 restrictions in ADRs 0013/0016; both map surfaces take their basemap from `basemap-bind.ts` rather than recreating the map on a provider/key/session change. `basemap-provider-binding.test.ts` drives a **real `BasemapProvider` through a scripted Google session tier into a recording map** and asserts the official descriptor reaches the source, the session token never reaches the published state or the map, a rejected key withdraws the contribution with a sanitized reason instead of downgrading, and a re-issued generation keeps exactly one contribution | No **live** provider session: nothing was requested from Google, so attribution and error states are unobserved and the official path still needs a real restricted key. Isolated Web placement is unrun |
@@ -88,7 +88,8 @@ The batch is admitted at exactly 12 files and 48,000,000 processing cells, both
 inside the production policy. Every tile is its own source occurrence with its
 own retained COG, the composition materializes **no** resolved result chunks,
 the sparse display draws real tiles, and the head survives restart with the same
-coverage. Peak sampled working set is 96 MiB, far inside the 1 GiB gate.
+coverage. Peak sampled working set is 92 MiB on the final revision (96 MiB on
+the earlier run recorded below), far inside the 1 GiB gate.
 
 Correcting that test also removed a real staleness: it asserted the composed
 `CogChunksV1` publication format the ordered route replaced, so it had been
@@ -225,8 +226,8 @@ produced it; the detailed sections below this one carry the raw output.
 | --- | --- | --- |
 | Production admission | 24 files, 2 GiB per file, 2 GiB total, 400,000,000 processing cells | `admission.rs`; 6 unit tests plus 3 ordered-boundary tests |
 | 24-tile sparse batch | union 60,809,728 cells, 18,432 processing cells, peak **73 MiB** | `sparse_twenty_four_tile_batch_stays_chunk_sized`, no override |
-| 48M MNH batch (12 tiles) | 12 occurrences, 12 retained COGs, 4 tiles drawn, restart reuse, peak **96 MiB**, 137.78 s | `e2e_mnh_batch_import_apply_display_restart` |
-| 400M-cell plane | `uncovered=396979300 overlap=0 invalid=3020700`; range 3469900.25..3477399.75; restart 396979300 cells; tile 14/8331/5798 at 28,980 B; 16 seam samples match the analytic plane; 4 holes NoData; hole edge valid; peak **199 MiB** (183 MiB incremental) | `e2e_capacity_plane_import_display_and_bounded_reads` |
+| 48M MNH batch (12 tiles) | 12 occurrences, 12 retained COGs, range −1.7019..39.2840, 4 tiles drawn (228,645 B), restart reuse, peak **92 MiB** (76 MiB incremental) over 1,847 complete ticks, **108.22 s**; composition: largest single member 65 MiB over 2 members at most | `e2e_mnh_batch_import_apply_display_restart`, re-run on the final revision |
+| 400M-cell plane | `uncovered=396979300 overlap=0 invalid=3020700`; range 3469900.25..3477399.75; restart 396979300 cells; tile 14/8331/5798 at 28,980 B; 16 seam samples match the analytic plane; 4 holes NoData; hole edge valid; peak **197 MiB** (181 MiB incremental); composition: largest single member 177 MiB over 2 members at most | `e2e_capacity_plane_import_display_and_bounded_reads` |
 | Durable bytes (plane lane) | **4,951,029,490** in 11 files — 2.95× the 1,677,760,928-byte source, dominated by derived chunk output | same lane, `report_library_bytes` |
 | Temporary bytes (plane lane) | **0**, no job scratch left; now an assertion rather than an observation | same lane |
 | Cancellation settlement | **101 ms** against a 5 s bound, on the real kill-and-reap path | `a_cancelled_engine_conversion_settles_within_the_contract_bound` |
@@ -406,6 +407,30 @@ Cost was reduced from 41 s to 5 s by writing the fixture in one pass at 128 MiB
 instead of value-by-value at 2 GiB, with the measurement still 50× inside the
 bound. It stays an ignored GDAL-backed test, consistent with the other engine
 lanes.
+
+### C1 capacity lanes re-run on the final revision (round 38)
+
+The MNH lane was last measured before the peak-composition change reached
+`measurement.rs` and before `report_library_bytes` existed, so it was re-run at the
+candidate head as a regression check on the delivered code. It passes, and its
+numbers moved — so the earlier figures are superseded rather than repeated:
+
+| | Earlier run | Final revision |
+| --- | --- | --- |
+| Peak | 96 MiB (78 MiB incremental) | **92 MiB (76 MiB incremental)** |
+| Composition | not measured | largest single member **65 MiB** over 2 members at most |
+| Durable bytes | not measured | **596,548,756** in 59 files |
+| Temporary bytes | not measured | **0**, no job scratch |
+| Duration | 137.78 s | **108.22 s** |
+
+The composition is the interesting part: for a 12-tile batch the cache ceiling
+(128 MiB) is **not** reached, because no single conversion dominates — 65 of 92 MiB
+is the largest member, so this lane's peak is one conversion plus a modest
+remainder rather than cache saturation. That contrasts with the plane lane, where
+177 of 197 MiB is one member and the cache ceiling is nearly the whole working set.
+
+The timings above are test durations, not display timings: they include fixture
+staging and hashing, so they are not a latency claim and are not offered as one.
 
 ### C5 verification of the final candidate (round 38)
 
