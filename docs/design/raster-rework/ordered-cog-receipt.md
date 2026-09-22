@@ -24,7 +24,8 @@ Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agen
 | Documentation reconciliation and this receipt | `524eef55` |
 | Forwarded correction brief incorporated (current prompt/design/review) | `34bf6041` |
 | R12 tile candidate bounds, R13 edit lifetime, R14 view-request identity | `d53f4185` |
-| Mounted-map evidence, receipt/debrief/guide reconciliation | the commit that carries this section |
+| Mounted-map evidence, receipt/debrief/guide reconciliation | `1bf4e6fe` |
+| Prompt status closed | `a685cc87` |
 
 ## What changed, precisely
 
