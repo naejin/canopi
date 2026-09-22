@@ -1288,6 +1288,31 @@ pub fn generation_chunk_extent(
         .map_err(|e| format!("Failed to read the generation extent: {e}"))
 }
 
+/// Cells actually occupied by one generation's published chunks.
+///
+/// This is the footprint an ordered member contributes to the admission
+/// budget: the sum over stored chunks, not the rectangle those chunks happen to
+/// span. Two chunks 8,000 cells apart cost two chunks, so the empty space
+/// between separated sources is not charged. Only `result` chunks are counted;
+/// a quality chunk describes the same cells rather than adding new ones, which
+/// is the result/quality role deduplication the admission policy requires.
+pub fn published_chunk_footprint(
+    connection: &Connection,
+    generation_id: &str,
+    role: &str,
+) -> Result<u64, String> {
+    let cells: i64 = connection
+        .query_row(
+            "SELECT COALESCE(SUM(?3 * ?3), 0)
+             FROM lidar_generation_chunks
+             WHERE generation_id = ?1 AND role = ?2 AND state = 'published'",
+            rusqlite::params![generation_id, role, super::generation::CHUNK_SIDE],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("Failed to read the published chunk footprint: {e}"))?;
+    Ok(cells.max(0) as u64)
+}
+
 /// Ordered members of a collection snapshot, topmost first.
 pub fn collection_members(
     connection: &Connection,

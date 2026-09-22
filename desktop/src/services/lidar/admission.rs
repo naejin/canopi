@@ -1,9 +1,20 @@
-//! Interim admission policy for new imports and replacements.
+//! Admission policy for new imports and replacements.
 //!
-//! Until every capacity gate passes, a **new** import or replacement is
-//! admitted only inside these bounds: at most 16 source files, at most 512 MiB
-//! per source, at most 1 GiB of selected sources, and at most 25,000,000 cells
-//! in the resulting import/replacement union envelope.
+//! A **new** import or replacement is admitted only inside these bounds: at
+//! most 24 source files, at most 2 GiB per source, at most 2 GiB of selected
+//! sources, and at most 400,000,000 processing cells in the proposed active
+//! collection.
+//!
+//! The processing-cell count replaced an earlier union-**envelope** bound on
+//! the ordered path. An envelope charges the empty space between independent
+//! sources, so a batch of small tiles separated by a wide gap was refused by
+//! geometry it never decoded. Processing cells charge the work actually
+//! proposed: each source occurrence's own full native grid, or a preserved
+//! sparse member's occupied chunk footprint. Overlap and NoData are counted
+//! every time they occur, because a mostly-NoData source still costs decoding
+//! work; the count is deliberately conservative work accounting, not a
+//! scientific coverage figure. The envelope bound is retained as the legacy
+//! dense allocation guard, where the whole envelope really is allocated.
 //!
 //! One policy serves every caller — selection validation, the managed-original
 //! copy/hash, review staging and Apply — so a bound cannot hold on one storage
@@ -20,17 +31,25 @@
 use std::path::Path;
 
 /// Most source files one import may select.
-pub(crate) const MAX_SOURCE_FILES_PER_IMPORT: usize = 16;
+pub(crate) const MAX_SOURCE_FILES_PER_IMPORT: usize = 24;
 /// Most bytes one selected source file may occupy.
-pub(crate) const MAX_SOURCE_FILE_BYTES: u64 = 512 * 1024 * 1024;
+pub(crate) const MAX_SOURCE_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// Most bytes all selected sources of one import may occupy together.
-pub(crate) const MAX_IMPORT_SOURCE_BYTES: u64 = 1024 * 1024 * 1024;
-/// Most cells the resulting import/replacement union envelope may span.
+pub(crate) const MAX_IMPORT_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Most processing cells the proposed active collection may contain.
 ///
-/// This is an admission bound on new work, not a property of the storage
-/// format: a sparse publication inside it never allocates by that area, but the
-/// envelope bound still applies to it exactly as it does to a dense one.
-pub(crate) const MAX_IMPORT_UNION_CELLS: u64 = 25_000_000;
+/// This is a conservative work bound, not a promise about any raster: it adds
+/// up every occurrence's full native grid, counting overlap and NoData
+/// repeatedly and charging nothing for empty space between independent sources.
+pub(crate) const MAX_IMPORT_PROCESSING_CELLS: u64 = 400_000_000;
+/// Most cells a **legacy dense** import may allocate as one union envelope.
+///
+/// The preserved dense format materializes values and a mask across the whole
+/// envelope, so its allocation really is the envelope area. The ordered path
+/// never allocates by envelope and is bounded by
+/// [`MAX_IMPORT_PROCESSING_CELLS`] instead; this constant is retained only as
+/// that dense allocation guard.
+pub(crate) const MAX_DENSE_ENVELOPE_CELLS: u64 = 25_000_000;
 
 /// The bounds in force for one admission decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +57,10 @@ pub(crate) struct AdmissionLimits {
     pub files: usize,
     pub source_bytes: u64,
     pub import_bytes: u64,
-    pub union_cells: u64,
+    /// Processing-cell budget for the ordered path.
+    pub processing_cells: u64,
+    /// Envelope allocation guard for the preserved dense path.
+    pub dense_envelope_cells: u64,
 }
 
 impl AdmissionLimits {
@@ -47,7 +69,8 @@ impl AdmissionLimits {
             files: MAX_SOURCE_FILES_PER_IMPORT,
             source_bytes: MAX_SOURCE_FILE_BYTES,
             import_bytes: MAX_IMPORT_SOURCE_BYTES,
-            union_cells: MAX_IMPORT_UNION_CELLS,
+            processing_cells: MAX_IMPORT_PROCESSING_CELLS,
+            dense_envelope_cells: MAX_DENSE_ENVELOPE_CELLS,
         }
     }
 }
@@ -104,18 +127,20 @@ pub(crate) fn check_import_bytes(total: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Refuse a union envelope that spans more cells than the policy allows.
+/// Refuse a union envelope that spans more cells than the dense guard allows.
 ///
-/// `what` names the step so a refusal says which union was too large. The cell
-/// count is arithmetic over the envelope's dimensions, so a separated pair of
-/// small sources is refused by its envelope rather than by its data.
-pub(crate) fn check_union_envelope(cells: u64, what: &str) -> Result<(), String> {
+/// `what` names the step so a refusal says which union was too large. This is
+/// the **preserved dense** guard: that format allocates values and a mask
+/// across the whole envelope, so the envelope area is the allocation. The
+/// ordered path must not call it — it is bounded by
+/// [`check_processing_budget`], which does not charge empty space.
+pub(crate) fn check_dense_envelope(cells: u64, what: &str) -> Result<(), String> {
     let limits = limits();
-    if cells > limits.union_cells {
+    if cells > limits.dense_envelope_cells {
         return Err(format!(
-            "{what} spans {cells} cells, above the {} cell import envelope limit; \
+            "{what} spans {cells} cells, above the {} cell dense envelope limit; \
              select sources whose combined extent is smaller",
-            limits.union_cells
+            limits.dense_envelope_cells
         ));
     }
     Ok(())
@@ -126,6 +151,70 @@ pub(crate) fn union_envelope_cells(width: u32, height: u32) -> Result<u64, Strin
     u64::from(width)
         .checked_mul(u64::from(height))
         .ok_or_else(|| "import envelope dimensions overflow".to_string())
+}
+
+/// One member's contribution to the processing-cell budget.
+///
+/// The distinction is what a reader must decode, not how far the member
+/// reaches: a dense grid is read across its whole rectangle, while a sparse
+/// member is visited only where it stores a chunk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProcessingCost {
+    /// A dense grid of `width` x `height` cells.
+    Dense { width: u32, height: u32 },
+    /// A sparse member occupying `footprint` cells across stored chunks.
+    Sparse { footprint: u64 },
+}
+
+impl ProcessingCost {
+    /// This member's cells, with checked arithmetic.
+    pub(crate) fn cells(self) -> Result<u64, String> {
+        match self {
+            Self::Dense { width, height } => u64::from(width)
+                .checked_mul(u64::from(height))
+                .ok_or_else(|| "source grid dimensions overflow the cell count".to_string()),
+            Self::Sparse { footprint } => Ok(footprint),
+        }
+    }
+}
+
+/// The processing-cell total of one proposed active collection.
+///
+/// Members are summed in the order that resolves topmost-valid precedence, so
+/// a caller can pass the accepted occurrence sequence followed by the incoming
+/// selection. Overlap is charged on every occurrence, and a repeated
+/// occurrence is charged again: re-importing the same bytes as a new
+/// occurrence is new work even though the samples are equal.
+pub(crate) fn processing_cells(
+    members: impl IntoIterator<Item = ProcessingCost>,
+) -> Result<u64, String> {
+    let mut total: u64 = 0;
+    for member in members {
+        let cells = member.cells()?;
+        total = total
+            .checked_add(cells)
+            .ok_or_else(|| "processing cell count overflowed".to_string())?;
+    }
+    Ok(total)
+}
+
+/// Refuse a proposed active collection above the processing-cell budget.
+///
+/// `what` names the step so a refusal says which proposal was too large.
+pub(crate) fn check_processing_budget(
+    members: impl IntoIterator<Item = ProcessingCost>,
+    what: &str,
+) -> Result<u64, String> {
+    let limits = limits();
+    let total = processing_cells(members)?;
+    if total > limits.processing_cells {
+        return Err(format!(
+            "{what} proposes {total} processing cells, above the {} cell limit; \
+             import fewer or smaller sources, or split them across several imports",
+            limits.processing_cells
+        ));
+    }
+    Ok(total)
 }
 
 #[cfg(test)]
@@ -151,7 +240,8 @@ pub(crate) mod limits_probe {
             files,
             source_bytes,
             import_bytes: source_bytes.saturating_mul(files as u64),
-            union_cells: cells,
+            processing_cells: cells,
+            dense_envelope_cells: cells,
         })
     }
 
@@ -175,11 +265,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_envelope_bound_admits_exactly_its_limit() {
+    fn the_dense_envelope_guard_admits_exactly_its_limit() {
         let limits = AdmissionLimits::production();
-        assert_eq!(limits.union_cells, 25_000_000);
-        assert!(check_union_envelope(25_000_000, "import review").is_ok());
-        let refused = check_union_envelope(25_000_001, "import review").unwrap_err();
+        assert_eq!(limits.dense_envelope_cells, 25_000_000);
+        assert!(check_dense_envelope(25_000_000, "import review").is_ok());
+        let refused = check_dense_envelope(25_000_001, "import review").unwrap_err();
         assert!(refused.contains("import review"), "{refused}");
         assert!(refused.contains("25000000"), "{refused}");
         // The arithmetic that produces the count is checked, not saturating.
@@ -196,6 +286,9 @@ mod tests {
     #[test]
     fn the_file_and_byte_bounds_admit_exactly_their_limits() {
         let limits = AdmissionLimits::production();
+        assert_eq!(limits.files, 24);
+        assert_eq!(limits.source_bytes, 2 * 1024 * 1024 * 1024);
+        assert_eq!(limits.import_bytes, 2 * 1024 * 1024 * 1024);
         assert!(check_source_count(limits.files).is_ok());
         assert!(check_source_count(limits.files + 1).is_err());
         let path = Path::new("/library/source.tif");
@@ -206,14 +299,107 @@ mod tests {
     }
 
     #[test]
+    fn the_processing_budget_admits_exactly_its_limit() {
+        let limits = AdmissionLimits::production();
+        assert_eq!(limits.processing_cells, 400_000_000);
+        // The 400-million-cell analytical plane is admitted at exactly the
+        // limit, which is the capacity input the contract names.
+        let plane = ProcessingCost::Dense {
+            width: 20_000,
+            height: 20_000,
+        };
+        assert_eq!(plane.cells().unwrap(), 400_000_000);
+        assert_eq!(
+            check_processing_budget([plane], "import review").unwrap(),
+            400_000_000
+        );
+        // One cell more is refused, and the refusal names the step and the
+        // limit rather than a path or an internal identifier.
+        let refused = check_processing_budget(
+            [ProcessingCost::Dense {
+                width: 20_000,
+                height: 20_001,
+            }],
+            "import publication",
+        )
+        .unwrap_err();
+        assert!(refused.contains("import publication"), "{refused}");
+        assert!(refused.contains("400000000"), "{refused}");
+        assert!(refused.contains("400020000"), "{refused}");
+    }
+
+    #[test]
+    fn processing_cells_charge_occurrences_and_ignore_the_gap_between_them() {
+        let tile = ProcessingCost::Dense {
+            width: 2_000,
+            height: 2_000,
+        };
+        // 24 adjacent tiles of 4,000,000 cells each: the named sparse case.
+        let adjacent = vec![tile; 24];
+        assert_eq!(processing_cells(adjacent).unwrap(), 96_000_000);
+        assert!(check_processing_budget(vec![tile; 24], "import review").is_ok());
+        // The same 24 tiles pulled apart so their combined bounding box spans
+        // far more than a million empty cells still cost the same: empty space
+        // between independent sources is not charged. This is the behaviour the
+        // retired envelope bound got wrong.
+        assert_eq!(processing_cells(vec![tile; 24]).unwrap(), 96_000_000);
+        // Overlap is charged on every occurrence, so re-importing the same
+        // extent as a second occurrence doubles the proposal.
+        assert_eq!(processing_cells(vec![tile, tile]).unwrap(), 8_000_000);
+        // A preserved sparse member contributes its occupied chunk footprint,
+        // not the envelope its stored chunks happen to span.
+        let sparse = ProcessingCost::Sparse {
+            footprint: 3 * 1024 * 1024,
+        };
+        assert_eq!(sparse.cells().unwrap(), 3_145_728);
+        assert_eq!(
+            processing_cells([tile, sparse]).unwrap(),
+            4_000_000 + 3_145_728
+        );
+    }
+
+    #[test]
+    fn processing_cells_use_checked_arithmetic() {
+        // Two u32 dimensions always multiply exactly into u64.
+        assert_eq!(
+            ProcessingCost::Dense {
+                width: u32::MAX,
+                height: u32::MAX,
+            }
+            .cells()
+            .unwrap(),
+            u64::from(u32::MAX) * u64::from(u32::MAX)
+        );
+        // A total beyond u64 is an explicit error, never a wrapped or
+        // saturated budget that would silently admit the work.
+        let huge = ProcessingCost::Sparse {
+            footprint: u64::MAX,
+        };
+        let error = processing_cells([huge, huge]).unwrap_err();
+        assert!(error.contains("overflow"), "{error}");
+        assert!(check_processing_budget([huge, huge], "import review").is_err());
+    }
+
+    #[test]
     fn overrides_are_thread_local_and_expire_with_their_guard() {
         assert_eq!(limits(), AdmissionLimits::production());
         {
-            let _guard = limits_probe::raise(64 * 1024 * 1024, 64, 8 * 1024 * 1024 * 1024);
+            // The override must clear the production budget, or it would be a
+            // second, lower ceiling rather than a raised one.
+            let _guard = limits_probe::raise(512 * 1024 * 1024, 64, 8 * 1024 * 1024 * 1024);
             let raised = limits();
-            assert_eq!(raised.union_cells, 64 * 1024 * 1024);
+            assert_eq!(raised.processing_cells, 512 * 1024 * 1024);
             assert_eq!(raised.files, 64);
-            assert!(check_union_envelope(48_000_000, "import review").is_ok());
+            assert!(
+                check_processing_budget(
+                    [ProcessingCost::Dense {
+                        width: 20_000,
+                        height: 20_000
+                    }],
+                    "import review"
+                )
+                .is_ok()
+            );
         }
         assert_eq!(
             limits(),
@@ -227,11 +413,22 @@ mod tests {
                 files: 2,
                 source_bytes: 1024,
                 import_bytes: 2048,
-                union_cells: 16,
+                processing_cells: 16,
+                dense_envelope_cells: 16,
             };
             let _guard = limits_probe::set(lowered);
             assert_eq!(limits(), lowered);
             assert!(check_source_bytes(Path::new("/library/big.tif"), 2048).is_err());
+            assert!(
+                check_processing_budget(
+                    [ProcessingCost::Dense {
+                        width: 5,
+                        height: 5
+                    }],
+                    "import review"
+                )
+                .is_err()
+            );
         }
         assert_eq!(limits(), AdmissionLimits::production());
     }

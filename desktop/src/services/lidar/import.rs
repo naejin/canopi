@@ -32,7 +32,96 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Canonical NoData used for a layer whose first source declares none.
 pub const FALLBACK_NODATA: f32 = -99999.0;
-pub(crate) use super::admission::MAX_IMPORT_UNION_CELLS as MAX_DENSE_WORKING_CELLS;
+pub(crate) use super::admission::MAX_DENSE_ENVELOPE_CELLS as MAX_DENSE_WORKING_CELLS;
+
+/// Every occurrence the ordered proposal would read, and what each costs.
+///
+/// The budget the admission policy charges is the work the collection would
+/// propose, not the area it would span. Each accepted occurrence is visited the
+/// way the resolver visits it — a source member across its own native grid, a
+/// preserved `previous-composition` member across only the chunks it actually
+/// stores — and each incoming staged source is charged its full native grid.
+/// Overlap and NoData are charged again on every occurrence on purpose: a
+/// mostly-NoData source still costs decoding work, so the count is conservative
+/// work accounting rather than a coverage measurement.
+///
+/// Only `result` chunks count for a preserved member. A quality chunk describes
+/// cells the result chunk already accounts for, which is the result/quality
+/// role deduplication the policy requires.
+fn ordered_processing_cost(
+    connection: &rusqlite::Connection,
+    head: Option<&catalogue::GenerationRow>,
+    incoming: &[&StagedSource],
+) -> Result<Vec<admission::ProcessingCost>, String> {
+    let mut proposed = Vec::new();
+    if let Some(head_row) = head {
+        let members = catalogue::collection_members(connection, &head_row.id)?;
+        if members.is_empty() {
+            // A head written before ordered collections existed replays through
+            // the legacy member table, or as one dense preserved lattice when
+            // even that is absent.
+            let legacy = catalogue::generation_members(connection, &head_row.id)?;
+            if legacy.is_empty() {
+                let manifest = read_generation_manifest(&head_row.manifest_json)?;
+                proposed.push(admission::ProcessingCost::Dense {
+                    width: manifest.grid.width,
+                    height: manifest.grid.height,
+                });
+            } else {
+                for (interpretation_id, _role, _job_id) in legacy {
+                    let interpretation =
+                        catalogue::get_interpretation(connection, &interpretation_id)?
+                            .ok_or_else(|| format!("missing interpretation {interpretation_id}"))?;
+                    proposed.push(admission::ProcessingCost::Dense {
+                        width: interpretation.width as u32,
+                        height: interpretation.height as u32,
+                    });
+                }
+            }
+        } else {
+            for member in members {
+                match (
+                    member.interpretation_id.as_deref(),
+                    member.base_generation_id.as_deref(),
+                ) {
+                    (Some(interpretation_id), _) => {
+                        let interpretation =
+                            catalogue::get_interpretation(connection, interpretation_id)?
+                                .ok_or_else(|| {
+                                    format!("missing interpretation {interpretation_id}")
+                                })?;
+                        proposed.push(admission::ProcessingCost::Dense {
+                            width: interpretation.width as u32,
+                            height: interpretation.height as u32,
+                        });
+                    }
+                    (None, Some(base_generation_id)) => {
+                        proposed.push(admission::ProcessingCost::Sparse {
+                            footprint: catalogue::published_chunk_footprint(
+                                connection,
+                                base_generation_id,
+                                generation::RESULT_ROLE,
+                            )?,
+                        });
+                    }
+                    (None, None) => {
+                        return Err(format!(
+                            "collection member {} names no source or preserved generation",
+                            member.member_id
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    for source in incoming {
+        proposed.push(admission::ProcessingCost::Dense {
+            width: source.width,
+            height: source.height,
+        });
+    }
+    Ok(proposed)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StagedSource {
@@ -288,25 +377,38 @@ pub fn stage_import(
         union = union_grid(&union, &grid_for_source(source))?;
     }
     validate_lattice(&union, "import review")?;
-    // Admission is one policy for both storage branches and is decided before
-    // any review work depends on the union's envelope. The envelope is the
-    // current composition's own extent plus the incoming sources, never the
-    // fixed lattice anchor: the anchor records where coordinates start, not how
-    // far the accepted coverage reaches.
-    let composition_extent = composition_extent_grid(library, head.as_ref())?;
-    admission::check_union_envelope(
-        admission::union_envelope_cells(union.width, union.height)?,
-        "import review",
-    )?;
-    if let Some(mut admitted) = composition_extent {
-        for source in &compatible {
-            admitted = union_grid(&admitted, &grid_for_source(source))?;
-        }
-        validate_lattice(&admitted, "import review envelope")?;
-        admission::check_union_envelope(
-            admission::union_envelope_cells(admitted.width, admitted.height)?,
-            "import review envelope",
+    // Admission is one policy for both storage branches, and the branch that
+    // will run decides which bound applies. The ordered route never allocates
+    // by envelope, so it is charged the processing cells it proposes; a legacy
+    // dense head keeps the envelope guard.
+    let dense_route = head.as_ref().is_some_and(|row| {
+        read_generation_manifest(&row.manifest_json)
+            .is_ok_and(|manifest| manifest.format == GenerationStorageFormat::LegacyDenseV1)
+    });
+    if dense_route {
+        let composition_extent = composition_extent_grid(library, head.as_ref())?;
+        admission::check_dense_envelope(
+            admission::union_envelope_cells(union.width, union.height)?,
+            "import review",
         )?;
+        if let Some(mut admitted) = composition_extent {
+            for source in &compatible {
+                admitted = union_grid(&admitted, &grid_for_source(source))?;
+            }
+            validate_lattice(&admitted, "import review envelope")?;
+            admission::check_dense_envelope(
+                admission::union_envelope_cells(admitted.width, admitted.height)?,
+                "import review envelope",
+            )?;
+        }
+    } else {
+        // Rechecked against the expected head at Apply; here it is decided
+        // before any review work depends on the proposal.
+        let proposed = {
+            let connection = library.catalogue()?;
+            ordered_processing_cost(&connection, head.as_ref(), &compatible)?
+        };
+        admission::check_processing_budget(proposed, "import review")?;
     }
 
     // R-tree candidate guard: when every accepted member has a footprint,
@@ -846,7 +948,7 @@ pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Resul
 /// [`dense_working_probe`], so a 48M-cell batch or a million-pixel gap can be
 /// exercised without exposing unsupported large dense jobs to users.
 fn dense_working_limit() -> u64 {
-    admission::limits().union_cells
+    admission::limits().dense_envelope_cells
 }
 
 fn stage_managed_original(
@@ -3550,23 +3652,33 @@ pub fn apply_import(
     }
     // Recheck at Apply against the selected sources and the expected head:
     // admission is decided again immediately before anything is materialized
-    // or published, on whichever branch will run. The envelope is the current
-    // composition's own extent plus the selection, not the fixed lattice
-    // anchor, so a layer that has grown across many imports cannot slip past
-    // the limit on the anchor's original dimensions.
-    admission::check_union_envelope(
-        admission::union_envelope_cells(union.width, union.height)?,
-        "import publication",
-    )?;
-    if let Some(mut admitted) = composition_extent_grid(library, head.as_ref())? {
-        for source in &compatible {
-            admitted = union_grid(&admitted, &grid_for_source(source))?;
-        }
-        validate_lattice(&admitted, "import publication envelope")?;
-        admission::check_union_envelope(
-            admission::union_envelope_cells(admitted.width, admitted.height)?,
-            "import publication envelope",
+    // or published, on whichever branch will run. This is the concurrent-change
+    // fence — a reorder, undo or second import that moved the head between
+    // review and Apply is admitted or refused against the head that will
+    // actually be replaced, not the one review saw.
+    if let Some(manifest) = head_base.manifest.as_ref()
+        && manifest.format == GenerationStorageFormat::LegacyDenseV1
+    {
+        admission::check_dense_envelope(
+            admission::union_envelope_cells(union.width, union.height)?,
+            "import publication",
         )?;
+        if let Some(mut admitted) = composition_extent_grid(library, head.as_ref())? {
+            for source in &compatible {
+                admitted = union_grid(&admitted, &grid_for_source(source))?;
+            }
+            validate_lattice(&admitted, "import publication envelope")?;
+            admission::check_dense_envelope(
+                admission::union_envelope_cells(admitted.width, admitted.height)?,
+                "import publication envelope",
+            )?;
+        }
+    } else {
+        let proposed = {
+            let connection = library.catalogue()?;
+            ordered_processing_cost(&connection, head.as_ref(), &compatible)?
+        };
+        admission::check_processing_budget(proposed, "import publication")?;
     }
     let _ = head_manifest;
     library.record_import_progress(
@@ -7008,7 +7120,7 @@ mod tests {
                 staging_two.union_grid.height
             )
             .unwrap()
-                < admission::MAX_IMPORT_UNION_CELLS,
+                < admission::MAX_DENSE_ENVELOPE_CELLS,
             "the second import's own envelope is small"
         );
         library.prepare_apply(&job_two).expect("review accepted");
@@ -7048,7 +7160,7 @@ mod tests {
             admission::union_envelope_cells(admitted.width, admitted.height).unwrap()
         };
         assert!(
-            anchor_relative < admission::MAX_IMPORT_UNION_CELLS,
+            anchor_relative < admission::MAX_DENSE_ENVELOPE_CELLS,
             "the anchor-relative envelope is what the superseded check measured: {anchor_relative}"
         );
         let south_grid = RasterGrid {
@@ -7062,7 +7174,7 @@ mod tests {
         with_incoming = union_grid(&with_incoming, &south_grid).unwrap();
         assert!(
             admission::union_envelope_cells(with_incoming.width, with_incoming.height).unwrap()
-                > admission::MAX_IMPORT_UNION_CELLS,
+                > admission::MAX_DENSE_ENVELOPE_CELLS,
             "the composition's real extent exceeds the limit"
         );
         let refused = staging_three_error.expect("staging refuses the oversized composition");
@@ -8273,10 +8385,10 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let sampler = crate::services::lidar::measurement::Sampler::start();
         let library = LidarLibrary::open(&root).expect("library opens");
-        // Twenty-four files exceed the production file count and the union
-        // exceeds the admission envelope, so this representative run raises
-        // both for its own thread only.
-        let _admission = admission::limits_probe::raise(128 * 1024 * 1024, 64, 1024 * 1024 * 1024);
+        // No admission override: 24 files and 96M processing cells are inside
+        // the production policy, while the union this arrangement spans is far
+        // above the retired envelope bound. Running the real policy is what
+        // makes this a capacity witness rather than an overridden probe.
 
         // Three columns eight rows apart, each column 100,000 cells from the
         // next, so the union is far larger than the data it holds.
@@ -8297,7 +8409,10 @@ mod tests {
                 ));
             }
         }
-        assert!(sources.len() > admission::MAX_SOURCE_FILES_PER_IMPORT);
+        // Twenty-four files is exactly the production file ceiling: this batch
+        // is admitted at the boundary rather than over it, and the union it
+        // spans is what the retired envelope bound refused.
+        assert_eq!(sources.len(), admission::MAX_SOURCE_FILES_PER_IMPORT);
 
         let layer_id = library
             .create_layer(
@@ -8342,14 +8457,36 @@ mod tests {
         };
         let union_cells =
             u64::from(staging.union_grid.width) * u64::from(staging.union_grid.height);
+        // Processing cost is charged per occurrence, so the same batch that
+        // spans an over-limit envelope costs only its own 96M cells. This is
+        // the concrete case the retired envelope bound refused by geometry the
+        // batch never decodes.
+        let proposed: Vec<admission::ProcessingCost> = (0..head_member_count(&library, &layer_id))
+            .map(|_| admission::ProcessingCost::Dense {
+                width: 32,
+                height: 24,
+            })
+            .collect();
+        let proposed_cells = admission::processing_cells(proposed.iter().copied()).unwrap();
         println!(
-            "24 tiles: {} cells in {} members, {total_bytes} resolved bytes, union {union_cells} cells",
+            "24 tiles: {} cells in {} members, {total_bytes} resolved bytes, \
+             union {union_cells} cells, proposed {proposed_cells} processing cells",
             24 * 32 * 24,
             head_member_count(&library, &layer_id)
         );
         assert!(
             union_cells > 25_000_000,
-            "the arranged union exceeds the old dense ceiling"
+            "the arranged union still exceeds the old dense envelope ceiling"
+        );
+        assert!(
+            admission::check_dense_envelope(union_cells, "sparse 24-tile batch").is_err(),
+            "the retained dense envelope guard would still refuse this geometry"
+        );
+        assert_eq!(proposed_cells, 24 * 32 * 24);
+        assert!(
+            admission::check_processing_budget(proposed.iter().copied(), "sparse 24-tile batch")
+                .is_ok(),
+            "the processing budget admits the batch, charging occurrences and not the gap"
         );
         assert!(
             total_bytes < 3 * 8 * 1024 * 1024,
@@ -8667,7 +8804,7 @@ mod tests {
                     staging.union_grid.height
                 )
                 .unwrap()
-                    > admission::MAX_IMPORT_UNION_CELLS
+                    > admission::MAX_DENSE_ENVELOPE_CELLS
             );
             library.prepare_apply(&job_id).expect("review accepted");
             let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
@@ -8773,7 +8910,8 @@ mod tests {
                 files: 4,
                 source_bytes: (bytes / 2).max(1),
                 import_bytes: 4096,
-                union_cells: 1_000_000,
+                processing_cells: 1_000_000,
+                dense_envelope_cells: 1_000_000,
             });
             let job_id = library.record_import_job(&layer_id).expect("job recorded");
             let error = stage_import(
