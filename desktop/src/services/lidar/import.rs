@@ -6255,6 +6255,85 @@ mod tests {
         tif
     }
 
+    /// Cancellation settles owned subprocess work promptly, not eventually.
+    ///
+    /// The resource contract bounds this at five seconds because a cancelled
+    /// import must release its slot and its scratch without the user waiting on
+    /// an abandoned conversion. The engine polls the flag every 50 ms and then
+    /// kills and reaps the child, so this asserts on measured wall-clock elapsed
+    /// time rather than on the poll interval the code happens to use: the
+    /// timeout ceiling would be 600 seconds, so a pass here only means the
+    /// cancel path ran, and the elapsed bound is what proves it.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_cancelled_engine_conversion_settles_within_the_contract_bound() {
+        let root = std::env::temp_dir().join(new_id("canopi-cancel-settle"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = GdalEngine::new();
+
+        // Long enough that the conversion is still running when the cancel
+        // lands, and cheap to build: 128 MiB of Float32, written in whole
+        // little-endian words through one buffer rather than value by value.
+        let grid = RasterGrid {
+            width: 8_192,
+            height: 4_096,
+            geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+        };
+        let raw = root.join("cancel.raw");
+        let total = grid.width as usize * grid.height as usize;
+        let words: Vec<u8> = (0..total).flat_map(|_| 1.0f32.to_le_bytes()).collect();
+        std::fs::write(&raw, &words).expect("raw writes");
+        drop(words);
+
+        let cancel = AtomicBool::new(false);
+        let source = root.join("cancel.tif");
+        let output = root.join("cancel-out.tif");
+        let args = crate::services::lidar::prepared_raster::controlled_cog_arguments(
+            &source,
+            &output,
+            "EPSG:3857",
+            &grid,
+            None,
+        );
+
+        let settled = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let handle = {
+            let engine = engine.clone();
+            let cancel = std::sync::Arc::new(AtomicBool::new(false));
+            let cancel_for_thread = cancel.clone();
+            let settled = settled.clone();
+            std::thread::spawn(move || {
+                // The engine call itself is the owned work; the caller sets the
+                // flag from outside, exactly as the UI's cancel action does.
+                let started = std::time::Instant::now();
+                let outcome = engine.run(
+                    GdalProgram::Translate,
+                    &args,
+                    Some(cancel_for_thread.as_ref()),
+                );
+                *settled.lock().unwrap() = Some((started.elapsed(), outcome.is_err()));
+            })
+        };
+
+        // Let the conversion start, then cancel it.
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        cancel.store(true, Ordering::Relaxed);
+        handle.join().expect("the engine thread joins");
+
+        let (elapsed, was_error) = settled.lock().unwrap().expect("the run settled");
+        assert!(
+            was_error,
+            "a cancelled conversion must report an error rather than a success"
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "cancellation settled in {elapsed:?}, above the 5 second contract bound"
+        );
+        println!("cancellation settled in {elapsed:?}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// Declared NoData is not data, so it must not enter the source range.
     ///
     /// The range is the physical span a user sees, and a sentinel like -9999

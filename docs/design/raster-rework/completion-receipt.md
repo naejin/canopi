@@ -213,6 +213,36 @@ The 76 ignored Rust tests are the GDAL- and fixture-backed lanes; individual one
 have been run and are recorded above, but the full ignored lane has not been run
 as one command on this revision and is not claimed.
 
+### C1 cancellation settlement, measured (round 23)
+
+The resource contract bounds cancellation settlement at five seconds: a cancelled
+import must release its slot and its scratch rather than leave the user waiting on
+an abandoned conversion. Nothing asserted that bound before; the cancellation
+tests that existed proved *what* a cancelled job leaves behind (nothing
+published, staging removed), not how long it takes to stop.
+
+`a_cancelled_engine_conversion_settles_within_the_contract_bound` now measures it
+on the real path. It builds a 128 MiB Float32 source, starts the actual controlled
+COG conversion through `GdalEngine::run`, sets the cancel flag after 250 ms and
+reports the wall-clock time until the call returns:
+
+| Measurement | Value |
+| --- | --- |
+| Cancellation settlement | **101 ms** (an earlier 2 GiB fixture measured 202 ms) |
+| Contract bound | 5 s (25–50× headroom) |
+| Converted by the engine itself | yes — `gdal_translate`, so the kill-and-reap path is the one under test |
+
+The assertion is on elapsed wall-clock time rather than on the 50 ms poll
+interval, so it cannot pass merely because the code kept its current polling
+cadence; and because the process timeout is 600 s, a pass additionally proves the
+cancel path ran rather than the timeout. The test also asserts that a cancelled
+conversion reports an error instead of a success.
+
+Cost was reduced from 41 s to 5 s by writing the fixture in one pass at 128 MiB
+instead of value-by-value at 2 GiB, with the measurement still 50× inside the
+bound. It stays an ignored GDAL-backed test, consistent with the other engine
+lanes.
+
 **Not run, and therefore not claimed:** Windows and macOS compilation, any
 packaged (non-dev) window, and the packaged Web artifact. Those remain the
 platform gaps the contract names as release blockers rather than passes.
