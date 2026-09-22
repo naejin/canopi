@@ -215,6 +215,42 @@ candidate. Nothing here supports a Linux/Windows/macOS packaged claim.
 
 ## Failures and improvements
 
+### Isolated Desktop launch — achieved, with input driving not established
+
+The candidate **builds and launches as a real Desktop window** in an isolated
+profile, which is the first genuine product-process evidence in this receipt:
+
+- `cargo build -p canopi-desktop` succeeded (39 s) on `86451722`.
+- Xephyr on `:99` (nested from `:0`, `-extension GLX`, software GL) plus Vite on
+  strict port 1430, with the app under `dbus-run-session` and its own
+  `XDG_CONFIG_HOME`/`XDG_DATA_HOME`/`XDG_CACHE_HOME`/`XDG_RUNTIME_DIR` (0700).
+- The app **created its own isolated profile**, which is the ownership proof the
+  recipe names: `data/com.canopi.app/` with `user.db`, `hsts-storage.sqlite`,
+  `lidar/lidar-library.sqlite` and `lidar/lidar-display-cache.sqlite`. Nothing
+  was written to the user's real profile.
+- A `1280x800` `Canopi` window mapped and **rendered the real application shell**:
+  title bar, File/Edit/View/Help menus, theme control, the right panel rail with
+  its twelve icon buttons, and the welcome screen with New Design / Open Design.
+- The UI is served from this candidate, not another checkout: the dev server
+  returns `AnalysisPanel.tsx` containing this assignment's `runningAnalysisJobId`.
+- Teardown was clean and scoped: `:99` released, port 1430 released, and the
+  user's own ports 1420/1422 never bound by this work.
+
+**What it does not establish.** I could not drive the workflow. XTEST delivered
+pointer motion (verified: the pointer landed at the intended root coordinates
+with window `0x200002` as the child under it) and button events, and the window
+held input focus, but **no click changed the UI** — four attempts at the New
+Design button with progressively longer holds, after first focusing the window
+body. So this evidence covers launch, rendering, profile isolation and teardown,
+and **not** the Data → import → Analysis → Layers → Inspect workflow, which
+remains unobserved.
+
+Classification: environment/tooling limitation for the input half. The recipe in
+the edition guide was written from a run that did drive input, so the difference
+is not yet explained; it is worth recording that the guide's claim is now
+reproduced only partially on this host. Screenshots and the profile are in
+`.rq-scratch/smoke-r14/`.
+
 | Case | Classification | Detector | Repair |
 | --- | --- | --- | --- |
 | The handoff's `completion-design.md` predicted a possible fast-forward for `main`; the actual ancestry made it impossible (the bounded stack re-parented `af8aed87` under `34bf6041`) | Design omission — but the contract said "prefer fast-forward where possible, otherwise a deliberate merge", so the prescribed fallback was sufficient | Git ancestry check before merging | Used the prescribed deliberate merge; recorded the real topology here |
