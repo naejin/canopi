@@ -126,9 +126,18 @@ the production callers with no admission override and no test-only limit:
 ```
 capacity plane: 1677760928 bytes
 staged: uncovered=396979300 overlap=0 invalid=3020700
-applied: 396979300 cells, range Some(3469900.25)..Some(3477399.75)
-(the run reported valid coverage; invalid=3020700 came from the same review)
+applied: 396979300 valid cells, 3020700 invalid, range Some(3469900.25)..Some(3477399.75)
+restart: 396979300 cells
+tile 14/8331/5798: 28980 bytes
+seam window: 16 samples match the analytic plane
+holes: 4 declared rectangles read as exactly NoData
+hole edge: pixels west of hole 0 are valid
+capacity plane: peak total 197 MiB, incremental 181 MiB over 15759 complete and 19 incomplete ticks
 ```
+
+The run passes the contract's combined budget with the whole pipeline — managed
+original, preparation, review, Apply, reopen, display and bounded reads —
+inside **181 MiB incremental**, nine times under the 1 GiB gate.
 
 Coverage plus invalid is exactly 400,000,000, and the invalid count is exactly
 the four declared holes' own area, so the holes were excluded rather than
@@ -169,7 +178,8 @@ already reserves 128 MiB for decoded raster data, so every engine process now
 receives exactly that through `GDAL_CACHEMAX`; the engine can no longer take
 memory the pipeline never budgeted, and the bounded run is also faster because
 the cache was thrashing rather than helping. This is a defect the capacity gate
-existed to catch, not a reason to raise the gate.
+existed to catch, not a reason to raise the gate. With the bound in place the
+same run reports **181 MiB incremental against the 1024 MiB budget**.
 
 Not measured: temporary/durable bytes, queue and cache peaks, cancellation
 settlement timing, low-space and write-failure behaviour, and cold/three-warm
