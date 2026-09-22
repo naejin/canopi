@@ -213,6 +213,52 @@ The 76 ignored Rust tests are the GDAL- and fixture-backed lanes; individual one
 have been run and are recorded above, but the full ignored lane has not been run
 as one command on this revision and is not claimed.
 
+### C1 low-space and write-failure: not verified, and here is why
+
+I could not write an honest test for the low-space and write-failure path, so it
+stays **unverified**. Recording the reasoning matters more than the failed
+attempt, because two plausible tests were written and both were discarded for
+proving nothing.
+
+The path is real: `write_job_source_cog` checks free space, then converts, then
+validates, and deletes its staged output if either step fails. The free-space
+check is only a prediction, so a disk that fills *during* a conversion is the case
+the cleanup exists for.
+
+**Attempt 1 — oversize declared grid.** A conversion that cannot fill its declared
+grid was expected to fail mid-write. It did fail, but the test **still passed with
+the cleanup deleted**, so it was detecting nothing. Cause: the conversion fails
+before producing output, and GDAL's own GTiff driver removes its partial file.
+**Attempt 2 — mismatched validation grid.** This one was worse: the test
+re-implemented the delete in the test body, so it would pass whether or not the
+production code deletes anything. A test that cannot fail is not evidence.
+
+**A direct probe settled the underlying question.** With a 64 KiB
+`RLIMIT_FSIZE` inherited by the conversion, `gdal_translate` genuinely fails
+mid-write (`_tiffWriteProc: File too large`, `TIFFAppendToStrip: Write error at
+scanline 8`) — and the output file **does not exist afterwards even with the
+cleanup removed**, because the GTiff driver removes it. So the
+conversion-failure cleanup is defensive rather than load-bearing, and the
+validation-failure branch is the one that could leave a readable-but-wrong file —
+but it was not reachable from a test without either re-implementing the delete or
+depending on the driver leaving a file behind.
+
+**What this means for the guarantee.** Publication is atomic and reads come from
+the catalogue, never from a directory scan, so a stray file in job scratch could
+not be mistaken for a published source even if one survived. The requirement that
+matters — nothing is published on failure — is separately and genuinely covered by
+`staged_source_rejects_an_insufficient_combined_budget_before_preparation`, which
+asserts the rejection names the required and available bytes and leaves zero
+converted outputs behind. What remains unverified is the narrower claim that the
+staged file is always tidied away.
+
+**Environment limits found, for whoever picks this up:** mounting a size-limited
+tmpfs is not permitted here, and neither is an unprivileged `RLIMIT_FSIZE` test of
+the *production* function because the limit is per-process and process-wide. A
+real test wants either a filesystem seam (an injected writer that can fail at a
+chosen byte) or a quota-limited fixture volume. Recorded as a limitation rather
+than papered over.
+
 ### C1 cancellation settlement, measured (round 23)
 
 The resource contract bounds cancellation settlement at five seconds: a cancelled
