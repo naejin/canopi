@@ -579,7 +579,11 @@
         "noInputs": "Nessun dataset nella libreria.",
         "noEligible": "Nessun dataset è attualmente idoneo come quota del suolo.",
         "notGround": "Non è quota del suolo",
-        "notReady": "Non pronto"
+        "notReady": "Non pronto",
+        "running": "Analisi in corso…",
+        "retry": "Ripeti analisi",
+        "previous": "Risultati precedenti",
+        "noResults": "Nessun risultato per questo input."
       },
       "webUnavailable": "I dataset raster e i risultati di questo progetto sono conservati qui, ma non vengono visualizzati né elaborati nell’edizione Web. Apri il progetto nell’app desktop per importarli, analizzarli o visualizzarli."
     },

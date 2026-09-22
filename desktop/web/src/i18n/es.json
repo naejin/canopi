@@ -579,7 +579,11 @@
         "noInputs": "Aún no hay conjuntos en la biblioteca.",
         "noEligible": "Ningún conjunto es apto como elevación del terreno.",
         "notGround": "No es elevación del terreno",
-        "notReady": "No está listo"
+        "notReady": "No está listo",
+        "running": "Análisis en curso…",
+        "retry": "Reintentar análisis",
+        "previous": "Resultados anteriores",
+        "noResults": "Aún no hay resultados para esta entrada."
       },
       "webUnavailable": "Los conjuntos de datos ráster y resultados de este diseño se conservan aquí, pero no se representan ni procesan en la edición web. Abra el diseño en la aplicación de escritorio para importarlos, analizarlos o mostrarlos."
     },

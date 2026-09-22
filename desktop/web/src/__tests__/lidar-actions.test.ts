@@ -9,8 +9,11 @@ const refreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const ensurePollingMock = vi.hoisted(() => vi.fn())
 const sessionIdentity = vi.hoisted(() => ({ value: 'design-a' as string | null }))
 
+const cancelAnalysisMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+
 vi.mock('../ipc/lidar', () => ({
   lidarApplyImport: vi.fn(),
+  lidarCancelAnalysisJob: cancelAnalysisMock,
   lidarCancelImport: vi.fn(),
   lidarCreateAnalysis: createAnalysisMock,
   lidarCreateLayer: createLayerMock,
@@ -48,8 +51,10 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }))
 
 import {
   analyseLayerAsSlope,
+  cancelAnalysisJob,
   createLidarLayer,
   deleteLidarLayer,
+  runningAnalysisJobId,
 } from '../app/lidar/actions'
 
 interface Deferred<T> {
@@ -113,5 +118,32 @@ describe('LiDAR action session isolation', () => {
 
     expect(refreshMock).toHaveBeenCalled()
     expect(removeMock).not.toHaveBeenCalled()
+  })
+
+  it('remembers the job a run started so Cancel can name it', async () => {
+    createAnalysisMock.mockResolvedValue({ definition_id: 'adef-1', job_id: 'job-77' })
+    await analyseLayerAsSlope('lyr-1', 'Percent')
+    // The library snapshot reports result state but not job identity, so the
+    // receipt is the only handle on the run the user actually started.
+    expect(runningAnalysisJobId('adef-1')).toBe('job-77')
+    expect(runningAnalysisJobId('adef-unknown')).toBeNull()
+    // The chosen unit is the recipe's own parameter, not a relabelled result.
+    expect(createAnalysisMock).toHaveBeenCalledWith('lyr-1', 'Slope', {
+      slope_unit: 'Percent',
+    })
+  })
+
+  it('cancels only a run this session started', async () => {
+    // Nothing started for this definition, so there is nothing to cancel and no
+    // guessed job id is sent.
+    expect(await cancelAnalysisJob('adef-unknown')).toBe(false)
+    expect(cancelAnalysisMock).not.toHaveBeenCalled()
+
+    createAnalysisMock.mockResolvedValue({ definition_id: 'adef-2', job_id: 'job-88' })
+    await analyseLayerAsSlope('lyr-1')
+    expect(await cancelAnalysisJob('adef-2')).toBe(true)
+    expect(cancelAnalysisMock).toHaveBeenCalledWith('job-88')
+    // A cancelled run is forgotten, so a second Cancel does not resend it.
+    expect(await cancelAnalysisJob('adef-2')).toBe(false)
   })
 })

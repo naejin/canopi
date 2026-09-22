@@ -579,7 +579,11 @@
         "noInputs": "库中还没有数据集。",
         "noEligible": "当前没有可用作地面高程的数据集。",
         "notGround": "不是地面高程",
-        "notReady": "未就绪"
+        "notReady": "未就绪",
+        "running": "正在分析…",
+        "retry": "重试分析",
+        "previous": "之前的结果",
+        "noResults": "此输入尚无结果。"
       },
       "webUnavailable": "本设计的栅格数据集和结果在此保留，但网页版不会渲染或处理它们。请在桌面应用中打开本设计以导入、分析或显示。"
     },

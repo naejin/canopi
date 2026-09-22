@@ -579,7 +579,11 @@
         "noInputs": "No datasets in the library yet.",
         "noEligible": "No dataset is currently eligible as ground elevation.",
         "notGround": "Not ground elevation",
-        "notReady": "Not ready"
+        "notReady": "Not ready",
+        "running": "Analysis running…",
+        "retry": "Retry analysis",
+        "previous": "Previous results",
+        "noResults": "No results yet for this input."
       },
       "webUnavailable": "This Design’s raster datasets and results are preserved here but are not rendered or processed in the Web Edition. Open the Design in the Desktop app to import, analyse or display them."
     },

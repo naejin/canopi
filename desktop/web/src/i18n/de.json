@@ -579,7 +579,11 @@
         "noInputs": "Noch keine Datensätze in der Bibliothek.",
         "noEligible": "Derzeit ist kein Datensatz als Geländehöhe geeignet.",
         "notGround": "Keine Geländehöhe",
-        "notReady": "Nicht bereit"
+        "notReady": "Nicht bereit",
+        "running": "Analyse läuft…",
+        "retry": "Analyse wiederholen",
+        "previous": "Frühere Ergebnisse",
+        "noResults": "Noch keine Ergebnisse für diese Eingabe."
       },
       "webUnavailable": "Die Rasterdatensätze und Ergebnisse dieses Entwurfs bleiben hier erhalten, werden in der Web-Edition aber weder dargestellt noch verarbeitet. Öffnen Sie den Entwurf in der Desktop-App zum Importieren, Analysieren oder Anzeigen."
     },

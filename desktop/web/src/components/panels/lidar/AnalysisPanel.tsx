@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'preact/hooks'
-import { analyseLayerAsSlope } from '../../../app/lidar/actions'
+import {
+  analyseLayerAsSlope,
+  cancelAnalysisJob,
+  runningAnalysisJobId,
+} from '../../../app/lidar/actions'
 import {
   ensureLidarPolling,
   installLidarLibraryObserver,
   lidarLibrary,
+  refreshLidarLibrary,
 } from '../../../app/lidar/library-store'
 import { t } from '../../../i18n'
 import type { LidarLayerSummary } from '../../../ipc/lidar'
@@ -48,6 +53,16 @@ export function AnalysisPanel() {
   const layers = library?.layers ?? []
   const eligible = layers.filter((layer) => ineligibilityReason(layer) === null)
   const chosen = layers.find((layer) => layer.id === selected) ?? null
+
+  // Everything already derived for the chosen input, so Run knows whether a job
+  // is in flight and whether the last attempt failed.
+  const results = chosen
+    ? (library?.analyses ?? []).filter((analysis) => analysis.source_layer_id === chosen.id)
+    : []
+  const run = results.find(
+    (analysis) => analysis.state === 'Preparing' || analysis.state === 'Refreshing',
+  ) ?? null
+  const previousFailed = results.some((analysis) => analysis.state === 'Failed')
 
   return (
     <div className={styles.panel}>
@@ -123,13 +138,33 @@ export function AnalysisPanel() {
           </label>
         </fieldset>
 
+        {run ? (
+          <div className={styles.run} role="status">
+            <span className={styles.runState}>{t(`canvas.lidar.state.${run.state}`)}</span>
+            {/* Cancel names the run this session started, never a guessed job. */}
+            <button
+              type="button"
+              className={styles.secondary}
+              disabled={!runningAnalysisJobId(run.id)}
+              onClick={() => {
+                if (chosen === null) return
+                void cancelAnalysisJob(run.id).then(() => refreshLidarLibrary())
+              }}
+            >
+              {t('canvas.lidar.cancelCreate')}
+            </button>
+          </div>
+        ) : null}
+
         <button
           type="button"
           className={styles.primary}
-          disabled={chosen === null}
+          disabled={chosen === null || run !== null}
           onClick={() => {
             if (chosen === null) return
             setError(null)
+            // A fresh job against the current head; the previous definition keeps
+            // its own result until this one publishes.
             analyseLayerAsSlope(chosen.id, unit)
               .then(() => ensureLidarPolling())
               .catch((cause: unknown) =>
@@ -137,12 +172,50 @@ export function AnalysisPanel() {
               )
           }}
         >
-          {t('canvas.lidar.createSlope')}
+          {run !== null
+            ? t('canvas.lidar.analysis.running')
+            : previousFailed
+              ? t('canvas.lidar.analysis.retry')
+              : t('canvas.lidar.createSlope')}
         </button>
+
+        {chosen === null ? null : (
+          <section className={styles.previous} aria-label={t('canvas.lidar.analysis.previous')}>
+            <h4 className={styles.previousHeading}>{t('canvas.lidar.analysis.previous')}</h4>
+            {results.length === 0 ? (
+              <p className={styles.empty}>{t('canvas.lidar.analysis.noResults')}</p>
+            ) : (
+              <ul className={styles.previousList}>
+                {results.map((result) => (
+                  <li key={result.id} className={styles.previousRow}>
+                    <span className={styles.previousState}>
+                      {t(`canvas.lidar.state.${result.state}`)}
+                    </span>
+                    {/* The previous result stays visible while a refresh runs or
+                        after a failure, so a reader never loses the last good
+                        numbers to an unrelated error. */}
+                    {result.value_range ? (
+                      <span className={styles.previousRange}>
+                        {formatRange(result.value_range)}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
         {eligible.length === 0 && layers.length > 0 ? (
           <p className={styles.empty}>{t('canvas.lidar.analysis.noEligible')}</p>
         ) : null}
       </div>
     </div>
   )
+}
+
+/** A result's observed range, which is what a legend would show. */
+function formatRange(range: readonly [number, number]): string {
+  const [min, max] = range
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return ''
+  return `${min.toFixed(2)} – ${max.toFixed(2)}`
 }

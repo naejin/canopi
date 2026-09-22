@@ -2,6 +2,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import type { LidarPresentationEntryKind } from '../../generated/contracts'
 import {
   lidarApplyImport,
+  lidarCancelAnalysisJob,
   lidarCancelImport,
   lidarCreateAnalysis,
   lidarCreateLayer,
@@ -123,6 +124,11 @@ export async function analyseLayerAsSlope(
     const receipt = await lidarCreateAnalysis(layerId, 'Slope', {
       slope_unit: slopeUnit,
     })
+    // Remember the job the user actually started, because that is the only
+    // handle that can cancel *this* run. The library snapshot reports result
+    // state but not job identity, so without this the Cancel action would have
+    // nothing to name.
+    runningAnalysisJobs.set(receipt.definition_id, receipt.job_id)
     await refreshLidarLibrary()
     if (designSessionStore.sessionIdentity.value === identity) {
       await presentEntity('Analysis', receipt.definition_id)
@@ -260,4 +266,35 @@ async function withLidarError(work: () => Promise<void>): Promise<void> {
   } catch (error) {
     lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
   }
+}
+
+/**
+ * Analysis jobs this session started, by definition.
+ *
+ * The library snapshot reports each result's state, but cancelling needs the job
+ * identity, and only the receipt that created the run carries it. Keeping it here
+ * means Cancel names the run the user started rather than guessing at one.
+ */
+const runningAnalysisJobs = new Map<string, string>()
+
+/** The job id for a definition this session started, if any. */
+export function runningAnalysisJobId(definitionId: string): string | null {
+  return runningAnalysisJobs.get(definitionId) ?? null
+}
+
+/**
+ * Cancel the run this session started for one definition.
+ *
+ * Cancellation is explicit and never implicit: closing or switching panels must
+ * leave jobs running, so nothing calls this except the Cancel action itself.
+ */
+export async function cancelAnalysisJob(definitionId: string): Promise<boolean> {
+  const jobId = runningAnalysisJobs.get(definitionId)
+  if (!jobId) return false
+  await withLidarError(async () => {
+    await lidarCancelAnalysisJob(jobId)
+    runningAnalysisJobs.delete(definitionId)
+    await refreshLidarLibrary()
+  })
+  return true
 }
