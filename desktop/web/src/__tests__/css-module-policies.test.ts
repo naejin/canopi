@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -548,3 +549,69 @@ function splitTopLevelComponents(value: string, splitSlash = false): string[] {
   push(value.length)
   return components
 }
+
+/**
+ * A stylesheet whose selector list is followed by another selector list instead
+ * of a declaration block is malformed, and the failure is silent: the stylesheet
+ * still parses, so every declaration in that rule simply stops applying.
+ *
+ * This happened for real. A bulk deletion of dead selectors removed a whole
+ * `:focus-visible` rule, leaving its selector list dangling immediately before
+ * the next rule. Nothing failed — the build was clean, the lint was clean, and
+ * every CSS policy above passed — but focus outlines silently stopped rendering
+ * on nine interactive controls, and that was reported as delivered. Selector
+ * structure is therefore checked here rather than assumed.
+ */
+function dangleselectorLists(css: string): string[] {
+  const findings: string[] = []
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  // Split into statements at top level only, so braces inside nested rules and
+  // any prelude are handled correctly.
+  const statements: string[] = []
+  let depth = 0
+  let start = 0
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (char === '{') {
+      if (depth === 0) {
+        statements.push(text.slice(start, index))
+        start = index
+      }
+      depth += 1
+    } else if (char === '}') {
+      depth -= 1
+      if (depth === 0) start = index + 1
+    }
+  }
+  for (const statement of statements) {
+    const prelude = statement.trim()
+    if (!prelude) continue
+    if (prelude.startsWith('@')) continue
+    // A selector list is written as consecutive lines. A **blank line** inside a
+    // prelude means two rules were merged: the declaration block that belonged to
+    // the first selector list was deleted, so its selectors were absorbed by the
+    // next rule. That is exactly how a bulk selector deletion silently disabled
+    // the focus-outline rule here, and it leaves no other trace — the stylesheet
+    // parses, the build is clean, and every declaration still typechecks.
+    if (/\n\s*\n/.test(statement.replace(/^\s+/, ''))) {
+      findings.push(prelude.replace(/\s+/g, ' ').slice(0, 120))
+      continue
+    }
+    if (prelude.endsWith(',') || prelude.split(',').some((part) => part.trim() === '')) {
+      findings.push(prelude.replace(/\s+/g, ' ').slice(0, 120))
+    }
+  }
+  return findings
+}
+
+describe('CSS module structural integrity', () => {
+  it('keeps every selector list attached to a declaration block', () => {
+    const violations = discoverCssModuleFacts('src')
+      .flatMap(({ path }) => {
+        const filePath = path.replace(/^src\//, 'src/')
+        const css = readFileSync(resolve(filePath), 'utf8')
+        return dangleselectorLists(css).map((prelude) => `${path}: ${prelude}`)
+      })
+    expect(violations).toEqual([])
+  })
+})

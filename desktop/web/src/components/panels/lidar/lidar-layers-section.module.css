@@ -57,6 +57,10 @@
 .headerBack:hover,
 .textButton:hover,
 .eyeButton:hover,
+.layerIdentity:hover,
+.previewTabs button:hover {
+  background: var(--color-control-hover);
+}
 
 .primaryButton {
   border-color: var(--color-primary);
@@ -94,13 +98,24 @@
 .headerBack:focus-visible,
 .textButton:focus-visible,
 .eyeButton:focus-visible,
+.moveButton:focus-visible,
+.layerIdentity:focus-visible,
+.pendingReview:focus-visible,
+.nameInput:focus-visible,
+.previewTabs button:focus-visible,
+.decision input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
 
 .engineWarning,
 .errorMessage,
 .emptyHint,
 .emptyState,
 .notice,
-.detailSummary,
+.detailSummary {
+  color: var(--color-text-muted);
+}
 
 .engineWarning,
 .notice {
@@ -172,7 +187,9 @@
   font-weight: 600;
 }
 
-.layerList,
+.layerList {
+  min-width: 0;
+}
 
 .layerRow {
   display: grid;
@@ -254,10 +271,8 @@
 }
 
 .layerIdentity {
-  display: grid;
-  grid-template-columns: var(--control-size-sm) minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: var(--space-1);
   min-width: 0;
   padding: var(--space-1);
   border: 1px solid transparent;
@@ -285,11 +300,13 @@
 
 .name {
   min-width: 0;
+  overflow: hidden;
   color: inherit;
   font-size: var(--text-sm);
   font-weight: 600;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metadata {
