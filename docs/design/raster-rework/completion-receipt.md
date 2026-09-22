@@ -40,7 +40,7 @@ branch or worktree was deleted.
 | C1 | **Partial — measured** | Policy enabled at 24 files / 2 GiB per file / 2 GiB total / 400,000,000 processing cells, up from the retired 25M bound; the 24-tile sparse batch, the 48M MNH batch and the **400M-cell plane all run through the production callers with no override**. Envelope measured: peak 73 MiB / 96 MiB / 199 MiB, durable 4,951,029,490 bytes in 11 files, temporary 0, cancellation settling in 101 ms against a 5 s bound. See [C1 measured envelope](#c1-measured-envelope) | Queue and cache peaks are not separated as distinct quantities; cold vs three-warm display timings are unmeasured; the low-space/write-failure path is unverified with probe evidence and named environment limits; no whole-union-allocation claim is made |
 | C2 | **Implemented, not live-verified** | Data, Analysis and Layers ship as production panels beside Layers through existing shell composition; slope in degrees or percent with an author-named result (catalogue v17); an other-continuous dataset must declare a unit label or an explicit unknown; Layers is a flat geographic presentation list with independent eyes | The end-to-end import chain is unobserved, so the surfaces are verified by unit and native tests rather than a driven Desktop pass |
 | C3 | **Implemented, not live-verified** | `inspection.rs` implements `sample(entity, expected generation, WGS84 point)`: `gdaltransform` to the raster CRS, north-up half-open containing pixel, `apply_scene_offset` inverting the canvas conversion, and four tests including an independent oracle across bearings 0/30/90/180/271.5/359 | No value has been read off a live session against an independently known source or slope value; hole/edge NoData and late-answer fencing are covered by tests, not by observation |
-| C4 | **Implemented, not live-verified** | Shared provider module with `google_satellite`, ADR 0028 replacing the Web-v1 restrictions in ADRs 0013/0016; both map surfaces take their basemap from `basemap-bind.ts` rather than recreating the map on a provider/key/session change | No live provider session: attribution and error states are unobserved, isolated Web placement is unrun, and the official Google path needs a real restricted key that does not exist here |
+| C4 | **Implemented; provider path driven end to end against a scripted tier** | Shared provider module with `google_satellite`, ADR 0028 replacing the Web-v1 restrictions in ADRs 0013/0016; both map surfaces take their basemap from `basemap-bind.ts` rather than recreating the map on a provider/key/session change. `basemap-provider-binding.test.ts` drives a **real `BasemapProvider` through a scripted Google session tier into a recording map** and asserts the official descriptor reaches the source, the session token never reaches the published state or the map, a rejected key withdraws the contribution with a sanitized reason instead of downgrading, and a re-issued generation keeps exactly one contribution | No **live** provider session: nothing was requested from Google, so attribution and error states are unobserved and the official path still needs a real restricted key. Isolated Web placement is unrun |
 | C5 | **Documents and gates done; platform unrun** | Combined gates pass on the candidate ([table](#c5-final-gate-run-on-the-delivered-candidate-round-31)); the [debrief synthesis](review-and-debrief.md#final-synthesis) is written; the tracker is reconciled with `canopi-jv8a.2`, `canopi-jv8a.4`, `canopi-j571.2` and `canopi-kko3` closed | Windows and macOS compilation, a packaged-window smoke and the packaged Web artifact are unrun and need a host this environment does not have |
 
 ### C1 detail
@@ -230,6 +230,36 @@ produced it; the detailed sections below this one carry the raw output.
 | Durable bytes (plane lane) | **4,951,029,490** in 11 files — 2.95× the 1,677,760,928-byte source, dominated by derived chunk output | same lane, `report_library_bytes` |
 | Temporary bytes (plane lane) | **0**, no job scratch left; now an assertion rather than an observation | same lane |
 | Cancellation settlement | **101 ms** against a 5 s bound, on the real kill-and-reap path | `a_cancelled_engine_conversion_settles_within_the_contract_bound` |
+
+### C4 provider path: driven end to end against a scripted tier (round 37)
+
+"No live provider evidence" was too coarse a limitation, because most of the C4
+provider path is exercisable without Google: the provider, the session handling,
+the generation fence and the map binding are all product code, and only the
+network peer is external. `basemap-provider-binding.test.ts` therefore drives a
+**real `BasemapProvider`** — not a stub — against a scripted Google tier, through
+`bindBasemapProvider`, into a recording map, and asserts the properties that
+matter:
+
+| Property | Assertion |
+| --- | --- |
+| The key belongs to the session request | the `createSession` URL carries it, and no other |
+| The official path is the one used | the published descriptor is `provider: google, official: true`, not the keyless fallback |
+| Imagery reaches the map | the reconciled source is a raster whose tile URL is the Google endpoint, with the layer present |
+| The session credential stays internal | neither the published state nor the map's source definitions contain the token |
+| A rejected key degrades honestly | the contribution is **withdrawn** and the reason is sanitized — the UI does not keep another provider's tiles under the Google name |
+| A re-issued generation does not accumulate | exactly one source and one layer survive a repeated update |
+
+The withdrawal assertion is verified by mutation: disabling withdrawal in
+`reconcileBasemapContribution` makes that test fail, so it detects the regression
+rather than merely passing.
+
+**What is still not established, and why the limitation is now narrower.** Nothing
+was requested from Google: this is a scripted tier, so it shows the product code
+handles a session correctly, not that the account or endpoint behaves as expected.
+Live attribution and error states remain unobserved, and the official path still
+needs a real restricted key. Isolated Web placement remains unrun. The claim this
+round supports is about the **provider and binding**, not about the service.
 
 **Composition of the peak (round 36).** The totals above cannot distinguish one
 large conversion from several resident at once, so the sampler now also reports the
