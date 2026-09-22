@@ -12,6 +12,8 @@ import type {
   LidarLayerHistoryPage,
   LidarLibrarySnapshot,
   LidarMeasurementKind,
+  LidarSampleOutcome,
+  LidarSampleRequest,
 } from '../generated/contracts'
 
 export type {
@@ -165,4 +167,17 @@ export async function lidarRestoreLayerVersion(
   expectedHead: string | null,
 ): Promise<LidarLayerEditOutcome> {
   return invoke('lidar_restore_layer_version', { layerId, versionId, expectedHead })
+}
+
+/**
+ * One bounded numeric inspection lookup.
+ *
+ * The request carries the generation the caller believes is current, so a head
+ * that moved since the user aimed is refused as stale rather than answered from
+ * different bytes.
+ */
+export async function lidarSamplePixel(
+  request: LidarSampleRequest,
+): Promise<LidarSampleOutcome> {
+  return invoke('lidar_sample_pixel', { request })
 }
