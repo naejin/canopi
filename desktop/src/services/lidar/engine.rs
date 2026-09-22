@@ -15,6 +15,11 @@ use std::time::{Duration, Instant};
 
 const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(600);
 const MAX_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
+/// GDAL's block cache for every engine process.
+///
+/// Matches the resource policy's 128 MiB reserve for decoded raster data, so a
+/// conversion cannot take memory the pipeline has not budgeted.
+const GDAL_CACHE_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_OUTPUT_FILE_BYTES: u64 = (MAX_OUTPUT_BYTES as u64) * 2;
 const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -168,6 +173,14 @@ impl GdalEngine {
             .map_err(|e| format!("Failed to create engine error file: {e}"))?;
         let child = Command::new(path)
             .args(args)
+            // GDAL's block cache defaults to a share of *system* RAM, not to
+            // anything this pipeline budgeted: measured on the representative
+            // 400-million-cell plane it grew to the size of the whole raster
+            // (1.66 GiB) while converting, which breaks the combined working-set
+            // gate on its own. The resource policy already reserves 128 MiB for
+            // decoded raster data, so the engine is given exactly that and no
+            // tool can silently exceed the pipeline's own bound.
+            .env("GDAL_CACHEMAX", GDAL_CACHE_BYTES.to_string())
             .stdin(if input.is_some() {
                 Stdio::piped()
             } else {
