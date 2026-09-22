@@ -566,7 +566,11 @@
         "deleteImpact": "Verwijderen haalt {analyses} analyseresultaat/-resultaten en de gepubliceerde assets weg.",
         "measurement": "Meting",
         "state": "Status",
-        "analyses": "Analyses"
+        "analyses": "Analyses",
+        "importSources": "Bronnen importeren…",
+        "datasetName": "Datasetnaam",
+        "interpretation": "Interpretatie",
+        "createDataset": "Dataset aanmaken"
       },
       "analysis": {
         "title": "Analyse",

@@ -566,7 +566,11 @@
         "deleteImpact": "删除将移除 {analyses} 个分析结果及其已发布资源。",
         "measurement": "测量类型",
         "state": "状态",
-        "analyses": "分析"
+        "analyses": "分析",
+        "importSources": "导入源…",
+        "datasetName": "数据集名称",
+        "interpretation": "解释",
+        "createDataset": "创建数据集"
       },
       "analysis": {
         "title": "分析",

@@ -566,7 +566,11 @@
         "deleteImpact": "삭제하면 분석 결과 {analyses}개와 게시된 자산이 제거됩니다.",
         "measurement": "측정 종류",
         "state": "상태",
-        "analyses": "분석"
+        "analyses": "분석",
+        "importSources": "소스 가져오기…",
+        "datasetName": "데이터셋 이름",
+        "interpretation": "해석",
+        "createDataset": "데이터셋 만들기"
       },
       "analysis": {
         "title": "분석",

@@ -566,7 +566,11 @@
         "deleteImpact": "La suppression retire {analyses} résultat(s) d'analyse et leurs ressources publiées.",
         "measurement": "Mesure",
         "state": "État",
-        "analyses": "Analyses"
+        "analyses": "Analyses",
+        "importSources": "Importer des sources…",
+        "datasetName": "Nom du jeu de données",
+        "interpretation": "Interprétation",
+        "createDataset": "Créer le jeu de données"
       },
       "analysis": {
         "title": "Analyse",

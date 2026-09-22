@@ -566,7 +566,11 @@
         "deleteImpact": "Deleting removes {analyses} analysis result(s) and their published assets.",
         "measurement": "Measurement",
         "state": "State",
-        "analyses": "Analyses"
+        "analyses": "Analyses",
+        "importSources": "Import sources…",
+        "datasetName": "Dataset name",
+        "interpretation": "Interpretation",
+        "createDataset": "Create dataset"
       },
       "analysis": {
         "title": "Analysis",

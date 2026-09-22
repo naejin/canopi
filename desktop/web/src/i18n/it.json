@@ -566,7 +566,11 @@
         "deleteImpact": "L'eliminazione rimuove {analyses} risultato/i di analisi e le relative risorse pubblicate.",
         "measurement": "Misura",
         "state": "Stato",
-        "analyses": "Analisi"
+        "analyses": "Analisi",
+        "importSources": "Importa sorgenti…",
+        "datasetName": "Nome del dataset",
+        "interpretation": "Interpretazione",
+        "createDataset": "Crea dataset"
       },
       "analysis": {
         "title": "Analisi",

@@ -179,3 +179,29 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.fieldset legend {
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}

@@ -566,7 +566,11 @@
         "deleteImpact": "Excluir remove {analyses} resultado(s) de análise e seus recursos publicados.",
         "measurement": "Medição",
         "state": "Estado",
-        "analyses": "Análises"
+        "analyses": "Análises",
+        "importSources": "Importar fontes…",
+        "datasetName": "Nome do conjunto",
+        "interpretation": "Interpretação",
+        "createDataset": "Criar conjunto"
       },
       "analysis": {
         "title": "Análise",

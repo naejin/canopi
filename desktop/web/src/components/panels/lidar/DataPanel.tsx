@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import {
+  createLidarLayer,
   deleteLidarLayer,
   fetchLidarLayerDeleteImpact,
   presentEntity,
@@ -32,6 +33,9 @@ export function DataPanel() {
   useEffect(() => installLidarLibraryObserver(), [])
   const library = lidarLibrary.value
   const [row, setRow] = useState<{ id: string; mode: RowMode } | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [newDatasetName, setNewDatasetName] = useState('')
+  const [draftKind, setDraftKind] = useState<MeasurementKind | null>(null)
   const [draftName, setDraftName] = useState('')
   const [impact, setImpact] = useState<LidarDeleteImpact | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -56,6 +60,82 @@ export function DataPanel() {
       <DockPanelHeader title={t('canvas.lidar.data.title')} count={library?.layers.length} />
       <div className={styles.body}>
         <p className={styles.intro}>{t('canvas.lidar.data.intro')}</p>
+
+        {/*
+          Data's primary action is importing sources. Creating the dataset first
+          is what makes the interpretation an explicit choice rather than a
+          filename guess, so the form asks for it before any file is opened.
+        */}
+        {creating ? (
+          <form
+            className={styles.inlineForm}
+            onSubmit={(event) => {
+              event.preventDefault()
+              const name = newDatasetName.trim()
+              // Interpretation stays unselected until the user chooses one.
+              if (name.length === 0 || draftKind === null) return
+              void run(async () => {
+                await createLidarLayer(name, draftKind)
+                setCreating(false)
+                setNewDatasetName('')
+                setDraftKind(null)
+              })
+            }}
+          >
+            <label className={styles.field}>
+              <span>{t('canvas.lidar.data.datasetName')}</span>
+              <input
+                type="text"
+                value={newDatasetName}
+                onInput={(event) => setNewDatasetName(event.currentTarget.value)}
+              />
+            </label>
+            <fieldset className={styles.fieldset}>
+              <legend>{t('canvas.lidar.data.interpretation')}</legend>
+              {MEASUREMENT_KINDS.map((kind) => (
+                <label key={kind} className={styles.choice}>
+                  <input
+                    type="radio"
+                    name="dataset-kind"
+                    checked={draftKind === kind}
+                    onChange={() => setDraftKind(kind)}
+                  />
+                  <span>{t(`canvas.lidar.kind.${kind}`)}</span>
+                </label>
+              ))}
+            </fieldset>
+            <div className={styles.formActions}>
+              <button type="submit" className={styles.primary} disabled={draftKind === null}>
+                {t('canvas.lidar.data.createDataset')}
+              </button>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => {
+                  setCreating(false)
+                  setNewDatasetName('')
+                  setDraftKind(null)
+                }}
+              >
+                {t('canvas.lidar.cancelCreate')}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className={styles.rowActions}>
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={() => {
+                setNewDatasetName('')
+                setDraftKind(null)
+                setCreating(true)
+              }}
+            >
+              {t('canvas.lidar.data.importSources')}
+            </button>
+          </div>
+        )}
         {lidarStatusMessage.value ? (
           <p className={styles.error} role="status">
             {lidarStatusMessage.value}
@@ -193,6 +273,16 @@ export function DataPanel() {
     </div>
   )
 }
+
+/** The interpretations this delivery can import, in the contract's order. */
+const MEASUREMENT_KINDS = [
+  'GroundElevation',
+  'SurfaceElevation',
+  'AboveGroundHeight',
+  'OtherContinuous',
+] as const
+
+type MeasurementKind = (typeof MEASUREMENT_KINDS)[number]
 
 /**
  * Coverage as an area, using the layer's own resolution when it is known.

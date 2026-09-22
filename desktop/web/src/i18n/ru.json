@@ -566,7 +566,11 @@
         "deleteImpact": "Удаление уберёт {analyses} результат(ов) анализа и опубликованные ресурсы.",
         "measurement": "Измерение",
         "state": "Состояние",
-        "analyses": "Анализы"
+        "analyses": "Анализы",
+        "importSources": "Импортировать источники…",
+        "datasetName": "Имя набора данных",
+        "interpretation": "Интерпретация",
+        "createDataset": "Создать набор"
       },
       "analysis": {
         "title": "Анализ",

@@ -566,7 +566,11 @@
         "deleteImpact": "Beim Löschen werden {analyses} Analyseergebnis(se) und deren veröffentlichte Assets entfernt.",
         "measurement": "Messgröße",
         "state": "Status",
-        "analyses": "Analysen"
+        "analyses": "Analysen",
+        "importSources": "Quellen importieren…",
+        "datasetName": "Datensatzname",
+        "interpretation": "Interpretation",
+        "createDataset": "Datensatz erstellen"
       },
       "analysis": {
         "title": "Analyse",
