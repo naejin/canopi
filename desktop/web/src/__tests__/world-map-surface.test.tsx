@@ -26,6 +26,17 @@ class FakeWorldMap {
   readonly resize = vi.fn()
   readonly fitBounds = vi.fn()
   readonly flyTo = vi.fn()
+  // The basemap provider binding owns a raster source and layer on the live
+  // map, so a faithful fake implements that narrow surface. A map that cannot
+  // be reconciled is not a map this surface can run against.
+  readonly sources = new Map<string, Record<string, unknown>>()
+  readonly layers = new Map<string, Record<string, unknown>>()
+  readonly setLayoutProperty = vi.fn((id: string, name: string, value: unknown) => {
+    const layer = this.layers.get(id)
+    if (layer && name === 'visibility') {
+      layer.layout = { ...(layer.layout as Record<string, unknown>), visibility: value }
+    }
+  })
   center = { lng: 0, lat: 14 }
   zoom = 1.15
 
@@ -37,6 +48,30 @@ class FakeWorldMap {
 
   getZoom() {
     return this.zoom
+  }
+
+  addSource(id: string, source: Record<string, unknown>) {
+    this.sources.set(id, source)
+  }
+
+  getSource(id: string) {
+    return this.sources.get(id)
+  }
+
+  removeSource(id: string) {
+    this.sources.delete(id)
+  }
+
+  addLayer(layer: Record<string, unknown>) {
+    this.layers.set(String(layer.id), layer)
+  }
+
+  getLayer(id: string) {
+    return this.layers.get(id)
+  }
+
+  removeLayer(id: string) {
+    this.layers.delete(id)
   }
 }
 
@@ -205,7 +240,7 @@ describe('WorldMapSurface', () => {
     expect(maps[0]!.resize).toHaveBeenCalled()
   })
 
-  it('preserves the current world map view when the basemap style rebuilds', async () => {
+  it('changes the basemap on the live map instead of rebuilding it', async () => {
     const templates = [template('forest', 2.35, 48.85)]
 
     await renderWorldMap(container, {
@@ -214,18 +249,30 @@ describe('WorldMapSurface', () => {
       onSelect: vi.fn(),
     })
     await vi.waitFor(() => expect(maps).toHaveLength(1))
+    const markersBefore = markers.length
+    const map = maps[0]!
+    map.center = { lng: -74.006, lat: 40.7128 }
+    map.zoom = 6
 
-    maps[0]!.center = { lng: -74.006, lat: 40.7128 }
-    maps[0]!.zoom = 6
     act(() => {
       basemapStyle.value = 'satellite'
     })
 
-    await vi.waitFor(() => expect(maps).toHaveLength(2))
-    expect(maps[0]!.remove).toHaveBeenCalled()
-    expect(maps[1]!.options).toMatchObject({
-      center: [-74.006, 40.7128],
-      zoom: 6,
-    })
+    // The provider reconciles into the live map, so a basemap change must not
+    // recreate the map, disturb the camera, or rebuild the markers. Recreating
+    // the map is what this test used to require, and it is exactly what the
+    // product contract forbids: no `setStyle()` and no map recreation on a
+    // provider, key or session change.
+    //
+    // This build has no MapTiler key, so `satellite` is genuinely *unavailable*.
+    // The provider therefore withdraws the contribution rather than leaving
+    // street tiles on screen under the satellite name, and the map, camera and
+    // markers all stay exactly as they were.
+    await vi.waitFor(() => expect(map.sources.size).toBe(0))
+    expect(maps).toHaveLength(1)
+    expect(map.remove).not.toHaveBeenCalled()
+    expect(map.getCenter()).toEqual({ lng: -74.006, lat: 40.7128 })
+    expect(map.getZoom()).toBe(6)
+    expect(markers).toHaveLength(markersBefore)
   })
 })

@@ -16,7 +16,28 @@ import {
   type WorldMapMarker,
 } from '../../maplibre/world-map'
 import { basemapStyle } from '../../app/settings/state'
+import { bindBasemapProvider, createBasemapProvider } from '../../maplibre/basemap-bind'
+import type {
+  BasemapProvider,
+  BasemapViewport,
+} from '../../maplibre/basemap-provider-session'
 import styles from './WorldMapSurface.module.css'
+
+/** The provider viewport for a live map, or a whole-world fallback before one exists. */
+function readWorldMapViewport(map: WorldMapLibreMap | null): BasemapViewport {
+  const bounds = map?.getBounds?.()
+  const zoom = map?.getZoom?.()
+  if (!bounds || typeof zoom !== 'number') {
+    return { west: -180, south: -85, east: 180, north: 85, zoom: 0 }
+  }
+  return {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+    zoom,
+  }
+}
 
 export function WorldMapSurface({
   templates,
@@ -29,6 +50,7 @@ export function WorldMapSurface({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const surfaceRef = useRef<MapLibreSurfaceAdapter<WorldMapLibreMap> | null>(null)
+  const providerRef = useRef<BasemapProvider | null>(null)
   const markersRef = useRef<WorldMapMarker[]>([])
   const lastTemplateLayoutKeyRef = useRef<string>('')
   const templatesRef = useRef(templates)
@@ -48,8 +70,13 @@ export function WorldMapSurface({
     if (!surface) return
 
     surface.attach(container)
+    const provider = createBasemapProvider()
+    providerRef.current = provider
     surface.requestMap({
-      key: preferredBasemapStyle,
+      // Deliberately independent of the provider: a basemap change is
+      // reconciled into the live map by the binding below, so it cannot reset
+      // the camera, the scene or any other layer.
+      key: 'world-map',
       createMap: (maplibre, target, preservedView) => createWorldMapLibreMap(
         maplibre,
         target,
@@ -61,6 +88,12 @@ export function WorldMapSurface({
       ),
       captureViewState: (context) => readWorldMapViewState(context.map),
       onCreate: (context) => {
+        // The provider's session and viewport work belongs to this map's
+        // lifetime, so both are torn down together.
+        context.lifetime.addCleanup(bindBasemapProvider({ provider, map: context.map }))
+        context.lifetime.addCleanup(() => {
+          providerRef.current = null
+        })
         context.lifetime.addCleanup(clearMarkers)
         syncTemplateMarkers(context.map, context.maplibre)
         syncMarkerSelection()
@@ -71,17 +104,30 @@ export function WorldMapSurface({
     return () => {
       surface.destroy()
     }
+    // Only the surface's own structural key belongs here. The basemap style is
+    // applied through the provider below.
+  }, [])
+
+  // A style change updates the provider rather than rebuilding the map, so the
+  // camera, the markers and the scene survive a provider switch mid-edit.
+  useEffect(() => {
+    providerRef.current?.update(
+      { style: preferredBasemapStyle },
+      readWorldMapViewport(surfaceRef.current?.map ?? null),
+    )
   }, [preferredBasemapStyle])
 
+  // Markers are rebuilt when the map is recreated, so the map itself is the
+  // signal here rather than the basemap style.
   useEffect(() => {
     const map = surfaceRef.current?.map
     const maplibre = surfaceRef.current?.maplibre
     if (map && maplibre) syncTemplateMarkers(map, maplibre)
-  }, [templates, preferredBasemapStyle])
+  }, [templates])
 
   useEffect(() => {
     syncMarkerSelection()
-  }, [selectedId, templates, preferredBasemapStyle])
+  }, [selectedId, templates])
 
   useEffect(() => {
     const map = surfaceRef.current?.map

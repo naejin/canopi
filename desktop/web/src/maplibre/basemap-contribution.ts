@@ -15,8 +15,12 @@ export interface BasemapReconcileTarget {
   getLayer(id: string): unknown
   removeLayer(id: string): void
   removeSource(id: string): void
-  addSource(id: string, source: BasemapRasterSource): void
-  addLayer(layer: BasemapRasterLayer): void
+  // These take the map's own parameter shape so a real MapLibre instance
+  // satisfies this interface structurally. `BasemapRasterSource` and
+  // `BasemapRasterLayer` remain the shapes this module *builds*, which is what
+  // keeps the reconciler from reaching beyond a raster source and layer.
+  addSource(id: string, source: Record<string, unknown>): void
+  addLayer(layer: Record<string, unknown>): void
   setLayoutProperty?(id: string, name: string, value: unknown): void
 }
 

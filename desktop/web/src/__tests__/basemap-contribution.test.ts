@@ -6,6 +6,22 @@ import {
   type BasemapRasterSource,
   type BasemapReconcileTarget,
 } from '../maplibre/basemap-contribution'
+/** Read a recorded layer as the shape the reconciler builds. */
+function readLayer(
+  layers: Map<string, Record<string, unknown>>,
+  id: string,
+): BasemapRasterLayer | undefined {
+  return layers.get(id) as BasemapRasterLayer | undefined
+}
+
+/** Read a recorded source as the shape the reconciler builds. */
+function readSource(
+  sources: Map<string, Record<string, unknown>>,
+  id: string,
+): BasemapRasterSource | undefined {
+  return sources.get(id) as BasemapRasterSource | undefined
+}
+
 import {
   MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
   MAPLIBRE_BASEMAP_SOURCE_ID,
@@ -29,8 +45,10 @@ function descriptor(overrides: Partial<BasemapDescriptor> = {}): BasemapDescript
 
 /** A target that records the mutation order and tracks live membership. */
 function recordingTarget() {
-  const sources = new Map<string, BasemapRasterSource>()
-  const layers = new Map<string, BasemapRasterLayer>()
+  // Stored in the map's own parameter shape, because that is what the
+  // reconciler hands over; assertions narrow to the contribution's shapes.
+  const sources = new Map<string, Record<string, unknown>>()
+  const layers = new Map<string, Record<string, unknown>>()
   const order: string[] = []
   const target: BasemapReconcileTarget = {
     getSource: (id) => sources.get(id) ?? null,
@@ -48,8 +66,9 @@ function recordingTarget() {
       sources.set(id, source)
     },
     addLayer: (layer) => {
-      order.push(`addLayer:${layer.id}`)
-      layers.set(layer.id, layer)
+      const id = String(layer.id)
+      order.push(`addLayer:${id}`)
+      layers.set(id, layer)
     },
     setLayoutProperty: vi.fn((id, name, value) => {
       order.push(`setLayout:${id}:${name}=${String(value)}`)
@@ -70,10 +89,10 @@ describe('basemap contribution reconciliation', () => {
       descriptor: descriptor(),
       copyright: null,
     })
-    expect(sources.get(MAPLIBRE_BASEMAP_SOURCE_ID)?.tiles).toEqual([
+    expect(readSource(sources, MAPLIBRE_BASEMAP_SOURCE_ID)?.tiles).toEqual([
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     ])
-    expect(layers.get(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)?.layout.visibility).toBe('visible')
+    expect(readLayer(layers, MAPLIBRE_BASEMAP_RASTER_LAYER_ID)?.layout.visibility).toBe('visible')
   })
 
   it('applies the provider tile size and zoom ceiling rather than a fixed 256/19', () => {
@@ -89,7 +108,7 @@ describe('basemap contribution reconciliation', () => {
       }),
       copyright: null,
     })
-    const source = sources.get(MAPLIBRE_BASEMAP_SOURCE_ID)
+    const source = readSource(sources, MAPLIBRE_BASEMAP_SOURCE_ID)
     expect(source?.tileSize).toBe(512)
     expect(source?.maxzoom).toBe(22)
     expect(source?.attribution).toBe('&copy; Google')
@@ -153,12 +172,12 @@ describe('basemap contribution reconciliation', () => {
       descriptor: descriptor(),
       copyright: null,
     })
-    const before = sources.get(MAPLIBRE_BASEMAP_SOURCE_ID)
+    const before = readSource(sources, MAPLIBRE_BASEMAP_SOURCE_ID)
     setBasemapContributionVisibility(target, false)
-    expect(layers.get(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)?.layout.visibility).toBe('none')
-    expect(sources.get(MAPLIBRE_BASEMAP_SOURCE_ID)).toBe(before)
+    expect(readLayer(layers, MAPLIBRE_BASEMAP_RASTER_LAYER_ID)?.layout.visibility).toBe('none')
+    expect(readSource(sources, MAPLIBRE_BASEMAP_SOURCE_ID)).toBe(before)
     setBasemapContributionVisibility(target, true)
-    expect(layers.get(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)?.layout.visibility).toBe('visible')
+    expect(readLayer(layers, MAPLIBRE_BASEMAP_RASTER_LAYER_ID)?.layout.visibility).toBe('visible')
   })
 
   it('ignores a visibility change when there is no contribution', () => {
