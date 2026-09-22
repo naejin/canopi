@@ -1,10 +1,30 @@
 # Ordered COG independent review
 
-Status: evidence — current disposition of `524eef55` is partial; three reproduced defects and mounted-map evidence remain. Earlier findings are retained below by revision.
+Status: evidence — R12–R14 correction accepted at `34e4ded4`; earlier partial dispositions retained below by revision. Integration and broader rework are separate.
 Tracking: `canopi-jv8a.4`, `canopi-kko3`.
-Current guidance: [current prompt](ordered-cog-agent-prompt.md), [fixed design](ordered-cog-design.md), [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief).
+Current guidance: [completion prompt](completion-agent-prompt.md), [fixed ordered-source design](ordered-cog-design.md), [completion contract](completion-design.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
+
+## Accepted correction at `34e4ded4`
+
+Independent disposition on 2026-09-22: accepted for the named ordered COG correction scope, with no blocking findings in R12–R14. Inspected the delivered production diff, callers, regression expectations, mounted-map screenshots and isolated library catalogue. This is not exhaustive certification of the whole raster rework.
+
+Independently repeated on `34e4ded4`:
+
+- `tile_candidate_bounds_enclose_the_reduced_windows_they_read`: passed.
+- `a_tile_near_its_edge_keeps_the_sources_inside_its_reduction_footprint` with `--include-ignored`: passed.
+- Focused Vitest `lidar-layer-priority`, `lidar-layer-collection`, `lidar-actions`, `lidar-library-store`: 27 passed across four files.
+- `CANOPI_SKIP_BUNDLED_DB=1 cargo test --offline --workspace`: 406 passed, 74 ignored; no failures. The initial Cargo invocation failed because the default cache was read-only; retry using the existing isolated `.rq-scratch/cargo-home` succeeded. No dependency/pin change was needed.
+- `npx tsc --noEmit` and `python3 scripts/check_docs.py`: passed.
+
+Rust commands used the delivery worktree's toolchain and existing Cargo cache. The workspace log was captured at `/tmp/canopi-34e4ded4-workspace-review.log` (optional local evidence, not a required artifact). Full ignored-GDAL and frontend-suite totals remain implementer evidence at their recorded revision.
+
+Saved screenshots demonstrate mounted reorder/Undo/Restore changes and a zoomed-out edge. Read-only catalogue inspection found four completed analysis jobs and the current analysis source equal to `gen-18d79dd5efb2aa2f0018`, the current layer head (range approximately 150.84–1183.27). The reviewer did not drive the GUI; some screenshots capture partial rendering, so they do not certify a settled whole-surface repaint after reopen. The completion assignment retains that end-to-end verification obligation.
+
+This disposition clears the correction blockers for `canopi-jv8a.4`; it preserves earlier accepted work and the named capacity/platform/fixture/follow-up limits. No code, bead, integration or release change occurred during review. The delivery worktree stayed clean and primary user-owned files were not modified. The subsequent whole-rework assignment now owns tracker reconciliation and authorized foundation integration.
 
 ## Current disposition at `524eef55`
+
+Historical disposition at this revision, superseded by the accepted correction above. Instructions in this section describe the completed repair; they are not a live assignment.
 
 Preserve `64050896` and the live-evidence delivery through `524eef55`. The earlier eleven-group repair produced substantial caller-level progress; do not restart that assignment. Independent review reproduced the three remaining failures below in an isolated archive. Keep the architecture and unchanged limits. No production sources were edited during review; integration and release remain unauthorized.
 

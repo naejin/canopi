@@ -1,8 +1,11 @@
 # Ordered COG Data Layers
 
-Status: active — user-selected replacement for materialized source merging; repair delivery reviewed at `524eef55`; three local defects and mounted-map evidence remain. Not accepted, integrated or released.
-Tracking: re-scope `canopi-jv8a.4` under `canopi-jv8a` / `canopi-j571`; reconcile `canopi-kko3` in the same implementation. bd owns progress.
-Current guidance: [implementation prompt](ordered-cog-agent-prompt.md), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR guide](../../agent/lidar.md), [collaboration](collaboration-protocol.md), [debrief](review-and-debrief.md).
+Status: completed — ordered-source implementation and R12–R14 correction delivered through `34e4ded4`; named correction scope independently accepted. Integration/release are separate; sections below retain the delivered contract.
+Tracking: `canopi-jv8a.4`, related `canopi-kko3`, parent `canopi-j571`; completion assignment reconciles bead status.
+Current guidance: [completion contract](completion-design.md), [current prompt](completion-agent-prompt.md), [accepted review](ordered-cog-review.md#accepted-correction-at-34e4ded4), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md).
+
+
+The exclusions and execution instructions below describe the completed foundation scope. New capacity, workbench, inspection and Web work is governed by the completion contract; the numeric, ownership, history and compatibility invariants here remain binding. Its C1 explicitly supersedes unchanged-admission instructions only after measured qualification.
 
 ## 1. Mandate and supersession
 
@@ -16,7 +19,7 @@ Keep GDAL, the pinned native reader, Float32 conversion semantics, current admis
 
 ## 2. Baseline, reuse and ownership
 
-Current repair baseline: `524eef55` on `feature/bounded-raster-generations`, catalogue v16. Preserve the complete delivery stack, including `64050896`. The [current review](ordered-cog-review.md#current-disposition-at-524eef55) narrows remaining work to R12–R14 and the mounted-map check; §8 remains the fixed contract, not a fresh eleven-group assignment.
+Historical repair baseline: `524eef55` on `feature/bounded-raster-generations`, catalogue v16, with the correction at `d53f4185`. Preserve the complete delivery stack, including `64050896`. The [review at that revision](ordered-cog-review.md#current-disposition-at-524eef55) reproduced R12–R14 and left the mounted-map observation; both are now recorded in the [receipt](ordered-cog-receipt.md#correction-at-d53f4185--r12r14-and-the-mounted-map), and §8 remains the fixed contract, not a fresh eleven-group assignment.
 
 Historical pre-implementation inspection: `0696bd3d` on `feature/bounded-raster-generations`, including C1/C2 from `bcc7f5dd` and test changes from `0696bd3d`; inspected design checkout: `94fd0a8d`. Preserve the accepted predecessor `a5fc7d7b`. The main checkout's dirty `desktop/src/native_operation.rs` and `.beads.gate.lock` remain user-owned. The implementation worktree was clean at inspection.
 
@@ -101,7 +104,7 @@ Undo/history and settled changes update the visible map and source/result rows w
 
 ## 7. Execution sequence and acceptance
 
-These are dependency gates, not separate approval rounds or a Markdown task tracker. Record execution state in the existing bead. Continue automatically when each gate passes; repair in-scope failures before proceeding.
+These were the dependency gates of the completed foundation assignment. They are retained to explain its acceptance evidence; use completion C0–C5 for new execution.
 
 | Phase / owned surfaces | Outcome and exit evidence |
 | --- | --- |
@@ -131,17 +134,17 @@ Expected values below come from the selected topmost-valid rule, not implementat
 
 ### Verification and final handoff
 
-Follow [AGENTS.md](../../../AGENTS.md) gates for changed files. The original mixed persistence/IPC/frontend delivery required Rust fmt, strict workspace Clippy/check/test, native command policy, frontend typecheck and full tests, binding generation/check, and docs validation. The current local correction uses repository gates for its actual diff plus the review regressions; unchanged migration/contract evidence retains its recorded revision. Do not broaden code solely to rerun a gate. Shared edition composition changes also require check:ui and both builds; exercise Web preservation even when composition itself is unchanged. Use existing prepared fixtures; preserve originals. Run focused tests while editing and the required broad gates on the final candidate, reusing successful results on identical code after prose-only edits.
+Follow [AGENTS.md](../../../AGENTS.md) gates for changed files. The original mixed persistence/IPC/frontend delivery required Rust fmt, strict workspace Clippy/check/test, native command policy, frontend typecheck and full tests, binding generation/check, and docs validation. The completed local correction used repository gates for its actual diff plus the review regressions; unchanged migration/contract evidence retains its recorded revision. Do not broaden code solely to rerun a gate. Shared edition composition changes also require check:ui and both builds; exercise Web preservation even when composition itself is unchanged. Use existing prepared fixtures; preserve originals. Run focused tests while editing and the required broad gates on the final candidate, reusing successful results on identical code after prose-only edits.
 
 The existing native route is `CARGO_HOME=/home/daylon/projects/canopi/.rq-scratch/cargo-home CANOPI_SKIP_BUNDLED_DB=1 cargo test --offline -p canopi-desktop --lib services::lidar -- --include-ignored --skip services::lidar::e2e --test-threads=1`. Real fixture tests use `CANOPI_LIDAR_E2E_FIXTURE` and `CANOPI_LIDAR_MNH_DIR`; set both for the fixture module, and report unavailable fixtures accurately. Do not import the old suite count as this delivery's result.
 
 Use the [edition guide](../../agent/edition-development.md) for an isolated production Desktop profile, free ports and owned processes. Exercise real MNT + small aligned overlay: add sources → inspect priority → move up/down → group hide/show → slope → remove/Undo/history restore → save/restart/reopen → incompatible-source refusal. Observe live map and analysis changes, not only SQLite. Include controls for cancelling import and preserved originals. Use the current UI, not the old qualification host. If real WebView control is unavailable, complete all independent work and return exact revision-specific runnable steps and the missing prerequisite; smoke remains pending.
 
-At delivery, update the existing `ordered-cog-receipt.md` here with lifecycle headers, final revision, capabilities, acceptance evidence, exact commands/results, migration limits and unavailable observations. No giant command transcript in Git. Reconcile current LiDAR/MapLibre/document/build guides as affected, this index, broader plan and design status; retire the prompt only when its authorized work is delivered, identifying incomplete evidence explicitly. Preserve old receipt/review history with its revision; do not rewrite old failures as successes. Finish the [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief) and keep the implementation bead open for independent disposition. No integration/release or production capacity change.
+The completed assignment's evidence is in `ordered-cog-receipt.md` and the accepted review at `34e4ded4`. New execution, receipt maintenance, tracker closure and integration follow the [completion contract](completion-design.md); do not keep the old bead open merely because this historical assignment once awaited disposition.
 
 ## 8. Repair contract after review of `783e31e3`
 
-The eleven findings at `783e31e3` motivated these fixed decisions; their delivered repairs are retained. Current execution is the [three remaining findings at `524eef55`](ordered-cog-review.md#current-disposition-at-524eef55) and mounted-map verification. Retain immutable snapshots, stable occurrence IDs, shared readers, heavy lease and scheduler. The decisions below close handoff ambiguities; private names and factoring remain delegated. No new job service, event bus, spatial engine, cache framework, generic pagination layer or benchmark project is required.
+The eleven findings at `783e31e3` motivated these fixed decisions; their delivered repairs are retained. The three findings the review of `524eef55` reproduced (R12–R14) and the mounted-map verification it required are delivered at `d53f4185`. Retain immutable snapshots, stable occurrence IDs, shared readers, heavy lease and scheduler. The decisions below close handoff ambiguities; private names and factoring remain delegated. No new job service, event bus, spatial engine, cache framework, generic pagination layer or benchmark project is required.
 
 ### Completion, reads and UI identity
 

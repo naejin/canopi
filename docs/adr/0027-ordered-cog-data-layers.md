@@ -1,7 +1,7 @@
 # Ordered COG collections instead of materialized source merges
 
-Status: accepted direction — selected by the user on 2026-09-21; repair delivery reviewed at `524eef55`; [independent review](../design/raster-rework/ordered-cog-review.md) requires three local corrections and mounted-map evidence before acceptance. Supersedes ADR 0026 for new source composition, not the validity of preserved historical assets or derived analysis storage.
-Current guidance: [ordered COG design](../design/raster-rework/ordered-cog-design.md), [LiDAR](../agent/lidar.md).
+Status: accepted — user-selected ordered-source direction; implementation through `34e4ded4` has its named correction scope [independently accepted](../design/raster-rework/ordered-cog-review.md#accepted-correction-at-34e4ded4). Supersedes ADR 0026 for new source composition, not preserved historical assets or derived analysis storage. Integration/release are separate.
+Current guidance: [ordered COG receipt](../design/raster-rework/ordered-cog-receipt.md), [design](../design/raster-rework/ordered-cog-design.md), [independent review](../design/raster-rework/ordered-cog-review.md), [LiDAR](../agent/lidar.md).
 
 A Data Layer owns an ordered collection of independent source COGs. Its numeric value is the highest-priority valid sample at each location; NoData reveals valid data below. Display and analysis share this rule. Changes publish member snapshots rather than materialized merged elevation chunks. Group visibility remains Design presentation; source priority changes library data and invalidates analyses.
 

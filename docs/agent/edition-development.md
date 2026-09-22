@@ -51,6 +51,19 @@ Use a fresh browser profile for Web interaction. Close the browser before deleti
 
 On Linux, isolate a real Desktop session by assigning fresh `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME` directories before `cargo tauri dev`. A separate Cargo target or temporary build output does not isolate Tauri app data. On macOS and Windows, use a disposable OS account or equivalent isolated user profile when testing settings, recovery, Recent Designs, or file dialogs. Never point an isolated session at a saved user Design.
 
+### Isolated Desktop verification on a nested X server
+
+When the user's own display, servers and ports must stay untouched, run the whole Desktop verification inside a nested X server. This recipe is verified twice on this repository's Linux host (2026-09-22) and is the route for live pixel evidence of native raster/UI work.
+
+1. Check the names are free (`xdpyinfo -display :99`, `ss -ltn | grep <port>`) and stop only processes this work started.
+2. `Xephyr :99 -screen 1280x900x24 -ac -noreset -listen tcp -extension GLX` started **from the host display** (`DISPLAY=:0`): Xephyr nests, so it needs a parent, while everything driven below uses `:99`. Without `-extension GLX` it crashes in the NVIDIA EGL/GBM path; software GL (`LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvmpipe`) is then sufficient for WebKit.
+3. Frontend on a strict port from `desktop/web`: `npm run dev -- --port 1430 --strictPort`.
+4. App with a disposable profile and a private bus:
+   `dbus-run-session -- bash -c 'DISPLAY=:99 GDK_BACKEND=x11 WEBKIT_DISABLE_COMPOSITING_MODE=1 XDG_CONFIG_HOME=… XDG_DATA_HOME=… XDG_CACHE_HOME=… XDG_RUNTIME_DIR=…(0700) cargo tauri dev --config "{\"build\":{\"devUrl\":\"http://localhost:1430\",\"beforeDevCommand\":null}}"'`.
+   The window's own `$XDG_DATA_HOME/com.canopi.app` is the ownership proof; host PIDs are invisible from the sandbox, so `pgrep` is not one.
+5. Drive it with XTEST and capture only the owned window (`import -display :99 -window <id>`). Hit-test every pointer action against the owning X window first: AT-SPI exposes no application objects here, so element positions come from screenshots. Without a compositor, resize the window a few pixels after a native dialog closes to force a repaint. Long panels re-flow while notices appear, so measure a control immediately before clicking it rather than reusing an older screenshot's position.
+6. Native GTK file choosers: navigate by breadcrumb and row. Typing a path that contains a hidden segment into the location entry can wedge the main loop; the **Name** field of the Save dialog accepts an absolute path and is the reliable route. Fixtures may live under the ignored `.rq-scratch/` workspace directory — the chooser lists hidden directories, so they are reachable by breadcrumb.
+
 Stop Vite or Tauri with Ctrl-C and wait for the process to exit before removing an isolated profile. Reload resets gallery memory. Web reset means clearing the isolated origin storage or discarding its browser profile; Desktop reset means discarding the isolated OS app-data profile.
 
 ## Verification workflow
