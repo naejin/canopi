@@ -1180,7 +1180,16 @@ fn stage_source(
         height: probe.height,
         geotransform: probe.geotransform,
     };
-    validate_working_grid(&source_grid, "source raster")?;
+    // No dense working-area check here. This step never allocates the source's
+    // grid: `gdal_translate` streams it into the retained COG and the facts and
+    // regions are derived from that COG in bounded windows. The dense guard
+    // belongs on the steps that really do allocate a whole area (raw
+    // extraction, composition and legacy replay below), and the ordered path's
+    // own bound is the admission processing budget, already applied at review
+    // and rechecked at Apply. Applying a memory bound to a streamed conversion
+    // is what previously refused a large single file that fits its disk
+    // estimate comfortably — the exact case C1 exists to admit.
+    validate_lattice(&source_grid, "source raster")?;
     let (source_cog, regions, valid_cells) = stage_source_samples(
         engine,
         cancel,

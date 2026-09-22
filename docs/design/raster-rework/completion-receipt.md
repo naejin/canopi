@@ -120,11 +120,38 @@ every hole interior reads NoData with an adjacent outside pixel reading data.
 Analytic oracle: **29.205932° / 55.901699 %**. This plane is synthetic and is
 never described as a survey; it is not derived from the private fixtures.
 
-Not measured: the 400M plane and 48M batch through the production pipeline,
-aggregate incremental RSS for those runs, temporary/durable bytes, queue and
-cache peaks, cancellation settlement timing, low-space and write-failure
-behaviour, restart reuse, and cold/three-warm display timings. Values not
-measured remain unknown; no whole-union-allocation claim is made.
+`e2e_capacity_plane_import_display_and_bounded_reads` drives that plane through
+the production callers with no admission override and no test-only limit:
+
+```
+capacity plane: 1677760928 bytes
+staged: uncovered=396979300 overlap=0 invalid=3020700
+applied: 396979300 cells, range Some(3469900.25)..Some(3477399.75)
+(the run reported valid coverage; invalid=3020700 came from the same review)
+```
+
+Coverage plus invalid is exactly 400,000,000, and the invalid count is exactly
+the four declared holes' own area, so the holes were excluded rather than
+counted. The composed range matches the plane's analytic extremes. Import took
+850 s on this host.
+
+**Defect this measurement exposed and repaired.** `validate_working_grid` — the
+25,000,000-cell **dense memory** guard — was being applied to `source raster`
+staging, which never allocates the source grid: `gdal_translate` streams the
+file into the retained COG and the facts/regions are derived from that COG in
+bounded windows. The guard therefore refused a 400,000,000-cell source that
+fits its own disk estimate comfortably. That is precisely the ceiling C1 exists
+to remove, and no existing test caught it because every synthetic fixture is
+far below 25M cells. The source path now uses `validate_lattice` (non-empty
+extent, checked dimensions, finite geometry, non-degenerate pixel size) and
+relies on the disk-space estimate that `write_job_source_cog` already performs;
+`validate_working_grid` still guards the steps that really do allocate a whole
+area — raw extraction, dense composition, legacy replay and slope.
+
+Not measured: aggregate incremental RSS for the 400M run, temporary/durable
+bytes, queue and cache peaks, cancellation settlement timing, low-space and
+write-failure behaviour, restart reuse, and cold/three-warm display timings.
+Values not measured remain unknown; no whole-union-allocation claim is made.
 
 ## Gates, application and platform evidence
 

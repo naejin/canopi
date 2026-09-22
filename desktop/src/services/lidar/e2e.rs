@@ -1036,3 +1036,366 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     drop(reopened);
     let _ = std::fs::remove_dir_all(&work);
 }
+
+/// The representative 400,000,000-cell analytical plane, when it is present.
+///
+/// `CANOPI_LIDAR_CAPACITY_PLANE` names the file to use. The plane is synthetic
+/// (see `scripts/generate_capacity_plane.py`), so this test never treats it as
+/// a survey and never resamples a private raster to stand in for one.
+fn fixture_capacity_plane() -> Result<PathBuf, String> {
+    let path = std::env::var_os("CANOPI_LIDAR_CAPACITY_PLANE")
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            "CANOPI_LIDAR_CAPACITY_PLANE is not set; generate the plane with \
+             scripts/generate_capacity_plane.py --out <path>"
+                .to_string()
+        })?;
+    if !path.is_file() {
+        return Err(format!("capacity plane is missing: {}", path.display()));
+    }
+    Ok(path)
+}
+
+/// The plane's analytic ground truth at a pixel centre, in metres.
+///
+/// `z = 0.25x + 0.5y - 100`, with x/y the pixel-centre coordinates derived from
+/// the known geotransform `(700000, 0.5, 0, 6600000, 0, -0.5)`.
+fn plane_expected(pixel_x: f64, pixel_y: f64) -> f64 {
+    let x = 700_000.0 + (pixel_x + 0.5) * 0.5;
+    let y = 6_600_000.0 - (pixel_y + 0.5) * 0.5;
+    0.25 * x + 0.5 * y - 100.0
+}
+
+/// The bounded read footprint of one lattice window.
+fn bounds_of(window: generation::LatticeWindow) -> collection::ReadBounds {
+    collection::ReadBounds {
+        x0: window.x,
+        y0: window.y,
+        x1: window.x + i64::from(window.width),
+        y1: window.y + i64::from(window.height),
+    }
+}
+
+/// The four declared NoData holes as `(y0, y1, x0, x1)`, half-open.
+const PLANE_HOLES: [(i64, i64, i64, i64); 4] = [
+    (5_100, 6_900, 590, 1_090),
+    (9_500, 10_400, 480, 1_560),
+    (15_300, 16_500, 17_890, 18_610),
+    (2_170, 2_430, 1_505, 2_600),
+];
+
+/// The authorized capacity input: one 20,000x20,000 Float32 file above 1 GiB,
+/// imported, reopened, displayed and read back through the production callers
+/// with no admission override, bounded numerics at block seams and exact
+/// NoData across its block-crossing holes.
+#[test]
+#[ignore = "requires system GDAL, the synthetic 400M-cell plane and disk/headroom; see CANOPI_LIDAR_CAPACITY_PLANE"]
+fn e2e_capacity_plane_import_display_and_bounded_reads() {
+    let engine = engine::GdalEngine::new();
+    engine.discover().expect("GDAL engine must be available");
+    let plane = match fixture_capacity_plane() {
+        Ok(path) => path,
+        Err(reason) => panic!("{reason}"),
+    };
+    let bytes = std::fs::metadata(&plane).expect("plane stat").len();
+    println!("capacity plane: {} bytes", bytes);
+    assert!(
+        bytes > 1024 * 1024 * 1024,
+        "the representative input must exceed 1 GiB, got {bytes}"
+    );
+
+    let work = std::env::temp_dir().join(format!("canopi-lidar-capacity-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let cancel = AtomicBool::new(false);
+    // One file and 400,000,000 processing cells are both inside the production
+    // policy, so this is the real admission a user gets.
+    assert_eq!(
+        admission::limits(),
+        admission::AdmissionLimits::production()
+    );
+
+    let sampler = super::measurement::Sampler::start();
+    let library = LidarLibrary::open(&work).expect("library opens");
+    let layer_id = library
+        .create_layer(
+            "capacity plane",
+            common_types::lidar::LidarMeasurementKind::GroundElevation,
+        )
+        .expect("layer created");
+    let job_id = library.record_import_job(&layer_id).expect("job recorded");
+    let staged = import::stage_import(&library, &job_id, &layer_id, &[plane], &cancel)
+        .expect("staging succeeds");
+    let review = &staged.review;
+    assert!(
+        review.compatible,
+        "the plane must be admitted: {:?}",
+        review.issues
+    );
+    println!(
+        "staged: uncovered={} overlap={} invalid={}",
+        review.uncovered_cells, review.overlap_cells, review.invalid_cells
+    );
+    assert_eq!(review.overlap_cells, 0, "a single source overlaps nothing");
+    library.finish_staging(
+        &job_id,
+        Ok(import::StagingOutput {
+            review: review.clone(),
+        }),
+    );
+    let staging: import::StagedImport = serde_json::from_str(
+        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        (staging.union_grid.width, staging.union_grid.height),
+        (20_000, 20_000),
+        "the plane is its own 400M-cell union"
+    );
+    assert_eq!(
+        staging.processing_cells, 400_000_000,
+        "the review is admitted for exactly the plane's own grid"
+    );
+    library.prepare_apply(&job_id).expect("review accepted");
+    let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    assert!(applied.changed);
+
+    let head = {
+        let connection = library.catalogue().unwrap();
+        catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .expect("head published")
+    };
+    let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
+    assert_eq!(
+        manifest.format,
+        import::GenerationStorageFormat::OrderedMembersV1
+    );
+    println!(
+        "applied: {} valid cells, {} invalid, range {:?}..{:?}",
+        head.coverage_cells, review.invalid_cells, head.min_value, head.max_value
+    );
+    // The plane is 400,000,000 cells and its four declared holes are exactly
+    // 3,020,700 of them, so coverage is the grid minus the holes. Checking both
+    // numbers is what proves the holes were excluded rather than counted.
+    // `GenerationRow::coverage_cells` is i64 while the review's own counters are
+    // u64, so both sides are compared in u64.
+    let hole_cells: u64 = PLANE_HOLES
+        .iter()
+        .map(|(y0, y1, x0, x1)| ((y1 - y0) * (x1 - x0)) as u64)
+        .sum();
+    assert_eq!(hole_cells, 3_020_700, "the declared holes' own area");
+    assert_eq!(
+        head.coverage_cells as u64 + review.invalid_cells,
+        400_000_000,
+        "valid coverage plus the declared holes is the whole grid"
+    );
+    assert_eq!(
+        review.invalid_cells, hole_cells,
+        "the invalid count is the declared holes and nothing else"
+    );
+    // The composed range is the plane's own analytic range: `z` rises with x and
+    // falls with y, so the lowest sample is at the far south-west corner and the
+    // highest at the south-east corner.
+    let expected_min = plane_expected(0.0, 19_999.0);
+    let expected_max = plane_expected(19_999.0, 0.0);
+    let observed_min = head.min_value.expect("a composed range exists") as f64;
+    let observed_max = head.max_value.expect("a composed range exists") as f64;
+    assert!(
+        (observed_min - expected_min).abs() < 1.0,
+        "composed min {observed_min} vs analytic {expected_min}"
+    );
+    assert!(
+        (observed_max - expected_max).abs() < 1.0,
+        "composed max {observed_max} vs analytic {expected_max}"
+    );
+
+    // Reopen: a fresh library handle sees the same head without recomputation.
+    drop(library);
+    let reopened = LidarLibrary::open(&work).expect("library reopens");
+    let snapshot = reopened.library_snapshot().expect("snapshot after restart");
+    assert_eq!(
+        snapshot.layers[0].coverage_cells,
+        head.coverage_cells as u64
+    );
+    println!("restart: {} cells", snapshot.layers[0].coverage_cells);
+
+    let result_layer_id = snapshot.layers[0].id.clone();
+    let generation_id = match &snapshot.layers[0].tilesets[0].source {
+        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
+            generation_id.clone()
+        }
+        other => panic!("expected a native generation, got {other:?}"),
+    };
+
+    // Display: a tile over the plane's middle draws real pixels.
+    let bounds: Vec<f64> = {
+        let connection = reopened.catalogue().unwrap();
+        let raw: String = connection
+            .query_row(
+                "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
+                [&generation_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        serde_json::from_str(&raw).unwrap()
+    };
+    let centre_x = (bounds[0] + bounds[2]) / 2.0;
+    let centre_y = (bounds[1] + bounds[3]) / 2.0;
+    let zoom = snapshot.layers[0].tilesets[0].min_zoom.max(10);
+    let span = 40_075_016.685_578_49 / f64::from(1u32 << zoom);
+    let half = 20_037_508.342_789_244;
+    let tile_x = ((centre_x + half) / span).floor() as u32;
+    let tile_y = ((half - centre_y) / span).floor() as u32;
+    let tile = reopened
+        .render_tile(
+            "source",
+            &result_layer_id,
+            &generation_id,
+            "elevation",
+            zoom,
+            tile_x,
+            tile_y,
+            &cancel,
+        )
+        .expect("capacity tile renders");
+    let visible = image::load_from_memory_with_format(&tile, image::ImageFormat::Png)
+        .map(|image| image.width() == 256 && image.height() == 256)
+        .unwrap_or(false);
+    assert!(visible, "a tile over the plane must draw");
+    println!("tile {zoom}/{tile_x}/{tile_y}: {} bytes", tile.len());
+
+    // Bounded numeric reads through the same resolver display and analysis use.
+    //
+    // The window is bounded, so this never materializes the plane: it reads a
+    // 4x4 block straddling a 1024-cell processing seam and a 4x4 block inside
+    // each declared hole, and compares the composed samples against the
+    // analytic plane the generator wrote.
+    let resolved = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::collection_members(&connection, &generation_id).unwrap()
+    };
+    assert_eq!(resolved.len(), 1, "the plane is one source occurrence");
+    let plane_manifest = {
+        let connection = reopened.catalogue().unwrap();
+        let head = catalogue::head_generation(&connection, &result_layer_id)
+            .unwrap()
+            .expect("head present");
+        import::read_generation_manifest(&head.manifest_json).expect("manifest parses")
+    };
+
+    let seam = 1_024i64;
+    let seam_window = generation::LatticeWindow {
+        x: seam - 2,
+        y: seam - 2,
+        width: 4,
+        height: 4,
+    };
+    let seam_values = {
+        let reader = collection::load_reader_within(
+            &reopened,
+            &generation_id,
+            &plane_manifest,
+            Some(bounds_of(seam_window)),
+            &cancel,
+        )
+        .expect("the bounded resolver binds")
+        .expect("the plane reaches its own seam");
+        reader
+            .read_window(seam_window, &cancel)
+            .expect("a seam-straddling window resolves")
+    };
+    assert_eq!(seam_values.samples.len(), 16);
+    for row in 0..4i64 {
+        for column in 0..4i64 {
+            let index = (row * 4 + column) as usize;
+            assert_eq!(
+                seam_values.valid[index], 1,
+                "the seam block is inside the plane: ({column},{row})"
+            );
+            let expected = plane_expected((seam - 2 + column) as f64, (seam - 2 + row) as f64);
+            let actual = f64::from(seam_values.samples[index]);
+            // Float32 storage of a value near 3.47e6 m quantises to about
+            // 0.25 m, half a 0.5 m pixel: far tighter than the contract's
+            // 0.001 deg / 0.01 pp slope tolerances, and tight enough that a
+            // wrong formula or a shifted seam cannot pass.
+            assert!(
+                (actual - expected).abs() <= 0.5,
+                "seam sample ({column},{row}) was {actual}, expected {expected}"
+            );
+        }
+    }
+    println!("seam window: 16 samples match the analytic plane");
+
+    // A hole interior must report NoData exactly, including where the hole
+    // crosses a processing-block boundary.
+    for (y0, y1, x0, x1) in PLANE_HOLES {
+        let (centre_y, centre_x) = ((y0 + y1) / 2, (x0 + x1) / 2);
+        let hole_window = generation::LatticeWindow {
+            x: centre_x - 2,
+            y: centre_y - 2,
+            width: 4,
+            height: 4,
+        };
+        let hole_values = {
+            let reader = collection::load_reader_within(
+                &reopened,
+                &generation_id,
+                &plane_manifest,
+                Some(bounds_of(hole_window)),
+                &cancel,
+            )
+            .expect("the bounded resolver binds")
+            .expect("the plane reaches its own hole");
+            reader
+                .read_window(hole_window, &cancel)
+                .expect("a hole window resolves")
+        };
+        assert!(
+            hole_values.valid.iter().all(|flag| *flag == 0),
+            "hole y[{y0},{y1}) x[{x0},{x1}) must be entirely NoData"
+        );
+    }
+    println!(
+        "holes: {} declared rectangles read as exactly NoData",
+        PLANE_HOLES.len()
+    );
+
+    // Just west of the first hole's left edge the same resolver returns data,
+    // so the mask is a boundary rather than a blanket refusal.
+    {
+        let (y0, y1, x0, _x1) = PLANE_HOLES[0];
+        let outside = generation::LatticeWindow {
+            x: x0 - 4,
+            y: (y0 + y1) / 2,
+            width: 3,
+            height: 3,
+        };
+        let values = {
+            let reader = collection::load_reader_within(
+                &reopened,
+                &generation_id,
+                &plane_manifest,
+                Some(bounds_of(outside)),
+                &cancel,
+            )
+            .expect("the bounded resolver binds")
+            .expect("the plane reaches west of its own hole");
+            reader
+                .read_window(outside, &cancel)
+                .expect("a window outside a hole resolves")
+        };
+        assert!(
+            values.valid.iter().all(|flag| *flag == 1),
+            "pixels west of the hole are valid"
+        );
+    }
+    println!("hole edge: pixels west of hole 0 are valid");
+
+    let measurement = sampler.finish();
+    let _ = super::measurement::gate_combined_budget("capacity plane", &measurement);
+
+    drop(reopened);
+    let _ = std::fs::remove_dir_all(&work);
+}

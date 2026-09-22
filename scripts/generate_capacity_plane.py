@@ -46,6 +46,22 @@ STRIP_ROWS = 2_000
 BLOCK_SIZE = 512
 MIN_BYTES = 1024 * 1024 * 1024
 
+# Authoritative RGF93 v1 / Lambert-93, the grid the plane's origin coordinates
+# belong to. The generation inputs are read-only and are never rewritten.
+EPSG_2154_WKT = (
+    'PROJCS["RGF93 v1 / Lambert-93",'
+    'GEOGCS["RGF93 v1",DATUM["Reseau_Geodesique_Francais_1993_v1",'
+    'SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],'
+    'AUTHORITY["EPSG","6171"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],'
+    'UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],'
+    'AUTHORITY["EPSG","4171"]],PROJECTION["Lambert_Conformal_Conic_2SP"],'
+    'PARAMETER["latitude_of_origin",46.5],PARAMETER["central_meridian",3],'
+    'PARAMETER["standard_parallel_1",49],PARAMETER["standard_parallel_2",44],'
+    'PARAMETER["false_easting",700000],PARAMETER["false_northing",6600000],'
+    'UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],'
+    'AXIS["Northing",NORTH],AUTHORITY["EPSG","2154"]]'
+)
+
 # Half-open rectangles `(y0, y1, x0, x1)` in pixel coordinates declared NoData.
 # No edge is aligned to a 512-cell processing block or to the 2,000-row strip
 # boundary used to write the file: holes 0 and 2 straddle a strip boundary
@@ -111,6 +127,10 @@ def write_strip(out: Path, row_offset: int, rows: int) -> None:
     dataset.SetGeoTransform(
         (ORIGIN_X, PIXEL, 0.0, ORIGIN_Y - row_offset * PIXEL, 0.0, -PIXEL)
     )
+    # A horizontal CRS is part of the admission contract, so the synthetic plane
+    # declares the same Lambert-93 grid its origin coordinates belong to. This
+    # is the authority definition, not the incomplete fixture WKT.
+    dataset.SetProjection(EPSG_2154_WKT)
     band = dataset.GetRasterBand(1)
     band.SetNoDataValue(NODATA)
 
