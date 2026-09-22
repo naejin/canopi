@@ -1,6 +1,6 @@
 # Web Edition map scope is street basemaps only
 
-Status: Accepted
+Status: Accepted — **partially superseded**: the street-basemaps-only restriction is replaced by [ADR 0028](0028-web-location-and-shared-basemaps.md). The no-backend, no-bulk-download and attribution constraints below remain in force.
 
 The Web Canvas displays street basemaps for Designs with confirmed placement. Designs without a saved Location have no basemap. This provides site context while keeping Location editing deferred under [ADR 0016](0016-web-edition-omits-geocoding.md). Satellite imagery, terrain contours, hillshade, and offline tile downloads remain outside this initial scope.
 

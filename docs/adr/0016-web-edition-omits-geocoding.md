@@ -1,6 +1,6 @@
 # Web Edition omits visible Location editing in v1
 
-Status: Accepted
+Status: Accepted — **partially superseded**: the prohibition on visible Web Location editing (coordinate form and map picking) is replaced by [ADR 0028](0028-web-location-and-shared-basemaps.md). Address search and geocoding remain Desktop-only exactly as recorded below.
 
 The Web Edition v1 does not expose a visible Location Workbench, Design Location panel, coordinate form, address search, geocoding, map picking, or altitude editing. Loaded `.canopi` files may still contain a saved Location, and Web Edition should preserve that document data through normal open/edit/export flows unless a future explicit Web Location editing decision changes the scope. The planned [Web Canvas street basemap](0013-web-edition-map-scope.md) can use that saved Location without exposing Location editing.
 
