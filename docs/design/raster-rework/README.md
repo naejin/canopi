@@ -6,15 +6,17 @@ Current guidance: [implementation plan](../raster-data-analysis-rework.md), [LiD
 
 This folder collects bounded agent handoffs and their review context for the raster rework. The user requested retaining this material to support a later tooling and methodology debrief. The plan owns intended behavior; bd owns execution status; receipts own measured evidence. Existing plan and receipt paths stay unchanged.
 
-The [ordered COG Data Layers](ordered-cog-design.md) model is implemented from `0696bd3d` on `feature/bounded-raster-generations`, preserving C1/C2 and accepted `a5fc7d7b`; the [delivery receipt](ordered-cog-receipt.md) owns its revisions, evidence and limits. Independent disposition and the user's integration decision are the next step. The old product-closure assignment is retired, and both it and the source-merge design are historical.
+The current assignment is [repairing ordered COG delivery](ordered-cog-agent-prompt.md), under the [fixed design](ordered-cog-design.md). Continue `783e31e3` on `feature/bounded-raster-generations`, preserving accepted predecessors and C1/C2. The [independent review](ordered-cog-review.md) found eleven required repair groups after the reported green delivery gates; product acceptance, integration and real Desktop evidence remain pending. Keep the ordered-source architecture and existing dock.
 
-The implementation agent delivered all four internal phases, routine repairs and the task-local improvements in one consolidated delivery. The [protocol](collaboration-protocol.md) sets escalation and review boundaries. The [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief) records the outcome: demonstrated workflows, escaped defects, design omissions and the improvements actually applied. Historical records below are evidence, not alternate execution instructions. Q remains frozen/unqualified.
+The implementation agent owns diagnosis, repair, tests, routine local decisions, verification and task-local improvements through one consolidated delivery. The [protocol](collaboration-protocol.md) sets escalation boundaries. The [debrief](review-and-debrief.md#ordered-cog-delivery-and-final-debrief) records revision-linked outcomes and evaluates small workflow/tooling interventions, including main-agent omissions and review misses. Historical records below are evidence, not alternate assignments. Q remains frozen/unqualified.
 
 | Artifact | Purpose |
 | --- | --- |
-| [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Retired: executed in one consolidated delivery; retained as the assignment record |
-| [Ordered COG delivery receipt](ordered-cog-receipt.md) | Revisions, capabilities, acceptance evidence, gate lane, migration limits and unavailable observations for the delivered ordered model |
-| [Ordered COG design](ordered-cog-design.md) | Fixed product, persistence, lifecycle, UI and acceptance decisions; delivered, awaiting disposition |
+| [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Sole current assignment: source collection, source priority, display, slope, compatibility and real Desktop delivery |
+| [Ordered COG independent review](ordered-cog-review.md) | Eleven required repair groups at `783e31e3`, counterexamples and evidence limits |
+| [Ordered COG delivery receipt](ordered-cog-receipt.md) | Implementer revisions, capabilities, gate lane, finding-to-regression map, migration limits and unavailable observations for `783e31e3` and its repairs |
+| [Ordered COG design](ordered-cog-design.md) | Fixed product, persistence, lifecycle, UI and acceptance decisions, including the repair contract |
+
 | [Ordered COG ADR](../../adr/0027-ordered-cog-data-layers.md) | User-selected replacement for compulsory merged-source publication |
 | [Bounded-generation completion assignment](bounded-generation-completion-agent-prompt.md) | Retired: delivered through `0696bd3d`; C1/C2 accepted in scope, product closure partial |
 | [Bounded-generation delivery receipt](bounded-generation-receipt.md) | Branch-local implementer report and measured evidence for B1–B5, BG1–BG8 and C1/C2; lives on `feature/bounded-raster-generations` |

@@ -1,18 +1,10 @@
 # GeoLibre adoption — compatibility-first native integration
 
-<<<<<<< HEAD
 Delivery disposition: G1–G5 plus its disk-budget/reporting correction is independently accepted at `a5fc7d7b` on `feature/geolibre-native-raster-integration`, not integrated into this checkout, and recorded in the [integration receipt](geolibre-integration-receipt.md). The [independent review](geolibre-integration-review.md) records evidence and limits. The [bounded-generation assignment](bounded-generation-agent-prompt.md) is the next execution contract; this design records the completed predecessor, not authority to repeat it.
 
 Status: completed — bounded integration independently accepted, not integrated or released.
 Tracking: `canopi-j571`; implementation `canopi-jv8a.1`, followed by the remaining `canopi-jv8a` foundation work.
 Current guidance: [next assignment](bounded-generation-agent-prompt.md), [integration receipt](geolibre-integration-receipt.md), [LiDAR](../../agent/lidar.md), [architecture ownership](../../workflow/architecture-ownership.md), [long-term product contract](../raster-data-analysis-rework.md).
-=======
-Delivery disposition: G1–G5 plus its disk-budget/reporting correction is independently accepted at `a5fc7d7b` on `feature/geolibre-native-raster-integration`, not integrated into this checkout. The [independent review](geolibre-integration-review.md) records evidence and limits. The [bounded-generation assignment](bounded-generation-agent-prompt.md) is the next execution contract; this design records the completed predecessor, not authority to repeat it.
-
-Status: completed — bounded integration independently accepted, not integrated or released.
-Tracking: `canopi-j571`; implementation `canopi-jv8a.1`, followed by the remaining `canopi-jv8a` foundation work.
-Current guidance: [next assignment](bounded-generation-agent-prompt.md), [LiDAR](../../agent/lidar.md), [architecture ownership](../../workflow/architecture-ownership.md), [long-term product contract](../raster-data-analysis-rework.md).
->>>>>>> 06c1498c
 
 ## Decision and outcome
 
