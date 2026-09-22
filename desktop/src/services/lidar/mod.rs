@@ -16,6 +16,7 @@ pub mod engine;
 mod generation;
 pub mod grid;
 pub mod import;
+mod inspection;
 #[cfg(test)]
 mod measurement;
 pub mod paths;
@@ -550,6 +551,19 @@ impl LidarLibrary {
         let connection = self.catalogue()?;
         let display = self.display()?;
         presentation::library_snapshot(&connection, &display, &self.inner.engine)
+    }
+
+    /// One bounded numeric inspection lookup.
+    ///
+    /// The read is synchronous inside the caller's executor slot — it touches
+    /// one pixel — and takes a caller-owned cancellation flag so a superseded
+    /// aim releases the native work instead of leaving it running.
+    pub fn sample(
+        &self,
+        request: &common_types::lidar::LidarSampleRequest,
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<common_types::lidar::LidarSampleOutcome, String> {
+        inspection::sample(self, &self.inner.engine, cancel, request)
     }
 
     pub fn create_layer(

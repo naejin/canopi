@@ -381,6 +381,67 @@ pub struct LidarAnalysisParameters {
     pub slope_unit: Option<LidarSlopeUnit>,
 }
 
+// Numeric pixel inspection: one read-only lookup of the physical value at one
+// WGS84 point on one source or result generation. The expected generation is
+// part of the request so a head that changed since the user aimed is refused
+// rather than answered from different bytes.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarSampleEntityKind {
+    /// A source Data Layer.
+    Source,
+    /// An analysis result.
+    Analysis,
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarSampleRequest {
+    pub kind: LidarSampleEntityKind,
+    /// Layer id or analysis definition id, matching `kind`.
+    pub entity_id: String,
+    /// The immutable generation the caller believes is current.
+    pub expected_generation_id: String,
+    /// WGS84 longitude in degrees.
+    pub longitude: f64,
+    /// WGS84 latitude in degrees.
+    pub latitude: f64,
+}
+
+/// Why a sample could not produce a physical value.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarSampleUnavailableReason {
+    /// The entity or generation no longer exists.
+    MissingGeneration,
+    /// The head moved after the request was aimed; re-aim and try again.
+    StaleGeneration,
+    /// The point does not transform into the generation's grid.
+    TransformFailed,
+    /// The generation's interpretation cannot be sampled numerically.
+    UnsupportedInput,
+}
+
+/// The outcome of one numeric inspection lookup.
+///
+/// `Value` carries the generation that was actually read, so a caller can prove
+/// the answer belongs to the head it asked about. The containing pixel is read
+/// at native resolution; no display interpolation is involved.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub enum LidarSampleOutcome {
+    Value {
+        generation_id: String,
+        value: f64,
+        units: String,
+    },
+    /// Inside the generation, but the containing pixel declares no data.
+    NoData { generation_id: String },
+    Unavailable {
+        reason: LidarSampleUnavailableReason,
+    },
+}
+
 // `.canopi` presentation section: ordered references to library layers and
 // analysis results with per-entry display settings. Reference identities
 // survive library renames; unavailable references persist without rendering.

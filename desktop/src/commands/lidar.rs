@@ -475,3 +475,25 @@ pub async fn lidar_delete_analysis(
         )
         .await
 }
+
+#[tauri::command]
+pub async fn lidar_sample_pixel(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    request: common_types::lidar::LidarSampleRequest,
+) -> Result<common_types::lidar::LidarSampleOutcome, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar sample pixel",
+            move || {
+                // One pixel: the read is bounded by construction, so a
+                // never-set flag is the honest cancellation state for a single
+                // admission-free lookup.
+                let cancel = std::sync::atomic::AtomicBool::new(false);
+                library.sample(&request, &cancel)
+            },
+        )
+        .await
+}
