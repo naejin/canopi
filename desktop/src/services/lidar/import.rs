@@ -7284,7 +7284,14 @@ mod tests {
         assert!(applied.changed);
 
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, Some(24 * 32 * 24));
+        // Twenty-four occurrences cannot be composed from metadata alone, so the
+        // generation claims no exact count. The member facts below are what the
+        // batch is charged and what its display range is built from.
+        assert_eq!(
+            head.coverage_cells, None,
+            "a multi-member composition does not claim an exact count"
+        );
+        assert_eq!(head.display_basis.as_deref(), Some("source-envelope"));
         assert_eq!(
             head_member_count(&library, &layer_id),
             24,
