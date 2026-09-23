@@ -63,8 +63,42 @@ No finding needed a counterexample: each was reproduced and repaired.
 | **GDAL-backed ignored LiDAR lane** | **69 passed / 8 failed.** Run at both `5d0a5e0b` and the repaired tip, so the failures are pre-existing, not regressions: three IGN-MNT e2e tests cannot find their fixture; three import tests still assert the retired 25,000,000-cell union-envelope refusal; one asserts a finite-NoData value range this host's GDAL 3.8.4 does not produce; two resource-gate tests panicked with "incremental unavailable (no complete workload sample)" while other builds ran concurrently. Filed as `canopi-a7ot` rather than silently accepted. **The lane is not a green baseline**, so no positive capacity claim rests on it |
 
 Not run, and therefore not claimed: Windows and macOS builds, the packaged-window
-smoke, live isolated Desktop or Web sessions, live restricted-Google-key
+smoke, a **driven** isolated Desktop or Web session, live restricted-Google-key
 qualification, and any non-publishing CI dispatch.
+
+### Isolated Desktop session at `96ef5d33` (partial observation)
+
+Recipe: `.rq-scratch/wt-candidate` on a nested `Xephyr :99` with `metacity`,
+Vite on strict port 1430, and the app under `dbus-run-session` with its own
+`XDG_CONFIG_HOME`/`XDG_DATA_HOME`/`XDG_CACHE_HOME`/`XDG_RUNTIME_DIR` (0700).
+Evidence: `.rq-scratch/smoke-r19/evidence/` and the retained isolated profile.
+
+**Observed.** The candidate builds and launches as a real window; the shell
+renders (title bar, File/Edit/View/Help, language and theme controls, the
+12-icon panel rail, welcome screen with New Design / Open Design). The app
+created its **own** isolated profile at
+`…/smoke-r19/profile/data/com.canopi.app` with `user.db`, `lidar/` and the
+rest, and nothing was written to the user's real profile. The dev server served
+this candidate — `GET /src/components/panels/lidar/DataPanel.tsx` contains
+`ImportJobStatus` — so the rendered UI is the corrected code, not another
+checkout. Teardown was scoped: `:99` released, port 1430 released, no leftover
+app/X/metacity processes, host `:0` untouched.
+
+**Not observed, and why.** The workflow could not be driven. Pointer motion
+reached the app (a rail hover produced its tooltip) but neither a
+motion→press→release→motion click on New Design nor a body-focus-then-`Ctrl+N`
+accelerator changed the UI, and the isolated `user.db` gained no `recent_files`
+row, so no Design was created and the Data/Analysis/Layers panels could not be
+opened. One environmental difference from the recipe's earlier successful run is
+recorded as an observation, not a diagnosis: this session started with a
+**"Plant database is corrupt. Reinstall or regenerate with prepare-db.py."**
+banner, because the bundled `desktop/resources/canopi-core.db` was copied from
+the primary checkout into this worktree rather than regenerated here. Whether
+that degraded state blocks New Design was not established. Classification:
+environment/automation limitation for the drive half; the launch, render,
+profile-isolation and teardown halves are genuinely observed. No capability
+claim rests on this session, and the corrected surfaces remain gated but
+undriven.
 
 ## C1 disposition and R26
 
