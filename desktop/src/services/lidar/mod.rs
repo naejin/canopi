@@ -2028,6 +2028,14 @@ fn delete_analysis_rows(connection: &Connection, definition_id: &str) -> Result<
 mod tests {
     use super::*;
 
+    fn scratch_root(label: &str) -> PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("canopi-retry-{label}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("scratch root");
+        root
+    }
+
     fn row_count(connection: &Connection, table: &str) -> i64 {
         connection
             .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
@@ -2109,7 +2117,8 @@ mod tests {
             let head_id = new_id("gen");
             connection
                 .execute(
-                    "INSERT INTO lidar_layer_generations(id, layer_id, created_at) VALUES(?1, ?2, ?3)",
+                    "INSERT INTO lidar_layer_generations(id, layer_id, created_at, manifest_json, coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES(?1, ?2, ?3, '{}', 1, 0, 1, '[0,0,1,1]')",
                     rusqlite::params![head_id, layer_id, now_iso()],
                 )
                 .expect("generation row");
@@ -2147,6 +2156,8 @@ mod tests {
         assert!(refused.contains("source head changed"), "{refused}");
 
         // Same definition identity: a new job for the saved definition.
+        // Do not hold the catalogue lock across enqueue: the spawned refresh
+        // also takes it, and a held lock would deadlock this thread.
         let receipt = library
             .retry_analysis("adef-retry", &head.id)
             .expect("retry enqueues");
@@ -2154,39 +2165,51 @@ mod tests {
         assert_ne!(receipt.job_id, "");
 
         // Definition count and saved name/parameters are unchanged.
-        let connection = library.catalogue().expect("catalogue");
-        let count: i64 = connection
-            .query_row("SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1", [&layer_id], |row| row.get(0))
-            .expect("count");
-        assert_eq!(count, 1);
-        let (name, params): (String, String) = connection
-            .query_row(
-                "SELECT parameters_json, parameters_json FROM lidar_analysis_definitions WHERE id = 'adef-retry'",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .expect("definition read");
-        assert!(name.contains("North slope"), "{name}");
-        assert!(params.contains("degrees"), "{params}");
+        {
+            let connection = library.catalogue().expect("catalogue");
+            let count: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1",
+                    [&layer_id],
+                    |row| row.get(0),
+                )
+                .expect("count");
+            assert_eq!(count, 1);
+            let params: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = 'adef-retry'",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("definition read");
+            assert!(params.contains("North slope"), "{params}");
+            assert!(params.contains("degrees"), "{params}");
+            connection
+                .execute(
+                    "UPDATE lidar_analysis_jobs SET state = 'failed' WHERE id = ?1",
+                    [&receipt.job_id],
+                )
+                .expect("settle job");
+        }
 
         // A second retry after the first job settles is a new job, same definition.
-        connection
-            .execute(
-                "UPDATE lidar_analysis_jobs SET state = 'failed' WHERE id = ?1",
-                [&receipt.job_id],
-            )
-            .expect("settle job");
         let second = library
             .retry_analysis("adef-retry", &head.id)
             .expect("second retry enqueues");
         assert_eq!(second.definition_id, "adef-retry");
         assert_ne!(second.job_id, receipt.job_id);
-        let count: i64 = connection
-            .query_row("SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1", [&layer_id], |row| row.get(0))
-            .expect("count");
-        assert_eq!(count, 1);
+        {
+            let connection = library.catalogue().expect("catalogue");
+            let count: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1",
+                    [&layer_id],
+                    |row| row.get(0),
+                )
+                .expect("count");
+            assert_eq!(count, 1);
+        }
 
-        drop(connection);
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }

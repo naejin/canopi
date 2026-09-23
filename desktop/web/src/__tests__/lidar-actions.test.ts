@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const createLayerMock = vi.hoisted(() => vi.fn())
 const createAnalysisMock = vi.hoisted(() => vi.fn())
+const retryAnalysisMock = vi.hoisted(() => vi.fn())
 const deleteLayerMock = vi.hoisted(() => vi.fn())
 const upsertMock = vi.hoisted(() => vi.fn())
 const removeMock = vi.hoisted(() => vi.fn())
@@ -16,6 +17,7 @@ vi.mock('../ipc/lidar', () => ({
   lidarCancelAnalysisJob: cancelAnalysisMock,
   lidarCancelImport: vi.fn(),
   lidarCreateAnalysis: createAnalysisMock,
+  lidarRetryAnalysis: retryAnalysisMock,
   lidarCreateLayer: createLayerMock,
   lidarDeleteAnalysis: vi.fn(),
   lidarDeleteLayer: deleteLayerMock,
@@ -165,5 +167,16 @@ describe('LiDAR action session isolation', () => {
     expect(cancelAnalysisMock).toHaveBeenCalledWith('job-88')
     // A cancelled run is forgotten, so a second Cancel does not resend it.
     expect(await cancelAnalysisJob('adef-2')).toBe(false)
+  })
+
+  it('R50: a Design switch during retry cannot present into the replacement Design', async () => {
+    const pending = deferred<{ definition_id: string; job_id: string }>()
+    retryAnalysisMock.mockReturnValue(pending.promise)
+    const { retryAnalysis } = await import('../app/lidar/actions')
+    const promise = retryAnalysis('adef-retry', 'gen-1')
+    sessionIdentity.value = 'design-b'
+    pending.resolve({ definition_id: 'adef-retry', job_id: 'job-retry' })
+    await promise
+    expect(upsertMock).not.toHaveBeenCalled()
   })
 })
