@@ -389,6 +389,33 @@ that same synthesis. A disproved lesson is revised or dropped. Promote demonstra
 lessons to the narrowest existing test/script/guide and remove superseded guidance.
 Broader skill or shared tooling changes need their own user authorization.
 
+
+
+**Acceptance-packet synthesis at `a41f76c7` (partial).** Commands live in the
+[receipt](completion-receipt.md#current-correction-acceptance). Independent
+acceptance remains a separate entry by the main reviewer.
+
+1. **Product outcome.** All five reviewer frontend RED cases are green through
+   real mounted callers and real store/workflow; native R48/R51 proofs pass
+   before and after. Full frontend 2830, native 118, gallery, both builds and
+   bindings are green. Driven Desktop/Web remains unobserved.
+2. **Escapes and causes.** Location/WorldMap mounts lacked the `events`
+   capability after migration: implementation. Lifetime had no `off`, so
+   hide/show leaked listeners: implementation. Workspace still enabled automatic
+   attribution: implementation. Late settlement wrote status after dispose:
+   implementation. Fresh-read mock resolved void, masking the returned-snapshot
+   contract: test-oracle gap (mock corrected, production fallback removed per
+   contract).
+3. **Necessity and reuse.** Reused mount, store fence, workflow guard,
+   acceptance hooks. No new framework. Reviewer test authoring caught five
+   caller defects before handoff.
+4. **Working-method/tool changes.** Reproducing the packet first (5 RED / 76
+   pass / 2 native pass) made the repair order obvious. Keep.
+5. **Total delivery effort.** One courier-free continuation; cost unknown.
+6. **Next action.** Independent acceptance. Follow-ups in bd: R50 IPC/native
+   drive, IGN fixtures, driven Desktop/Web, live key, packaged smoke.
+   Integration and release separate.
+
 **E1–E5 caller-repair synthesis (partial).** Commands live in the
 [receipt](completion-receipt.md#current-correction-acceptance). Independent
 acceptance remains a separate entry by the main reviewer.
