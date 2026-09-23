@@ -682,13 +682,15 @@ export interface BasemapViewportMetadata {
  * Read the documented viewport response.
  *
  * `maxZoomRects` describes availability over sub-rectangles of the request.
- * Coverage is exact for the small bounded metadata response: wrapped
- * viewport/rectangles are normalized into ordinary longitude intervals,
- * clipped to the viewport and partitioned at rectangle boundaries. Every
- * positive-area partition needs support; its supported zoom is the maximum of
- * covering rectangles, and the source ceiling is the minimum across partitions,
- * capped by the base descriptor. Uncovered or unsupported metadata is
- * unavailable, not an invented zoom. Empty objects and answers without finite
+ * Coverage is exact for the bounded metadata format: wrapped provider
+ * rectangles and viewports are normalized into intervals split at ±180 with
+ * constant-time modulo, then intersected. A viewport spanning at least 360
+ * degrees queries one complete world. Every positive-area partition needs
+ * support; its supported zoom is the maximum of covering rectangles, and the
+ * source ceiling is the minimum across partitions, capped by the base
+ * descriptor. Uncovered or unsupported metadata is unavailable, not an
+ * invented zoom. More than 64 input rectangles is unavailable under the
+ * existing metadata error policy. Empty objects and answers without finite
  * applicable availability or a copyright are not established metadata.
  */
 export function readViewportMetadata(
@@ -701,7 +703,9 @@ export function readViewportMetadata(
     typeof json.copyright === 'string' && json.copyright.length > 0 ? json.copyright : null
   if (copyright === null) return null
   const rects = Array.isArray(json.maxZoomRects) ? json.maxZoomRects : []
-  const parsed: Array<{ north: number; south: number; east: number; west: number; maxZoom: number }> = []
+  // Conservative local parser support bound, not a claimed provider guarantee.
+  if (rects.length > 64) return null
+  const parsed: Array<{ north: number; south: number; west: number; east: number; maxZoom: number }> = []
   for (const rect of rects) {
     if (!isRecord(rect)) continue
     const value = Number(rect.maxZoom)
@@ -714,20 +718,27 @@ export function readViewportMetadata(
       !Number.isFinite(north) || !Number.isFinite(south)
       || !Number.isFinite(east) || !Number.isFinite(west)
       || north <= south
+      || south < -90 || north > 90
+      || Math.abs(west) > 360 || Math.abs(east) > 360
     ) {
       continue
     }
-    parsed.push({ north, south, east, west, maxZoom: value })
+    parsed.push({ north, south, west, east, maxZoom: value })
   }
   if (parsed.length === 0) return null
   if (
     !Number.isFinite(viewport.north) || !Number.isFinite(viewport.south)
     || !Number.isFinite(viewport.east) || !Number.isFinite(viewport.west)
+    || !Number.isFinite(viewport.zoom) || viewport.zoom <= 0
     || viewport.north <= viewport.south
+    || viewport.south < -90 || viewport.north > 90
+    || Math.abs(viewport.west) > 360 || Math.abs(viewport.east) > 360
   ) {
     return null
   }
-  const ceiling = exactCoverageCeiling(viewport, parsed)
+  const viewPieces = splitLongitudeSpan(viewport.west, viewport.east)
+  if (viewPieces.length === 0) return null
+  const ceiling = exactCoverageCeiling(viewPieces, viewport, parsed)
   if (ceiling === null) return null
   return {
     copyright,
@@ -735,95 +746,102 @@ export function readViewportMetadata(
   }
 }
 
+type LonInterval = { start: number; end: number }
+
 /**
- * Exact rectangle coverage over the requested viewport.
+ * Normalize one directed longitude span into intervals in [-180, 180],
+ * split at the antimeridian with constant-time modulo (no iterative shifting).
  *
- * Longitude is unwrapped into ordinary intervals so a viewport that crosses
- * the antimeridian is one contiguous span. Partitioning is at rectangle
- * boundaries along longitude and latitude; every positive-area partition must
- * be covered, and the source ceiling is the least per-partition maximum zoom.
+ * A span of at least 360 degrees is one complete world. Zero-width spans
+ * produce no interval. Ordinary unwrapped bounds such as 170..190 are
+ * supported and become [170, 180] and [-180, -170].
+ */
+function splitLongitudeSpan(west: number, east: number): LonInterval[] {
+  const span = east >= west ? east - west : east + 360 - west
+  if (!Number.isFinite(span) || span <= 0) return []
+  if (span >= 360 - 1e-9) {
+    return [{ start: -180, end: 180 }]
+  }
+  // Constant-time wrap of the start into [-180, 180).
+  let cursor = (((west + 180) % 360) + 360) % 360 - 180
+  if (cursor === 180) cursor = -180
+  const pieces: LonInterval[] = []
+  let remaining = span
+  // At most two pieces: one per side of the antimeridian.
+  while (remaining > 1e-9 && pieces.length < 3) {
+    const room = 180 - cursor
+    const take = Math.min(remaining, room)
+    if (take > 1e-9) {
+      pieces.push({ start: cursor, end: cursor + take })
+    }
+    remaining -= take
+    cursor = -180
+  }
+  return pieces
+}
+
+function intersectLon(a: LonInterval, b: LonInterval): LonInterval | null {
+  const start = Math.max(a.start, b.start)
+  const end = Math.min(a.end, b.end)
+  return end > start ? { start, end } : null
+}
+
+/**
+ * Exact rectangle coverage over the normalized viewport intervals.
+ *
+ * Overlapping rectangles offer the greatest supported zoom at a point; the
+ * source-wide ceiling is the least such availability across partitions.
  */
 function exactCoverageCeiling(
+  viewPieces: readonly LonInterval[],
   viewport: BasemapViewport,
-  rects: ReadonlyArray<{ north: number; south: number; east: number; west: number; maxZoom: number }>,
+  rects: ReadonlyArray<{ north: number; south: number; west: number; east: number; maxZoom: number }>,
 ): number | null {
-  const latEdges = new Set<number>([viewport.south, viewport.north])
-  // Unwrap the viewport into a single ordinary longitude interval.
-  const viewWest = viewport.west
-  let viewEast = viewport.east
-  if (viewEast < viewWest) viewEast += 360
-  const lonEdges = new Set<number>([viewWest, viewEast])
-
-  type Interval = { start: number; end: number }
-  const lonRects: Array<Interval & { latNorth: number; latSouth: number; maxZoom: number }> = []
-  for (const rect of rects) {
-    // Clip each rectangle to the viewport's latitude range.
-    const latSouth = Math.max(rect.south, viewport.south)
-    const latNorth = Math.min(rect.north, viewport.north)
-    if (latNorth <= latSouth) continue
-    // Normalize the rectangle into ordinary longitudes relative to viewWest.
-    let west = rect.west
-    let east = rect.east
-    while (west < viewWest) {
-      west += 360
-      east += 360
-    }
-    while (west > viewEast) {
-      west -= 360
-      east -= 360
-    }
-    // A wrapped rectangle becomes one or two ordinary intervals inside the view.
-    const spans: Array<Interval> = []
-    if (west <= east) {
-      const s = Math.max(west, viewWest)
-      const e = Math.min(east, viewEast)
-      if (e > s) spans.push({ start: s, end: e })
-    } else {
-      // west..360 and 0..east after unwrapping already handled by the shifts
-      // above; if still inverted, split at the wrap inside the view.
-      const s1 = Math.max(west, viewWest)
-      const e1 = viewEast
-      if (e1 > s1) spans.push({ start: s1, end: e1 })
-      const s2 = viewWest
-      const e2 = Math.min(east + 360, viewEast)
-      if (e2 > s2) spans.push({ start: s2, end: e2 })
-    }
-    for (const span of spans) {
-      lonEdges.add(span.start)
-      lonEdges.add(span.end)
-      lonRects.push({
-        start: span.start,
-        end: span.end,
-        latNorth,
-        latSouth,
-        maxZoom: rect.maxZoom,
-      })
-    }
-    latEdges.add(latSouth)
-    latEdges.add(latNorth)
-  }
-
-  const latBreaks = [...latEdges].sort((a, b) => a - b)
-  const lonBreaks = [...lonEdges].sort((a, b) => a - b)
+  type Piece = LonInterval & { latNorth: number; latSouth: number; maxZoom: number }
   let ceiling: number | null = null
-  for (let i = 0; i + 1 < latBreaks.length; i += 1) {
-    const latA = latBreaks[i]!
-    const latB = latBreaks[i + 1]!
-    if (!(latB > latA)) continue
-    for (let j = 0; j + 1 < lonBreaks.length; j += 1) {
-      const lonA = lonBreaks[j]!
-      const lonB = lonBreaks[j + 1]!
-      if (!(lonB > lonA)) continue
-      // Overlapping rectangles offer the greatest supported zoom at a point.
-      let partZoom: number | null = null
-      for (const rect of lonRects) {
-        if (rect.latNorth <= latA || rect.latSouth >= latB) continue
-        if (rect.end <= lonA || rect.start >= lonB) continue
-        partZoom = partZoom === null ? rect.maxZoom : Math.max(partZoom, rect.maxZoom)
+  for (const view of viewPieces) {
+    const latEdges = new Set<number>([viewport.south, viewport.north])
+    const lonEdges = new Set<number>([view.start, view.end])
+    const pieces: Piece[] = []
+    for (const rect of rects) {
+      const latSouth = Math.max(rect.south, viewport.south)
+      const latNorth = Math.min(rect.north, viewport.north)
+      if (latNorth <= latSouth) continue
+      for (const span of splitLongitudeSpan(rect.west, rect.east)) {
+        const clipped = intersectLon(span, view)
+        if (!clipped) continue
+        lonEdges.add(clipped.start)
+        lonEdges.add(clipped.end)
+        latEdges.add(latSouth)
+        latEdges.add(latNorth)
+        pieces.push({
+          start: clipped.start,
+          end: clipped.end,
+          latNorth,
+          latSouth,
+          maxZoom: rect.maxZoom,
+        })
       }
-      // Uncovered partition: unavailable, not an invented zoom.
-      if (partZoom === null) return null
-      ceiling = ceiling === null ? partZoom : Math.min(ceiling, partZoom)
+    }
+    const latBreaks = [...latEdges].sort((a, b) => a - b)
+    const lonBreaks = [...lonEdges].sort((a, b) => a - b)
+    for (let i = 0; i + 1 < latBreaks.length; i += 1) {
+      const latA = latBreaks[i]!
+      const latB = latBreaks[i + 1]!
+      if (!(latB > latA)) continue
+      for (let j = 0; j + 1 < lonBreaks.length; j += 1) {
+        const lonA = lonBreaks[j]!
+        const lonB = lonBreaks[j + 1]!
+        if (!(lonB > lonA)) continue
+        let partZoom: number | null = null
+        for (const piece of pieces) {
+          if (piece.latNorth <= latA || piece.latSouth >= latB) continue
+          if (piece.end <= lonA || piece.start >= lonB) continue
+          partZoom = partZoom === null ? piece.maxZoom : Math.max(partZoom, piece.maxZoom)
+        }
+        if (partZoom === null) return null
+        ceiling = ceiling === null ? partZoom : Math.min(ceiling, partZoom)
+      }
     }
   }
   return ceiling

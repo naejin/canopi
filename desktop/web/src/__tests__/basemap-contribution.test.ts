@@ -142,9 +142,10 @@ describe('basemap contribution reconciliation', () => {
     expect(sources.size).toBe(1)
     // The layer goes before its source, because MapLibre refuses to remove a
     // source a layer still references.
-    expect(order.slice(-5)).toEqual([
+    expect(order.slice(-6)).toEqual([
       `removeLayer:${MAPLIBRE_BASEMAP_RASTER_LAYER_ID}`,
       `removeSource:${MAPLIBRE_BASEMAP_SOURCE_ID}`,
+      'attribution:',
       `addSource:${MAPLIBRE_BASEMAP_SOURCE_ID}`,
       expect.stringContaining('attribution:'),
       `addLayer:${MAPLIBRE_BASEMAP_RASTER_LAYER_ID}`,

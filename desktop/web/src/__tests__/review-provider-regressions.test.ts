@@ -439,4 +439,96 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     )
     expect(overlapping?.maxZoom).toBe(18)
   })
+
+  it('R47: uncovered Greenwich gap is unavailable', () => {
+    const result = readViewportMetadata(
+      { copyright: 'credit', maxZoomRects: [{ west: 170, east: -170, south: 0, north: 10, maxZoom: 18 }] },
+      { west: -10, east: 10, south: 1, north: 9, zoom: 12 },
+    )
+    expect(result?.maxZoom ?? null).toBeNull()
+  })
+
+  it('R47: partial wrapped coverage is unavailable', () => {
+    const result = readViewportMetadata(
+      { copyright: 'credit', maxZoomRects: [{ west: 178, east: -178, south: 0, north: 10, maxZoom: 18 }] },
+      { west: 175, east: -175, south: 1, north: 9, zoom: 12 },
+    )
+    expect(result?.maxZoom ?? null).toBeNull()
+  })
+
+  it('R47: full-world rectangle covers a wrapped viewport', () => {
+    const result = readViewportMetadata(
+      { copyright: 'credit', maxZoomRects: [{ west: -180, east: 180, south: 0, north: 10, maxZoom: 18 }] },
+      { west: 175, east: -175, south: 1, north: 9, zoom: 12 },
+    )
+    expect(result?.maxZoom).toBe(18)
+  })
+
+  it('R47: full-world rectangle covers an unwrapped MapLibre viewport', () => {
+    const result = readViewportMetadata(
+      { copyright: 'credit', maxZoomRects: [{ west: -180, east: 180, south: 0, north: 10, maxZoom: 18 }] },
+      { west: 170, east: 190, south: 1, north: 9, zoom: 12 },
+    )
+    expect(result?.maxZoom).toBe(18)
+  })
+
+  it('R47: healthy wrapped coverage is supported', () => {
+    const result = readViewportMetadata(
+      { copyright: 'credit', maxZoomRects: [{ west: 170, east: -170, south: 0, north: 10, maxZoom: 18 }] },
+      { west: 175, east: -175, south: 1, north: 9, zoom: 12 },
+    )
+    expect(result?.maxZoom).toBe(18)
+  })
+
+  it('R47: more than 64 rectangles is unavailable', () => {
+    const many = Array.from({ length: 65 }, (_, i) => ({
+      west: i, east: i + 0.5, south: 0, north: 10, maxZoom: 18,
+    }))
+    expect(
+      readViewportMetadata({ copyright: 'c', maxZoomRects: many }, {
+        west: 0, south: 1, east: 65, north: 9, zoom: 12,
+      }),
+    ).toBeNull()
+  })
+
+  it('R47: malformed large coordinates and zero-width viewports are unavailable', () => {
+    expect(
+      readViewportMetadata(
+        { copyright: 'c', maxZoomRects: [{ west: 1e20, east: 1e20 + 1, south: 0, north: 10, maxZoom: 18 }] },
+        { west: 0, south: 1, east: 1, north: 9, zoom: 12 },
+      ),
+    ).toBeNull()
+    expect(
+      readViewportMetadata(
+        { copyright: 'c', maxZoomRects: [{ west: 0, east: 1, south: 0, north: 10, maxZoom: 18 }] },
+        { west: 1, south: 1, east: 1, north: 9, zoom: 12 },
+      ),
+    ).toBeNull()
+  })
+
+  it('R45: withdrawal clears basemap credit while other sources keep theirs', () => {
+    const credits: string[] = []
+    const sources = new Map<string, Record<string, unknown>>()
+    const layers = new Map<string, Record<string, unknown>>()
+    const target = {
+      getSource: (id: string) => sources.get(id) ?? null,
+      getLayer: (id: string) => layers.get(id) ?? null,
+      removeLayer: (id: string) => void layers.delete(id),
+      removeSource: (id: string) => void sources.delete(id),
+      addSource: (id: string, source: Record<string, unknown>) => void sources.set(id, source),
+      addLayer: (layer: Record<string, unknown>) => void layers.set(String(layer.id), layer),
+      setLayoutProperty: () => {},
+      replaceBasemapAttribution: (credit: string) => credits.push(credit),
+    }
+    reconcileBasemapContribution(target, {
+      state: 'ready',
+      descriptor: descriptor({ attribution: 'A' }),
+      copyright: 'A',
+    }, { officialTilesResolvable: true })
+    expect(credits.at(-1)).toBe('A')
+    expect(sources.size).toBe(1)
+    reconcileBasemapContribution(target, { state: 'idle' })
+    expect(sources.size).toBe(0)
+    expect(credits.at(-1)).toBe('')
+  })
 })

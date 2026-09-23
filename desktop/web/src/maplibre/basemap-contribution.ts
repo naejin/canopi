@@ -195,13 +195,19 @@ export function reconcileBasemapContribution(
   else target.addLayer(layer)
 }
 
-/** Withdraw the basemap contribution when there is one. */
+/** Withdraw the basemap contribution and its owned credit when there is one. */
 function removeContribution(target: BasemapReconcileTarget): void {
   if (target.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)) {
     target.removeLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
   }
   if (target.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)) {
     target.removeSource(MAPLIBRE_BASEMAP_SOURCE_ID)
+  }
+  // Clearing the basemap-owned credit on withdrawal keeps Idle/Unavailable
+  // from retaining stale credit after imagery is gone, while credits belonging
+  // to other sources remain untouched.
+  if (target.replaceBasemapAttribution) {
+    target.replaceBasemapAttribution('')
   }
 }
 
