@@ -1,8 +1,63 @@
 # Raster rework completion receipt
 
-Status: evidence — C0 integrated; C1's policy enabled with its capacity, byte and cancellation envelope measured and its low-space path recorded as unverified; C2–C4 implemented and gated but not live-verified; C5's combined gates and document set complete, with the platform builds and packaged artifacts unrun. **Partial delivery, not a verified release candidate.**
+Status: evidence — foundation integrated; candidate `5d0a5e0b` requires R15–R26 corrections and the new source-import route. Prior capacity, gate and workflow evidence is retained and revision-labelled; no corrected candidate is verified yet.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
+
+## Current correction acceptance
+
+This section is the current claim boundary. The prior delivery below is evidence
+at its named revisions, not a claim that inspection/providers are functional or
+that only platform observations remain. See the [independent review](completion-review-5d0a5e0b.md)
+and [source-import amendment](source-import-design.md). The reviewed tip is
+`5d0a5e0b`; its code gate revision is `2b39ee2a`. Five independent review probes
+failed while 16 existing tests passed; the review names their scope and locations.
+
+The implementer replaces pending entries below with concise measured outcomes at
+the repaired revision. bd remains the execution tracker; this is acceptance evidence.
+
+| Boundary | Current evidence / required next proof |
+| --- | --- |
+| C0 preservation | `f61f8494` integrates the accepted foundation; retain `5d0a5e0b` candidate work and merge the new docs; record resulting ancestry |
+| C1 / R23 / R26 import | Pending new production route: no preview/composed scan, nullable exact metadata, disk/resource admission, migrated historical data, above-cap/BigTIFF evidence and actual Data workflow |
+| C2 / R24–R25 workbenches | Pending Remove from Design/Undo, Data-owned import/history, Analysis request/error/retry/unit regressions and visible flow |
+| C3 / R15–R18 inspection | Pending correct point, actual source/result/historical readers, signed coverage, units, cancellation and live lifecycle/keyboard evidence |
+| C4 / R19–R22 providers | Pending outgoing authenticated tile/viewport, actual changed key, metadata, style readiness, mounted Canvas/Location/WorldMap, renewal/disposal and streamed byte bound |
+| C5 combined candidate | Pending corrected-tree gates, real Desktop/Web, package/CI/platform observations and independent review |
+
+For each R15–R26 row in the final disposition record: reproduced revision and
+trigger → repair revision → committed regression and observed failing reason →
+passing result → applicable live proof or explicit gap. Group related rows only
+when their distinct outcomes remain visible. A disputed finding needs concrete
+counterevidence, not silent omission. Record the C1 design amendment separately
+from defect correction so prior implementation is not judged against a later rule.
+
+For capacity report input identities, cell/byte counts, source/output TIFF format,
+working-memory and cache/queue scope, sampling interval, simultaneous child/app
+RSS, peak live scratch, durable storage and settled residue **separately**. Include
+low-space/write failure with unchanged old head/result and successful retry;
+metadata-only publication should show no prior-composition pixel reads. Record
+cold/three-warm display timing without turning it into an optimization quota.
+
+For live proof identify edition, dev versus package, OS, isolated profile/fixture,
+UI trigger, expected visible outcome, observed outcome, head/result identity and
+artifact. For inspection include clicked geographic coordinate, expected native
+cell/value/units and observed readout. For provider tests separate fake transport,
+actual outgoing request construction and real account response; redact secrets.
+An unavailable host/key/fixture names the exact command or observation prevented.
+
+At final consolidation keep one current capability/gate table and one R15–R26
+repair table, with links to necessary logs. Retain revision-labelled historical
+measurements but collapse repeated round narration and duplicated gate output.
+No source image, private raster, key, token or full personal path enters Git.
+
+## Prior delivery at 5d0a5e0b
+
+The following records are the implementation agent's prior delivery. Any claim of
+capability completion is superseded by the current correction boundary above;
+its actual measured results retain their named scope. “Temporary 0” below means
+post-settlement residue, not peak conversion space. The old 24/2-GiB/400M policy
+is historical and does not govern the amended route.
 
 ## Baseline and claim boundary
 
@@ -11,7 +66,7 @@ Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-de
 | Accepted foundation | `34e4ded4` on `feature/bounded-raster-generations` |
 | Whole-rework handoff docs | `a96dcfd9` on `feature/raster-html-references` |
 | Integrated `main` (C0) | `f61f8494` |
-| Candidate `feature/raster-rework-completion` | `ff56eaf3` (latest at this consolidation; earlier sections name the revision they measured) |
+| Candidate `feature/raster-rework-completion` | `5d0a5e0b` (reviewed delivered tip; earlier sections name the revision they measured) |
 
 C0 merged the accepted foundation with the handoff. The bounded stack re-parented
 `af8aed87` under `34bf6041`, so `main` could not fast-forward and a deliberate

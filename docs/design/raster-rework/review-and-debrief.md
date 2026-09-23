@@ -1,12 +1,66 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — completed foundation findings and whole-rework improvement/debrief contract; no completion measurements are claimed yet.
+Status: evidence — historical deliveries and independent review through `5d0a5e0b`; correction-cycle final synthesis remains pending.
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
 The user authorized the full remaining sequence on 2026-09-22, with the implementation agent continuing through internal milestones and returning only for material blockers. The purpose is more useful delivery per necessary main-agent intervention while preserving architectural coherence and trustworthy review. Actual savings have not been measured. This section owns the final synthesis; bd owns resumable progress and the completion receipt owns detailed measurements.
+
+### Correction cycle after independent review of 5d0a5e0b
+
+The [review](completion-review-5d0a5e0b.md) found R15–R26 despite the prior gate
+passes. The user's accepted [source-import amendment](source-import-design.md)
+also replaces the main agent's earlier conservative limit/mandatory measurement
+prescription. Both sides of this handoff must be evaluated: implementation gaps
+are not all design omissions, and the expensive import route was not an invention
+of the implementation agent. Preserve these distinctions in the final debrief.
+
+| Observed case | Classification / owner | Small intervention and next-use detector | Current disposition |
+| --- | --- | --- | --- |
+| Existing tests pass while tile session/viewport transport and attribution fail | Implementation plus test-boundary gap; implementer repairs, reviewer verifies | Assert actual outgoing tile/viewport authentication and installed attribution, with recognizable fake secrets excluded from exported/logged state | Five review probes establish escapes across provider/inspection; repair benefit pending |
+| Offset oracle repeats the implementation; real slope manifests never sampled | Scientific oracle/caller gap; implementer and reviewer | Known geographic cells/physical values through published source and slope readers at nonzero bearing/latitude | Pending |
+| Key-change test never changes key; inspection tests manually call unwired cleanup | Trigger/wiring gap; implementer | Drive settings and Design/head changes through their production owners; assert trigger happened and late work cannot publish | Pending |
+| Preview/full-composition preparation makes source admission depend on unrelated old pixels | Design overprescription; main agent | New source-only preparation and explicit unknown exact metadata; count prior-source pixel reads during append/reorder | Contract amended; implementation benefit pending |
+| Temporary-space cleanup was used as capacity evidence; safety gates remained unavailable | Measurement/acceptance gap; implementer, reviewer | Measure live peak, settled residue and durable bytes separately; inject real publication/write failure | Pending |
+| GUI progress stopped at lossy synthetic path typing | Environment/automation limitation, not established product root cause | Reuse clipboard paste or short owned fixture paths in the existing isolated recipe, then verify the same visible workflow | Pending; do not claim a chooser repair without evidence |
+
+Record a new event only when it changes a decision, exposes an escape, or justifies
+a specific tool/test/guide improvement. Reuse the event row instead of appending
+another round narrative. On the next actual use, record observed benefit, renewed
+failure, or “not tested”; only then decide keep/revise/drop. No generic skills,
+model router, new dashboard or qualification framework is authorized.
+
+### Final correction debrief to deliver
+
+Replace pending synthesis with a short answer to these concrete questions:
+
+1. What now works through the actual app, and what still lacks observation? Link
+   the receipt instead of copying gates or screenshots into this section.
+2. Which R15–R26 defects escaped because the test never triggered the event,
+   tested the wrong boundary, copied an oracle, or omitted a production caller?
+   Which escaped the main agent's design/review, and which contradicted an existing
+   adequate instruction? Name the earliest economical detector for each group.
+3. Did source-only import remove old collection reads and mandatory preview work?
+   What replaced exact metadata, and did users receive truthful ranges/coverage?
+   Compare only equivalent observed inputs; the old/new pipeline differ.
+4. Which task-local test/script/guide changes demonstrably helped on their next
+   use? Give keep/revise/drop, owner and the one authoritative updated location.
+   Untested improvements remain proposals with a concrete next-use experiment.
+5. Which courier exchanges were material decisions/external prerequisites, and
+   which were avoidable continuations or missing handoff decisions? Report only
+   directly observed counts/time/cost, otherwise unknown. A round budget, test
+   count or presumed model price is not a productivity measurement.
+6. What bounded follow-ups remain in bd, and which instructions or tools should
+   be removed because they duplicate an existing owner or no longer apply?
+
+The main agent adds independent escapes and scoped acceptance to this same
+synthesis after review. Continuous improvement means using verified fixes in the
+next real task, not continuously increasing documentation or verification volume.
+A partial delivery has a partial debrief; absence of external evidence remains
+explicit. The previous “Final synthesis” below is historical at `2b39ee2a`, not the
+final disposition of the corrected candidate.
 
 ### Record during the work
 

@@ -1,19 +1,27 @@
 # Raster rework handoffs and debrief
 
-Status: active — the completion handoff owns remaining implementation; older assignments are evidence.
-Tracking: `canopi-j571`; executor claims one completion bead; bd owns task status and follow-ups.
+Status: active — correction/source-import handoff continues `canopi-j571.1` from candidate `5d0a5e0b`; older assignments are evidence.
+Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-Start with the completion prompt and contract. On 2026-09-22 the user authorized the **whole remaining rework through a verified candidate**, returning only for material blockers: integrate the accepted foundation, qualify larger capacity, build production Data/Analysis/Layers and inspection, add Web Location/shared basemaps, then verify the combined candidate. No routine phase requires another prompt. New work still requires independent review before mainline integration/release.
+The [R15–R26 review](completion-review-5d0a5e0b.md) requires functional corrections,
+not only platform observations. The [source-import contract](source-import-design.md)
+now settles the user's accepted simplification and supersedes the old C1
+24-file/2-GiB/400M policy and compulsory preview/composition measurement. Continue
+the existing candidate; foundation integration is already complete at `f61f8494`.
 
-The ordered correction at `34e4ded4` is [accepted in its named scope](ordered-cog-review.md#accepted-correction-at-34e4ded4). Preserve native integration `a5fc7d7b`, C1/C2, the eleven-group repair and R12–R14 regressions. Existing production admission remains unchanged until the new measured gate passes. Q is frozen/unqualified; do not restart its tooling.
+Start with the completion prompt and contract. On 2026-09-22 the user authorized the **whole remaining rework through a verified candidate**, returning only for material blockers: preserve the integrated foundation, finish independent source import and resource qualification, correct Data/Analysis/Layers and inspection, repair Web/shared providers, then verify the combined candidate. No routine phase requires another prompt. New work still requires independent review before mainline integration/release.
+
+The ordered correction at `34e4ded4` is [accepted in its named scope](ordered-cog-review.md#accepted-correction-at-34e4ded4). Preserve native integration `a5fc7d7b`, C1/C2, the eleven-group repair and R12–R14 regressions. The candidate’s historical production ceilings are replaced only as the new bounded source route and its safety evidence land. Q is frozen/unqualified; do not restart its tooling.
 
 The [protocol](collaboration-protocol.md) owns raster-specific execution/evidence practice. Maintain one [completion receipt](completion-receipt.md), bd checkpoints and the [existing debrief](review-and-debrief.md#whole-rework-delivery-and-improvement). The main agent owns missing design decisions and independent review; the implementer owns routine choices, repair and tested task-local improvements. Historical records below are not alternate assignments.
 
 | Artifact | Purpose |
 | --- | --- |
 | [Whole-rework execution prompt](completion-agent-prompt.md) | Sole current assignment; sustained implementation through one verified candidate |
-| [Completion contract](completion-design.md) | Integration, conditional capacity policy, workbenches, inspection, Web/provider and final gates |
+| [Completion contract](completion-design.md) | Existing candidate continuation, correction interfaces, workbenches, inspection, providers and final gates |
+| [Source-import contract](source-import-design.md) | Streamed source preparation, metadata-only publication, exact/display statistics, resource and compatibility decisions |
+| [Candidate review](completion-review-5d0a5e0b.md) | R15–R26 findings and independent diagnostic evidence |
 | [Completion receipt](completion-receipt.md) | Actual revisions, measurements, gates, limitations and improvements; initialized, not an execution claim |
 | [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Retired correction; accepted at `34e4ded4` |
 | [Ordered COG independent review](ordered-cog-review.md) | Acceptance at `34e4ded4`; earlier findings and evidence limits retained by revision |
