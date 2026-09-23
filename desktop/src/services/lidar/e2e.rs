@@ -134,6 +134,67 @@ fn assert_tileset_has_visible_pixels(
     assert_png_has_visible_pixels(engine, pngs.last().expect("largest tile exists"));
 }
 
+/// Render one real tile from an on-demand tileset and return it with its
+/// coordinates.
+///
+/// An ordered composition draws from its members' payloads instead of a
+/// pre-generated pyramid, so "has visible pixels" means the shared renderer
+/// returns a drawn 256x256 tile. The advertised zooms are walked from the
+/// coarsest level up, because a fine level may fall outside the fixture.
+fn render_native_tile(
+    library: &LidarLibrary,
+    layer_id: &str,
+    tileset: &common_types::lidar::LidarTileset,
+    cancel: &AtomicBool,
+) -> (String, u32, u32, u32, Vec<u8>) {
+    let generation_id = match &tileset.source {
+        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
+            generation_id.clone()
+        }
+        _ => panic!("an on-demand tileset must name the generation it reads"),
+    };
+    for z in (0..=tileset.max_zoom).rev() {
+        let span = 40_075_016.685_578_49 / f64::from(1u32 << z);
+        let half = 20_037_508.342_789_244;
+        let bounds = {
+            let connection = library.catalogue().unwrap();
+            let raw: String = connection
+                .query_row(
+                    "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
+                    [&generation_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            serde_json::from_str::<Vec<f64>>(&raw).unwrap()
+        };
+        let centre_x = (bounds[0] + bounds[2]) / 2.0;
+        let centre_y = (bounds[1] + bounds[3]) / 2.0;
+        let x = ((centre_x + half) / span).floor() as u32;
+        let y = ((half - centre_y) / span).floor() as u32;
+        let bytes = library
+            .render_tile(
+                "source",
+                layer_id,
+                &generation_id,
+                "elevation",
+                z,
+                x,
+                y,
+                cancel,
+            )
+            .expect("tile renders");
+        // An empty tile is the shared transparent 1x1 PNG; a drawn tile is a
+        // full 256x256 image.
+        let drawn = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+            .map(|image| image.width() == 256 && image.height() == 256)
+            .unwrap_or(false);
+        if drawn {
+            return (generation_id, z, x, y, bytes);
+        }
+    }
+    panic!("the on-demand tileset drew nothing at any advertised zoom");
+}
+
 fn assert_known_slope(engine: &engine::GdalEngine, root: &std::path::Path, cancel: &AtomicBool) {
     let raw_path = root.join("known-slope.raw");
     let source_path = root.join("known-slope.tif");
@@ -217,6 +278,11 @@ fn dirs_home() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir)
 }
 
+/// The full dense lifecycle on the real IGN MNT fixture: import, publish,
+/// display, slope, restart reuse and a same-file replacement, followed by the
+/// shipped ordered route over that grandfathered dense head and its undo. Run
+/// with:
+/// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_import_publish --nocapture`
 #[test]
 #[ignore = "requires system GDAL and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_import_publish_slope_restart_reuse() {
@@ -233,7 +299,7 @@ fn e2e_import_publish_slope_restart_reuse() {
     let cancel = AtomicBool::new(false);
     assert_known_slope(&engine, &work, &cancel);
     // This lifecycle exercises the preserved dense route deliberately.
-    let _dense = generation::chunked_publication::without_sparse();
+    let dense_guard = generation::chunked_publication::without_sparse();
 
     // Open the library (slice 1: catalogue + assets under app data root).
     let library = LidarLibrary::open(&work).expect("library opens");
@@ -282,13 +348,10 @@ fn e2e_import_publish_slope_restart_reuse() {
         completed_job.state,
         common_types::lidar::LidarImportJobState::Complete
     );
-    assert_eq!(
-        completed_job.progress,
-        Some(common_types::lidar::LidarImportProgress {
-            phase: common_types::lidar::LidarImportProgressPhase::Finalizing,
-            percent: 100,
-        })
-    );
+    // A settled job reports its outcome through its state; the phase it passed
+    // through while publishing is cleared so a reader cannot mistake a stale
+    // percentage for work still running.
+    assert_eq!(completed_job.progress, None);
     println!("published: {}", outcome.summary());
 
     // Snapshot shows the layer with an elevation tileset.
@@ -446,31 +509,129 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert_eq!(members[0].2.as_deref(), Some(job_id.as_str()));
     assert_eq!(members[1].2.as_deref(), Some(replacement_job.as_str()));
 
-    // Undo removes the selected replacement occurrence and keeps the first
-    // identical import, including its spatial footprint and visible tiles.
-    let undo = import::undo_import(&reopened, &replacement_job, &cancel)
-        .expect("replacement undo publishes");
-    assert!(undo.changed);
-    let after_undo = reopened.library_snapshot().expect("snapshot after undo");
+    // A dense publication composes straight from its own mosaic and records no
+    // snapshot lineage, so a dense head offers no composition Undo. That is the
+    // pre-rework behaviour of this preserved route and the reason production
+    // never publishes densely: the ordered publication below is what an
+    // accepted import actually runs. The request is answered, not failed, and
+    // the head it names stays authoritative.
+    let dense_undo = import::undo_import(&reopened, &replacement_job, &cancel)
+        .expect("an undo request against a dense head is answered");
+    assert!(!dense_undo.changed, "{}", dense_undo.summary());
+    assert_eq!(dense_undo.generation_id, replacement_head.id);
+    let after_dense_undo = reopened
+        .library_snapshot()
+        .expect("snapshot after the refused undo");
     assert!(
-        after_undo.layers[0]
+        after_dense_undo.layers[0]
             .coverage_cells
             .expect("this fixture measured its coverage")
             > 3_000_000
     );
-    assert_tileset_has_visible_pixels(&engine, &after_undo.layers[0].tilesets[0]);
+    assert_tileset_has_visible_pixels(&engine, &after_dense_undo.layers[0].tilesets[0]);
+    let (unchanged_head, unchanged_members) = {
+        let connection = reopened.catalogue().unwrap();
+        (
+            catalogue::head_generation(&connection, &layer_id)
+                .unwrap()
+                .expect("the head survives a refused undo"),
+            catalogue::generation_members(&connection, &replacement_head.id).unwrap(),
+        )
+    };
+    assert_eq!(unchanged_head.id, replacement_head.id);
+    assert_eq!(unchanged_members.len(), 2, "a refused undo removes nothing");
+
+    // Re-enable the shipped publication route: an accepted import over the
+    // grandfathered dense head wraps that head as one historical member, which
+    // is what makes the composition undoable again.
+    drop(dense_guard);
+    let ordered_job = reopened
+        .record_import_job(&layer_id)
+        .expect("ordered job recorded");
+    let ordered = import::stage_and_publish(
+        &reopened,
+        &ordered_job,
+        &layer_id,
+        std::slice::from_ref(&fixture),
+        true,
+        &cancel,
+    )
+    .expect("the ordered publication is admitted");
+    reopened.finish_import_sources(&ordered_job, &layer_id, Ok(()));
+    assert!(ordered.changed, "{}", ordered.summary());
+    let ordered_head = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .expect("ordered head published")
+    };
+    assert_eq!(
+        import::read_generation_manifest(&ordered_head.manifest_json)
+            .unwrap()
+            .format,
+        import::GenerationStorageFormat::OrderedMembersV1
+    );
+    let ordered_members = {
+        let connection = reopened.catalogue().unwrap();
+        catalogue::collection_members_page(&connection, &ordered_head.id, None, 10).unwrap()
+    };
+    assert_eq!(ordered_members.len(), 2);
+    assert_eq!(ordered_members[0].kind, "source");
+    assert_eq!(
+        ordered_members[0].job_id.as_deref(),
+        Some(ordered_job.as_str())
+    );
+    assert_eq!(ordered_members[1].kind, "previous-composition");
+    assert_eq!(
+        ordered_members[1].base_generation_id.as_deref(),
+        Some(replacement_head.id.as_str())
+    );
+
+    // Undo removes the accepted occurrence and republishes the wrapped dense
+    // composition, whose measurement is the dense head's own.
+    let undo = import::undo_import(&reopened, &ordered_job, &cancel).expect("undo publishes");
+    assert!(undo.changed, "{}", undo.summary());
+    let after_undo = reopened.library_snapshot().expect("snapshot after undo");
+    assert_eq!(
+        after_undo.layers[0].coverage_cells,
+        replacement_head
+            .coverage_cells
+            .map(|cells| cells.max(0) as u64),
+        "undo restores the dense composition's own coverage"
+    );
+    let reverted_tileset = after_undo.layers[0]
+        .tilesets
+        .iter()
+        .find(|tileset| tileset.style == "elevation")
+        .expect("the restored composition stays displayable");
+    let (tile_generation, z, x, y, bytes) =
+        render_native_tile(&reopened, &layer_id, reverted_tileset, &cancel);
+    assert_eq!(
+        tile_generation, undo.generation_id,
+        "the restored head is what the map reads"
+    );
+    println!("restored tile {z}/{x}/{y}: {} bytes", bytes.len());
     let undo_head = {
         let connection = reopened.catalogue().unwrap();
         catalogue::head_generation(&connection, &layer_id)
             .unwrap()
             .unwrap()
     };
-    let remaining = {
+    assert_eq!(undo_head.id, undo.generation_id);
+    let (remaining, ordered_history) = {
         let connection = reopened.catalogue().unwrap();
-        catalogue::generation_members(&connection, &undo_head.id).unwrap()
+        (
+            catalogue::collection_members_page(&connection, &undo_head.id, None, 10).unwrap(),
+            catalogue::collection_member_count(&connection, &ordered_head.id).unwrap(),
+        )
     };
     assert_eq!(remaining.len(), 1);
-    assert_eq!(remaining[0].2.as_deref(), Some(job_id.as_str()));
+    assert_eq!(remaining[0].kind, "previous-composition");
+    assert_eq!(
+        remaining[0].base_generation_id.as_deref(),
+        Some(replacement_head.id.as_str())
+    );
+    assert_eq!(ordered_history, 2, "the undone snapshot stays in history");
 
     reopened
         .delete_layer(&layer_id)
@@ -542,21 +703,25 @@ fn e2e_sparse_generation_lifecycle() {
     let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
     assert_eq!(
         manifest.format,
-        import::GenerationStorageFormat::CogChunksV1,
-        "the sparse route publishes resolved chunks"
+        import::GenerationStorageFormat::OrderedMembersV1,
+        "a source import publishes an ordered collection of source occurrences"
     );
-    assert!(head.mosaic_path.is_none(), "a sparse head owns no mosaic");
+    assert!(head.mosaic_path.is_none(), "an ordered head owns no mosaic");
+    // A one-occurrence composition carries its member's exact facts without
+    // reading the composed pixels.
     assert!(
         head.coverage_cells
-            .expect("this fixture measured its coverage")
+            .expect("a one-member composition carries its member's exact count")
             > 3_000_000
     );
     let chunks = {
         let connection = library.catalogue().unwrap();
         catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
     };
-    // A 2000x2000 lattice is exactly four 1024-cell chunks.
-    assert_eq!(chunks.len(), 4, "only occupied chunks are stored");
+    assert!(
+        chunks.is_empty(),
+        "an ordered composition materializes no resolved chunks"
+    );
     println!(
         "sparse import: {} cells in {} chunks, value range {:?}..{:?}",
         head.coverage_cells
@@ -573,57 +738,7 @@ fn e2e_sparse_generation_lifecycle() {
         .iter()
         .find(|tileset| tileset.style == "elevation")
         .expect("a sparse layer is displayable");
-    let generation_id = match &tileset.source {
-        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
-            generation_id.clone()
-        }
-        _ => panic!("a sparse generation has no asset template"),
-    };
-    let mut tile_bytes = None;
-    let mut tile_coordinates = None;
-    'outer: for z in (0..=tileset.max_zoom).rev() {
-        let span = 40_075_016.685_578_49 / f64::from(1u32 << z);
-        let half = 20_037_508.342_789_244;
-        let bounds = {
-            let connection = library.catalogue().unwrap();
-            let raw: String = connection
-                .query_row(
-                    "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
-                    [&generation_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            serde_json::from_str::<Vec<f64>>(&raw).unwrap()
-        };
-        let centre_x = (bounds[0] + bounds[2]) / 2.0;
-        let centre_y = (bounds[1] + bounds[3]) / 2.0;
-        let x = ((centre_x + half) / span).floor() as u32;
-        let y = ((half - centre_y) / span).floor() as u32;
-        let bytes = library
-            .render_tile(
-                "source",
-                &layer_id,
-                &generation_id,
-                "elevation",
-                z,
-                x,
-                y,
-                &cancel,
-            )
-            .expect("tile renders");
-        // An empty tile is the shared transparent 1x1 PNG; a drawn tile is a
-        // full 256x256 image.
-        let drawn = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
-            .map(|image| image.width() == 256 && image.height() == 256)
-            .unwrap_or(false);
-        if drawn {
-            tile_bytes = Some(bytes);
-            tile_coordinates = Some((z, x, y));
-            break 'outer;
-        }
-    }
-    let (z, x, y) = tile_coordinates.expect("a rendered tile at some zoom");
-    let bytes = tile_bytes.unwrap();
+    let (generation_id, z, x, y, bytes) = render_native_tile(&library, &layer_id, tileset, &cancel);
     println!("native tile {z}/{x}/{y}: {} bytes", bytes.len());
     assert!(bytes.len() > 100, "a drawn tile is a real PNG");
 
@@ -774,12 +889,46 @@ fn e2e_sparse_generation_lifecycle() {
         Some(0),
         "undoing the only import leaves no coverage"
     );
-    // The replaced generation and its chunks stay as immutable history.
-    let history_chunks = {
+    // The replaced generation stays as immutable history: its ordered
+    // occurrence, the retained source payload that occurrence resolves and its
+    // measured facts all survive, and an ordered composition publishes no
+    // resolved chunks because its members stay authoritative.
+    let (history_row, history_members, history_chunks) = {
         let connection = reopened.catalogue().unwrap();
-        catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
+        (
+            catalogue::generation_row(&connection, &head.id)
+                .unwrap()
+                .expect("the replaced generation stays in history"),
+            catalogue::collection_member_count(&connection, &head.id).unwrap(),
+            catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap(),
+        )
     };
-    assert_eq!(history_chunks.len(), 4, "history keeps its chunks");
+    assert_eq!(history_row.coverage_cells, head.coverage_cells);
+    assert_eq!(
+        import::read_generation_manifest(&history_row.manifest_json)
+            .unwrap()
+            .format,
+        import::GenerationStorageFormat::OrderedMembersV1,
+        "the replaced generation keeps the format it was published with"
+    );
+    assert_eq!(history_members, 1, "history keeps its ordered occurrence");
+    assert!(
+        history_chunks.is_empty(),
+        "an ordered composition materializes no resolved chunks"
+    );
+    let retained = {
+        let connection = reopened.catalogue().unwrap();
+        generation::retained_cog(
+            &connection,
+            &reopened.inner.paths,
+            &format!("interp-{}", staging.sources[0].interp_hash),
+        )
+        .unwrap()
+    };
+    assert!(
+        retained.is_some(),
+        "the occurrence's retained source payload survives the undo"
+    );
 
     drop(reopened);
     let measurement = sampler.finish();
@@ -996,6 +1145,7 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         let half = 20_037_508.342_789_244;
         let x = ((centre_x + half) / span).floor() as u32;
         let y = ((half - centre_y) / span).floor() as u32;
+        let cold = std::time::Instant::now();
         let bytes = library
             .render_tile(
                 "source",
@@ -1008,13 +1158,38 @@ fn e2e_mnh_batch_import_apply_display_restart() {
                 &cancel,
             )
             .expect("tile renders");
+        let cold = cold.elapsed();
+        // Three repeats of the same coordinate: the warm cost the map pays
+        // while panning back over a tile it has already drawn.
+        let mut repeats = Vec::with_capacity(3);
+        for _ in 0..3 {
+            let started = std::time::Instant::now();
+            let again = library
+                .render_tile(
+                    "source",
+                    &layer_id,
+                    &generation_id,
+                    "elevation",
+                    z,
+                    x,
+                    y,
+                    &cancel,
+                )
+                .expect("tile renders again");
+            repeats.push(started.elapsed());
+            assert_eq!(again, bytes, "a repeat renders the same immutable tile");
+        }
         let visible = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
             .map(|image| image.width() == 256 && image.height() == 256)
             .unwrap_or(false);
         println!(
-            "tile {z}/{x}/{y}: {} bytes{}",
+            "tile {z}/{x}/{y}: {} bytes{}, cold {:.0} ms, three repeats {:.0}/{:.0}/{:.0} ms",
             bytes.len(),
-            if visible { "" } else { " (empty)" }
+            if visible { "" } else { " (empty)" },
+            cold.as_secs_f64() * 1000.0,
+            repeats[0].as_secs_f64() * 1000.0,
+            repeats[1].as_secs_f64() * 1000.0,
+            repeats[2].as_secs_f64() * 1000.0
         );
         if visible {
             drawn += 1;
@@ -1288,6 +1463,7 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
     let half = 20_037_508.342_789_244;
     let tile_x = ((centre_x + half) / span).floor() as u32;
     let tile_y = ((half - centre_y) / span).floor() as u32;
+    let cold = std::time::Instant::now();
     let tile = reopened
         .render_tile(
             "source",
@@ -1300,11 +1476,39 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
             &cancel,
         )
         .expect("capacity tile renders");
+    let cold = cold.elapsed();
+    // Three repeats of the same immutable coordinate: the observed warm cost,
+    // reported as a measurement and never as a quota.
+    let mut repeats = Vec::with_capacity(3);
+    for _ in 0..3 {
+        let started = std::time::Instant::now();
+        let again = reopened
+            .render_tile(
+                "source",
+                &result_layer_id,
+                &generation_id,
+                "elevation",
+                zoom,
+                tile_x,
+                tile_y,
+                &cancel,
+            )
+            .expect("capacity tile renders again");
+        repeats.push(started.elapsed());
+        assert_eq!(again, tile, "a repeat renders the same immutable tile");
+    }
     let visible = image::load_from_memory_with_format(&tile, image::ImageFormat::Png)
         .map(|image| image.width() == 256 && image.height() == 256)
         .unwrap_or(false);
     assert!(visible, "a tile over the plane must draw");
-    println!("tile {zoom}/{tile_x}/{tile_y}: {} bytes", tile.len());
+    println!(
+        "tile {zoom}/{tile_x}/{tile_y}: {} bytes, cold {:.0} ms, three repeats {:.0}/{:.0}/{:.0} ms",
+        tile.len(),
+        cold.as_secs_f64() * 1000.0,
+        repeats[0].as_secs_f64() * 1000.0,
+        repeats[1].as_secs_f64() * 1000.0,
+        repeats[2].as_secs_f64() * 1000.0
+    );
 
     // Bounded numeric reads through the same resolver display and analysis use.
     //
