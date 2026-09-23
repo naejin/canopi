@@ -318,6 +318,8 @@ pub(super) fn sample(
             reason: LidarSampleUnavailableReason::StaleGeneration,
         });
     }
+    #[cfg(test)]
+    super::acceptance_hooks::after_target(library);
     let Some((x, y)) = transform_point(
         engine,
         cancel,
@@ -351,6 +353,8 @@ pub(super) fn sample(
         });
     };
     let resolved = reader.read_window(library, &target.grid, window, cancel)?;
+    #[cfg(test)]
+    super::acceptance_hooks::after_read(library);
     // Recheck currency after the slow read without holding the catalogue
     // across it: a concurrent head change makes Value/NoData stale before
     // delivery, and a disappeared target is missing rather than a stale success.

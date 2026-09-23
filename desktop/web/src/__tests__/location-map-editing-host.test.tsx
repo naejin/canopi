@@ -10,7 +10,7 @@ import {
   useLocationMapEditingHost,
   type LocationMapEditingHost,
 } from '../app/location/map-editing'
-import { basemapStyle, locale } from '../app/settings/state'
+import { basemapStyle, locale, googleMapsApiKey } from '../app/settings/state'
 import {
   designSessionFixture,
   currentDesign,
@@ -22,6 +22,8 @@ const maplibreMock = vi.hoisted(() => ({
   mapConstructor: vi.fn(),
   navigationControlConstructor: vi.fn(),
 }))
+
+vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: 'test-map-worker' }))
 
 vi.mock('maplibre-gl', () => ({
   Map: maplibreMock.mapConstructor,
@@ -51,6 +53,12 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     ...overrides,
   }
 }
+
+
+const acceptanceHttp = vi.hoisted(() => ({ request: vi.fn() }))
+vi.mock('../maplibre/basemap-http.browser', () => ({
+  createBrowserBasemapHttp: () => ({ request: acceptanceHttp.request }),
+}))
 
 class FakeLocationMap {
   // The app reconciles the basemap provider into whichever map is live, so the
@@ -92,6 +100,15 @@ class FakeLocationMap {
 
   fire(event: string, payload?: unknown): void {
     for (const handler of this.handlers.get(event) ?? []) handler(payload)
+  }
+
+  getBounds() {
+    return {
+      getWest: () => this.center.lng - 1,
+      getEast: () => this.center.lng + 1,
+      getSouth: () => this.center.lat - 1,
+      getNorth: () => this.center.lat + 1,
+    }
   }
 
   getCenter() {
@@ -201,6 +218,44 @@ describe('Location map editing host', () => {
     if (!map) throw new Error('Fake map was not created')
     return map
   }
+
+
+  it('acceptance: movement refreshes official metadata through the mounted Location caller', async () => {
+    const requests: string[] = []
+    acceptanceHttp.request.mockImplementation(async (input: { url: string }) => {
+      requests.push(input.url)
+      const moving = requests.filter(url => url.includes('viewport')).length > 1
+      return { ok: true, status: 200, json: input.url.includes('createSession')
+        ? { session: 'test-session', expiry: '4000000000', tileWidth: 256, tileHeight: 256 }
+        : { copyright: moving ? 'Moved credit' : 'Initial credit', maxZoomRects: [
+          { north: 90, south: -90, west: -180, east: 180, maxZoom: moving ? 16 : 18 },
+        ] } }
+    })
+    googleMapsApiKey.value = 'synthetic-test-key'
+    basemapStyle.value = 'google_satellite'
+    try {
+      await act(async () => { render(<HostProbe onRender={() => {}} />, container) })
+      await flushMapHost()
+      await vi.waitFor(() => expect(map).not.toBeNull())
+      const activeMap = map!
+      expect(activeMap).not.toBeNull()
+      const readSource = () => activeMap.getSource('canopi-basemap-raster') as { maxzoom: number; attribution: string } | undefined
+      // Healthy control: the real provider/session/binding have installed the initial metadata.
+      await vi.waitFor(() => expect(readSource()?.maxzoom).toBe(18))
+      const before = requests.filter(url => url.includes('viewport')).length
+      activeMap.center = { lng: 22, lat: 30 }
+      activeMap.zoom = 12
+      activeMap.fire('moveend')
+      await vi.waitFor(() => expect(requests.filter(url => url.includes('viewport')).length).toBeGreaterThan(before))
+      await vi.waitFor(() => expect(readSource()?.maxzoom).toBe(16))
+      expect(readSource()?.attribution).toBe('Moved credit')
+      expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1)
+    } finally {
+      render(null, container)
+      googleMapsApiKey.value = null
+      basemapStyle.value = 'street'
+    }
+  })
 
   it('commits search, panned-center, and clicked locations through one action', async () => {
     renderProbe()

@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { basemapStyle } from '../app/settings/state'
+import { basemapStyle, googleMapsApiKey } from '../app/settings/state'
 import { WorldMapSurface } from '../components/world-map/WorldMapSurface'
 import type { TemplateMeta } from '../types/community'
 
@@ -12,12 +12,20 @@ const maplibreMock = vi.hoisted(() => ({
   boundsConstructor: vi.fn(),
 }))
 
+vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: 'test-map-worker' }))
+
 vi.mock('maplibre-gl', () => ({
   Map: maplibreMock.mapConstructor,
   NavigationControl: maplibreMock.navigationControlConstructor,
   Marker: maplibreMock.markerConstructor,
   LngLatBounds: maplibreMock.boundsConstructor,
   setWorkerUrl: vi.fn(),
+}))
+
+
+const acceptanceHttp = vi.hoisted(() => ({ request: vi.fn() }))
+vi.mock('../maplibre/basemap-http.browser', () => ({
+  createBrowserBasemapHttp: () => ({ request: acceptanceHttp.request }),
 }))
 
 class FakeWorldMap {
@@ -58,6 +66,15 @@ class FakeWorldMap {
 
   loaded() {
     return true
+  }
+
+  getBounds() {
+    return {
+      getWest: () => this.center.lng - 1,
+      getEast: () => this.center.lng + 1,
+      getSouth: () => this.center.lat - 1,
+      getNorth: () => this.center.lat + 1,
+    }
   }
 
   getCenter() {
@@ -203,6 +220,42 @@ describe('WorldMapSurface', () => {
     render(null, container)
     container.remove()
     basemapStyle.value = 'street'
+  })
+
+
+  it('acceptance: movement refreshes official metadata through the mounted WorldMap caller', async () => {
+    const requests: string[] = []
+    acceptanceHttp.request.mockImplementation(async (input: { url: string }) => {
+      requests.push(input.url)
+      const moving = requests.filter(url => url.includes('viewport')).length > 1
+      return { ok: true, status: 200, json: input.url.includes('createSession')
+        ? { session: 'test-session', expiry: '4000000000', tileWidth: 256, tileHeight: 256 }
+        : { copyright: moving ? 'Moved credit' : 'Initial credit', maxZoomRects: [
+          { north: 90, south: -90, west: -180, east: 180, maxZoom: moving ? 16 : 18 },
+        ] } }
+    })
+    googleMapsApiKey.value = 'synthetic-test-key'
+    basemapStyle.value = 'google_satellite'
+    try {
+      await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
+      await vi.waitFor(() => expect(maps).toHaveLength(1))
+      const activeMap = maps[0]!
+      const readSource = () => activeMap.getSource('canopi-basemap-raster') as { maxzoom: number; attribution: string } | undefined
+      // Healthy control: the real provider/session/binding have installed the initial metadata.
+      await vi.waitFor(() => expect(readSource()?.maxzoom).toBe(18))
+      const before = requests.filter(url => url.includes('viewport')).length
+      activeMap.center = { lng: 22, lat: 30 }
+      activeMap.zoom = 12
+      activeMap.listeners.get('moveend')?.forEach(listener => listener())
+      await vi.waitFor(() => expect(requests.filter(url => url.includes('viewport')).length).toBeGreaterThan(before))
+      await vi.waitFor(() => expect(readSource()?.maxzoom).toBe(16))
+      expect(readSource()?.attribution).toBe('Moved credit')
+      expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1)
+    } finally {
+      render(null, container)
+      googleMapsApiKey.value = null
+      basemapStyle.value = 'street'
+    }
   })
 
   it('renders template markers, fits their bounds, selects markers, flies to selection, and resizes through the host', async () => {
