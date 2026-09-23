@@ -1,8 +1,8 @@
 # Independent review and repair decisions at 9208c930
 
-Status: active — eight findings require repair; implementation authorized, independent acceptance pending.
+Status: evidence — original R44–R51 obligations; current repairs are refined by the review at `578a4f1c`.
 Tracking: `canopi-j571.1` under `canopi-j571`; continue the existing candidate.
-Current guidance: [sole prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [earlier correction decisions](completion-correction-design.md), [source-import amendment](source-import-design.md), [receipt](completion-receipt.md).
+Current guidance: [latest review](completion-review-578a4f1c.md), [sole prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [earlier correction decisions](completion-correction-design.md), [source-import amendment](source-import-design.md), [receipt](completion-receipt.md).
 
 ## Evidence and scope
 

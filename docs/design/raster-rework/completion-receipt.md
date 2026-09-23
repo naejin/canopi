@@ -1,31 +1,43 @@
 # Raster rework completion receipt
 
-Status: partial — R44–R51 repairs delivered on the candidate at `51511c90` for independent acceptance. R27 ceiling lift, R43 live scratch/queue/fault sampling, driven Desktop/Web, live key and platform builds remain unavailable and are named below. Prior implementation reports are not acceptance.
+Status: partial — independent review at `578a4f1c` found incomplete R44–R51 repairs; final C0–C5 acceptance remains unmet.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-Independent review of `9208c930` found [R44–R51](completion-review-9208c930.md):
-four added diagnostic assertions failed while 16 existing tests passed.
+Independent review at `578a4f1c` is recorded in the [latest repair decisions](completion-review-578a4f1c.md).
+The code tip was `51511c90` (docs tip `578a4f1c`), on
+`feature/raster-rework-completion`; commits `b3c39729`, `ac7f04f5`, `51511c90`.
+The prior implementation labels are superseded by the disposition below, not erased
+from history. The review independently ran 44 existing frontend tests successfully;
+its separate probes found defects that those tests did not detect.
 
-Code tip for this repair batch: `51511c90` on `feature/raster-rework-completion`
-(docs merge `30aee873`, lifecycle `b3c39729`, provider `ac7f04f5`, native `51511c90`).
+| ID | Retained implementation at reviewed tip | Independent disposition / remaining proof | Owner |
+| --- | --- | --- | --- |
+| R44 | Late-cancel success attaches | Freshness still wrong under overlapping read; action→workflow dependency remains; gated post-commit settlement regression required | Implementer |
+| R45 | Production attribution adapter exists | Withdrawal retains credit; real control construction/ownership and mounted behavior unproved | Implementer |
+| R46 | Binding hides Loading imagery | No new defect established; retain visibility/delayed-style controls on final tree | Implementer verification |
+| R47 | Partition scan replaces five-point sampling | Wrong wrapped coverage and parser hang reproduced; normalize/bound and retain healthy controls | Implementer |
+| R48 | Checked occupied-block preflight added | No ongoing capacity checks; admission/overflow/mid-write/preservation/retry boundary tests outstanding | Implementer |
+| R49 | Chunk uses finite engine route | No new routing defect established; stalled-child timeout/cancellation cleanup unproved | Implementer verification |
+| R50 | Same-definition retry service exists | Panel guesses first failure and blocks explicit create semantics; UI/IPC/native regressions outstanding | Implementer |
+| R51 | Main read path rechecks currency | Early NoData bypass remains source-traced; gated native race/healthy controls outstanding | Implementer |
+| R27 | Old production ceilings retained | Complete bounded consumers and required safety evidence before lifting; unset variables alone do not establish missing inputs | Implementer; identify actual external fixture owner only if needed |
+| R43 | Residue distinguished from peak | Live scratch/queue/fault observations remain work; document exact missing prerequisites for any unavailable lane | Implementer |
+| C0–C5 | Candidate stack retained; partial feature delivery | Combined-tree gates and driven workflows below remain incomplete; acceptance/integration/release separate | Implementer then independent reviewer |
 
-| ID | Production caller / test | Observed result | Residual gap | Who resolves |
-| --- | --- | --- | --- | --- |
-| R44 | `lidar-import-attachment.test.ts` late-cancel success | Complete after a cancel request still attaches once | — | implementer (done) |
-| R45 | `basemap-provider-binding.test.ts` + `createAttributionControls` | Copyright-only updates owned attribution control; source retained | Live MapLibre control render not driven | independent review |
-| R46 | `review-provider-regressions.test.ts` Loading hide | Effective visibility = user ∧ Ready; Loading hides cached imagery | — | implementer (done) |
-| R47 | `review-provider-regressions.test.ts` gappy/wrapped/interior | Exact partition coverage; uncovered = unavailable; wrap supported | — | implementer (done) |
-| R48 | `analysis.rs::admit_sparse_slope_storage` | Checked occupied-work estimate before output; low-space refused | Real mid-write fault seam not injected this round | implementer (follow-up) |
-| R49 | `raster_assets.rs` chunk vs source conversion | Chunk keeps finite deadline; source conversion uncapped | Controllable-clock timeout test not added | implementer (follow-up) |
-| R50 | `lidar_retry_analysis` + AnalysisPanel Retry | Same definition ID, new job; changed head refused | Full UI/IPC/native integration lane not driven | independent review |
-| R51 | `inspection.rs` post-read recheck | Value/NoData rechecked; StaleGeneration / MissingGeneration | In-flight gate test not added this round | implementer (follow-up) |
-| R27 | `admission.rs` ceilings retained | Production limits unchanged | Large-fixture lift lanes unavailable (`CANOPI_LIDAR_E2E_FIXTURE`, `CANOPI_LIDAR_MNH_DIR`, `CANOPI_LIDAR_CAPACITY_PLANE` unset) | fixture owner |
-| R43 | capacity claim boundary | Labels corrected; peak live scratch not sampled | Live peak/concurrent queue/fault sampling unavailable | implementer (follow-up) |
+For the next delivery update these rows in place with repair revision, exact named
+regression/command and observed result. Link detailed evidence rather than copy
+logs. Keep a required proof gap visible even when implementation exists. Record
+external gaps as **command → actual prerequisite absent → work still completed →
+residual risk → owner/closure evidence**. Not attempted is not unavailable.
 
-### Final gates at `51511c90`
+### Reported gates at `51511c90`
+
+These are implementer-reported prior-tip results, not final-tree verification or
+independent acceptance. Run the required combined gates under C5 after repairs.
+
 
 | Gate | Result |
 | --- | --- |

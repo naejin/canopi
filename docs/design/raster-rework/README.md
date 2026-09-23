@@ -1,15 +1,15 @@
 # Raster rework handoffs and debrief
 
-Status: active — correction/source-import handoff continues `canopi-j571.1` from candidate `9208c930`; older assignments are evidence.
+Status: active — correction/source-import handoff continues `canopi-j571.1` from candidate `578a4f1c`; older assignments are evidence.
 Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The [current independent review](completion-review-9208c930.md) found eight
-remaining defects/obligations, with four added diagnostic failures and 16 existing
-tests passing. Its repair decisions refine the existing architecture; the
-[earlier correction decisions](completion-correction-design.md), C0–C5 and
-source-import amendment remain in scope. Source-only publication exists, but the
-whole amendment and candidate are not independently accepted.
+The [current independent review](completion-review-578a4f1c.md) retains R44–R51
+and supplies executable coverage cases, gated lifecycle scenarios and fixed repair
+decisions. Forty-four existing frontend tests passed; independent probes still
+found coverage, parser, attribution and settlement defects. Source-traced native
+obligations and missing final gates remain. The earlier decisions, C0–C5 and
+source-import amendment retain their scope. Whole-candidate acceptance is pending.
 
 Start with the completion prompt and correction decisions, then C0–C5 and the
 source-import contract. The implementation agent continues all authorized repairs,
@@ -23,11 +23,13 @@ The [protocol](collaboration-protocol.md) owns raster-specific execution/evidenc
 
 | Artifact | Purpose |
 | --- | --- |
+| [Latest review and fixed repairs](completion-review-578a4f1c.md) | Current boundary decisions, reproducible counterexamples and selective GeoLibre reuse |
+| [Prior R44–R51 review](completion-review-9208c930.md) | Retained baseline obligations; latest review refines incomplete repairs |
 | [Whole-rework execution prompt](completion-agent-prompt.md) | Sole current assignment; sustained implementation through one verified candidate |
 | [Completion contract](completion-design.md) | Existing candidate continuation, correction interfaces, workbenches, inspection, providers and final gates |
 | [Source-import contract](source-import-design.md) | Streamed source preparation, metadata-only publication, exact/display statistics, resource and compatibility decisions |
 | [Current correction decisions](completion-correction-design.md) | Repair ownership, lifecycle decisions, sequence and falsifiable exits at `26eca68a` |
-| [Current candidate review](completion-review-26eca68a.md) | R27–R43 and ten independent diagnostic failures |
+| [Earlier candidate review](completion-review-26eca68a.md) | R27–R43 and ten independent diagnostic failures |
 | [Previous candidate review](completion-review-5d0a5e0b.md) | Retained R15–R26 evidence; not an alternative assignment |
 | [Completion receipt](completion-receipt.md) | Actual revisions, measurements, gates, limitations and improvements; initialized, not an execution claim |
 | [Ordered COG implementation prompt](ordered-cog-agent-prompt.md) | Retired correction; accepted at `34e4ded4` |
