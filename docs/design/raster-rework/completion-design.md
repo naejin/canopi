@@ -1,8 +1,12 @@
 # Raster rework completion contract
 
-Status: active — consolidated correction handoff after independent review of candidate `26eca68a`; not independently accepted.
+Status: active — consolidated correction handoff after independent review of candidate `9208c930`; not independently accepted.
 Tracking: `canopi-j571.1` under `canopi-j571`; continue the existing candidate bead/branch. No replacement epic or duplicate implementation bead.
-Current guidance: [execution prompt](completion-agent-prompt.md), [correction decisions](completion-correction-design.md), [current review](completion-review-26eca68a.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [execution prompt](completion-agent-prompt.md), [correction decisions](completion-correction-design.md), [current review](completion-review-9208c930.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+
+The [9208c930 review and repair decisions](completion-review-9208c930.md) are the
+current seam-specific addendum (R44–R51). Earlier R27–R43 repairs and remaining
+capacity/evidence requirements stay in scope; no prior report establishes acceptance.
 
 ## Outcome, authority and exclusions
 
@@ -16,12 +20,13 @@ Exclude new engines, custom raster codecs, precision migration, reprojection/res
 
 ## Inspected baseline and reuse decisions
 
-The implementation baseline is `26eca68a` on `feature/raster-rework-completion`
+The implementation baseline is `9208c930` on `feature/raster-rework-completion`
 in `.rq-scratch/wt-candidate`, descended from main integration `f61f8494` and
-accepted foundation `34e4ded4`. Gates and real-fixture measurements were reported
-at code tip `b4ab8fe6`; independent review reproduced ten failing assertions while
-44 tests passed. Preserve the one-step import, v18 metadata migration, meaningful
-R12–R26 repairs and their measurements. The review still requires functional,
+accepted foundation `34e4ded4`. Historical gates and real-fixture measurements
+belong to `b4ab8fe6`. The `26eca68a` review found ten diagnostic failures with 44
+tests passing; the `9208c930` review found four added diagnostic failures with 16
+existing tests passing. Preserve the one-step import, v18 metadata migration,
+R12–R43 repairs that satisfy their contracts, and revision-labelled measurements. The review still requires functional,
 resource-admission and evidence corrections; existing green totals are not acceptance.
 
 The primary documentation checkout is `feature/raster-html-references`; its

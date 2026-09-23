@@ -1,17 +1,15 @@
 # Raster rework handoffs and debrief
 
-Status: active — correction/source-import handoff continues `canopi-j571.1` from candidate `26eca68a`; older assignments are evidence.
+Status: active — correction/source-import handoff continues `canopi-j571.1` from candidate `9208c930`; older assignments are evidence.
 Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The [current independent review](completion-review-26eca68a.md) found functional
-and resource-contract gaps after the delivered measurements: ten diagnostic
-assertions failed while 44 tests passed. The user approved fixing the candidate,
-then independent review, then separately authorized integration into the normal
-development checkout. The [correction decisions](completion-correction-design.md)
-settle the next execution sequence; the source-import amendment still supersedes
-the old 24-file/2-GiB/400M policy. Source-only publication is implemented; the
-whole amendment is not complete.
+The [current independent review](completion-review-9208c930.md) found eight
+remaining defects/obligations, with four added diagnostic failures and 16 existing
+tests passing. Its repair decisions refine the existing architecture; the
+[earlier correction decisions](completion-correction-design.md), C0–C5 and
+source-import amendment remain in scope. Source-only publication exists, but the
+whole amendment and candidate are not independently accepted.
 
 Start with the completion prompt and correction decisions, then C0–C5 and the
 source-import contract. The implementation agent continues all authorized repairs,

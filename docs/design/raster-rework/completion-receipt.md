@@ -1,16 +1,33 @@
 # Raster rework completion receipt
 
-Status: partial — R27–R43 repairs delivered on the candidate for independent acceptance. Required large-fixture, live GUI, live key and platform evidence remain unavailable and are named below. Reported gates at `b4ab8fe6` are retained as revision-labelled prior evidence.
+Status: partial — independent review of `9208c930` requires R44–R51 repairs and remaining C0–C5 evidence. Prior implementation reports are not acceptance.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-The [independent review at `26eca68a`](completion-review-26eca68a.md) found
-**10 diagnostic assertions failed and 44 tests passed**. The user approved
-repairs under the [current correction decisions](completion-correction-design.md).
-This section owns the current disposition; subsequent revision-labelled sections
-retain reported delivery evidence.
+Independent review of `9208c930` found [R44–R51](completion-review-9208c930.md):
+four added diagnostic assertions failed while 16 existing tests passed. The
+review did not rerun full gates. Cancellation attachment, production attribution,
+loading visibility, viewport coverage, sparse admission, chunk timeout policy,
+same-definition Retry and native post-read currency require repairs.
+
+The candidate is not independently accepted. R27 capacity ceilings and R43 live
+resource/queue/fault evidence also remain open under the accepted amendment.
+Unavailable large fixtures do not by themselves block local admission, queue or
+fault tests. Record a concrete prerequisite for each unavailable observation.
+
+For the next delivery replace this current disposition with a compact table of
+R44–R51 and remaining C0–C5 outcomes: code revision, named production caller/test,
+observed result, residual gap and who can resolve it. Retain prior measurements
+under their actual revisions. Do not mark a repair from suite totals or comments.
+
+### Reported correction batch at 9208c930 — superseded by independent review
+
+The following is the implementer's prior report, retained for provenance. Its
+“repaired” claims for sparse admission, same-definition Retry, native post-read
+currency and complete provider/attachment behavior are contradicted by the review;
+none is current acceptance evidence.
 
 Code tip for this correction batch: `77de3367` on `feature/raster-rework-completion`
 (history-preserving docs merge `2574eb89`, Slice A `96e4828d`, Slice B `837e67a0`,

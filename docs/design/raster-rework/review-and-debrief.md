@@ -1,19 +1,48 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — independent review at `26eca68a` requires R27–R43 corrections; C1/R26 remains partial. Earlier delivery claims and measurements are revision-bound evidence, not acceptance. The next final synthesis and independent disposition are pending.
+Status: evidence — review of `9208c930` requires R44–R51; final implementation synthesis and independent acceptance remain pending.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
-Current guidance: [current corrections](completion-correction-design.md), [current review](completion-review-26eca68a.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
+Current guidance: [current corrections](completion-correction-design.md), [current review](completion-review-9208c930.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The current assignment continues candidate `26eca68a` under `canopi-j571.1`.
+The current assignment continues candidate `9208c930` under `canopi-j571.1`.
 The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
 supersede the earlier claim that only external observations remained. This section
 owns the next debrief; material older outcomes below remain evidence at their
 named revisions, not instructions to restart retired work. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
+
+### Independent disposition at 9208c930
+
+[Eight findings and decisions](completion-review-9208c930.md) remain; four added
+boundary assertions failed while 16 existing tests passed. Five-point coverage and
+wrapped-midpoint failures were reproduced, as were late cancellation attachment
+loss and binding visibility overriding Loading. Other findings followed production
+call tracing. No whole-suite or live provider acceptance was performed.
+
+The receipt claimed same-definition Retry and native post-read currency existed,
+although their callers did not implement them. An optional test attribution hook
+had no production implementation. These are implementation/test/claim gaps; their
+causes are not established by model identity or cost assumptions. The main reviewer
+also owns earlier missed caller boundaries and must verify these in final review.
+
+### Next-use improvement experiment
+
+Use the existing tests and receipt, not another framework. Before claiming a repair,
+trace trigger → production owner/adapter → final observable outcome. In the next
+slice, test this practice on R44 settlement, R45/R46 adapter plus binding, and
+R50/R51 native identity. Record whether it caught a defect before handoff and whether
+independent review found another escape. Adoption is pending that observation.
+A failed next use calls for revising the detector, not simply adding more prose.
+
+Tool changes are justified by a witnessed failure or repeated friction: identify
+the broken input, patch the smallest existing tool, verify that input and a healthy
+control, then record the next actual use. No observed next use means untested benefit.
+Cost/elapsed effort and courier-cycle savings stay unknown unless directly recorded;
+no synthetic cost estimate or model ranking is part of this debrief.
 
 ### Independent disposition at 26eca68a
 
@@ -50,7 +79,7 @@ another round narrative. On the next actual use, record observed benefit, renewe
 failure, or “not tested”; only then decide keep/revise/drop. No generic skills,
 model router, new dashboard or qualification framework is authorized.
 
-### Final correction debrief at `b4ab8fe6` (C1 implemented and measured)
+### Reported correction debrief at `b4ab8fe6` (scope later qualified)
 
 1. **What now works through the actual app, and what still lacks observation.**
    The shipped import is one job: choose files → choose the interpretation →
@@ -193,67 +222,35 @@ Test totals and line counts are not productivity measures.
 
 ### Final correction debrief to deliver
 
-Delivered with the corrected candidate at `77de3367` (partial: large-fixture,
-live GUI/key and platform evidence unavailable). Independent acceptance remains
-a separate entry by the main agent.
+The prior implementer synthesis is retained at `9208c930` in Git; its claims are
+qualified by the independent disposition above. Replace the pending final synthesis
+with one concise evidence-based account, after
+self-review and final gates. Link the receipt instead of duplicating gate logs.
+Answer these six questions:
 
-1. **What can the user now do?** At `77de3367` the product has the R27–R43
-   lifecycle repairs behind the accepted workflows: library-lived import
-   settlement with session-fenced Design attachment, inspection that invalidates
-   on head change and cancels re-aims, and map providers that follow key/locale
-   changes, coalesce viewport metadata and only publish Ready with validated
-   metadata. See the [receipt](completion-receipt.md#current-correction-acceptance).
-   Retained: v18 migration, source-only publication, exact/display split,
-   original/history compatibility, R12–R26 regressions. External gaps: no driven
-   Desktop/Web session, no live Google key, no Windows/macOS or packaged smoke,
-   no large-fixture ceiling lift, no live peak-scratch sample.
-2. **What escaped, and why did the existing checks miss it?** Three families.
-   (a) Lifecycle transitions: tests proved initial state or helpers while the
-   obligation was a mounted caller over a later transition (R32–R38). Detector
-   gap: assert the settled job, the displayed answer after a head change, or the
-   second configuration update — not only the first. (b) Claim boundary: R43
-   labelled post-settlement residue as peak; the sampling point never observed a
-   live peak. Reporting error owned by the implementer. (c) Design omission
-   (main agent): Ready-before-metadata and the dense-before-sparse admission
-   order were underspecified in earlier contracts. Self-review discovery: the
-   merge conflict resolver initially duplicated a status line in the debrief;
-   caught by reading the resolved file before commit.
-3. **What implementation complexity was necessary?** Reused existing owners:
-   `library-store` polling, Design Edit `upsertLidarEntry`, inspection session,
-   `BasemapProvider`/`basemap-bind`/`contribution`, GDAL `engine`. New and
-   earned: `app/lidar/workflow.ts` (Desktop-lifetime attachment intent) and
-   `installBasemapConfigObserver` (reactive config identity). No second job,
-   map or Design store. Dense slope guard retained where dense allocation
-   actually happens.
-4. **Which workflow/tool changes actually helped?**
+1. What now works through production callers and actual driven app workflows?
+   Separate those evidence levels and identify remaining acceptance/integration gaps.
+2. Which invariant families escaped, and which were found before delivery? For each
+   material case classify supported design omission, implementation deviation,
+   test/oracle gap, reviewer oversight or environment/tool limitation; allow overlap.
+3. Which ownership changes fixed the escapes, and what existing machinery was reused
+   or removed? Identify unnecessary prescription owned by the main reviewer too.
+4. Which detector or small tooling change actually helped on its next use? Record
+   failure/revision → intervention → evidence → keep/revise/drop. Mark untested
+   proposals explicitly; do not convert every incident into a permanent rule.
+5. What affected total delivery effort? Use observed implementation/review/rework
+   time, usage or courier exchanges only where available. State unknowns. Test and
+   line counts do not prove productivity, and implementation-agent preference is
+   not measured cost evidence.
+6. What remains, who owns it, and what concrete evidence or decision closes it?
+   Distinguish code work, missing external prerequisites, independent acceptance,
+   integration and release. Track executable follow-ups in bd.
 
-| Observed failure / revision | Category and responsible owner | Smallest applied or proposed change | Decisive evidence and next actual use | Keep / revise / drop / untested | Maintained home or follow-up |
-| --- | --- | --- | --- | --- | --- |
-| Panel dispose stopped shared import polling | Implementation; implementer | Library observer no longer stops the timer; Desktop-lifetime workflow owns it | `lidar-library-store.test.ts` panel-unmount case | Keep (observed) | `library-store.ts`, `workflow.ts` |
-| useComputed captured plain key so the keyless prompt stayed cached | Implementation; implementer | Read signals inside the computed callback | `basemap-settings.test.tsx` clear-key prompt assertion | Keep (observed) | `BasemapSettings.tsx` |
-| Merge conflict status line duplicated | Process; implementer | Read resolved files before staging | Caught in this round before commit | Keep | collaboration protocol already covers it |
-| Live peak scratch sampling | Environment/limitation | Sampled only post-settlement residue historically | Unavailable this host | Untested; claim corrected | Receipt R43 row |
+The implementation agent writes the synthesis; the main reviewer adds independently
+observed escapes and acceptance disposition in the same record. Promote only proven
+lessons into the narrowest maintained test/script/guide, removing stale instructions.
+No broad workflow/skill/tool project is required to finish this product delivery.
 
-5. **Where was effort or a user exchange avoidable?** No continuation prompt was
-   requested. One courier-free round. The docs-merge conflict required a
-   disposition decision already present in the mandate; no avoidable exchange.
-   Cost was not measured.
-6. **What should change next, and what would disprove it?** (a) Run the
-   amendment's large-fixture lanes and only then lift R27 ceilings — disprove by
-   a failing >24-file/>2-GiB/>400M-cell production admission without overrides.
-   (b) Sample live job/GDAL scratch during work for R43 — disprove by a peak
-   that matches settled residue. (c) Drive one isolated Desktop Data → display →
-   slope → inspection → save/reopen session — disprove by any broken step. All
-   are follow-up beads, not blockers to independent acceptance of the code
-   repairs.
-
-| Observed failure / revision | Category and responsible owner | Smallest applied or proposed change | Decisive evidence and next actual use | Keep / revise / drop / untested | Maintained home or follow-up |
-| --- | --- | --- | --- | --- | --- |
-| Fill only for material interventions observed during this correction | Do not infer a model cause | Prefer existing tests/scripts/guides | Failing trigger and healthy control; distinguish next-use observation from prediction | Benefit unknown is valid | Link the artifact or bead |
-
-Remove the instructional example row when real interventions are recorded. Do not
-fill a quota. The reviewer adds its own escapes and acceptance disposition to the
-same record after delivery, without replacing the implementer's evidence.
 
 ### Interventions carried into this assignment
 
@@ -277,7 +274,7 @@ next-use evidence supports a benefit:
 
 ### Final synthesis
 
-Current disposition: changes required at `26eca68a`. The next implementation
+Current disposition: changes required at `9208c930`. The next implementation
 synthesis is pending the correction, followed by independent acceptance. Do not
 reuse an earlier “implemented” heading as evidence of complete current scope.
 Historical accepted outcomes and limitations follow; their old execution prompts,
