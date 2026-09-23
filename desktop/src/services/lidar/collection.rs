@@ -62,9 +62,12 @@ pub(super) struct SnapshotPlan {
 
 /// A snapshot that has been measured and is ready to commit.
 pub(super) struct SnapshotMeasurement {
-    pub published_cells: u64,
-    pub min_value: f64,
-    pub max_value: f64,
+    /// Exact valid cells, or `None` when the composition's count is not
+    /// derivable from member metadata.
+    pub published_cells: Option<u64>,
+    /// Exact composed range, or `None` when it is not derivable.
+    pub min_value: Option<f64>,
+    pub max_value: Option<f64>,
     /// The range styling and legends use, which need not be the exact one: a
     /// composition published without reading its pixels has no exact range but
     /// still has a stable display domain derived from its members.
@@ -475,17 +478,69 @@ pub(super) fn chunk_extent_grid(
     })
 }
 
-/// Measure a planned composition: valid cells, value range and display bounds.
+/// Derive a planned composition's metadata **without reading its pixels**.
 ///
-/// The pass visits only the composition's occupied 1024-cell chunks, one
-/// bounded window at a time, so its cost follows the stored coverage rather
-/// than the empty gap inside the members' envelope. No merged raster is
-/// written: the measurement is the publication's only whole-composition work.
+/// Publishing membership does not require knowing the composed values: the
+/// composition is defined by its members, their order and their own stored
+/// facts, all of which the catalogue already holds. The pass below therefore
+/// opens no raster and decodes nothing; its cost follows the member list, not
+/// the coverage.
+///
+/// Exact composed facts are what cannot be derived from member metadata, so
+/// they are reported only when they really are derivable:
+///
+/// - an empty composition is exactly zero cells with no range;
+/// - a composition of one member *is* that member, so its exact facts carry
+///   over;
+/// - anything else reports the exact count and range as unknown rather than
+///   summing member counts, which would count overlap and occluded cells twice
+///   and call an envelope an area.
+///
+/// The display range is always available, because it is not a statistic: it is
+/// the union of the stored member ranges, including the ranges of preserved
+/// compatibility members, and it is labelled by that basis.
 pub(super) fn measure(
     library: &LidarLibrary,
     plan: &SnapshotPlan,
     cancel: &AtomicBool,
 ) -> Result<SnapshotMeasurement, String> {
+    import::check_cancel(cancel)?;
+    let connection = library.catalogue()?;
+    let mut member_cells = 0u64;
+    let mut display_min = f64::INFINITY;
+    let mut display_max = f64::NEG_INFINITY;
+    let mut any_range = false;
+    for member in &plan.members {
+        import::check_cancel(cancel)?;
+        let (cells, min, max) = member_facts(&connection, member)?;
+        member_cells = member_cells.saturating_add(cells);
+        if let (Some(min), Some(max)) = (min, max)
+            && min.is_finite()
+            && max.is_finite()
+        {
+            display_min = display_min.min(min);
+            display_max = display_max.max(max);
+            any_range = true;
+        }
+    }
+    // No member holds a valid cell, so the composition holds none either: this
+    // is the one composed statement member facts can make soundly, and it is
+    // exact because an empty union needs every member to be empty.
+    let exact_cells = match plan.members.len() {
+        0 => Some(0),
+        1 => Some(member_cells),
+        _ if member_cells == 0 => Some(0),
+        _ => None,
+    };
+    let (exact_min, exact_max) = match (plan.members.len(), any_range) {
+        (1, true) => (Some(display_min), Some(display_max)),
+        // An empty or all-NoData composition has a known range of nothing.
+        (_, false) if exact_cells == Some(0) => (Some(0.0), Some(0.0)),
+        _ => (None, None),
+    };
+    // Display bounds are the envelope of what the members actually occupy: the
+    // reader is only asked for its occupied blocks, which is arithmetic over
+    // member extents and opens nothing.
     let resolved: Vec<(String, ResolvedMember)> = plan
         .members
         .iter()
@@ -493,50 +548,58 @@ pub(super) fn measure(
         .collect();
     let reader = CollectionReader::new(resolved, plan.lattice.clone())?;
     let chunks = reader.occupied_chunks()?;
-    let side = generation::CHUNK_SIDE;
-    let mut published_cells = 0u64;
-    let mut min_value = f64::INFINITY;
-    let mut max_value = f64::NEG_INFINITY;
-    for (chunk_x, chunk_y) in &chunks {
-        import::check_cancel(cancel)?;
-        let window = generation::LatticeWindow {
-            x: chunk_x.saturating_mul(side),
-            y: chunk_y.saturating_mul(side),
-            width: side as u32,
-            height: side as u32,
-        };
-        let resolved = reader.read_window(window, cancel)?;
-        for (sample, valid) in resolved.samples.iter().zip(resolved.valid.iter()) {
-            if *valid == 0 {
-                continue;
-            }
-            published_cells = published_cells.saturating_add(1);
-            let value = f64::from(*sample);
-            // A NaN sample is a valid cell with no numeric magnitude, exactly as
-            // the dense route treats it: it counts as coverage and is excluded
-            // from the reported range.
-            if value.is_finite() {
-                min_value = min_value.min(value);
-                max_value = max_value.max(value);
-            }
-        }
-    }
-    if !min_value.is_finite() || !max_value.is_finite() {
-        min_value = 0.0;
-        max_value = 0.0;
-    }
     let bounds_3857 = coverage_bounds(library, plan, &chunks, cancel)?;
+    let (display_min_value, display_max_value) = if any_range {
+        (display_min, display_max)
+    } else {
+        // No member declares a range: a constant-domain generation renders
+        // transparently, which is what the styling path already does with a
+        // zero-width domain.
+        (0.0, 0.0)
+    };
     Ok(SnapshotMeasurement {
-        published_cells,
-        min_value,
-        max_value,
-        // This pass reads the composed values, so the range it finds is exact
-        // and is also the display domain.
-        display_min_value: min_value,
-        display_max_value: max_value,
-        display_basis: common_types::lidar::LidarDisplayRangeBasis::Exact,
+        published_cells: exact_cells,
+        min_value: exact_min,
+        max_value: exact_max,
+        display_min_value,
+        display_max_value,
+        // A range only one member supplied is that member's own exact range; a
+        // union of several is an envelope, and it is labelled as one.
+        display_basis: if plan.members.len() == 1 {
+            common_types::lidar::LidarDisplayRangeBasis::Exact
+        } else {
+            common_types::lidar::LidarDisplayRangeBasis::SourceEnvelope
+        },
         bounds_3857,
     })
+}
+
+/// One member's own stored exact facts, without opening its payload.
+///
+/// A source occurrence reads the exact aggregate its occupied-region index
+/// already stores. A preserved composition has no interpretation of its own, so
+/// it reports the exact facts of the generation it replays.
+fn member_facts(
+    connection: &rusqlite::Connection,
+    member: &SnapshotMember,
+) -> Result<(u64, Option<f64>, Option<f64>), String> {
+    if let Some(interpretation_id) = member.interpretation_id.as_deref() {
+        let (cells, min, max) = catalogue::interpretation_coverage(connection, interpretation_id)?;
+        return Ok((cells.max(0) as u64, min, max));
+    }
+    let Some(base_id) = member.base_generation_id.as_deref() else {
+        return Ok((0, None, None));
+    };
+    let Some(row) = catalogue::generation_row(connection, base_id)? else {
+        return Ok((0, None, None));
+    };
+    Ok((
+        row.coverage_cells
+            .map(|cells| cells.max(0) as u64)
+            .unwrap_or(0),
+        row.min_value,
+        row.max_value,
+    ))
 }
 
 /// Display bounds: the envelope of the composition's occupied chunks.
@@ -618,7 +681,9 @@ pub(super) fn insert_snapshot(
                 layer_id,
                 catalogue::now_iso(),
                 manifest_json,
-                measurement.published_cells as i64,
+                measurement
+                    .published_cells
+                    .map(|cells| cells as i64),
                 measurement.min_value,
                 measurement.max_value,
                 measurement.display_min_value,

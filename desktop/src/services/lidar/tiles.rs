@@ -833,9 +833,19 @@ fn generation_range(
         ),
         other => return Err(format!("unknown raster entity kind {other}")),
     };
+    // Each column falls back on its own: a single COALESCE over all four would
+    // return the *minimum* for both, collapsing the domain to a constant.
+    let (display_min, display_max) = match display.split_once(", ") {
+        Some(pair) => pair,
+        None => (display, display),
+    };
+    let (exact_min, exact_max) = match exact.split_once(", ") {
+        Some(pair) => pair,
+        None => (exact, exact),
+    };
     let sql = format!(
-        "SELECT COALESCE({display}, {exact}) FROM {table}
-         WHERE id = ?1 AND {owner_column} = ?2"
+        "SELECT COALESCE({display_min}, {exact_min}), COALESCE({display_max}, {exact_max})
+         FROM {table} WHERE id = ?1 AND {owner_column} = ?2"
     );
     connection
         .query_row(

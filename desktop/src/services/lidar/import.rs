@@ -258,6 +258,23 @@ pub struct StagingOutput {
 // Staging
 // ---------------------------------------------------------------------------
 
+/// The range the accepted head is displayed with.
+///
+/// The previews share one value scale with the map that will show the result,
+/// so they read the head's **display** range — falling back to its exact range
+/// for a generation written before the display columns existed. Reading only
+/// the exact columns would collapse the preview scale whenever a composition's
+/// exact range is unknown.
+fn head_display_bounds(head: Option<&catalogue::GenerationRow>) -> (Option<f64>, Option<f64>) {
+    let Some(head) = head else {
+        return (None, None);
+    };
+    match (head.display_min_value, head.display_max_value) {
+        (Some(min), Some(max)) => (Some(min), Some(max)),
+        _ => (head.min_value, head.max_value),
+    }
+}
+
 pub fn stage_import(
     library: &LidarLibrary,
     job_id: &str,
@@ -525,14 +542,11 @@ pub fn stage_import(
     // initial review reflects the UI's default decision: add uncovered
     // coverage and preserve overlap.
     check_cancel(cancel)?;
-    let preview_min = head
-        .as_ref()
-        .and_then(|row| row.min_value)
+    let (head_min, head_max) = head_display_bounds(head.as_ref());
+    let preview_min = head_min
         .unwrap_or(coverage.preview_min)
         .min(coverage.preview_min);
-    let preview_max = head
-        .as_ref()
-        .and_then(|row| row.max_value)
+    let preview_max = head_max
         .unwrap_or(coverage.preview_max)
         .max(coverage.preview_max)
         .max(preview_min + 1.0);
@@ -697,14 +711,11 @@ pub fn render_composition_preview(
             cancel,
         )?
     };
-    let preview_min = head
-        .as_ref()
-        .and_then(|row| row.min_value)
+    let (head_min, head_max) = head_display_bounds(head.as_ref());
+    let preview_min = head_min
         .unwrap_or(coverage.preview_min)
         .min(coverage.preview_min);
-    let preview_max = head
-        .as_ref()
-        .and_then(|row| row.max_value)
+    let preview_max = head_max
         .unwrap_or(coverage.preview_max)
         .max(coverage.preview_max)
         .max(preview_min + 1.0);
@@ -3513,7 +3524,9 @@ fn replay_members(
 #[derive(Debug, Clone)]
 pub struct ApplyOutcome {
     pub generation_id: String,
-    pub published_cells: u64,
+    /// Exact published cells, or `None` when the publication did not need to
+    /// count them. An unknown count is reported as unknown rather than as zero.
+    pub published_cells: Option<u64>,
     pub changed: bool,
     pub message: Option<String>,
 }
@@ -3523,8 +3536,13 @@ impl ApplyOutcome {
     /// is recorded with the publication.
     pub fn summary(&self) -> String {
         format!(
-            "generation {} published with {} cells (changed: {})",
-            self.generation_id, self.published_cells, self.changed
+            "generation {} published with {} (changed: {})",
+            self.generation_id,
+            match self.published_cells {
+                Some(cells) => format!("{cells} cells"),
+                None => "unknown coverage".to_string(),
+            },
+            self.changed
         )
     }
 }
@@ -3658,8 +3676,7 @@ pub fn apply_import(
                 published_cells: head
                     .as_ref()
                     .and_then(|row| row.coverage_cells)
-                    .map(|cells| cells.max(0) as u64)
-                    .unwrap_or(0),
+                    .map(|cells| cells.max(0) as u64),
                 changed: false,
                 message: Some("no coverage changes selected; existing generation kept".to_string()),
             });
@@ -3843,12 +3860,21 @@ pub fn apply_import(
             "publishing an ordered source collection"
         );
         let measurement = collection::measure(library, &plan, cancel)?;
-        if measurement.published_cells == 0 {
+        // Member facts prove an empty composition exactly, so this refusal is
+        // still sound: with no member holding a valid cell the union holds none.
+        if measurement.published_cells == Some(0) {
+            let named = compatible
+                .iter()
+                .map(|source| source.filename.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
             return Ok(ApplyOutcome {
                 generation_id: head.as_ref().map(|h| h.id.clone()).unwrap_or_default(),
-                published_cells: 0,
+                published_cells: Some(0),
                 changed: false,
-                message: Some("selection contains no valid pixels; nothing published".to_string()),
+                message: Some(format!(
+                    "selection contains no valid pixels; nothing published ({named})"
+                )),
             });
         }
         let (manifest_json, _) = collection::manifest_for(library, &plan)?;
@@ -3947,7 +3973,7 @@ pub fn apply_import(
     if published_cells == 0 {
         return Ok(ApplyOutcome {
             generation_id: head.as_ref().map(|h| h.id.clone()).unwrap_or_default(),
-            published_cells: 0,
+            published_cells: Some(0),
             changed: false,
             message: Some("selection contains no valid pixels; nothing published".to_string()),
         });
@@ -3955,7 +3981,7 @@ pub fn apply_import(
     if previous_cells == Some(published_cells) && !replace_overlap {
         return Ok(ApplyOutcome {
             generation_id: head.as_ref().map(|h| h.id.clone()).unwrap_or_default(),
-            published_cells,
+            published_cells: Some(published_cells),
             changed: false,
             message: Some(
                 "selection added no accepted coverage; existing generation kept".to_string(),
@@ -4221,7 +4247,7 @@ pub fn apply_import(
     let diagnostic = promotions.commit();
     Ok(ApplyOutcome {
         generation_id,
-        published_cells,
+        published_cells: Some(published_cells),
         changed: true,
         message: diagnostic,
     })
@@ -4451,7 +4477,7 @@ pub fn undo_last_change(
     if !base.undo_available {
         return Ok(ApplyOutcome {
             generation_id: base.generation_id.clone(),
-            published_cells: 0,
+            published_cells: Some(0),
             changed: false,
             message: Some("there is no earlier version to undo".to_string()),
         });
@@ -4522,7 +4548,7 @@ pub fn restore_version(
     if occurrence_identities(&members) == occurrence_identities(&current) {
         return Ok(ApplyOutcome {
             generation_id: base.generation_id.clone(),
-            published_cells: 0,
+            published_cells: Some(0),
             changed: false,
             message: Some("that version is already the current composition".to_string()),
         });
@@ -4570,7 +4596,7 @@ pub fn move_member(
     let Some(target) = target else {
         return Ok(ApplyOutcome {
             generation_id: base.generation_id.clone(),
-            published_cells: 0,
+            published_cells: Some(0),
             changed: false,
             message: Some("that source is already at the edge of the list".to_string()),
         });
@@ -6776,9 +6802,14 @@ mod tests {
         assert!(head.mosaic_path.is_none() && head.coverage_mask_path.is_none());
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
         assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
+        // A one-member composition *is* its member, so its exact facts carry
+        // over without reading the composed pixels.
         assert_eq!(head.coverage_cells, Some(60 * 45));
         assert_eq!(head.min_value, Some(5.0));
         assert_eq!(head.max_value, Some(5.0));
+        assert_eq!(head.display_min_value, Some(5.0));
+        assert_eq!(head.display_max_value, Some(5.0));
+        assert_eq!(head.display_basis.as_deref(), Some("exact"));
         assert_eq!(published_chunk_count(&library, &head.id), 0);
         assert_eq!(head_member_count(&library, &layer_id), 1);
         let first_member_id = {
@@ -6820,9 +6851,24 @@ mod tests {
             apply_import(&reopened, &staging_two, true, false, &cancel).expect("second applies");
         assert!(stacked.changed);
         let stacked_head = head_of(&reopened, &layer_id);
-        assert_eq!(stacked_head.coverage_cells, Some(80 * 45));
-        assert_eq!(stacked_head.min_value, Some(5.0));
-        assert_eq!(stacked_head.max_value, Some(9.0));
+        // Two members cannot be composed from metadata alone, so the exact
+        // count and range are unknown rather than guessed: summing member cells
+        // would count the overlap twice, and the union of their ranges is an
+        // envelope rather than the composed extremum.
+        assert_eq!(
+            stacked_head.coverage_cells, None,
+            "a multi-member composition does not claim an exact count"
+        );
+        assert_eq!(stacked_head.min_value, None);
+        assert_eq!(stacked_head.max_value, None);
+        // What is available is the display range, labelled by its basis.
+        assert_eq!(stacked_head.display_min_value, Some(5.0));
+        assert_eq!(stacked_head.display_max_value, Some(9.0));
+        assert_eq!(
+            stacked_head.display_basis.as_deref(),
+            Some("source-envelope"),
+            "a union of member ranges is an envelope, never an exact statistic"
+        );
         assert_eq!(published_chunk_count(&reopened, &stacked_head.id), 0);
         let members = {
             let connection = reopened.catalogue().unwrap();
@@ -7425,13 +7471,15 @@ mod tests {
         let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("second");
         let head = head_of(&library, &layer_id);
         assert_eq!(head.id, applied.generation_id);
-        assert_eq!(head.coverage_cells, Some(16));
-        assert_eq!(
-            head.min_value,
-            Some(9.0),
-            "the published range is the composed one"
-        );
-        assert_eq!(head.max_value, Some(9.0));
+        // Two members cannot be composed from metadata, so the exact count and
+        // range are unknown. What the generation does publish is the display
+        // range: the union of its members' own ranges, labelled as an envelope.
+        assert_eq!(head.coverage_cells, None);
+        assert_eq!(head.min_value, None);
+        assert_eq!(head.max_value, None);
+        assert_eq!(head.display_min_value, Some(5.0));
+        assert_eq!(head.display_max_value, Some(9.0));
+        assert_eq!(head.display_basis.as_deref(), Some("source-envelope"));
 
         drop(library);
         let reopened = LidarLibrary::open(&root).expect("library reopens");
@@ -7598,7 +7646,17 @@ mod tests {
             samples.iter().all(|value| *value == 7.0),
             "the accepted overlay value survives the transition: {samples:?}"
         );
-        assert_eq!(head.max_value, Some(7.0), "and the statistics agree");
+        // The transitioned head is the preserved overlay plus the newly staged
+        // source, so it cannot claim an exact composed count or range. Its
+        // display range is the union of what its members supply: the overlay's
+        // 7 and the new source's values, labelled as an envelope.
+        assert_eq!(head.coverage_cells, None);
+        assert_eq!(head.min_value, None, "no exact composed range is claimed");
+        assert_eq!(head.max_value, None);
+        // The overlay's own preserved range and the new source's.
+        assert_eq!(head.display_min_value, Some(3.0));
+        assert_eq!(head.display_max_value, Some(7.0));
+        assert_eq!(head.display_basis.as_deref(), Some("source-envelope"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -8264,9 +8322,12 @@ mod tests {
         let head = head_of(&library, &layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
         assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
-        assert_eq!(head.coverage_cells, Some(60 * 45 + 40 * 30));
-        assert_eq!(head.min_value, Some(5.0));
-        assert_eq!(head.max_value, Some(7.0));
+        assert_eq!(
+            head.coverage_cells, None,
+            "a preserved base plus an appended source is not derivable metadata"
+        );
+        assert_eq!(head.min_value, None);
+        assert_eq!(head.max_value, None);
         assert_eq!(
             published_chunk_count(&library, &head.id),
             0,
@@ -8420,9 +8481,13 @@ mod tests {
         assert!(applied.changed);
 
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, Some(expected_cells as i64));
-        assert_eq!(head.min_value, Some(3.0));
-        assert_eq!(head.max_value, Some(7.0));
+        assert_eq!(head.coverage_cells, None);
+        assert_eq!(head.min_value, None);
+        assert_eq!(head.max_value, None);
+        assert_eq!(head.display_min_value, Some(3.0));
+        assert_eq!(head.display_max_value, Some(7.0));
+        assert_eq!(head.display_basis.as_deref(), Some("source-envelope"));
+        let _ = expected_cells;
         // The composition materializes nothing at all: its cost is member
         // metadata, and only the occupied lattice blocks are ever visited.
         assert_eq!(
@@ -8825,9 +8890,14 @@ mod tests {
             Some(base.id.as_str()),
             "the previous composition points at the original opaque base"
         );
-        assert_eq!(head.coverage_cells, Some(60 * 45 + 40 * 30));
-        assert_eq!(head.min_value, Some(4.0));
-        assert_eq!(head.max_value, Some(6.0));
+        // A preserved base plus an appended source: the exact composed facts
+        // are not derivable from metadata, so the generation reports the display
+        // range its members supply and claims no exact statistic.
+        assert_eq!(head.coverage_cells, None);
+        assert_eq!(head.min_value, None);
+        assert_eq!(head.max_value, None);
+        assert_eq!(head.display_min_value, Some(4.0));
+        assert_eq!(head.display_max_value, Some(6.0));
         // The preserved base is untouched.
         {
             let connection = library.catalogue().unwrap();
@@ -8930,7 +9000,7 @@ mod tests {
         let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
         assert!(applied.changed);
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, Some(32));
+        assert_eq!(head.coverage_cells, None);
         assert_eq!(
             head_occupied_chunks(&library, &layer_id).len(),
             2,
@@ -8995,7 +9065,7 @@ mod tests {
             "the processing budget admits the pair, charging the sources and not the gap"
         );
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, Some(32));
+        assert_eq!(head.coverage_cells, None);
         assert_eq!(
             head_member_count(&library, &layer_id),
             2,
@@ -10213,11 +10283,10 @@ mod tests {
             .expect("replace-overlap applies");
         assert!(replaced.changed);
         let head = head_of(&library, &layer_id);
-        assert_eq!(
-            head.coverage_cells,
-            Some(16),
-            "replacement adds no new coverage"
-        );
+        // The composition is a preserved base plus a replacement, so it cannot
+        // claim an exact count; the values below are what prove the replacement
+        // added no new coverage.
+        assert_eq!(head.coverage_cells, None);
         let (values, valid) = head_window(
             &library,
             &layer_id,
@@ -10254,7 +10323,9 @@ mod tests {
         library.prepare_apply(&job_three).expect("review accepted");
         let extended = apply_import(&library, &staging_three, true, false, &cancel).expect("apply");
         assert!(extended.changed);
-        assert_eq!(head_of(&library, &layer_id).coverage_cells, Some(32));
+        // The extension made a second occurrence, so the exact composed count is
+        // no longer derivable from member metadata.
+        assert_eq!(head_of(&library, &layer_id).coverage_cells, None);
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
@@ -12009,9 +12080,11 @@ mod tests {
         // are 7 and 9 rather than either source's constant.
         let head = head_of(&library, &layer_id);
         assert_eq!(head.id, stacked.generation_id);
-        assert_eq!(head.coverage_cells, Some(6));
-        assert_eq!(head.min_value, Some(7.0));
-        assert_eq!(head.max_value, Some(9.0));
+        assert_eq!(head.coverage_cells, None);
+        assert_eq!(head.min_value, None);
+        assert_eq!(head.max_value, None);
+        assert_eq!(head.display_min_value, Some(7.0));
+        assert_eq!(head.display_max_value, Some(9.0));
 
         let request = |z: u32, x: u32, y: u32| tiles::TileRequest {
             entity_kind: "source".to_string(),
